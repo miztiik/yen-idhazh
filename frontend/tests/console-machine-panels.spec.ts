@@ -15,9 +15,10 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { WATCHED_FLAG } from '../src/lib/server/host-fingerprint';
+import { canaryArticleRows, canaryMachineRows, heldRows } from './support/canary-records';
 
 const REPO = resolve(process.cwd(), '..');
 
@@ -33,27 +34,26 @@ const APPEARANCE = JSON.parse(
  */
 const WATCHED: readonly string[] = WATCHED_FLAG;
 
-/** Every row of one canary ledger, read straight off its day tree.
+/** Every row of one canary record, as the canary packed it.
  *
- * The page's arithmetic is checked against this rather than against itself: an
- * oracle that reads the module it is testing proves only that the module agrees
- * with itself.
+ * The page's arithmetic is checked against these rows rather than against
+ * itself: an oracle that reads the module it is testing proves only that the
+ * module agrees with itself. The rows come through the reader the page's server
+ * calls, because the packed file is the only copy the canary keeps; everything
+ * the panels compute from them is recomputed here.
  */
-function canaryRows(ledger: string): Record<string, string>[] {
-	const root = join(REPO, 'backend', 'var', 'canary', 'state', ledger);
-	const rows: Record<string, string>[] = [];
-	for (const relative of readdirSync(root, { recursive: true }) as string[]) {
-		if (!relative.endsWith('.csv')) continue;
-		const text = readFileSync(join(root, relative), 'utf8').trim();
-		if (text === '') continue;
-		const [header, ...lines] = text.split('\n');
-		const columns = header.split(',');
-		for (const line of lines) {
-			const cells = line.split(',');
-			rows.push(Object.fromEntries(columns.map((name, index) => [name, cells[index] ?? ''])));
-		}
-	}
-	return rows;
+const records = {
+	'host-fingerprint': heldRows(canaryMachineRows),
+	'item-health': heldRows(canaryArticleRows)
+};
+
+test.beforeAll(async () => {
+	await records['host-fingerprint'].load();
+	await records['item-health'].load();
+});
+
+function canaryRows(ledger: keyof typeof records): Record<string, string>[] {
+	return records[ledger].rows();
 }
 
 /** One shard of one run, as the two ledgers together describe it.
@@ -98,7 +98,7 @@ function canaryShards(): CanaryShard[] {
 		held.set(key, shard);
 	}
 	for (const row of canaryRows('item-health')) {
-		const shard = held.get(`${row.run_id}/${row.shard}`);
+		const shard = held.get(`${row.run_id}/${row.machine_shard}`);
 		if (shard === undefined) continue;
 		shard.writtenTokens = added(shard.writtenTokens, row.output_tokens);
 		shard.writeSeconds = added(shard.writeSeconds, row.decode_ms, 0.001);

@@ -28,7 +28,7 @@ import {
 	frame
 } from '../src/lib/charts/frame';
 import { readoutCapStyle } from '../src/lib/charts/readout';
-import { readCsv, readDayShards } from '../src/lib/server/payload';
+import { canaryArticleRows } from './support/canary-records';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -396,7 +396,7 @@ test.describe('the coverage sentence', () => {
 		const plot = page.locator('[data-timing="plot"]');
 		const from = (await plot.getAttribute('data-timing-first')) ?? '';
 		const to = (await plot.getAttribute('data-timing-last')) ?? '';
-		const want = timedInWindow(from, to);
+		const want = await timedInWindow(from, to);
 		expect(want.days, 'the fixture window times every day, so the sentence is untested').toBeGreaterThan(
 			0
 		);
@@ -447,18 +447,18 @@ test.describe('the coverage sentence', () => {
 	});
 });
 
-/** Every item-health row the canary wrote.
+/** Every article row the canary packed.
  *
- * Through `readDayShards`, the reader the page's own server uses, so a grain
- * change in the ledger cannot leave this comparing the page against an empty set.
+ * Through the reader the page's own server uses, so a change in how the record
+ * is filed cannot leave this comparing the page against an empty set.
  */
-function ledger(): Record<string, string>[] {
-	return readDayShards(join(REPO, 'backend', 'var', 'canary', 'state', 'item-health'), -1).rows;
+function ledger(): Promise<Record<string, string>[]> {
+	return canaryArticleRows();
 }
 
 const STAGES = ['fetch_ms', 'extract_ms', 'summarize_ms'] as const;
 
-/** What the chart's sentence has to say, recomputed from the CSV.
+/** What the chart's sentence has to say, recomputed from the record.
  *
  * A day counts as timed where any of the three stages has a millisecond on it,
  * which is the same rule the page keeps - and the same rule stated twice from
@@ -466,12 +466,12 @@ const STAGES = ['fetch_ms', 'extract_ms', 'summarize_ms'] as const;
  * The stage count appears nowhere: it is the thing that must have stopped
  * mattering.
  */
-function timedInWindow(
+async function timedInWindow(
 	from: string,
 	to: string
-): { days: number; items: number; low: number; high: number } {
+): Promise<{ days: number; items: number; low: number; high: number }> {
 	const byDay = new Map<string, Record<string, string>[]>();
-	for (const row of ledger()) {
+	for (const row of await ledger()) {
 		if (row.date < from || row.date > to) continue;
 		byDay.set(row.date, [...(byDay.get(row.date) ?? []), row]);
 	}

@@ -1,6 +1,6 @@
 # The model's own file
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 What `config/` says about a set of weights: which model runs, what runtime
 settings are declared for those exact bytes, how a turn is written for it, and
@@ -128,8 +128,8 @@ separate "more slots did not help" from "more slots were never used". The
 endpoint is llama-server's own loopback surface inside a CI job. No reader
 reaches it, so Guardrail #1 is untouched. `digest.yml` reads it once at the end of
 each `work` job, keeps the raw body in that shard's runtime artifact, and
-commits the counters that matter onto that shard's row of
-`state/host-fingerprint/` -
+commits the counters that matter onto that shard's row of the host-fingerprint
+ledger -
 the artifact keeps them for two days and the row keeps them forever, which is
 what makes the read rate on
 [../../architecture/summarize/throughput.md](../../architecture/summarize/throughput.md)

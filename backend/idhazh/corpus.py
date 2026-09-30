@@ -339,10 +339,10 @@ def rescored(
             "semantic_coverage": metrics.semantic_coverage(text, full_text),
             "evidential_density": metrics.evidential_density(full_text),
             "speculative_density": metrics.speculative_density(full_text),
-            "summary_word_count": metrics.word_count(text),
+            "summary_words": metrics.word_count(text),
             "truncation_flagged": article.truncated,
-            "source_word_count": article.source_word_count,
-            "source_seen_word_count": article.word_count,
+            "source_words_before_cap": article.source_word_count,
+            "source_words": article.word_count,
             "source_digest": derive_text_digest(article.text or ""),
         }
     )
@@ -354,7 +354,7 @@ def rescored(
         summary=text,
         output_digest=recorded.output_digest,
         model_id=recorded.model_id,
-        attempt=recorded.attempt,
+        attempt=recorded.summary_attempt,
         source_truncated=article.truncated,
         generated_at=recorded.scored_at,
         status=SummaryStatus.OK,

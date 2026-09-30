@@ -7,7 +7,7 @@ import {
 	stepPreset,
 	windowOfDays
 } from '../src/lib/charts/viewport';
-import { readDayShards } from '../src/lib/server/payload';
+import { canaryArticleRows, canaryScoreRows } from './support/canary-records';
 
 /**
  * One window, and every section that follows it saying the same number.
@@ -102,22 +102,16 @@ function chartRuleDays(): string[] {
 	return found.sort();
 }
 
-/** Every date a ledger that files `<YYYY>/<MM>/<DD>.csv` holds a kept row for. */
-function dayDates(dir: string, keep: (row: Record<string, string>) => boolean): string[] {
-	return readDayShards(dir, -1)
-		.rows.filter(keep)
-		.map((row) => row.date ?? '')
-		.filter(Boolean);
+/** Every date a set of rows holds a row for. */
+function datesOf(rows: readonly Record<string, string>[]): string[] {
+	return rows.map((row) => row.date ?? '').filter(Boolean);
 }
 
 /** Every day the Summaries daily table can draw a row for, read off the two
- * committed ledgers rather than off the page it is checking. */
-function workedDays(): string[] {
-	const scored = dayDates(join(CANARY, 'state', 'scores'), () => true);
-	const ran = dayDates(
-		join(CANARY, 'state', 'item-health'),
-		(row) => Number(row.summarize_ms) > 0
-	);
+ * packed records rather than off the page it is checking. */
+async function workedDays(): Promise<string[]> {
+	const scored = datesOf(await canaryScoreRows());
+	const ran = datesOf((await canaryArticleRows()).filter((row) => Number(row.summarize_ms) > 0));
 	return [...new Set([...scored, ...ran])].sort();
 }
 
@@ -617,7 +611,7 @@ test('THE ORACLE: a daily table drawn under the control is drawn over the contro
 	const widest = Math.max(...PRESETS);
 	for (const [route, committed] of [
 		['/console/', chartRuleDays()],
-		['/console/model/', workedDays()]
+		['/console/model/', await workedDays()]
 	] as const) {
 		await page.goto(route);
 		await hydrated(page);

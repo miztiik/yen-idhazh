@@ -1,6 +1,6 @@
 # The Run Timeline
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-29
 
 **What shape does the run timeline have, and why that shape?** This page answers
 that one question. The shape landed before any producer so the writers produce
@@ -117,7 +117,7 @@ already carries, and re-deriving a month costs one month of census day files.
 ## Which cells a run can fill, and from where
 
 Six of the eight steps have a producer and two do not. The writer reads one
-ledger for all six - `state/item-health/` - and joins nothing.
+ledger for all six - the item-health ledger - and joins nothing.
 
 | Step | Census column it is filled from |
 | --- | --- |

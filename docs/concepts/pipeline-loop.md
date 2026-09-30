@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -140,7 +140,7 @@ ledger contract sit under `state/`:
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Assemble | Have we already published this address? |
 | `state/feed-health/<YYYY>/<MM>/<DD>/` | Collect | What did every feed do, on every run? |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/` | Collect, then Assemble | Is this address gone for good? |
-| `state/item-health/<YYYY>/<MM>/<DD>/` | the worker, then Assemble | What did every planned item do in this run? |
+| `state/raw/item-health/<YYYY>/<MM>/<DD>/` | the worker, then Assemble | What did every planned item do in this run? |
 
 Three rules hold for all of them:
 
@@ -149,12 +149,14 @@ Three rules hold for all of them:
 - **Nothing under `state/` is ever served.** The console reads it at build time and bakes the numbers into the page. A reader gets the figures, never the file.
 
 **A ledger more than one job writes gives every writer its own file.** A
-writer writes one file named for its run, its attempt at that run, its job and
-its shard, inside the day directory its own rows name - so no two writers of one
+writer writes one file of its own inside the day directory its own rows name -
+a CSV named for its run, its attempt at that run, its job and its shard, or a
+raw file the ledger door names for it - so no two writers of one
 ledger ever share a path, which is what a
 lost push race needs in order to cost a merge rather than the rows. Nothing has
-to be folded first: the file a writer closes is already the ledger, and
-`day_shards.settled_rows` decides what two rows of one key mean at read time.
+to be folded first: the file a writer closes is already the ledger, and the
+reader decides what two rows of one key mean at read time -
+`day_shards.settled_rows` for a CSV day, the door's `settle_rows` for a raw one.
 
 `state/host-fingerprint/` was the first ledger through it, from 2026-09-17. Ten
 jobs of one run each draw a machine and each record it, and on 2026-09-16 those
@@ -176,6 +178,11 @@ head, which left every ledger with one path two runs of one day both computed
 bytes for. Now the day directory is the ledger. The gardener's closed-day fold
 still runs, but only over a day no run will write again: it folds that day's
 writer files into one `settled.csv` to save files, and it changes no answer.
+
+The item-health, scores and host-fingerprint ledgers have since moved to the
+ledger door: each writer's file is a raw file under `state/raw/<ledger>/`, and a
+compaction rather than a fold packs a finished day
+([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).
 
 See [../architecture/sources/freshness.md](../architecture/sources/freshness.md) for the first two and [../architecture/sources/health.md](../architecture/sources/health.md) for the third.
 

@@ -39,13 +39,15 @@ const THRESHOLDS: LostThresholds = {
 };
 
 /** One item row in the cells this panel reads. A row with no `cpu_steal_pct`
- * key is a row written before the ledger split it out of the busy share. */
+ * key is a row written before the ledger split it out of the busy share. The
+ * shard is the machine's, `machine_shard`: the article record's own writer cells
+ * name the job that filed the row, not the one it ran on. */
 function row(
 	date: string,
 	shard: string,
 	steal?: number
 ): Record<string, string> {
-	const built: Record<string, string> = { date, run_id: `${date}-1`, shard };
+	const built: Record<string, string> = { date, run_id: `${date}-1`, machine_shard: shard };
 	if (steal !== undefined) built.cpu_steal_pct = String(steal);
 	return built;
 }

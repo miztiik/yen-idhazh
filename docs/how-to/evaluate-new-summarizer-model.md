@@ -365,12 +365,16 @@ The bench never writes the committed config, never publishes, and never grades a
 summary. It says how fast, not how good.
 
 **One thing a bench dispatch does commit, from 2026-09-17: the machine it drew.**
-One row lands on `main` under
-`state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>.csv`, and nothing else
-from the dispatch is written back. A bench reading is about a machine, and until
-that date the processor it ran on expired with the artifact. The rows are kept
-apart from the daily run's for the reason on
+One row lands on `main` as one parquet file under
+`state/pipeline-tests/raw/host-fingerprint/<YYYY>/<MM>/<DD>/`, and nothing else
+from the dispatch is written back. A dispatch whose probe wrote no row stages
+nothing, and its commit step prints `no machine recorded`. A bench reading is
+about a machine, and until that date the processor it ran on expired with the
+artifact. The rows are kept apart from the daily run's for the reason on
 [../reference/host-metrics.md](../reference/host-metrics.md#design-rationale).
+The two CSV files a bench filed before the ledger door, 952 bytes under
+`state/pipeline-tests/host-fingerprint/` holding one row, stay as they are:
+moving them would write about 56 files to carry that one row.
 
 Two readings are cold on purpose. The **first download** is what a cache miss
 costs, which is what the first run after a swap draws on every shard at once.

@@ -1,12 +1,12 @@
 """Does every hand-written list in the console still name what its contract declares?
 
-Six console modules carry a value that has to match what a Pydantic contract
+Seven console modules carry a value that has to match what a Pydantic contract
 declares - the eval panel's column map, the settings vocabulary, the doubt
-reasons, the bandwidth margin, the prompt-reuse column grammar, and the date the
-busy share stopped holding the stolen half. A copy that has fallen behind its
-contract draws a panel with a column missing from it, names a column no run
-writes, or prints a correction for the wrong day, and none of those shows up as
-an error anywhere.
+reasons, the bandwidth margin, the prompt-reuse column grammar, the date the
+busy share stopped holding the stolen half, and the article record's column
+list. A copy that has fallen behind its contract draws a panel with a column
+missing from it, names a column no run writes, or prints a correction for the
+wrong day, and none of those shows up as an error anywhere.
 
 **These six moved here from the browser suite on 2026-09-23**, where each read
 the generated `schemas/<stem>.schema.json`, or the TypeScript generated beside
@@ -49,6 +49,33 @@ def quoted_ids(text: str, name: str) -> list[str]:
     found = re.search(rf"export const {name}\b[^=]*= \[(.*?)\n\];", text, re.DOTALL)
     assert found, f"no exported array named {name}"
     return re.findall(r"\bid: '([^']*)'", found[1])
+
+
+def quoted_strings(text: str, name: str) -> list[str]:
+    """Every quoted string inside `export const <name> = [ ... ] as const;`, in order."""
+    found = re.search(rf"export const {name}\b[^=]*= \[(.*?)\n\] as const;", text, re.DOTALL)
+    assert found, f"no exported constant array named {name}"
+    return re.findall(r"'([^']*)'", found[1])
+
+
+def test_the_article_record_asks_for_every_column_the_contract_declares_in_its_order() -> None:
+    """The door answers only the columns it is asked for, so the list is the whole row.
+
+    `ledger-rows.ts` spells `ItemHealthRow`'s columns once, because the door
+    never offers every column. A column the contract gains and the list lacks
+    would reach a panel as an empty reading rather than as an error. The order
+    is held too: the door sorts the rows it returns by the columns in the order
+    they were asked for.
+    """
+    asked = quoted_strings(read_text(SERVER / "ledger-rows.ts"), "ITEM_HEALTH_COLUMNS")
+    declared = list(ItemHealthRow.csv_columns())
+
+    assert asked == declared, (
+        "ITEM_HEALTH_COLUMNS in ledger-rows.ts is not ItemHealthRow's columns in order. "
+        f"Missing: {[name for name in declared if name not in asked]}. "
+        f"Not declared: {[name for name in asked if name not in declared]}. "
+        "If both are empty, only the order differs: write them in the contract's order."
+    )
 
 
 def test_every_eval_column_is_drawn_on_a_panel_or_declared_not_a_measurement() -> None:

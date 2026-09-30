@@ -1175,12 +1175,12 @@ export function runLengths(
 	const found: RunLength[] = [];
 	for (const [runId, rows] of byRun) {
 		const words = rows
-			.map((row) => measured(row.summary_word_count))
+			.map((row) => measured(row.summary_words))
 			.filter((count): count is number => count !== null)
 			.sort((a, b) => a - b);
 		if (words.length === 0) continue;
 		const asks = rows
-			.map((row) => measured(row.source_word_count) ?? measured(row.source_seen_word_count))
+			.map((row) => measured(row.source_words_before_cap) ?? measured(row.source_words))
 			.filter((count): count is number => count !== null)
 			.map((count) => askFor(rungs, count))
 			.filter((band): band is SummaryBand => band !== null);
@@ -1275,13 +1275,13 @@ function sideMeasures(
 	const rungs = ladder(bands);
 	const times = summarizeMs(health);
 	const words = scores
-		.map((row) => measured(row.summary_word_count))
+		.map((row) => measured(row.summary_words))
 		.filter((count): count is number => count !== null);
 	const copies = scores.map(copied);
 	const rates = health.map(itemRates);
 	const outside = scores.filter((row) => {
-		const wrote = measured(row.summary_word_count);
-		const read = measured(row.source_word_count) ?? measured(row.source_seen_word_count);
+		const wrote = measured(row.summary_words);
+		const read = measured(row.source_words_before_cap) ?? measured(row.source_words);
 		if (wrote === null || read === null) return false;
 		const ask = askFor(rungs, read);
 		return ask !== null && (wrote < ask.target_words_min || wrote > ask.target_words_max);

@@ -9,11 +9,14 @@ retention rolled a day file out (`CLAUDE.md` section 13).
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable
 from pathlib import Path
 
-from idhazh import day_partition, day_shards
-from idhazh.contracts.base import ServerJob
+from conftest import seed_scores
+
+from idhazh import day_partition, ledger
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer
 
@@ -31,21 +34,26 @@ def put(
     state: Path, rows: list[EvalRow], *, run_id: str = A_RUN, attempt: int = 1
 ) -> int:
     """One writer's measurements, filed the way a finished run files them."""
-    return writer.append_segment(
-        state, rows, run_id=run_id, attempt=attempt, job=ServerJob.ASSEMBLE, shard=0
-    )
+    return seed_scores(state, rows, run_id=run_id, attempt=attempt)
 
 
-def test_one_writers_rows_for_a_day_share_one_file_with_one_header(tmp_path: Path) -> None:
+def as_csv(path: Path, records: Iterable[dict[str, str]]) -> None:
+    """Rows written out as the CSV the month summariser reads, outside the state tree."""
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=writer.columns(), lineterminator="\n")
+        out.writeheader()
+        out.writerows(records)
+
+
+def test_one_writers_rows_for_a_day_share_one_file(tmp_path: Path) -> None:
     """A writer owns its file, so its whole slice of a day is written at once."""
     state = tmp_path / "state"
-    assert put(state, [row(), row(item_id="ai-02", output_digest="b" * 64)]) == 2
-    days = writer.ledger_days(state)
-    assert len(days) == 1, "one writer, one day, one file"
-    with days[0].open(encoding="utf-8") as handle:
-        lines = list(csv.reader(handle))
-    assert len(lines) == 3
-    assert tuple(lines[0]) == writer.columns()
+    rows = [row(), row(item_id="ai-02", output_digest="b" * 64)]
+    assert put(state, rows) == 2
+    files = ledger.list_raw_files(state, LedgerName.SCORES)
+    assert len(files) == 1, "one writer, one day, one file"
+    assert files[0].envelope.row_schema_version == EvalRow.schema_version()
+    assert ledger.load([files[0].path], model=EvalRow) == rows
 
 
 def test_two_days_of_rows_land_in_two_files(tmp_path: Path) -> None:
@@ -60,7 +68,7 @@ def test_two_days_of_rows_land_in_two_files(tmp_path: Path) -> None:
 
     assert put(state, [september, august]) == 2
 
-    assert [day_shards.date_of(day) for day in writer.ledger_days(state)] == [
+    assert [held.envelope.covers for held in ledger.list_raw_files(state, LedgerName.SCORES)] == [
         august.date,
         september.date,
     ]
@@ -78,8 +86,8 @@ def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) 
     assert put(state, [row()]) == 1
     again = row(date="2026-08-22", run_id="2026-08-22-1", item_id="ai-07")
     assert put(state, [again], run_id="2026-08-22-1") == 0
-    with writer.ledger_days(state)[0].open(encoding="utf-8") as handle:
-        assert len(list(csv.reader(handle))) == 2
+    assert len(list(writer.records(state))) == 1
+    assert ledger.held_days(state, LedgerName.SCORES) == ["2026-08-21"]
 
 
 def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -> None:
@@ -96,7 +104,7 @@ def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -
     later = row(date="2026-09-14", run_id="2026-09-14-1", item_id="ai-07")
 
     assert put(state, [later], run_id="2026-09-14-1") == 0
-    assert [day_shards.date_of(day) for day in writer.ledger_days(state)] == [held.date]
+    assert ledger.held_days(state, LedgerName.SCORES) == [held.date]
 
 
 def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> None:
@@ -106,30 +114,35 @@ def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> No
 
 
 def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path) -> None:
-    """The dedupe spans the archives too, or deleting a shard reopens the door.
+    """The dedupe spans the archives too, or dropping an index day reopens the door.
 
     Sharding was the first way this could break and the fix was to read every
-    partition. Archiving is the second: a month past the scores task's
-    full-grain window has no rows left to read at all, so
-    a dedupe over the rows alone would call every measurement in it new on the
-    day it was deleted - and a count over the ledger would stop being a count of
+    partition. Archiving is the second: once a month past the scores task's
+    full-grain window has an archive, the task drops that month's index days,
+    so a dedupe over the index alone would call every measurement in it new on
+    the day they went - and a count over the ledger would stop being a count of
     items, which is the one thing this ledger promises it is not.
     """
     state = tmp_path / "state"
-    assert put(state, [row()]) == 1
-    days = writer.ledger_days(state)
-    month = day_shards.date_of(days[0])[:7]
+    held = row()
+    assert put(state, [held]) == 1
+    month = held.date[:7]
+    shard = tmp_path / f"{month}.csv"
+    as_csv(shard, writer.records(state))
     summary = score_archive.summarise(
-        days, month=month, observation_key=writer.OBSERVATION_KEY
+        [shard], month=month, observation_key=writer.OBSERVATION_KEY
     )
     score_archive.write(score_archive.archive_path(state, month), summary)
-    for day in days:
+    for day in writer.index_days(state):
         day.unlink()
         day_partition.drop_empty_day_dirs(day)
 
-    assert not writer.ledger_days(state)
+    assert not writer.index_days(state)
     assert put(state, [row(date="2026-09-14", run_id="2026-09-14-1")], run_id="2026-09-14-1") == 0
-    assert not writer.ledger_days(state), "the archived measurement was written again"
+    assert ledger.held_days(state, LedgerName.SCORES) == [held.date], (
+        "the archived measurement was written again"
+    )
+    assert not writer.index_days(state), "the archived measurement was indexed again"
 
 
 def test_a_changed_output_is_a_new_measurement(tmp_path: Path) -> None:
@@ -166,8 +179,8 @@ def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path)
     Driven from a row with the column removed. Walking the committed ledger cost
     a parse per row and asserted the ledger STILL HELD a row older than the
     column, which is a fuse timed to the day the last one ages out of retention.
-    The cell-count check it carried belongs to `require_matching_header`, which
-    refuses a mismatched append at write time - proved below.
+    The cell-count check it carried went with the CSV files: the ledger door
+    writes every row under the columns its contract declares.
     """
     old = row().model_dump(mode="json")
     old.pop("source_digest")

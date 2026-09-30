@@ -24,24 +24,30 @@ Get the directory from a finished run with:
     gh run download <run-id> --repo miztiik/yen-idhazh --name captures-<shard>
 
 A capture written before 2026-09-15 carries no cost numbers, because the run
-that wrote it did not record them here. Point `--health` at the day's ledger and
-the cost section fills from the row that run did write:
+that wrote it did not record them here. Name the run's UTC day with `--health`
+and the cost section fills from the row that run did write, read from the
+item-health ledger under `--state` (default `state`):
 
-    ... --health state/item-health/2026/09/14.csv
+    ... --health 2026-09-14
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import re
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import date
 from itertools import count
 from pathlib import Path
 from typing import Any
+
+from idhazh import ledger
+from idhazh.contracts.base import DATE_PATTERN
+from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.ledger_name import LedgerName
 
 #: The order the run makes them in. A viewer that sorted these alphabetically
 #: would print the reply before the question on every item.
@@ -267,43 +273,42 @@ class Row:
     calls: dict[str, tuple[Cost, Split | None, str]]
 
 
-def from_ledger(path: Path) -> dict[str, Row]:
-    """What the run wrote to its item-health rows, by item.
+def from_ledger(state: Path, day: str) -> dict[str, Row]:
+    """What the run wrote to its item-health rows on one UTC day, by item.
 
     The fallback for a capture taken before this utility recorded its own, and
     the only source for the cells a capture never carries - the outcome, the
     word counts, the shard. Both sources are the same numbers off the same
     reply, so a capture that carries them wins and this fills what it left empty.
 
-    One named day file, read once for the whole directory. A read whose cost
-    grows with the archive has to justify itself (Guardrail #12), and one that
-    reopens the same file once an item is just slow. The last matching row wins:
-    a day can hold two runs over one item, and the later one is the one a reader
-    downloading today's artifact is asking about.
+    One named day of the item-health ledger, read once for the whole directory
+    through the ledger door and settled the way every reader of it is
+    (`ledger.load_days`). A read whose cost grows with the archive has to justify
+    itself (Guardrail #12), and one that reads the same day once an item is just
+    slow. The last matching row wins: a day can hold two runs over one item, and
+    the later one is the one a reader downloading today's artifact is asking
+    about.
     """
     found: dict[str, Row] = {}
-    with path.open(encoding="utf-8", newline="") as handle:
-        for line in csv.DictReader(handle):
-            item_id = line.get("item_id") or ""
-            if not item_id:
+    for row in ledger.load_days(state, LedgerName.ITEM_HEALTH, [day], model=ItemHealthRow):
+        line = row.csv_row()
+        calls: dict[str, tuple[Cost, Split | None, str]] = {}
+        for call in CALL_ORDER:
+            if not line.get(f"{call}_input_tokens"):
                 continue
-            calls: dict[str, tuple[Cost, Split | None, str]] = {}
-            for call in CALL_ORDER:
-                if not line.get(f"{call}_input_tokens"):
-                    continue
-                calls[call] = (
-                    Cost(
-                        kind=str(line.get(f"{call}_kind") or ""),
-                        prefill_ms=whole(line.get(f"{call}_prefill_ms")),
-                        decode_ms=whole(line.get(f"{call}_decode_ms")),
-                        input_tokens=whole(line.get(f"{call}_input_tokens")),
-                        output_tokens=whole(line.get(f"{call}_output_tokens")),
-                        cached_tokens=whole(line.get(f"{call}_cached_tokens")),
-                    ),
-                    ledger_split(line) if call == "summary" else None,
-                    str(line.get(f"{call}_finish_reason") or ""),
-                )
-            found[item_id] = Row(about=ledger_about(line), calls=calls)
+            calls[call] = (
+                Cost(
+                    kind=str(line.get(f"{call}_kind") or ""),
+                    prefill_ms=whole(line.get(f"{call}_prefill_ms")),
+                    decode_ms=whole(line.get(f"{call}_decode_ms")),
+                    input_tokens=whole(line.get(f"{call}_input_tokens")),
+                    output_tokens=whole(line.get(f"{call}_output_tokens")),
+                    cached_tokens=whole(line.get(f"{call}_cached_tokens")),
+                ),
+                ledger_split(line) if call == "summary" else None,
+                str(line.get(f"{call}_finish_reason") or ""),
+            )
+        found[row.item_id] = Row(about=ledger_about(line), calls=calls)
     return found
 
 
@@ -316,9 +321,9 @@ def ledger_about(line: Mapping[str, str]) -> About:
         source_words=whole(line.get("source_words")),
         summary_words=whole(line.get("summary_words")),
         outcome=str(line.get("outcome") or ""),
-        failure_code=str(line.get("failure_code") or ""),
+        failure_code=str(line.get("code") or ""),
         run_id=str(line.get("run_id") or ""),
-        shard=str(line.get("shard") or ""),
+        shard=str(line.get("machine_shard") or ""),
     )
 
 
@@ -601,9 +606,8 @@ def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
         return [
             *out,
             "No call in this pair recorded what it cost. A capture written before "
-            "2026-09-15 carries no cost numbers; pass "
-            "`--health state/item-health/<yyyy>/<mm>/<dd>.csv` to fill this section "
-            "from the row that run did write.",
+            "2026-09-15 carries no cost numbers; pass `--health <YYYY-MM-DD>`, the "
+            "run's UTC day, to fill this section from the row that run did write.",
             "",
         ]
 
@@ -758,9 +762,8 @@ def about_section(pair: Mapping[str, Capture], number: int, *, summary_at: int) 
         return [
             *out,
             "This capture does not say which story it was about. A capture written "
-            "before 2026-09-15 carries no link; pass "
-            "`--health state/item-health/<yyyy>/<mm>/<dd>.csv` to fill this from the "
-            "row that run did write.",
+            "before 2026-09-15 carries no link; pass `--health <YYYY-MM-DD>`, the "
+            "run's UTC day, to fill this from the row that run did write.",
             "",
         ]
     rows = [["link", f"<{about.canonical_url}>" if about.canonical_url else "-"]]
@@ -977,6 +980,13 @@ def summarise(found: Mapping[str, Mapping[str, Capture]]) -> str:
     return "\n".join(rows)
 
 
+def utc_day(text: str) -> str:
+    """One UTC day as `--health` takes it, `YYYY-MM-DD`. argparse prints a refusal."""
+    if re.fullmatch(DATE_PATTERN, text, flags=re.ASCII) is None:
+        raise argparse.ArgumentTypeError(f"a day is YYYY-MM-DD, not {text!r}")
+    return date.fromisoformat(text).isoformat()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -999,16 +1009,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--health",
+        type=utc_day,
+        metavar="YYYY-MM-DD",
+        help="the run's UTC day, whose item-health rows fill a capture written before "
+        "costs were recorded",
+    )
+    parser.add_argument(
+        "--state",
         type=Path,
-        help="the day's item-health CSV, for a capture written before costs were recorded",
+        default=Path(ledger.STATE_DIRNAME),
+        help="the state tree the item-health ledger sits under (default: state)",
     )
     parser.add_argument("--out", type=Path, help="write markdown here instead of to the terminal")
     args = parser.parse_args(argv)
 
     if not args.directory.is_dir():
         parser.error(f"{args.directory} is not a directory")
-    if args.health is not None and not args.health.is_file():
-        parser.error(f"{args.health} is not a file")
+    rows = from_ledger(args.state, args.health) if args.health is not None else {}
+    if args.health is not None and not rows:
+        parser.error(
+            f"the item-health ledger under {args.state.as_posix()} holds no row for "
+            f"{args.health}"
+        )
     found = pairs(args.directory)
     if not found:
         parser.error(
@@ -1017,10 +1039,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if not args.item:
-        listed = found
-        if args.health is not None:
-            rows = from_ledger(args.health)
-            listed = {item_id: merged(pair, rows.get(item_id)) for item_id, pair in found.items()}
+        listed = {item_id: merged(pair, rows.get(item_id)) for item_id, pair in found.items()}
         print(summarise(listed))
         print(f"\n{len(listed)} item(s). Add --item <id> to read one.")
         return 0
@@ -1030,7 +1049,6 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"no item id contains {args.item!r}. Run without --item to list them")
 
     head = 0 if args.full else args.head
-    rows = from_ledger(args.health) if args.health is not None else {}
     documents = []
     for item_id in wanted:
         pair = merged(found[item_id], rows.get(item_id))

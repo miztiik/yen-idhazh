@@ -148,7 +148,9 @@ function processorTime(
 		const totalMs = cell(row.item_total_ms);
 		if (busyPct === null || totalMs === null || totalMs <= 0) continue;
 		offered += 1;
-		const processors = byShard.get(shardKey(row.date ?? '', row.run_id ?? '', row.shard ?? ''));
+		const processors = byShard.get(
+			shardKey(row.date ?? '', row.run_id ?? '', row.machine_shard ?? '')
+		);
 		if (processors === undefined) continue;
 		counts.add(processors);
 		seconds.push((busyPct / PER_CENT) * processors * (totalMs / MS_PER_SECOND));
@@ -194,7 +196,7 @@ function addedMemory(health: readonly Record<string, string>[]): {
 		const index = cell(row.item_index);
 		const rss = cell(row.llama_rss_bytes);
 		if (index === null || rss === null) continue;
-		const key = shardKey(row.date ?? '', row.run_id ?? '', row.shard ?? '');
+		const key = shardKey(row.date ?? '', row.run_id ?? '', row.machine_shard ?? '');
 		const held = byShard.get(key);
 		if (held === undefined) byShard.set(key, [{ index, rss }]);
 		else held.push({ index, rss });

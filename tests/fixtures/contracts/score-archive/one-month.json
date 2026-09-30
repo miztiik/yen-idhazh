@@ -22,13 +22,6 @@
         5
       ],
       "measurements": {
-        "attempt": {
-          "max": 1.0,
-          "min": 1.0,
-          "n": 5,
-          "sum": 5.0,
-          "sum_squares": 5.0
-        },
         "compression": {
           "max": 0.4391691394658754,
           "min": 0.059344091618948464,
@@ -85,14 +78,14 @@
           "sum": 0.0,
           "sum_squares": 0.0
         },
-        "source_seen_word_count": {
+        "source_words": {
           "max": 1923.0,
           "min": 332.0,
           "n": 5,
           "sum": 5317.0,
           "sum_squares": 7081477.0
         },
-        "source_word_count": {
+        "source_words_before_cap": {
           "max": 1310.0,
           "min": 332.0,
           "n": 4,
@@ -106,7 +99,14 @@
           "sum": 0.0,
           "sum_squares": 0.0
         },
-        "summary_word_count": {
+        "summary_attempt": {
+          "max": 1.0,
+          "min": 1.0,
+          "n": 5,
+          "sum": 5.0,
+          "sum_squares": 5.0
+        },
+        "summary_words": {
           "max": 148.0,
           "min": 89.0,
           "n": 5,

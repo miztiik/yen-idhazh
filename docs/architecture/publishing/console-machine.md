@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-29
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -13,7 +13,7 @@ The headings, their order and which panels sit under each are
 `console.panel_groups.machine` in
 [`config/appearance.json`](../../../config/appearance.json), so the table below
 describes that file rather than repeating a count that a config edit moves.
-Every panel reads `state/item-health/`, `state/host-fingerprint/` or both -
+Every panel reads the item-health ledger, the host-fingerprint ledger or both -
 the two instruments this route puts beside each other - and the machine panels
 and the split take the processor and the flags off the machine record as well.
 Both ledgers are read at build time under `$lib/server/` and nothing on the
@@ -429,7 +429,7 @@ All three come off ledgers the site already commits; none of them reached a
 screen before.
 
 **The unclaimed figure is read, never recomputed.** It is `stage_gap_ms` off
-`state/item-health/`, added over the shard's rows, and the page works out
+the item-health ledger, added over the shard's rows, and the page works out
 nothing. The column is the item's own wall clock minus every step the pipeline
 named, so it is the one thing that can catch a regression in a step nobody
 named - and a figure the page subtracted from the step clocks itself would agree
@@ -471,8 +471,8 @@ hides the panel explaining another route's numbers.
 
 ## The run strip is a time axis, and a day nothing ran is drawn
 
-The pipeline has written a machine row per shard per run to
-`state/host-fingerprint/` and an item row to `state/item-health/` for longer than
+The pipeline has written a machine row per shard per run to the host-fingerprint
+ledger and an item row to the item-health ledger for longer than
 this route has existed, and no page had ever put the two together. The route
 exists before its panels do, and says what is missing once at the top and once
 per named panel. A route that hid itself until it had data would be a route

@@ -1,11 +1,11 @@
 # Summary Metrics
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-29
 
 What one number about one summary means, and what it cannot see.
 
 Somebody arrives here holding a column name - `self_repetition`, `verbatim_run`,
-`extractiveness`, `truncation_flagged` - off `state/scores.csv`, off `EvalRow`,
+`extractiveness`, `truncation_flagged` - off the scores ledger, off `EvalRow`,
 or off a console panel, and wants the sentence that defines it. That is the whole
 question this page answers.
 
@@ -211,7 +211,7 @@ being a formality.
 
 **The word-count pair still stays the recommended test**, and the new agreement
 does not change that. The flag is right only on rows a reader has to filter for
-first; `source_word_count > source_seen_word_count` is right on every row that
+first; `source_words_before_cap > source_words` is right on every row that
 carries both, with nothing to remember. What the 430 of 430 buys is confidence
 that the two now say the same thing, so a reader who picks either one gets the
 same answer on any row written from here.

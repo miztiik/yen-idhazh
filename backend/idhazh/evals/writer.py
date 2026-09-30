@@ -1,7 +1,8 @@
-"""Append to the committed eval ledger, one file a day.
+"""How the eval ledger's measurements are filed, once each, and indexed.
 
-Append-only, in the column order the contract defines, and never recomputed at
-read time. Committing the scores rather than deriving them is what makes a
+Filed through the ledger door under `state/raw/scores/`, in the column order the
+contract defines, and never recomputed at read time. Committing the scores rather
+than deriving them is what makes a
 claim about last quarter a lookup instead of a re-run against a model that has
 since moved.
 
@@ -11,11 +12,14 @@ nothing new to say, so it writes nothing. That is the promise in
 `docs/concepts/evaluation.md`, and it is what keeps a count over the ledger a
 count of items rather than a count of times the pipeline looked at them.
 
-A month past the full-grain window of `config/gardener/scores.json` stops being
-rows and becomes `state/score-archive/<YYYY-MM>.json` (`idhazh.evals.archive`). That is
-why `recorded_observations` reads two places: the promise above has to hold for
-a month whose rows are gone, and the archive's sorted digest index is the only
-thing that can still answer it.
+`recorded_observations` reads two places: the index described below, and any
+month summary already written under `state/score-archive/<YYYY-MM>.json`
+(`idhazh.evals.archive`). No new summary is built: the `scores` task built one
+from the CSV day files, and those are gone. So no index day is ever dropped,
+and the dedupe read opens one more index day for every day recorded, until a
+month summary built from the door's rows lands. That read grows with what the
+ledger has piled up (Guardrail #12), and it is listed in
+`docs/concepts/growing-reads.md`.
 
 **The dedupe does not read the rows.** Answering "do we already hold this one?"
 meant every run paid for every row it had ever written. Measured on this
@@ -50,8 +54,8 @@ from pathlib import Path
 from typing import Final, NamedTuple
 
 from idhazh import day_shards, ledger
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
@@ -65,40 +69,16 @@ from idhazh.ledger import require_matching_header
 OBSERVATION_KEY: Final = ledger.OBSERVATION_KEY
 
 
-def ledger_days(state_dir: Path) -> list[Path]:
-    """Every committed shard of the ledger, oldest day first.
-
-    Anything that is not a day of this ledger is left alone: the gardener's
-    `scores` task archives and then deletes out of this directory, so
-    it names what it recognises rather than acting on what it does not. What
-    counts as a day is `day_shards.shard_files` and nothing local - this
-    directory is the one where getting that wrong deletes a file. That walk
-    reads a `<DD>.csv` day file and a `<DD>/` day directory of writer-owned
-    files alike, so nothing here moves when the ledger changes shape.
-
-    The daily settlement was the caller that made this a cost, and it is gone. A
-    run appends to the one day file `ledger_path` names, so that file is the only
-    place a repeat can be, and walking the rest charged every run for every day on
-    record (Guardrail #12). The operator's full pass still comes here, and it is
-    unbounded because every one of its callers has to see the whole ledger.
-    """
-    return list(
-        day_shards.shard_files(
-            ledger.tree_root(state_dir, LedgerName.SCORES), days=UNBOUNDED_WINDOW
-        )
-    )
-
-
 def records(state_dir: Path) -> Iterator[dict[str, str]]:
-    """Every committed row, oldest day first, as the CSV spells it.
+    """Every row the eval ledger holds now, oldest day first, as a CSV line spells it.
 
-    One sequence over many files, so a reader that wants the whole ledger reads
-    it the way it always did and a reader that wants a window can skip whole days
-    instead.
+    The whole ledger, read through the door and settled once
+    (`ledger.load_ledger_rows`). Unbounded on purpose and declared: every caller
+    is an operator's pass that has to see every measurement
+    (`docs/concepts/growing-reads.md`).
     """
-    for shard in ledger_days(state_dir):
-        with shard.open("r", encoding="utf-8", newline="") as handle:
-            yield from csv.DictReader(handle)
+    for row in ledger.load_ledger_rows(state_dir, LedgerName.SCORES, model=EvalRow):
+        yield row.csv_row()
 
 
 def columns() -> tuple[str, ...]:
@@ -118,10 +98,9 @@ def observation(payload: Mapping[str, object]) -> tuple[str, ...]:
 def observation_digest(payload: Mapping[str, object]) -> str:
     """The same identity as one hash, which is the form that survives a deletion.
 
-    A month past the scores task's full-grain window is summarised and its
-    day files are unlinked, and the summary keeps this digest rather than the four
-    values it came from - `state/score-archive/` is a fixed-width index instead
-    of a second copy of the addresses.
+    The index keeps this digest rather than the four values it came from, and so
+    does a month summary under `state/score-archive/` - a fixed-width record
+    instead of a second copy of the addresses.
     """
     return archive.digest_of(observation(payload))
 
@@ -135,12 +114,13 @@ def recorded_observations(state_dir: Path) -> set[str]:
     which would turn a count over the ledger into a count of times the pipeline
     looked, and that is the one thing this ledger promises it is not.
 
-    **The archived half is what makes deleting a day safe.** A month older
-    than the full-grain window has no rows left to read, so a dedupe over the
-    rows alone would call every measurement in it new the day it was deleted.
-    `state/score-archive/<YYYY-MM>.json` carries those digests for exactly this
-    union, and it is why the archive keeps them sorted (`docs/concepts/
-    evaluation.md`).
+    **The archived half is what makes deleting an index day safe.** The
+    `scores` task drops an index day only once a month summary covers its
+    month, so a dedupe over the index alone would call every measurement in it
+    new the day it was dropped. `state/score-archive/<YYYY-MM>.json` carries
+    those digests for exactly this union, and it is why the archive keeps them
+    sorted (`docs/concepts/evaluation.md`). No new summary is built today, so
+    no index day is dropped; the module docstring says why.
 
     **Neither half reads a score row.** Both are fixed-width digest records, so
     what this costs follows the measurements the ledger holds rather than the
@@ -156,8 +136,9 @@ def recorded_observations(state_dir: Path) -> set[str]:
 def index_days(state_dir: Path) -> list[Path]:
     """Every committed shard of the index, oldest day first.
 
-    `day_shards.shard_files` for the reason `ledger_days` gives, and unbounded
-    for the reason it gives: every caller here needs the whole index.
+    `day_shards.shard_files` decides what counts as a day, which is the same walk
+    the `scores` task drops index days by. Unbounded because every caller here
+    needs the whole index.
     """
     return list(
         day_shards.shard_files(
@@ -177,12 +158,11 @@ def indexed_observations(state_dir: Path) -> set[str]:
     **This opens one file a recorded day and it is declared rather than hidden**
     (Guardrail #12, `docs/concepts/growing-reads.md`). It was one file a month
     until 2026-09-13, when the grain change turned 2 opens into 23, and it gains
-    about 365 a year. The ledger bound is what answers it: a day past the scores
-    task's full-grain window is folded into one
-    `state/score-archive/<YYYY-MM>.json` and its index day is dropped, so the
-    live index holds at most fourteen months of days. **The task ships
-    `dry_run: true`, so nothing prunes and the count grows until its declaration
-    is flipped** (`docs/architecture/publishing/retention.md`).
+    about 365 a year. **Nothing bounds it today.** The `scores` task drops an
+    index day only once a month summary under `state/score-archive/` covers it,
+    and it builds no summary any more: it built one from the CSV day files, and
+    those are gone. So the read grows with every recorded day until a month
+    summary built from the door's rows lands.
 
     A cover was rejected rather than overlooked: a measurement re-taken outside
     a window would read as new, and a count over the ledger would become a count
@@ -244,22 +224,20 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
     by name rather than skipped: a typo must not read as a clean pass over
     nothing.
     """
-    live = _by_day(ledger_days(state_dir))
+    live = _digests_by_day(state_dir, days)
     named = sorted({day[:10] for day in days})
     if not named:
         raise ValueError("rebuild_index was given no day, and a pass over none repairs none")
     absent = [date for date in named if date not in live]
     if absent:
-        raise FileNotFoundError(
-            f"{ledger.tree_relpath(LedgerName.SCORES)} holds no rows for {absent}"
-        )
+        raise FileNotFoundError(f"the scores ledger holds no rows for {absent}")
 
     # One stamp for the whole pass, so every day this command repaired carries
     # the same name and an operator can see one repair rather than twenty.
     name = ledger.repair_name(datetime.now(UTC))
     found: dict[str, IndexDrift] = {}
     for date in named:
-        produced = _digests_of_day(live[date])
+        produced = live[date]
         found[date] = _drift(_indexed_on(state_dir, date), produced)
         if found[date].missing:
             index = ledger.path(state_dir, LedgerName.SCORE_INDEX, date)
@@ -292,27 +270,18 @@ def _drift(held: frozenset[str], produced: frozenset[str]) -> IndexDrift:
     return IndexDrift(extra=held - produced, missing=produced - held)
 
 
-def _by_day(shards: Iterable[Path]) -> dict[str, list[Path]]:
-    """The shards of each recorded day, keyed by the day they are filed under.
+def _digests_by_day(state_dir: Path, days: Iterable[str]) -> dict[str, frozenset[str]]:
+    """The distinct observations each named day's rows produce, read from the rows.
 
-    A day is one file today and a directory of writer-owned files after the
-    ledger changes shape, so a caller that asks about a date gets every file that
-    date holds rather than whichever one the walk named last.
+    The one read here that opens a score row on purpose, which is why only
+    `rebuild_index` calls it and why that is a command a person types. A day
+    with no row is absent from the answer rather than empty.
     """
-    by_day: dict[str, list[Path]] = {}
-    for shard in shards:
-        by_day.setdefault(day_shards.date_of(shard), []).append(shard)
-    return by_day
-
-
-def _observations_of(shards: Sequence[Path]) -> Iterator[str]:
-    """Every row's observation digest, across one day's shards, in file order."""
-    for shard in shards:
-        if not shard.exists():
-            continue
-        with shard.open("r", encoding="utf-8", newline="") as handle:
-            for row in csv.DictReader(handle):
-                yield observation_digest(row)
+    by_day: dict[str, set[str]] = {}
+    named = {day[:10] for day in days}
+    for row in ledger.load_days(state_dir, LedgerName.SCORES, named, model=EvalRow):
+        by_day.setdefault(row.date, set()).add(observation_digest(row.model_dump(mode="json")))
+    return {day: frozenset(held) for day, held in by_day.items()}
 
 
 def _digests_of_index(path: Path) -> frozenset[str]:
@@ -327,15 +296,6 @@ def _digests_of_index(path: Path) -> frozenset[str]:
     require_matching_header(path, index_columns())
     with path.open("r", encoding="utf-8", newline="") as handle:
         return frozenset(record["observation_digest"] for record in csv.DictReader(handle))
-
-
-def _digests_of_day(shards: Sequence[Path]) -> frozenset[str]:
-    """The distinct observations one day's rows produce, read from the rows.
-
-    The one read here that opens a score row on purpose, which is why only
-    `rebuild_index` calls it and why that is a command a person types.
-    """
-    return frozenset(_observations_of(shards))
 
 
 def _append_index(path: Path, digests: Iterable[str]) -> int:
@@ -376,40 +336,29 @@ def _unrecorded(rows: Sequence[EvalRow], already: set[str]) -> list[tuple[EvalRo
     return fresh
 
 
-def append_segment(
+def file_measurements(
     state_dir: Path,
     rows: Iterable[EvalRow],
     *,
-    run_id: str,
-    attempt: int,
-    job: ServerJob,
-    shard: int,
+    identity: WriterIdentity,
 ) -> int:
-    """Put this writer's measurements in its own segment, for the compaction to fold.
+    """File this writer's new measurements through the ledger door, and index them.
 
     Two jobs of one run measure items - a work shard as each item settles, and
-    assemble over the whole day afterwards - so neither may open the day file.
-    Each writes its own file inside the day directory, named for the writer, and
-    the index beside it. Two writers never share a path, so a lost push race
-    costs a merge rather than the rows, and a re-run's second attempt corrects
-    its first try instead of colliding with it.
+    assemble over the whole day afterwards - and each files its own raw file
+    under `state/raw/scores/`, named for the writer by the door. Two writers
+    never share a path, so a lost push race costs a merge rather than the rows,
+    and a re-run's second attempt replaces its first try instead of colliding
+    with it.
 
-    **The dedupe reads the committed days, and what it cannot see is settled
-    later.** A measurement already in a committed day is skipped here. A
-    measurement this run's other writer left in the day directory minutes ago is
-    invisible - the dedupe reads the index and this run's index files are not in
-    it yet - so both writers mint it, and the fold settles the pair against
-    `OBSERVATION_KEY`. That is the same answer by a later route, which is what
-    makes it safe to run a second time.
+    **The dedupe reads the committed index, and what it cannot see is settled
+    later.** A measurement already recorded is skipped here. A measurement this
+    run's other writer filed minutes ago is invisible - the dedupe reads the
+    index and this run's index files are not in it yet - so both writers file
+    it, and the settlement keeps one row per `OBSERVATION_KEY`. That is the same
+    answer by a later route, which is what makes it safe to run a second time.
 
-    **Nothing here checks a header.** Each file is this writer's alone and is
-    written whole from the contract's own columns, so there is no earlier header
-    to agree with. The fold reads every file back through the contract's own
-    reader and writes the day whole under the current columns, so a header from
-    an earlier build is replaced rather than repaired.
-
-    Returns how many measurements went into the segment, so a caller can log the
-    count.
+    Returns how many measurements were filed, so a caller can log the count.
     """
     pending = list(rows)
     if not pending:
@@ -418,20 +367,19 @@ def append_segment(
     if not fresh:
         return 0
     stamp = ObservationIndexRow.schema_version()
-    written = ledger.write_segment(
+    if not ledger.persist(
         state_dir,
-        LedgerName.SCORES,
         [row for row, _ in fresh],
-        run_id=run_id,
-        attempt=attempt,
-        job=job,
-        shard=shard,
-    )
+        ledger=LedgerName.SCORES,
+        covers=identity.run_id[:10],
+        identity=identity,
+    ):
+        return 0
     # The rows first, then the index, and the order is the whole argument. A
     # crash between the two leaves a measurement recorded and not indexed, which
-    # the next run mints again and the fold settles. The other order leaves a
-    # digest whose row was never written - a measurement nothing will ever take
-    # again, and nothing on disk that says it is missing.
+    # the next run files again and the settlement keeps once. The other order
+    # leaves a digest whose row was never written - a measurement nothing will
+    # ever take again, and nothing on disk that says it is missing.
     #
     # `date=` because an index row is a stamp and a digest and carries no date
     # cell to be filed by. The day is the run's own, which is the day the eval
@@ -443,10 +391,10 @@ def append_segment(
             ObservationIndexRow.model_validate({"version": stamp, "observation_digest": digest})
             for _, digest in fresh
         ],
-        run_id=run_id,
-        attempt=attempt,
-        job=job,
-        shard=shard,
-        date=run_id[:10],
+        run_id=identity.run_id,
+        attempt=identity.attempt,
+        job=identity.job,
+        shard=identity.shard,
+        date=identity.run_id[:10],
     )
-    return written
+    return len(fresh)

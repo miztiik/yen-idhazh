@@ -1,0 +1,18 @@
+{
+  "dry_run": true,
+  "kind": "compaction",
+  "ledger": "item-health",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "monthly_window": {
+    "unit": "months",
+    "value": 15
+  },
+  "owns": [
+    "state/raw/item-health",
+    "state/compact/item-health"
+  ],
+  "window": {
+    "unit": "forever"
+  }
+}

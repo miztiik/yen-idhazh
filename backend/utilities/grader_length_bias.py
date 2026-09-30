@@ -137,14 +137,14 @@ def slices_under(text: str, config: EvaluationConfig) -> int:
 def _cut_by_row(state_dir: Path) -> dict[str, bool | None]:
     """Whether extract cut each measurement's article, keyed the way evidence is named.
 
-    Read as the arithmetic rather than as the flag. `source_word_count` counts
-    the body before `extract.truncation_cap_tokens` and `source_seen_word_count`
+    Read as the arithmetic rather than as the flag. `source_words_before_cap` counts
+    the body before `extract.truncation_cap_tokens` and `source_words`
     counts what survived it, and the difference between them is the cut and
     nothing else (`docs/concepts/evaluation.md`). `truncation_flagged` changed
     meaning on 2026-08-28 and is true on one row in the whole ledger, so reading
     it here would split the table on a column that measures something else.
 
-    An empty `source_word_count` is a row that does not know its own pre-cap
+    An empty `source_words_before_cap` is a row that does not know its own pre-cap
     length, and that is `None` rather than `False`. So is a pair whose month has
     aged out of the scores task's full-grain window: the summary that
     replaced it counts cuts per cohort and cannot answer for one item. Both land
@@ -155,10 +155,10 @@ def _cut_by_row(state_dir: Path) -> dict[str, bool | None]:
 
 
 def _cut_of(record: Mapping[str, str]) -> bool | None:
-    full = str(record.get("source_word_count") or "").strip()
+    full = str(record.get("source_words_before_cap") or "").strip()
     if not full:
         return None
-    return int(full) > int(record["source_seen_word_count"])
+    return int(full) > int(record["source_words"])
 
 
 def load_pairs(evidence_dir: Path, state_dir: Path) -> list[Pair]:

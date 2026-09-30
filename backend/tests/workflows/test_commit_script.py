@@ -59,16 +59,29 @@ def _a_writers_file(*, attempt: int) -> str:
     A test of what a rebase does to two committed names has to use names a run
     can actually produce: the shard is two digits in a committed name and the
     date comes from the rows rather than from the runner, so a name written by
-    hand here would be a name no writer ever takes.
+    hand here would be a name no writer ever takes. Feed health is a tree the
+    plan job files into, and one that still keeps a day as a folder of CSV
+    files named for their writers.
     """
     return ledger.day_shard_relpath(
-        LedgerName.ITEM_HEALTH,
+        LedgerName.FEED_HEALTH,
         date=SUBSTITUTED_DATE,
         run_id=f"{SUBSTITUTED_DATE}-40000000001",
         attempt=attempt,
         job=ServerJob.PLAN,
         shard=0,
     )
+
+
+def _stand_in_day(tree: str, date: str) -> str:
+    """Where the harness's stand-in producer files one day of one of its two trees.
+
+    `rebuild_day.py` has no ledger behind it: it writes each run's rows by hand,
+    one CSV file per writer, into a day folder it spells itself. So the folder
+    is asked of that same spelling rather than of the ledger registry, which
+    files neither of these ledgers by day folder any more.
+    """
+    return f"{ledger.STATE_DIRNAME}/{tree}/{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
 def _committed_day(origin: Path, env: dict[str, str], relpath: str) -> list[dict[str, str]]:
@@ -658,8 +671,8 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     published = _rows(
         _git(origin, env, "show", f"main:{ledger.relpath(LedgerName.PUBLISHED, date)}")
     )
-    scores = _committed_day(origin, env, ledger.relpath(LedgerName.SCORES, date))
-    health = _committed_day(origin, env, ledger.relpath(LedgerName.ITEM_HEALTH, date))
+    scores = _committed_day(origin, env, _stand_in_day("scores", date))
+    health = _committed_day(origin, env, _stand_in_day("item-health", date))
     every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
     # Exactly once each in the two day trees. Each run writes the one file its
     # own run, attempt, job and shard name, so a rebuild cannot add to what a

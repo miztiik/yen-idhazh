@@ -9,11 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from idhazh import (
-    day_shards,
-    ledger,
-)
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh import ledger
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import writer
 from idhazh.stages import common
@@ -52,27 +48,22 @@ def stage_rebuild_score_index(
     `check-publication` and `site-weight` already hold.
     """
     state = state_dir if state_dir is not None else common.STATE_ROOT
-    # Unbounded because the operator names a month and the answer has to be
-    # whether that month is committed - a cover would make a real month read as
-    # a typo (Guardrail #12).
-    by_month = day_shards.shards_by_month(
-        ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW
-    )
+    # From names alone - the ledger's indexes and raw folder names - because the
+    # operator names a month and the answer has to be whether that month holds
+    # rows; a cover would make a real month read as a typo (Guardrail #12).
+    by_month: dict[str, list[str]] = {}
+    for day in ledger.held_days(state, LedgerName.SCORES):
+        by_month.setdefault(day[:7], []).append(day)
     named = sorted(by_month) if months is None else sorted({month[:7] for month in months})
     if not named:
-        LOG.error(
-            "rebuild-score-index found no rows under %s, so no index can be wrong about one",
-            ledger.tree_relpath(LedgerName.SCORES),
-        )
+        LOG.error("rebuild-score-index found no rows in the scores ledger, so no index is wrong")
         return 1
     absent = [month for month in named if month not in by_month]
     if absent:
         LOG.error("rebuild-score-index was asked for months that are not committed: %s", absent)
         return 1
 
-    # A day is a directory of writer-owned files, so the same date arrives once
-    # per writer and `rebuild_index` is given each day once.
-    days = sorted({day_shards.date_of(shard) for month in named for shard in by_month[month]})
+    days = sorted({day for month in named for day in by_month[month]})
     found = writer.rebuild_index(state, days)
     for date, drift in sorted(found.items()):
         LOG.info(

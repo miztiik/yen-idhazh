@@ -62,7 +62,8 @@ def test_every_shipped_module_is_named_for_a_declaration_of_the_kind_it_serves()
 
     A module is named for one declaration, or for its kind when it serves every
     declaration of that kind that has no module of its own - the compaction is
-    one module for every ledger it compacts.
+    one module for every ledger it compacts. A retired declaration has no module
+    to be served by: nothing runs it, so its module was deleted with it.
     """
     shipped = registry.discover()
     tasks = config.load_gardener().tasks
@@ -76,7 +77,8 @@ def test_every_shipped_module_is_named_for_a_declaration_of_the_kind_it_serves()
         served = [
             other
             for other, policy in tasks.items()
-            if registry.bind(other, TaskKind(policy.kind), shipped) is held
+            if policy.lifecycle_status is not TaskLifecycleStatus.RETIRED
+            and registry.bind(other, TaskKind(policy.kind), shipped) is held
         ]
         assert served, f"tasks/{stem}.py is named for its kind and serves no declaration"
     assert shipped["corpus_squash"].kind is TaskKind.HISTORY

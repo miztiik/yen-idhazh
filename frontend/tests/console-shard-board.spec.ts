@@ -11,35 +11,34 @@
  * so an implementation that worked it out from the step clocks would draw a
  * different number here.
  *
- * Every expectation below is recomputed from the canary ledgers on disk, never
+ * Every expectation below is recomputed from the canary's packed records, never
  * read back off the page. An oracle that reads the module it is testing proves
  * only that the module agrees with itself.
  *
- * `frontend/scripts/build-canary.mjs` writes both ledgers this reads.
+ * `frontend/scripts/build-canary.mjs` writes both records this reads.
  */
 
 import { expect, test } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { canaryArticleRows, canaryMachineRows, heldRows } from './support/canary-records';
 
-const REPO = resolve(process.cwd(), '..');
+/** Every row of one canary record, as the canary packed it.
+ *
+ * Read through the reader the page's server calls, because the packed file is
+ * the only copy the canary keeps; everything the board computes from these rows
+ * is recomputed here.
+ */
+const records = {
+	'host-fingerprint': heldRows(canaryMachineRows),
+	'item-health': heldRows(canaryArticleRows)
+};
 
-/** Every row of one canary ledger, read straight off its day tree. */
-function canaryRows(ledger: string): Record<string, string>[] {
-	const root = join(REPO, 'backend', 'var', 'canary', 'state', ledger);
-	const rows: Record<string, string>[] = [];
-	for (const relative of readdirSync(root, { recursive: true }) as string[]) {
-		if (!relative.endsWith('.csv')) continue;
-		const text = readFileSync(join(root, relative), 'utf8').trim();
-		if (text === '') continue;
-		const [header, ...lines] = text.split('\n');
-		const columns = header.split(',');
-		for (const line of lines) {
-			const cells = line.split(',');
-			rows.push(Object.fromEntries(columns.map((name, index) => [name, cells[index] ?? ''])));
-		}
-	}
-	return rows;
+test.beforeAll(async () => {
+	await records['host-fingerprint'].load();
+	await records['item-health'].load();
+});
+
+function canaryRows(ledger: keyof typeof records): Record<string, string>[] {
+	return records[ledger].rows();
 }
 
 function measured(cell: string | null | undefined): number | null {
@@ -100,7 +99,7 @@ function foldShard(runId: string, shard: string): Expected {
 	let clocked = 0;
 	const waits: number[] = [];
 	for (const row of canaryRows('item-health')) {
-		if (row.run_id !== runId || row.shard !== shard) continue;
+		if (row.run_id !== runId || row.machine_shard !== shard) continue;
 		const input = measured(row.input_tokens);
 		const cached = measured(row.cached_tokens);
 		if (input !== null && cached !== null) items += 1;

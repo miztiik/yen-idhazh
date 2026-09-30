@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -21,7 +21,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/seen/<YYYY>/<MM>/<DD>.csv` | How old is this? - for an article whose feed carried no date | day file | `collect.seen_window_days` |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Have we already run this? | day file | `collect.published_window_days` |
 | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | Is this source still working? One row per feed per run | day file | `HEALTH_WINDOW_DAYS` |
-| `state/item-health/<YYYY>/<MM>/<DD>.csv` | What did every planned item do? One row per planned item per run | day file | the published projection, a month at a time |
+| `state/raw/item-health/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did every planned item do? One row per planned item per run, one file per writer | raw and compact | the published projection, a month at a time |
 | `state/item-health-summary/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this address gone for good? One file per writer, under the day the address was retired | raw and compact | the whole tree |
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
@@ -31,7 +31,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 
 `state/feed-health/` is read by the console directly at build time. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
-`state/item-health/` is the fastest-growing of the four day-filed ledgers. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's day files.
+`state/raw/item-health/` is the fastest-growing ledger in the table above. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's days, read through `ledger.load_days` ([persistence.md](persistence.md#reading-a-whole-ledger)).
 
 `state/raw/feed-retirements/` is read whole because a retirement has no time bound. It files by day anyway, for the reason the section on the two whole-read ledgers gives below. It is also the smallest: a row is written only when a server has reported one address permanently gone on five distinct runs, and none had been written when it moved under `state/raw/` on 2026-09-28.
 

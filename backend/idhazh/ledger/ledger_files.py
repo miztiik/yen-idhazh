@@ -41,6 +41,7 @@ Every day and month here is a UTC day and month (CLAUDE.md section 2).
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -232,3 +233,117 @@ def load_ledger_rows[C: Contract](
                     "skipped a ledger file path=%s reason=%s", _shown(state_dir, path), refusal
                 )
     return [held.row for held in raw_files.settle_rows(stored, keys.door_key(ledger))]
+
+
+def month_days(month: str) -> list[str]:
+    """Every UTC day of a `YYYY-MM` month, first to last."""
+    day, last = date.fromisoformat(f"{month}-01"), date.fromisoformat(_last_day(month))
+    days: list[str] = []
+    while day <= last:
+        days.append(day.isoformat())
+        day += timedelta(days=1)
+    return days
+
+
+def held_months(state_dir: Path, ledger: LedgerName) -> list[str]:
+    """Every UTC month this ledger may hold a row in, oldest first, from names alone.
+
+    The two indexes and the names of the raw day folders: no data file is
+    opened, so it costs one listing and two small reads whatever the ledger
+    holds. A month named here can still hold no row - a quiet day is a zero-row
+    file with an index entry - and `load_days` over its days then returns none.
+    """
+    months: set[str] = set()
+    for period in Period:
+        index = _index(state_dir, ledger, period)
+        if index is not None:
+            months.update(entry.covers[:7] for entry in index.entries)
+    months.update(day[:7] for day in raw_files.raw_days(state_dir, ledger))
+    return sorted(months)
+
+
+def held_days(state_dir: Path, ledger: LedgerName) -> list[str]:
+    """Every UTC day this ledger holds a row for, oldest first, from names alone.
+
+    A day the daily index names with rows, or a raw day folder that holds a
+    file. A day the daily index names with none is a quiet day and is left out.
+    A month file's index counts the month's rows and not its days, so every day
+    of an absorbed month is named, and `load_days` returns nothing for the ones
+    that held none. No data file is opened.
+    """
+    days: set[str] = set(raw_files.raw_days(state_dir, ledger))
+    daily = _index(state_dir, ledger, Period.DAILY)
+    if daily is not None:
+        days.update(entry.covers for entry in daily.entries if entry.rows)
+    monthly = _index(state_dir, ledger, Period.MONTHLY)
+    if monthly is not None:
+        for entry in monthly.entries:
+            if entry.rows:
+                days.update(month_days(entry.covers))
+    return sorted(days)
+
+
+def _stored_or_skipped[C: Contract](
+    state_dir: Path, path: Path, *, model: type[C]
+) -> list[StoredRow[C]]:
+    """One file's rows beside their identity, or none with a warning naming it."""
+    try:
+        return load_stored([path], model=model)
+    except ValueError as refusal:
+        logger.warning("skipped a ledger file path=%s reason=%s", _shown(state_dir, path), refusal)
+        return []
+
+
+def load_days[C: Contract](
+    state_dir: Path, ledger: LedgerName, days: Collection[str], *, model: type[C]
+) -> list[C]:
+    """These UTC days' current rows, each day settled on its own, oldest day first.
+
+    The bounded read a caller asking about named days takes (Guardrail #12): the
+    two indexes, the one compact file that serves each day, and the raw files of
+    only the days no index names. A day is read from exactly one place by the
+    rule `list_ledger_files` gives, and a month file serves only the rows its
+    raw files first filed under that day.
+
+    Each day is settled on its own, as `day_shards.settled_day` settled a CSV
+    day: a key that carries no date - the eval ledger's - is one measurement
+    within a day, and the question across days belongs to its writer.
+    """
+    paired = keys.door_contract(ledger)
+    if paired is not model:
+        raise ValueError(
+            f"{ledger.value} rows are {paired.__name__} in the door table in "
+            f"idhazh/ledger/keys.py, and this read asked for {model.__name__}"
+        )
+    key = keys.door_key(ledger)
+    monthly = _index(state_dir, ledger, Period.MONTHLY)
+    daily = _index(state_dir, ledger, Period.DAILY)
+    months = {entry.covers for entry in monthly.entries} if monthly else set()
+    compact_days = {entry.covers for entry in daily.entries} if daily else set()
+    wanted = sorted(set(days))
+    raw_wanted = {day for day in wanted if day[:7] not in months and day not in compact_days}
+    raw_by_day: dict[str, list[Path]] = {}
+    for held in raw_files.list_raw_files(state_dir, ledger, days=raw_wanted):
+        raw_by_day.setdefault(held.envelope.covers, []).append(held.path)
+    month_rows: dict[str, list[StoredRow[C]]] = {}
+    rows: list[C] = []
+    for day in wanted:
+        files: list[list[StoredRow[C]]]
+        if day[:7] in months:
+            month = day[:7]
+            if month not in month_rows:
+                found = compact_file(state_dir, ledger, Period.MONTHLY, month)
+                month_rows[month] = (
+                    _stored_or_skipped(state_dir, found, model=model) if found else []
+                )
+            files = [[held for held in month_rows[month] if held.identity.covers == day]]
+        elif day in compact_days:
+            found = compact_file(state_dir, ledger, Period.DAILY, day)
+            files = [_stored_or_skipped(state_dir, found, model=model)] if found else []
+        else:
+            files = [
+                _stored_or_skipped(state_dir, path, model=model)
+                for path in raw_by_day.get(day, [])
+            ]
+        rows.extend(held.row for held in raw_files.settle_rows(files, key))
+    return rows

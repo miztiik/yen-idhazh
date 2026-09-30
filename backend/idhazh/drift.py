@@ -15,18 +15,17 @@ as no drift at every call site.
 
 from __future__ import annotations
 
-import csv
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import StrEnum
-from math import isfinite
 from pathlib import Path
 from statistics import median
 from typing import Final
 from urllib.parse import urlsplit
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.evaluation import DriftConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.day_partition import days_in_window
@@ -101,53 +100,31 @@ class Windows:
     days_read: tuple[str, ...]
 
 
-def _score(row: Mapping[str, str], name: str) -> float | None:
-    raw = row[name].strip()
-    if not raw:
-        return None
-    value = float(raw)
-    if not isfinite(value) or not 0 <= value <= 1:
-        raise ValueError(f"{name} must be a finite score between zero and one")
-    return value
-
-
-def _observation(row: Mapping[str, str]) -> Observation:
-    address = row["source_url"]
-    parsed = urlsplit(address)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ValueError("source_url must be an HTTP or HTTPS address")
-    raw_words = row["source_word_count"].strip()
-    words = int(raw_words) if raw_words else None
-    if words is not None and words < 0:
-        raise ValueError("source_word_count must not be negative")
+def _observation(row: EvalRow) -> Observation:
+    """One settled eval row, reduced to what a trend needs. The contract already checked it."""
     return Observation(
-        address,
-        _score(row, "hhem"),
-        _score(row, "extractiveness"),
-        words,
-        model_id=row.get("model_id", ""),
-        scorer_version=row.get("scorer_version", ""),
-        url_key=row.get("url_key", ""),
-        scored_at=row.get("scored_at") or row["date"],
-        date=row["date"],
+        str(row.source_url),
+        row.hhem,
+        row.extractiveness,
+        row.source_words_before_cap,
+        model_id=row.model_id,
+        scorer_version=row.scorer_version,
+        url_key=row.url_key,
+        scored_at=row.scored_at or row.date,
+        date=row.date,
     )
 
 
 def read_windows(state_dir: Path, *, today: date, recent_days: int, baseline_days: int) -> Windows:
     """Read only the days touched by two completed-day UTC windows.
 
-    `day_partition.days_in_window` names both ends, so a cover of `n` days opens
-    the files of at most `n + 1` days and reads exactly those days - where the
-    month shards it replaced could hold two months of rows behind a 28-day cover
-    and threw most of them away on the `baseline_start <= when < today` test
-    below.
+    `day_partition.days_in_window` names both ends, so a cover of `n` days reads
+    the rows of at most `n + 1` days and reads exactly those days, through the
+    ledger door's bounded day read (`ledger.load_days`): each day from the one
+    file that serves it, settled on its own.
 
-    A day is a directory of writer-owned files, so every file in it is read: a
-    reader that took whichever the walk named last would drop one writer's
-    measurements and call the window thin.
-
-    A day the ledger never recorded has no file, which is not a fault: a run that
-    scored nothing that day wrote nothing that day.
+    A day the ledger never recorded holds no row, which is not a fault: a run
+    that scored nothing that day wrote nothing that day.
     """
     if recent_days < 1 or baseline_days < 1:
         raise ValueError("recent_days and baseline_days must each be at least one")
@@ -155,38 +132,20 @@ def read_windows(state_dir: Path, *, today: date, recent_days: int, baseline_day
     baseline_start = recent_start - timedelta(days=baseline_days)
     recent: list[Observation] = []
     baseline: list[Observation] = []
-    days_read: list[str] = []
-    root = ledger.tree_root(state_dir, LedgerName.SCORES)
     dates = days_in_window(
         (today - timedelta(days=1)).isoformat(), recent_days + baseline_days - 1
     )
-    for when_read in reversed(dates):
-        shards = day_shards.one_day(root, when_read)
-        if not shards:
+    rows = ledger.load_days(state_dir, LedgerName.SCORES, dates, model=EvalRow)
+    for row in rows:
+        when = date.fromisoformat(row.date)
+        if not baseline_start <= when < today:
             continue
-        days_read.append(when_read)
-        for path in shards:
-            where = f"{ledger.tree_relpath(LedgerName.SCORES)}/{path.relative_to(root).as_posix()}"
-            with path.open(encoding="utf-8", newline="") as handle:
-                reader = csv.DictReader(handle)
-                required = {"date", "source_url", "hhem", "extractiveness", "source_word_count"}
-                if not required.issubset(reader.fieldnames or []):
-                    raise ValueError(f"{where} misses required drift columns")
-                for row in reader:
-                    try:
-                        when = date.fromisoformat(row["date"])
-                        if not baseline_start <= when < today:
-                            continue
-                        observation = _observation(row)
-                    except (KeyError, ValueError, AttributeError, TypeError) as error:
-                        raise ValueError(
-                            f"{where} row {reader.line_num} is invalid for drift"
-                        ) from error
-                    if when >= recent_start:
-                        recent.append(observation)
-                    else:
-                        baseline.append(observation)
-    return Windows(baseline_start, recent_start, today, recent, baseline, tuple(days_read))
+        if when >= recent_start:
+            recent.append(_observation(row))
+        else:
+            baseline.append(_observation(row))
+    days_read = tuple(sorted({row.date for row in rows}))
+    return Windows(baseline_start, recent_start, today, recent, baseline, days_read)
 
 
 def domain_of(url: str) -> str:
@@ -434,7 +393,7 @@ def report(
         )
     if not windows.days_read:
         lines.append(
-            f"{ledger.tree_relpath(LedgerName.SCORES)}/ holds no day in the requested window "
+            f"The {LedgerName.SCORES.value} ledger holds no day in the requested window "
             "- nothing was compared"
         )
         return "\n".join(lines), 1

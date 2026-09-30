@@ -1,6 +1,6 @@
 # Autotuning summary quality: the metrics and the loop
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-29
 
 How yen-idhazh measures whether a summary is good, and how the thresholds tune themselves with no human
 in the loop.
@@ -106,7 +106,7 @@ flowchart TD
     sum --> rouge["Term recall<br/>Coverage 0..1"]
     art --> rouge
     sum --> mini["MiniLM adjacent cosine<br/>Coherence -1..1"]
-    hhem --> row[("EvalRow<br/>state/scores")]
+    hhem --> row[("EvalRow<br/>state/raw/scores")]
     rouge --> row
     mini --> row
   end

@@ -102,12 +102,12 @@ def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvR
     writer off - and rewriting the append beside that caller would give one
     ledger two shapes.
 
-    `evals.writer.append_segment` does, against its `OBSERVATION_KEY`, and the reason the
-    two differ is what a row means. There a row is a measurement, so re-measuring
-    an item nothing changed about has nothing new to say. Here a row is a fact
-    about a run - this feed answered at this hour, this item finished - and a run
-    that runs twice did happen twice. Collapsing those would turn a count of runs
-    into a count of days.
+    `evals.writer.file_measurements` does, against its `OBSERVATION_KEY`, and the
+    reason the two differ is what a row means. There a row is a measurement, so
+    re-measuring an item nothing changed about has nothing new to say. Here a row
+    is a fact about a run - this feed answered at this hour, this item finished -
+    and a run that runs twice did happen twice. Collapsing those would turn a
+    count of runs into a count of days.
 
     So each caller owns its own repeats, and each one is named here because the
     guarantee does not live in this file:
@@ -130,10 +130,6 @@ def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvR
       against `FEED_HEALTH_KEY` at read time, so the winner is picked by the rule
       in `contracts.feed_health.supersedes` rather than by which line landed
       first.
-    - **item-health** - two stages write it, so it cannot rely on a caller's own
-      guarantee. Each writes its own file under the day, and
-      `day_shards.settled_rows` settles the day against `ITEM_HEALTH_KEY` at
-      read time.
 
     Both filters read the file the job checked out, which is frozen at the
     commit its run was triggered at, so neither can see a row a second attempt

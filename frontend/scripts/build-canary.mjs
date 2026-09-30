@@ -17,7 +17,26 @@ import { join, resolve } from 'node:path';
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 const ROOT = resolve(CANARY, 'digest');
 const STATE = resolve(CANARY, 'state');
+/** Where the item-health and host-fingerprint rows are written as CSV, one file a
+ * run, before `build_canary_day.py --file-fixture-rows` files them through the
+ * ledger door and deletes them. Beside the state tree, never inside it: the
+ * door is the only writer of those two ledgers under `state/`. */
+const FIXTURE_ROWS = resolve(CANARY, 'fixture-rows');
 const CONFIG = resolve(process.cwd(), '..', 'config');
+
+/** Run a Python step from the repository root with the backend on the path.
+ *
+ * Returns what it printed when `capture` is set; otherwise its output goes
+ * straight to this process's own. */
+function python(args, { capture = false } = {}) {
+	return execFileSync(process.env.IDHAZH_PYTHON || 'python', args, {
+		stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+		encoding: 'utf8',
+		shell: false,
+		cwd: resolve(process.cwd(), '..'),
+		env: { ...process.env, PYTHONPATH: resolve(process.cwd(), '..', 'backend') }
+	});
+}
 
 /** The window the committed model file opens, read rather than spelled.
  *
@@ -55,35 +74,20 @@ function newestDirectory(at) {
  * The two canary ledgers are written by two programs - the day and its scores
  * by `build_canary_day.py`, the item-health rows here - and `url_key` is the
  * key that joins them. It is a digest of the canonical address, so it is READ
- * off the ledger the Python step already wrote rather than derived a second
- * time in JavaScript: two derivations of one key is how the fixture would come
- * to disagree with the contract it stands in for.
+ * back through the ledger door the Python step filed the scores through rather
+ * than derived a second time in JavaScript: two derivations of one key is how
+ * the fixture would come to disagree with the contract it stands in for.
  *
  * An item the scores do not name takes a stand-in key instead - see
  * `standInKey`. Those rows are the cut fixtures and the timed tails, which
  * nothing scored.
- *
- * The ledger files one CSV a writer under `<YYYY>/<MM>/<DD>/`, so this walks
- * the tree. A `readdir` of `*.csv` over the root, or over a month, finds
- * nothing, and finding nothing here is silent: every row would keep its own id
- * and the join the console draws would quietly stop matching.
  */
 function scoredKeys() {
-	const dir = join(STATE, 'scores');
-	const found = new Map();
-	if (!existsSync(dir)) return found;
-	for (const path of dayFiles(dir)) {
-		const lines = readFileSync(path, 'utf8').split('\n').filter(Boolean);
-		const header = lines[0].split(',');
-		const itemAt = header.indexOf('item_id');
-		const keyAt = header.indexOf('url_key');
-		if (itemAt < 0 || keyAt < 0) continue;
-		for (const row of lines.slice(1)) {
-			const cells = row.split(',');
-			if (cells[itemAt] && cells[keyAt]) found.set(cells[itemAt], cells[keyAt]);
-		}
-	}
-	return found;
+	const printed = python(
+		['backend/utilities/build_canary_day.py', '--scored-keys', '--state', STATE],
+		{ capture: true }
+	);
+	return new Map(Object.entries(JSON.parse(printed)));
 }
 
 /** A url key for a fixture item the score ledger never named.
@@ -97,25 +101,6 @@ function scoredKeys() {
  */
 function standInKey(id) {
 	return createHash('sha256').update(id).digest('hex');
-}
-
-/** Every writer's file under a day-filed store, oldest first. */
-function dayFiles(root) {
-	const found = [];
-	for (const year of readdirSync(root, { withFileTypes: true })) {
-		if (!year.isDirectory()) continue;
-		for (const month of readdirSync(join(root, year.name), { withFileTypes: true })) {
-			if (!month.isDirectory()) continue;
-			const at = join(root, year.name, month.name);
-			for (const day of readdirSync(at, { withFileTypes: true })) {
-				if (!day.isDirectory()) continue;
-				for (const name of readdirSync(join(at, day.name))) {
-					if (name.endsWith('.csv')) found.push(join(at, day.name, name));
-				}
-			}
-		}
-	}
-	return found.sort();
 }
 
 /** Write one writer's rows into a day-filed store.
@@ -159,7 +144,7 @@ function writeItemHealthCanary() {
 	 * state no test could reach.
 	 */
 	const longAgo = back(40);
-	const dir = join(STATE, 'item-health');
+	const dir = join(FIXTURE_ROWS, 'item-health');
 	mkdirSync(dir, { recursive: true });
 
 	// Every token and millisecond on a published row below is one real request
@@ -197,7 +182,7 @@ function writeItemHealthCanary() {
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
 		'summary_words', 'detail', 'fetch_ms', 'extract_ms', 'summarize_ms', 'prefill_ms',
 		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap',
-		'shard', 'job', 'span_integrity', 'elements_found', 'element_class', 'model_calls',
+		'machine_shard', 'machine_job', 'span_integrity', 'elements_found', 'element_class', 'model_calls',
 		'label_kind', 'label_prefill_ms', 'label_decode_ms', 'label_input_tokens',
 		'label_output_tokens', 'label_cached_tokens', 'summary_kind', 'summary_prefill_ms',
 		'summary_decode_ms', 'summary_input_tokens', 'summary_output_tokens', 'summary_cached_tokens',
@@ -410,7 +395,7 @@ function writeItemHealthCanary() {
 		const stamp = (seconds) =>
 			new Date(Date.parse(`${rowDate}T06:00:00Z`) + seconds * 1000).toISOString().slice(0, 19) + 'Z';
 		return {
-			shard,
+			machine_shard: shard,
 			item_index: seat.index,
 			item_started_at: stamp(seat.at),
 			item_ended_at: stamp(seat.at + spent)
@@ -544,7 +529,7 @@ function writeItemHealthCanary() {
 		// The one shard the machine record reached with no processor on it. Its item
 		// rows name none either, so the fallback cannot quietly fill the cell in and
 		// the board has a row that says "Not recorded".
-		const unrecorded = `${rowDate}-${run}-${seat.shard}` === `${date}-2-1`;
+		const unrecorded = `${rowDate}-${run}-${seat.machine_shard}` === `${date}-2-1`;
 		// The kernel's own account, on the newest day and on every row of it but
 		// the refused one. `gapMs` is set by the refused builder and by nothing
 		// else, so it is what marks the row this fixture uses to carry states no
@@ -1241,23 +1226,31 @@ function writeHostFingerprintCanary() {
 		byWriter.set(`${quiet}/${quiet}-1`, { day: quiet, runId: `${quiet}-1`, rows: [] });
 	}
 	for (const writer of byWriter.values()) {
-		writeDayShard(join(STATE, 'host-fingerprint'), writer.day, writer.runId, COLUMNS, writer.rows);
+		writeDayShard(join(FIXTURE_ROWS, 'host-fingerprint'), writer.day, writer.runId, COLUMNS, writer.rows);
 	}
 }
 
 writeItemHealthCanary();
 writeSpanRollupCanary();
 writeHostFingerprintCanary();
-execFileSync(
-	process.env.IDHAZH_PYTHON || 'python',
-	['-m', 'idhazh.telemetry.publish.public_telemetry', '--state', STATE, '--public', join(STATE, 'telemetry')],
-	{
-		stdio: 'inherit',
-		shell: false,
-		cwd: resolve(process.cwd(), '..'),
-		env: { ...process.env, PYTHONPATH: resolve(process.cwd(), '..', 'backend') }
-	}
-);
+// The two ledgers above go through the ledger door, and then every fixture day of
+// the console's three door ledgers is packed: the console reads them from packed
+// files only, so a day left raw is a day no browser test can see.
+python([
+	'backend/utilities/build_canary_day.py',
+	'--file-fixture-rows',
+	FIXTURE_ROWS,
+	'--state',
+	STATE
+]);
+python([
+	'-m',
+	'idhazh.telemetry.publish.public_telemetry',
+	'--state',
+	STATE,
+	'--public',
+	join(STATE, 'telemetry')
+]);
 
 // The payloads the console fetches, written here and not in `build_canary_day.py`
 // because every source they read is written above: the item-health rows, the
@@ -1265,23 +1258,14 @@ execFileSync(
 // A band derived before them names one month where the telemetry holds two, and
 // the console would then never ask for the older shard the widest-window spec
 // fetches.
-execFileSync(
-	process.env.IDHAZH_PYTHON || 'python',
-	[
-		'backend/utilities/build_canary_day.py',
-		'--console-payloads-only',
-		'--out',
-		ROOT,
-		'--state',
-		STATE
-	],
-	{
-		stdio: 'inherit',
-		shell: false,
-		cwd: resolve(process.cwd(), '..'),
-		env: { ...process.env, PYTHONPATH: resolve(process.cwd(), '..', 'backend') }
-	}
-);
+python([
+	'backend/utilities/build_canary_day.py',
+	'--console-payloads-only',
+	'--out',
+	ROOT,
+	'--state',
+	STATE
+]);
 
 console.log(`building the site from ${ROOT}`);
 execFileSync('npm', ['run', 'build'], {

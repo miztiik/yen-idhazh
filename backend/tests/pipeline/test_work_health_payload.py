@@ -259,7 +259,7 @@ def test_the_shard_names_one_machine_on_every_row_it_records(
 def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """`job` and `shard` together are the key that reaches this machine's host record.
+    """`machine_job` and `machine_shard` together are the key to this machine's host record.
 
     A shard is not a key on its own: `plan`, `work` and `assemble` each draw a
     machine and each write shard 0, so three of the four columns resolve to
@@ -273,7 +273,9 @@ def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(
     written = rows(items_dir)
 
     assert written, "no rows means the loop below asserts nothing"
-    assert {(row.job, row.shard) for row in written.values()} == {(ServerJob.WORK, 0)}
+    assert {(row.machine_job, row.machine_shard) for row in written.values()} == {
+        (ServerJob.WORK, 0)
+    }
 
 
 def test_an_item_that_failed_extraction_still_leaves_a_row(

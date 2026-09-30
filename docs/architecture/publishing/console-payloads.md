@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 The operator console reads ten datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -20,7 +20,7 @@ Every path below is under `frontend/public/`. Every shape is a contract under `b
 | --- | --- | --- | --- |
 | Verdict band | `console-shell.ts` `consoleShell` | `console/band.json` | `console-band` |
 | Telemetry rows | `payload.ts` `telemetryRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
-| Item health | `payload.ts` `itemHealthRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
+| Item health | `ledger-rows.ts` `itemHealthRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
 | Run manifests | `payload.ts` `loadManifests` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Published items | `payload.ts` `publishedItems` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Published charts | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
@@ -32,8 +32,9 @@ Every path below is under `frontend/public/`. Every shape is a contract under `b
 
 **Two datasets left this table on 2026-09-16.** `scores/<YYYY-MM>.csv` and
 `feed-health/<YYYY-MM>.csv` were published for fourteen months each and no route
-ever fetched either - `evalRows` and `feedResults` read the day files under
-`state/scores/` and `state/feed-health/` at build time and always did. The
+ever fetched either - the console read both ledgers under `state/` at build time
+and always did. Today `evalRows` reads the eval ledger's packed files and
+`feedResults` the day files under `state/feed-health/`. The
 published trees, their two projections and their two schemas are gone; the
 ledgers stay. What that removes from this page is the twelfth dataset and the
 twelfth reader, not a source the console needs.
@@ -55,7 +56,7 @@ so a second projection of it would be two schemas for one row.
 
 ### The run timeline is a second cut of the census, and that is the point
 
-`run-timeline/<YYYY-MM>.csv` is projected from `state/item-health/`, which the
+`run-timeline/<YYYY-MM>.csv` is projected from the item-health ledger, which the
 telemetry shard beside it also projects. It is not the two-schemas-for-one-row
 case the paragraph above refuses: the telemetry shard is the census narrowed for
 a browser and keyed by item, and this is the census **re-filed against a clock**
@@ -84,8 +85,8 @@ table above's place as a declared shape with no writer until 2026-09-16.
 What it holds and why it holds it is
 [`run-timeline.md`](run-timeline.md). Two things about it belong here: it is
 **published whole**, because nothing on it identifies a page, and it has no
-`state/` counterpart, because the row is derivable from one month of census day
-files and a committed ledger would be a third copy of numbers git already holds.
+`state/` counterpart, because the row is derivable from one month of the census
+and a committed ledger would be a third copy of numbers git already holds.
 
 ## What may not cross
 
@@ -130,12 +131,12 @@ day the run is publishing, and every projection's body stays in its own module
 
 | Producer | Writes | Reads |
 | --- | --- | --- |
-| `console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, `state/host-fingerprint/` over the widest window, and the newest day's `run.json` |
+| `console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, the newest day's item-health rows and its day-metrics record, the host-fingerprint days over the widest window - both ledgers through `ledger.load_days` - and the newest day's `run.json` |
 | `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
-| `machine.py` | `machine/<YYYY-MM>.csv` | one month of `state/item-health/<YYYY>/<MM>/` and of `state/host-fingerprint/<YYYY>/<MM>/` |
+| `machine.py` | `machine/<YYYY-MM>.csv` | one month of the item-health and host-fingerprint ledgers, through `ledger.load_days` |
 | `span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY>/<MM>/<DD>/` |
-| `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of `state/item-health/<YYYY>/<MM>/` |
+| `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of the item-health ledger, through `ledger.load_days` |
 
 `scores.py` and `feed_health.py` were two more rows of that table until
 2026-09-16. They folded a month of `state/scores/` and `state/feed-health/` into
@@ -483,28 +484,30 @@ working rather than the table being lucky. A route column would have gone stale
 on a change that moved no data, and it would have had to be maintained by
 whoever moved a panel rather than by whoever moved a payload.
 
-**A reader function that opens a `state/` ledger settles it, and settles it
-once.** Two jobs write a census row for every item - a work shard as the item
-settles, and assemble over the whole day afterwards - so `itemHealthRows`
-applies `ledger.ITEM_HEALTH_KEY` and `ledger.ITEM_HEALTH_RULE` before any panel
-sees a row, exactly as `feedResults` below applies `settled` from
-`frontend/src/lib/feed-health.ts`. A panel reading the raw files counts every
-item of that day twice and a list keyed by item id draws one story twice, which
-is how this surfaced: `MemoryBoard.svelte` threw on a repeated key. **It is only
-ever the newest day.** A closed day has been folded into one settled file by the
-gardener - one whole day after it ends, `fold.after_days` in the declaration that
-owns the tree; the day a run is publishing still holds one
-file per writer, and that is the day every panel here opens on - so the defect
-is invisible in any fixture built from folded days. Measured 2026-09-23 over the
-committed ledger: thirteen folded days held 0 repeated keys between them, and
-the unfolded day held 240 repeats over 240 items.
+**A console reader takes one row per key from the packing, and settles nothing
+itself.** Two jobs write a census row for every item - a work shard as the item
+settles, and assemble over the whole day afterwards - and a panel that read both
+would count every item of that day twice. A list keyed by item id draws one
+story twice, which is how this surfaced: `MemoryBoard.svelte` threw on a repeated
+key. The packing settles each day under the ledger's own key and preference in
+`backend/idhazh/ledger/keys.py` before it writes the day's file, so
+`itemHealthRows` and `evalRows` in `frontend/src/lib/server/ledger-rows.ts` read
+days that already hold one row per item per run, or one per scored measurement.
+The frontend holds no key and no rule: a second settle there would be a second
+rule for one question. `feedResults` is the one reader here that still settles,
+with `settled` from `frontend/src/lib/feed-health.ts`, because `state/feed-health/`
+is still CSV day files.
 
-**`evalRows` is the same shape, and it settles too.** It opens `state/scores`,
-whose key is `ledger.OBSERVATION_KEY`, and until 2026-09-23 it handed the raw
-rows to the model panels - so the newest day reached them doubled exactly as the
-census did: measured that day, 441 rows over 237 keys, against 0 repeats on
-every folded day before it. Both reads now go through one settler, because two
-copies of a settlement loop is how the next ledger gets the third copy.
+**The panels stop at the newest packed day, never at today.** A day is packed
+once a whole day has passed since it ended, so the day a run is still
+publishing - the only day a repeated row ever reached a panel - is never read.
+Measured 2026-09-23 over the committed ledgers, before they moved: thirteen
+folded census days held 0 repeated keys between them and the unfolded day held
+240 repeats over 240 items, and the eval ledger's unfolded day held 441 rows over
+237 keys. **Each route says where its panels stop**, in one plain line under its
+introduction, when a record is not packed yet, did not load, or stops two or
+more days before the newest published day (`recordNotes` in
+`frontend/src/lib/console/recording.ts`).
 
 **The settlement is per day, never over the whole cover, and that is the part
 that carries the weight.** `OBSERVATION_KEY` carries no date. It is the article,
@@ -512,33 +515,27 @@ the words that came out, and the version of the instrument that read them - so
 two days holding one key can be two real measurements, and collapsing the cover
 would delete the second. Measured 2026-09-23 over the committed ledger: of
 12,463 keys, exactly one spans two days, and a cover-wide settlement would have
-dropped it. A day is the unit a writer owns - one directory, one file per job -
-so a repeat inside it is one record written twice and a repeat across it is not.
-The scope costs nothing for a key that already carries `date`, which is why
-`itemHealthRows` takes the same path and returns the same rows in the same
-order.
+dropped it. So the packing settles a day on its own and joins a month's days as
+they are, never across them: a repeat inside a day is one record written twice
+and a repeat across days is not. The scope costs nothing for a key that already
+carries `date`.
 
 **A key with no preference keeps the first row it saw.** That is what the
 backend does with a key `ledger.preference_for` has no rule for, and the ledger
 bears out the reason: all 204 repeated keys of the publishing day agreed cell
-for cell. Only `ITEM_HEALTH_KEY` needs a rule here, because its two writers
+for cell. Only `ITEM_HEALTH_KEY` carries a rule, because its two writers
 genuinely differ - assemble cannot name the job that ran the item.
 
-**`state/host-fingerprint/` settles by merging, because two of its rows under one
-key are halves rather than repeats.** A job writes its machine before its heaviest
-step and its clock after its last item, into the one file it owns, and neither
-half repeats a cell of the other - so choosing one row, which is all a preference
-can do, loses the other half. `hostFingerprints` and `machine-counters.hostRows`
-both read the ledger through `mergedDayShards` with `HOST_FINGERPRINT_KEY`, which
-unions the cells, per day. **A key whose rows fill one cell two different ways is
-left as it was**: that is a second attempt on a second runner, or a writer fault,
-and no union can say which value was the job's. The fleet then counts two runners,
-because two were drawn, and `machine-counters.ts` refuses the run by name. Neither
-the key nor `version` is compared. Measured 2026-09-27 over the committed ledger:
-121 of its 381 rows were a job's second half and no cell disagreed. The merge moved
-no placement count - the fleet already skipped a row with no fingerprint, and
-`mergeHost` already joined a shard's halves - and it put the job's own clock beside
-its machine on 185 of 260 placements, against 64 before.
+**A job's two halves in the machine record are one row once packed.** A job
+writes its machine before its heaviest step and its clock after its last item,
+and neither half repeats a cell of the other, so keeping one of two rows would
+lose the other half. The clock step reads its own probe row back and files the
+whole row again as a later write of the same work unit, and the union keeps the
+later file ([../contracts/persistence.md](../contracts/persistence.md#the-two-identifiers)).
+`machineRecord` in `frontend/src/lib/server/host-fingerprint.ts` reads the packed
+days once, and the Hardware route hands the same rows to the fingerprints and to
+`machine-counters.ts`, so a job's own clock sits beside its machine with no merge
+in the frontend.
 
 **Row 10 measured before it moved anything, and the measurement changed the
 order of the work.** The plan read the 32 inline SVGs as "139 KB of 3,726 KB, so

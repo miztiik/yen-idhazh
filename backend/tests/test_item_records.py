@@ -88,7 +88,7 @@ def test_a_completion_record_carries_every_column_the_census_row_declares() -> N
     """
     lines = Lines()
     subject = settled(
-        recorder(lines), fetch_ms=900, extract_ms=120, summarize_ms=475890, shard=0
+        recorder(lines), fetch_ms=900, extract_ms=120, summarize_ms=475890, machine_shard=0
     )
 
     subject.done()
@@ -335,7 +335,7 @@ def test_an_item_that_starts_is_named_before_anything_can_kill_it() -> None:
     """A shard killed on its timeout has to name the item it died on."""
     lines = Lines()
     subject = recorder(lines)
-    subject.note(item_id="ai-07", item_index=6, shard=2)
+    subject.note(item_id="ai-07", item_index=6, machine_shard=2)
 
     subject.start()
 
@@ -381,6 +381,7 @@ def test_the_shard_record_counts_failures_by_code_and_names_one_item() -> None:
 
     record = lines.parsed()[-1]
     assert record["name"] == "shard.done"
+    assert record["machine_shard"] == 1, "the shard is named by the census column's own name"
     assert record["items"] == 80
     assert record["failures"] == {"bad_shape": 3, "labels_truncated": 1}
     assert record["slowest"] == {"item_id": "ai-07", "item_total_ms": 475890}

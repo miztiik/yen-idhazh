@@ -35,7 +35,7 @@
       }
     },
     {
-      "column": "source_word_count",
+      "column": "source_words_before_cap",
       "stat": {
         "count": 12,
         "maximum": 1400.0,
@@ -151,6 +151,6 @@
     "output_tokens": 3600,
     "prefill_ms": 24000
   },
-  "version": "2026-09-13",
+  "version": "2026-09-29",
   "visuals_rendered": 3
 }

@@ -1,7 +1,7 @@
 """The browser-safe source-health view: four facts about each address we ask.
 
-`state/feed-health/`, `state/raw/feed-retirements/` and `state/item-health/` are
-the private record. They carry a feed's URL, an item's address, our own
+`state/feed-health/`, `state/raw/feed-retirements/` and `state/raw/item-health/`
+are the private record. They carry a feed's URL, an item's address, our own
 diagnostic free text and the status a `robots.txt` answered with, and none of
 those may reach a page. This is the narrow shape that does cross, written to
 `frontend/public/source-health.json` once per run by

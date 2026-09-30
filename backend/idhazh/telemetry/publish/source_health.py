@@ -31,10 +31,10 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, day_partition, day_shards, ledger
+from idhazh import config, day_partition, ledger
 from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_endpoint_key
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.source_health_view import (
     DayYield,
@@ -493,28 +493,19 @@ def _recent_item_health(state_root: Path, *, today: str, keep: int) -> list[Item
     strictly before `today`, because a run still working on today has
     opportunities nobody has attempted.
 
-    A day is a directory of writer-owned files, so the days are counted rather
-    than the files - counting files would give a day with four work shards in it
-    four times the weight of a day with one - and each day taken is settled, so a
-    re-run's second attempt corrects its first instead of being counted beside
-    it.
+    Days are counted rather than files - counting files would give a day with
+    four work shards in it four times the weight of a day with one - and each
+    day taken is settled, so a re-run's second attempt replaces its first
+    instead of being counted beside it.
     """
     if keep <= 0:
         return []
-    directory = ledger.tree_root(state_root, LedgerName.ITEM_HEALTH)
     recorded = [
-        date
-        for dates in day_shards.dates_by_month(directory, days=UNBOUNDED_WINDOW).values()
-        for date in dates
-        if date < today
+        date for date in ledger.held_days(state_root, LedgerName.ITEM_HEALTH) if date < today
     ]
-    return [
-        ItemHealthRow.from_csv_row(cells)
-        for date in sorted(recorded)[-keep:]
-        for cells in day_shards.settled_day(
-            directory, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
-        )
-    ]
+    return ledger.load_days(
+        state_root, LedgerName.ITEM_HEALTH, recorded[-keep:], model=ItemHealthRow
+    )
 
 
 def publish(

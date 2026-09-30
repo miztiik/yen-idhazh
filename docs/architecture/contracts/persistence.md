@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -82,7 +82,7 @@ The paths come back ascending by the day each file covers, never by path string.
 
 **Oldest first is an explicit sort, read from each file's envelope**: the day it covers, then `written_at_ms`, then `file_id`. A directory listing agrees today only because a `file_id` starts with its clock, and a reader that leaned on it would change its answer the day the name grammar did. Every file in a day folder is read whatever its suffix, because `ledger.format` may be JSON lines, and `index/` beside the years is passed over, because a listing is not a row.
 
-**The first row of a key wins**, because the three ledgers that read this way keep one record per key: a retirement per `endpoint_key`, a cleanup pass per `(date, run_id)`, and a gardener task's pass per `(date, run_id, task)`. Two stale checkouts can each file one address, as two work units, and the earlier one is kept. A key that declares a winner rule of its own in `ledger/keys.py` is refused, because this reader would apply the wrong one.
+**The first row of a key wins, unless the key declares a preference.** Every ledger that reads this way keeps one record per key: a retirement per `endpoint_key`, a cleanup pass per `(date, run_id)`, a gardener task's pass per `(date, run_id, task)`, a census row per `(date, run_id, item_id)`, a measurement per `(url_key, output_digest, scorer_version)`, and a machine row per `(date, run_id, job, shard)`. Two stale checkouts can each file one address, as two work units, and the earlier one is kept. A key that declares a preference in `ledger/keys.py` keeps the later row where the preference says so. Item-health's does: a work shard files a census row as the item settles and assemble files one for the whole day afterwards, and the row that names the machine that ran the item, `machine_job`, is kept. Either way a row is kept or dropped whole, and a cell only the dropped row filled is named in a warning.
 
 **A file this build cannot read is skipped, with one warning that names it**: a newer row shape, a row today's model refuses, a file that is not a ledger file, or one whose envelope names another ledger or another day than the folder it sits in. Only `ValueError` is caught. A missing parquet engine raises `ImportError`, and that stops the run, because skipping every file for it would read as a ledger with no history. For the retirements the direction is the safe one: a skipped file costs one request to an address that is probably still gone, and the next run files it again. **The compaction never skips**: `read_day_files` stops that day, because a file it could not read would be deleted unread.
 
@@ -94,16 +94,21 @@ The paths come back ascending by the day each file covers, never by path string.
 | --- | --- |
 | `list_ledger_files(state_dir, ledger)` | every source a ledger is read from, oldest first - one compact file, or one raw day's files - and the holes |
 | `load_ledger_rows(state_dir, ledger, model=)` | the rows of every source, settled once by `settle_rows`. `model` and the key come from the door table in `ledger/keys.py`, so a reader cannot settle a ledger by another ledger's rule |
+| `load_days(state_dir, ledger, days, model=)` | the named UTC days' current rows, oldest day first - the bounded read. It opens the two indexes, the one compact file that serves each day, and the raw files of only the days no index names |
+| `held_days(state_dir, ledger)`, `held_months(state_dir, ledger)` | which days and months the ledger holds rows for, read from the indexes and the raw folder names alone, so no data file is opened |
+| `month_days(month)` | every UTC day of a `YYYY-MM` month, for a caller that reads a month through `load_days` |
+
+**`load_days` settles each day on its own**, as the CSV reader settled a day. So a key that carries no date - the eval ledger's - is settled within a day and never across days. The writer is what keeps one measurement off two days: it files a measurement only once.
 
 **A hole is served and reported.** From the first day the compact periods cover to the newest day `index/daily.json` names, every day must be named. A day that is not is a hole: its rows went somewhere no reader finds them. It is logged by name, and any raw files it still has are read. An index this build cannot read is read as absent, with a warning, so the reader serves the raw files it can still find rather than nothing.
 
-`ledger.load_retirements` and `ledger.load_visual_prunes` read this way and keep their signatures. Both ask about their ledger's whole history, so a window would answer a different question, and [growing-reads.md](../../concepts/growing-reads.md) lists both.
+`ledger.load_retirements` and `ledger.load_visual_prunes` read this way and keep their signatures. Both ask about their ledger's whole history, so a window would answer a different question, and [growing-reads.md](../../concepts/growing-reads.md) lists both. A reader of item-health, scores or host-fingerprint names its days and calls `load_days`; one that calls `load_ledger_rows` is asking about the whole history, and growing-reads.md lists it too.
 
 ## The envelope inside the file
 
 **A filename carries identity, never meaning.** What a file holds is written inside it, as `FileEnvelope` (`backend/idhazh/contracts/file_envelope.py`): the parquet footer's key-value metadata, or the first line of a JSON-lines file. Every value is a string, `attempt` and `shard` are zero-padded to two digits, and `period` and `built_from` are absent on a raw file. `row_count` is not a key: the parquet footer carries it already.
 
-**A key is also a column only when a query filters or groups on it.** Row-group statistics let a reader skip a whole file on such a column without decompressing it. Measured 2026-09-24: a column that never varies costs about 250 bytes whatever the row count, so the eight identity columns cost about 2,000 bytes - 26 percent of a 3-row raw file, 6 percent of a 420-row month file. The columns are the row's own `version`, then `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id`. **A contract field of the same name as one of them is that column instead**, so a row's own value is never overwritten, and the envelope still carries the writer's. Three contracts due to move declare such a field today: `HostFingerprintRow` its `run_id`, `job` and `shard`, `VisualPruneRow` its `run_id`, and `EvalRow` its `run_id` and an `attempt` of its own. **That last one stops `scores` at the door until one of the two is renamed**: the union ranks on each row's `attempt` cell, so the door refuses an `EvalRow` whose own `attempt` is not the attempt of the job that files it.
+**A key is also a column only when a query filters or groups on it.** Row-group statistics let a reader skip a whole file on such a column without decompressing it. Measured 2026-09-24: a column that never varies costs about 250 bytes whatever the row count, so the eight identity columns cost about 2,000 bytes - 26 percent of a 3-row raw file, 6 percent of a 420-row month file. The columns are the row's own `version`, then `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id`. **A contract field of the same name as one of them is that column instead**, so a row's own value is never overwritten, and the envelope still carries the writer's. Four contracts declare such a field: `HostFingerprintRow` its `run_id`, `job` and `shard`, and `VisualPruneRow`, `EvalRow` and `ItemHealthRow` their `run_id`. **A field that would mean something else under one of those names was renamed before its ledger moved.** The union ranks on each row's `attempt` cell, so `EvalRow`'s own attempt - which try at the summary produced the text - is `summary_attempt`. The envelope's `job` and `shard` name the writer, and assemble files census rows for items it did not run, so the machine that took an item's readings is `ItemHealthRow`'s `machine_job` and `machine_shard`. A committed CSV heading with an old name still reads, through each model's `from_csv_row`.
 
 `content_sha256` is taken over the rows as canonical JSON lines whatever the container, so a copy can be proven a copy after a rename.
 
@@ -116,7 +121,7 @@ The paths come back ascending by the day each file covers, never by path string.
 | Compression | `ledger.compression_raw` (snappy) or `ledger.compression_compact` (zstd) | `none` - it is plain text |
 | For | every ledger by default | a payload a person reads in a pull request |
 
-The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller at a thousand rows), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` ships empty**, because no page reads a compact file yet.
+The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller at a thousand rows), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` ships empty**, because no page fetches a compact file in a browser yet. The four console routes read the packed files of the three console ledgers while the site is built, from `state/` on disk, and a browser receives only what they drew.
 
 ### The column types
 
@@ -130,10 +135,11 @@ The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `
 | `bool` | bool | no |
 | any of those `\| None` | the same | yes |
 | a `StrEnum` | string, never a dictionary column | as annotated |
+| an `IntEnum` | int64 | as annotated |
 | `tuple[str, ...]`, of `str` or any alias or `StrEnum` | list of string | as annotated |
 | anything else | a `TypeError` naming the field | - |
 
-A date stays a string: it is a stamp a person reads in a diff and in a path, and a second type would be a second spelling of one value. The tuple row is there for `FeedRetirementRow`, whose evidence is a tuple of run ids and a tuple of dates. An `IntEnum` is not in the table yet, so `ItemHealthRow`, whose `tier` is one, is refused by name until the change that moves it adds the row.
+A date stays a string: it is a stamp a person reads in a diff and in a path, and a second type would be a second spelling of one value. The tuple row is there for `FeedRetirementRow`, whose evidence is a tuple of run ids and a tuple of dates. An `IntEnum` - `ItemHealthRow`'s `tier` is one - stays its number, the value its JSON form already carries, so a query filters on the number a person reads in the contract.
 
 ## Swapping the engine
 
@@ -141,29 +147,40 @@ A date stays a string: it is a stamp a person reads in a diff and in a path, and
 
 1. Rewrite `render`, `read`, `read_envelope` and `engine_version` in `ledger/parquet.py` against the new engine. Keep their signatures.
 2. Keep the envelope as the file's key-value metadata, and keep the column types `arrow_schema.py` names.
-3. Update the one-module rule in the single-engine test to the new engine's import name, and the `parquet` extra in `pyproject.toml`.
+3. Update the one-module rule in the single-engine test to the new engine's import name, and the engine's line in `pyproject.toml`'s base dependencies.
 4. Run `backend/tests/ledger`. The round-trip test reads back every model in both formats, and the committed files under `tests/fixtures/parquet/` are what an earlier engine wrote, so a swap that cannot read them fails there.
 
 **A footer records its engine's version, so two engines never write identical bytes.** That breaks nothing: nothing compares a data file's bytes, only whether a path exists.
 
 ## Moving a ledger onto the door
 
-Two ledgers moved on 2026-09-28, producer and reader together: `state/feed-retirements.csv` and the `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` day files. Their registry entries switched to `raw-and-compact`, and their `merge=union` lines in `.gitattributes` and `path_classes.UNION_SAFE` went, because a file with one writer has nothing for a union to settle.
+Five ledgers have moved, producer and reader together. Two moved on 2026-09-28: `state/feed-retirements.csv` and the `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` day files. Their registry entries switched to `raw-and-compact`, and their `merge=union` lines in `.gitattributes` and `path_classes.UNION_SAFE` went, because a file with one writer has nothing for a union to settle. The other three are the ledgers the console reads: the `state/item-health/`, `state/scores/` and `state/host-fingerprint/` day trees, which filed one CSV per writer under each day and were settled on every read. Their registry entries switched to `raw-and-compact` as well.
 
 | Ledger | Writer now | Reader now | Files under |
 | --- | --- | --- | --- |
 | feed retirements | `telemetry.source_health.file_retirements`, the one writer, called by the plan stage (`410 Gone`) and the assemble stage (low yield) | `ledger.load_retirements` | the day each address was retired, because the row has no `date` field |
 | visual cleanup record | the gardener's `visual-prune` task, through `ledger.persist` | `ledger.load_visual_prunes` | the day its `date` names |
+| item-health, the census | `stages.record` in each work shard as its items settle, and `stages.assemble` for the whole day afterwards, both through `ledger.persist` | `ledger.load_days` for named days, and `ledger.load_ledger_rows` where the question is the whole history | the day its `date` names |
+| scores, the eval ledger | `evals.writer.file_measurements`, called by the same two stages. It files a measurement only once, and writes the `state/score-index/` CSV day tree beside it | the same two | the day its `date` names |
+| host-fingerprint, the machine record | `telemetry.silicon`: `idhazh fingerprint` files the job's row when the job starts, and `idhazh job-clock` files it again with the job-end cells under the same writer, so the later file replaces the first | the same two | the day its `date` names |
 
-Each writer names the commit its run checked out, which is why `idhazh plan` takes `--commit` as `idhazh assemble` always did and a gardener run takes `--git-sha`, and every workflow job that reaches either ledger installs `.[parquet]`. A test holds both: `backend/tests/workflows/test_ledger_door_jobs.py`.
+Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. `backend/tests/workflows/test_ledger_door_jobs.py` holds that for every step that runs an `idhazh` command. No job has to ask for the parquet engine to reach these ledgers, because pyarrow is part of the base install ([What it costs to install](#what-it-costs-to-install)).
 
-**The committed CSV moved once, on 2026-09-28, through a one-shot migration.** It read the CSV, wrote one file per day through the door, read each file back field for field and cell for cell against the CSV row it came from, and only then deleted the CSV. The files it wrote carry `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_csv`, which is why `ServerJob` keeps `migrate`: a reader names those files' writer from it. No CSV of either ledger is left on `main`, and a run that checked out the CSV layout cannot push its append over the deleted file, so the program had nothing left to move and was deleted on 2026-09-28; git history holds it.
+**The first two ledgers' committed CSV moved once, on 2026-09-28, through a one-shot migration.** It read the CSV, wrote one file per day through the door, read each file back field for field and cell for cell against the CSV row it came from, and only then deleted the CSV. The files it wrote carry `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_csv`, which is why `ServerJob` keeps `migrate`: a reader names those files' writer from it. No CSV of either ledger is left on `main`, and a run that checked out the CSV layout cannot push its append over the deleted file, so the program had nothing left to move and was deleted on 2026-09-28; git history holds it.
+
+**The three console ledgers move through `backend/utilities/migrate_to_parquet.py`.** For each ledger and each CSV day, it takes the rows today's CSV reader returns for that day (`day_shards.settled_day`) and files them as one raw file through the door. Then the compaction's own daily step packs every finished day its rule admits, and writes each day's file, `index/daily.json` and the daily watermark as a live pass would, so a packing task turned on later resumes from the right day. A day the rule does not admit yet stays a raw file. **Nothing is deleted until everything is proven**: every day is read back through `load_days`, from whichever file now serves it, and compared cell for cell with the rows it was built from before any CSV of that ledger is removed. A day that does not read back leaves every CSV where it was, and the program exits 1.
+
+Running it again is safe. Every file it writes carries `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_to_parquet`, so a second run files a day under the same work unit, and a day with nothing new is not written again. A CSV file that lands after the first run - from a run created before the merge and pushing after it - is folded onto what the door holds for its day, and the day is packed again. `--check` exits 1 while any CSV of the three is left. **Delete the program when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`.** The three packing tasks ship report-only, which is what a person turns on next ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md#the-compaction)).
 
 ## What it costs to install
 
-pyarrow is the largest thing the project installs, so it is the `parquet` optional extra rather than a runtime dependency: only a job that touches a parquet file installs `.[parquet]`, and `dev` pulls it in for the suite. **Its install time on ubuntu-latest was not measured before the first workflow job installed it**, by owner ruling (2026-09-27); the first digest run that installs it is where that reading comes from, and it is written here when it is taken. The reading in hand is from Windows, whose wheel bundles different shared objects, so it is not quoted.
+pyarrow is the largest thing the project installs, and it is a base dependency: `pip install -e .` installs it for every job, whether or not that job opens a parquet file. Its beneficiary is the one module that writes and reads parquet, `ledger/parquet.py`. **An optional extra that only the jobs reaching the door install is the smaller install, and it is the one this project could not hold.** A check that follows a job's imports misses the next way in - a Node script that starts Python, or a verb held in a variable - and a job it misses fails at its first read of the door. A base dependency cannot be missed.
 
-The jobs that install it share `setup-python`'s pip cache key with the jobs that do not, because that action keys on the OS, the interpreter and the dependency file and offers no input that names the extras. A cache saved by a job without the engine costs the next job that needs it a download of pyarrow, never a failed run.
+**What that costs is an estimate from GitHub's own step timings on ubuntu-latest (2026-09-29), not a paired measurement.** A plain install took 10 to 16 seconds (mean 12.9, over 13 runs) and an install with the engine 13 to 22 seconds (mean 15.2, over 10 runs). So the engine adds about 2 seconds to an average install - inside the spread between runs - and about 12 seconds at the widest, on each of about 12 installs that never open a parquet file. pyarrow 25.0.1 declares no dependencies of its own, so it moves no version the project already installs. A reading taken on Windows is not quoted, because that wheel bundles different shared objects.
+
+**Installed everywhere is not imported everywhere.** pyarrow is imported in `ledger/parquet.py` and nowhere else, and `ledger/persist.py` loads that module only inside the calls that write or read a parquet file, so importing the door loads no engine. `backend/tests/ledger/test_single_engine_import.py` holds the first half, and `test_the_facade_does_not_load_pyarrow` in `backend/tests/contracts/test_ledger_package.py` holds the second.
+
+Every job installs the same set, so whichever job saves `setup-python`'s pip cache saves pyarrow in it.
 
 ## Design rationale
 

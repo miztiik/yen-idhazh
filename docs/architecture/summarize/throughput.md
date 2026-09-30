@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-29
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -148,7 +148,7 @@ cannot say whether a slow day was long articles or long summaries.
 ## Each call is charged on its own, and the item is their sum
 
 An item is read by more than one model call, so from 2026-09-12 `Summary`,
-`state/item-health/` and the published projection record the five cost numbers
+the item-health ledger and the published projection record the five cost numbers
 per call as well as for the item. **The five flat cells are the sum over the
 calls the row records**, which is what keeps every reader that pools them -
 `day_metrics`, `console_band`, `backend/utilities/reconcile_prefill.py`
@@ -240,7 +240,7 @@ them for two days, so this page published a rate nothing committed could check -
 and under Guardrail #10 a number that cannot be reconciled cannot justify a design.
 
 Each `work` shard now commits its server's counters onto its own row of
-`state/host-fingerprint/`, and
+the host-fingerprint ledger, and
 `backend/utilities/reconcile_prefill.py` pools both sides of one run and prints
 the gap. **Measured on run `2026-08-26-5`: the ledger says 11.1755 tok/s and the
 server says 11.1796, which is 0.037 percent apart against a 5 percent bound
@@ -382,14 +382,14 @@ declared entry.
 **Three prices nobody can read off a token count, and each can fail the design
 on its own. The first has now been read.** The prompt cache: if the summarize-and-plan call's
 `cached_tokens` is below the label call's prompt token count, the slot is not answering
-for the article and every figure above is wrong. `state/item-health/` carries
+for the article and every figure above is wrong. The item-health ledger carries
 `label_input_tokens` and `summary_cached_tokens` side by side from 2026-09-12,
 so the reading is one comparison over that ledger, and
 [the sequence the window holds](#the-sequence-is-declared-once-and-the-window-was-checked-against-it)
 below says what came back. The second is the summarize-and-plan call's decode: its output budget is
 4,735 tokens and the one reply ever measured was 327, and a reply at half the
 budget is 144 minutes of the summarize-and-plan call alone on a 20-item shard. The third is the worst
-`work` shard against the 180-minute bar in `state/host-fingerprint/`.
+`work` shard against the 180-minute bar in the host-fingerprint ledger.
 
 ## The sequence is declared once, and the window was checked against it
 
@@ -431,7 +431,8 @@ and 4,735 for the summarize-and-plan call's. At the committed `n_ctx` of 65,536 
 would have been refused**. That is the number that decides
 whether a later row proposes a raise, and it says the raise has already been
 made and bought the whole tail. Read once from `ledger.load_item_health` with a
-30-day cover, 2026-09-13.
+30-day cover, 2026-09-13; that reader is `ledger.load_days` over the same 30 days
+now.
 
 ## The write rate still falls through a run, and the cause is the ordering
 
@@ -522,7 +523,7 @@ Three things follow for anyone reading a rate off this page or the console:
 
 - **A rate that moved between two runs is not evidence of a change we made**
  until both runs are known to have drawn the same processor. `cpu_model` is a
- committed per-shard cell on `state/host-fingerprint/`, so that check costs
+ committed per-shard cell on the host-fingerprint ledger, so that check costs
  a column read.
 - **Compare within a processor, never across one.** Every paired figure in
  [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) that prices a

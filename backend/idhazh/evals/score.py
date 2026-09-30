@@ -142,7 +142,7 @@ def to_eval_row(
     the jobs that hold it already only ever read this row back
     (`docs/concepts/evaluation.md`).
 
-    `source_word_count` and `source_seen_word_count` both come off `article`,
+    `source_words_before_cap` and `source_words` both come off `article`,
     never off a text this function counts for itself. They are a before-the-cap
     and after-the-cap pair, and a pair is only readable when one counter
     produced both numbers. The full count is None when it is not knowable, and
@@ -182,7 +182,7 @@ def to_eval_row(
         ),
         vertical=item.vertical,
         model_id=summary.model_id,
-        attempt=summary.attempt,
+        summary_attempt=summary.attempt,
         hhem=hhem,
         hhem_full=hhem_full,
         hhem_delta=delta,
@@ -206,9 +206,9 @@ def to_eval_row(
             hedge_dropped=hedge,
             config=config,
         ),
-        source_word_count=source_words,
-        source_seen_word_count=article.word_count,
-        summary_word_count=metrics.word_count(text),
+        source_words_before_cap=source_words,
+        source_words=article.word_count,
+        summary_words=metrics.word_count(text),
         output_digest=summary.output_digest,
         source_digest=text_digest(premise),
         determinism_violation=determinism_violation,

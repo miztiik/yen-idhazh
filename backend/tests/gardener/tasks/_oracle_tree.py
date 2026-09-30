@@ -9,6 +9,13 @@ would read a real file differently.
 The pass side was recorded once, before the passes were deleted, into
 `tests/fixtures/gardener/prune-oracle/removals.json`; this builder is what that
 record was taken over, so changing a file here changes what the record means.
+
+Since then three ledgers - item-health, scores and host-fingerprint - moved off
+their CSV day trees onto the ledger door, so this tree files their rows under
+`state/raw/`, the way their writers file them now. The record's paths under
+their old trees name files this tree no longer holds, and
+`test_every_task_takes_what_its_pass_took.py` says what that leaves each task
+answering for.
 """
 
 from __future__ import annotations
@@ -19,7 +26,14 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text, seed_item_health
+from conftest import (
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    read_text,
+    seed_host_fingerprint,
+    seed_item_health,
+    seed_scores,
+)
 from retention._trees import TERMINAL_ORDER, health_row
 
 from idhazh import ledger, telemetry
@@ -31,7 +45,6 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import SeenRow
-from idhazh.evals import writer as score_writer
 
 #: The day every window is measured from. Late enough that each fourteen-month
 #: window has months on both sides of it, and the 390-day one days on both sides.
@@ -213,9 +226,8 @@ def _feed_health(state: Path, month: str, index: int) -> None:
 
 def _host_fingerprint(state: Path, month: str, index: int) -> None:
     day = f"{month}-11"
-    ledger.write_segment(
+    seed_host_fingerprint(
         state,
-        LedgerName.HOST_FINGERPRINT,
         [
             HostFingerprintRow(
                 version=HostFingerprintRow.schema_version(),
@@ -225,10 +237,6 @@ def _host_fingerprint(state: Path, month: str, index: int) -> None:
                 cpu_model="AMD EPYC 7763 64-Core Processor",
             )
         ],
-        run_id=f"{day}-1",
-        attempt=1,
-        job=ServerJob.PLAN,
-        shard=0,
     )
 
 
@@ -258,8 +266,8 @@ def _score_row(*, day: str, number: int) -> EvalRow:
             "unsupported_numbers": number % 3,
             "hedge_dropped": number % 4 == 0,
             "extraction_suspect": number % 5 == 0,
-            "source_word_count": 1320,
-            "source_seen_word_count": 1320 - (number % 2) * 40,
+            "source_words_before_cap": 1320,
+            "source_words": 1320 - (number % 2) * 40,
             "score_ms": 1000 + number,
             "scored_at": f"{day}T06:18:02Z",
         }
@@ -269,13 +277,10 @@ def _score_row(*, day: str, number: int) -> EvalRow:
 def _score_month(state: Path, month: str, index: int) -> None:
     for day_of_month in (4, 17):
         day = f"{month}-{day_of_month:02d}"
-        score_writer.append_segment(
+        seed_scores(
             state,
             [_score_row(day=day, number=index * 100 + offset) for offset in range(3)],
             run_id=f"{day}-1",
-            attempt=1,
-            job=ServerJob.ASSEMBLE,
-            shard=0,
         )
 
 

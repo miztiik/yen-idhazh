@@ -102,11 +102,10 @@ permissions:
 
 concurrency:
   # One group per target, because the four targets are four jobs that share
-  # nothing. Only `bench` commits: its `runtime` job pushes one host row to
-  # `state/pipeline-tests/host-fingerprint/<Y>/<M>/<DD>.csv`, a day file two
-  # dispatches on one day both append to. Until every writer owns its own
-  # filename, two of them racing that path lose a row at the rebase - and the
-  # step is `continue-on-error`, so the run stays green while the record goes.
+  # nothing. Only `bench` commits: its `runtime` job pushes one host row as a
+  # raw file of its own under `state/pipeline-tests/raw/host-fingerprint/`,
+  # named for its writer, so two dispatches on one day never share a path and
+  # neither can lose the other's row at the rebase.
   #
   # Per target rather than one flat group, for validate.yml's reason: GitHub
   # keeps only ONE pending run per group and a newer pending run cancels the
@@ -554,11 +553,8 @@ jobs:
             lscpu -p=CPU,CORE,SOCKET,NODE
           } | tee backend/var/runtime-sweep/hardware.txt
 
-      # `.[parquet]` rather than `.`: `idhazh plan` below reads every retirement
-      # through the ledger door and can file one, and the door's files are
-      # parquet.
       - name: Install
-        run: pip install -e ".[parquet]"
+        run: pip install -e .
 
       # The same key the raw case wrote, so this job restores what that job
       # already paid for. A miss here is a second download of the same bytes,
@@ -719,6 +715,7 @@ jobs:
           python -m idhazh fingerprint \
             --config backend/var/candidate-config \
             --date "$RUNTIME_DATE" \
+            --commit "${GITHUB_SHA}" \
             --shard 0 \
             --job runtime
 
@@ -794,15 +791,21 @@ jobs:
       # artifact and the runner takes the rest with it; this commits one row -
       # the machine this dispatch drew - to `main`.
       #
-      # `state/pipeline-tests/host-fingerprint` and nothing wider. The sweep's
+      # `state/pipeline-tests/raw/host-fingerprint` and nothing wider. The sweep's
       # own item-health, scores and traces land under the same trial root
       # because the whole state root moved, but nothing reads them back and
       # committing them would grow the repository for no reader (Guardrail #12).
       #
-      # The row is keyed on the run id, the run id is `github.run_id`, and no
-      # second dispatch can reproduce one - so two dispatches never write one
-      # row, and this path needs no merge driver. Nothing under `state/` carries
-      # a union driver any more except the published and cleanup day trees.
+      # Staged only when the probe wrote it. No commit holds the folder open -
+      # the ledger door files one raw file per write and has no empty file to
+      # seed a folder with - and `git add` on a path that is not there fails the
+      # step. A bench whose probe wrote nothing prints its nothing-staged
+      # message instead.
+      #
+      # The file is named by the ledger door for its writer, the writer is keyed
+      # on the run id, the run id is `github.run_id`, and no second dispatch can
+      # reproduce one - so two dispatches never write one path, and this path
+      # needs no merge driver.
       #
       # `if: always()` because a bench that failed its verdict still drew a
       # machine, and that is the dispatch worth having the record of.
@@ -815,9 +818,12 @@ jobs:
           COMMIT_MESSAGE: "bench: the machine ${{ inputs.runtime_candidate }} drew"
           NOTHING_STAGED_MESSAGE: "no machine recorded"
           PUSH_FAILED_MESSAGE: "could not push the bench host record"
-        run: >-
-          python backend/utilities/commit_and_push.py
-          state/pipeline-tests/host-fingerprint
+        run: |
+          if [ -d state/pipeline-tests/raw/host-fingerprint ]; then
+            python backend/utilities/commit_and_push.py state/pipeline-tests/raw/host-fingerprint
+          else
+            echo "$NOTHING_STAGED_MESSAGE"
+          fi
 
       - name: Upload runtime sweep
         if: always()

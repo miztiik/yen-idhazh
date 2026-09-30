@@ -11,6 +11,7 @@ from idhazh.contracts import derive_url_key
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.eval_row import RENAMED_CELLS as EVAL_RENAMED_CELLS
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow
 from idhazh.contracts.summary import Summary
@@ -160,7 +161,7 @@ def test_the_model_cannot_have_read_more_words_than_the_article_holds() -> None:
     """
     payload = mutate(
         CONTRACT_FIXTURES_DIR / "eval-row" / "truncation-artifact.json",
-        source_word_count=1874,
+        source_words_before_cap=1874,
     )
     with pytest.raises(ValueError, match="not more"):
         EvalRow.model_validate(payload)
@@ -170,9 +171,9 @@ def test_an_article_shorter_than_the_cap_reads_the_same_length_twice() -> None:
     """Equal is the normal case, not an error: nothing was cut."""
     payload = mutate(
         CONTRACT_FIXTURES_DIR / "eval-row" / "truncation-artifact.json",
-        source_word_count=1875,
+        source_words_before_cap=1875,
     )
-    assert EvalRow.model_validate(payload).source_word_count == 1875
+    assert EvalRow.model_validate(payload).source_words_before_cap == 1875
 
 
 def test_an_eval_row_may_not_know_how_long_its_article_was() -> None:
@@ -184,11 +185,31 @@ def test_an_eval_row_may_not_know_how_long_its_article_was() -> None:
     """
     payload = mutate(
         CONTRACT_FIXTURES_DIR / "eval-row" / "truncation-artifact.json",
-        source_word_count=None,
+        source_words_before_cap=None,
     )
     row = EvalRow.model_validate(payload)
-    assert row.source_word_count is None
-    assert row.source_seen_word_count == 1875, "the seen count is still a measurement"
+    assert row.source_words_before_cap is None
+    assert row.source_words == 1875, "the seen count is still a measurement"
+
+
+def test_an_eval_row_written_under_the_old_names_reads_under_the_new_ones() -> None:
+    """The four renamed keys are read under their new names, on both read paths.
+
+    A sealed `.eval.json` written before the rename reaches the before-validator,
+    and a committed CSV heading reaches `from_csv_row`. Each old key moves only
+    when its new name is absent, so a payload carrying both keeps its own.
+    """
+    fixture = CONTRACT_FIXTURES_DIR / "eval-row" / "truncation-artifact.json"
+    current = json.loads(fixture.read_text(encoding="utf-8"))
+    back = {new: old for old, new in EVAL_RENAMED_CELLS.items()}
+    old = {back.get(name, name): value for name, value in current.items()}
+    assert set(old) - set(current) == set(EVAL_RENAMED_CELLS), "the fixture holds all four"
+    expected = EvalRow.model_validate(current)
+    assert EvalRow.model_validate(old) == expected
+    headings = {back.get(name, name): cell for name, cell in expected.csv_row().items()}
+    assert EvalRow.from_csv_row(headings) == expected
+    both = {**current, "summary_word_count": current["summary_words"] + 1}
+    assert EvalRow.model_validate(both).summary_words == current["summary_words"]
 
 
 def test_an_ok_item_health_row_carries_only_recorded_extract_signals() -> None:

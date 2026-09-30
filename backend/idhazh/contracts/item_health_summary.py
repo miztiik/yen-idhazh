@@ -1,13 +1,14 @@
 """One day of one pipeline stage, after the full-grain rows are gone.
 
-`state/item-health/<YYYY>/<MM>/<DD>.csv` is the census: one row per planned item
-per run, and the denominator under every rate this project publishes. It is also
-the fastest-growing thing under `state/` - measured 2026-08-30, 1,270,452 bytes
-for six published days, which is 211,742 bytes a day and about 77 MB a year.
+The item-health ledger (`state/raw/item-health/`) is the census: one row per
+planned item per run, and the denominator under every rate this project
+publishes. It is also the fastest-growing thing under `state/` - measured
+2026-08-30, 1,270,452 bytes for six published days, which is 211,742 bytes a
+day and about 77 MB a year.
 
-The full-grain window of `config/gardener/telemetry-aggregate.json` decides how
-long that stays readable item by item. Past it, a month is folded into this
-shape and the full-grain shard is deleted.
+The full-grain window of `config/gardener/telemetry-aggregate.json` decides when
+a month is folded into this shape. Its rows are deleted later, by the monthly
+window of `config/gardener/compact-item-health.json`, which reaches further back.
 One row per `(date, stage)` is five rows a day, so a year of history costs
 kilobytes rather than megabytes and a year-over-year comparison stays possible -
 which deleting the shard outright would make unanswerable, and Guardrail #10 would

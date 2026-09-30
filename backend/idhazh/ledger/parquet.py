@@ -4,9 +4,8 @@
 one statement. Every other module reaches the engine through this one, so
 replacing it - duckdb is the named candidate - is a change to one file.
 `ledger/persist.py` imports this module inside the functions that write and read
-parquet, never at its top: pyarrow is an optional extra that only the jobs
-touching parquet install, and a module-scope import would stop every stage that
-imports the ledger from loading without it.
+parquet, never at its top, so importing the ledger never loads pyarrow: a stage
+that never opens a parquet file does not pay to load the engine.
 
 The envelope is written as the schema's metadata, which pyarrow writes into the
 file's key-value metadata. Row-group statistics are left on: a constant column

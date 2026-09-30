@@ -3,9 +3,10 @@
 `item-health/2026/09/18/` is a day: two writer files, each named
 `<run_id>-<attempt>-<job>-<shard>.csv`, which is the shape every state ledger
 more than one job writes is in. There is no head above a day, so a `<DD>.csv`
-beside these directories is a name no writer spells. `host-fingerprint/` holds a
-day directory too, because the reader that asks which days a record opened has
-to report one date for a day however many files the day holds.
+beside these directories is a name no writer spells. The console now reads the
+article record from its packed files, so this tree stands for the ledgers that
+still file by day - feed health, the span rollup and the similarity judge's two
+trees - which share the one walk.
 
 Committed rather than built in a temporary directory, because the shape is the
 thing under test and a fixture a person can open is the cheapest description of

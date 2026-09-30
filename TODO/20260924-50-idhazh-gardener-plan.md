@@ -332,7 +332,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 6 | The corpus squash becomes Python | 4 | D | DONE | p50r6 | #1141 | p50-r6-worker |
 | 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5, 11 | F | DONE | p50r7 | #1151 | p50-r7-worker |
 | 8 | `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled | 6, 7 | G | DONE | p50r8 | #1156 | p50-r8-worker |
-| 9 | The three ledgers the console's routes read become parquet | 7, 12, and plan 51's row titled **The query door module and its two entry points** | H | IN-FLIGHT | p50r9, p50r9fe | - | p50-r9-worker-3, p50-r9-worker-fe |
+| 9 | The three ledgers the console's routes read become parquet | 7, 12, and plan 51's row titled **The query door module and its two entry points** | H | DONE | p50r9, p50r9fe | #1166 | p50-r9-worker-3, p50-r9-worker-fe, p50-r9-worker-5, p50-r9-worker-docs2 |
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
 | 11 | The index and watermark shapes are declared | 2 | C | DONE | p50r11 | #1136 | p50-r11-worker |
 | 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | DONE | p50r12 | #1161 | p50-r12-worker-2 |

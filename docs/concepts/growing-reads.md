@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -111,9 +111,9 @@ command **refuses to run with neither flag** - a step that named neither would
 get the unbounded pass by accident.
 
 **One run, or one date.** `ledger.load_settled_failures` and
-`ledger.load_source_counts` take a date and open that day's shard.
-`ledger.load_host_fingerprint_shard` takes a day file, and a run id already
-names its date, so the audit that asks about one run opens one file.
+`ledger.load_source_counts` take a date and read that one day through
+`ledger.load_days`. An audit that asks about one run reads the host-fingerprint
+ledger the same way, because a run id already names its date.
 `corpus.scored_from_items` reads one run's own items directory. These are bounded
 by construction - the input never had a clock, and putting one on it could only
 lose work the run just did.
@@ -138,12 +138,13 @@ rather than hidden.** `indexed_observations` opens one file a partition, and the
 index moved from month files to day files with the ledger it describes - so **2
 opens became 23, and it gains about 365 a year**. The bytes did not move: the same
 digests are spread over more files, 21 more header lines. The ledger bound is what
-answers it - the `full-grain` series of `config/gardener/scores.json` is 14 months, so once the prune is
-switched on the live index holds at most fourteen months of days and everything
-older is one `state/score-archive/<YYYY-MM>.json` a month. **The `scores` task
-ships `dry_run: true`, so nothing prunes and the count grows until its
-declaration is flipped**
+would answer it - an index day goes once a `state/score-archive/<YYYY-MM>.json`
+covers its month. **Nothing builds an archive today**: it was built from the
+scores ledger's CSV day files, which moved to the ledger door, so the count
+grows until an archive is built from the door's rows and the `scores` task is
+flipped live
 ([../architecture/publishing/retention.md](../architecture/publishing/retention.md)).
+Until then the read is [unbounded](#unbounded-and-it-says-so), and listed there.
 A cover was rejected rather than overlooked, for the reason the paragraph above
 gives. `fingerprint.append_new` is the same shape one size down: it
 carries digests rather than built rows, and the set stops growing when the inputs
@@ -226,10 +227,10 @@ reads are here and not how many. These are `backend/`'s;
 | --- | --- | --- |
 | `ledger.load_seen` | day files of `state/seen/` | `collect.seen_window_days`, committed at 90 |
 | `ledger.load_health` | day files of `state/feed-health/` | `ledger.HEALTH_WINDOW_DAYS`, 31 |
-| `ledger.load_item_health` | day files of `state/item-health/` | the caller's `within_days` |
+| `ledger.load_days` | the two compact indexes of one door ledger, the one compact file that serves each day it is handed, and the raw files of only the days no index names | the days its caller names. Every reader of `item-health`, `scores` and `host-fingerprint` that asks about a window or a date calls it: the drift review, `console_band.publish`'s machine rows, `machine.publish`, `run_timeline.publish`, `public_telemetry.publish`, `day_metrics`, `source_health._recent_item_health`, `reconcile_prefill.py` and the `telemetry-aggregate` task among them |
 | `ledger.load_fitted_thresholds` | day files of `state/content-similarity-judge/fitted-thresholds/` | the caller's `within_days`, and the fit asks for `max(settled_window_days, step_change_window_rows * 2)` - 28 days on the committed knobs. **The cover is in days and the guard's median is in rows, which is why it is twice the row count rather than equal to it.** One missed run leaves 13 rows inside a 14-day cover, the median returns nothing, and a guard that silently never fires is worse than one that fires too readily. A bound set by two knobs, never by what the archive holds |
 | `similarity.applied.applied_line` | the same day files, through `load_fitted_thresholds` | `assemble.same_story.adaptive_dedup_threshold.applied_lookback_days`, committed at 7. It runs on every publish, so the bound is the one that matters most on this page: 8 file opens on the thousandth day and on the third. A gap longer than the lookback means the judge has been down that long, and the committed config floor is the honest answer - so the cover is also the policy |
-| the window refusal count | the same day files, through `load_item_health` | 30 days ending at the run date. **It took no new read.** The question - how many items the two-call sequence would not fit the window - is about the recent tail, and an answer over a longer span is dominated by shapes the pipeline no longer sends. The 30 dates are named by date arithmetic inside `load_item_health`, never by a directory walk, so the cost is 30 file opens whatever the archive holds. Read once on 2026-09-13 and written up in [the throughput page](../architecture/summarize/throughput.md); it is a verb a person types, off the daily path |
+| the window refusal count | the item-health days, through `ledger.load_days` since the ledger moved to the door | 30 days ending at the run date. **It took no new read.** The question - how many items the two-call sequence would not fit the window - is about the recent tail, and an answer over a longer span is dominated by shapes the pipeline no longer sends. The 30 dates are named by date arithmetic, never by a directory walk, so the cost is 30 days whatever the archive holds. Read once on 2026-09-13 and written up in [the throughput page](../architecture/summarize/throughput.md); it is a verb a person types, off the daily path |
 | `telemetry.source_health.reliability` | the feed-health day files in range | `collect.reliability_window_days` |
 | `ledger.load_published` | day files of `state/published/` | `collect.published_window_days`, **committed at `-1`** |
 | `evals.retrieval.load_corpus` | day directories of `frontend/public/digest/` | `assist.eval_corpus_through`, a pinned day rather than a rolling count. The day is read off the path and a later one is never opened, which is the whole saving: the gate was loading 32 days to score 6. A rolling count would be the wrong cover here - the pin holds the competitor set still for a frozen label set, so a cover that moved with the calendar would put the gate back where it was. `None` reads every day and is what the operator surface asks for |
@@ -243,12 +244,13 @@ reads are here and not how many. These are `backend/`'s;
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests |
+| `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests. That bounds the bytes a measurement costs, not the number of files: while no archive is built, the file count grows with every recorded day, and `indexed_observations` is listed under [unbounded](#unbounded-and-it-says-so) for it |
 | `ledger.write_segment` on `LedgerName.COUNTERFACTUAL_SCORES` | one writer file of `state/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
-| `ledger.load_settled_failures` | one item-health day file | one date |
+| `ledger.load_settled_failures` | one item-health day, through `ledger.load_days` | one date |
 | `ledger.load_story_similarity_pairs` | one day file of `state/content-similarity-judge/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
-| `ledger.load_source_counts` | one item-health day file | one date |
-| `ledger.load_host_fingerprint_shard` | one host-fingerprint day file | one date |
+| `ledger.load_source_counts` | one item-health day, through `ledger.load_days` | one date |
+| `telemetry.silicon`'s clock step | the host-fingerprint raw files of one day, through `ledger.list_raw_files` | one date: it reads back the row its own probe filed |
+| `ledger.held_days`, `ledger.held_months` | the two compact indexes of one door ledger and the names of its raw day folders, never a data file | the days and months the ledger holds. It grows by one name a raw day until a compaction packs it, and by one index entry a packed day or month. `source_health._recent_item_health`, `machine.publish`, `public_telemetry.publish`, `run_timeline.publish`, the `telemetry-aggregate` task and `idhazh rebuild-score-index` ask it which days or months exist |
 | `similarity.holdout.score_marks` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date its rows name | the length of the hand-marked file, and nothing else. The verb that calls it is typed by a person; another year of archive adds no read, and a day nothing marks is never opened. This is the backend twin of `similarity-holdout.holdoutReading` below, and it has the same cover for the same reason |
 | `corpus.scored_from_items` | one run's items directory | one run |
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
@@ -271,12 +273,16 @@ reads are here and not how many. These are `backend/`'s;
 | `site_weight.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
 | `retention.dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
 | `build_reference_dataset.archive_candidates` | every committed `digest.json` under `frontend/public/digest/` | the candidate pool for the frozen reference set has to be every article the pipeline has published, because the set is drawn on **outlet diversity** and a window would hide the outlets that publish rarely. It is a verb a person types, off the daily path and run once a set (2026-09-13) |
-| `item_health_provenance.archive_columns` | every shard of every day of `state/item-health/` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is an on-demand [column diagnostic](../architecture/sources/item-health.md#diagnosing-missing-columns), not a saved architecture report. No test repeats it (`CLAUDE.md` section 13) |
-| `empty_column_census.census` | every shard of every day of `state/item-health/` and of `state/host-fingerprint/` | same question as the row above, asked of every published ledger rather than one, and crossed with the reader map on each contract so that a column with neither a reader nor a writer exits non-zero. A window cannot answer it for the same reason, and a test cannot hold it for a second one: an assertion that a column is empty goes red the day it first fills, which is a date rather than an edit. It is a verb a person types, off the daily path. Measured 2026-09-21: 29 day files and 14,026 item rows, 6 day files and 76 host rows |
+| `item_health_provenance.archive_columns` | every row of the item-health ledger, through `ledger.load_ledger_rows` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is an on-demand [column diagnostic](../architecture/sources/item-health.md#diagnosing-missing-columns), not a saved architecture report. No test repeats it (`CLAUDE.md` section 13) |
+| `empty_column_census.census` | every row of the item-health and host-fingerprint ledgers, through `ledger.load_ledger_rows` | same question as the row above, asked of every published ledger rather than one, and crossed with the reader map on each contract so that a column with neither a reader nor a writer exits non-zero. A window cannot answer it for the same reason, and a test cannot hold it for a second one: an assertion that a column is empty goes red the day it first fills, which is a date rather than an edit. It is a verb a person types, off the daily path. Measured 2026-09-21: 29 day files and 14,026 item rows, 6 day files and 76 host rows |
 | `sample_sheet.index` | every committed `digest.json` under `frontend/public/digest/` | a drawn pair can straddle midnight, so its two articles are not always on the draw's own date - resolving against that date alone lost 2,035 of the 2,804 pairs drawn over 29 days. It is a verb a person types when labelling the holdout ([../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md)), off the daily path, and nothing in the pipeline reads what it writes |
 | `measure_retrieval.report` | every published day and every committed month shard | it asks whether the index names every published item. A window would compare the days inside it and say nothing about the ones outside, which is the only place a dropped item can hide. It is a verb a person types, off the daily path, and it was a gated test until 2026-09-22 |
 | `ledger_families.listing` | every file under every ledger's folder in `state/` | the question is how many files each ledger holds, and only a listing answers it. It is a verb a person types, off the daily path, and its test drives it from a registry and a state tree the test writes (2026-09-27) |
 | the gardener's `run-tasks` checkout, and `gardener_publish.Checkout.cone_bytes` | every file under the folders one shard owns, downloaded by the checkout, then sized from the commit in one `git ls-tree -r -l` | a task deletes what its window no longer keeps, so it has to see all of what it owns. Every row carries the weight as `cone_bytes`, and a shard over `max_cone_mb` - committed at 768, an estimate - exits 1 once its record has landed. Measured 2026-09-28: the heaviest shard owned 46.3 MB and grew about 1.4 MB a day, and its 390-day and 14-month windows let it grow for about a year before they start to delete ([the reasoning](../architecture/publishing/idhazh-gardener.md#what-a-shards-folders-weigh)) |
+| `evals.writer.indexed_observations`, which `recorded_observations` calls every time a work shard or assemble files a measurement | every day file of `state/score-index/`, one a recorded day once the closed-day fold has settled it | **awaiting a person's approval.** An observation key carries no date, so a window would let a measurement re-taken outside it read as new, and no bounded input answers "do we already hold this one?". The bound was the `scores` task dropping an index day once a month archive covers it, and no archive is built since the scores ledger moved to the ledger door, so the read opens one more file for every day recorded: 23 on 2026-09-13, and about 365 more a year. Building the archive from the door's rows would bound it again, and whether to do that is the person's call |
+| `evals.writer.records` | every row of the scores ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row and `grader_length_bias.py` joins every row. Each is a verb a person types, off the daily path |
+| `data_wrangler.py refill`'s score read, `measure_ledgers.py`, and `server_memory_mark.py` when it names no day | every row of the ledger each one reads, through `ledger.load_ledger_rows` | each is an operator verb whose question is the whole history; none runs on the daily path |
+| `backend/utilities/migrate_to_parquet.py` | every CSV day left under `state/item-health/`, `state/scores/` and `state/host-fingerprint/` | a migration moves every day there is, once. It is deleted when no CSV of the three is left on `main` |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of
 their cover.** `plan` is one of four verbs on
@@ -321,10 +327,10 @@ than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turnin
 | `series.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries - except `telemetry`, per the paragraph above |
 | `scores.publish`, `feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
 | `span_rollup.publish` | the state shard for the month named | the month the run's own rows name, which the compaction folded before this read |
-| `public_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
+| `public_telemetry.publish` | the item-health days of the months the caller names, through `ledger.load_days`, or every month `ledger.held_months` names when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
 | `run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
-| `console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards, the `state/host-fingerprint/` day files inside the window, and the newest day's `run.json` | `max(console.window_presets)`, committed at 90, for the first two; one file for the third |
+| `console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards, the host-fingerprint days inside the window through `ledger.load_days`, and the newest day's `run.json` | `max(console.window_presets)`, committed at 90, for the first two; one file for the third |
 
 **Two of them list a tree to learn which months exist**, and that residue is
 named rather than hidden: `run_days.months_published` and
@@ -337,8 +343,8 @@ nothing at all for a tree whose last run was two months ago - the same reason
 streamed `state/runtime-counters.csv` - one appended file with no shards and no
 prune, so a run that wanted September's rows walked every row ever appended to
 find them. That ledger was deleted on 2026-09-20 and the machine series is folded
-from two day trees instead, so the read is now the months `series.months_to_write`
-names and the day files inside them.
+from the host-fingerprint and item-health ledgers instead, so the read is now the
+months `series.months_to_write` names, read through `ledger.load_days`.
 
 **The eighth answers to a different knob, and that knob has never bitten,
 2026-09-12.** `public_telemetry.publish` is the odd member of this block: it
@@ -361,8 +367,8 @@ and declares `-1`: rewriting every shard is the job, and it is an operator
 command a person runs once on a contract change rather than a per-run cost.
 
 **The ledger moved to day files on 2026-09-13, and this read got worse in
-handles and not in rows.** `state/item-health/` now files
-`<YYYY>/<MM>/<DD>.csv`, so the publisher folds a month from that month's day
+handles and not in rows.** `state/item-health/` filed
+`<YYYY>/<MM>/<DD>.csv` from then, so the publisher folded a month from that month's day
 files through `day_partition.days_by_month`. The daily case still opens one
 month's worth - at most 31 files rather than one - and the unbounded case opens
 every recorded day rather than every month: **2 opens became 20 on 2026-09-13,
@@ -373,6 +379,11 @@ read would leave a fresh clone permanently short of a mirror it never published.
 The count is checked rather than asserted in prose -
 `backend/tests/test_publish_telemetry.py` counts the handles both cases open, over
 a twelve-month ledger the test builds.
+
+**It has since moved to the ledger door.** The publisher asks `ledger.held_months`
+which months exist and reads each through `ledger.load_days`, so a month the
+compaction has absorbed is one file again, a packed day is one file, and a day
+not packed yet is its raw files.
 
 **What the two cases open is counted rather than timed**, in
 `backend/tests/test_publish_telemetry.py`, over a twelve-partition ledger the
@@ -447,14 +458,14 @@ the last day there was.
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
-| `payload.readDayShards`, `payload.dayShardFiles`, `payload.itemHealthRows` | the shards of the newest `days` recorded days of `state/item-health/` | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts days, never files** - see below |
-| `payload.evalRows` | through `readDayShards`, over `state/scores/` | the same 91 |
+| `payload.readDayShards`, `payload.dayShardFiles` | the shards of the newest `days` recorded days of a CSV day tree | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts days, never files** - see below |
+| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `host-fingerprint.machineRecord` | the ledger's compact index, then the newest `days` packed days of the item-health, scores or host-fingerprint ledger, through the query door's `sliceFromDisk`. Never a raw file | the same 91, counted back from the newest packed day that holds a row: when the newest packed days hold none, the reader reads as many earlier days to make up for them. `-1` reads every packed day, and a caller that passes it says why beside the call |
 | `payload.feedResults` | through `readDayShards`, over `state/feed-health/` | the same 91 |
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
 | `similarity-holdout.mergeLineHoldoutScore` | through `readDayShards`, over `state/content-similarity-judge/merge-line-holdout-scores/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `span-rollup.loadSpanRollup` | `state/span-rollup/` at both grains: through `readShards` over the month files, and through `readDayShards` over the day tree | the same 5 months for the month files, and the same 91 days for the day tree. Only one of the two shapes is ever on disk, so the sum is what is there |
-| `machine-counters.loadMachineCounters` | `state/host-fingerprint/` through `mergedDayShards` and `state/item-health/` through `settledDayShards`, both over the one `dayShardFiles` walk | the day cover, for both |
+| `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the day cover, for all three |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
@@ -467,7 +478,7 @@ file ([partitions.md](partitions.md#what-counts-as-a-day-file)).
 the ledger holds. What moves is the file count inside the window, not the window.
 
 **What that costs, said rather than implied.** A live day costs one open per
-writer. On the two five-run days measured on 2026-09-17 and 2026-09-20 that is
+writer. On the two five-run days measured on 2026-09-17 and 2026-09-20 that was
 20 writers for item-health and 25 for host-fingerprint, against one file each
 before the day directory landed. A day whose writers have been folded to one
 `settled.csv` costs one open again. So the read is bounded by the number of days
@@ -475,6 +486,12 @@ still unfolded times the writers a day, plus one file for every folded day in
 the window - and by nothing in the archive behind it. The gardener folds a day
 one whole day after it ends, so the unfolded half is at most the newest two days
 rather than the whole 91-day window.
+
+**The three records the console reads most are off this path.** The item-health
+and host-fingerprint figures above were taken while those ledgers were CSV day
+trees. They moved to the ledger door with the scores ledger, and `itemHealthRows`,
+`evalRows` and `machineRecord` read packed days only: one file a packed day, or
+one a month once a compaction absorbs it, whatever a day's writers numbered.
 
 **The holdout read is the one on this page whose cover is a file rather than a
 number, and it is the one that reaches outside the window.** It asks whether the
@@ -738,6 +755,11 @@ rest. To find those days it lists every day folder of the tree, which is the
 listing the task's window pass already makes over the same tree, and it has to:
 which days still hold a writer file is a question about every day. The listing
 reads names only, and its row is in the inventory above.
+
+**The item-health, scores and host-fingerprint ledgers have left this count.**
+They moved to the ledger door, where each ledger's compaction, not this fold,
+bounds its files. The figures above were taken with them in it, so they overstate
+what the fold holds now.
 
 Authority: Fowler and Carmack, converged, 2026-09-22. The move into the
 gardener, the one-day rule and the fold's own switch: Fowler and Carmack,

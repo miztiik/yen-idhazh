@@ -4,7 +4,6 @@
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
   "owns": [
-    "state/item-health",
     "state/item-health-summary",
     "frontend/public/telemetry"
   ],

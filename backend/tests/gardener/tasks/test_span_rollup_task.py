@@ -14,10 +14,12 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from retention._trees import HISTORY_MONTHS, TODAY, host_fingerprint_history, months_back
+from conftest import seed_host_fingerprint
+from retention._trees import HISTORY_MONTHS, TODAY, months_back
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.gardener import ForeverWindow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
@@ -61,6 +63,23 @@ def span_rollup_history(state: Path, months: list[str]) -> None:
         )
 
 
+def a_machine_in(state: Path, month: str) -> None:
+    """One machine on the 11th of `month`, filed through the ledger door by its job's writer."""
+    day = f"{month}-11"
+    seed_host_fingerprint(
+        state,
+        [
+            HostFingerprintRow(
+                version=HostFingerprintRow.schema_version(),
+                date=day,
+                run_id=f"{day}-1",
+                shard=0,
+                cpu_model="AMD EPYC 7763 64-Core Processor",
+            )
+        ],
+    )
+
+
 @pytest.mark.parametrize("dry_run", [True, False])
 def test_no_month_goes_however_old_and_no_other_ledger_is_touched(
     dry_run: bool, tmp_path: Path
@@ -70,7 +89,7 @@ def test_no_month_goes_however_old_and_no_other_ledger_is_touched(
     state = tmp_path / ledger.STATE_DIRNAME
     months = months_back(TODAY, HISTORY_MONTHS)
     span_rollup_history(state, months)
-    host_fingerprint_history(state, months[:1])
+    a_machine_in(state, months[0])
     before = files_under(tmp_path)
     assert len(before) == len(months) + 1, "the tree holds one file a month and one machine file"
 

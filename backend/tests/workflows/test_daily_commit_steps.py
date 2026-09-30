@@ -115,10 +115,13 @@ def _writer_file(run_id: str) -> str:
 
     Built through `ledger.day_shard_relpath` rather than spelled here, so a test
     of the predicate that reads a filename cannot pass against a filename no
-    writer produces.
+    writer produces. Feed health is the tree this job files into itself, and a
+    CSV day tree is where a filename carries its writer: a raw file of the
+    ledger door is named by a fresh id, so it never meets another file at one
+    path.
     """
     return ledger.day_shard_relpath(
-        LedgerName.ITEM_HEALTH,
+        LedgerName.FEED_HEALTH,
         date=THE_DAY,
         run_id=run_id,
         attempt=THIS_ATTEMPT,
@@ -546,8 +549,8 @@ def test_two_runs_that_conflict_each_keep_the_file_they_wrote(tmp_path: Path) ->
     Two runs are in flight and each writes its own file. The tip also carries a
     file under THIS run's name, which is what an earlier push of this same job
     leaves when the push that followed it lost the race - so the rebase has an
-    add of one path from each side, and `state/segments/**/*.csv` refuses to
-    merge content at all.
+    add of one path from each side, and a file one writer owns takes no merge
+    driver, so git stops on it rather than merging its content.
 
     The script keeps what this job wrote there, because that filename can only
     have come from this job. The second run's file is nothing this job may touch

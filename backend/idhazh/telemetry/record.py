@@ -177,7 +177,7 @@ class ItemRecorder:
         """The three cells that say which item a short record is about."""
         return {
             "item_id": self._cells.get("item_id"),
-            "shard": self._cells.get("shard"),
+            "machine_shard": self._cells.get("machine_shard"),
             "item_index": self._cells.get("item_index"),
             **extra,
         }
@@ -374,7 +374,7 @@ def shard_done(
             run=run_id,
             name=events.EventName.SHARD_DONE,
             cells={
-                "shard": shard,
+                "machine_shard": shard,
                 "items": items,
                 "failures": dict(failures),
                 "slowest": dict(slowest) if slowest else None,

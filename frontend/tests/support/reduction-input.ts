@@ -83,7 +83,7 @@ export function plannedOf(sizes: Sizes): Map<string, number> {
 	return found;
 }
 
-/** One row per item, the shape `state/item-health/<YYYY-MM>.csv` holds.
+/** One row per item, the shape the packed article record holds.
  *
  * Spread evenly over the runs, because the join this row is about is every
  * accepted run against every one of these.
@@ -99,7 +99,7 @@ export function healthRows(sizes: Sizes): Record<string, string>[] {
 		rows.push({
 			date: dayOf(Math.floor(run / 2)),
 			run_id: runIdOf(run),
-			shard: String(index % sizes.shards),
+			machine_shard: String(index % sizes.shards),
 			item_id: `item-${index}`,
 			url_key: `key-${index}`,
 			source_id: `source-${index % 7}`,
@@ -151,9 +151,9 @@ export function scoreRows(sizes: Sizes): Record<string, string>[] {
 			truncation_flagged: index % 4 === 0 ? 'True' : 'False',
 			extractiveness: String(Math.round(next() * 100) / 100),
 			verbatim_run: String(Math.round(next() * 100) / 100),
-			summary_word_count: String(40 + Math.round(next() * 160)),
-			source_word_count: String(words),
-			source_seen_word_count: String(words),
+			summary_words: String(40 + Math.round(next() * 160)),
+			source_words_before_cap: String(words),
+			source_words: String(words),
 			score_ms: String(1_000 + Math.round(next() * 20_000))
 		});
 	}

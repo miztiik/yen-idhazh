@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -71,7 +71,7 @@ back. The committed guard covered `notes.csv`, which every reader already refuse
 
 **The ASCII clause is not decoration.** `str.isdigit` and `int` both accept another
 script's numerals, so a stem in Arabic-Indic digits reads as January 2025 to a naive
-check while `evals.writer.append_segment` names its own file `2025-01`. That is two files
+check while a writer names its own file `2025-01`. That is two files
 claiming one month, and a fold would summarise over one of them. CPython's date parser
 happens to refuse that stem today, but through how it compiles its digit class rather
 than through anything this rule asked for, and a detail is not a rule - so the check is
@@ -116,7 +116,7 @@ copy of.
 
 | Class | What the name means | How a race on it ends |
 | --- | --- | --- |
-| **written-once** | the filename carries `<run_id>-<attempt>-<job>-<shard>`, so it names exactly one writer. Nothing rewrites it or deletes it except retention and the closed-day fold | two writers cannot name one file, so there is no race to settle |
+| **written-once** | the filename carries `<run_id>-<attempt>-<job>-<shard>`, or is a `file_id` the ledger door mints for one writer, so it names exactly one writer. Nothing rewrites it or deletes it except retention, the closed-day fold and a compaction | two writers cannot name one file, so there is no race to settle |
 | **derived** | the content is a function of other jobs' output. It is handed back to the tip before the rebase and rebuilt against it | the rebuild wins. It is never text-merged and never settled by who wrote it |
 | **union-safe** | append-only rows, `merge=union`, **and a named read-side property that makes a repeat change no answer** | both sides land whole, and the reader settles them |
 
@@ -155,6 +155,13 @@ every file in it carries its writer's name.** `state/<ledger>/<YYYY>/<MM>/<DD>/`
 holds one `<run_id>-<attempt>-<job>-<shard>.csv` per writer, spelled once in
 `ledger.segment_name`. Two writers cannot name one file, so two runs pushing at
 once cannot collide on it - which is the whole reason the shape exists.
+
+A ledger that goes through the ledger door has the same property one level down:
+`state/raw/<ledger>/<YYYY>/<MM>/<DD>/` holds one file per write, the door mints
+its name, and the writer's identity is inside the file
+([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)).
+The item-health, scores and host-fingerprint ledgers moved there; what follows on
+this page is about the CSV day trees.
 
 **Since 2026-09-22 there is no head above it.** A producer writes the final day
 path directly, and `state/segments/` is gone. The shape used to be a staging
@@ -285,15 +292,15 @@ Authority: owner, 2026-09-06.
 
 | Collection | Path pattern | Writer | What makes a partition closed |
 | --- | --- | --- | --- |
-| Eval ledger | `state/scores/<YYYY>/<MM>/<DD>/` | `evals.writer.append_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm`. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
-| Score index | `state/score-index/<YYYY>/<MM>/<DD>/` | `evals.writer.append_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22, and it files by the ledger's day rather than a grain of its own: two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-score-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. |
-| Item health | `state/item-health/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. Each writer files its own rows under the day those rows name. Closed once the run's date leaves the day. The day grain buys the two things `state/published/` buys: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard, which no merge driver can express. |
-| Feed health | `state/feed-health/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. The same one-date write, settled against `FEED_HEALTH_KEY` at read time. Closed once the run's date leaves the day. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
+| Eval ledger | `state/raw/scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/scores/` | `evals.writer.file_measurements`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. Every write is a file of its own, so two runs never collide on one, and a packing task makes each finished day one file. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
+| Score index | `state/score-index/<YYYY>/<MM>/<DD>/` | `evals.writer.file_measurements` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22, and it files by the ledger's day rather than a grain of its own: two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-score-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. |
+| Item health | `state/raw/item-health/<YYYY>/<MM>/<DD>/`, packed under `state/compact/item-health/` | `ledger.persist`, from `stages.record` and `stages.assemble` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. Each write files its own rows under the day those rows name, as a file of its own, so two runs never collide on one. Closed once the run's date leaves the day. |
+| Feed health | `state/feed-health/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. The same one-date write, settled against `FEED_HEALTH_KEY` at read time. Closed once the run's date leaves the day. The day grain buys what it buys for `state/published/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Seen addresses | `state/seen/<YYYY>/<MM>/<DD>.csv` | `ledger.append_seen` | Partitioned by **day** since 2026-09-13. The same one-date append, and the date is the run's own digest date - which is why `first_seen_run[:10]` names the file every row inside it sits in. Closed once the run's date leaves the day. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
 | Counterfactual scores | `state/counterfactual-scores/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-14 and a **day directory** since 2026-09-22. The plan stage writes the run's own digest date and nothing else, so the day closes when the day's last run finishes. It is the one collection here whose day directory is created even when the run has no rows for it: the plan job's commit step names the directory, and `git add` under `set -e` aborts on a path that is not there. Its only reader opens a trailing window, and the gardener's `counterfactual-scores` task deletes what falls below it. |
 | Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `telemetry.publish.public_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
-| Folded item health | `state/item-health-summary/<YYYY-MM>.csv` | `retention.compact_month`, written by `ledger.write_item_health_summary` | Written once, when the item-health month passes the `full-grain` series of `config/gardener/telemetry-aggregate.json` (14 months). It stays **monthly** while the ledger below it files by day, because it summarises a month and a day file of a month's totals is a shape nothing consumes - so the fold is where the two grains meet, reading at most 31 day directories and writing one. Closed the moment it is written; the days it summarises are gone, so there is nothing left to write. No file is committed yet. |
-| Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by the gardener's `scores` task | Written once, when the scores month passes the `full-grain` series of `config/gardener/scores.json` (14 months), and only after it reconciles against a second reading of that month's day files. It stays **monthly** while the ledger below it files by day, for the reason the folded item health gives: it summarises a month. Closed the moment it is written. No file is committed yet. |
+| Folded item health | `state/item-health-summary/<YYYY-MM>.csv` | `retention.compact_month`, written by `ledger.write_item_health_summary` | Written once, when the item-health month passes the `full-grain` series of `config/gardener/telemetry-aggregate.json` (14 months). It stays **monthly** while the ledger below it files by day, because it summarises a month and a day file of a month's totals is a shape nothing consumes - so the summary is where the two grains meet, reading the month's days through `ledger.load_days` and writing one file. Closed the moment it is written; the rows it summarises go later, when the item-health compaction's `monthly_window` passes, and nothing writes the summary again. No file is committed yet. |
+| Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by the gardener's `scores` task | Written once, when the scores month passes the `full-grain` series of `config/gardener/scores.json` (14 months), and only after it reconciles against a second reading of that month's day files. Nothing writes one today: it was built from the CSV day files, which moved to the ledger door, so the `scores` compaction stays report-only until it is built from the door's rows. It stays **monthly** while the ledger below it files by day, for the reason the folded item health gives: it summarises a month. Closed the moment it is written. No file is committed yet. |
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `stages.assemble.stage_assemble` rebuilds only `month_of(plan.date)`. |
 | Published addresses | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` | Partitioned by **day**, not by month. The caller hands the date and the writer appends to that day alone, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
 | Day metrics | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` | Partitioned by **day**. One record per published day, mirroring the published tree it is derived from, and closed the moment that day is. The site opens only the dates a page names, so nothing walks the tree. |
@@ -326,7 +333,7 @@ What it writes, and how the two freezes compose, is
 
 ## A ledger and its mirror may file at different grains
 
-**`state/item-health/` files by day and `frontend/public/telemetry/` files by
+**The item-health ledger files by day and `frontend/public/telemetry/` files by
 month, and neither is a mistake.** They answer different questions, so they take
 their grain from different things.
 
@@ -340,10 +347,10 @@ their grain from different things.
  month grain the widest preset fetches five; at day grain it would fetch ninety.
 
 **So somebody has to bridge them, and it is the publisher.**
-`public_telemetry.publish` folds a month from that month's day files through
-`day_partition.days_by_month`, and the gardener's `telemetry-aggregate` task
-folds and deletes on the same boundary. A month's input is at most 31 files, so
-the bridge is a ledger-bounded read rather than a growing one.
+`public_telemetry.publish` folds a month from that month's days, read through
+`ledger.load_days`, and the gardener's `telemetry-aggregate` task summarises on
+the same boundary. A month's input is at most 31 days, so the bridge is a
+ledger-bounded read rather than a growing one.
 
 **A day tree's filenames are an index of which days the ledger holds, and a
 bridge reads that index instead of doing calendar arithmetic.**
@@ -351,10 +358,10 @@ bridge reads that index instead of doing calendar arithmetic.**
 `source_yield_min_complete_days` dates the ledger actually recorded, which is not
 the set a calendar window of the same width names - a gap in the record leaves
 the window short, and widening it until it is long enough reads back to the first
-run the project made. Every day file's name IS a recorded date, so the newest
-`keep` names are the answer and nothing behind them is opened. A month name could
-not do this: it says only that the ledger holds records somewhere inside that
-month.
+run the project made. `ledger.held_days` reads that index from the two compact
+indexes and the raw day folders' names, so the newest `keep` days are the answer
+and no data file behind them is opened. A month name could not do this: it says
+only that the ledger holds records somewhere inside that month.
 
 What the day grain costs, stated rather than implied: the unbounded case of
 `public_telemetry.publish` opens about thirty times as many file handles for the
@@ -395,8 +402,9 @@ could re-file any ledger from a command line.
 
 Two kinds, and they are not the same operation.
 
-**A whole partition ages out.** The gardener's `seen`, `feed-health`,
-`telemetry-aggregate` and `scores` tasks unlink a file. The partition is the unit, nothing
+**A whole partition ages out.** The gardener's `seen` and `feed-health` tasks
+unlink a day file, `telemetry-aggregate` and `scores` unlink a published copy, an
+index day or a summary, and a compaction unlinks a door ledger's month file. The partition is the unit, nothing
 is edited, and the freeze rule has no opinion because there is no month left to
 rewrite. What bounds each collection is
 [the state-tree section](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree)
@@ -410,9 +418,9 @@ has no implemented command.
 
 ### A late arrival
 
-A row whose date falls in a month that is not the run's own. `evals.writer.append_segment`
-handles it by construction, because it routes on the row's date rather than on the
-run's. `ledger.write_segment` does the same. Every `ledger.append_*` is handed one
+A row whose date falls in a month that is not the run's own. `ledger.persist`
+handles it by construction, because it files each row under the day its own
+`date` names rather than the run's. `ledger.write_segment` does the same. Every `ledger.append_*` is handed one
 date and appends to that month, so its
 caller decides: hand it a date in a closed month and it has performed a correction.
 

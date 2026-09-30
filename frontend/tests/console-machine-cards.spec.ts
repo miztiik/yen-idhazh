@@ -20,9 +20,6 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import {
 	cacheWords,
 	clockSentence,
@@ -31,14 +28,14 @@ import {
 	uptimeSentence
 } from '../src/lib/charts/machine-cards';
 import { UNRECORDED_STOP } from '../src/lib/charts/machine-colour';
-import { hostFingerprints, machineRecordDays, watchedFlags } from '../src/lib/server/host-fingerprint';
+import { fingerprintsOf, machineRecordDays, watchedFlags } from '../src/lib/server/host-fingerprint';
 import type { HostFingerprint } from '../src/lib/server/host-fingerprint';
 import {
 	machineCounters,
 	type MachineLimits,
 	type MachineRun
 } from '../src/lib/server/machine-counters';
-import { halvesDay, ledgers, plan, type ShardReading } from './support/machine-rows';
+import { ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig } from '../src/lib/server/config';
 
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 21_600 };
@@ -585,63 +582,60 @@ test.describe('a day that published and kept no machine row', () => {
 		expect(view.lostNote).toBeNull();
 	});
 
-	test("a writer's file with a header and no rows is a day the record RAN", () => {
-		// The fact the rows cannot carry, and the one the whole join turns on. A
-		// fixture tree, because the archive's own example of this ages out of every
-		// window and a test timed to go red on a date nobody set is a fuse
-		// (`CLAUDE.md` section 13).
-		const root = mkdtempSync(join(tmpdir(), 'idhazh-record-'));
-		const at = join(root, 'host-fingerprint', '2026', '09');
-		mkdirSync(join(at, '16'), { recursive: true });
-		mkdirSync(join(at, '17'), { recursive: true });
-		const header = 'version,date,run_id,job,shard,fingerprint,cpu_model';
-		writeFileSync(join(at, '16', '2026-09-16-1-1-work-00.csv'), `${header}\n`);
-		writeFileSync(
-			join(at, '17', '2026-09-17-1-1-work-00.csv'),
-			`${header}\n2026-09-17,2026-09-17,2026-09-17-1,work,0,3a7f0b1c2d4e5f60,AMD EPYC 7763\n`
-		);
+	test('a day whose machine rows name no machine is a day the record RAN', () => {
+		// The fact a fingerprint cannot carry, and the one the whole join turns on:
+		// the clock's half of a job landed and the probe's did not. Built rows,
+		// because the archive's own example of this ages out of every window and a
+		// test timed to go red on a date nobody set is a fuse (`CLAUDE.md` section
+		// 13).
+		const job = (date: string, fingerprint: string): Record<string, string> => ({
+			version: '2026-09-18',
+			date,
+			run_id: `${date}-1`,
+			job: 'work',
+			shard: '0',
+			fingerprint,
+			cpu_model: fingerprint === '' ? '' : 'AMD EPYC 7763',
+			job_seconds: '780'
+		});
+		const rows = [job('2026-09-16', ''), job('2026-09-17', '3a7f0b1c2d4e5f60')];
 
-		// Both days opened a file; only one kept a row. 15 September opened none at
-		// all, and that is the day the record had not begun on.
-		expect(machineRecordDays(-1, root)).toEqual(['2026-09-16', '2026-09-17']);
-		expect(hostFingerprints(-1, root).map((row) => row.date)).toEqual(['2026-09-17']);
+		// Both days hold a row; only one row names its machine. 15 September holds
+		// none at all, and that is the day the record had not begun on.
+		expect(machineRecordDays(rows)).toEqual(['2026-09-16', '2026-09-17']);
+		expect(fingerprintsOf(rows).map((row) => row.date)).toEqual(['2026-09-17']);
 	});
 
-	test('a ledger that was never written reports no days rather than throwing', () => {
-		const root = mkdtempSync(join(tmpdir(), 'idhazh-record-'));
-		expect(machineRecordDays(-1, root)).toEqual([]);
+	test('a record that holds no row reports no days rather than throwing', () => {
+		expect(machineRecordDays([])).toEqual([]);
 	});
 });
 
-test.describe("one job's two halves", () => {
-	test('reach the cards as one placement carrying the machine and the clock', () => {
-		// The shape every work file has held since 2026-09-18: the probe's half
-		// names the machine and the clock's half names what the job cost, in one
-		// file. The clock's half carries no fingerprint, so until the halves were
-		// merged it was dropped here and the job's clock never sat beside the
-		// machine it was measured on.
-		const root = mkdtempSync(join(tmpdir(), 'idhazh-record-'));
-		try {
-			halvesDay(root, {
+test.describe("one job's row", () => {
+	test('reaches the cards as one placement carrying the machine and the clock', () => {
+		// Packed, a job's two halves are one row: the clock step files the whole
+		// row, so the newest row a job wrote names the machine AND what the job
+		// cost. The reader types that row whole, so the job's clock sits beside
+		// the machine it was measured on.
+		const rows = fingerprintsOf([
+			{
+				version: '2026-09-20',
 				date: '2026-09-17',
-				runId: '2026-09-17-1',
+				run_id: '2026-09-17-1',
 				job: 'work',
-				shard: 0,
+				shard: '0',
 				fingerprint: '3a7f0b1c2d4e5f60',
-				cpuModel: 'AMD EPYC 7763 64-Core Processor',
-				cores: 2,
-				modelLoadMs: 2290.5,
-				jobSeconds: 780
-			});
-			const rows = hostFingerprints(-1, root);
-			expect(rows, 'one job is one placement').toHaveLength(1);
-			expect(rows[0].fingerprint).toBe('3a7f0b1c2d4e5f60');
-			expect(rows[0].cpu_model).toBe('AMD EPYC 7763 64-Core Processor');
-			expect(rows[0].cores).toBe(2);
-			expect(rows[0].job_seconds).toBe(780);
-			expect(rows[0].model_load_ms).toBe(2290.5);
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
+				cpu_model: 'AMD EPYC 7763 64-Core Processor',
+				cores: '2',
+				model_load_ms: '2290.5',
+				job_seconds: '780'
+			}
+		]);
+		expect(rows, 'one job is one placement').toHaveLength(1);
+		expect(rows[0].fingerprint).toBe('3a7f0b1c2d4e5f60');
+		expect(rows[0].cpu_model).toBe('AMD EPYC 7763 64-Core Processor');
+		expect(rows[0].cores).toBe(2);
+		expect(rows[0].job_seconds).toBe(780);
+		expect(rows[0].model_load_ms).toBe(2290.5);
 	});
 });

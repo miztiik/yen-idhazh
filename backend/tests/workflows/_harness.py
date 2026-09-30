@@ -700,10 +700,11 @@ COMMIT_STAGED_PATHS: Final = {
     # many times a day against unmerged branches, so one of its rows beside the
     # rows the console reads would mean every panel filtering by job for ever.
     #
-    # The fingerprint directory alone, not `state/pipeline-tests` whole: the
-    # sweep's item-health, scores and traces land under the same trial root
-    # because the whole state root moved, and nothing reads them back.
-    "bench": [f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}"],
+    # The machine ledger's raw folder alone, not `state/pipeline-tests` whole:
+    # the sweep's item-health, scores and traces land under the same trial root
+    # because the whole state root moved, and nothing reads them back. The
+    # folder is asked of the ledger door, which files the probe's row there.
+    "bench": [ledger.raw_root(Path(BENCH_LEDGER_ROOT), LedgerName.HOST_FINGERPRINT).as_posix()],
 }
 
 # The step that fills the two ledgers the step above commits, and the two things
@@ -788,8 +789,9 @@ CLOCK_VARIABLES: Final = ("JOB_STARTED_AT",)
 
 # The other end of `FINGERPRINT_STEP`. The probe runs before the model server so
 # the bandwidth reading gets an idle machine; the job's own clock and what the
-# weights cost to open are only knowable once the job is over. Both halves go to
-# the one segment this job owns and the fold unites them.
+# weights cost to open are only knowable once the job is over. Both halves are
+# filed through the ledger door as one work unit of this job, so the clock's
+# whole row replaces the probe's half-row when the ledger is read.
 JOB_CLOCK_STEP: Final = "What this job cost"
 
 JOB_CLOCK_COMMAND: Final = "python -m idhazh job-clock"
@@ -1812,17 +1814,24 @@ def _substitute(text: str) -> str:
 
 
 def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
-    """The paths and the strings one commit step hands the shared program."""
+    """The paths and the strings one commit step hands the shared program.
+
+    The call is read from the one line of the step that makes it, because a step
+    may guard it: the bench stages its folder only when its probe wrote one.
+    """
     workflow = _load_workflows()[COMMIT_WORKFLOWS[label]]
     job_name = COMMIT_JOBS[label]
     step = _step(workflow, job_name, "name", COMMIT_STEPS[label])
-    command = shlex.split(_script(step, f"job {job_name} commit step {label}"))
-    assert tuple(command[:2]) == COMMIT_PROGRAM_CALL, (
-        f"{label} must commit through {COMMIT_PROGRAM_CALL[1]}"
-    )
+    script = _script(step, f"job {job_name} commit step {label}")
+    calls = [
+        words
+        for line in script.splitlines()
+        if tuple((words := shlex.split(line))[:2]) == COMMIT_PROGRAM_CALL
+    ]
+    assert len(calls) == 1, f"{label} must commit through {COMMIT_PROGRAM_CALL[1]}, once"
     declared = _mapping(step.get("env"), f"job {job_name} commit env {label}")
     settings = {name: _substitute(str(value)) for name, value in declared.items()}
-    return command[2:], settings
+    return calls[0][2:], settings
 
 
 def _git_calls(source: str) -> list[str]:

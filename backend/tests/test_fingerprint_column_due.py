@@ -8,11 +8,11 @@ what the rows hold, which is why it is an operator surface rather than a
 collected test (CLAUDE.md section 13).
 
 Every case below builds its own ledger in a temp directory, laid out the way a
-run leaves one: a directory a day, with each writer's file in it and, once the
-day is folded, its `settled.csv`. The rows are the committed eval-row fixture
-re-dated, so every cell has the shape a committed row has. Nothing here reads
-`state/scores/`: that collection grows, and a test over it would cost more every
-run and would go red because somebody published a day.
+run leaves one: the ledger door's raw files, one per writer per day. The rows
+are the committed eval-row fixture re-dated, so every cell has the shape a
+committed row has. Nothing here reads the committed score ledger: that
+collection grows, and a test over it would cost more every run and would go red
+because somebody published a day.
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, fold, read_text, seed_scores
+from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_scores, writer_identity
 
-from idhazh import day_shards, ledger
-from idhazh.contracts.base import ServerJob, derive_url_key
+from idhazh import ledger
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.ledger_name import LedgerName
 from utilities.fingerprint_column_due import main
@@ -125,35 +125,27 @@ def test_an_empty_column_is_not_a_stamp(tmp_path: Path, capsys: pytest.CaptureFi
     assert said["stamped_days"] == "0"
 
 
-def test_a_stamped_row_in_a_folded_day_directory_holds_the_column_and_counts_once(
+def test_a_measurement_two_writers_filed_holds_the_column_and_counts_once(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The layout the committed ledger really has, which the tool once walked past.
+    """The layout the committed ledger really has: one measurement in two writers' files.
 
-    The day was folded into `settled.csv`, and a late writer's file beside it
-    repeats the same measurement. A reader looking for `<DD>.csv` finds no file
-    and calls the column retired; a reader that adds the two files up counts the
-    row twice.
+    A work shard and assemble can each file the same item, because neither sees
+    the index the other is writing, so one day can hold the same row in two
+    files. A reader that adds the files up counts the row twice.
     """
     day = "2026-09-12"
     state = _ledger(tmp_path / "state", {day: True})
-    fold(state, day)
-    folder = ledger.path(state, LedgerName.SCORES, day)
-    late = ledger.day_shard_path(
+    ledger.persist(
         state,
-        LedgerName.SCORES,
-        date=day,
-        run_id=f"{day}-2",
-        attempt=1,
-        job=ServerJob.ASSEMBLE,
-        shard=0,
+        [_a_row(day, stamped=True)],
+        ledger=LedgerName.SCORES,
+        covers=day,
+        identity=writer_identity(f"{day}-2"),
     )
-    late.write_bytes((folder / day_shards.SETTLED_NAME).read_bytes())
     config = _config(tmp_path / "config", 366)
 
-    assert sorted(path.name for path in folder.iterdir()) == sorted(
-        [day_shards.SETTLED_NAME, late.name]
-    )
+    assert len(ledger.list_raw_files(state, LedgerName.SCORES, days=[day])) == 2
     assert _ask(state, config, "2026-09-20") == 0
 
     said = _read(capsys)

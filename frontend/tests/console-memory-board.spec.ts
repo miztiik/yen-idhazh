@@ -21,7 +21,7 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
 	memoryBoard,
@@ -35,6 +35,7 @@ import {
 	type MachineRun
 } from '../src/lib/server/machine-counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
+import { canaryArticleRows, heldRows } from './support/canary-records';
 
 const REPO = resolve(process.cwd(), '..');
 const DATE = '2026-09-04';
@@ -427,23 +428,17 @@ test.describe('the memory board, at item grain', () => {
 	});
 });
 
-/** Every row of one canary ledger, read straight off its day tree. */
-function canaryRows(ledger: string): Record<string, string>[] {
-	const root = join(REPO, 'backend', 'var', 'canary', 'state', ledger);
-	const rows: Record<string, string>[] = [];
-	for (const relative of readdirSync(root, { recursive: true }) as string[]) {
-		if (!relative.endsWith('.csv')) continue;
-		const text = readFileSync(join(root, relative), 'utf8').trim();
-		if (text === '') continue;
-		const [header, ...lines] = text.split('\n');
-		const columns = header.split(',');
-		for (const line of lines) {
-			const cells = line.split(',');
-			rows.push(Object.fromEntries(columns.map((name, index) => [name, cells[index] ?? ''])));
-		}
-	}
-	return rows;
-}
+/** Every row of the canary's article record, as the canary packed it.
+ *
+ * Read through the reader the page's server calls, because the packed file is
+ * the only copy the canary keeps; every figure below is recomputed from these
+ * rows rather than read back off the page.
+ */
+const articles = heldRows(canaryArticleRows);
+
+test.beforeAll(async () => {
+	await articles.load();
+});
 
 function measured(cell: string | null | undefined): number | null {
 	const text = (cell ?? '').trim();
@@ -465,7 +460,8 @@ test.describe('the memory panel puts the item grain on the page', () => {
 		const runId = await board.getAttribute('data-memory-board');
 		expect(runId, 'the panel drew no run').not.toBe('empty');
 
-		const floors = canaryRows('item-health')
+		const floors = articles
+			.rows()
 			.filter((row) => row.run_id === runId)
 			.map((row) => measured(row.os_mem_available_min_bytes))
 			.filter((value): value is number => value !== null);
@@ -496,7 +492,7 @@ test.describe('the memory panel puts the item grain on the page', () => {
 		const board = page.locator('[data-memory-board]');
 		const runId = await board.getAttribute('data-memory-board');
 
-		const rows = canaryRows('item-health').filter((row) => row.run_id === runId);
+		const rows = articles.rows().filter((row) => row.run_id === runId);
 		// The canary's newest run carries one row the kernel account never
 		// reached, beside rows it did.
 		const drawn = rows.filter(
@@ -532,7 +528,8 @@ test.describe('the memory panel puts the item grain on the page', () => {
 		const board = page.locator('[data-memory-board]');
 		const runId = await board.getAttribute('data-memory-board');
 
-		const peaks = canaryRows('item-health')
+		const peaks = articles
+			.rows()
 			.filter((row) => row.run_id === runId)
 			.map((row) => measured(row.llama_rss_peak_bytes))
 			.filter((value): value is number => value !== null);
@@ -559,7 +556,7 @@ test.describe('the memory panel puts the item grain on the page', () => {
 		const runId = await board.getAttribute('data-memory-board');
 
 		const byItem = new Map<string, Record<string, string>>();
-		for (const row of canaryRows('item-health')) {
+		for (const row of articles.rows()) {
 			if (row.run_id !== runId) continue;
 			byItem.set((row.item_id ?? '').trim(), row);
 		}

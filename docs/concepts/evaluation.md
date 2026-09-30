@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -68,10 +68,12 @@ name its weights and fails instead of minting a plausible identity.
 
 ### The two source word counts are one counter, before and after the cap
 
-`source_word_count` is `Article.source_word_count`, the words in the extracted
-body before `extract.truncation_cap_tokens` cut it. `source_seen_word_count` is
+`source_words_before_cap` is `Article.source_word_count`, the words in the
+extracted body before `extract.truncation_cap_tokens` cut it. `source_words` is
 `Article.word_count`, the same counter applied to what survived. The difference
-between them is the cut, and nothing else.
+between them is the cut, and nothing else. They are the names item-health gives
+the same two facts; a committed CSV heading from before the rename,
+`source_word_count` or `source_seen_word_count`, still reads under the new name.
 
 **A row stamped before `2026-08-27T20:00` measured something else.** Both cells
 came off the post-cap string through two different counters -
@@ -87,7 +89,7 @@ before anyone checked the impossible direction.
 **Two things now stop it happening again.** `EvalRow` refuses a row whose seen
 count exceeds its full count, mirroring the rule `Article` already enforces -
 the pair could only stay wrong while nothing compared the two cells. And
-`source_word_count` is nullable, so a row can say it does not know instead of
+`source_words_before_cap` is nullable, so a row can say it does not know instead of
 naming a number nobody measured.
 
 **The committed rows were rewritten**, by a one-shot utility retired on
@@ -384,7 +386,7 @@ row is a judgement.
 
 **The source is a join, and the join is printed when it fails.** The eval ledger
 records the address and the title and never the feed, so a summary reaches a
-source through `url_key` on `state/item-health/<YYYY>/<MM>/<DD>/`. Measured
+source through `url_key` on the item-health ledger. Measured
 2026-09-01 over the committed ledgers, 3,959 of 4,110 scored rows join, and every
 day from 2026-08-24 joins at 100 percent - the 151 that do not are the two oldest
 scored days, written before item-health carried them. Rows that do not join are
@@ -418,7 +420,7 @@ read side re-joins on `output_digest` and takes the live score from this ledger.
 
 **Hidden from the labeller, without exception:** `hhem`, `hhem_full`,
 `hhem_delta`, the band, the band reason, every counterweight, `model_id`,
-`attempt`, `pipeline_fingerprint`, `scorer_version`, any other row's label, the
+`summary_attempt`, `pipeline_fingerprint`, `scorer_version`, any other row's label, the
 running tally, and the row's decile. The queue is never ordered by score - that
 would leak the gradient off the sequence.
 
@@ -439,10 +441,9 @@ counterweight's own precision and recall out of the same sixty labels.
 **Those three counterweights are copied onto the label row from 2026-09-03, and
 that is a change of policy rather than of shape.** The read side used to re-join
 `unsupported_numbers`, `hedge_dropped` and `extraction_suspect` from
-`state/scores/` on `output_digest`, and that ledger now keeps fourteen months of
-item-level rows - the `full-grain` series of `config/gardener/scores.json` -
-before a month
-becomes a summary. A label outlives its source row, so a re-join is a promise the
+the scores ledger on `output_digest`, and that ledger keeps item-level rows only
+until the `monthly_window` of `config/gardener/compact-scores.json` passes, once
+that compaction is live. A label outlives its source row, so a re-join is a promise the
 ledger stops being able to keep - and what would be lost is exactly the precision
 and recall the sixty labels are drawn to buy. `LabelRow` carries the three as
 nullable columns filled by the queue; null means a row written before this stamp,
@@ -659,7 +660,7 @@ arrived.
 
 The console plots these five since 2026-09-05, and the panel had to read them
 from the committed day payloads under `frontend/public/digest/`. **`band_reason`
-is not a column of `state/scores/`.** The ledger's 35 columns carry the inputs
+is not a column of the scores ledger.** The ledger's 35 columns carry the inputs
 the reason is decided from - `hhem`, `coverage`, `unsupported_numbers`,
 `hedge_dropped` - and the band, and no reason. `verdict` decides it,
 `assemble.build_day` writes it onto the item, and that is the only place on disk
@@ -944,15 +945,15 @@ not a canary.
 
 ## The ledger
 
-Every item produces one row, appended to a committed CSV. It is appended by CI, read by the dashboard, and never recomputed at read time (Guardrail #1). The row shape is a contract like any other, versioned and changelogged ([../../CLAUDE.md](../../CLAUDE.md) section 11).
+Every item produces one row, filed through the ledger door into a committed parquet file ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). It is written by CI, read by the dashboard, and never recomputed at read time (Guardrail #1). The row shape is a contract like any other, versioned and changelogged ([../../CLAUDE.md](../../CLAUDE.md) section 11).
 
 Committing the scores rather than deriving them is what makes a claim about last quarter a lookup instead of a re-run against a model that has since changed.
 
-The ledger header is part of the contract. A writer now refuses to append when the committed header no longer matches `EvalRow.csv_columns`. A contract test also parses every committed `state/*.csv` with Python's `csv` module and fails if any data row has a different cell count from its header. This protects the file itself, not only the append path.
+The row shape travels with the file. Every file records the version stamp of the shape its rows were written under, and the door refuses a file written under a newer shape than the build reading it, naming the file and both stamps.
 
-**The ledger records measurements, not runs.** The writer refuses a row whose
-address, output words and scorer version all match a row
-the file already holds. Nothing in that recorded measurement identity changed,
+**The ledger records measurements, not runs.** The writer files no row whose
+address, output words and scorer version all match a measurement
+the ledger already records. Nothing in that recorded measurement identity changed,
 so a second row would only inflate the denominator every rate is computed
 against. Article-input identity is not part of this de-duplication key, and the
 pipeline stamp left it on 2026-09-12: it stopped being written, so keeping it
@@ -991,7 +992,7 @@ Four rows written before this rule are still committed - four items on 2026-08-2
 
 The 2026-08-23 repair kept positions stable. It measured `state/scores.csv` with Python's `csv` module: 33 header names and 19 data rows, all with 33 cells. Ten historical rows predated `score_ms`, so they now carry the contract default `0`. All 19 rows predated `evidential_density` and `speculative_density`, so those cells stay empty as CSV nulls.
 
-**Adding a column is a data migration, every time.** `self_repetition` landed on 2026-08-26 and the committed ledger moved with it in the same commit: one name on the header line and one empty cell on each of 2,116 data rows. Measured before and after - the file went from 1,548,111 to 1,550,243 bytes, which is 2,117 commas plus the 15 characters of the column name and not one byte more, and the line count did not change. The rows are padded rather than left short because the contract test above fails a row whose cell count differs from its header, and empty is the honest cell: those rows were scored by a build that never measured the thing.
+**Adding a column was a data migration, every time, while the ledger was a CSV.** `self_repetition` landed on 2026-08-26 and the committed ledger moved with it in the same commit: one name on the header line and one empty cell on each of 2,116 data rows. Measured before and after - the file went from 1,548,111 to 1,550,243 bytes, which is 2,117 commas plus the 15 characters of the column name and not one byte more, and the line count did not change. The rows were padded rather than left short because a contract test failed a row whose cell count differed from its header, and empty is the honest cell: those rows were scored by a build that never measured the thing.
 
 **The row is self-describing.** It carries the date, the source link and the title, not only the scores - so that a row still means something after the day it describes has been pruned from the published site. Those columns exist from the first row, because adding them after a prune cannot recover what was already lost.
 
@@ -1061,11 +1062,21 @@ A month with no committed shard exits non-zero rather than reporting a clean
 pass over nothing, and the refusal comes before any file is touched, so the
 months named beside a typo keep the index they had.
 
-**`state/score-archive/` is not a source for a rebuild.** A month past the
-`full-grain` series of `config/gardener/scores.json` has no rows left to derive anything
-from, which is precisely why the archive keeps those digests itself.
+**`state/score-archive/` is not a source for a rebuild.** A month whose rows are
+gone has nothing left to derive an index from, which is precisely why the archive
+keeps those digests itself.
 
 ### A month past fourteen becomes a summary, and the dedupe survives it
+
+**Nothing turns a month into a summary today.** The `scores` task built the
+archive below from a month's CSV day files and hashed their bytes. The eval
+ledger has since moved to the ledger door, so those files are gone and the task
+archives no month. The rows are deleted by the `scores` compaction now, past its
+`monthly_window`, and it stays report-only until an archive is built from the
+door's rows
+([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md#design-rationale)).
+What follows is the archive's shape and the reasons it is needed, which that
+change has to keep.
 
 `state/scores/` is the largest ledger under `state/` - measured 2026-09-03, 5,335
 rows in 4,266,655 bytes over two monthly shards - and nothing bounded it. Sharding
@@ -1079,9 +1090,9 @@ again - which turns a count over the ledger from a count of items into a count o
 times the pipeline looked, and that is the one thing this ledger promises it is
 not.
 
-So a month past the `full-grain` series of `config/gardener/scores.json` is turned into
-`state/score-archive/<YYYY-MM>.json` first, and the shard is unlinked only after
-that file has been written temp-then-rename, read back through its contract, and
+So a month past the `full-grain` series of `config/gardener/scores.json` was turned into
+`state/score-archive/<YYYY-MM>.json` first, and the shard was unlinked only after
+that file had been written temp-then-rename, read back through its contract, and
 reconciled field by field against a second reading of the shard. The archive
 carries:
 
@@ -1122,10 +1133,10 @@ years is in
 
 **It ships in dry run.** The `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a
 schedule, so a file deleted here stops being recoverable once that prune passes
-over it (`CLAUDE.md` section 8). The step prints what a live run would remove and
-removes nothing; turning it on is a one-line commit somebody takes after reading
-that list. The first files it would take are the day files under
-`state/scores/2026/08/` on 2027-10-01.
+over it (`CLAUDE.md` section 8). The `scores` compaction prints what a live run
+would remove and removes nothing; turning it on is a one-line commit somebody
+takes after reading that list, and after an archive is built from the door's
+rows.
 
 ## See also
 

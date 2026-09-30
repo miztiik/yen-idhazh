@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-29
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -27,9 +27,9 @@ set is still operator-only: the console reads it at build time under
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`HostFingerprintRow`](../../`HostFingerprintRow`) |
-| Ledger | `state/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch |
-| One file per writer | `<run_id>-<attempt>-<job>-<shard>.csv` inside the day directory - nothing else ever opens that path |
-| Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job writes its own file through `ledger.write_segment` and `ledger.extend_segment`, and nothing else writes the ledger |
+| Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its compaction; `state/pipeline-tests/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch |
+| Files | one raw file per write, `<file_id>.parquet` in the day directory, a name the ledger door mints so no second writer takes it. The probe and the clock of one job are one writer, so the clock's file replaces the probe's |
+| Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job files its own row through `ledger.persist`, and nothing else writes the ledger |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` |
@@ -42,7 +42,7 @@ not say what the other two cost. The `work` shards had the record from the start
 because they hold the model server; the two jobs either side of them spent time
 nobody could attribute to a processor.
 
-**No job writes a shared day file, from 2026-09-17.** Each writes its own segment
+**No job writes a shared day file, from 2026-09-17.** Each writes its own file
 and nothing else opens it. Ten writers on one path is
 what emptied 2026-09-16; the design rationale below says what it cost and why a
 merge driver was never going to settle it.
@@ -51,20 +51,20 @@ merge driver was never going to settle it.
 The probe runs before the job's heaviest step, because the bandwidth reading
 wants a gigabyte and an idle machine. What the job cost - its wall clock, and
 what opening the weights cost before the first item - is only knowable once the
-job is over. So `idhazh job-clock` writes a second row of the same shape into the
-same segment, carrying those two cells and repeating nothing, and
-`day_shards.settled_rows` takes the union at read time. The console's build-time
-readers take the same union through `mergedDayShards`, from 2026-09-27, so a job is
-one row on the Hardware route too
-([../architecture/publishing/console-payloads.md](../architecture/publishing/console-payloads.md)).
-**A job that dies between the two leaves a usable half-row with two
-empty cells**, which is the degrade path rather than a failure - and an empty
+job is over. So `idhazh job-clock` reads the probe's row back from its own raw
+file and files the whole row again, with the job-end cells filled, under the same
+writer. The ledger door keeps the later file of one writer, so a job is one row
+wherever it is read
+([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#the-two-identifiers)).
+**A job that dies between the two leaves a usable half-row with its job-end
+cells empty**, which is the degrade path rather than a failure - and an empty
 cell is what says the reading was not taken, where a zero would claim a job that
 cost nothing.
 
-The two halves share one segment because the path grammar names the job and not
-the step: `<run>-<attempt>-<job>-<shard>.csv` has no element two steps of one job
-could differ in. They are two rows of the file that job owns.
+The two halves are one writer because the writer identity names the job and not
+the step: the run, the attempt, the job, the shard and the producer are the same
+for both steps of one job, so both files belong to one work unit and the later
+one is read.
 
 **A bench dispatch writes into a tree of its own.** `measure.yml` redirects its
 whole state root with `run.trial_state_dirname`, so its rows land under
@@ -75,31 +75,34 @@ earns its keep when somebody counts across many days, and a day tree is the
 shape a bounded window can read (Guardrail #12).
 
 **Two tables join on the key, and no column is duplicated to make that work.**
-This table and `state/item-health/<YYYY>/<MM>/<DD>/` both carry `date`,
-`run_id`, `job` and `shard`, and a job runs on one machine, so the key is the
+This table and the item-health ledger both carry `date` and `run_id`, and both
+name the job and the shard - `job` and `shard` here, `machine_job` and
+`machine_shard` on the item row - and a job runs on one machine, so the key is the
 join. There is deliberately no `host_fingerprint` column on the item row: it
 would be a second copy of a value this table already holds, and a second copy is
 a thing that can disagree.
 
 **The item row is the third from 2026-09-17, and it is the one that answers per
-item.** It carried `shard` from 2026-08-30 and could spell three of the four
+item.** It carried the shard from 2026-08-30 and could spell three of the four
 columns; `plan`, `work` and `assemble` all write shard 0, so three of the four
-found every job of the run rather than the one that read the item. With `job`
+found every job of the run rather than the one that read the item. With the job
 beside it the question "which processor summarized this item, and what could it
-do" is one equality:
+do" is one equality. The item row's two are named for the machine because the
+ledger door's own `job` and `shard` name the writer, and assemble writes census
+rows for items it did not run:
 
 ```sql
 SELECT ih.item_id, hf.fingerprint, hf.cpu_model, hf.microcode, hf.flags
 FROM item_health ih
 JOIN host_fingerprint hf
   ON hf.date = ih.date AND hf.run_id = ih.run_id
- AND hf.job  = ih.job  AND hf.shard  = ih.shard
+ AND hf.job  = ih.machine_job  AND hf.shard  = ih.machine_shard
 ```
 
 **What a machine WAS is here; what it HAD at the moment is on the item row.**
 This table is taken once a job and holds the parts - the processor, its cache,
 its flags. Memory moves inside a job, so it is sampled per item instead: six
-`os_` columns on `state/item-health/` carry what `/proc/meminfo` said, including
+`os_` columns on the item-health ledger carry what `/proc/meminfo` said, including
 the lowest headroom seen while the model worked on that one item
 ([../architecture/sources/item-health.md](../architecture/sources/item-health.md#what-the-machine-had-against-what-a-process-held)).
 Neither table repeats the other's cells.
@@ -377,7 +380,7 @@ reads, so only `work` rows carry these cells today.
 
 **`server_prompt_tokens` and `server_prompt_seconds` are the only two cells on
 the site that can disagree with the item ledger.** Everything else that answers
-"how fast did this run read?" is arithmetic over `state/item-health/`, and a sum
+"how fast did this run read?" is arithmetic over the item-health ledger, and a sum
 over a ledger cannot tell you the ledger is wrong. These two come from a counter
 the model server kept on its own, so the two answers are independent - which is
 what let a 0.746 percent drift on one article be seen at all. The bound is 5
@@ -494,13 +497,15 @@ So from 2026-09-17 no job opens a shared day file. Each writes
 the run, the try at it, the job and the shard - four cells that make a filename
 one writer's alone. Since 2026-09-22 that file is the ledger rather than a copy
 waiting to be folded, so a run that died leaves its rows in the day they belong
-to and nothing has to catch up.
+to and nothing has to catch up. The ledger has since moved to the ledger door,
+and the rule holds there too: every write is a raw file the door names for its
+writer
+([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).
 
-**The attempt is in the name and in no column.** GitHub keeps the run id stable
-across a re-run and increments the attempt, so without it a second try takes the
-path its first try already wrote - in exactly the case where the two disagree,
-because the first is the one that died. With it, both files reach the reader and
-the higher attempt wins each cell the two fill differently.
+**The attempt is the writer's, and in no column of the contract.** GitHub keeps
+the run id stable across a re-run and increments the attempt. The door files each
+try as its own raw file and keeps the rows of the higher attempt, so a re-run
+replaces its first try - the one that died - instead of adding a second row.
 
 **The row's shape did not change.** Every file in the day
 carries the tree's own columns and the tree's own contract, so there is no
@@ -509,7 +514,8 @@ got before. Authority: Fowler, 2026-09-17.
 
 **A bench dispatch writes the same way.** `measure.yml` has no `assemble` job,
 and it needs none: its probe writes its own file under the day and the commit
-stages the day directory. When this was decided it was the one state writer with
+stages `state/pipeline-tests/raw/host-fingerprint`. When this was decided it was
+the one state writer with
 no concurrency group
 at all, which is why it got its own file rather than being left on the shared
 path. It groups per target now, and a day is still shared by every dispatch

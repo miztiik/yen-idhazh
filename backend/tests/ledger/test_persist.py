@@ -477,6 +477,30 @@ def test_a_row_naming_another_try_than_its_writer_is_refused(tmp_path: Path) -> 
     assert not tmp_path.exists() or not any(tmp_path.rglob("*.*"))
 
 
+def test_a_row_whose_own_identity_cell_would_not_read_back_is_refused_before_the_write(
+    tmp_path: Path,
+) -> None:
+    """A field named like an identity cell is that column, so a bad value there loses the file.
+
+    The reader refuses a file whose identity cells do not validate, so a row
+    carrying one would be written once and never read again. `model_copy` skips
+    validation, which is how such a value would get past the row's own model.
+    """
+    row = _fixture_rows(HostFingerprintRow)[0]
+    assert isinstance(row, HostFingerprintRow)
+    unreadable = row.model_copy(update={"shard": -1})
+
+    with pytest.raises(ValueError, match="identity cells would not read back"):
+        ledger.persist(
+            tmp_path,
+            [unreadable],
+            ledger=LedgerName.HOST_FINGERPRINT,
+            covers=unreadable.date,
+            identity=_identity(job=unreadable.job),
+        )
+    assert not tmp_path.exists() or not any(tmp_path.rglob("*.*"))
+
+
 @pytest.mark.parametrize(
     ("covers", "refusal"),
     [

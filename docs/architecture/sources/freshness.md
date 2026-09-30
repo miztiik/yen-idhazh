@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -196,9 +196,9 @@ once inside one day, 231 of them never succeeded on any attempt, and 403 repeat
 attempts bought 2 items.** On a five-run day, runs 2 to 5 each spent 8 to 41 of
 their 160 slots re-reading a locked door.
 
-So the planning step now reads today's rows of
-`state/item-health/<YYYY>/<MM>/<DD>/` - which is today's own file, so the read
-is one open whatever the archive holds - and drops any address that failed today
+So the planning step now reads today's rows of the item-health ledger - one
+day's files, so the read costs one day whatever the archive holds - and drops any
+address that failed today
 with a code in `collect.settled_failure_codes`. The `work` job commits that
 ledger the moment an item settles, so the next run of the day sees it.
 

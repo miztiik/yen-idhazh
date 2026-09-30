@@ -53,9 +53,10 @@ recorded a premise at all.
 Both the summary and the article body are untrusted (Guardrail #11). They print as
 inert terminal text and are sanitized on the way to the note field.
 
-**A draw only reaches the months still at full grain.** `state/scores/` keeps
-the scores task's full-grain window of item-level rows and then
-becomes a summary, and a summary holds no row to label. So the report prints the
+**A draw only reaches the months still at full grain.** The scores ledger
+(`state/raw/scores/`) keeps item-level rows for the monthly window of
+`config/gardener/compact-scores.json`, and an older month exists only as a
+summary, which holds no row to label. So the report prints the
 months the draw could see and the months that have aged out, and a run against a
 ledger with no full-grain month left refuses instead of reporting a draw of
 zero.
@@ -72,9 +73,8 @@ from typing import Final
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from idhazh import config, ledger  # noqa: E402
+from idhazh import config  # noqa: E402
 from idhazh.contracts.label_row import LabelRow, LabelTag, LabelVerdict  # noqa: E402
-from idhazh.contracts.ledger_name import LedgerName  # noqa: E402
 from idhazh.evals import archive, evidence, labels  # noqa: E402
 from idhazh.evals.writer import records as _score_records  # noqa: E402
 from idhazh.ledger import STATE_DIRNAME  # noqa: E402
@@ -98,7 +98,7 @@ SKIP: Final = object()
 
 
 def _ledger(state_dir: Path) -> list[dict[str, str]]:
-    """Every committed row, oldest day first. The ledger is a day tree now.
+    """Every committed row, oldest day first, read through the ledger door.
 
     A ledger with no full-grain month left is refused by name rather than
     reported as an empty draw. The two look identical from the row count and
@@ -110,12 +110,12 @@ def _ledger(state_dir: Path) -> list[dict[str, str]]:
         summarised = archive.archived_months(state_dir)
         if summarised:
             raise SystemExit(
-                f"every month of {ledger.tree_relpath(LedgerName.SCORES)} has aged out of "
+                "every month of the scores ledger has aged out of "
                 f"the full-grain window - {', '.join(summarised)} exist only as summaries "
                 f"at {archive.archive_relpath('<YYYY-MM>')}, and a summary holds no row to "
                 f"label. {archive.RAW_WINDOW_NOTE}"
             )
-        raise SystemExit(f"no eval ledger under {ledger.tree_relpath(LedgerName.SCORES)}")
+        raise SystemExit("the scores ledger holds no row")
     return rows
 
 
@@ -142,10 +142,7 @@ def refuse(records: Sequence[dict[str, str]], *, scorer: str, reason: str) -> in
     print(f"reason           {reason}")
     print(RULE)
     print()
-    print(
-        f"{ledger.tree_relpath(LedgerName.SCORES)} holds these scorers. "
-        "Only the scorer above can be drawn:"
-    )
+    print("The scores ledger holds these scorers. Only the scorer above can be drawn:")
     for pair in labels.pairs(records):
         here = "   <- this scorer" if pair.scorer_version == scorer else ""
         print()
@@ -340,8 +337,8 @@ def main() -> int:
                 "date": item["date"],
                 "run_id": item["run_id"],
                 "output_digest": item["output_digest"],
-                "summary_word_count": int(item["summary_word_count"]),
-                "source_seen_word_count": int(item["source_seen_word_count"]),
+                "summary_word_count": int(item["summary_words"]),
+                "source_seen_word_count": int(item["source_words"]),
                 "scorer_version": item["scorer_version"],
                 "hhem_at_label": float(item["hhem"]),
                 "band_at_label": item["band"],

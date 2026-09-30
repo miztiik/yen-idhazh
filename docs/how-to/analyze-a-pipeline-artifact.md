@@ -1,6 +1,6 @@
 # How to analyze a pipeline artifact
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-29
 
 How to find out what the model was asked about one story, what it answered, what
 that cost, and whether the summary it wrote is any good.
@@ -32,7 +32,7 @@ do not share a prompt and neither copy is redundant.
 | :--- | :--- | :--- |
 | A run id | `gh run list --workflow digest.yml`, or `--workflow validate.yml` for a qualification | Always |
 | The `captures-<shard>` artifact | `gh run download`. 90 days from a digest run, 30 from a qualification | Always |
-| The day's item-health ledger | `state/item-health/<yyyy>/<mm>/<dd>.csv`, committed | Only for a capture written before 2026-09-15 |
+| The run's UTC day | `YYYY-MM-DD`, the day the run published. The analyzer reads that day's rows from the item-health ledger under `--state`, default `state` | Only for a capture written before 2026-09-15 |
 
 ## Steps
 
@@ -43,17 +43,17 @@ do not share a prompt and neither copy is redundant.
    gh run download <run-id> --repo miztiik/yen-idhazh --pattern 'captures-*' --dir test-results/captures/<run-id>
    ```
 
-2. List every item, to pick the one worth opening. Add `--health` and the
-   columns fill with what each item cost.
+2. List every item, to pick the one worth opening. Add `--health` with the run's
+   UTC day and the columns fill with what each item cost.
 
    ```powershell
-   python backend/utilities/pipeline_artifact_analyzer.py test-results/captures/<run-id> --health state/item-health/<yyyy>/<mm>/<dd>.csv
+   python backend/utilities/pipeline_artifact_analyzer.py test-results/captures/<run-id> --health <yyyy-mm-dd>
    ```
 
 3. Write one item's document. `--item` takes any part of an item id.
 
    ```powershell
-   python backend/utilities/pipeline_artifact_analyzer.py test-results/captures/<run-id> --item <part-of-an-item-id> --health state/item-health/<yyyy>/<mm>/<dd>.csv --out report.md
+   python backend/utilities/pipeline_artifact_analyzer.py test-results/captures/<run-id> --item <part-of-an-item-id> --health <yyyy-mm-dd> --out report.md
    ```
 
 4. Read the document top to bottom. It is numbered in the order the questions
@@ -75,7 +75,8 @@ do not share a prompt and neither copy is redundant.
 | Flag | What it does |
 | :--- | :--- |
 | `--item <id>` | Any part of an item id. Omit to list every item |
-| `--health <csv>` | The day's item-health ledger, for a capture that carries no cost or link of its own |
+| `--health <yyyy-mm-dd>` | The run's UTC day, whose item-health rows fill a capture that carries no cost or link of its own |
+| `--state <dir>` | The state tree the item-health ledger sits under. Default `state` |
 | `--out <path>` | Write markdown to a file instead of the terminal |
 | `--head N` | Keep only the first N characters of each raw block. Everything is printed by default |
 | `--tail N` | Characters kept from the back when `--head` is set |
@@ -87,6 +88,7 @@ do not share a prompt and neither copy is redundant.
 | `holds no capture files` | The run had `logging.capture_prompts` and `logging.capture_replies` both off, so the upload was a green no-op |
 | `No call in this pair recorded what it cost` | A capture written before 2026-09-15. Pass `--health` |
 | `This capture does not say which story it was about` | The same. Pass `--health` |
+| `the item-health ledger under state holds no row for <day>` | The day passed to `--health` is not the day the run published, or `--state` points at a tree without it |
 | `the prompt was not captured` on a call | One flag was off for that run |
 | `This reply cannot be read as JSON` | That is the finding, and section 6 has the bytes. The message names the character it broke at |
 

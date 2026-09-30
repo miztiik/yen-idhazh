@@ -9,8 +9,8 @@ a panel that has to be migrated the first time the shape moves
 of its producer).
 
 **Nothing writes this document yet.** The console derives it at build time out
-of `state/item-health/` and `state/host-fingerprint/`, the way every
-other panel on that route is derived, and the generated schema is what the
+of the item-health and host-fingerprint ledgers, the way every other panel on
+that route is derived, and the generated schema is what the
 frontend resolves its column names and its flag vocabulary against. What the
 declaration buys today is that the vocabulary has one home: the twelve chips a
 card draws come from `WATCHED_FLAGS` through this schema, so a flag added to

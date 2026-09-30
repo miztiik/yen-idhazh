@@ -76,10 +76,7 @@ class LedgerName(StrEnum):
 #: naming any other ledger is a wrong call and is refused by name.
 DAY_TREES: Final[frozenset[LedgerName]] = frozenset(
     {
-        LedgerName.ITEM_HEALTH,
-        LedgerName.HOST_FINGERPRINT,
         LedgerName.SPAN_ROLLUP,
-        LedgerName.SCORES,
         LedgerName.SCORE_INDEX,
         LedgerName.CANDIDATE_MODELS,
         LedgerName.FEED_HEALTH,

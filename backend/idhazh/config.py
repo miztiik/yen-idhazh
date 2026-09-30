@@ -639,7 +639,7 @@ def _refuse_a_machine_source_shorter_than_its_copy(
         raise ValueError(
             f"{_where(_MACHINE_SOURCE_TASK)} keeps {_spelled(policy.window)} and "
             f"observability.public_machine_keep_months is {published}. The published "
-            "machine shard is folded from state/host-fingerprint/, so a source month "
+            "machine shard is folded from the host-fingerprint ledger, so a source month "
             "deleted while the published one is still kept is a shard nothing can rebuild"
         )
 
@@ -668,24 +668,29 @@ def _refuse_a_picture_window_the_archive_does_not_state(
 def _old_tree_floor(ledger: LedgerName, tasks: Mapping[str, TaskPolicy]) -> Window | None:
     """How far back a ledger reached before it moved, read off the task that limited it.
 
-    That is the retention task whose `owns` names the ledger's old tree, or, for a
-    task with series, the series that covers that ledger. A retired task keeps
-    its declaration, so the answer outlives the tree it was about.
+    A task's series that covers the ledger, first: a task that still summarises
+    the ledger's months reads them for as long as that series lasts, whether or
+    not it still owns the tree they sat in. Else the retention task whose `owns`
+    names the ledger's old tree. A retired task keeps its declaration, so the
+    answer outlives the tree it was about.
     """
     # Imported here rather than at the top: the ledger package reads this module
     # while it loads, so importing it back at module scope would be a cycle.
     from idhazh.ledger.paths import STATE_DIRNAME
 
-    old_tree = f"{STATE_DIRNAME}/{ledger.value}"
-    for name, policy in tasks.items():
-        if not isinstance(policy, RetentionPolicy) or old_tree not in (policy.owns or ()):
-            continue
+    retention = {
+        name: policy for name, policy in tasks.items() if isinstance(policy, RetentionPolicy)
+    }
+    for name, policy in retention.items():
         allowed = _SERIES.get(name, {})
         for series, window in (policy.series or {}).items():
             kept = allowed.get(series)
             if kept is not None and kept.ledger is ledger:
                 return window
-        return policy.window
+    old_tree = f"{STATE_DIRNAME}/{ledger.value}"
+    for policy in retention.values():
+        if old_tree in (policy.owns or ()):
+            return policy.window
     return None
 
 

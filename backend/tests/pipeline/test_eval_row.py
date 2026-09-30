@@ -113,7 +113,7 @@ def test_the_row_digests_the_text_the_scorer_was_given() -> None:
 def test_the_two_source_word_counts_are_one_counter_before_and_after_the_cap() -> None:
     """Built by the real extractor, so the pair is a genuine cut and not two counters.
 
-    `source_seen_word_count` larger than `source_word_count` is impossible when
+    `source_words` larger than `source_words_before_cap` is impossible when
     one string is a cut of the other. It happened on 590 of the 2,232 rows
     written before this, which is what proved the pair was measuring
     `len(_WORD.findall(t))` against `len(t.split())` on one post-cap string.
@@ -146,10 +146,10 @@ def test_the_two_source_word_counts_are_one_counter_before_and_after_the_cap() -
         scored_at="2026-08-21T06:18:02Z",
     )
 
-    assert built.source_word_count == cut.source_word_count == 4000
-    assert built.source_seen_word_count == cut.word_count
-    assert built.source_seen_word_count < built.source_word_count
-    assert built.source_word_count != metrics.word_count(FULL_TEXT), (
+    assert built.source_words_before_cap == cut.source_word_count == 4000
+    assert built.source_words == cut.word_count
+    assert built.source_words < built.source_words_before_cap
+    assert built.source_words_before_cap != metrics.word_count(FULL_TEXT), (
         "the column must come off the article, not off whatever full_text was passed"
     )
 

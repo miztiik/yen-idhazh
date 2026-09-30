@@ -13,8 +13,8 @@ into a temporary directory, and read its exit code.
 
 from __future__ import annotations
 
-import csv
 import datetime
+import json
 import os
 import re
 import subprocess
@@ -25,14 +25,13 @@ from typing import Final
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text, seed_scores
 from pydantic import ValidationError
 
-from idhazh import ledger as segment_ledger
 from idhazh.contracts.app_config import AppConfig
-from idhazh.contracts.base import ServerJob
+from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.evaluation import DriftConfig
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.drift import (
     Alert,
     Observation,
@@ -57,18 +56,6 @@ COMPARE_STEP: Final = "Compare the windows"
 #: The module that step calls. Read rather than copied, so a second copy cannot
 #: pass its own tests while the shipped one exits 0 on an empty window.
 REVIEW_MODULE: Final = "backend/utilities/drift_report.py"
-#: The five cells the review reads out of the eval ledger. A row carries about
-#: forty; `csv.DictReader` hands the program a mapping, so a fixture that names
-#: these five exercises every line of it.
-LEDGER_COLUMNS: Final = (
-    "date",
-    "source_url",
-    "hhem",
-    "extractiveness",
-    "source_word_count",
-    "model_id",
-    "scorer_version",
-)
 
 
 def rows(
@@ -489,62 +476,70 @@ def scheduled_windows() -> dict[str, str]:
     return resolved
 
 
+def measured(
+    when: datetime.date | str,
+    url: str,
+    *,
+    hhem: float = 0.85,
+    extractiveness: float = 0.20,
+    words: int | None = 1200,
+) -> EvalRow:
+    """One eval row carrying the cells the review reads, and the committed fixture's rest.
+
+    The review reads the date, the address, the two scores, the article's length
+    and the two identities. Every other cell has the shape a committed row has,
+    so the address is what makes two rows two measurements: a caller gives each
+    row its own, because the writer files a repeated measurement once.
+    """
+    held = json.loads(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
+    day = str(when)
+    return EvalRow.model_validate(
+        {
+            **held,
+            "date": day,
+            "run_id": f"{day}-1",
+            "scored_at": f"{day}T06:18:02Z",
+            "source_url": url,
+            "url_key": derive_url_key(url),
+            "hhem": hhem,
+            "hhem_full": hhem,
+            "hhem_delta": 0.0,
+            "extractiveness": extractiveness,
+            "source_words_before_cap": words,
+            "source_words": held["source_words"] if words is None else words,
+            "model_id": "fixture-model",
+            "scorer_version": "fixture-scorer",
+        }
+    )
+
+
+def file_rows(directory: Path, filed: list[EvalRow]) -> None:
+    """File each day's rows under `directory/state` the way the assemble job files them."""
+    for day in sorted({row.date for row in filed}):
+        seed_scores(
+            directory / "state", [row for row in filed if row.date == day], run_id=f"{day}-1"
+        )
+
+
 def ledger(directory: Path, *, recent: int, baseline: int) -> None:
-    """A ledger holding two windows of identical, healthy rows.
+    """A ledger holding two windows of identical, healthy rows, and one row older than both.
 
     Identical on both sides on purpose: the second half of this row's oracle is
     that a real comparison finding nothing still exits 0, and a fixture with any
-    movement in it could not tell a pass from a lucky threshold.
+    movement in it could not tell a pass from a lucky threshold. The older row
+    is what makes an empty window an empty window rather than an absent ledger.
     """
     today = datetime.datetime.now(datetime.UTC).date()
-    write_rows(
+    windows = scheduled_windows()
+    older = int(windows["RECENT_DAYS"]) + int(windows["BASELINE_DAYS"]) + 1
+    file_rows(
         directory,
         [
-            {
-                "date": (today - datetime.timedelta(days=age)).isoformat(),
-                "source_url": f"{HEALTHY}/{age}/{index}",
-                "hhem": "0.85",
-                "extractiveness": "0.20",
-                "source_word_count": "1200",
-                "model_id": "fixture-model",
-                "scorer_version": "fixture-scorer",
-            }
-            for age, count in ((1, recent), (14, baseline))
+            measured(today - datetime.timedelta(days=age), f"{HEALTHY}/{age}/{index}")
+            for age, count in ((1, recent), (14, baseline), (older, 1))
             for index in range(count)
         ],
     )
-
-
-def a_days_file(directory: Path, date: str) -> Path:
-    """Where the assemble job files a day's measurements.
-
-    Raw cells rather than the writer, because half these cases are a cell the
-    contract would refuse and the review has to be the one that reports it.
-    """
-    return segment_ledger.day_shard_path(
-        directory / "state",
-        LedgerName.SCORES,
-        date=date,
-        run_id=f"{date}-1",
-        attempt=1,
-        job=ServerJob.ASSEMBLE,
-        shard=0,
-    )
-
-
-def write_rows(directory: Path, records: list[dict[str, str]]) -> None:
-    grouped: dict[Path, list[dict[str, str]]] = {}
-    if not records:
-        yesterday = datetime.datetime.now(datetime.UTC).date() - datetime.timedelta(days=1)
-        grouped[a_days_file(directory, yesterday.isoformat())] = []
-    for record in records:
-        grouped.setdefault(a_days_file(directory, record["date"]), []).append(record)
-    for shard, values in grouped.items():
-        shard.parent.mkdir(parents=True, exist_ok=True)
-        with shard.open("w", encoding="utf-8", newline="") as handle:
-            out = csv.DictWriter(handle, fieldnames=LEDGER_COLUMNS)
-            out.writeheader()
-            out.writerows(values)
 
 
 def review(directory: Path) -> subprocess.CompletedProcess[str]:
@@ -585,6 +580,10 @@ def test_the_review_reads_its_floor_from_config() -> None:
     assert "from idhazh.config import load" in program
     assert enough() >= 1
 
+#: What the review prints when neither window holds a row, so there is no day to read.
+NO_DAY: Final = "The scores ledger holds no day in the requested window - nothing was compared"
+
+
 @pytest.mark.parametrize(
     ("recent", "baseline", "empty"),
     [
@@ -604,6 +603,9 @@ def test_the_review_fails_when_it_compared_nothing(
     recent and 0 baseline rows" under a green check. Turn the scorer off for a
     week and the only automated watchman for slow extraction failure reported
     all clear every day.
+
+    One empty side is named by the side. With both sides empty the windows hold
+    no day at all, and the review says that instead.
     """
     ledger(tmp_path, recent=enough() * recent, baseline=enough() * baseline)
     result = review(tmp_path)
@@ -611,9 +613,13 @@ def test_the_review_fails_when_it_compared_nothing(
     assert result.returncode != 0, result.stdout
     assert "nothing was compared" in result.stdout
     assert "no drift" not in result.stdout
+    both = len(empty) == 2
+    assert (NO_DAY in result.stdout) is both, result.stdout
     for side in ("recent", "baseline"):
         named = f"the {side} window holds 0" in result.stdout
-        assert named is (side in empty), f"{side} was named {named}, and it should not have been"
+        assert named is (side in empty and not both), (
+            f"{side} was named {named}, and it should not have been"
+        )
 
 
 def test_a_populated_pair_of_windows_with_no_drift_still_passes(tmp_path: Path) -> None:
@@ -631,24 +637,18 @@ def test_a_ledger_that_is_not_there_is_not_a_green_check(tmp_path: Path) -> None
     result = review(tmp_path)
 
     assert result.returncode != 0, result.stdout
-    assert "state/scores/ holds no day" in result.stdout
+    assert NO_DAY in result.stdout
 
 
 def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
     """A populated pair that HAS moved still reaches the alert, past the new floor."""
     today = datetime.datetime.now(datetime.UTC).date()
-    write_rows(
+    file_rows(
         tmp_path,
         [
-            {
-                "date": (today - datetime.timedelta(days=age)).isoformat(),
-                "source_url": f"{HEALTHY}/{age}/{index}",
-                "hhem": "0.85",
-                "extractiveness": "0.20",
-                "source_word_count": str(words),
-                "model_id": "fixture-model",
-                "scorer_version": "fixture-scorer",
-            }
+            measured(
+                today - datetime.timedelta(days=age), f"{HEALTHY}/{age}/{index}", words=words
+            )
             for age, words in ((1, 150), (14, 1200))
             for index in range(enough())
         ],
@@ -671,70 +671,33 @@ def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
 
 
 def test_the_reader_uses_completed_utc_days_and_only_relevant_days(tmp_path: Path) -> None:
-    """The cover is the days the two windows reach, and nothing else is opened.
+    """The cover is the days the two windows reach, and nothing else is read.
 
     At day grain the window's own arithmetic excludes the incomplete day and the
-    day after it, so those two files are never opened at all - where the month
-    shard holding them used to be opened and its rows filtered. The stray
-    `2024-01.csv` is a month-shaped name at the root of a day tree, which no day
-    a run files can produce and which is therefore never named.
+    day after it, so those two days are never read at all, and neither is the
+    day just past the baseline.
     """
     anchor = datetime.date(2026, 1, 5)
-    write_rows(
+    file_rows(
         tmp_path,
         [
-            {
-                "date": (anchor - datetime.timedelta(days=age)).isoformat(),
-                "source_url": f"{HEALTHY}/{age}",
-                "hhem": "",
-                "extractiveness": "0.2",
-                "source_word_count": "100",
-            }
+            measured(anchor - datetime.timedelta(days=age), f"{HEALTHY}/{age}", words=100)
             for age in (-1, 0, 1, 7, 8, 35, 36)
         ],
     )
-    irrelevant = tmp_path / "state" / "scores" / "2024-01.csv"
-    irrelevant.write_bytes(b"not a ledger")
 
     result = read_windows(tmp_path / "state", today=anchor, recent_days=7, baseline_days=28)
 
     assert result.days_read == ("2025-12-01", "2025-12-28", "2025-12-29", "2026-01-04")
     assert {row.date for row in result.recent} == {"2025-12-29", "2026-01-04"}
     assert {row.date for row in result.baseline} == {"2025-12-01", "2025-12-28"}
-    assert all(row.hhem is None for row in result.recent + result.baseline)
-
-
-@pytest.mark.parametrize("metric", ["hhem", "extractiveness", "source_word_count"])
-def test_an_invalid_metric_is_reported_instead_of_silently_dropped(
-    tmp_path: Path, metric: str
-) -> None:
-    record = {
-        "date": "2026-09-05",
-        "source_url": HEALTHY,
-        "hhem": "0.9",
-        "extractiveness": "0.2",
-        "source_word_count": "100",
-    }
-    record[metric] = "nan"
-    write_rows(tmp_path, [record])
-
-    with pytest.raises(ValueError, match="row 2 is invalid for drift"):
-        read_windows(
-            tmp_path / "state", today=datetime.date(2026, 9, 6), recent_days=7, baseline_days=28
-        )
 
 
 def test_full_windows_with_only_sparse_domains_are_not_a_clean_review(tmp_path: Path) -> None:
-    write_rows(
+    file_rows(
         tmp_path,
         [
-            {
-                "date": when,
-                "source_url": f"https://domain-{index}.example/story",
-                "hhem": "0.9",
-                "extractiveness": "0.2",
-                "source_word_count": "100",
-            }
+            measured(when, f"https://domain-{index}.example/{when}", hhem=0.9, words=100)
             for when in ("2026-09-05", "2026-08-20")
             for index in range(enough())
         ],

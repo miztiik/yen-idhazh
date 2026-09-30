@@ -24,7 +24,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { seconds } from '../src/lib/charts/machine';
 import { grouped } from '../src/lib/charts/series';
 import {
@@ -33,12 +33,7 @@ import {
 	runnerHourSeconds,
 	type MachineProcessors
 } from '../src/lib/console/machine/article-cost';
-import { readDayShards } from '../src/lib/server/payload';
-
-/** The canary tree the browser suite is built from. The page under the browser
- * was built from this tree, so reading the committed one would compare a
- * drawing of one ledger against the arithmetic of another. */
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
+import { canaryArticleRows, canaryMachineRows } from './support/canary-records';
 
 const CONSOLE = (
 	JSON.parse(
@@ -49,17 +44,20 @@ const CONSOLE = (
 const WIDEST = Math.max(...CONSOLE.window_presets);
 const NARROWEST = Math.min(...CONSOLE.window_presets);
 
-function canaryHealth(): Record<string, string>[] {
-	return readDayShards(join(CANARY, 'item-health'), -1).rows;
+/** The canary's article rows. The page under the browser was built from this
+ * tree, so reading the committed one would compare a drawing of one ledger
+ * against the arithmetic of another. */
+function canaryHealth(): Promise<Record<string, string>[]> {
+	return canaryArticleRows();
 }
 
 /** The canary's machine records as the join needs them.
  *
- * Mapped here rather than through the page's own reader, so the test states
- * what a machine record is instead of borrowing the module's idea of it.
+ * Mapped here rather than through the page's own join, so the test states what
+ * a machine record is instead of borrowing the module's idea of it.
  */
-function canaryMachines(): MachineProcessors[] {
-	return readDayShards(join(CANARY, 'host-fingerprint'), -1).rows.map((row) => ({
+async function canaryMachines(): Promise<MachineProcessors[]> {
+	return (await canaryMachineRows()).map((row) => ({
 		date: row.date ?? '',
 		run_id: row.run_id ?? '',
 		shard: Number(row.shard ?? '0'),
@@ -92,7 +90,7 @@ function processorSecondsFrom(
 		const busy = Number(row.cpu_busy_pct ?? '');
 		const total = Number(row.item_total_ms ?? '');
 		if (!(row.cpu_busy_pct ?? '') || !(row.item_total_ms ?? '') || total <= 0) continue;
-		const count = counts.get(`${row.date ?? ''}|${row.run_id ?? ''}|${row.shard ?? ''}`);
+		const count = counts.get(`${row.date ?? ''}|${row.run_id ?? ''}|${row.machine_shard ?? ''}`);
 		if (count === undefined) continue;
 		found.push((busy / 100) * count * (total / 1000));
 	}
@@ -101,9 +99,9 @@ function processorSecondsFrom(
 
 /** Each machine record's count under the column named, keyed the way an item
  * row finds it. Records that left the column empty are absent, not zero. */
-function countsBy(column: string): Map<string, number> {
+async function countsBy(column: string): Promise<Map<string, number>> {
 	const found = new Map<string, number>();
-	for (const row of readDayShards(join(CANARY, 'host-fingerprint'), -1).rows) {
+	for (const row of await canaryMachineRows()) {
 		const value = row[column] ?? '';
 		if (value === '') continue;
 		found.set(`${row.date ?? ''}|${row.run_id ?? ''}|${row.shard ?? ''}`, Number(value));
@@ -128,7 +126,7 @@ function memoryStepsFrom(health: readonly Record<string, string>[]): {
 		const index = Number(row.item_index);
 		const rss = Number(row.llama_rss_bytes);
 		if (!Number.isFinite(index) || !Number.isFinite(rss)) continue;
-		const key = `${row.date ?? ''}|${row.run_id ?? ''}|${row.shard ?? ''}`;
+		const key = `${row.date ?? ''}|${row.run_id ?? ''}|${row.machine_shard ?? ''}`;
 		byShard.set(key, [...(byShard.get(key) ?? []), { index, rss }]);
 	}
 	const steps: number[] = [];
@@ -161,20 +159,20 @@ function itemRow(cells: Partial<Record<string, string | number>>): Record<string
 }
 
 test.describe('the three costs, as arithmetic', () => {
-	test('processor time is the busy share across the LOGICAL processors, not the cores', () => {
+	test('processor time is the busy share across the LOGICAL processors, not the cores', async () => {
 		// The kernel counts every logical processor on one line, so the share it
 		// reports is a share of all of them. Taking it across the cores instead
 		// would halve every figure on a machine that runs two threads a core -
 		// which is what the canary's records describe, so the two answers here
 		// are genuinely different numbers and the test can tell them apart.
-		const health = canaryHealth();
-		const byThreads = processorSecondsFrom(health, countsBy('threads'));
-		const byCores = processorSecondsFrom(health, countsBy('cores'));
+		const health = await canaryHealth();
+		const byThreads = processorSecondsFrom(health, await countsBy('threads'));
+		const byCores = processorSecondsFrom(health, await countsBy('cores'));
 		expect(byThreads.length, 'the canary resolved no article to a machine record').toBeGreaterThan(
 			0
 		);
 
-		const cost = articleCost(health, canaryMachines());
+		const cost = articleCost(health, await canaryMachines());
 		expect(cost.processorSeconds.from).toBe(byThreads.length);
 		expect(cost.processorSeconds.mid).toBeCloseTo(middle(byThreads), 6);
 		expect(cost.processorSeconds.low).toBeCloseTo(Math.min(...byThreads), 6);
@@ -191,8 +189,8 @@ test.describe('the three costs, as arithmetic', () => {
 		// reached the machine and left the count empty. Nothing about the runner
 		// we usually get may fill it in.
 		const health = [
-			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 0, cpu_busy_pct: 80, item_total_ms: 1000 }),
-			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 0, cpu_busy_pct: 40, item_total_ms: 2000 })
+			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 0, cpu_busy_pct: 80, item_total_ms: 1000 }),
+			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 0, cpu_busy_pct: 40, item_total_ms: 2000 })
 		];
 		const blind = articleCost(health, [
 			{ date: '2026-08-20', run_id: 'r1', shard: 0, threads: null }
@@ -216,29 +214,29 @@ test.describe('the three costs, as arithmetic', () => {
 		expect(seen.processors).toEqual([4]);
 	});
 
-	test('the canary carries that case, so the page is drawing a real absence', () => {
+	test('the canary carries that case, so the page is drawing a real absence', async () => {
 		// The rule above is stated on rows this file wrote. This one proves the
 		// fixture the browser runs on actually holds a machine record with no
 		// count, which is what makes the gap the panel prints a real number.
-		const machines = canaryMachines();
+		const machines = await canaryMachines();
 		const blind = machines.filter((machine) => machine.threads === null);
 		expect(blind.length, 'the canary names a count on every machine record').toBeGreaterThan(0);
 
-		const cost = articleCost(canaryHealth(), machines);
+		const cost = articleCost(await canaryHealth(), machines);
 		expect(
 			cost.processorSeconds.outOf - cost.processorSeconds.from,
 			'the canary resolved every article, so the unresolved half asserts nothing'
 		).toBeGreaterThan(0);
 	});
 
-	test('model time is reading the prompt and writing the reply, added up', () => {
-		const health = canaryHealth();
+	test('model time is reading the prompt and writing the reply, added up', async () => {
+		const health = await canaryHealth();
 		const expected = health
 			.filter((row) => (row.prefill_ms ?? '') !== '' && (row.decode_ms ?? '') !== '')
 			.map((row) => (Number(row.prefill_ms) + Number(row.decode_ms)) / 1000);
 		expect(expected.length, 'no canary article recorded both halves').toBeGreaterThan(0);
 
-		const cost = articleCost(health, canaryMachines());
+		const cost = articleCost(health, await canaryMachines());
 		expect(cost.modelSeconds.from).toBe(expected.length);
 		expect(cost.modelSeconds.outOf).toBe(expected.length);
 		expect(cost.modelSeconds.mid).toBeCloseTo(middle(expected), 6);
@@ -254,15 +252,15 @@ test.describe('the three costs, as arithmetic', () => {
 		// a new shard starts a new model server and its first reading is a restart
 		// rather than an article.
 		const health = [
-			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 0, item_index: 0, llama_rss_bytes: 100 }),
-			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 0, item_index: 1, llama_rss_bytes: 160 }),
-			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 0, item_index: 2, llama_rss_bytes: 140 }),
+			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 0, item_index: 0, llama_rss_bytes: 100 }),
+			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 0, item_index: 1, llama_rss_bytes: 160 }),
+			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 0, item_index: 2, llama_rss_bytes: 140 }),
 			// A gap: item 4 follows item 2, so whatever happened at item 3 is not
 			// one article's doing.
-			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 0, item_index: 4, llama_rss_bytes: 900 }),
+			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 0, item_index: 4, llama_rss_bytes: 900 }),
 			// A second shard, whose first reading is a fresh server.
-			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 1, item_index: 0, llama_rss_bytes: 500 }),
-			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 1, item_index: 1, llama_rss_bytes: 510 })
+			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 1, item_index: 0, llama_rss_bytes: 500 }),
+			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 1, item_index: 1, llama_rss_bytes: 510 })
 		];
 		const cost = articleCost(health, []);
 		expect(cost.addedBytes.from, 'a gap or a shard boundary was counted as a step').toBe(3);
@@ -274,7 +272,7 @@ test.describe('the three costs, as arithmetic', () => {
 
 	test('a shard with one article has no step, and says so rather than reporting zero', () => {
 		const cost = articleCost(
-			[itemRow({ date: '2026-08-20', run_id: 'r1', shard: 0, item_index: 0, llama_rss_bytes: 100 })],
+			[itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 0, item_index: 0, llama_rss_bytes: 100 })],
 			[]
 		);
 		expect(cost.addedBytes.from).toBe(0);
@@ -338,8 +336,8 @@ test.describe('the panel, on the canary', () => {
 		await widen(page, WIDEST);
 
 		const span = await shownSpan(page);
-		const health = canaryHealth().filter((row) => within(row, span.start, span.end));
-		const expected = processorSecondsFrom(health, countsBy('threads'));
+		const health = (await canaryHealth()).filter((row) => within(row, span.start, span.end));
+		const expected = processorSecondsFrom(health, await countsBy('threads'));
 		expect(expected.length, 'the window the page drew holds no measurable article').toBeGreaterThan(
 			0
 		);
@@ -385,11 +383,11 @@ test.describe('the panel, on the canary', () => {
 		await widen(page, WIDEST);
 
 		const span = await shownSpan(page);
-		const health = canaryHealth().filter((row) => within(row, span.start, span.end));
+		const health = (await canaryHealth()).filter((row) => within(row, span.start, span.end));
 		const offered = health.filter(
 			(row) => (row.cpu_busy_pct ?? '') !== '' && Number(row.item_total_ms ?? '') > 0
 		).length;
-		const measured = processorSecondsFrom(health, countsBy('threads')).length;
+		const measured = processorSecondsFrom(health, await countsBy('threads')).length;
 		expect(offered, 'every article resolved, so this asserts nothing').toBeGreaterThan(measured);
 
 		const processor = page.locator(`${PANEL} [data-article-cost="processor"]`);
@@ -408,13 +406,13 @@ test.describe('the panel, on the canary', () => {
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 
-		const counts = [...new Set(countsBy('threads').values())];
+		const counts = [...new Set((await countsBy('threads')).values())];
 		const hour = runnerHourSeconds(counts);
 		expect(hour, 'the canary names no processor count at all').not.toBeNull();
 
 		const span = await shownSpan(page);
-		const health = canaryHealth().filter((row) => within(row, span.start, span.end));
-		const many = hour! / middle(processorSecondsFrom(health, countsBy('threads')));
+		const health = (await canaryHealth()).filter((row) => within(row, span.start, span.end));
+		const many = hour! / middle(processorSecondsFrom(health, await countsBy('threads')));
 		const said = many < 10 ? many.toFixed(1) : grouped(Math.round(many));
 
 		const processor = page.locator(`${PANEL} [data-article-cost="processor"]`);
@@ -432,7 +430,7 @@ test.describe('the panel, on the canary', () => {
 		await widen(page, WIDEST);
 
 		const span = await shownSpan(page);
-		const health = canaryHealth().filter((row) => within(row, span.start, span.end));
+		const health = (await canaryHealth()).filter((row) => within(row, span.start, span.end));
 		const { steps, shards } = memoryStepsFrom(health);
 		expect(steps.length, 'the window the page drew holds no memory step').toBeGreaterThan(0);
 
@@ -463,7 +461,7 @@ test.describe('the panel, on the canary', () => {
 		await widen(page, NARROWEST);
 
 		const span = await shownSpan(page);
-		const health = canaryHealth().filter((row) => within(row, span.start, span.end));
+		const health = (await canaryHealth()).filter((row) => within(row, span.start, span.end));
 		expect(health.length, 'the narrowest window drew no article at all').toBeGreaterThan(0);
 		expect(
 			memoryStepsFrom(health).steps.length,

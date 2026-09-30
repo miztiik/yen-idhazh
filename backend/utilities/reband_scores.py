@@ -75,33 +75,34 @@ def read_rows(path: Path) -> list[dict[str, str]]:
 
 
 def read_ledger(state_dir: Path) -> list[dict[str, str]]:
-    """Every committed row, oldest day first.
+    """Every committed row, oldest day first, as a CSV line spells it.
 
-    The ledger is a tree of day files, so a re-band that opened one file
-    would report on whatever slice of history that file happened to be. Reading
+    The ledger holds many days, so a re-band that read one would report on
+    whatever slice of history that day happened to be. Reading
     every day is what makes the percentages below percentages of the ledger.
 
-    Each day's columns are checked on its own: a day written before a column
-    existed has to fail by name here rather than arrive as a missing key inside
-    the arithmetic.
+    Every row comes through the ledger door into today's contract, so each one
+    carries every column the contract names and none arrives as a missing key
+    inside the arithmetic.
 
-    A tree whose every month has been summarised is refused by name. It is not
+    A ledger whose every month has been summarised is refused by name. It is not
     an empty ledger and it is not a fresh clone: the rows existed and are gone,
     and only a message that says so stops somebody re-running this and believing
     the pipeline never scored anything.
     """
-    days = writer.ledger_days(state_dir)
-    if not days:
-        scores = ledger.tree_root(state_dir, LedgerName.SCORES).as_posix()
+    if not ledger.held_days(state_dir, LedgerName.SCORES):
         summarised = archive.archived_months(state_dir)
         if summarised:
             raise ValueError(
-                f"every month of {scores} has aged "
+                "every month of the scores ledger has aged "
                 f"out of the full-grain window - {', '.join(summarised)} exist only as "
                 f"summaries, and a band is a function of one row. {archive.RAW_WINDOW_NOTE}"
             )
-        raise ValueError(f"{scores} holds no <YYYY>/<MM>/<DD>.csv day file")
-    return [row for day in days for row in read_rows(day)]
+        raise ValueError(
+            f"{state_dir.as_posix()} holds no day of the scores ledger, raw or compacted, "
+            "so there is no row to re-band"
+        )
+    return list(writer.records(state_dir))
 
 
 def reband(rows: Iterable[dict[str, str]], config: EvaluationConfig) -> RebandReport:
@@ -191,7 +192,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--state",
         type=Path,
         default=Path("state"),
-        help="The state directory. Every month shard under scores/ is read.",
+        help="The state directory. Every day the scores ledger holds is read.",
     )
     parser.add_argument("--config", type=Path, default=Path("config"))
     args = parser.parse_args(argv)
@@ -202,7 +203,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "\n".join(
             lines_for(
                 report,
-                ledger.tree_root(args.state, LedgerName.SCORES),
+                args.state,
                 archived=archive.archived_months(args.state),
             )
         )

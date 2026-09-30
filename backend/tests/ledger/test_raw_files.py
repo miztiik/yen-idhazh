@@ -18,10 +18,12 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from conftest import CONTRACT_FIXTURES_DIR
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Format, RowIdentity, WriterIdentity
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -174,16 +176,6 @@ def test_the_day_listing_beside_the_years_is_not_read_as_rows(
     assert "skipped" not in caplog.text
 
 
-def test_a_key_that_declares_a_preference_is_refused_before_anything_is_read(
-    tmp_path: Path,
-) -> None:
-    """This reader keeps the first row per key, which is the wrong rule for such a key."""
-    with pytest.raises(ValueError, match="declares a preference"):
-        ledger.load_current_rows(
-            tmp_path, WHICH, model=VisualPruneRow, key=ledger.FEED_HEALTH_KEY
-        )
-
-
 # --- the settlement, over rows written out literally --------------------------------
 
 #: Two work units, spelled the way the door stamps a `unit_id` cell.
@@ -236,9 +228,56 @@ def test_settling_keeps_the_first_row_of_a_key_two_units_both_filed() -> None:
     assert ledger.settle_rows([[earlier], [later]], ledger.VISUAL_PRUNE_KEY) == [earlier]
 
 
-def test_settling_refuses_a_key_with_a_preference_of_its_own() -> None:
-    with pytest.raises(ValueError, match="declares a preference"):
-        ledger.settle_rows([], ledger.FEED_HEALTH_KEY)
+def an_item(unit: str, *, machine: bool, fetch_ms: int | None = None) -> ledger.StoredRow[ItemHealthRow]:
+    """One item's health row, as a work shard (`machine`) or assemble's census filed it."""
+    base = ItemHealthRow.model_validate_json(
+        (CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json").read_text(encoding="utf-8")
+    )
+    row = ItemHealthRow.model_validate(
+        {
+            **base.model_dump(),
+            "machine_job": ServerJob.WORK if machine else None,
+            "machine_shard": 0 if machine else None,
+            "fetch_ms": fetch_ms,
+        }
+    )
+    return ledger.StoredRow(
+        identity=RowIdentity(
+            ledger=LedgerName.ITEM_HEALTH,
+            covers=row.date,
+            run_id=row.run_id,
+            attempt=1,
+            job=ServerJob.WORK if machine else ServerJob.ASSEMBLE,
+            shard=0,
+            unit_id=unit,
+        ),
+        row=row,
+    )
+
+
+@pytest.mark.parametrize("census_first", [True, False], ids=["census-first", "work-first"])
+def test_a_key_with_a_preference_keeps_the_row_it_prefers_whichever_was_filed_first(
+    census_first: bool,
+) -> None:
+    """The item-health key prefers the row naming its machine, over any filing order."""
+    work, census = an_item(UNIT_A, machine=True), an_item(UNIT_B, machine=False)
+    files = [[census], [work]] if census_first else [[work], [census]]
+
+    assert ledger.settle_rows(files, ledger.ITEM_HEALTH_KEY) == [work]
+
+
+def test_a_settled_row_is_kept_whole_and_a_cell_only_the_dropped_row_held_is_named(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Rows are not merged cell by cell: the census row's own reading goes, and says so."""
+    work = an_item(UNIT_A, machine=True)
+    census = an_item(UNIT_B, machine=False, fetch_ms=40)
+
+    with caplog.at_level("WARNING"):
+        (kept,) = ledger.settle_rows([[census], [work]], ledger.ITEM_HEALTH_KEY)
+
+    assert kept.row.fetch_ms is None
+    assert "cell=fetch_ms" in caplog.text
 
 
 # --- what the compaction reads: one day, strictly ---------------------------------

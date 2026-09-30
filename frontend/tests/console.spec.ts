@@ -13,6 +13,7 @@ import { shortDate } from '../src/lib/format';
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
 import { readCsv, readDayShards, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 import { failing, preserves, reliability, type FeedRecord } from '../src/lib/feed-health';
+import { canaryArticleRows, canaryScoreRows, heldRows } from './support/canary-records';
 import { telemetryRow } from './support/telemetry-row';
 
 /**
@@ -31,6 +32,31 @@ import { telemetryRow } from './support/telemetry-row';
  */
 
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
+
+/** Every score row the canary packed, and every article row.
+ *
+ * Read through the readers the page's own server uses, once before the tests
+ * run, rather than through a listing here: a listing of the wrong shape reads
+ * nothing, which makes every day look unscored, and a test whose fixture
+ * silently empties passes for the wrong reason. The oracles below call one
+ * another several levels deep, so the rows are held for them rather than read
+ * again at every level.
+ */
+const scoreHeld = heldRows(canaryScoreRows);
+const articleHeld = heldRows(canaryArticleRows);
+
+test.beforeAll(async () => {
+	await scoreHeld.load();
+	await articleHeld.load();
+});
+
+function scoreRows(): Record<string, string>[] {
+	return scoreHeld.rows();
+}
+
+function healthRows(): Record<string, string>[] {
+	return articleHeld.rows();
+}
 
 /** A run strip at the pitch `cellFor` settles on for a page-wide frame: a 16px
  * cell and a 4px gap. The axis is thinned against that room, so a test about it
@@ -594,7 +620,7 @@ test('the run that read only the start of an article says so on its own square',
 	// Per run, and only here. Measured 2026-08-29 over 19 committed runs the
 	// count is 1 to 12 articles of 160 to 200 - which is the article mix on that
 	// run, so a published figure would read as the cap moving when nothing did.
-	const rows = readDayShards(join(CANARY, 'state', 'item-health'), -1).rows.filter(
+	const rows = healthRows().filter(
 		(row) => row.date === DAY
 	);
 	const cutByRun = new Map<string, Set<string>>();
@@ -1737,29 +1763,6 @@ test('the renamed section draws what it drew before, figure for figure', async (
 	await expect(page.locator('[data-flow]')).toHaveCount(1);
 	await expect(page.locator('[data-charts="table"] thead th')).toHaveCount(8);
 });
-
-/** Every score row the canary wrote.
- *
- * `state/scores/` files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so this goes
- * through `readDayShards` - the reader the page's own server uses - rather than
- * a directory listing here. A spec that opened one file by name reads nothing,
- * which makes every day look unscored, and a test whose fixture silently empties
- * passes for the wrong reason.
- */
-function scoreRows(): Record<string, string>[] {
-	return readDayShards(join(CANARY, 'state', 'scores'), -1).rows;
-}
-
-/** Every item-health row the canary wrote.
- *
- * `state/item-health/` files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so this
- * goes through `readDayShards` - the reader the page's own server uses - rather
- * than a directory listing here. The comment above `scoreRows` names the failure
- * this avoids: a spec whose fixture silently empties passes for the wrong reason.
- */
-function healthRows(): Record<string, string>[] {
-	return readDayShards(join(CANARY, 'state', 'item-health'), -1).rows;
-}
 
 /** The canary's own score rows and item-health rows for one date. */
 function ledgers(date: string): {

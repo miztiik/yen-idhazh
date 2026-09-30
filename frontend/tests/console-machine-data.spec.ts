@@ -6,16 +6,15 @@
  * readings here in the test, never off the module's own output - otherwise the
  * assertion only proves the module agrees with itself.
  *
- * Pure functions and committed ledgers only, in every section but the last. No
- * browser, no SvelteKit alias, no `$app` import: a spec that reaches one fails
- * the whole suite at load rather than failing one test. The last section drives
- * a browser, because what it measures is where the board's strings landed on a
- * phone, and no amount of arithmetic answers that.
+ * Pure functions and the canary's packed ledgers only, in every section but the
+ * last. No browser, no SvelteKit alias, no `$app` import: a spec that reaches
+ * one fails the whole suite at load rather than failing one test. The last
+ * section drives a browser, because what it measures is where the board's
+ * strings landed on a phone, and no amount of arithmetic answers that.
  */
 
 import { expect, test } from '@playwright/test';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -32,44 +31,46 @@ import {
 	highLabel,
 	type ContextOptions
 } from '../src/lib/console/machine/context-cost';
-import { HOST_FINGERPRINT_KEY, mergedDayShards, readDayShards } from '../src/lib/server/payload';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
-	hostRows,
-	loadMachineCounters,
 	machineCounters,
 	machineLimits,
 	plannedShards,
 	type MachineLimits,
 	type MachineRun
 } from '../src/lib/server/machine-counters';
-import { halvesDay, ledgers, plan, type ShardReading } from './support/machine-rows';
+import { canaryArticleRows, canaryMachineRows, CANARY_STATE, heldRows } from './support/canary-records';
+import { ledgers, plan, type ShardReading } from './support/machine-rows';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-/** The canary tree the browser suite is built from. The three oracles below
- * that drive a page read THIS ledger, never the committed one: the page under
- * the browser was built from it, and reading the other tree would compare a
- * drawing of one ledger against the arithmetic of another. */
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
+/** The canary's machine records and article rows, read the way the page's
+ * server reads them, before the tests below run.
+ *
+ * The oracles that drive a page read THIS tree, never the committed one: the
+ * page under the browser was built from it, and reading the other tree would
+ * compare a drawing of one ledger against the arithmetic of another. They call
+ * one another several levels deep, so the rows are held for them.
+ */
+const machineHeld = heldRows(canaryMachineRows);
+const articleHeld = heldRows(canaryArticleRows);
 
-/** The canary's machine records, read the way the page's server reads them. */
+test.beforeAll(async () => {
+	await machineHeld.load();
+	await articleHeld.load();
+});
+
 function canaryHosts(): Record<string, string>[] {
-	return readDayShards(join(CANARY, 'host-fingerprint'), -1).rows;
+	return machineHeld.rows();
 }
 
-/** The canary's item rows, over every day file.
- *
- * Through `readDayShards`, the reader the page's own server uses, so a grain
- * change in the ledger cannot leave this comparing the page against an empty set.
- */
 function canaryHealth(): Record<string, string>[] {
-	return readDayShards(join(CANARY, 'item-health'), -1).rows;
+	return articleHeld.rows();
 }
 
 /** What the canary's own run manifests planned, read where the page reads it. */
 function canaryPlan(): Map<string, number> {
-	return plannedShards(-1, resolve(CANARY, '..', 'digest'));
+	return plannedShards(-1, resolve(CANARY_STATE, '..', 'digest'));
 }
 
 /** A fixed 150-minute job timeout as seconds, not read from config, so these
@@ -509,75 +510,35 @@ test.describe('a shard is a set and never a count', () => {
 	});
 });
 
-test.describe('a job written in two halves', () => {
-	/** One work shard as the ledger holds it: the probe's half names the machine,
-	 * the clock's half names what the job cost, and both sit in one file. */
-	const SHARD: ShardReading & { fingerprint: string } = {
-		...FULL[0],
-		fingerprint: '3a7f0b1c2d4e5f60'
-	};
+test.describe('two machine records for one shard', () => {
+	const SHARD: ShardReading = FULL[0];
 	const RUN_ID = SHARD.runId ?? '';
 
-	test('the merged row reads the same shard as the two halves read apart', () => {
-		const root = mkdtempSync(join(tmpdir(), 'idhazh-halves-'));
-		try {
-			const dir = halvesDay(root, SHARD);
-			const merged = mergedDayShards(dir, HOST_FINGERPRINT_KEY, -1).rows;
-			const apart = readDayShards(dir, -1).rows;
-			expect(merged).toHaveLength(1);
-			expect(apart).toHaveLength(2);
-
-			const { health } = ledgers([SHARD]);
-			const counted = machineCounters(merged, health, plan([RUN_ID, 1]), LIMITS);
-			expect(counted.refused).toEqual([]);
-			// `mergeHost` already joined a shard's halves, so merging them earlier
-			// may not move a counter - it only stops handing the rest of the page a
-			// row with no machine in it.
-			expect(counted).toEqual(machineCounters(apart, health, plan([RUN_ID, 1]), LIMITS));
-			const [shard] = only(counted.runs, RUN_ID).reported;
-			expect(shard.jobSeconds).toBe(600);
-			expect(shard.cpuModel).toBe('AMD EPYC 7763 64-Core Processor');
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
-	});
-
-	test('a retry on a second machine is still refused once the halves are merged', () => {
-		const root = mkdtempSync(join(tmpdir(), 'idhazh-halves-'));
-		try {
-			// Two attempts at one shard on two runners. Merged into one row, the run
-			// would be read off whichever machine happened to come first.
-			const dir = halvesDay(root, SHARD, 1);
-			halvesDay(
-				root,
-				{
-					...SHARD,
-					fingerprint: 'c81d9e0a1b2c3d4e',
-					cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C',
-					jobSeconds: 720
-				},
-				2
-			);
-			const rows = mergedDayShards(dir, HOST_FINGERPRINT_KEY, -1).rows;
-			const { runs, refused } = machineCounters(
-				rows,
-				ledgers([SHARD]).health,
-				plan([RUN_ID, 1]),
-				LIMITS
-			);
-			expect(runs).toEqual([]);
-			expect(refused.map((run) => run.runId)).toEqual([RUN_ID]);
-			expect(refused[0].why).toContain('two machine records that disagree');
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
+	test('that disagree are refused by name, never read one over the other', () => {
+		// Packing keeps one row per job, so the door never hands over two rows for
+		// one shard. The reader still refuses them if it is ever handed two: read
+		// off whichever came first, the run would describe a machine by chance.
+		const { hosts, health } = ledgers([SHARD]);
+		const second = {
+			...hosts[0],
+			cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
+			job_seconds: '720'
+		};
+		const { runs, refused } = machineCounters(
+			[...hosts, second],
+			health,
+			plan([RUN_ID, 1]),
+			LIMITS
+		);
+		expect(runs).toEqual([]);
+		expect(refused.map((run) => run.runId)).toEqual([RUN_ID]);
+		expect(refused[0].why).toContain('two machine records that disagree');
 	});
 });
 
-test.describe('the ledgers this reads are the committed ones', () => {
+test.describe('the ledgers this reads, as the canary packs them', () => {
 	const limits = machineLimits();
-	const rows = hostRows();
-	const { runs, refused } = loadMachineCounters();
+	const counted = () => machineCounters(canaryHosts(), canaryHealth(), canaryPlan(), limits);
 
 	test('the ceilings come from config and not from a literal', () => {
 		const config = JSON.parse(
@@ -593,15 +554,16 @@ test.describe('the ledgers this reads are the committed ones', () => {
 		expect(limits.jobTimeoutSeconds).toBe(config.run.shard_timeout_minutes * 60);
 	});
 
-	test('the committed ledgers still have rows to read', () => {
+	test('the packed ledgers have rows to read', () => {
 		// Guards the rest of this block: every assertion below passes over an
 		// empty ledger and would say nothing.
-		expect(rows.length).toBeGreaterThan(0);
+		const { runs, refused } = counted();
+		expect(canaryHosts().length).toBeGreaterThan(0);
 		expect(runs.length + refused.length).toBeGreaterThan(0);
 	});
 
 	test('nothing derived off them is impossible', () => {
-		for (const run of runs) {
+		for (const run of counted().runs) {
 			if (run.shards !== null) {
 				expect(
 					run.reported.length,
@@ -621,7 +583,7 @@ test.describe('the ledgers this reads are the committed ones', () => {
 	});
 
 	test('a run the reader refuses says which run and why', () => {
-		for (const run of refused) {
+		for (const run of counted().refused) {
 			expect(run.runId).not.toBe('');
 			expect(run.why.length).toBeGreaterThan(10);
 		}
@@ -650,21 +612,26 @@ test.describe('the module cannot reach a browser', () => {
 
 	test('it reads the ledgers through STATE_ROOT, so a fixture tree can replace them', () => {
 		// The canary suite builds a site out of fixture runs by pointing
-		// `STATE_ROOT` at a copy. A path built any other way reads the real ledger
-		// anyway, and the canary silently measures the wrong tree.
-		expect(source).toContain("join(STATE_ROOT, 'host-fingerprint')");
-		// And the item side through the shared reader, which is rooted the same way.
+		// `STATE_ROOT` at a copy. A read rooted any other way reads the real ledger
+		// anyway, and the canary silently measures the wrong tree. Both reads go
+		// through the shared readers, and both of those are rooted at `STATE_ROOT`
+		// unless a caller names another root.
+		expect(source).toContain('machineRecord(days)');
 		expect(source).toContain('itemHealthRows(days)');
+		for (const reader of ['host-fingerprint.ts', 'ledger-rows.ts']) {
+			const text = readFileSync(join(HERE, '..', 'src', 'lib', 'server', reader), 'utf8');
+			expect(text, `${reader} defaults its root to something else`).toContain(
+				'root: string = STATE_ROOT'
+			);
+		}
 	});
 
-	test("it reads the machine record through the door that merges a job's halves", () => {
-		// The fleet reads the same ledger through `mergedDayShards` in
-		// `host-fingerprint.ts`. One reader merged and one raw would put two panels
-		// on one route in disagreement about how many rows a job has.
-		expect(source).toContain(
-			"mergedDayShards(join(STATE_ROOT, 'host-fingerprint'), HOST_FINGERPRINT_KEY, days)"
-		);
+	test('it reads the machine record through the reader the fleet reads it through', () => {
+		// The fleet reads the same record through `machineRecord` in
+		// `host-fingerprint.ts`. Two readers of one record would put two panels on
+		// one route in disagreement about how many rows a job has.
 		expect(source).not.toContain('readDayShards');
+		expect(source).not.toContain('sliceFromDisk');
 	});
 });
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import types
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import BaseModel
@@ -88,6 +88,10 @@ def _column_type(name: str, annotation: Any) -> tuple[ColumnType, bool]:
         # encoding is the engine's choice, and this file is read by two engines.
         if issubclass(bare, StrEnum):
             return ColumnType.STRING, nullable
+        # An integer enum stays its number, the value its JSON form already carries,
+        # so a reader filters on the number a person reads in the contract.
+        if issubclass(bare, IntEnum):
+            return ColumnType.INT64, nullable
     raise TypeError(
         f"{name} is declared {annotation!r}, which no column type in "
         "idhazh/ledger/arrow_schema.py maps. Add the annotation to the table or "

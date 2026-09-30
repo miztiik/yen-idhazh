@@ -74,7 +74,7 @@ def test_a_cone_is_what_its_tasks_own_and_the_complement_adds_nothing(tmp_path: 
     cones = {shard.index: shard.cone for shard in planned.shards}
 
     assert cones[1] == ("state/feed-health",), "the complement task added a folder"
-    assert cones[2] == ("state/score-archive", "state/score-index", "state/scores")
+    assert cones[2] == ("state/score-archive", "state/score-index")
     owned = [
         folder
         for shard in planned.shards

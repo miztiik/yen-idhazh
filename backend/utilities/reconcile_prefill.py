@@ -2,7 +2,7 @@
 
 Two instruments measure the same thing and neither knows about the other. The
 item-health ledger sums a field the summarize stage copied out of each model
-reply; `state/host-fingerprint/` carries what llama-server itself counted for
+reply; the host-fingerprint ledger carries what llama-server itself counted for
 the whole shard, on the same row that says which machine the shard drew.
 `docs/architecture/summarize/throughput.md` and the console both publish rates
 derived from the first one, so the second one is what makes those rates
@@ -26,17 +26,16 @@ on it.
 from __future__ import annotations
 
 import argparse
-import csv
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
 from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger import load_host_fingerprint_shard
 
 #: How far apart the two instruments may be before one of them is wrong.
 #:
@@ -87,30 +86,28 @@ def pool_counters(rows: list[HostFingerprintRow]) -> Pooled:
     )
 
 
-def pool_ledger(shards: Sequence[Path], *, run_id: str) -> Pooled:
+def pool_ledger(rows: Sequence[dict[str, str]], *, run_id: str) -> Pooled:
     """One run's item-health rows, summed over `input_tokens - cached_tokens`.
 
     That subtraction is the definition: `cached_tokens` is what the runtime
     reused instead of reading, so leaving it in reports a rate the machine never
     ran at. The console and the throughput doc use the same one.
 
-    Every work shard of the run left its own file in the day directory, so the
+    The day's rows come from every work shard of the run, so the
     pool is over all of them - a pool over one would report a fraction of the
     tokens against the whole server's seconds.
     """
     tokens = 0
     milliseconds = 0
     parts = 0
-    for path in shards:
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            for row in csv.DictReader(handle):
-                if row["run_id"] != run_id:
-                    continue
-                if any(not row[cell] for cell in _REQUIRED):
-                    continue
-                tokens += int(row["input_tokens"]) - int(row["cached_tokens"] or 0)
-                milliseconds += int(row["prefill_ms"])
-                parts += 1
+    for row in rows:
+        if row["run_id"] != run_id:
+            continue
+        if any(not row[cell] for cell in _REQUIRED):
+            continue
+        tokens += int(row["input_tokens"]) - int(row["cached_tokens"] or 0)
+        milliseconds += int(row["prefill_ms"])
+        parts += 1
     return Pooled(tokens=tokens, seconds=milliseconds / 1000.0, parts=parts)
 
 
@@ -171,11 +168,11 @@ def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
     """Both sides of one run, pooled the same way.
 
     Both sides file by day and a run id opens with its date, so each side reads
-    one day however long the ledgers get. A day is a directory of writer-owned
-    files and every file in it is read.
+    one day however long the ledgers get. Each side's day is read through the
+    ledger door, settled, from whichever file holds it.
 
-    The `work` rows only. The other side of this comparison is
-    `state/item-health/`, which is one row per summarized item, so the visual
+    The `work` rows only. The other side of this comparison is the item-health
+    ledger, which is one row per summarized item, so the visual
     planner's server has nothing to reconcile against and pooling it in would
     add a second model's tokens to the first model's seconds.
     """
@@ -183,16 +180,20 @@ def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
     return Reconciliation(
         run_id=run_id,
         ledger=pool_ledger(
-            day_shards.one_day(ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), date),
+            [
+                row.csv_row()
+                for row in ledger.load_days(
+                    state_dir, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow
+                )
+            ],
             run_id=run_id,
         ),
         server=pool_counters(
             [
                 row
-                for shard in day_shards.one_day(
-                    ledger.tree_root(state_dir, LedgerName.HOST_FINGERPRINT), date
+                for row in ledger.load_days(
+                    state_dir, LedgerName.HOST_FINGERPRINT, [date], model=HostFingerprintRow
                 )
-                for row in load_host_fingerprint_shard(shard)
                 if row.run_id == run_id and row.job == WORK_JOB
             ]
         ),

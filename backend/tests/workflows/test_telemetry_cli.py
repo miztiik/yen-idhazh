@@ -26,10 +26,18 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health, seed_span_rollup
+from conftest import (
+    CONTRACT_FIXTURES_DIR,
+    read_text,
+    seed_feed_health,
+    seed_item_health,
+    seed_span_rollup,
+)
 
 from idhazh import assemble, atomic_write, cli, ledger
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
@@ -122,6 +130,23 @@ def _a_published_day(tmp_path: Path) -> tuple[Path, Path, str]:
     seed_span_rollup(
         state_root, day.date, [span.model_copy(update={"date": day.date, "run_id": run_id})]
     )
+    feed = FeedHealthRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "feed-health-row" / "answered.json")
+    )
+    seed_feed_health(
+        state_root,
+        day.date,
+        [
+            feed.model_copy(
+                update={
+                    "date": day.date,
+                    "run_id": run_id,
+                    "checked_at": f"{day.date}T06:00:00Z",
+                }
+            )
+        ],
+        run_id=run_id,
+    )
     return state_root, digest_root, day.date
 
 
@@ -140,7 +165,7 @@ def test_every_telemetry_subcommand_runs_against_a_day(
     """
     state_root, digest_root, date = _a_published_day(tmp_path)
     extra = {
-        "prune": ["--target", LedgerName.ITEM_HEALTH, "--since", date, "--until", date]
+        "prune": ["--target", LedgerName.FEED_HEALTH, "--since", date, "--until", date]
     }
 
     exit_code = cli.main(
@@ -172,7 +197,9 @@ def test_a_prune_the_router_refuses_names_the_store_and_changes_nothing(
     argparse gives a command line nobody can act on, which is what this is.
     """
     state_root, digest_root, date = _a_published_day(tmp_path)
-    before = sorted(path.relative_to(state_root).as_posix() for path in state_root.rglob("*.csv"))
+    before = sorted(
+        path.relative_to(state_root).as_posix() for path in state_root.rglob("*") if path.is_file()
+    )
 
     with pytest.raises(SystemExit) as exit_code:
         cli.main(
@@ -197,32 +224,55 @@ def test_a_prune_the_router_refuses_names_the_store_and_changes_nothing(
     assert exit_code.value.code == 2
     assert LedgerName.PUBLISHED in capsys.readouterr().err
     assert (
-        sorted(path.relative_to(state_root).as_posix() for path in state_root.rglob("*.csv"))
+        sorted(
+            path.relative_to(state_root).as_posix()
+            for path in state_root.rglob("*")
+            if path.is_file()
+        )
         == before
     )
 
 
 def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
-    """The instrument shards at two grains, and a listing that sees one is half blind.
+    """The instrument files at two grains, and a listing that sees one is half blind.
 
-    A day shard is `<ledger>/<YYYY>/<MM>/<DD>` and a month fold is
-    `<ledger>/<YYYY-MM>` - a different depth, not a different suffix. A single
-    glob finds one of them, and the one it misses is silently absent rather than
-    reported empty. Both paths are asked of the ledger rather than spelled here,
-    so a ledger that moves takes this with it.
+    A day is `<ledger>/<YYYY>/<MM>/<DD>` in a writer-owned tree and one or two
+    folders deeper under the ledger door - `raw/<ledger>/<YYYY>/<MM>/<DD>/` for
+    the files a run filed, `compact/<ledger>/daily/<YYYY>/<MM>/<DD>` once the
+    day is packed - and a month fold is `<ledger>/<YYYY-MM>`: a different
+    depth, not a different suffix. A single glob finds one of them, and the one
+    it misses is silently absent rather than reported empty. Every path is asked
+    of the ledger rather than spelled here, so a ledger that moves takes this
+    with it. The listing reads names alone, so the packed day and the month fold
+    are placed as files and never opened.
     """
     state_root, _digest_root, date = _a_published_day(tmp_path)
+    packed = ledger.compact_path(state_root, LedgerName.ITEM_HEALTH, Period.DAILY, date)
+    packed.parent.mkdir(parents=True, exist_ok=True)
+    packed.write_bytes(b"")
+    month_fold = ledger.path(state_root, LedgerName.ITEM_HEALTH_SUMMARY, assemble.month_of(date))
+    month_fold.parent.mkdir(parents=True, exist_ok=True)
+    month_fold.write_text("version\n", encoding="utf-8", newline="\n")
 
     report = "\n".join(inventory.files(state_root, date=date))
 
-    day_shard = ledger.path(state_root, LedgerName.ITEM_HEALTH, date).relative_to(state_root).as_posix()
-    month_shard = (
-        ledger.path(state_root, LedgerName.SPAN_ROLLUP, assemble.month_of(date))
-        .relative_to(state_root)
-        .as_posix()
+    raw_files = [
+        held.path.relative_to(state_root).as_posix()
+        for held in ledger.list_raw_files(state_root, LedgerName.ITEM_HEALTH, days=[date])
+    ]
+    assert raw_files, "the built day filed no census, so the listing proves nothing about it"
+    for relpath in raw_files:
+        assert relpath in report, f"a raw day file is missing from the listing: {report}"
+    span_day = ledger.path(state_root, LedgerName.SPAN_ROLLUP, date).relative_to(state_root)
+    assert f"{span_day.as_posix()}/" in report, (
+        f"the writer-owned day is missing from the listing: {report}"
     )
-    assert day_shard in report, f"the day shard is missing from the listing: {report}"
-    assert month_shard in report, f"the month shard is missing from the listing: {report}"
+    assert packed.relative_to(state_root).as_posix() in report, (
+        f"the packed day is missing from the listing: {report}"
+    )
+    assert month_fold.relative_to(state_root).as_posix() in report, (
+        f"the month fold is missing from the listing: {report}"
+    )
 
 
 def test_a_store_that_nests_is_listed_rather_than_silently_missed(tmp_path: Path) -> None:

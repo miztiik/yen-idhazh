@@ -48,6 +48,7 @@ from idhazh.contracts.base import (
     Slug,
     without_retired_keys,
 )
+from idhazh.contracts.eval_row import RENAMED_CELLS as EVAL_RENAMED_CELLS
 from idhazh.contracts.item_health import ItemStage
 
 # An eval-row column name is snake_case (`hhem_full`, `score_ms`), so it is not a
@@ -80,9 +81,9 @@ INSTRUMENT_COLUMNS: frozenset[str] = frozenset(
         "speculative_density",
         "coherence",
         "semantic_coverage",
-        "source_word_count",
-        "source_seen_word_count",
-        "summary_word_count",
+        "source_words_before_cap",
+        "source_words",
+        "summary_words",
         "score_ms",
     }
 )
@@ -251,6 +252,19 @@ class DayInstrument(Model):
     column: EvalColumn
     stat: DayDistribution
 
+    @model_validator(mode="before")
+    @classmethod
+    def _a_renamed_column_is_read_under_its_new_name(cls, data: Any) -> Any:
+        """A day recorded before an eval column was renamed names the column it had then.
+
+        The committed days are never rewritten, and the reducer joins days on
+        `column`, so an old name read as it was written would split one
+        instrument into two across the day of the rename.
+        """
+        if isinstance(data, dict) and data.get("column") in EVAL_RENAMED_CELLS:
+            return {**data, "column": EVAL_RENAMED_CELLS[data["column"]]}
+        return data
+
 
 class DayLabelSimilarity(Model):
     """How close the day's own item vectors sat to the committed label vectors.
@@ -393,6 +407,11 @@ class DayMetrics(Contract):
     __schema_stem__: ClassVar[str] = "day-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-29",
+            change="An instrument names the three renamed eval word counts by their new names.",
+            why="The eval row renamed them, and a day recorded before reads under the new name.",
+        ),
+        ChangelogEntry(
             version="2026-09-14T01:30",
             change="ItemStage gained visual, so stage_timing may name it.",
             why="The enum is inlined here, so a name the event envelope gained moves this file.",
@@ -406,11 +425,6 @@ class DayMetrics(Contract):
             version="2026-09-13",
             change="Added the optional label_similarity block: the day's distribution.",
             why="Nothing said whether the encoder's geometry had moved.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12T21:00",
-            change="pipeline_fingerprint is optional and nothing sets it.",
-            why="The stamp stopped being a gate and stopped being the eval window's key.",
         ),
         ChangelogEntry(
             version="2026-09-07",

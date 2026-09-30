@@ -395,28 +395,27 @@ def stage_assemble(
     _report_prose_change(recorded_inputs, previous_manifest)
     atomic_write.write_atomic(target / "run.json", manifest.to_json())
     published = ledger.append_published(common.STATE_ROOT, day.date, _published_rows(day, plan))
-    # This job's own segments, never the day files. A work shard recorded the
-    # same items hours ago on another runner, so two writers would be appending
-    # to one path; each writes its own segment and the fold below settles the
-    # pair. `assemble` runs once for the whole day, so it is shard 0 of one.
-    attempt = run_context.run_attempt()
-    item_health = ledger.write_segment(
+    # This job's own raw files, never another writer's. A work shard recorded the
+    # same items hours ago on another runner, and each files its own file through
+    # the ledger door; the settlement keeps one row an item. `assemble` runs once
+    # for the whole day, so it is shard 0 of one.
+    identity = WriterIdentity(
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.ASSEMBLE,
+        shard=ASSEMBLE_SHARD,
+        producer=PRODUCER,
+        git_sha=commit_sha,
+    )
+    filed = ledger.persist(
         common.STATE_ROOT,
-        LedgerName.ITEM_HEALTH,
         item_health_rows,
-        run_id=run_id,
-        attempt=attempt,
-        job=ServerJob.ASSEMBLE,
-        shard=ASSEMBLE_SHARD,
+        ledger=LedgerName.ITEM_HEALTH,
+        covers=plan.date,
+        identity=identity,
     )
-    landed = writer.append_segment(
-        common.STATE_ROOT,
-        rows,
-        run_id=run_id,
-        attempt=attempt,
-        job=ServerJob.ASSEMBLE,
-        shard=ASSEMBLE_SHARD,
-    )
+    item_health = len(item_health_rows) if filed else 0
+    landed = writer.file_measurements(common.STATE_ROOT, rows, identity=identity)
     # Every projection of the instrument, in the one order `dispatch` names. It
     # runs after the ledgers this stage appended and reads those files rather
     # than anything in memory here, so a run that failed to append publishes the

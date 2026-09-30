@@ -2,8 +2,8 @@
 
 `RunTimelineRow` settled the shape and left the writer open
 (`docs/architecture/publishing/run-timeline.md`). This is the writer. It reads
-the per-item census under `state/item-health/` - a day tree, bounded to the days
-of one month - and writes `frontend/public/run-timeline/<YYYY-MM>.csv`.
+the per-item census, the item-health ledger (`state/raw/item-health/`), bounded
+to the days of one month, and writes `frontend/public/run-timeline/<YYYY-MM>.csv`.
 
 **One ledger, not two.** The contract's step 7 takes its NAME from
 `EvalRow.score_ms`, and the value is not a second measurement: `stages/work.py`
@@ -41,9 +41,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.telemetry.publish import series
@@ -139,7 +138,7 @@ def project(census: Iterable[Mapping[str, str]]) -> list[RunTimelineRow]:
     for row in rows:
         started = _epoch_ms(row.get("item_started_at"))
         total = _whole(row.get("item_total_ms"))
-        shard = _whole(row.get("shard"))
+        shard = _whole(row.get("machine_shard"))
         run_id = row.get("run_id") or ""
         if started is None or total is None or shard is None or run_id == "":
             continue
@@ -180,17 +179,20 @@ def read_shard(path: Path) -> list[RunTimelineRow]:
         return [RunTimelineRow.from_csv_row(row) for row in reader]
 
 
-def _month_rows(census_root: Path, dates: Iterable[str]) -> Iterable[Mapping[str, str]]:
+def _month_rows(state_root: Path, dates: Iterable[str]) -> Iterable[Mapping[str, str]]:
     """Every cell of one month, in day order, as the strings a shard holds.
 
-    Each day is settled before it is projected. A day is a directory of
-    writer-owned files and a re-run leaves a second attempt beside the first, so
-    projecting every file would draw one item's bar twice.
+    Each day is settled before it is projected. Every writer files its own raw
+    file and a re-run files a second attempt beside the first, so projecting
+    every file would draw one item's bar twice.
     """
     for date in dates:
-        settled = day_shards.settled_day(
-            census_root, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
-        )
+        settled = [
+            row.csv_row()
+            for row in ledger.load_days(
+                state_root, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow
+            )
+        ]
         for row in project(settled):
             yield row.csv_row()
 
@@ -208,22 +210,22 @@ def publish(
 
     The census files by day and this mirror files by month, the same pair
     `public_telemetry` already draws and for the same reason: a run writes one
-    day, and a browser fetches one month. So a named month opens at most 31
-    census files whatever the archive grows to (`CLAUDE.md` Guardrail #12).
+    day, and a browser fetches one month. So a named month reads at most 31
+    census days whatever the archive grows to (`CLAUDE.md` Guardrail #12).
     """
-    census_root = ledger.tree_root(state_root, LedgerName.ITEM_HEALTH)
-    by_month = day_shards.dates_by_month(census_root, days=UNBOUNDED_WINDOW)
+    available = ledger.held_months(state_root, LedgerName.ITEM_HEALTH)
 
     def encode(month: str) -> bytes:
         return series.encode_csv(
-            PUBLIC_COLUMNS, _month_rows(census_root, by_month.get(month, []))
+            PUBLIC_COLUMNS,
+            _month_rows(state_root, ledger.month_days(month) if month in available else []),
         )
 
     return series.publish_series(
         digest_root=digest_root,
         dirname=DIRNAME,
         suffix=SUFFIX,
-        available=sorted(by_month),
+        available=available,
         encode=encode,
         keep_months=keep_months,
         today=today,

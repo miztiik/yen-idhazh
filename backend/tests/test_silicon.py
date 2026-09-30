@@ -6,9 +6,9 @@ import time
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR, fold
+from conftest import FIXTURES_DIR, SEED_COMMIT
 
-from idhazh import config, day_shards, ledger
+from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
@@ -25,27 +25,20 @@ SERVER_LOG = FIXTURES_DIR / "runtime" / "2026-08-29-3-shard-0.server-head.txt"
 SERVER_METRICS = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-0.prom"
 
 #: The day every plan below runs on, so the day the files land under and the day
-#: the fold is asked for cannot drift apart.
+#: the reader is asked for cannot drift apart.
 FINGERPRINT_DAY = "2026-09-16"
 
 
-def writer_files(state: Path) -> list[Path]:
-    """Every file of the fingerprint day that one writer owns.
-
-    The fold's own `settled.csv` is left out, because a test asking what a
-    writer left is asking what the fold has not taken yet.
-    """
-    root = ledger.tree_root(state, LedgerName.HOST_FINGERPRINT)
-    return [
-        path
-        for path in day_shards.one_day(root, FINGERPRINT_DAY)
-        if path.name != day_shards.SETTLED_NAME
-    ]
+def raw_files(state: Path) -> list[ledger.RawFile]:
+    """Every raw file of the fingerprint day, oldest first, each with the envelope of its writer."""
+    return ledger.list_raw_files(state, LedgerName.HOST_FINGERPRINT, days={FINGERPRINT_DAY})
 
 
-def settled_fingerprint(state: Path) -> Path:
-    """The fold of the fingerprint day, which is the file every reader opens."""
-    return ledger.path(state, LedgerName.HOST_FINGERPRINT, FINGERPRINT_DAY) / day_shards.SETTLED_NAME
+def settled(state: Path) -> list[HostFingerprintRow]:
+    """The fingerprint day as every reader reads it: its raw files, settled."""
+    return ledger.load_days(
+        state, LedgerName.HOST_FINGERPRINT, [FINGERPRINT_DAY], model=HostFingerprintRow
+    )
 
 
 def a_plan() -> RunPlan:
@@ -313,82 +306,92 @@ def test_the_bench_can_ask_for_the_model_name_on_its_own() -> None:
     assert silicon.host_cpu_model("") is None
 
 
-def test_the_stage_writes_this_job_its_own_segment_and_never_the_day_file(
+def test_the_stage_files_this_job_its_own_raw_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ten jobs of one run record a machine, so none of them may open one file.
 
-    `state/host-fingerprint/2026/09/16.csv` is header-only in this repository
-    because they did. A segment is named for the run, the attempt, the job and
-    the shard, so two writers cannot take one path and the compaction is what
-    turns them back into the day a reader opens.
+    The row goes through the ledger door, which names the file for its writer:
+    the run, the attempt, the job, the shard and the module that wrote it travel
+    in the file's own envelope, so two writers cannot take one path and every
+    reader settles them back into one day.
 
     The attempt is set here rather than left to the environment: this suite runs
-    on Actions too, and a re-run of the CI job would otherwise put a 2 in a name
-    this test spells out.
+    on Actions too, and a re-run of the CI job would otherwise put a 2 in the
+    identity this test spells out.
     """
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     row = silicon.stage_fingerprint(
-        a_plan(), settings=a_probe(), state_root=tmp_path, shard=2, job=ServerJob.WORK
+        a_plan(),
+        settings=a_probe(),
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=2,
+        job=ServerJob.WORK,
     )
 
     assert row is not None
-    assert not settled_fingerprint(tmp_path).exists(), (
-        "the probe writes a segment; the head has one writer and it is the compaction"
-    )
-    written = writer_files(tmp_path)
-    assert [path.name for path in written] == ["2026-09-16-1-1-work-02.csv"]
-
-    fold(tmp_path, FINGERPRINT_DAY)
-    head = settled_fingerprint(tmp_path)
-    assert head.exists(), "a fingerprint nobody stored answers nothing next month"
-    assert head.parts[-4:] == ("2026", "09", "16", day_shards.SETTLED_NAME), (
-        "the tree has to be day sharded"
-    )
-    assert not writer_files(tmp_path), "a folded segment is removed, not left behind"
+    (written,) = raw_files(tmp_path)
+    who = written.envelope.identity
+    assert (who.run_id, who.attempt, who.job, who.shard) == ("2026-09-16-1", 1, ServerJob.WORK, 2)
+    assert who.producer == silicon.PRODUCER
+    assert who.git_sha == SEED_COMMIT, "a file says which commit wrote it"
+    day = written.path.parent.relative_to(ledger.raw_root(tmp_path, LedgerName.HOST_FINGERPRINT))
+    assert day.parts == ("2026", "09", "16"), "the tree has to be day sharded"
+    assert settled(tmp_path) == [row], "a fingerprint nobody stored answers nothing next month"
 
 
 def test_a_second_attempt_at_one_shard_writes_beside_the_first_and_wins(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """GitHub keeps the run id and increments the attempt, so the attempt is in the name.
+    """GitHub keeps the run id and increments the attempt, so the attempt is in the identity.
 
-    Without it the second try takes the path the first already took - in exactly
-    the case where the two disagree, because the first attempt is the one that
-    died. Both files survive to the fold, and the fold keeps the higher attempt.
+    Without it the second try would be read as the first - in exactly the case
+    where the two disagree, because the first attempt is the one that died. Both
+    files survive on disk, one work unit between them, and every reader keeps the
+    higher attempt.
     """
     plan, settings = a_plan(), a_probe()
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
-    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0)
+    silicon.stage_fingerprint(
+        plan, settings=settings, state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+    )
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
-    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0)
+    second = silicon.stage_fingerprint(
+        plan, settings=settings, state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+    )
 
-    written = writer_files(tmp_path)
-    assert [path.name for path in written] == [
-        "2026-09-16-1-1-work-00.csv",
-        "2026-09-16-1-2-work-00.csv",
-    ]
-
-    fold(tmp_path, FINGERPRINT_DAY)
-    lines = settled_fingerprint(tmp_path).read_text(encoding="utf-8")
-    assert lines.count("\n") == 2, "one machine, one row, however many attempts drew it"
+    written = raw_files(tmp_path)
+    assert sorted(held.envelope.identity.attempt for held in written) == [1, 2]
+    assert len({held.envelope.unit_id for held in written}) == 1, "two tries at one work unit"
+    assert settled(tmp_path) == [second], "one machine, one row, however many attempts drew it"
 
 
-def test_a_second_call_in_one_attempt_rewrites_the_one_segment(tmp_path: Path) -> None:
-    """A machine counted twice is exactly what would make the distribution lie."""
+def test_a_second_call_in_one_attempt_is_read_as_one_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A machine counted twice is exactly what would make the distribution lie.
+
+    The two calls are one writer's two writes of one work unit in one attempt,
+    and a reader keeps the later of those, never both.
+    """
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     plan, settings = a_plan(), a_probe()
 
-    silicon.stage_fingerprint(
-        plan, settings=settings, state_root=tmp_path, shard=0, job=ServerJob.WORK
-    )
-    silicon.stage_fingerprint(
-        plan, settings=settings, state_root=tmp_path, shard=0, job=ServerJob.WORK
-    )
+    for _ in range(2):
+        silicon.stage_fingerprint(
+            plan,
+            settings=settings,
+            state_root=tmp_path,
+            commit_sha=SEED_COMMIT,
+            shard=0,
+            job=ServerJob.WORK,
+        )
 
-    assert len(writer_files(tmp_path)) == 1, "one writer, one path, one file"
-    fold(tmp_path, FINGERPRINT_DAY)
-    lines = settled_fingerprint(tmp_path).read_text(encoding="utf-8")
-    assert lines.count("\n") == 2, "one header and one row, however many times the stage ran"
+    assert len({held.envelope.unit_id for held in raw_files(tmp_path)}) == 1, (
+        "one writer, one work unit"
+    )
+    assert len(settled(tmp_path)) == 1, "one row, however many times the stage ran"
 
 
 def test_the_switch_being_off_writes_nothing_and_still_returns(tmp_path: Path) -> None:
@@ -396,124 +399,62 @@ def test_the_switch_being_off_writes_nothing_and_still_returns(tmp_path: Path) -
     settings = config.load()
     settings.app.observability.host_fingerprint = False
 
-    row = silicon.stage_fingerprint(a_plan(), settings=settings, state_root=tmp_path, shard=0)
+    row = silicon.stage_fingerprint(
+        a_plan(), settings=settings, state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+    )
 
     assert row is None
-    assert not writer_files(tmp_path)
-    assert not settled_fingerprint(tmp_path).exists()
+    assert not raw_files(tmp_path)
+    assert not settled(tmp_path)
 
 
 def test_a_row_survives_the_round_trip_through_the_ledger_shape(tmp_path: Path) -> None:
     """An empty cell has to read back as absent, never as a zero bandwidth.
 
-    Read off the segment rather than off the head, because the segment is where
-    the writer's own rendering lands: a head has been through the fold, so a cell
-    the writer never filled and a cell the fold dropped would look the same.
+    Read off the one raw file the writer left rather than through the settled
+    reader, because that file is where the writer's own rendering lands.
     """
-    silicon.stage_fingerprint(a_plan(), settings=a_probe(), state_root=tmp_path, shard=0)
-
-    path = writer_files(tmp_path)[0]
-    header, body = path.read_text(encoding="utf-8").splitlines()[:2]
-    read = HostFingerprintRow.from_csv_row(
-        dict(zip(header.split(","), body.split(","), strict=True))
+    silicon.stage_fingerprint(
+        a_plan(), settings=a_probe(), state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
     )
+
+    (written,) = raw_files(tmp_path)
+    (read,) = ledger.load([written.path], model=HostFingerprintRow)
 
     assert read.memcpy_gib_s is None, "a probe that did not run is absent, not zero"
     assert read.memcpy_probe_mib == 0
     assert len(read.fingerprint or "") == 16
 
 
-def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Path) -> None:
-    """A head two columns narrower than the contract, and a new segment beside it.
-
-    The settlement re-files the head on the next fold and the two cells come back
-    empty - which says the reading was not taken, not that the server read
-    nothing. Both rows end under one header.
-
-    **This is the scenario, not the proof of the widening.** A head is re-filed
-    before anything reads it and a short line under a wide header is padded by
-    the CSV reader, so this case passes whether or not the contract can read a
-    narrow row. What can fail is a segment under its own header, and that case
-    lives in `tests/gardener/test_closed_day_fold.py`.
-
-    Built here rather than read off `state/`: a committed head is re-filed by the
-    first fold that touches it, so a test that read one would pass today by
-    accident and answer nothing later (`CLAUDE.md` section 13).
-    """
-    narrow = tuple(
-        name
-        for name in HostFingerprintRow.csv_columns()
-        if name not in ("server_prompt_tokens", "server_prompt_seconds")
-    )
-    yesterday = HostFingerprintRow(
-        version="2026-09-18",
-        date="2026-09-16",
-        run_id="2026-09-16-1",
-        shard=0,
-        cpu_model="AMD EPYC 7763 64-Core Processor",
-        job_seconds=5550,
-    )
-    path = settled_fingerprint(tmp_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    cells = yesterday.csv_row()
-    path.write_text(
-        ",".join(narrow) + "\n" + ",".join(cells[name] for name in narrow) + "\n",
-        encoding="utf-8",
-        newline="",
-    )
-    silicon.stage_job_clock(
-        a_plan(),
-        settings=a_probe(),
-        state_root=tmp_path,
-        shard=1,
-        metrics_path=SERVER_METRICS,
-    )
-
-    fold(tmp_path, FINGERPRINT_DAY)
-
-    header, *body = path.read_text(encoding="utf-8").splitlines()
-    columns = header.split(",")
-    assert columns == list(HostFingerprintRow.csv_columns())
-    rows = {
-        cells["shard"]: cells
-        for cells in (dict(zip(columns, line.split(","), strict=True)) for line in body)
-    }
-    assert rows["0"]["server_prompt_tokens"] == "", "a reading nobody took is empty, not zero"
-    assert rows["0"]["job_seconds"] == "5550", "the widening may not cost the cells already there"
-    assert rows["1"]["server_prompt_tokens"] == "30538"
-    assert HostFingerprintRow.from_csv_row(rows["0"]).server_prompt_seconds is None
-
-
-def _head_row(state_dir: Path, date: str = "2026-09-16") -> dict[str, str]:
-    """The one row of the day's settled file, by column name."""
-    path = ledger.path(state_dir, LedgerName.HOST_FINGERPRINT, date) / day_shards.SETTLED_NAME
-    header, *body = path.read_text(encoding="utf-8").splitlines()
-    assert len(body) == 1, f"one machine, one row, and the head holds {len(body)}"
-    return dict(zip(header.split(","), body[0].split(","), strict=True))
-
-
-def test_the_probe_and_the_job_clock_fold_into_one_row(tmp_path: Path) -> None:
-    """The Oracle: two halves of one key, no cell filled twice, one row in the head.
+def test_the_probe_and_the_job_clock_settle_into_one_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Oracle: two halves of one key, no cell filled twice, one row a reader sees.
 
     The probe runs before the model server because the bandwidth reading wants an
     idle machine, and the job's own clock is only knowable once the job is over.
-    Both write a row of the same shape under `HOST_FINGERPRINT_KEY`, filling
-    columns the other left empty, so the fold takes the union rather than
-    choosing between them.
+    The clock step reads back the row its own probe filed, fills the four cells
+    only it can know, and files the whole row again as the same writer, so the
+    reader keeps that later row in place of the half.
 
-    It is the Join case of the settlement that makes this work, and Join only
-    fires because the key columns are excluded from what counts as contested -
-    `date`, `run_id`, `job` and `shard` are equal by construction, which is what
-    made the two rows one record in the first place.
+    What the clock adds is exactly its four cells: a cell the probe measured
+    that came back changed would be the clock overwriting the machine.
     """
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     plan, settings = a_plan(), a_probe()
     probe = silicon.stage_fingerprint(
-        plan, settings=settings, state_root=tmp_path, shard=2, job=ServerJob.WORK
-    )
-    clock = silicon.stage_job_clock(
         plan,
         settings=settings,
         state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=2,
+        job=ServerJob.WORK,
+    )
+    whole = silicon.stage_job_clock(
+        plan,
+        settings=settings,
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
         shard=2,
         job=ServerJob.WORK,
         job_started_at=int(time.time()) - 5550,
@@ -521,42 +462,42 @@ def test_the_probe_and_the_job_clock_fold_into_one_row(tmp_path: Path) -> None:
         metrics_path=SERVER_METRICS,
     )
 
-    assert probe is not None and clock is not None
-    contested = [
-        name
-        for name, value in clock.csv_row().items()
-        if value and probe.csv_row()[name] and name not in ledger.HOST_FINGERPRINT_KEY
-    ]
-    assert contested == ["version"], (
-        "the two halves must fill different cells, or the fold has to choose between them"
+    assert probe is not None and whole is not None
+    changed = sorted(
+        name for name, value in whole.csv_row().items() if value != probe.csv_row()[name]
+    )
+    assert changed == sorted(silicon.CLOCK_CELLS), (
+        "the clock fills its own four cells and leaves every cell the probe measured alone"
     )
 
-    fold(tmp_path, FINGERPRINT_DAY)
-    row = _head_row(tmp_path)
+    (row,) = settled(tmp_path)
 
-    assert row["fingerprint"] == probe.fingerprint
-    assert row["measured_at"] == probe.measured_at
-    assert row["job_seconds"] == "5550"
-    assert float(row["model_load_ms"]) == clock.model_load_ms
-    assert row["server_prompt_tokens"] == "30538"
-    assert row["server_prompt_seconds"] == "2795.15"
-    assert HostFingerprintRow.from_csv_row(row).shard == 2
+    assert row == whole
+    assert row.fingerprint == probe.fingerprint
+    assert row.measured_at == probe.measured_at
+    assert row.job_seconds == 5550
+    assert row.model_load_ms is not None and row.model_load_ms > 0
+    assert row.server_prompt_tokens == 30538
+    assert row.server_prompt_seconds == 2795.15
+    assert row.shard == 2
 
 
 def test_a_job_that_died_before_its_clock_leaves_a_usable_half_row(tmp_path: Path) -> None:
-    """The degrade path, named: two empty cells rather than a row nobody can read.
+    """The degrade path, named: four empty cells rather than a row nobody can read.
 
     A shard killed at `run.shard_timeout_minutes` never reaches the clock step,
     and everything the probe measured about the machine is still true.
     """
-    silicon.stage_fingerprint(a_plan(), settings=a_probe(), state_root=tmp_path, shard=0)
+    silicon.stage_fingerprint(
+        a_plan(), settings=a_probe(), state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+    )
 
-    fold(tmp_path, FINGERPRINT_DAY)
-    row = _head_row(tmp_path)
+    (row,) = settled(tmp_path)
 
-    assert row["job_seconds"] == ""
-    assert row["model_load_ms"] == ""
-    assert HostFingerprintRow.from_csv_row(row).job_seconds is None
+    assert row.fingerprint is not None, "the machine is still known"
+    assert row.job_seconds is None
+    assert row.model_load_ms is None
+    assert row.csv_row()["job_seconds"] == ""
 
 
 def test_a_clock_with_no_stamp_and_no_log_reports_absence_rather_than_zero(
@@ -570,7 +511,12 @@ def test_a_clock_with_no_stamp_and_no_log_reports_absence_rather_than_zero(
     neither.
     """
     clock = silicon.stage_job_clock(
-        a_plan(), settings=a_probe(), state_root=tmp_path, shard=0, server_log_path=None
+        a_plan(),
+        settings=a_probe(),
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=0,
+        server_log_path=None,
     )
 
     assert clock is not None
@@ -582,26 +528,36 @@ def test_a_clock_with_no_stamp_and_no_log_reports_absence_rather_than_zero(
     assert clock.fingerprint is None, "the clock half measured no machine and may not claim one"
 
 
-def test_the_clock_half_lands_in_the_probes_own_segment(
+def test_the_clock_is_a_later_write_of_the_probes_own_work_unit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """One job, one writer, one file - the grammar names the job and not the step.
+    """One job, one writer, one work unit - the identity names the job and not the step.
 
-    `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv` has no element a
-    second step of one job could differ in, so a second file is not something
-    this grammar can express. The two halves are two rows of the file this job
-    owns, and neither is ever edited.
+    The door never edits a file, so the clock step files the whole row again
+    under the identity its probe filed with. Every file of the day is then one
+    work unit of one attempt, and a reader keeps the later write of it: one row
+    a job, never a half-row beside a whole one.
     """
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     plan, settings = a_plan(), a_probe()
-    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0)
-    silicon.stage_job_clock(
-        plan, settings=settings, state_root=tmp_path, shard=0, job_started_at=int(time.time()) - 60
+    probe = silicon.stage_fingerprint(
+        plan, settings=settings, state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+    )
+    whole = silicon.stage_job_clock(
+        plan,
+        settings=settings,
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=0,
+        job_started_at=int(time.time()) - 60,
     )
 
-    written = writer_files(tmp_path)
-    assert [path.name for path in written] == ["2026-09-16-1-1-work-00.csv"]
-    assert written[0].read_text(encoding="utf-8").count("\n") == 3, "one header and two halves"
+    written = raw_files(tmp_path)
+    assert len({held.envelope.unit_id for held in written}) == 1, "one writer, one work unit"
+    assert {held.envelope.identity.attempt for held in written} == {1}
+    assert probe is not None and whole is not None
+    assert whole.fingerprint == probe.fingerprint, "the clock carries the probe's machine"
+    assert settled(tmp_path) == [whole]
 
 
 def test_the_switch_being_off_records_no_clock_either(tmp_path: Path) -> None:
@@ -610,11 +566,16 @@ def test_the_switch_being_off_records_no_clock_either(tmp_path: Path) -> None:
     settings.app.observability.host_fingerprint = False
 
     clock = silicon.stage_job_clock(
-        a_plan(), settings=settings, state_root=tmp_path, shard=0, job_started_at=1
+        a_plan(),
+        settings=settings,
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=0,
+        job_started_at=1,
     )
 
     assert clock is None
-    assert not writer_files(tmp_path)
+    assert not raw_files(tmp_path)
 
 
 def test_the_job_clock_and_the_model_load_are_decoded_off_a_real_capture() -> None:

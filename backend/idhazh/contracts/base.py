@@ -13,9 +13,10 @@ import hashlib
 import json
 import re
 import unicodedata
+from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Final, Self, get_args
+from typing import Annotated, Any, ClassVar, Final, Self, cast, get_args
 
 from annotated_types import MaxLen, MinLen
 from pydantic import (
@@ -678,6 +679,29 @@ def without_retired_keys(data: Any, *keys: str) -> Any:
     if not any(key in data for key in keys):
         return data
     return {name: value for name, value in data.items() if name not in keys}
+
+
+def renamed_keys[V](data: V, renames: Mapping[str, str]) -> V:
+    """Read each renamed key of an incoming payload under its new name, and nothing else.
+
+    The read-side migration `CLAUDE.md` section 11 owes when a field changes
+    name in a shape whose older payloads are never rewritten - a sealed per-item
+    payload, or a committed CSV whose heading still spells the old name. The old
+    key is moved to the new one only when the new one is absent, so a payload
+    that already carries the new name keeps its own value, and an old key beside
+    it is dropped rather than left for `extra="forbid"` to refuse.
+
+    Named keys only, and a new mapping, for the reasons `without_retired_keys`
+    gives: a model opts in with the names it renamed, and a caller that still
+    holds its own dict never sees it change.
+    """
+    if not isinstance(data, dict) or not any(old in data for old in renames):
+        return data
+    moved = {name: value for name, value in data.items() if name not in renames}
+    for old, new in renames.items():
+        if old in data and new not in data:
+            moved[new] = data[old]
+    return cast("V", moved)
 
 
 class ChangelogEntry(Model):

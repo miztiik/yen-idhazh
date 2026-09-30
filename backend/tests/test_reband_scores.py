@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import sys
 from collections.abc import Callable, Iterable
@@ -11,7 +12,10 @@ from types import ModuleType
 from typing import Any, cast
 
 import pytest
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text, seed_scores
 
+from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -77,16 +81,32 @@ def test_reband_output_is_stable_for_operators() -> None:
     ]
 
 
-# --- Reading the sharded ledger ----------------------------------------------
+# --- Reading the ledger through the door ---------------------------------------
 
 
-def _day(state: Path, date: str, lines: list[str]) -> Path:
-    """One writer's file of the ledger, in the layout `evals.writer` writes."""
-    day = state / "scores" / date[:4] / date[5:7] / date[8:10] / f"{date}-1-1-work-00.csv"
-    day.parent.mkdir(parents=True, exist_ok=True)
-    header = FIXTURE.read_text(encoding="utf-8").splitlines()[0]
-    day.write_text("\n".join([header, *lines]) + "\n", encoding="utf-8", newline="")
-    return day
+def _file(state: Path, date: str, *, band: str, hhem: float) -> None:
+    """One measurement on `date`, filed by the writer the pipeline files with.
+
+    The committed eval-row fixture re-dated, with its own address so the writer
+    files it as a new measurement rather than as a repeat of another day's.
+    """
+    held = json.loads(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
+    address = f"{held['source_url']}-{date}"
+    row = EvalRow.model_validate(
+        {
+            **held,
+            "date": date,
+            "run_id": f"{date}-1",
+            "scored_at": f"{date}T06:18:02Z",
+            "source_url": address,
+            "url_key": derive_url_key(address),
+            "band": band,
+            "hhem": hhem,
+            "hhem_full": hhem,
+            "hhem_delta": 0.0,
+        }
+    )
+    assert seed_scores(state, [row], run_id=f"{date}-1") == 1
 
 
 def test_a_report_covers_every_day_the_ledger_holds(tmp_path: Path) -> None:
@@ -98,9 +118,9 @@ def test_a_report_covers_every_day_the_ledger_holds(tmp_path: Path) -> None:
     has to be three.
     """
     state = tmp_path / "state"
-    _day(state, "2026-02-09", ["high,0.91,0,1.0,False"])
-    _day(state, "2026-03-11", ["high,0.40,0,1.0,False"])
-    _day(state, "2026-04-02", ["low,0.95,0,1.0,False"])
+    _file(state, "2026-02-09", band="high", hhem=0.91)
+    _file(state, "2026-03-11", band="high", hhem=0.40)
+    _file(state, "2026-04-02", band="low", hhem=0.95)
 
     report = reband(read_ledger(state), EvaluationConfig())
 
@@ -114,32 +134,22 @@ def test_a_ledger_with_no_day_says_so_rather_than_reporting_on_nothing(
     """Zero rows is a percentage of zero, and every share would print 0.0%.
 
     A report that looks calm because it read nothing is the failure mode the
-    absent file used to have, so the directory has to be as loud as the file was.
-    """
-    with pytest.raises(ValueError, match=re.escape("holds no <YYYY>/<MM>/<DD>.csv day file")):
-        read_ledger(tmp_path / "state")
-
-
-def test_a_day_missing_a_column_is_named_by_its_own_filename(tmp_path: Path) -> None:
-    """A day written before a column existed fails by name, not by KeyError.
-
-    With many day files the operator needs to know which one, and the arithmetic
-    downstream would otherwise raise somewhere that names no file at all.
+    absent file used to have, so the refusal has to be as loud as the file was,
+    and it names the directory it read.
     """
     state = tmp_path / "state"
-    _day(state, "2026-02-09", ["high,0.91,0,1.0,False"])
-    narrow = _day(state, "2026-03-11", [])
-    narrow.write_text("band,hhem\nhigh,0.91\n", encoding="utf-8", newline="")
 
-    with pytest.raises(ValueError, match=re.escape("2026-03-11-1-1-work-00.csv is missing columns")):
+    with pytest.raises(ValueError, match=re.escape(f"{state.as_posix()} holds no day")):
         read_ledger(state)
 
 
-def test_the_operator_is_told_which_directory_was_read(tmp_path: Path) -> None:
-    """The first printed line names the ledger, and it is now a directory."""
+def test_the_operator_is_told_which_directory_was_read(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The first printed line names the state directory the ledger was read from."""
     state = tmp_path / "state"
-    _day(state, "2026-02-09", ["high,0.91,0,1.0,False"])
+    _file(state, "2026-02-09", band="high", hhem=0.91)
 
-    report = reband(read_ledger(state), EvaluationConfig())
+    assert main(["--state", str(state), "--config", str(CONFIG_DIR)]) == 0
 
-    assert lines_for(report, state / "scores")[0].endswith("scores")
+    assert capsys.readouterr().out.splitlines()[0] == "scores: state"

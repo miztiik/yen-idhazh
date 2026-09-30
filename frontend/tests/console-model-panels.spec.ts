@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import {
 	AXIS_LABEL_GAP_PX,
 	AXIS_LABEL_PX,
@@ -8,7 +8,6 @@ import {
 	thinLabels
 } from '../src/lib/charts/frame';
 import { grouped, swapScale } from '../src/lib/charts/series';
-import { readDayShards } from '../src/lib/server/payload';
 import {
 	modelSwap,
 	runLengths,
@@ -16,6 +15,7 @@ import {
 	writeTimes,
 	type DayWindow
 } from '../src/lib/server/model-work';
+import { canaryArticleRows, canaryScoreRows } from './support/canary-records';
 
 /**
  * The three panels the model route gained on 2026-08-31, and the figure that
@@ -37,23 +37,6 @@ const WEEK: DayWindow = { start: '2026-08-15', end: '2026-08-21', days: 7 };
 /** The two type sizes `SwapDots` draws its row labels at. */
 const NAME_PX = 11;
 const VALUE_PX = 10;
-
-/** The canary's own state tree, which the built page was rendered from. */
-const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
-
-/** A day-filed ledger directory, read the way the page's server reads it. */
-function days(dir: string): Record<string, string>[] {
-	return readDayShards(dir, -1).rows;
-}
-
-/** The item-health ledger, which files by day rather than by month.
- *
- * Through the production reader rather than a copy here, so a grain change in
- * the ledger cannot leave this comparing the page against an empty set.
- */
-function healthRows(): Record<string, string>[] {
-	return readDayShards(join(STATE, 'item-health'), -1).rows;
-}
 
 /** The three bands the committed config carries at the ends of its range, so a
  * fixture article picks an ask the way a real one does. */
@@ -297,13 +280,14 @@ test.describe('what checking a summary cost, off the critical path', () => {
 		const to = (await doubt.getAttribute('data-model-doubt-to')) ?? '';
 		expect(from, 'the page did not say which window it drew').not.toBe('');
 
-		// Re-derived here from the two ledgers, straight off the CSV, with no bin
-		// anywhere in the arithmetic. A percentile read off a bar lands on that
-		// bar's centre, and on a doubling axis the centre of the bar holding the
-		// median can be a factor of two away from the median.
+		// Re-derived here from the two packed records, through the readers the
+		// page's server uses, with no bin anywhere in the arithmetic. A percentile
+		// read off a bar lands on that bar's centre, and on a doubling axis the
+		// centre of the bar holding the median can be a factor of two away from the
+		// median.
 		const ledgers: Record<string, { rows: Record<string, string>[]; column: string }> = {
-			'write-times': { rows: healthRows(), column: 'summarize_ms' },
-			'score-cost': { rows: days(join(STATE, 'scores')), column: 'score_ms' }
+			'write-times': { rows: await canaryArticleRows(), column: 'summarize_ms' },
+			'score-cost': { rows: await canaryScoreRows(), column: 'score_ms' }
 		};
 
 		let checked = 0;
@@ -497,8 +481,8 @@ test.describe('how long the summaries came out', () => {
 			run_id: runId,
 			date,
 			model_id: 'a-model',
-			summary_word_count: String(words),
-			source_word_count: String(sourceWords)
+			summary_words: String(words),
+			source_words_before_cap: String(sourceWords)
 		};
 	}
 
@@ -527,7 +511,7 @@ test.describe('how long the summaries came out', () => {
 
 	test('a run whose articles recorded no length has no ask, and says so', () => {
 		const runs = runLengths(
-			[{ run_id: 'r', date: '2026-08-20', summary_word_count: '70' }],
+			[{ run_id: 'r', date: '2026-08-20', summary_words: '70' }],
 			BANDS
 		);
 		expect(runs).toHaveLength(1);
@@ -582,7 +566,7 @@ test.describe('how long the summaries came out', () => {
 
 test.describe('did the model change move anything', () => {
 	function row(date: string, model: string, extra: Record<string, string> = {}) {
-		return { date, model_id: model, summary_word_count: '100', source_word_count: '800', ...extra };
+		return { date, model_id: model, summary_words: '100', source_words_before_cap: '800', ...extra };
 	}
 
 	function pair(count: number, date: string, model: string, extra: Record<string, string> = {}) {
@@ -593,7 +577,7 @@ test.describe('did the model change move anything', () => {
 		const swap = modelSwap(
 			[
 				...pair(10, '2026-08-20', 'old', { band: 'low' }),
-				...pair(10, '2026-08-21', 'new', { summary_word_count: '50' })
+				...pair(10, '2026-08-21', 'new', { summary_words: '50' })
 			],
 			[
 				...Array.from({ length: 10 }, () => timed('2026-08-20', 100_000)),

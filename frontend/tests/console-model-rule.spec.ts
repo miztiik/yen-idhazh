@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 
 import { modelRules } from '../src/lib/charts/frame';
 import { pipelineChanges } from '../src/lib/server/model-work';
-import { readDayShards } from '../src/lib/server/payload';
+import { canaryScoreRows } from './support/canary-records';
 
 /**
  * The model-change rule, and the judgement behind it.
@@ -30,17 +30,15 @@ import { readDayShards } from '../src/lib/server/payload';
  * missing element, and every chart that does not draw says why in words.
  */
 
-const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
-
 /** The canary's score rows, read as the page's server reads them.
  *
  * Through the production reader rather than a directory listing here: the
- * ledger files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, and a local `readdir` of
- * `*.csv` over the root reads nothing at all - which leaves this oracle
- * comparing the page against an empty set.
+ * record comes from its packed files, and a listing of any other shape reads
+ * nothing at all - which leaves this oracle comparing the page against an empty
+ * set.
  */
-function canaryScores(): Record<string, string>[] {
-	return readDayShards(join(STATE, 'scores'), -1).rows;
+function canaryScores(): Promise<Record<string, string>[]> {
+	return canaryScoreRows();
 }
 
 /**
@@ -79,7 +77,7 @@ function boundariesFrom(rows: Record<string, string>[]): string[] {
  * day that holds each, which is the same precedence the page applies: a record
  * that names a field beats one that can only say a field moved.
  */
-function canaryBoundaries(): string[] {
+async function canaryBoundaries(): Promise<string[]> {
 	const kind = new Map<string, 'stamp' | 'manifest'>();
 	const held = new Map<string, string[]>();
 	const keep = (date: string, mark: 'stamp' | 'manifest', value: string) => {
@@ -93,7 +91,7 @@ function canaryBoundaries(): string[] {
 		held.set(date, [...(held.get(date) ?? []), value]);
 	};
 
-	for (const row of canaryScores()) {
+	for (const row of await canaryScores()) {
 		if (!row.date || !row.pipeline_fingerprint) continue;
 		keep(row.date, 'stamp', row.pipeline_fingerprint);
 	}
@@ -236,8 +234,8 @@ test.describe('the boundary, as arithmetic', () => {
 		).toEqual([]);
 	});
 
-	test('the committed ledger, read by both implementations, agrees', () => {
-		const rows = canaryScores();
+	test('the committed ledger, read by both implementations, agrees', async () => {
+		const rows = await canaryScores();
 		expect(rows.length, 'the canary ledger is empty - the read is broken').toBeGreaterThan(0);
 		expect(pipelineChanges(rows)).toEqual(boundariesFrom(rows));
 	});
@@ -361,7 +359,7 @@ test.describe('the rule, on the built console', () => {
 	test('a chart that draws the rule draws one per boundary inside its own span', async ({
 		page
 	}) => {
-		const boundaries = canaryBoundaries();
+		const boundaries = await canaryBoundaries();
 		let drawing = 0;
 		const drawn = new Set<string>();
 		for (const route of ROUTES) {
@@ -406,7 +404,7 @@ test.describe('the rule, on the built console', () => {
 	test('a chart that draws no rule in its span says so, rather than being blank', async ({
 		page
 	}) => {
-		const boundaries = canaryBoundaries();
+		const boundaries = await canaryBoundaries();
 		for (const route of ROUTES) {
 			for (const chart of await declaredOn(page, route)) {
 				if (chart.rule !== 'yes') continue;
@@ -461,7 +459,7 @@ test.describe('the rule, on the built console', () => {
 		// steps the days with an arrow key meets it without a pointer. Stepping
 		// every column and counting is what stops the line being a constant: a row
 		// printed on every column would say the pipeline changed every day.
-		const boundaries = canaryBoundaries();
+		const boundaries = await canaryBoundaries();
 		await page.goto('/console/');
 		const chart = page.locator('[data-model-rule-name="timings"]');
 		await expect(chart).toHaveCount(1);

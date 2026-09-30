@@ -40,13 +40,19 @@ def _day_files(state_root: Path, date: str) -> list[Path]:
     `st_size` is the size of the entry, not of what is in it, so reporting one
     would print a number that looks like bytes and is not.
 
-    **Two depths, because a ledger may nest.** A one-segment glob misses
+    **Three depths, because a ledger may nest.** A one-segment glob misses
     `<group>/<ledger>/<YYYY>/<MM>/<DD>` and says nothing about the miss, so a
-    nested ledger would be absent from an inventory that reported success.
+    nested ledger would be absent from an inventory that reported success. The
+    ledger door files a raw day at `raw/<ledger>/<YYYY>/<MM>/<DD>/` and a packed
+    one at `compact/<ledger>/daily/<YYYY>/<MM>/<DD>`, which is the third depth.
     """
     year, month, day = date.split("-")
     stem = f"{year}/{month}/{day}*"
-    found = set(state_root.glob(f"*/{stem}")) | set(state_root.glob(f"*/*/{stem}"))
+    found = {
+        entry
+        for pattern in (f"*/{stem}", f"*/*/{stem}", f"*/*/*/{stem}")
+        for entry in state_root.glob(pattern)
+    }
     files: set[Path] = set()
     for entry in found:
         if entry.is_dir():
@@ -64,10 +70,13 @@ def _month_files(state_root: Path, date: str) -> list[Path]:
     directory rather than beside day shards a walker would read as the same
     shape.
 
-    Two depths, for the reason `_day_files` gives.
+    Two depths, for the reason `_day_files` gives, and a third for the ledger
+    door's packed month, `compact/<ledger>/monthly/<YYYY>/<MM>`.
     """
     stem = f"{month_of(date)}.*"
-    return sorted(set(state_root.glob(f"*/{stem}")) | set(state_root.glob(f"*/*/{stem}")))
+    year, month = month_of(date).split("-")
+    patterns = (f"*/{stem}", f"*/*/{stem}", f"*/*/*/{year}/{month}.*")
+    return sorted({entry for pattern in patterns for entry in state_root.glob(pattern)})
 
 
 def files(state_root: Path, *, date: str) -> list[str]:
@@ -91,21 +100,13 @@ def outcomes(state_root: Path, *, date: str) -> list[str]:
     """How this date's items ended, counted by stage, outcome and failure code.
 
     One day of the census, settled, and nothing else. Every work shard of a run
-    leaves its own file in the day directory, so the count is over all of them
-    and a re-run's second attempt does not add its items a second time.
+    files its own raw file, so the count is over all of them and a re-run's
+    second attempt does not add its items a second time.
 
-    A day the ledger never recorded has no file, which is not a fault: a run that
-    planned nothing that day wrote nothing that day.
+    A day the ledger never recorded holds no row, which is not a fault: a run
+    that planned nothing that day wrote nothing that day.
     """
-    rows = [
-        ItemHealthRow.from_csv_row(cells)
-        for cells in day_shards.settled_day(
-            ledger.tree_root(state_root, LedgerName.ITEM_HEALTH),
-            date,
-            ledger.ITEM_HEALTH_KEY,
-            ItemHealthRow,
-        )
-    ]
+    rows = ledger.load_days(state_root, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow)
     if not rows:
         return [f"{date}: the item-health ledger recorded no item"]
 

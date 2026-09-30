@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -65,12 +65,12 @@ starts its own server and probes it on loopback.
 | `backend/var/run/<date>/plan.json` | The day's work list | no - gitignored |
 | `backend/var/run/<date>/items/*.json` | Per-item article, summary and eval | no - gitignored |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
-| `state/scores/<YYYY>/<MM>/<DD>/` | One row per scored item | **yes** |
+| `state/raw/scores/<YYYY>/<MM>/<DD>/` | One row per scored item, packed later under `state/compact/scores/` | **yes** |
 | `state/seen/<YYYY>/<MM>/<DD>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
 | `state/feed-health/<YYYY>/<MM>/<DD>/` | What every feed did on every run | **yes** |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/` | Every endpoint the run stopped asking, and the evidence | **yes** |
-| `state/item-health/<YYYY>/<MM>/<DD>/` | What every planned item did on every run | **yes** |
+| `state/raw/item-health/<YYYY>/<MM>/<DD>/` | What every planned item did on every run, packed later under `state/compact/item-health/` | **yes** |
 
 **The ledgers under `state/` are the pipeline's whole memory.** Plan reads them
 at the start of a run and appends to them before it ranks anything, and Assemble
@@ -108,18 +108,26 @@ declaration, and this is the order:
 2. Read that run's log: `gh run view <runId> --repo <owner/repo> --job <jobId>
  --log`, and grep it for `would delete`. Each task prints one line a pass and
  then one line a file it would take.
-3. Check the list against what you expect. On 2027-10-01 that is four trees -
- the day files under `state/item-health/2026/08/`,
- `frontend/public/telemetry/2026-08.csv`, the day files under
- `state/feed-health/2026/08/` and the day files under `state/scores/2026/08/`.
- A fifth name, or
- a month that is not the oldest, means a boundary is wrong and the switch
- waits.
-4. Confirm `state/score-archive/2026-08.json` exists and reconciles. The `scores`
- task writes and reads back every archive before it unlinks anything, so an
- archive that is missing is a pass that already refused.
+3. Check the list against what you expect. On 2027-10-01 the retention tasks
+ name two trees - `frontend/public/telemetry/2026-08.csv` and the day files under
+ `state/feed-health/2026/08/`. A third name, or a month that is not the oldest,
+ means a boundary is wrong and the switch waits. The item-health and scores rows
+ are not on that list: their compactions delete them, and a compaction's own list
+ is read as
+ [the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-dry-run-does-and-what-the-record-says)
+ says.
+4. Do not turn `compact-scores` on yet. The `scores` task built the score archive
+ from the CSV day files, which moved to the ledger door, so it builds none now;
+ until an archive is built from the door's rows, a live `compact-scores` would
+ delete months with no summary written for them
+ ([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md#design-rationale)).
 5. Only then set that task's `dry_run` to `false` in its own declaration, in a
  commit that changes nothing else.
+
+**The console ledgers' packing tasks are the ones to turn on first.**
+`compact-item-health`, `compact-scores` and `compact-host-fingerprint` ship
+report-only, and the console reads their packed files, so until they run live it
+shows data up to the day the migration ran. `compact-scores` waits for step 4.
 
 **Each task is switched on by itself, and the picture cleanup is a task of its
 own.** `visual-prune` files a row under `state/raw/visual-prunes/` saying what it
@@ -129,11 +137,8 @@ and nothing published is old enough to sit behind it. Switching it on is a
 separate change with its own conditions
 ([../architecture/publishing/retention.md](../architecture/publishing/retention.md#the-cleanup-says-what-it-did-not-clear)).
 
-Two consequences to know before step 5. The published copy goes with its private
-source, so `/console/`'s per-item detail stops reaching back past the window. And
-two console readers walk the whole score ledger rather than the window, so their
-date lists shorten with no number moving
-([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)).
+One consequence to know before step 5. The published copy goes with its private
+source, so `/console/`'s per-item detail stops reaching back past the window.
 
 What each ledger keeps, and why, is on the doc that owns it:
 [../architecture/sources/health.md](../architecture/sources/health.md) for feed
@@ -155,15 +160,18 @@ python -m idhazh telemetry census --date 2026-09-15  # how that day's items ende
 python -m idhazh telemetry rollup --date 2026-09-15  # how long that day's spans took
 ```
 
+`show` lists a CSV day tree's files for the date, a door ledger's raw files for
+that day, and the packed day or month file once a compaction has taken it.
+
 `census` is the fastest way in: it counts the day's items by stage, outcome and
 failure code, which is the same answer as filtering the census shard by hand.
 
-Every planned item has a census row in `state/item-health/<YYYY>/<MM>/<DD>/`.
-Open it directly when you need a column `census` does not fold, because that
-ledger is committed and keeps the denominator next to the failure count:
+Every planned item has a census row in the item-health ledger. Read it directly
+when you need a column `census` does not fold, because that ledger is committed
+and keeps the denominator next to the failure count:
 
-1. Open the current month shard.
-2. Filter by `date` and `run_id`.
+1. Read the day through `ledger.load_days`, which settles a re-run's rows for you.
+2. Filter by `run_id`.
 3. Read `stage`, `outcome`, `code`, `http_status`, `source_words`,
  `summary_words`, `fetch_ms`, `extract_ms` and `summarize_ms`.
 4. Treat `detail` as a bug report for the classifier. It appears only when
@@ -197,7 +205,7 @@ When a run wrote instrument rows nobody wants kept, delete them by naming the
 ledger and the two days. Both ends are named, so this is three days:
 
 ```
-python -m idhazh telemetry prune --target item-health --since 2026-09-13 --until 2026-09-15
+python -m idhazh telemetry prune --target feed-health --since 2026-09-13 --until 2026-09-15
 ```
 
 It prints every file a live run would remove and removes nothing until you add
@@ -206,6 +214,10 @@ It prints every file a live run would remove and removes nothing until you add
 two may not do. Which ledgers it accepts, why those two are refused, and what
 makes it safe to stop half way is
 [../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days).
+
+`item-health`, `scores` and `host-fingerprint` are not targets: they file through
+the ledger door, and until each ledger's compaction runs live nothing offers a
+range delete for them, the same as `visual-prunes`.
 
 ## Three things that will bite
 
