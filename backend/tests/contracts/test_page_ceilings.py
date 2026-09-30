@@ -28,9 +28,9 @@ LEDGERS: Final = "state/"
 LONGEST_MONTH_DAYS: Final = 31
 
 #: The committed scores day index grown to 62 entries from its own row counts and
-#: sizes, at gzip -5, measured 2026-09-30. The index the ceilings are checked
-#: against must weigh at least this, or they would be checked against one lighter
-#: than a real index.
+#: sizes, at gzip -5, measured 2026-09-30 through Python 3.14's zlib-ng on Windows.
+#: The index the ceilings are checked against must weigh at least this, or they
+#: would be checked against one lighter than a real index.
 REAL_DAY_INDEX_AT_62_ENTRIES: Final = 662
 
 

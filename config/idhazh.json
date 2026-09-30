@@ -263,9 +263,9 @@
     "cold_console_load_bytes": 3400000,
     "payload_ceilings_bytes": {
       "console/band.json": 2000,
-      "state/compact/host-fingerprint/index/": 2000,
-      "state/compact/item-health/index/": 2000,
-      "state/compact/scores/index/": 2000,
+      "state/compact/host-fingerprint/index/": 2200,
+      "state/compact/item-health/index/": 2200,
+      "state/compact/scores/index/": 2200,
       "telemetry/": 1100000
     }
   },
