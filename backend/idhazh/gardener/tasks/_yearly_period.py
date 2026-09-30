@@ -178,7 +178,9 @@ def absorb(
     ):
         ready.append(ahead)
         ahead = _after(ahead)
-    tree.listing.fetch([tree.monthly_year_folder(held) for held in ready if held not in tree.yearly])
+    tree.listing.fetch(
+        [tree.monthly_year_folder(held) for held in ready if held not in tree.yearly]
+    )
     taken = 0
     while _ready(tree, year, now=now, after_days=policy.monthly_keep_days):
         if taken == policy.max_periods_per_run:
