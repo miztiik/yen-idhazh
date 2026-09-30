@@ -70,7 +70,7 @@ A ledger that goes through the ledger door files under two roots rather than one
 | `content-similarity-judge/holdout-pairs.csv` | a person, by hand | `similarity/holdout.py`, `similarity-holdout.ts` | `merge=text` stops the push for a person |
 | `llm-council/shard-outcomes` | `council/session.py` | nothing yet | the union driver keeps both |
 
-`corpus/corpus.jsonl` and `corpus/corpus.meta.json` are no ledger, take no merge driver and carry no writer in their names, so a push race that conflicts on them stops the push: `backend/utilities/commit_and_push.py` keeps a conflicted file only when its name carries the job's own identity.
+`corpus/corpus.jsonl` and `corpus/corpus.meta.json` are not ledgers, have no merge driver of their own and carry no writer in their names, so a push race that conflicts on them stops the push: `backend/utilities/commit_and_push.py` keeps a conflicted file only when its name carries the job's own identity.
 
 ## What the registry refuses when it loads
 

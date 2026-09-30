@@ -97,10 +97,10 @@ and [weight rules](site-weight.md).
 - The gardener still wakes at 00:40 so that the force push lands in the quiet
   time, 01:23 to 07:23: the council's runs of 2026-09-19 to 28 had ended by
   01:23, and none of the digest runs of 2026-09-16 to 28 was created before 07:23.
-  A scheduled wake is estimated to start 112 to 334 minutes late, the delays of
-  the two nearest cron lines, and the three jobs' time limits add 55 minutes, so
-  the push lands between 02:32 and 07:09. The first scheduled wake, on
-  2026-09-30, started 315 minutes late, inside that estimate.
+  A scheduled wake is estimated to start 112 to 334 minutes late, the delays
+  measured on the two nearest cron lines, and the three jobs' time limits add
+  55 minutes, so the push lands between 02:32 and 07:09. The first scheduled
+  wake, on 2026-09-30, started 315 minutes late, inside that estimate.
   `backend/tests/workflows/test_triggers.py` holds these readings and fails when
   a cron line they were read under changes.
 - A skipped speed case must not skip the remaining measurement jobs. A failed one

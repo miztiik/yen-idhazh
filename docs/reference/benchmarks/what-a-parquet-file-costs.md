@@ -61,8 +61,8 @@ dictionary and statistics overhead around 370 bytes of data.
 - Packing decides the cost. A ledger packed into one file was 2.6 times smaller
   than its CSV, and a ledger filed as one file per writer was 15.1 times larger.
 - The charge every file pays grows with its columns: about 3,764 bytes at 13
-  columns and about 9,300 at 31. So a wider row needs more rows to a file
-  before parquet is the smaller.
+  columns and about 9,300 at 31. So the row count at which parquet becomes the
+  smaller file differs from one ledger to the next.
 
 ## What it does not settle
 
