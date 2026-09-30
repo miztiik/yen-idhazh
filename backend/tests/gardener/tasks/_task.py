@@ -21,6 +21,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.gardener import TaskPolicy
 from idhazh.gardener import registry, runner
 from idhazh.gardener.context import TaskContext
+from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.one_at_a_time import Pass
 
 from ._oracle_tree import REMOVALS, RUN_ID, TODAY
@@ -41,18 +42,18 @@ def declared() -> dict[str, TaskPolicy]:
 
 
 def committed_folders(root: Path, tasks: dict[str, TaskPolicy]) -> frozenset[str]:
-    """What `git ls-tree` would list for this tree: each owned folder, and every child of state."""
+    """What `git ls-tree` would list for this tree: each named folder, and every child of state."""
     state = root / ledger.STATE_DIRNAME
     children = {
         child.relative_to(root).as_posix() for child in state.iterdir() if child.is_dir()
     } if state.is_dir() else set()
-    owned = {
+    named = {
         folder
         for policy in tasks.values()
-        for folder in policy.owns or ()
+        for folder in (*(policy.owns or ()), *policy.reads)
         if (root / folder).is_dir()
     }
-    return frozenset(children | owned)
+    return frozenset(children | named)
 
 
 def context_for(
@@ -80,6 +81,7 @@ def context_for(
         shard=0,
         git_sha=GIT_SHA,
         owned_folders=folders.walk,
+        listing=FileListing.from_disk(root, runner.listed_folders(policy, folders)),
     )
 
 
