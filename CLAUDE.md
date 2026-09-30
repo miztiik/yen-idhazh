@@ -122,27 +122,25 @@ Logging is local by construction. There is no log sink, no log service, and no r
 
 ### Paths
 
-For anything leaving the process (JSON, logs, manifests, agent memory, error messages, doc cross-links):
+Paths leaving the process, including JSON, logs, manifests, agent memory, errors and doc links, must be:
 
-- Relative paths only. No absolute paths. No drive letters.
-- POSIX separators only (`/`). Never `\`.
-- Minimal reconstructable form.
+- Relative, with no drive letters.
+- POSIX-separated (`/`, never `\`).
+- In the minimal reconstructable form.
 
-In-memory `Path` objects for local I/O may stay platform-native. This applies at the moment a path leaves the process.
+In-memory `Path` objects for local I/O may remain platform-native.
 
 ### Time
 
-**Every instant this project reads, writes, compares, schedules or prints is UTC.** There is no second timezone anywhere in the system, and no local-time value is ever persisted, compared or shown. This covers every clock the project touches: the workflow schedules, the date a digest is filed under, the age a retention window measures, the instant a prune or a delete decides against, the commit timestamp, the age of a fetched feed entry, the stamp inside a published payload, and every date a reader or an operator sees on a page.
+**Use UTC for every instant and date the project reads, writes, compares, schedules or displays.** This includes retention, deletion, feed ages, commits and published data.
 
-Three rules make it checkable.
+- **Clock:** Python uses `datetime.now(timezone.utc)`; TypeScript uses `Date.now()` and `*UTC*` accessors. Do not use bare `datetime.now()`, `datetime.utcnow()`, `date.today()` or local-time `Date` getters.
+- **Encoding:** Persist instants as ISO-8601 with `Z` or epoch milliseconds. Persist dates as `YYYY-MM-DD`, meaning the UTC day.
+- **Labels:** State UTC in each instant field's description and beside displayed instants.
 
-- **Read the clock one way.** `datetime.now(timezone.utc)` in Python; `Date.now()` and the `*UTC*` accessors in TypeScript. A bare `datetime.now()`, a `datetime.utcnow()`, a `date.today()` or a local-time `Date` getter is a defect. The first and third are wrong on any machine that is not on UTC - which is every developer machine and no CI runner, so the bug ships green. `utcnow()` returns a naive value that compares wrongly against an aware one.
-- **Persist one way.** An instant is ISO-8601 carrying `Z`, or epoch milliseconds. A date is `YYYY-MM-DD` and means the UTC day. A persisted value with no offset in it cannot be read twice with the same answer.
-- **Say so once, where it is read.** A field holding an instant says UTC in its description, and a surface printing one says UTC beside it. A reader left to guess the timezone has been handed a number with no meaning (section 0b).
+**Day boundaries are 00:00 UTC.** Compute a period's age from its own end instant against the current UTC clock, never the job's start time. Changing a schedule must not change which periods qualify.
 
-**A day boundary is 00:00 UTC, and no boundary is ever derived from when a job happened to wake.** A schedule is a wake, never a measurement: whether a period is old enough to act on is computed from that period's own end instant against the clock, so moving a cron cannot change which periods qualify.
-
-These are conventions rather than guardrails because a serialization invariant has one correct answer, so there is nothing here to adapt.
+These are fixed conventions, not adaptable guardrails.
 
 ## 3. Repository Topology
 
