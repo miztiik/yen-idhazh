@@ -1,851 +1,178 @@
 # Design System
 
-**Last Updated**: 2026-09-28
-The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
+**Last Updated**: 2026-09-30
 
-**A rule is here if it binds a token or a bound the whole site resolves.** A rule about one named console panel - how a figure is worded, ranked, tinted or drawn there - is in [console-design.md](console-design.md), which reads this page's vocabulary and adds no token of its own.
+Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
-The surface is small on purpose: a digest page, an item, and an eval dashboard. There is no application here - no session, no navigation tree, no state to lose ([vision.md](vision.md)).
-
-**The architecture fixes how much surface there is. It does not fix how good that surface is.** Scope-restraint is inherited and not up for debate. Craft-restraint is a choice, and every instance of it needs an argument on the day it is made.
+New designs, charts and visuals render in the browser. Do not add prerendered data surfaces. Existing prerendered routes and chart engines that conflict with [telemetry intent](telemetry-intent.md) are migration work, not precedents.
 
 ## Typography is the interface
 
-This is a reading surface before it is anything else. Measure, leading, hierarchy and the space between items do more work here than any component will, and a digest that is hard to skim has failed before a single control is considered.
-
-- **A reading measure on the prose, and a fluid frame around it.** Long lines are where a skim turns into work, so the summary and the title are held to a measure. **The measure is a property of the text and never of the shell.** Put it on the shell and the whole application inherits a paragraph's width: measured 2026-08-28, one `max-w-2xl` on the root layout capped every page at 624px and left 912px of a 1536px screen empty, including a console with five tables and six charts in it. **Where a heading and its paragraph stack, the measure goes on the block that holds both, once, at the prose size** - see [the two right edges](#the-measure-is-one-block-not-one-class-per-line) below for what per-element caps did instead.
-- **A hierarchy of exactly three levels** on an item - what it is, what it says, where it came from. A fourth level means something on the item has not earned its place.
-- **Two faces at most**: one for reading, one for data (tabular numerals on the dashboard, so columns line up). The display face carries the wordmark, the edition date and story titles, including links in the lead index. `theme.display_face_enabled` puts them back on the reading stack.
-- **Article type stays readable at every width.** Titles use `--text-2xl` with `--leading-2xl`; summaries use `--text-lg` with `--leading-lg`. A phone gets fewer columns, not smaller prose. The title and its paragraphs share one measured block, with `--space-3` between the title and the summary.
-- **The edition header and lead index are not story cards.** The date and published count lead the unboxed header; incomplete work and update history follow in quieter type. `Top stories` is an unboxed index between horizontal rules. Its titles use `--text-base` and reasons use `--text-sm`, with their paired leading. It forms columns when the available width holds `--zone-aside` per entry and stacks otherwise. All titles, reasons and links remain visible. The reader loses the surrounding boxes, not the context they held; story cards retain their surfaces and edges.
+- Constrain prose, not the application shell. A dashboard may use the frame's width while paragraphs retain a comfortable measure.
+- Keep an item's hierarchy to title, summary and provenance. Use the configured display face for titles and the reading face for prose; data uses tabular numerals.
+- Keep article type readable on phones. Reduce columns before reducing prose size. Pair each size token with its leading token.
+- Edition headers and the leading-story index are unboxed. Story cards retain their surfaces and edges.
+- Use the configured display-face toggle and type scale. Do not add a font for a single decorative treatment.
 
 ## The state-driven styling pattern
 
-The DOM state is the single source of truth for the view. Nothing is styled imperatively: **state is reflected by toggling a class or a `data-` attribute, and CSS reacts declaratively.**
+Reflect state through classes and `data-` attributes; let CSS render it. Loading, empty, degraded, truncated and low-confidence states must be explicit. Use payload metadata rather than a bespoke layout for each item.
 
-- **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`. `loading` is a global class in [../../frontend/src/styles/app.css](../../frontend/src/styles/app.css) rather than a component's scoped one, because the surface it belongs to switches every block on at once from one ancestor - see [the reserved box](console-design/the-mark-shapes-a-panel-may-reach-for.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
-- **Data-attribute styling** carries variants: an item keys its treatment off `data-visual` (the visual's state - `rendered`, `render_failed` or `absent`) and `data-band` (the confidence band from [evaluation.md](evaluation.md)).
-- **No inline styles** except genuinely dynamic values. Everything else is a token or a class.
-
-Because the payload already carries the visual's kind and state, the band and the truncation flag, rendering is **one component parameterised by data** rather than a layout per item type. A per-item special case is a smell.
+Inline styles are for genuinely dynamic values such as coordinates or computed widths. Fixed appearance belongs in tokens and classes.
 
 ## Design tokens
 
-Every colour, space, radius, shadow, font, easing and duration is a CSS custom property in [../../frontend/src/styles/tokens.css](../../frontend/src/styles/tokens.css), named **by purpose**, not by value:
+[tokens.css](../../frontend/src/styles/tokens.css) and `config/appearance.json` own colours, type, leading, spacing, radius, elevation, frame widths and motion. Name tokens by purpose. Keep non-colour scales outside theme blocks; tune both themes explicitly.
 
-- **Fonts** - a display face for headings, a reading face for body, and a tabular data face. The display face is self-hosted woff2, Latin subset, one variable file at 48,256 bytes; the body keeps the system stack, because that renders on the first frame at zero bytes and the body is what the reader came for.
-- **Space** - `--space-0` to `--space-9` on a 4px base. On a page that is mostly text this does more work than any component will.
-- **Type** - `--text-xs` to `--text-3xl`, each paired with its own `--leading-*`. A size without a leading is half a decision.
-- **Radius** - five steps. Panel language needs a bigger corner than a chip does.
-- **Elevation** - `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-panel`, plus `--color-surface-raised` and `--color-surface-sunken`. A page with one surface colour is a page where nothing is in front of anything.
-- **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; the **fill ramp**, `--fill-high` / `--fill-medium` / `--fill-low`, which is the same three meanings weighted to be filled rather than read; and the **chart ramp**, `--chart-1` to `--chart-8`, which is categorical and carries no verdict.
-- **Tints** - `--tint-accent`, `--tint-info`, `--tint-good`, `--tint-warn`, `--tint-bad`, `--tint-neutral`. A panel takes the hue of what it means, at 7 to 9 percent in light and roughly double that in dark.
-- **Gradients** - `--gradient-wordmark`, `--gradient-wash`, `--gradient-panel`. Chrome and identity only.
-- **Frame** - `--frame-reading`, `--frame-console`, `--measure`, `--gutter`. Defaults live in the token file and `config/appearance.json` overrides them at build time ([config/appearance.md](config/appearance.md)).
-- **Motion** - one ease and a short duration scale.
+| Token family | Meaning |
+| --- | --- |
+| `--band-*` | Confidence expressed as readable text |
+| `--fill-*` | The same status meanings expressed as filled marks |
+| `--chart-*` | Distinguishable categories, not good/bad verdicts |
+| `--movement-*` | Whether a change improved or worsened a measure |
+| `--source-swatch-*` | Source identity and the read-state ring |
+| `--tint-*` | Restrained surface treatments |
 
-**The two colour ramps may not be swapped for each other.** The confidence ramp
-is green, amber and red because those colours mean good, watch and bad. The
-chart ramp exists so a chart can tell up to eight series apart, and it
-deliberately holds none of those three hues - a chart that borrowed the band
-tokens told a reader that the slowest stage was the failing one.
-`--source-swatch-*` is not the answer either: those are background tints for a
-monogram, not stroke colours, and at 1px on a card they are not visible.
-`--series-1` to `--series-4` survive as aliases of the first four chart
-stops so no existing chart changed colour when the ramp widened.
-
-**The dark theme is designed, not derived.** A shadow on a dark ground reads as
-nothing, so elevation there is a raised surface colour plus a hairline; every
-tint is re-tuned rather than reused at the same alpha, because the same alpha
-over a dark ground is invisible.
+Do not substitute one family for another. A categorical series colour must not imply confidence. A source tint must not become an unreadable chart stroke.
 
 ### The reading item is a surface, and it does not float
 
-An item is a card on the page ground: `--color-surface`, `--radius-lg`, a 1px
-hairline, and **no shadow at rest**. `--shadow-md` and an accent border arrive
-together on `:hover` and on `:focus-within`, so a reader who never touches a
-pointer gets the same feedback from the keyboard.
-
-**Nothing lifts.** The title is a heading, not a link, so a rise would promise a
-click the card does not answer - and it would promise it on every row of a day
-that published 621 items at its largest in the last six (2026-08-26, measured
-2026-08-31 on the committed payloads; the six days run 111 to 621). Elevation on
-hover says "these lines belong together"; a lift says "click me", and only one of
-those is true.
-
-**The hairline is the separation, in both themes, and on dark it takes
-`--color-rule-strong`.** The surface lift alone is 1.08:1 in light and 1.10:1 in
-dark, which is not an edge in either. Against the page ground, `--color-rule`
-reads 1.16:1 in light and 1.36:1 in dark; `--color-rule-strong` reads 1.36:1 and
-1.77:1. Dark is the branch `--item-edge` takes when the document names no theme
-and light is named explicitly, so the item stays right whichever theme is the
-base. Every ratio here is arithmetic over the committed hex values, so the
-spread is zero by construction and the date is the date the values were chosen;
-[../../frontend/tests/item-card.spec.ts](../../frontend/tests/item-card.spec.ts)
-recomputes them from the live document.
-
-**This reverses a rule that never bound.** The item carried "hairline rules
-rather than cards: seventeen boxes of chrome on a page whose product is prose is
-chrome winning" from the day it was written. It named what was removed and never
-what the reader gave up, so under [../../CLAUDE.md](../../CLAUDE.md) section 14
-it was not a ruling. It cost
-four things: figure and ground on the whole reading surface, the container an
-item's chart needed, an anchor a top-of-page list could point at, and any hover
-or focus feedback at all. Authority: Susan, 2026-08-31.
+Use the item surface, configured corner radius and a hairline. There is no shadow at rest. Hover and keyboard focus may add the configured shadow and accent edge, but the card does not rise: its title is not itself a link. Preserve a visible edge in both themes.
 
 ### A fill is not a text colour
 
-The confidence ramp is a text colour. `--band-high`, `--band-medium` and
-`--band-low` are read as type - on a status chip, in a table cell, on a card -
-so they are weighted for reading, and a 16px solid painted in one of them reads
-as ink rather than as a state. Measured 2026-08-30 against `--color-surface` in
-the light theme they run 5.02:1, 5.43:1 and 6.12:1, and the console's run strip
-drawn in them read as olive and brick. `--fill-high`, `--fill-medium` and
-`--fill-low` are the parallel set: the same three meanings, weighted to be
-filled. In light they are `#2e9e63`, `#c08200` and `#e0523a`, reading 3.39:1,
-3.26:1 and 3.86:1 - clear of the surface, and clear of text weight. In the dark
-theme the two ramps agree today, because a fill there is lighter than its ground
-and the band values were already at fill weight.
-
-The band a fill value has to land in, measured against `--color-surface`:
-
-| Theme | Bound | Where it comes from |
-| --- | --- | --- |
-| Both | at least 3:1 | WCAG 2.2 SC 1.4.11. A graphical object that carries meaning has to be distinguishable from what it sits on, or the shape itself is not there. |
-| Light | under 4.5:1 | WCAG 2.2 SC 1.4.3 makes 4.5:1 the *minimum* for normal text, so a colour at or above it is a text-weight colour. That is the defect the ramp removes. |
-| Dark | under 9:1 | On a dark ground a fill is lighter than its ground and can never become ink, so the light ceiling does not apply. This bound is a measured tripwire instead: the loudest dark fill reads 7.94:1, and 9 fails `--color-text` at 14.93:1 and pure white at 17.62:1. |
-
-[../../frontend/tests/console-run-health.spec.ts](../../frontend/tests/console-run-health.spec.ts)
-computes those ratios itself, from the WCAG relative-luminance formula written
-out in that file. It is one surface's oracle over the tokens that surface uses,
-not an audit sweep, and it adds no dependency - accessibility audit tooling
-stays a project non-goal ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
-
-Every ratio in this section is **arithmetic over the committed hex values**, not
-a sample: the same two colours give the same number on every machine, so the
-spread is zero by construction and the date is the date the values were chosen.
-That is why the oracle can assert an exact bound rather than a tolerance.
-
-Rejected: lightening the band tokens themselves, which would fail text contrast
-on every surface that reads them as type; and drawing a fill as the band token
-at reduced opacity, because opacity over a tinted surface gives a different
-colour on every surface and so cannot be checked once. Authority: Jony,
-2026-08-30.
-
-**A scale is not a colour, and does not live in a theme block.** Space, type,
-radius and motion are declared once in their own `:root` block outside both
-themes. A scale left inside a theme block reads as something a theme could
-change, and the next theme has to restate it or lose it.
+Use status fill tokens for solid marks and band tokens for text. The fill's contrast against its surface is at least 3:1, below 4.5:1 in light and below 9:1 in dark. Existing surface tests check these bounds; do not replace the text ramp to adjust a fill.
 
 ### Movement colour reads the measure, not the sign
 
-`--movement-good` and `--movement-bad` say a number went the way we wanted.
-They are the third semantic pair, after the confidence ramp and the fill ramp,
-and they exist because a sign is not a verdict: **a fall in `Time to write one`
-is the machine getting faster, and a fall in `Summaries published` is a quiet
-news day.** Until 2026-08-31 the console painted both from the sign, so the
-improvement read as the loss.
-
-- **Polarity is a property of the measure, declared where the measure is
- defined** - `lower-is-better`, `higher-is-better`, or `no-agreed-direction`.
- The console declares it in three places and nowhere else: `COLUMNS` on the
- Model route, `sideMeasures` in
- [../../frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts),
- and the `TargetSense` a bar was already built with. A component that decided
- its own is how two cards come to disagree about whether down is good.
-- **A movement with no agreed direction paints neutral and says so**, in words
- on the card. Susan, 2026-08-31: a grey number a reader has to interpret is a
- fact withheld.
-- **Zero is neutral on every measure.** Nothing moved, so there is no direction
- to be right about.
-- **The pair is not the confidence ramp and may never equal it.** Green there
- means "it worked". A summary that got 3 percent slower is not broken, and
- painting it `--band-low` is how an operator learns to ignore `--band-low`.
- `ThemeConfig` in
- [../../backend/idhazh/contracts/appearance_config.py](../../backend/idhazh/contracts/appearance_config.py)
- refuses a movement value equal to a band value, and
- [../../frontend/tests/console-polarity.spec.ts](../../frontend/tests/console-polarity.spec.ts)
- refuses it again on the rendered page.
-- **Same meaning, quieter voice.** Measured 2026-08-31 over the committed hex
- values, the light pair sits at 40.5 and 44.2 percent saturation against the
- confidence ramp's 66 and 70.6, and both still clear the 4.5:1 WCAG 2.2 SC
- 1.4.3 sets for normal type.
-- **Colour is never the only signal.** The sign is printed beside every
- coloured percentage.
-
-The values live in `config/appearance.json` under `theme` and reach CSS through
-`frame.generated.css` at build time - the same route the frame tokens take, and
-for the same reason: a colour that has to be right on the first painted frame
-cannot be injected from a layout.
-
-Rejected: reusing the confidence ramp, which is the alarm-fatigue trade above;
-and letting the sign alone decide, which is the defect the row removed. Owner,
-2026-08-31.
+Declare polarity with the measure: lower-is-better, higher-is-better or no-agreed-direction. Zero and directionless changes are neutral. Print the sign and explain a neutral direction where needed. Movement colours are distinct from confidence colours: slower does not mean invalid.
 
 ### The source swatch is a fill, and its floor is 1.5:1
 
-The eight `--source-swatch-*` values are the fill of the ring on an item's
-leading edge. **Whether that ring is filled at all is the read mark**: filled
-means unread, hollow means read. So the swatch has to be visible against
-`--color-surface`, and until 2026-08-31 it was not - the dark set read 1.16:1 to
-1.34:1 and the light set 1.18:1 to 1.28:1, which makes a filled ring and a
-hollow one the same ring. All sixteen were re-tuned in place, hue kept and
-lightness moved, and every one now reads at least 1.5:1.
-
-**1.5:1, and not the 3:1 the fill ramp takes.** The bound above binds a fill
-whose *colour* carries meaning; here the colour carries nothing, because the
-publication is named in words on the same line and the monogram repeats it. What
-carries meaning is the presence of the fill, which is an area rather than a hue -
-and an area difference survives a cheap panel, sunlight and arm's length, which
-is exactly what dimmer text and a lighter weight do not. Those two are one signal
-twice: both are less ink, so they fail together.
-
-The letters sit on the fill at about 4.9:1 in both themes, so raising the tint
-cost the monogram nothing.
-[../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts)
-recomputes all sixteen ratios from the committed hex values, and checks the
-number of swatches against the modulus `swatchIndex` divides by - an index with
-no swatch behind it resolves to no fill, which on this surface reads as "already
-read". Authority: Susan, 2026-08-31.
+Filled means unread; hollow means read. Keep every source swatch visible against the item surface at 1.5:1 or above. The source is also named in words, so hue alone carries no identity requirement.
 
 ### A value the scale cannot hold does not go on the reading surface
 
-Every font, colour, size and space on the reading routes resolves through a
-utility to a token. Two rules, and an oracle in
-[../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) for
-each, over every file a reading route can reach:
-
-- **No bracketed arbitrary value in a utility class.** `text-[0.8125rem]` is a
- size no theme can reach and no scale can hold. Where one sat between two
- steps it was rounded to the nearer step, and to the larger of the two on an
- exact tie - this surface's proven failure mode is being too little, so a tie
- that shrinks it is the wrong way to break one.
-- **No `px` literal in an authored style block.** A hard pixel count ignores a
- reader who set their browser text larger. A size is `%` or `fr` for a share of
- the space, `ch` for a text measure, `rem` for anything that should scale with
- the reader's own setting, or a `clamp` between two of those.
-
-Two carve-outs, named in the oracle rather than left to a general escape. **A
-hairline is `1px`**, because a border that scales stops being a hairline. **A
-media-query breakpoint keeps its committed value**, because a media query cannot
-read a custom property - and the oracle checks the number against
-`frame.breakpoints_px` in `config/appearance.json`, so an invented breakpoint
-still fails. An aspect ratio is neither: it has no absolute value, so there is no
-step to round it to.
-
-A genuinely dynamic value - a computed width, a chart coordinate - stays in a
-`style=` attribute, which the inline-style rule above already allows. The oracle
-reads utility classes and `<style>` blocks and does not read `style=`.
-
-**The console is out of scope, and it is excluded structurally.** The oracle
-walks the import graph from the reading routes, so a component only the console
-renders drops out on its own and no name list has to be maintained against a
-sibling plan. A component both surfaces share is covered, which is the stricter
-answer and the right one.
-
-### Design rationale
-
-The pile was 60 bracketed values across 19 files and 8 distinct type sizes -
-10, 12, 13, 14, 15, 17, 20 and 22px - against a seven-step scale, measured
-2026-08-31. Rejected: minting tokens that match the existing values, which
-preserves the pile under new names and leaves the scale unusable; and doing this
-inside the row that raises contrast, which would put a no-op refactor and a
-visual change in one commit so a regression could not be attributed to either.
-Authority: Susan and Fowler, with the owner ruling the scope on 2026-08-31 -
-every hardcoded value, not only type, because a hex in a component is a colour
-the dark theme cannot override.
+Do not use arbitrary bracketed utility values or authored pixel sizes on reading routes. Use tokens, relative units, fractions and measured dynamic values. A one-pixel hairline and media-query breakpoints checked against configuration are the defined exceptions. Shared components follow the reading rules when a reading route uses them.
 
 ## Colour is one signal, never the only one
 
-A confidence band carries a **word** as well as a tint. A visual kind carries a shape or a position as well as a colour. This is a clarity rule for all readers, and it is also what keeps the page legible in a screenshot, in dark mode, and on a bad screen.
+Pair semantic colour with words, shape or position. Keep labelled controls, semantic landmarks, visible focus and keyboard access. Follow `CLAUDE.md` section 0a for audit-tool scope.
 
-Accessibility *audit tooling* is a project non-goal ([../../CLAUDE.md](../../CLAUDE.md) section 0a); labelled controls, semantic landmarks and visible focus are simply good building and are in scope.
-
-### Decorative colour and semantic colour are not the same rule
-
-The rule above binds **colour that encodes meaning**. Read as a general ban on colour it says something it never meant, and for eleven months that is how it was read: no gradient was proposed on this surface, ever, and the reason was a rule that does not apply to one.
-
-- **Semantic colour is doubly constrained.** A tint that tells a reader something carries a word or a shape as well, and it may never borrow the confidence ramp's three hues. This is the whole of the rule above.
-- **Decorative colour is unconstrained.** Chrome, identity, a panel tint, an empty state, the wordmark, a page background. It encodes nothing, so there is nothing for a second signal to duplicate.
-
-The line is drawn by the question "would a reader be wrong about a fact if this were grey?" A gradient on the site header fails that question, so it is decoration. A gradient running red at the bad end of a chart passes it, so it is semantic and is refused - a reader would read the hue as the verdict.
-
-### Decoration that spells a word is still read
-
-The wordmark is the one place the two rules meet. Its gradient encodes nothing,
-so the paragraph above leaves it unconstrained - but the shape it fills is the
-site's name, and a reader reads a name as type. So `--gradient-wordmark` takes
-the one bound a decoration normally escapes: **every stop clears 4.5:1 against
-`--color-bg` in both themes**, which is what WCAG 2.2 SC 1.4.3 sets for normal
-text.
-
-That bound was not being met. Measured 2026-08-31 over the committed hex values,
-the three light-theme stops read 3.9803:1, 4.0195:1 and 2.9318:1 - a site name a
-third of the way below its own floor, in the theme nobody was looking at.
-Nothing had ever asked.
-[../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) now
-asks on every run, from the committed values, so the spread is zero by
-construction.
-
-- **Five stops at 135deg, one set per theme.** Seven stops across roughly 200px
- of glyphs puts a stop every 28px and the middle three read as one band. Dark
- gets its own set rather than a tint of light's, because on a light ground a
- stop has to go down to be read and on a dark ground it has to go up.
-- **`--wordmark-size` is `clamp(1.75rem, 1.2rem + 2.2vw, 2.75rem)`** - 28px on a
- 360px phone, 44px from 1127px up. Not 52px: the header sits on every route,
- and 52px is 8 percent of a 640px phone screen spent before the first story.
-- **Weight 300, and no second face.** The committed variable face covers 100 to
- 900, so the weight axis is free. A display face bought for ten characters on
- one string is a second woff2 on every route (`CLAUDE.md` Guardrail #2).
-- **No animation.** A cycling `background-position` is a loop rather than a
- response to anything the reader did, and `prefers-reduced-motion` is a hard
- kill-switch, so the effect would have to be designed twice. **What is lost is
- the moving shimmer**; what buys it back is the size, the five stops and the
- wider angle, which survive a screenshot, reduced motion and a battery.
-- **The three wordmark scale tokens sit in the `:root` block, outside both
- themes.** A scale is not a colour. The tracking is `0.06em` rather than a
- pixel count so it holds at both ends of the clamp - a fixed 4px is 0.14em at
- 28px and breaks the word into separate letters.
-
-Authority: Susan, 2026-08-31. Rejected: a second geometric display face, on
-bytes; and animating the gradient, on the reduced-motion cost above.
+Decoration may use colour without encoding a fact. A decorative wordmark still has to be readable: every gradient stop clears 4.5:1 against the page background in both themes. The wordmark does not animate.
 
 ### A label's shape says whether it can be tapped
 
-> **An outline means you can act on it. A tinted fill means it is telling you something.**
+Outlined labels are links or buttons; tinted labels are non-focusable information. Give a label family one tint rather than inventing a verdict for each member. The item's desk and lens labels use the same family.
 
-The reading page carries both, one line apart, and without this rule the second one to ship would have had to invent a look:
-
-| | Outlined | Tinted fill |
-| --- | --- | --- |
-| Example | the topic pill row above a day | the desk chip and a lens chip on an item's eyebrow |
-| Type | link or button | `<span>`, never focusable |
-| Size | `--text-sm`, tap-height | `--text-xs`, no minimum height |
-| Carries | a name and a count | a name only |
-
-**One tint for every member of a label family, not one per member.** A lens chip uses `--tint-accent` whatever the topic is: the word carries the category and the colour carries only "this is a topic". Six hues to say what six words already say would collide with the confidence ramp and the chart ramp, and a `war` chip in a warn hue would read as a severity we never assigned. The seventh lens then arrives with its slot already filled and needs no colour decision - which is the point.
-
-**The item's desk name uses the same label family.** It takes `--tint-accent`, the padding and the radius of the lens chips beside it. It keeps the configured display name and normal letter spacing. Its first position identifies the desk without an all-capitals label competing with the headline. It is not a link: the topic filter already provides that action, and a 44px tap target does not fit a 12px line. The reader loses no action or label.
-
-**The publisher pill is outlined and is NOT tap-height, and that is the one place the table above is knowingly broken.** It arrived on 2026-09-16 with the same-story fold: a card that folds a group prints the other newsrooms in its footer, each an outlined link to that newsroom's own story ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). Outlined is right - it is a link and a tap does something no other control on the card does. The height is not: three 44px pills inside an item footer would make the footer taller than the summary it sits under, on every grouped story, and the footer is a line of text with two controls pinned to its trailing edge rather than a control bar. So the pill takes the footer's own `--text-sm` line and a pill's padding, and the 44px targets on the card stay where they were. **What the reader loses is a bigger target on a phone for the one control on the card that is not the main link.** It is recoverable rather than lost: the same story is reachable by paging the stream, and `ui.draw_same_story` removes the row entirely. Retire this exception when the fold is measured and either the pill earns a band of its own or the stack moves off the footer.
-
-A tinted label is decorative under the rule above, because it repeats a word that is already there. It stays decorative only while it carries the word; a tinted chip carrying an icon alone would be semantic colour with no second signal, and is refused.
+Primary controls use tap-height targets. Secondary publisher links in a compact item footer currently use the footer's line height; this is a smaller phone target, not the standard for a new control bar.
 
 ### Content on demand is a `<details>`, not a button
 
-A section that leads with a shape and keeps its rows behind a control uses a native `<details>` and `<summary>`. **The reason is the element itself: it is keyboard-reachable for free and it says which state it is in without a second label.** A button plus a conditional block has to be given both, and a control that has to be given them is a control somebody can forget to give them to.
-
-The script-less argument is the second reason and it is now narrower than it was. It reads: a page is complete before a script runs, so a conditional block does not hide the rows - it deletes them for a reader with no script, and the section then makes a claim the reader cannot check. That holds **unchanged on `/`, `/archive/`, `/404` and `/evals/`**, which are whole in the document and always will be. On a reading route it holds for the seed the document carries and not for the stories a browser fetches after it, because those are not there to be hidden either way ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). The first reason covers every page equally, which is why it is the first reason.
-
-The other shape is different and stays: `Show N more` on the failed-item list and the day list is a button that extends a list already on the page. Nothing behind it is hidden, so nothing is lost when the button is dead.
+Use native disclosure for content already present but hidden. Use a button when an action extends an existing list. Preserve keyboard operation and expose state without relying on a second handwritten control protocol.
 
 ### No reader-facing surface scrolls sideways
 
-> **A horizontal scrollbar is a control that hides its own contents.** The owner ruled it out everywhere on the reading surface, 2026-08-31.
-
-It says nothing about how much is behind it, it is invisible until a pointer arrives, and on a phone it competes with the gesture that moves between pages. Hiding the bar with `scrollbar-width: none` is strictly worse: the control still hides the contents and the only hint that more exists is gone.
-
-Two shapes replace it. A row of variable-width labels **wraps**, and the overflow past a configured count folds into a `<details>` reading `+N more` - the pill row is the case, with the count in `digest.topic_pills_max`. Which items fold is decided by arithmetic over the payload at the point it is drawn, and never by measuring the row: one order is computed in the backend and published, so a row that measured itself on the reader's device could disagree with the order the payload carries and two readers of one shared link would see two pages. A grid guards its own minimum with `minmax(min(var(--auto-grid-min), 100%), 1fr)`, because a bare minimum is a demand for room the container may not have.
+Wrap variable-width labels and use a configured disclosure count for overflow. Do not hide a horizontal scrollbar and leave the hidden contents behind it. Grids must allow their minimum track width to fit the available container.
 
 ### A control only sticks where it is one band
 
-> **A panel that follows the reader down the page must be one band tall at the width it sticks at.**
-
-The filter bar is the case. It sticks from `frame.breakpoints_px[1]` (1024px) up, where the pills sit on the left and the field on the right in a single band. Below that it can run to several wrapped lines plus a field, and a control holding a third of a phone screen for the whole scroll is screen the reader paid for. A media query cannot read a custom property, so the number is written twice - in `config/appearance.json` and in the component - which is the one place this duplication is unavoidable and is already true of the item's side rail.
-
-**This rule is why the day's aside stands beside the stream and not beside the day's controls.** The first arrangement of the two-column day put the leads in column two from the top of the page, which narrowed everything below them to 896px - and at 896px the filter bar's six pills wrap under its field, so a two-band panel then followed the reader down the page. The controls keep the whole content box and the aside starts level with the first story.
-
-**The console's tab strip is the second case, and it holds the rule for any number of tabs.** It sticks from the same width, as one row: the route tabs with the days control at the trailing end. Where the tabs are wider than the row, the tab list scrolls sideways inside the strip rather than wrapping to a second band - the one sideways scroll the operator surface has, by owner decision 2026-09-27, and the list opens with the band's worst route in view
-([../architecture/publishing/what-sits-above-every-console-route.md](../architecture/publishing/what-sits-above-every-console-route.md#from-the-wide-breakpoint-up-the-strip-sticks-and-it-is-one-row)).
+A sticky control occupies one band at the width where it sticks. Below that breakpoint, wrapped controls flow with the page. The console's route strip may scroll internally to stay one row; this does not permit sideways scrolling on reading pages.
 
 ### The reading page spends its width in four named zones
 
-> **No zone is a pixel count.** Every column the reading page draws beside its prose is a `rem` knob in `config/appearance.json`, so it grows with a reader who set their browser text larger.
-
-| Zone | Token | Default | Drawn from |
-| --- | --- | --- | --- |
-| the source mark | `--zone-mark` | `1.75rem` | every width - the read state has to stay beside the title it qualifies |
-| the card | `minmax(0, 1fr)`, text at `--measure` | `68ch` | every width |
-| the item's footer rail | `--zone-rail` | `14rem` | the middle breakpoint, and it retires at the wide one |
-| the day's aside | `--zone-aside` | `18rem`, sticky | the wide breakpoint |
-
-**There were five until 2026-09-12.** `--zone-time` was a `5.5rem` leading column on the day stream, carrying a time rail that grouped stories by the hour and drew one marker per group. The rail is deleted and every story now prints its own time in its eyebrow, so the stream is the content box again at every width. What the reader loses is the hairline that made a column of times read as one axis; what they get back is a time on every story rather than on one in seven, and 5.5rem of every line at the two widths that had the column. Re-measured 2026-09-12 over 8,922 committed stories: the rail drew 1,218 markers, so 86.3 percent carried no time at all.
-
-**A phone never had the time-rail column, and that was measured rather than assumed.** A 360px screen leaves 328 CSS px of content box; the item already spends 40 on the read mark and its gap and 32 on its own padding, so a 3.5rem rail plus its gap left the summary **186px** - about 25 characters, with `Interconnector` broken across two lines in the title. That measurement is why the rail had two layouts, and it is a large part of why one column of times was the wrong place for a fact every story has.
-
-**The frame's content box holds a measure plus exactly one trailing column.** Measured 2026-09-02 at 1536px, that box is 1,216px and the item filled all of it, while the summary used 659.81 - so 230.19px stood empty beside the prose on every story. What that buys is one column of at most 27.1rem once the measure and the mark are paid for. Both the item's rail and the day's aside want it, and keeping both leaves the summary 570px, so the day's column wins at the width it appears and the item gives its rail back. The footer then returns to where the item's own split put it, under the summary it is a claim about.
-
-**The measure never moves.** A wide card holding a 68-character paragraph is not wasted space; a wide paragraph is what the measure exists to prevent, and widening it was refused before the layout was chosen. What the aside spends is the space the measure does not want.
+Use the source mark, measured prose, optional item footer rail and optional day aside. Zone widths are configured relative units, not pixel substitutes. At a width where the day aside appears, return the item footer beneath the prose rather than squeezing both trailing columns beside it.
 
 ### The measure is one block, not one class per line
 
-**A `ch` belongs to the element it lands on, so one measure class on two sizes of type is two measures.** The item card wore `.measure` on its title and again on its summary. Measured 2026-09-17 in Chromium at 1536px on a day with an aside: the summary stopped at **659.81px** and the title ran to **1025.33px**, so every card had two right edges **147.13px apart** - about 16 percent of the 896px card. The title was not held to a wider measure, it was held to none: `68ch` of 28px type is 1,057.05px and the card body is 806.93px, so the cap never bound at any width the reading page has.
-
-The fix is to stop asking each line of text to work it out. `.prose` in `DigestItem.svelte` carries `max-width: var(--measure)` once, at `--text-lg`, and the title and the summary inherit that one width. The figure stays outside the block, because a chart is drawn at a width rather than wrapped to one ([the chart's column](#a-charts-column-is-set-by-what-the-chart-was-drawn-at)).
-
-**The display face makes the old arrangement unfixable rather than merely wrong.** An item's title is set in `--font-display` and the summary in `--font-reading`, and a `ch` of one is not a `ch` of the other - so two per-element caps could not have agreed even at one font size. A block cap is not a tidier version of the per-element one; it is the only one that can be right.
-
-**What the reader loses is title width.** A long headline now wraps where it used to run on, and it is the same cut the paragraph under it already took. What they get is one edge to read down instead of a step, and `text-wrap: balance` on the title so the lines it does take are even rather than greedy.
-
-**`frontend/tests/item-zones.spec.ts` is the memory.** It reads both used widths off the page and fails unless they are equal, at every band, in both themes - so a class put back on the title is caught by arithmetic rather than by somebody noticing the step.
-**A `rem` zone is only a `rem` zone if something checks.** `14rem` and `224px` look identical at the default font size and diverge the moment a reader changes it, and no screenshot tells them apart. `frontend/tests/item-zones.spec.ts` reads every zone's used width with the root font size at 16px and again at 22px and fails unless each one scaled by 22/16 - measured on its own build, the mark went 28 to 38.5, the item's footer rail 224 to 308 and the aside 288 to 396. It prints both numbers in the failure, so the assertion cannot pass on a layout it never measured. Size savings must preserve this behavior ([../reference/site-weight.md](../reference/site-weight.md#reader-facing-trade-offs)).
-
-**A vertical rule is the one thing the reading surface does not draw.** The time rail had one - a hairline the height of the stream, with each marker knocking a hole in it by painting its own ground, so the eye read a single line with labels on it rather than a stack of separate numbers. It went with the rail on 2026-09-12, and no rule runs vertically on a reader-facing page now. A vertical rule earns its place only beside something ordered, and the stream's order is no longer a thing a reader reads down one column.
+Apply `--measure` once to the block holding title and summary, at the prose size. A `ch` width applied separately to different fonts or sizes produces different edges. Keep figures outside that prose cap. Verify zone widths also scale when the root font size changes.
 
 ### A chart's column is set by what the chart was drawn at
 
-An item's visual has no column of its own, and the reason is arithmetic rather than taste. The committed charts are 825 x 437px SVGs carrying 25 labels at 10px. Across the card body at 890px those labels draw at 10.8 CSS px; in a 20rem column they draw at 3.9. That is the same rule as [the Sankey above](#a-diagram-a-narrow-column-cannot-hold-becomes-a-list-never-a-smaller-diagram) - a chart engine scales its marks with the container and its type with nothing at all - so the figure keeps the card's width until the render spec is handed the width it will occupy. `digest.visual_side` stays unread until then, because a knob whose only setting draws an illegible chart is worse than a knob nothing reads.
-
-**Reserved is not the same as unowned.** `config/appearance.json` declares `digest.visual_side` and nothing else does; `config/idhazh.json` carried a second copy saying `above` until 2026-09-05, and the frontend's fallback merge quietly dropped it, so a knob edited in that file did nothing. Both the committed value and the contract default now read `trailing`, which is what the card draws - title, summary, reader note, then the figure. A default naming a position no page renders is the wrong answer waiting for the reader who first switches this on.
-
-What the figure did give back is height. A fixed 16:10 box reserved space the chart never used: an 825 x 437 chart inside an 890 x 556 box left 85px of empty band above and below it. An SVG carries its own width and height, so `width: 100%; height: auto` reserves the right box from the markup and still cannot shift the page as the image loads.
-
-**And since 2026-09-05 the drawing takes its colours from these tokens like everything else on the card.** A story holds the SVG itself rather than a link to it - the build puts it there for the stories a prerendered document carries, and the browser fetches it for the rest - so the page's stylesheet reaches the marks: the bars take `--chart-1`, the axis type takes `--color-text-secondary`, the ticks and the axis line take `--chart-axis` and the grid takes `--chart-grid`. Nothing was added to the file to make that work - a presentation attribute is the lowest priority in the cascade, so `fill="#000"` loses to any rule. What the drawing brought with it, and what it cost, are in [../architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md](../architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md#the-browser-draws-the-chart-so-the-chart-reads-the-page-it-is-printed-on).
+Draw against the actual content width in CSS pixels. Do not shrink a wide drawing until its labels are unreadable. Reserve the figure's dimensions to avoid layout shifts; choose a simpler layout when the available width cannot hold its labels.
 
 ### Every fact a drawing shows is reachable without a pointer
 
-> **A drawing is one carrier of a fact, never the only one.** The dominant reading device has no hover, so a value behind a pointer is a value most readers never get.
-
-An item's figure is **one tab stop**, and the name it announces lists every bar the drawing painted: each bar's name, each bar's figure, and the unit the axis counts. One stop per chart and never one per bar. A day runs to hundreds of stories, so a stop per bar would make the stream something a keyboard cannot get past - and `role="img"` replaces the subtree with a single name anyway, so a bar given its own stop would announce nothing.
-
-**The name is written in the browser, off the same `Drawing` the marks are drawn from.** That is what makes the two sets equal by construction rather than by two derivations agreeing - and they had not agreed. The compiler writes `alt_text` on the day payload from the same figures, and measured on the canary day 2026-09-14 it re-grouped the article's own `1200` as `1,200`, so the reader who hears the chart and the reader who sees it were given different characters. It is also cut to 300 characters, which eight bars at the `visuals.max_chart_points` ceiling pass on ordinary names - so the last bars were drawn and never spoken. The compiler still writes it and the backend still holds it to the element table; what changed is that the reading page stopped carrying it.
-
-**What the reader loses is nothing on screen and one thing off it.** A reader with JavaScript off gets neither the chart nor the sentence. Measured on the canary build 2026-09-14, the prerendered document carries **zero `<figure>` elements**: the figure exists only once the marks have arrived, so the sentence had already stopped reaching that reader when the browser took over the drawing on 2026-09-13. This row states the loss rather than causing it.
-
-[../../frontend/tests/item-visual.spec.ts](../../frontend/tests/item-visual.spec.ts) is the memory. It reads the pointer-reachable set off the drawn nodes, walks the keyboard-reachable set by pressing Tab from the top of the document, and compares the two whole, printing both when they differ. **Asserting that some keyboard route exists is not the check** - the defect is always one fact that only a pointer reaches. One test is driven from a **built** eight-bar chart rather than from the canary's four, because the case that breaks is the one the archive has never produced.
-
-Authority: Reader, plan 14 row #2.
+The accessible description and visible marks come from the same drawing data. An item chart is one tab stop whose name includes every bar, its value and the unit. Do not require a keyboard user to tab through every mark in a long story stream. Compare the complete pointer-visible and keyboard-accessible fact sets in tests.
 
 ### A control that needs a script is not left on the page without one
 
-> **A dead input that swallows typing is worse than no input.**
-
-Every page here is rendered whole before a script runs - the stories past a reading route's seed are the one exception, and they are content rather than a control - so a control that only works afterwards has to say so. The shape is a `<noscript>` block holding a `<style>` that hides the scripted controls by attribute, and one sentence, hidden by `hidden`, that the same rule un-hides. Nothing is conditionally rendered, so hydration has nothing to reconcile and there is no flash.
-
-Two details make it work rather than look like it works. The rule inside `<noscript>` is unscoped, and a Svelte scoped class rule outranks it - `.field.svelte-<hash>` is specificity (0,2,0) against (0,1,0) - so the element carrying the attribute must not take a `display` of its own; the layout goes on a child. And the fallback sentence uses `hidden`, which the author rule beats without an `!important`. The trap and its symptom are in [../reference/agent-notes/browser.md](../reference/agent-notes/browser.md#svelte).
-
-What survives without a script is the part that was never scripted. On a day page the topic pills are links to prerendered routes, so a reader with no script still reaches every desk; on the archive they are buttons over a list a script fetched, so they go with the field and the page keeps its prerendered day list - the recent days as rows, and every older day inside a native month disclosure that opens with no script at all.
-
-`frontend/tests/layout-overflow.spec.ts` is the memory: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`, on every reader-facing route, at 360, 801 and 1536 CSS px, in both themes. Measured before the rule landed, `/archive/` reported 368px of document in a 360px viewport in both themes, from an `--auto-grid-min` of `22rem` inside the 328px a 360px screen leaves after its gutters.
-
-The console is not covered by that spec. It carries live scroll containers of its own and a sibling plan holds those routes; `frontend/tests/console-frame.spec.ts` asserts the same property there, per element.
+Hide or disable script-dependent controls until they can act. Provide a truthful no-script state, and retain working navigation and native disclosure where available. Do not promise that fetched charts exist without JavaScript or leave an input that accepts typing but does nothing.
 
 ### A diagram a narrow column cannot hold becomes a list, never a smaller diagram
 
-A chart engine scales its marks with the container and its **type with nothing at all**. The chart-drawing flow is the case: its Sankey labels sit outside the nodes, in a fixed 170-pixel column, at a fixed 12-pixel size. Measured 2026-09-01 in Chromium on the built console, that column is 12 percent of a 1,376px SVG at 1440 and **52 percent of a 328px one at 360**, so the four stages divide 158 pixels between them and their labels print over each other.
-
-| Viewport | Flow SVG | Label pairs overlapping | Worst overlap |
-| --- | --- | --- | --- |
-| 360 | 328 px | 3 | 59.1 px |
-| 390 | 358 px | 3 | 56.2 px |
-| 640 | 589 px | 2 | 17.1 px |
-| 690 | 635 px | 1 | 1.8 px |
-| **700** | 644 px | **0** | - |
-| 1440 | 1,376 px | 0 | - |
-
-Two answers were refused before this one. **A horizontal scroll** destroys the diagram's whole value - seeing every branch at once - and hides the small branches off screen. **Smaller type** was already measured and rejected once, when a one-line label ran 280px into a 246px column pitch; the reply then was two lines, and two lines is what the table above measures. Neither is available at 360, because the label column does not shrink with the frame at any font size a reader can use.
-
-So below `48rem` the same numbers are a **stepped list**: one row per stage with its count and its share of everything that reached chart drawing, and the branch that left it indented under it. The breakpoint is the one the console page already stacks at, and it clears the measured crossing by 68 pixels.
-
-**One call builds both shapes.** `chartFlow` returns the option and the steps together, so the list and the diagram cannot report two different flows - which is the failure a fallback invites and the one nothing on screen would show.
-`frontend/tests/console-flow.spec.ts` reads every count off the diagram at 1440 and off the list at 390 and compares the two sets, and it checks on the page that what leaves a stage is what arrived at it.
-
-**Only one is drawn at a time.** Two shapes of one flow on one screen is two answers to one question, and a reader who finds them has to work out whether they agree.
-
-Authority: Jony, plan row #13. The geometry is measured in a browser and never reasoned about, which is the rule that produced both this table and the two-line labels before it.
+Derive the wide diagram and narrow list from one dataset. Show only one representation at a time, preserve every count, and test their equivalence. Do not trade legibility for smaller type or a scrollbar that hides the comparison.
 
 ## Sufficiency is a gate, not a taste
 
-A surface fails review for being **insufficient**, exactly as it fails for being over-built. This is stated because the opposite was: every review persona this project had was a veto, so the surface converged on the minimum that passed all of them, and nobody's job was to say it was not enough.
+Gates 1-4 apply to surfaces; gate 5 applies to drawings. Gates 6-10 apply to console drawings. A required exception states the current limitation, its cost and why it remains, not the review history.
 
-**There are ten gates.** Gates 1 to 4 bind any surface, reader-facing or operator-facing, and gate 5 binds any drawing on one. Gates 6 to 10 bind a drawing on the console, because they ask about a trend over days, a ledger column, the readout strip and the query door, and only the console has those.
+| Gate | Requirement | Failure |
+| --- | --- | --- |
+| 1 | Plots cover the configured `console.plot_min_fill_share` of panel content width at 390, 768 and 1440 px | Insufficient covered width or no plotted share; measure covered width, not the span between disconnected plots |
+| 2 | Panel and page have distinct rendered surfaces; plots use the panel's own ground | An indistinguishable panel or a separate tinted plot background |
+| 3 | Exactly one `data-lede`, visibly larger than every competing word or filled mark | Missing, duplicate or visually subordinate lede |
+| 4 | The picture communicates a considered hierarchy and useful comparison | Native `title=` mark tooltips, a bare numeric table without a visual comparison, or the wrong control for a two-state mode |
+| 5 | Exactly one `data-comparison` sentence containing "against" | Missing or duplicate comparison; composition instead declares `composition`, shows at least two stacked fills and states why on its owning page |
+| 6 | Every trend declares `data-model-rule` | `yes` without a settings-change rule or a visible no-change sentence; `no` without a reason of at least five words |
+| 7 | Drawn columns have declared readers | A column remains in `UNREAD_CELLS` |
+| 8 | Waiting, quiet, missing and unreachable are visibly distinct | Any two states have the same visible words and placeholder treatment |
+| 9 | The readout strip is declared and drawn | Missing readout attributes or an absent declared strip |
+| 10 | Queries request columns within a bounded date range | A query asks for a whole ledger or leaves its date range open |
 
-| # | Gate | What decides it | What fails it |
-| --- | --- | --- | --- |
-| 1 | **Does it use the screen it is on?** | How much of the panel's content width sits under at least one drawn plot, at 390, 768 and 1440 px. Covered width, so two small charts side by side fill a panel together and two thin ones at opposite edges do not pass as one wide one | A share under `console.plot_min_fill_share` at any width, or a panel that draws no plot, so no share is printed |
-| 2 | **Does it separate figure from ground?** | The colour each surface lands on screen as, with every see-through layer blended onto what is behind it: the page around the panel, the panel, and the ground under each plot | A panel the same colour as the page around it, or a plot drawn on a ground that is not the panel's own |
-| 3 | **Is there one thing the eye lands on first?** | Exactly one element carries `data-lede`, and it is the largest thing in the panel: its type size against every other visible word, or, where it is a mark with no words, its area against every other filled mark | No lede, two, or one that something else in the panel is as large as |
-| 4 | **Does it look like it was made this year?** | A reviewer, reading the component and its pictures | A native `title=` tooltip on a mark; a bare table of numbers with no shape beside it; a control that is a `<select>` or a verb button where a two-state radio is the rule |
-| 5 | **Can a reader make its comparison in two seconds?** | Exactly one element carries `data-comparison`, and its sentence has the word "against" in it. A mix over time - a stacked series of counts or shares - declares `data-comparison="composition"` instead, and passes only where its stacked bars show two fills or more; the page that owns the panel then says in a `## Design rationale` line why it compares nothing | No declaration, two, or a sentence with no "against" that is not a mix over time |
-| 6 | **Does a trend carry its confounders?** | Every trend over days declares `data-model-rule` on itself or on the element that holds it. `yes` draws the settings-change rule, or says in visible words that no setting changed inside the span; `no` says why in five words or more | A trend with no declaration, or one that says `yes` and draws neither the rule nor the sentence. A line that moved because somebody changed a setting looks exactly like a line that moved because the work got worse |
-| 7 | **Does every column it draws have a reader?** | `backend/tests/contracts/test_column_readers.py` | A column drawn while its name is still in `UNREAD_CELLS` |
-| 8 | **Are its four nothings told apart?** | The panel is drawn waiting, quiet, missing and unreachable, and what a sighted reader sees in each - the visible words, and the colour of the box that stands in for the chart - is compared | Any two of the four drawn as the same picture. A quiet pipeline and a broken fetch must never look alike |
-| 9 | **Is the strip declared?** | `frontend/tests/console-readout.spec.ts` | A chart that declares none of the readout attributes, or a declared strip that is not drawn |
-| 10 | **Does it query columns, not ledgers?** | `frontend/tests/chart-vocabulary.spec.ts`, over every call to the query door | A call that names no columns, or leaves its date range open |
+The measured gates use `frontend/tests/panel-sufficiency.spec.ts` and `frontend/tests/support/panel-gates.ts`. Column readers, readouts and query coverage have their own contract and frontend tests. Gate 4 requires visual review.
 
-Two of the gates carry the measurement that made them. Gate 1: on 2026-08-28 the digest used 40.6 percent of a 1536px viewport and had two responsive breakpoints in the entire site, one of which changed padding. Gate 5: "peak memory" is a subject, and "how near 16 GiB the worst shard got, against the rest" is a comparison. A sentence that cannot take an "against" is a number looking for a home rather than a drawing, and a figure whose comparison only arrives after a paragraph has not been drawn yet, because two seconds is what a glance is worth. Susan, 2026-09-17; the chart rules that follow from it are in [console-design.md](console-design.md).
-
-**Six of the ten are arithmetic, so a spec decides them.** Gates 1, 2, 3, 5, 6 and 8 are `frontend/tests/panel-sufficiency.spec.ts`, and the measuring is in `frontend/tests/support/panel-gates.ts`: one function reads a drawn panel into plain numbers and words, and one pure function per gate judges them, so a share printed beside a picture is the share a gate judged. Gates 7, 9 and 10 are the tests the table names. Gate 4 is a reviewer.
-
-**The specs judge an opt-in list, `console.judged_panel_ids`, and it is empty until a panel is redrawn.** Gates 3, 5 and 6 read `data-lede`, `data-comparison` and `data-model-rule`, and most panels carry none of them, so judging the whole console would be red on the day the gates landed - and a gate that is red on arrival is a gate people learn to skip. A panel joins the list in the pull request that redraws it. The contract refuses a judged id that no console route draws, and one named twice. Until then a test-only panel, `frontend/tests/fixtures/panels/WitnessPanel.svelte`, built from the real `Panel` and `DateSeries`, proves every spec'd gate passes a good panel and fails one bad panel per gate, and that each bad panel fails its own gate and no other.
-
-**Gate 8 needs a way to put a real panel into each of its nothings.** The sufficiency spec keeps one driver per judged panel id, and it refuses a judged id with no driver by name, so a panel cannot join the list and skip the gate that tells a quiet day from a broken fetch.
+`console.judged_panel_ids` selects panels for the automated sufficiency checks. A redrawn panel joins that list with a driver for all four data states. A test-only witness verifies the gate machinery; it does not certify unlisted production panels.
 
 ### Gate 4 is read from pictures
 
-Every panel in `console.panel_groups` that its route draws with an id is pictured at the three widths in both themes, and at the narrowest width in dark once more with every data request its route made refused - the one way to see a broken fetch without a second build, and taken only where the route asks for data after it arrives, because a route that fetches nothing has no broken fetch to show. The Pipelines route draws its sections with no panel id yet, so its panels are not pictured until each section is one addressed panel. `frontend/tests/panel-captures.spec.ts` takes the pictures and CI uploads them; the files, the artefact and when a run takes them are in [../how-to/run-the-gates.md](../how-to/run-the-gates.md). Nothing compares pixels: a committed picture goes red when a runner's fonts differ from the machine that took it, and it is a binary file the history prune rewrites on a schedule.
+Review each panel at the three widths in both themes, plus its broken-fetch state where it fetches data. Start with the 390 px dark image. The comparison must be apparent without reading a paragraph, and the phone layout must not be the desktop layout scaled down.
 
-**The 390 dark picture decides.** It is the narrowest, the least tested, and the theme nobody checks. A reviewer who cannot say the panel's comparison sentence after two seconds of looking at it fails the panel, whatever the attribute says. **A 390 picture that is the 1440 picture with everything smaller fails too**: a panel that only works at one width has not been drawn, it has been positioned.
-
-A surface that fails a gate ships only with a `## Design rationale` entry saying why. `CLAUDE.md` section 9 carries the Definition-of-Done line; Susan ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)) rules them.
-
-**And a veto costs something.** A ruling that removes must name what the reader loses. "Remove before adding" is a good instinct and a bad rule when it is free: a removal that states only what was removed is not a ruling and does not bind ([../../CLAUDE.md](../../CLAUDE.md) section 14).
-
-### Height is not the target; the page somebody lands on is
-
-The console chart-craft plan opened by complaining that `/console/` was too tall on a phone - 16,385 px, with the band taking 63 percent of the first viewport and the first chart a screen and a half down. Twenty-six rows later it is **15,131 px, 7.7 percent shorter**, and the other two console routes are **32 to 37 percent taller** because they gained a doubt list, a cost distribution, a context chart, peak memory and three latency plots. Across all three the console grew 13.2 percent on a phone.
-
-That is the sufficiency gate and the veto working together rather than one beating the other. **A surface is not judged by its total height.** It is judged by what the first viewport says, what a reader has to scroll past to reach a figure, and whether the figure is there at all. Cutting the band and capping the failure list bought the first two; the panels behind the other two routes are the third, and shrinking them to hold a height number would have been the failure the sufficiency checks exist to catch. Numbers and method: [../reference/pipeline-cost.md](../reference/pipeline-cost.md).
+Judge useful first-screen content and access to facts, not total page height. A reduction must state what the reader loses.
 
 ## Motion vocabulary
 
-There is almost no motion here, and that is the correct amount. This is a page a reader skims, not a thing they operate.
+Use `fadeIn` for arriving content, `shimmer` for the console's reserved loading box, and `toastIn` for a notice. Animate transform, opacity or paint-only properties, not layout.
 
-- **`transform` and `opacity`, plus the paint-only properties.** A colour, a border colour and a shadow change without moving anything, so they may ease - `RankedList`, the topic pills and the theme control already do. Never animate a layout-triggering property.
-- **`prefers-reduced-motion` is a hard kill-switch** - a media query that zeroes durations, and removes a transform an interaction brings on rather than making it instant. A zeroed duration shortens a movement; it does not remove one, so a 2px rise on hover becomes a jump in one frame and a reader who asked for stillness still sees it move. The reset names the elements that take an interaction rather than every element, because a transform that **positions** something - a rotated axis title, a chart readout centred on its own width - is not motion and a blanket reset drops both on the floor.
-- **A moving gradient is the case a zeroed duration gets wrong, not slightly but completely.** `animation-duration: 0.01ms !important` on `*` does not stop the sweep across a skeleton block - it FREEZES it, and a frozen sweep is a bright band across the block that nobody chose and that says nothing. So a reserved block loses the gradient outright under reduced motion and stays a flat tint. It wins on specificity, `(0,2,0)` against the blanket's `(0,0,0)`, and the proof is a computed style read in a browser that asked for stillness rather than an argument about the cascade.
-- The whole named set: `fadeIn` (content arriving), `shimmer` (skeleton while a payload parses), `toastIn` (the rare notice). Anything beyond these needs an argument. `shimmer` has exactly one caller and it is the console's reserved box; it is not available to a reading page, where a skeleton would draw boxes over prose a reader is already reading.
+Reduced motion removes movement and shimmer gradients; setting a duration to zero is insufficient if it leaves an interaction transform or a frozen bright band. Do not remove transforms that position an element rather than animate it.
 
-Nothing on the reading path waits on a network for its first frame, so **there is no excuse for a spinner.** Nothing on the operator path gets one either, and there the reason is different: the console has a dozen waits at once and an operator who can act from the first frame. A spinner suits one wait, a blank page and a person who can do nothing until it stops - and none of those three is true here. Authority: Susan, accepted as owner decision D3, plan row #12.
-
-**Three things wait, and none of them gets a spinner.** A reading page fetches
-the stories past its seed. What it shows meanwhile is nothing at all, because
-the frame the reader already has is readable; past `ui.payload_slow_ms` it is
-one sentence, and a fetch that fails is one sentence and a retry. A skeleton
-there would draw boxes where a reader is already reading.
-
-And the archive's search downloads a 43 MB encoder the first time a
-reader uses it. What it shows meanwhile is bytes as type, taken from the
-library's own count of what has arrived - a measurement, not an animation. When
-the weights land that count goes blind, because the runtime behind them reports
-nothing to anybody, so the line stops printing numbers and prints a word. A bar
-that keeps moving on no measurement is a bar that is making it up.
-
-The console is the third and it is the one that gets the skeleton, because it is
-the only surface here whose panels have nothing at all to show until a fetch
-lands. What it draws is [a reserved box with the axis frame in it](console-design/the-mark-shapes-a-panel-may-reach-for.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
-
-**A day payload gets no byte readout, and that is the same rule read the other
-way.** A compressed response reports its compressed length, so a bar drawn on
-one would print precision the number does not carry - which is a bar making it
-up, exactly as above. The encoder is different because the library counts real
-bytes and because 43 MB is worth naming before a click.
+Do not use spinners. Keep existing reading content available while more arrives; show a slow or failed fetch as a concise state with retry. Console panels reserve their own room and may use a loading skeleton. Show progress numbers only when a real measurement supplies them.
 
 ## A machine's state is a sentence, never a dot
 
-Colour is one signal and never the only one, and that rule has a second edge: a
-dot says nothing until it carries a word, and once it carries a word it is a
-sentence. So a state a reader has to act on is written out in full.
-
-The archive's on-device search is the whole example, and it has five states:
-
-| State | The sentence |
-| --- | --- |
-| Not downloaded | `Search runs on your device. The first search downloads 43 MB, once. Nothing you type leaves your browser.` |
-| Downloading | `Downloading - 12.4 MB of 43 MB.` and, once the count goes blind, `Getting ready to search.` |
-| Ready | `Search runs on your device. Nothing you type leaves your browser. The download is done.` |
-| The encoder changed | `The search files changed since your last visit. The next search downloads 43 MB again, once. Nothing you type leaves your browser.` |
-| This browser cannot run it | `Search is unavailable here - this browser cannot run it. Everything above still works.` |
-
-Three rules hold under them:
-
-- **The cost is named before the click, never after it.** Whether the download
- has already been paid for is read out of the browser's own cache storage. That
- is this device's disk, so nothing is reported anywhere and Guardrail #1 is intact.
- When it cannot be read the whole size is printed, because overstating a cost
- is honest and understating one is not.
-- **Every wait offers a stop, and stopping leaves the page as it was.** Nothing
- greys out while a download runs, and the list a reader was reading stays live.
-- **A failure offers a retry.** One flaky connection may not turn a feature off
- for the rest of a page's life.
-
-The shape generalises past this one control: any state worth a colour is worth a
-sentence, and a state a reader cannot act on is worth neither.
+State cost before a download, progress while it is measurable, readiness when complete, and a useful failure with retry. Every cancellable wait offers a stop without disabling unrelated content. Use the configured download size rather than a copied number. Do not imply that initialization progress is measured when the runtime reports none.
 
 ## Icons
 
-Icons are **vector glyphs referenced by id** from a generated manifest, never inline SVG, never a hardcoded path, never a raster image. The manifest is a persisted surface with its own schema ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)). An icon that needs a caption is a label wearing a costume.
+Use the existing Lucide-derived icon system by id. Keep glyphs monochrome and inherit `currentColor`; do not add a handwritten inline path or a second theme-specific artwork set. [Icon provenance](../../frontend/src/lib/icons/PROVENANCE.md) owns source and update details.
 
-**Colour arrives by semantic tint, not by multi-colour artwork.** A glyph is monochrome and inherits `currentColor`, so the thing it sits in decides the hue: a confidence mark takes the band's colour, a topic pill takes the pill's. One set serves both themes, and a new status arrives with a slot already waiting instead of a second artwork file. Multi-colour artwork cannot be re-tinted, so a dark theme would need a second set drawn by hand.
+Icons belong in controls, chrome and declared classifications. Do not invent a story type with a decorative headline icon. `clock-alert` identifies a printed fallback time that came from this pipeline, not the publisher; absence of time provenance must not manufacture that claim. Tests check both missing ids and unused glyphs.
 
-**Where a mark goes, and where it does not.** Chrome, controls, the console and the topic pills. Not beside a headline: a topic is a classification the pipeline actually made and may carry a mark, but "what kind of story is this" is an assertion no stage ever produced, and an icon that asserts it is inventing a fact on the page.
+## Charts render in the browser
 
-**The reading stream draws exactly one glyph, and it is `clock-alert` beside a story's own time.** It marks the story whose printed clock is ours rather than the publisher's - the feed's own time was absent or rejected as impossible. That is the one case where a reader scanning times would otherwise read a number from a different clock as a feed time, and since 2026-09-06 the mark is the only thing that says so: the stamp is digits, so the words that used to carry it are gone. Nothing else beside a time takes a mark: a story with no stamp at all prints nothing, a merely old story needs none because the date in front of its clock says it, and a stamp the payload attributes to nobody takes none either - a mark there would claim a clock the run never recorded, and that is 3,733 stories. Eighteen of the 8,922 committed stories are in the marked state, re-measured 2026-09-12, which is why it needs a mark - a reader has no way to spot two in a thousand.
+Use d3 for chart arithmetic and browser rendering. Theme values come from shared tokens. The browser measures the occupied width; floor fractional pixel widths when needed to prevent a resize loop. Reserve stable height where the chart's row count allows it.
 
-**The set is closed and it is checked in both directions.** `frontend/tests/icons.spec.ts` fails on an icon nothing draws and on a reference to an id that does not exist, so a set cannot rot silently either way. The first of those is not theoretical: the set was cut from 29 glyphs to 15 on the day it landed, because the lens and event taxonomies exist in `config/taxonomy.json` and no surface renders them. Those thirteen marks wait for a surface rather than shipping against one that might arrive.
-
-Source is [Lucide](https://lucide.dev) under the ISC licence; only the icons in use are committed, as unmodified source SVG, and the sprite module is generated from them. Provenance and the add procedure are in `frontend/src/lib/icons/PROVENANCE.md`.
-
-### Design rationale
-
-**Icons ship, and the earlier refusal was wrong (owner, 2026-08-29).** The rule used to say "keep the set tiny: an external-link mark, a confidence mark", which in practice produced two inline SVGs and no system at all - the exact state the icon rule was written to prevent. What was right in the old line was the refusal to put a decorative mark beside a headline, and that survives above as a narrower rule.
-
-**Measured cost, 2026-08-29 on this tree.** Fifteen glyphs, 2,128 B of marks, and the generated module reaches every route because a component names an icon by id and a lookup on a dynamic key cannot be tree-shaken: `/` +1,897 B, `/404` +1,771 B, `/<date>/` +1,900 B, `/archive/` +1,833 B, `/console/` +1,404 B, `/evals/` +1,775 B gzipped. `/evals/` also crossed its prerendered-HTML ceiling by 185 B and the ceiling moved from 2,730 to 2,979.
-
-**The rejected alternative was an inline sprite.** It costs no JavaScript at all, which is better, and puts roughly 700 B of gzipped markup into every prerendered document, which is worse where it lands: `/404` had 37 B of headroom under a ceiling whose whole purpose is keeping the error page tiny. The bytes go where there is room for them. If the JS cost ever matters more than the 404's ceiling, this is the trade to revisit, and the numbers to revisit it with are here.
-
-## Charts are static first, enhanced only when interaction earns it
-
-An item's chart is compiled at build time into data and its shape, and **the reader's browser draws it** - owner ruling 2026-09-13, [../architecture/publishing/where-a-drawing-becomes-pixels.md](../architecture/publishing/where-a-drawing-becomes-pixels.md). Nothing is rendered in the pipeline and no drawing is committed. Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
-
-**No chart ENGINE on a reader's route, and that half is settled.** The arithmetic is a different question and is answered below: `d3-scale` and `d3-array` reach the reader and nothing else does.
-
-**The operator surface is a separate question, and it was answered wrongly
-twice.** An engine was carried for pan and zoom between 2026-08-23 and
-2026-08-24, then removed because the viewport control already did that with a
-keydown handler and four buttons. On 2026-08-29 the same blanket ban was
-re-argued from a `/console/` weight four and a half times out of date, and the
-owner overruled it. What replaces the blanket is not another blanket in either
-direction. Any library adopted for the console must (1) render SVG, not canvas,
-so `tokens.css` stays the only place a colour is decided, (2) render server-side
-at build time, so the page is complete before any script runs, and (3) carry a
-measured gzipped cost recorded next to the decision.
-
-Measured 2026-09-01 on five builds of `origin/main` at `8d658de`, and unmoved
-across twenty-six rows of chart work: registering only the chart types in use,
-the engine is a lazy chunk of **192,029 B gzipped** (567,839 B raw) on every one
-of the five. The number that decides affordability is not the chunk but what
-opening the console costs, and that moved **1,854 B**, from 69,622 to 71,476.
-About 40 B of that is the toolchain rather than the change. What importing the
-package whole would have cost, what deleting the legend component bought, and
-the stale figure this record replaced are in
-[../archive/measurements-2026-08.md](../archive/measurements-2026-08.md).
-
-Three rules came out of taking those numbers, and they cost more than the
-numbers did. **Identify the chunk by content, never by size** - the encoder
-chunk beside it is bigger, so "the largest chunk" finds the wrong file. **Read
-the gzip level-9 byte, not the bundler's log line**, which uses a different
-compressor and reads about 2 KB high. And **a bundler probe is not the
-artefact**: the figure that justified adopting the engine was taken with a
-standalone script, and the thing that shipped read more than twice it. Adding a
-chart type means editing
-[../../frontend/src/lib/charts/core.ts](../../frontend/src/lib/charts/core.ts),
-and the whole point of it being a file somebody has to edit is that they measure
-it in the same commit - the record went 25 percent stale in one day when six
-shapes were added and nobody re-measured. No reading route imports any of it,
-and [../../frontend/tests/charts.spec.ts](../../frontend/tests/charts.spec.ts)
-fails the build if a page ever preloads it.
-
-What a chart may take from a library is the arithmetic. `d3-scale` and
-`d3-array` map a domain to pixels and choose the tick values; they own no
-element, no canvas and no theme, and the marks, the SVG and the prerendering
-stay ours. `.nice` and `ticks` are the part a hand-rolled axis gets wrong,
-and getting it wrong shows as an axis labelled 0, 37, 74 that nobody can read a
-value off. The two are 20.5 KB together. **They are the only two that reach a
-reader**, since 2026-09-13: a bar takes its band scale from `d3-scale` in the
-browser, and `d3-selection`, `d3-axis` and `d3-shape` are not installed at all,
-which is a control rather than a preference - a package outside the lockfile
-cannot be imported onto a reading page.
-
-**A chart draws in CSS pixels at the width it occupies.** A `viewBox` is a scale
-factor, not a unit: four charts that each pick their own and then stretch to the
-column render the same `font-size` at four sizes. Measured 2026-08-25 at a
-1057px window, one console page put `font-size="10"` on screen at 4.5px in one
-panel and at 16.6px in the next. The width comes from one place -
-[../../frontend/src/lib/charts/frame.ts](../../frontend/src/lib/charts/frame.ts)
-- and the server draws at `console.chart_width`, so the page is complete before
-any script runs. A canvas cannot inherit a custom property inside the drawn
-pixels, so a canvas chart resolves tokens in JavaScript at mount and after every
-theme change - which ends the token file being the only place a colour is
-decided.
-
-**The rule is the same on the digest and the width arrives differently, because
-a reader's card is not a number a build can know.** A story's chart is drawn in
-the reader's browser, so its width is measured rather than configured:
-[../../frontend/src/lib/visual/width.ts](../../frontend/src/lib/visual/width.ts)
-reads the figure's content box and
-[../../frontend/src/lib/visual/bar.ts](../../frontend/src/lib/visual/bar.ts)
-places every mark in it, one unit to one pixel. Three things follow, and each one
-is a rule rather than an implementation note. **The measured width is floored to
-whole pixels**, so a drawing can never be wider than the box it was measured in
-and start a resize loop; the cost is that it can sit up to one pixel short, which
-is the tolerance
-[../../frontend/tests/item-visual.spec.ts](../../frontend/tests/item-visual.spec.ts)
-holds it to at three widths. **The height is a count of bars and does not depend
-on the width**, so the figure is its final height from the frame the marks land
-in and a story cannot shift while it is read - which is the promise the `viewBox`
-used to keep. And **the name sits above its bar**: a name column wide enough for
-the 40 characters the compiler allows leaves a phone nothing to draw a bar in, so
-the layout that works at 360px is the layout that ships at 1440px too.
+Do not introduce an engine that prerenders charts or requires a runtime server. Existing incompatible implementations follow [telemetry intent](telemetry-intent.md). Data preparation may happen in the producer; drawing and interaction happen on the reader's device.
 
 ## A figure on a chart is the article's or it is ours, and it never has to be guessed
 
-Every number a reader reads off an axis is one of two things and no third. It is
-the article's own characters, cut at a span anybody can re-slice; or it is
-arithmetic we performed over those characters, carrying a chain back to every one
-of them. `docs/architecture/publishing/visuals.md` holds the contract that makes
-that true. What binds a surface is the consequence of it.
-
-- **A converted figure is drawn in its converted form and never redrawn over the
- original.** `4.2 kt` and `4,200 t` are one quantity, and putting both on one
- page is two answers to one question. The axis carries the form the chart is
- drawn against.
-- **The accessible description carries what the article printed, where the two
- differ.** Nothing is lost by a conversion - the element still holds the
- characters - so the description is where a reader who wants the source figure
- is given it, rather than a second visible label competing with the first.
-- **A figure we computed is never presented as a figure the article stated.** A
- percentage that is a share of the slices, or a bar that is a count of values in
- a range, is what the caption says it is. This is the same rule as
- [a console figure says what it counts, in words](console-design.md#a-console-figure-says-what-it-counts-in-words),
- read from the reader's side.
-- **A chart with nothing to draw draws nothing.** A mark whose figure resolves to
- neither of the two ways is not softened, greyed or labelled "unavailable" - the
- item publishes with no picture, which reads exactly like the nine items in ten
- that never earned one.
-
-Shortening a number is a separate act and is not on this list: `2,000,000` drawn
-as `2M` is the same quantity in fewer glyphs. It is bound by the legibility floor
-like any other drawn label, and making a number shorter is not a licence to set it
-smaller.
+- Preserve source spans for stated values and a traceable derivation for computed values.
+- Draw a converted quantity once, in its converted unit. Include the source's original text in the accessible description when it differs.
+- Label computed shares, counts and aggregates as computations, not quotations from the article.
+- Do not draw an unsupported value. Publish the item without a picture when no valid drawing remains.
+- Shortening a number's notation does not permit smaller or illegible type.
 
 ## Design rationale
 
-**Three sentences were struck on 2026-08-29, and the reason is one mechanism
-rather than three mistakes.** This page opened with "Restraint is not a style
-choice on this project; it falls out of the architecture", [ui-shell.md](ui-shell.md)
-and [vision.md](vision.md) said the operator surfaces "earn no design budget",
-and the reading measure was written as a property of the shell. All three are
-defensible sentences and all three are the same error: an architectural
-constraint restated as a design value. Guardrail #1 constrains what may *execute* at
-read time and says nothing about what may be *drawn* - a gradient, an elevation
-scale and a self-hosted face cost a reader nothing at read time and the runner
-nothing at build time. But a constraint stated as a value stops needing a
-justification, so every additive proposal had to argue against the project's own
-doctrine while every subtractive one was pre-approved. The measurements that
-settled it are at the sufficiency gate above; the rejected alternative was
-softening the three sentences rather than striking them, refused because a
-softened absolute is still read as an absolute. Owner, 2026-08-29, over Jony's
-prior ruling.
+One token system and payload-driven states keep meaning consistent across pages and themes. A measured prose block preserves reading comfort without wasting dashboard width. Browser-drawn charts adapt to the actual device. Shared drawing data keeps marks, descriptions and narrow layouts consistent.
 
-**The token list on this page specified a shadow scale and a space scale that
-were never built.** That is the quieter half of the same failure: the doctrine
-was right and the implementation stopped short.
-
-**Sufficiency became a gate because the review roster was six vetoes and no
-demand.** Jony removes, Fowler deletes, Carmack refuses on budget, Reader and
-Editor report. Nothing asked whether the result was good enough to be worth a
-stranger's attention, and a system of pure vetoes converges on the minimum that
-passes every veto. Giving Jony the demand mandate as well was rejected: one head
-holding both "remove before adding" and "this is not enough" resolves to the veto
-every time. Susan was added at a distinct altitude instead, and a veto now has to
-name what the reader loses. Owner and Fowler, 2026-08-29.
-
-**Driving the look from fields the payload already carries** - visual kind, band,
-truncation - rather than from per-item styling is what keeps the surface one
-component instead of many, and it means a new visual kind or band arrives with a
-slot already waiting. The rejected alternative, bespoke treatment per item type,
-produces a page that must be edited every time the pipeline learns something new.
-Jony.
-
-**Keeping the motion set to three named animations is a deliberate under-build.**
-A reading surface that animates is a reading surface that interrupts. Jony, with
-Reader as the check.
-
-**Taking `d3-scale` and `d3-array` while still refusing a chart library on a
-reading route is one distinction, not two rules.** A chart library owns the
-element, the redraw and the theme, which is why the last one drew a second copy
-of a chart that already existed. A scale library returns a number. The rejected
-alternatives were all libraries that draw: `echarts` (canvas), `@observablehq/plot`
-(needs a DOM shim to prerender), `chart.js` (canvas), `uplot`, and a component
-library, which is worst of all when every chart on the surface is bespoke. A CDN
-was rejected on top of all of them: the HTTP cache is partitioned per site, so
-the shared-cache argument is dead, and the repo's `script-src` allows `self`
-only. "Fix the units without the dependency" was rejected last, because `.nice`
-and `ticks` are exactly the part hand-rolling gets wrong. Jony and Carmack,
-2026-08-25, owner accepted; overruled for the operator surface only on
-2026-08-29, on the three conditions in the chart section above.
-
-Three lessons from that reversal are recorded because they are more transferable
-than the ruling. **A byte count is a measurement and goes stale like any other** -
-a design argument leaning on a number someone took months ago has not met Guardrail
-#10. **An argument that generalises from the worst implementation of a thing is
-not an argument about the thing** - "a canvas cannot inherit a custom property"
-is true of canvas and false of the SVG renderers those libraries also ship. And
-**check whether the thing a dependency is supposed to buy is already built**: the
-case for the engine was that it buys a pointer readout, and `frame.ts` already
-had one covering mouse, pen, touch and keyboard - two of the four charts were
-simply never wired to it.
-
-**A plot gets no ground of its own, and gate 2 fails one that has.** The plan
-that wrote the ten gates had gate 4 fail "a plot with no tint or elevation
-separating it from the panel". Susan struck that clause on 2026-09-28, because a
-tint under a plot is paid for by every mark drawn on it. The ratios are
-arithmetic over the committed hex values, the same way
-[a fill is not a text colour](#a-fill-is-not-a-text-colour) computes its own: in
-light, `--fill-medium` reads 3.26:1 on the panel and 2.89:1 on
-`--color-surface-sunken`, which takes it under the 3:1 floor a fill has to
-clear; the chart grid falls from 1.20:1 to 1.07:1, which is no line at all; and
-in dark, the chart axis falls from 3.2:1 on the panel to 2.76:1 on the neutral
-tint. The separation a plot needs is the panel's against the page, and that is
-the pair gate 2 measures. Fowler agreed.
-
-**Gate 6 reads the declaration `DateSeries` already makes.** The same plan named
-a new attribute, `data-settings-rule`. `DateSeries` already declares
-`data-model-rule`, with the rule's name and the sentence it draws when no setting
-changed inside the span, so a second attribute would be a second answer to one
-question, free to disagree with the first. Fowler and Susan, 2026-09-28.
-
-**Gate 1 measures covered width.** The widest single plot fails a panel of two
-small charts that fill its width between them, and the span from the leftmost
-plot to the rightmost passes two thin charts at opposite edges; covered width is
-the only one of the three that asks whether the width is used. Susan,
-2026-09-28. `console.plot_min_fill_share` (0.85) is an estimate: no judged panel
-has printed a share yet, and the shares the first judged panels print are the
-measurement that would move it.
-
-### The footer ships as one row of links, and it fails two sufficiency checks
-
-**On 2026-09-09 the footer lost three of its four blocks and gained nothing.**
-What is left is the three links: Archive, Console, Source code. This entry
-exists because that surface fails the gate above, and `CLAUDE.md` section 9 says
-a surface that fails ships only with the reason written down.
-
-Two of the gates fail. **Nothing lands first** (gate 3) - three links of one
-weight in one row have no order to be read in. And **it does not look like it was
-made this year** (gate 4): a bare link strip under a hairline is the plainest footer a page
-can have, and it is the exact "thin, cold, unloved" shape Susan exists to catch
-([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)).
-Measured 2026-09-09 in Chromium at 1280x900 on the canary build, the same on all
-five routes that have a footer: the block is **102 px tall and holds three
-links**, against 3 blocks and 2 paragraphs before. Gates 1 and 2 pass -
-the footer uses the width of the frame it sits in, and the top rule plus
-`--color-text-tertiary` still hold it away from the reading surface.
-
-**What the reader loses, named rather than implied.** The build line said which
-commit produced the page, so a reader who thought something looked wrong could
-open that commit; there is now no way to tell one build from another from the
-page. The verification sentence - "Every summary is checked against the article
-it came from" - was the only place that told a stranger why an item is allowed
-to say it is unsure, and Reader
-([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md))
-argued to keep it beside the day. The retention promise is now stated on
-`/archive/` alone, so a reader on a dated page is told nothing about what may
-later be deleted.
-
-**Why it ships anyway.** Every one of those sentences is read off the newest day
-or off the build, and the footer is on every page - so each rewrote the bytes of
-every document on the site whenever anything published, leaving a page a reader
-already holds stale for a reason that is nothing to do with what it says. The
-measurement, and the alternatives the owner refused, are in
-[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
-
-**What would fix the two failed checks costs nothing this row cares about,** and
-it is written here so the next person does not have to rediscover it: the footer
-needs one block that does not come from a day or a build. A sentence about what
-the site is, set above the links at the heading step, would give the eye
-somewhere to land and give the strip a reason to be a footer rather than a
-leftover. It is a fixed string, so it moves no bytes on any later run.
+The shared footer must not depend on the latest day's data or build identity: either would change unrelated pages on every publication. The current link-only footer has limited visual hierarchy. Improve it with stable content rather than restoring those dependencies.
 
 ## See also
 
-- [console-design.md](console-design.md) - the operator half: how a console figure is worded, ranked, tinted and drawn.
-- [ui-shell.md](ui-shell.md) - the chrome that consumes these tokens.
-- [../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md) - who rules the sufficiency checks, and why the roster needed a demand side.
-- [../../CLAUDE.md](../../CLAUDE.md) - section 14 carries the authority assignment, and the rule that a veto must name what the reader loses.
-- [digest.md](digest.md) - the item shape this vocabulary dresses.
-- [evaluation.md](evaluation.md) - where the confidence bands come from.
-- [principles.md](principles.md) - the beliefs behind the restraint.
-- [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - the console projection.
-- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the payload fields the styling keys off.
-- [../../CLAUDE.md](../../CLAUDE.md) - section 0a (accessibility scope) and section 12 (published-site verification).
+- [console-design.md](console-design.md) - operator presentation rules.
+- [ui-shell.md](ui-shell.md) - shared page chrome.
+- [digest.md](digest.md) - reading-item structure.
+- [config/appearance.md](config/appearance.md) - appearance controls.
+- [telemetry-intent.md](telemetry-intent.md) - browser rendering and data requirements.
+- [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - visual verification.

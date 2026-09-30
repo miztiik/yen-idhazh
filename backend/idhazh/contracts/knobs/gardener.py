@@ -466,6 +466,23 @@ class HistoryPolicy(_Declared):
             "force-push of main, the one exception CLAUDE.md section 8 allows."
         ),
     )
+    push_attempts: int = Field(
+        ge=1,
+        description=(
+            "How many pushes one run makes in all. A push is refused when main moved "
+            "after the run read it, and each refusal is followed by a whole new squash "
+            "on the new tip. After the last refusal the run is not recorded, so the "
+            "squash is due again at the next daily wake. No default."
+        ),
+    )
+    push_retry_delay_seconds: int = Field(
+        ge=0,
+        description=(
+            "How many seconds a run waits after a refused push before it fetches main "
+            "and squashes again. Every wait, and every squash, must fit inside the "
+            "history job's timeout. No default."
+        ),
+    )
 
 
 #: One declaration, validated by the member its `kind` names. A key that belongs

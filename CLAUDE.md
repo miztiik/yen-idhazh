@@ -1,6 +1,6 @@
 # CLAUDE.md - Yen Idhazh: Engineering Contract
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -211,7 +211,7 @@ Avoid (broad / lossy / history-rewriting):
 
 **The standing exception is the `history` job of `.github/workflows/idhazh-gardener.yml`.** It squashes commits older than the `window` of `config/gardener/corpus-squash.json` and force-pushes `main`, every `every_days` of that same declaration. The workflow's other jobs push without force, and the exception does not reach them. The standing exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
 
-**The exception does not cover forcing over another run.** The job reads origin's tip again immediately before the push and refuses if it moved, because a force push replaces the whole ref and would delete a commit that landed while the squash ran. A refused prune writes no stamp, so it is due again at the next daily wake - it costs one day, not one cadence. Owner decision, 2026-09-22.
+**The exception does not cover forcing over another run.** The job pushes with a lease on the tip it read before it rewrote anything (`--force-with-lease=refs/heads/main:<tip>`), because a force push replaces the whole ref and would delete a commit that landed while the squash ran: git refuses the push if `main` moved. After a refusal the job fetches the new tip, squashes again on it and pushes with a lease on that, up to `push_attempts` pushes in all (`config/gardener/corpus-squash.json`). After the last refusal it writes no stamp, so the squash is due again at the next daily wake - it costs one day, not one cadence. Owner decision, 2026-09-22; the lease and the retry are the person's ruling of 2026-09-29.
 
 What it costs, stated rather than implied: a squash boundary is per-commit, not per-path, so the range it collapses carries `backend/`, `docs/` and `state/` as well as `corpus/`. `git blame` and `git bisect` reach back `window` to `window + every_days` and no further, and a commit SHA older than that stops resolving. A clone taken before a prune has to be re-fetched.
 

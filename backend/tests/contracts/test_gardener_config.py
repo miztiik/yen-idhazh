@@ -123,6 +123,40 @@ def test_the_committed_gardener_config_loads_and_the_squash_is_its_one_history_t
     assert (settings.config.attempts, settings.config.shards) == (6, 5)
     history = [name for name, policy in settings.tasks.items() if isinstance(policy, HistoryPolicy)]
     assert history == ["corpus-squash"]
+    squash = settings.tasks["corpus-squash"]
+    assert isinstance(squash, HistoryPolicy)
+    assert (squash.push_attempts, squash.push_retry_delay_seconds) == (3, 60)
+
+
+@pytest.mark.parametrize("key", ["push_attempts", "push_retry_delay_seconds"])
+def test_a_history_declaration_without_a_push_key_is_refused_by_name(
+    tmp_path: Path, key: str
+) -> None:
+    """Neither has a default: the file says how often the squash pushes and how long it waits."""
+    declared = {name: value for name, value in fixture("history").items() if name != key}
+    message = refused(a_garden(tmp_path, history=declared))
+    assert "config/gardener/history.json is refused" in message and key in message
+
+
+@pytest.mark.parametrize(
+    ("changes", "loads"),
+    [
+        ({"push_attempts": 0}, False),
+        ({"push_attempts": 1}, True),
+        ({"push_retry_delay_seconds": -1}, False),
+        ({"push_retry_delay_seconds": 0}, True),
+    ],
+)
+def test_a_squash_pushes_at_least_once_and_never_waits_less_than_nothing(
+    tmp_path: Path, changes: dict[str, int], loads: bool
+) -> None:
+    config_dir = a_garden(tmp_path, history=fixture("history", **changes))
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "config/gardener/history.json is refused" in message
+        assert all(key in message for key in changes)
 
 
 def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None:
