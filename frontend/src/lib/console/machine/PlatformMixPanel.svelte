@@ -120,11 +120,12 @@
 	const folds = $derived(foldSentences(view));
 	const keyed = $derived(ramp.steps.some((step) => step.low !== null));
 	const spanText = $derived(windowDays === 1 ? 'the last day' : `the last ${windowDays} days`);
+	/** One sentence, whose last clause names the span in the digits every
+	 * Hardware subtitle uses, so the page reads alike from panel to panel. */
 	const note = $derived(
-		'We do not pick the machine. The platform hands us one at the start of every job, so a slow ' +
-			'week can be the machine rather than the code. Each day is split by the kind of machine ' +
-			`that ran its jobs, over ${spanText}. It counts what we were given and predicts nothing ` +
-			'about the next job. The stronger the colour, the faster the machine.'
+		'We do not pick the machine: the platform hands us one at the start of every job, so a slow ' +
+			'week can be the machine rather than the code - each day split by the kind that ran its jobs, ' +
+			`over the last ${windowDays} days.`
 	);
 	const hint =
 		"Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest. Click or Enter lists that day's jobs.";
@@ -187,12 +188,14 @@
 					{#each folds as fold (fold)}
 						<span data-fleet-fold>{fold}</span>
 					{/each}
+					This counts what we were given and predicts nothing about the next job.
 				</p>
 				{#if keyed}
 					<!-- The speed each colour stands for, named by the kinds that land on
 					     it over the whole record, so the key holds still when the span
 					     moves. The strip under the plot names every row. -->
 					<p class="speed-key" data-fleet-speed-key>
+						<span class="key-lead">The stronger the colour, the faster the machine.</span>
 						<span class="key-end">Slower</span>
 						{#each ramp.steps as step (step.step)}
 							<span class="key-step" data-fleet-speed-step={step.step}>
@@ -329,6 +332,13 @@
 
 	.key-end {
 		font-weight: 600;
+		color: var(--color-text-secondary);
+	}
+
+	/* The key's sentence takes a line of its own, so the steps under it read as
+	   one row from slower to faster. */
+	.key-lead {
+		flex-basis: 100%;
 		color: var(--color-text-secondary);
 	}
 

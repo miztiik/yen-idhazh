@@ -80,8 +80,11 @@
 
 	/** The day a pointer or a key has picked, or null for the resting one. */
 	let selected = $state<number | null>(null);
+	/** A day held open is the strip's resting day until it is closed, so a tap
+	 * that opened a list leaves that day's numbers under the plot. */
+	const shown = $derived(selected ?? picked);
 	const marks = $derived(readout === null ? [] : readoutMarks(geometry?.columns ?? []));
-	const showing = $derived(selected ?? readout?.resting ?? null);
+	const showing = $derived(shown ?? readout?.resting ?? null);
 	const pattern = $derived(`${name}-hatch`);
 </script>
 
@@ -211,7 +214,7 @@
 			     console prints: it is the key as well, so no second key is drawn. -->
 			<ChartReadout
 				{readout}
-				at={selected}
+				at={shown}
 				{name}
 				maxShare={readoutMaxShare}
 				{restingNote}

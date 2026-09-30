@@ -52,9 +52,12 @@
 	const HELD = 2;
 
 	let selected = $state<number | null>(null);
+	/** A day held open is the strip's resting day until it is closed, so a tap
+	 * that opened a list leaves that day's numbers under the plot. */
+	const shown = $derived(selected ?? picked);
 	const box = $derived(geometry.frame);
 	const marks = $derived(readoutMarks(geometry.columns));
-	const showing = $derived(selected ?? readout.resting);
+	const showing = $derived(shown ?? readout.resting);
 </script>
 
 <div class="fleet-dots-plot" data-readout-columns={readout.columns.length}>
@@ -140,7 +143,7 @@
 				stroke="var(--color-text-tertiary)"
 				stroke-opacity="0.5"
 				data-fleet-guide
-			/>
+			/>hown
 		{/if}
 	</svg>
 	<ChartReadout {readout} at={selected} {name} maxShare={readoutMaxShare} {restingNote} {hint} />
