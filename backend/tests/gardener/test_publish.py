@@ -162,17 +162,19 @@ def test_one_record_with_two_identities_is_exit_2(
     assert on_origin(origin, RECORD) == '{"task": "old"}\n'
 
 
-def test_something_staged_outside_the_shard_is_exit_2(
+def test_a_folder_named_as_a_write_is_refused_before_anything_stages(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A folder handed over as a write stages every file inside it, which nobody declared."""
+    """A folder handed over as a write stands for every file inside it, which nobody declared."""
     origin, checkout = a_checkout(tmp_path, monkeypatch)
     write(checkout / "state/newdir/x.txt", "x\n")
 
     code, said = landed(a_shard(written={"state/newdir"}), checkout)
 
     assert code == EXIT_INTEGRITY
-    assert any("state/newdir/x.txt staged" in line for line in said)
+    assert said == [
+        "shard 0: state/newdir is a folder, and a shard writes and deletes files one at a time"
+    ]
     assert on_origin(origin, RECORD) is None
 
 
@@ -235,7 +237,9 @@ def test_a_folder_named_for_deletion_is_refused_before_anything_stages(
     code, said = landed(a_shard(deleted={"state/dir"}), checkout)
 
     assert code == EXIT_INTEGRITY
-    assert said == ["shard 0: state/dir is a folder, and a shard deletes files one at a time"]
+    assert said == [
+        "shard 0: state/dir is a folder, and a shard writes and deletes files one at a time"
+    ]
     assert git(checkout, "diff", "--cached", "--name-only") == ""
 
 

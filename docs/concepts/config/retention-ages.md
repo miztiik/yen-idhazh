@@ -253,7 +253,7 @@ series, so the two spellings of that number are refused unless they agree.
 old value from a frozen copy of the file as it was and checks the declaration
 holds the same one, key by key. **One value changed later, on purpose.** The eval
 rows' 14 months became `forever` when every eval row was kept for ever and
-nothing summarised a month (owner, 2026-09-30), so both score names now point at
+nothing summarised a month, so both score names now point at
 the compaction window that keeps every row, and the test names that one change
 with its reason.
 

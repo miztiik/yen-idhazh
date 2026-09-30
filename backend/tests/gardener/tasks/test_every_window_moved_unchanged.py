@@ -36,8 +36,8 @@ pytestmark = pytest.mark.contract
 WINDOWS: Final = FIXTURES_DIR / "gardener" / "prune-oracle" / "windows.json"
 
 #: Each window that changed on purpose after it moved, as its value then and now.
-#: Every eval row is kept for ever and nothing summarises a month (owner,
-#: 2026-09-30), so the rows' fourteen months became forever.
+#: Every eval row is kept for ever and nothing summarises a month, so the rows'
+#: fourteen months became forever.
 CHANGED_ON_PURPOSE: Final[dict[str, tuple[Any, Any]]] = {
     "observability.scores_full_grain_months": (14, None),
 }

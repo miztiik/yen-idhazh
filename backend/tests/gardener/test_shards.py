@@ -1,10 +1,9 @@
 """Does a wake split its active tasks into shards the same way every time, with none empty?
 
 The split is round-robin over sorted task names, into the smaller of
-`shards` and the number of tasks, and a shard checks out exactly the folders
-its tasks own. These tests read a fixture garden of eleven declarations - every
-status and every kind - so each rule is tested against the cases it has to
-leave out as well as the ones it takes.
+`shards` and the number of tasks. These tests read a fixture garden of eleven
+declarations - every status and every kind - so each rule is tested against the
+cases it has to leave out as well as the ones it takes.
 """
 
 from __future__ import annotations
@@ -21,9 +20,6 @@ from idhazh.gardener import shards
 from ._garden import GARDENER_FIXTURES, a_config
 
 pytestmark = pytest.mark.contract
-
-#: The folders a cone may never be: a whole root that holds every ledger.
-BARE_ROOTS = frozenset({"state", "state/raw", "state/compact"})
 
 
 def the_garden(tmp_path: Path) -> GardenerSettings:
@@ -65,25 +61,6 @@ def test_fewer_tasks_than_shards_is_one_shard_a_task(tmp_path: Path) -> None:
     planned = shards.plan(settings)
     assert planned.shard_count == len(settings.tasks) == 3
     assert all(len(shard.task_names) == 1 for shard in planned.shards)
-
-
-def test_a_cone_is_what_its_tasks_own_and_the_complement_adds_nothing(tmp_path: Path) -> None:
-    """Every owned folder is in exactly one shard's cone, and no cone is a whole root."""
-    settings = the_garden(tmp_path)
-    planned = shards.plan(settings)
-    cones = {shard.index: shard.cone for shard in planned.shards}
-
-    assert cones[1] == ("state/feed-health",), "the complement task added a folder"
-    assert cones[2] == ("state/score-index",)
-    owned = [
-        folder
-        for shard in planned.shards
-        for name in shard.task_names
-        for folder in settings.tasks[name].owns or ()
-    ]
-    everywhere = [folder for cone in cones.values() for folder in cone]
-    assert sorted(everywhere) == sorted(owned)
-    assert BARE_ROOTS.isdisjoint(everywhere)
 
 
 def test_an_empty_garden_is_the_empty_shape_on_one_line(tmp_path: Path) -> None:

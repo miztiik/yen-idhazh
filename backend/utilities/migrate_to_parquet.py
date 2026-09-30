@@ -69,6 +69,7 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.gardener.file_listing import FileListing
 
 # The compaction's own daily step, reached into on purpose: the packing a person
 # chose for this one move is the packing a live pass does, and a copy of it here
@@ -248,7 +249,8 @@ def _pack(
 ) -> list[str]:
     """Run the compaction's daily step live over this ledger, and name the days it packed."""
     now = datetime.combine(today, time.min, tzinfo=UTC)
-    tree = CompactTree.read(state_dir, which)
+    listing = FileListing.from_disk(state_dir.parent, policy.owns or ())
+    tree = CompactTree.read(state_dir, which, listing)
     before = dict(tree.daily)
     first_kept = _monthly_period.first_kept_month(
         now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
