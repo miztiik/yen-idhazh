@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -15,6 +15,7 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Confirm the interpreter and imported package belong to the intended environment and checkout. Use the documented `IDHAZH_PYTHON` setting for frontend commands that invoke Python.
 - Keep inputs unchanged during a check. If a test dirties tracked files, fix its output location rather than bypassing the input check.
 - Drive migrations and failure states with bounded fixtures. Confirm the fixture reaches the behavior under test; do not skip an assertion because its required control or data is absent.
+- Before moving a document or changing a table, check for tests and tools that read it. Repair those inputs as well as Markdown links.
 - Use the complete project build command. For byte comparisons, use one fixed `BUILD_VERSION` across both builds so generated identifiers do not change. Never measure output from a failed build.
 - Compare CI's actual candidate and failure with your local tree before attributing a regression. A conflict-free merge does not prove that the combined changes work.
 
