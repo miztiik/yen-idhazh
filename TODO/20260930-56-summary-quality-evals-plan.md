@@ -58,7 +58,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The score month summary is retired, and no eval row is ever deleted | - | A | IN-FLIGHT | p56r1 | - | p56-r1-worker |
+| 1 | The score month summary is retired, and no eval row is ever deleted | - | A | DONE | p56r1 | #1170 | p56-r1-worker |
 | 2 | The shared packing gains a year period | - | A | NOT STARTED | - | - | - |
 | 3 | The eval ledger becomes `summary-quality-evals`, and its ID files stop growing | 1 | B | NOT STARTED | - | - | - |
 
