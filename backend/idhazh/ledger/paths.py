@@ -293,19 +293,22 @@ def compact_path(
 ) -> Path:
     """Where one compact period's file sits, named for what it covers.
 
-    `compact/<ledger>/daily/<YYYY>/<MM>/<DD>` or `compact/<ledger>/monthly/<YYYY>/<MM>`.
-    A compact period has one writer, so its name is the period rather than a
-    minted id, and a reader can compute the address. `covers` has to be the shape
-    `period` covers, or this refuses rather than file a month under a day.
+    `compact/<ledger>/daily/<YYYY>/<MM>/<DD>`, `compact/<ledger>/monthly/<YYYY>/<MM>`
+    or `compact/<ledger>/yearly/<YYYY>/<YYYY>`. A compact period has one writer, so its
+    name is the period rather than a minted id, and a reader can compute the
+    address. `covers` has to be the shape `period` covers, or this refuses rather
+    than file a month under a day. No file sits directly beside its period's
+    watermark, a year file included, because fetching a watermark into a checkout
+    that holds only names brings every file beside it.
     """
     if not covers_fits(covers, tier=Tier.COMPACT, period=period):
         raise ValueError(
-            f"{covers!r} is not a {period.value} period: a daily file covers YYYY-MM-DD "
-            "and a monthly file covers YYYY-MM"
+            f"{covers!r} is not a {period.value} period: a daily file covers YYYY-MM-DD, "
+            "a monthly file covers YYYY-MM and a yearly file covers YYYY"
         )
     *folders, leaf = covers.split("-")
     built = state_dir.joinpath(
-        COMPACT_DIRNAME, ledger.value, period.value, *folders, f"{leaf}.{fmt.value}"
+        COMPACT_DIRNAME, ledger.value, period.value, *(folders or [leaf]), f"{leaf}.{fmt.value}"
     )
     return _under_the_two_roots(state_dir, built)
 

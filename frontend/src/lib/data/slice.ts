@@ -1,15 +1,16 @@
 /**
  * Which compact files does a closed range of UTC days need?
  *
- * For each day, the coarsest period that holds it: the month file when
- * `monthly.json` names the day's month, otherwise the day file when `daily.json`
- * names the day. So a day is read through exactly one file, and a day both
- * indexes name is read from the month - reading it twice would double every
- * number drawn from it. A day neither index names is a hole, and the first one,
- * ascending, comes back instead of a file set: drawing the days around a hole
- * would be an undercount nobody could see.
+ * For each day, the coarsest period that holds it: the year file when
+ * `yearly.json` names the day's year, else the month file when `monthly.json`
+ * names the day's month, otherwise the day file when `daily.json` names the day.
+ * So a day is read through exactly one file, and a day two indexes name is read
+ * from the coarser - reading it twice would double every number drawn from it.
+ * A day no index names is a hole, and the first one, ascending, comes back
+ * instead of a file set: drawing the days around a hole would be an undercount
+ * nobody could see.
  *
- * Pure: it takes the range and the two entry lists, and reads nothing else.
+ * Pure: it takes the range and the three entry lists, and reads nothing else.
  */
 
 import type { CompactEntry, Period } from './compact-index';
@@ -41,15 +42,18 @@ export function filesFor(
 	from: DateStamp,
 	to: DateStamp,
 	daily: readonly CompactEntry[],
-	monthly: readonly CompactEntry[]
+	monthly: readonly CompactEntry[],
+	yearly: readonly CompactEntry[]
 ): FileSelection {
+	const years = new Map(yearly.map((entry) => [entry.covers, entry]));
 	const months = new Map(monthly.map((entry) => [entry.covers, entry]));
 	const days = new Map(daily.map((entry) => [entry.covers, entry]));
 	const chosen = new Map<string, ChosenFile>();
 	for (const day of daysBetween(from, to)) {
-		const month = months.get(day.slice(0, 7));
-		const period: Period = month ? 'monthly' : 'daily';
-		const entry = month ?? days.get(day);
+		const year = years.get(day.slice(0, 4));
+		const month = year === undefined ? months.get(day.slice(0, 7)) : undefined;
+		const period: Period = year ? 'yearly' : month ? 'monthly' : 'daily';
+		const entry = year ?? month ?? days.get(day);
 		if (entry === undefined) return { hole: day };
 		const key = `${period}/${entry.covers}`;
 		if (!chosen.has(key)) chosen.set(key, { period, entry, firstDay: day });

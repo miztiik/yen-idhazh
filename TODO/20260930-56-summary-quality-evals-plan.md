@@ -4,7 +4,7 @@
 
 **Level**: 5 (CLAUDE.md section 6). It deletes a persisted contract, adds a period to the saved file format, and renames a committed ledger. The person's rulings below are the design consultation; the ESCALATE triggers name what still stops a worker.
 
-**Status**: row 1 is done (#1170). Row 2 is built and merges as built (#1172), by the person's ruling R5 on trigger 4. Row 3 is next. Row 4, added by R5, makes the browser read only the byte ranges it needs, and then shortens the wait before a year a published ledger reads is packed.
+**Status**: rows 1 and 2 are done (#1170, #1172). Row 2 merged as built, by the person's ruling R5 on trigger 4. Row 3 is next. Row 4, added by R5, makes the browser read only the byte ranges it needs, and then shortens the wait before a year a published ledger reads is packed.
 
 **Chain** (CLAUDE.md section 0d). **Intent**: the person's rulings of 2026-09-30, section 0. **Contract**: `backend/idhazh/contracts/` and the pages each row names. **Code**: the three rows.
 
@@ -63,7 +63,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The score month summary is retired, and no eval row is ever deleted | - | A | DONE | p56r1 | #1170 | p56-r1-worker |
-| 2 | The shared packing gains a year period | - | A | NOT STARTED | - | - | - |
+| 2 | The shared packing gains a year period | - | A | DONE | p56r2 | #1172 | p56-r2-worker |
 | 3 | The eval ledger becomes `summary-quality-evals`, and its ID files stop growing | 1 | B | NOT STARTED | - | - | - |
 | 4 | The browser reads a year file by byte ranges, and a published ledger's year waits 77 days | 2 | B | NOT STARTED | - | - | - |
 
@@ -71,6 +71,9 @@ A worker commits and pushes the moment its gates pass, and measures after.
 
 | # | Row | The plan said | What is true, and why | Authority |
 | --- | --- | --- | --- | --- |
+| 1 | 2 | Trigger 4 stops row 2 | It fired at 11.97 times the month file, because the browser downloads a whole file. Row 2 merged as built, a published ledger waits 367 days for its year to pack, and row 4 moves the browser to byte ranges | The person, R5 |
+| 2 | 2 | A year file sits at `yearly/<YYYY>.parquet` | It sits at `yearly/<YYYY>/<YYYY>.parquet`. Plan 50's row 14 made the upkeep checkout fetch a watermark together with every file beside it, so a year file beside the year watermark would be downloaded on every wake. No year file existed, so nothing moved on disk | Plan owner, forced by #1173 |
+| 3 | 2 | `compact-scores.json` turns year packing on | It does not. Row 3 renames that file, so the switch is written once, in `compact-summary-quality-evals.json` | Row 2 worker |
 
 ---
 
@@ -94,7 +97,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 
 ### Row #2 - The shared packing gains a year period
 
-- **Scope (R3).** The compaction in `backend/idhazh/gardener/tasks/` (`compaction.py`, `_compact_tree.py`, `_monthly_period.py`, `_daily_period.py`) gains a third period. When a year is done, its month files are packed into `state/compact/<ledger>/yearly/<YYYY>.parquet`, the yearly index and watermark are written, and the month files are deleted, in that order, so a pass that dies part way loses nothing. It is written once and serves every ledger; a declaration turns it on.
+- **Scope (R3).** The compaction in `backend/idhazh/gardener/tasks/` (`compaction.py`, `_compact_tree.py`, `_monthly_period.py`, `_daily_period.py`) gains a third period. When a year is done, its month files are packed into `state/compact/<ledger>/yearly/<YYYY>/<YYYY>.parquet`, the yearly index and watermark are written, and the month files are deleted, in that order, so a pass that dies part way loses nothing. It is written once and serves every ledger; a declaration turns it on.
 - **Contract changes:** `Period` in `backend/idhazh/contracts/file_envelope.py` gains `yearly`; the index and watermark shapes in `backend/idhazh/contracts/ledger_index.py` cover it; the path builders in `backend/idhazh/ledger/paths.py` build it; the compaction policy in `backend/idhazh/contracts/knobs/gardener.py` gains the opt-in and its timing. Version stamps and changelog entries where CLAUDE.md section 11 asks for them.
 - **The browser's readers** learn year files: `COMPACT_PERIODS` in `frontend/src/lib/data/compact-index.ts`, `slice-reader.ts` and `ledger-reach.ts`, with the tests that bind the frontend copy to the contracts.
 - **Measure (ESCALATE trigger 4):** what reading one month out of a year file costs the browser, against reading that month's own file. A year file written with one row group per month is the design to test first.
@@ -106,6 +109,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 ### Row #3 - The eval ledger becomes `summary-quality-evals`, and its ID files stop growing
 
 - **Scope (R2, R4).** `LedgerName.SCORES` becomes `summary-quality-evals`: `state/raw/<name>/`, `state/compact/<name>/`, its entry in `config/ledgers.json`, `config/gardener/compact-<name>.json`, the code that names it (about 28 backend modules and 8 frontend files), and the docs. Every committed file moves, and the migration reads every row back cell for cell before it deletes an old file (ESCALATE trigger 2).
+- **Year packing (R3):** the renamed `config/gardener/compact-summary-quality-evals.json` sets `monthly_keep_days`, the switch row 2 left for this row (deviation 3). It is not published, so it may wait as little as `daily_keep_days` plus 32 days.
 - **Design questions for dispatch (Fowler and Carmack):**
   1. Each committed file's envelope names its ledger. Is every file rewritten, or does the reader accept the old name for one release?
   2. Does `unit_id` include the ledger name? If so, every file is filed again under a new name.

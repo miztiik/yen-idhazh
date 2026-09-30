@@ -21,7 +21,7 @@ columns: the cells every row carries about the writer that first filed it,
 which a compact file keeps as they were.
 
 Every instant here is UTC: `written_at_ms` is epoch milliseconds and `covers` is
-a UTC day or month (CLAUDE.md section 2).
+a UTC day, month or year (CLAUDE.md section 2).
 """
 
 from __future__ import annotations
@@ -30,13 +30,14 @@ import re
 import uuid
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, ClassVar, Final, Self
+from typing import Annotated, ClassVar, Final, Self, assert_never
 
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
     DATE_PATTERN,
     MONTH_PATTERN,
+    YEAR_PATTERN,
     ChangelogEntry,
     CommitSha,
     Contract,
@@ -63,6 +64,7 @@ class Period(StrEnum):
 
     DAILY = "daily"
     MONTHLY = "monthly"
+    YEARLY = "yearly"
 
 
 class Format(StrEnum):
@@ -86,9 +88,11 @@ class Compression(StrEnum):
 
 
 #: What `covers` must look like for each kind of file. A raw file and a daily
-#: file cover one UTC day; a monthly file covers one UTC month.
+#: file cover one UTC day; a monthly file covers one UTC month; a yearly file
+#: covers one UTC year.
 _DAY: Final = re.compile(DATE_PATTERN)
 _MONTH: Final = re.compile(MONTH_PATTERN)
+_YEAR: Final = re.compile(YEAR_PATTERN)
 
 #: The module that wrote a file, as a dotted name inside the ledger package.
 _WRITER_PATTERN: Final = r"^idhazh\.ledger\.[a-z_]+$"
@@ -127,12 +131,22 @@ def covers_fits(covers: str, *, tier: Tier, period: Period | None) -> bool:
     """Whether a period stamp has the shape this kind of file covers.
 
     A raw file and a daily file cover a UTC day; a monthly file covers a UTC
-    month. Asked by the envelope when it validates and by the door before it
-    builds a path, so the two cannot disagree about what a period looks like.
+    month; a yearly file covers a UTC year. Asked by the envelope when it
+    validates and by the door before it builds a path, so the two cannot
+    disagree about what a period looks like.
     """
-    if tier is Tier.RAW or period is Period.DAILY:
+    if tier is Tier.RAW or period is None:
         return _DAY.fullmatch(covers) is not None
-    return _MONTH.fullmatch(covers) is not None
+    match period:
+        case Period.DAILY:
+            shape = _DAY
+        case Period.MONTHLY:
+            shape = _MONTH
+        case Period.YEARLY:
+            shape = _YEAR
+        case _:
+            assert_never(period)
+    return shape.fullmatch(covers) is not None
 
 
 class WriterIdentity(Model):
@@ -208,6 +222,11 @@ class FileEnvelope(Contract):
     __schema_stem__: ClassVar[str] = "file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-30",
+            change="period may be yearly, and covers then holds a UTC year, YYYY.",
+            why="A finished year's month files may be packed into one year file.",
+        ),
+        ChangelogEntry(
             version="2026-09-28",
             change="built_from is filled for the first time, on each file the compaction writes.",
             why="A compact file says how many files it read, so its rebuild can be checked.",
@@ -231,13 +250,14 @@ class FileEnvelope(Contract):
     ledger: LedgerName = Field(description="Which ledger the rows belong to.")
     covers: PeriodStamp = Field(
         description=(
-            "The UTC day (`2026-09-23`) a raw or daily file covers, or the UTC month "
-            "(`2026-08`) a monthly file covers. Never the day the file was written."
+            "The UTC day (`2026-09-23`) a raw or daily file covers, the UTC month "
+            "(`2026-08`) a monthly file covers, or the UTC year (`2026`) a yearly file "
+            "covers. Never the day the file was written."
         )
     )
     period: Period | None = Field(
         default=None,
-        description="`daily` or `monthly` on a compact file. Absent on a raw file.",
+        description="`daily`, `monthly` or `yearly` on a compact file. Absent on a raw file.",
     )
     written_at_ms: int = Field(
         ge=0,
@@ -296,8 +316,8 @@ class FileEnvelope(Contract):
         if (self.tier is Tier.COMPACT) != (self.period is not None):
             raise ValueError(
                 f"a {self.tier.value} file {'needs' if self.tier is Tier.COMPACT else 'names no'} "
-                "period: a compact file covers a daily or monthly period and a raw file "
-                "covers the day its writer filed it under"
+                "period: a compact file covers a daily, monthly or yearly period and a raw "
+                "file covers the day its writer filed it under"
             )
         if self.tier is Tier.RAW and self.built_from is not None:
             raise ValueError("a raw file was read from nothing, so it carries no built_from")
@@ -305,7 +325,8 @@ class FileEnvelope(Contract):
             raise ValueError(
                 f"covers {self.covers!r} is not the shape a {self.tier.value} "
                 f"{self.period.value + ' ' if self.period else ''}file covers: a raw or "
-                "daily file covers YYYY-MM-DD and a monthly file covers YYYY-MM"
+                "daily file covers YYYY-MM-DD, a monthly file covers YYYY-MM and a yearly "
+                "file covers YYYY"
             )
         return self
 

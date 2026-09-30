@@ -380,8 +380,10 @@ and deletes nothing. How to read the list and turn one live is
 
 **A compaction moves one ledger's rows out of the many small raw files its
 writers leave, into one file a day and then one file a month, and deletes what
-it moved.** A raw file holds one writer's rows for one day, so a ledger gains a
-file on every run, and at a few rows a file a parquet file is mostly its footer.
+it moved.** Where its declaration asks, it then packs each finished year's month
+files into one file a year. A raw file holds one writer's rows for one day, so a
+ledger gains a file on every run, and at a few rows a file a parquet file is
+mostly its footer.
 One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
 by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
 ledger is one declaration and no Python. Six ship - for `gardener`,
@@ -408,13 +410,17 @@ flowchart TB
 
   subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
     DROP["1 and 2. drop the month files, listings<br/>and raw days the windows no longer keep"]
+    YDONE{"a year done?<br/>monthly_keep_days since it ended,<br/>its next January absorbed, every month named"}
+    YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
+    YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
+    PACK["3. pack it, one row group a month:<br/>year file, yearly.json, delete its month files,<br/>monthly.json, yearly/watermark.json last"]
     MDONE{"a month done?<br/>daily_keep_days since it ended,<br/>every day compacted, no raw day left"}
     MWAIT["the month waits for a later wake"]
     MHOLE["a day of it is named nowhere:<br/>refused by name, exit 1"]
-    ABSORB["3. absorb it: month file, monthly.json,<br/>delete its day files, daily.json,<br/>monthly/watermark.json last"]
+    ABSORB["4. absorb it: month file, monthly.json,<br/>delete its day files, daily.json,<br/>monthly/watermark.json last"]
     DDUE{"compact_after_days whole days<br/>since the day ended?"}
     DHOLD["the day waits: a run may still be writing"]
-    TAKE["4. take it: read and settle its raw files,<br/>write its listing, its day file and daily.json,<br/>delete the raw files, daily/watermark.json last"]
+    TAKE["5. take it: read and settle its raw files,<br/>write its listing, its day file and daily.json,<br/>delete the raw files, daily/watermark.json last"]
     DRY{"dry_run?"}
     REPORT["report every path, land the record only<br/>all six compactions, today"]
     LAND["land every write and delete<br/>in the shard's one commit"]
@@ -422,11 +428,18 @@ flowchart TB
 
   DAILY[("state/compact/ledger/daily/YYYY/MM/DD.parquet<br/>index/daily.json, daily/watermark.json")]
   MONTHLY[("state/compact/ledger/monthly/YYYY/MM.parquet<br/>index/monthly.json, monthly/watermark.json")]
-  READER["ledger_files.py: each date from one file<br/>its month, else its day, else its raw files"]
+  YEARLY[("state/compact/ledger/yearly/YYYY.parquet<br/>index/yearly.json, yearly/watermark.json")]
+  READER["ledger_files.py: each date from one file<br/>its year, else its month, else its day,<br/>else its raw files"]
 
   W --> RAWF
   RAWF --> DROP
-  DROP --> MDONE
+  DROP --> YDONE
+  YDONE -->|"not yet, or not asked"| YWAIT
+  YDONE -->|"a month missing"| YHOLE
+  YDONE -->|"yes"| PACK
+  YWAIT --> MDONE
+  YHOLE --> MDONE
+  PACK --> MDONE
   MDONE -->|"not yet"| MWAIT
   MDONE -->|"a day missing"| MHOLE
   MDONE -->|"yes"| ABSORB
@@ -441,9 +454,11 @@ flowchart TB
   DRY -->|"no"| LAND
   LAND --> DAILY
   LAND --> MONTHLY
+  LAND --> YEARLY
   RAWF --> READER
   DAILY --> READER
   MONTHLY --> READER
+  YEARLY --> READER
 
   classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
   classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
@@ -454,12 +469,12 @@ flowchart TB
   classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
   classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
 
-  class W,DROP,ABSORB,TAKE,READER stage;
-  class MDONE,DDUE,DRY decision;
+  class W,DROP,PACK,ABSORB,TAKE,READER stage;
+  class YDONE,MDONE,DDUE,DRY decision;
   class LAND yes;
-  class MHOLE no;
-  class MWAIT,DHOLD,REPORT warn;
-  class RAWF,DAILY,MONTHLY ledger;
+  class YHOLE,MHOLE no;
+  class YWAIT,MWAIT,DHOLD,REPORT warn;
+  class RAWF,DAILY,MONTHLY,YEARLY ledger;
   class REFRESH sysPublish;
   class GARDEN sysOps;
 ```
@@ -474,14 +489,15 @@ tree, in [the closed-day fold](#the-closed-day-fold) below.
 | --- | --- |
 | 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json` |
 | 2 | Drops each raw listing older than `raw_index_keep_days` whose day is compacted and whose raw folder is empty, and every raw day in a month the window no longer keeps |
-| 3 | Absorbs every month that is done into its month file |
-| 4 | Takes every raw day that is due into its day file |
+| 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
+| 4 | Absorbs every month that is done into its month file |
+| 5 | Takes every raw day that is due into its day file |
 
 **Drops first and days last, because no pass may write a path it deletes.** A
 shard refuses a path it both wrote and deleted, so a pass that did either would
-stall every wake after it. In this order a month absorbs day files
-an earlier wake wrote, never one this pass wrote, and a month whose last days
-this pass takes is absorbed at the next wake.
+stall every wake after it. In this order a year packs month files and a month
+absorbs day files that an earlier wake wrote, never one this pass wrote, and a
+period whose last part this pass writes is taken at the next wake.
 
 **Every rule counts whole UTC days after a period's own end.** The pass measures
 from 00:00 UTC on the wake's own day, so every wake of one UTC day gets the same
@@ -561,6 +577,48 @@ absorbed.
 window, so no re-run can land there; a file that does is for a person to read.
 The rest of the pass still runs.
 
+### A year
+
+**A year is packed only where its declaration sets `monthly_keep_days`.** Every
+other ledger keeps its month files exactly as `monthly_window` says. A ledger
+that packs years keeps `monthly_window` forever, because a window would delete a
+month file before its year took it, and its year files are kept for ever.
+
+**A year is packed whole or not at all, and only when three things are true**:
+`monthly_keep_days` whole days have passed since it ended, at 00:00 UTC on 1
+January; the monthly watermark is past its December, so its next January is
+absorbed; and `index/monthly.json` names every one of its months, each with its
+file. A year that fails the first or second waits for a later wake. A year
+missing a month is refused by name, the yearly watermark stays, and the task
+exits 1. A year's months run from January to December, except in the first year
+a ledger packs, whose months start at the oldest month the monthly index names.
+That year's file still covers the whole year, so a reach that counts from the
+yearly index starts on its 1 January even when its first rows came later.
+
+**The earliest a year can go is `daily_keep_days` plus 32 days after it ends.**
+Its next January is absorbed `daily_keep_days` after that January ends, 31 days
+into the new year, and the pass packs years before it absorbs months, so the
+year goes one wake later. A smaller `monthly_keep_days` would change nothing, so
+the loader refuses one. At the default of 45, 2026 is packed on 19 March 2027 at
+the earliest.
+
+Packing is five steps in this order: the year file, `index/yearly.json`, the
+deletion of its month files, `index/monthly.json`, and `yearly/watermark.json`
+last. The month files are joined as they are and never settled, and the monthly
+watermark stays where it is. A pass that stopped before the yearly index leaves
+every month file, so the next wake packs that year again. A pass that stopped
+after it leaves a year the yearly index already names, so the next wake deletes
+the month files still there, rewrites the monthly index and moves the
+watermark, and builds nothing. Either way a reader in between reads each month
+once: a month both indexes name is read from its year.
+
+**A year file is built one month at a time, one row group a month.** The pass
+holds one month's rows at a time rather than the year's, and a reader that
+filters on a date can skip the row groups of the other months. A year file over
+50 MiB, the size at which GitHub warns about a pushed file, is refused by name
+and its month files are kept: GitHub refuses a push that holds a file over
+100 MiB, and one that did would stall every later wake.
+
 ### What a dry run does, and what the record says
 
 **A dry run does all of the work and changes nothing.** It reads every file,
@@ -574,8 +632,8 @@ the files it wrote: the net is `bytes_freed` minus the `bytes` of the index
 entries it wrote. `candidates_seen` counts every raw day folder it listed and
 every file it read or weighed, so a listing that grows while a compaction only
 reports shows in every row. `until` is the newest day that was due. A pass that
-used its budget stops `ceiling`, with `resume_from` naming the day or month the
-next pass starts at; one that refused a period stops `failed`, naming it.
+used its budget stops `ceiling`, with `resume_from` naming the day, month or
+year the next pass starts at; one that refused a period stops `failed`, naming it.
 
 ## The closed-day fold
 
@@ -696,6 +754,21 @@ month's check would call the days before it holes. The start asks the same
 function the window drops months by, `first_kept_month`, so a first pass never
 takes a day the same pass would drop (Carmack and Fowler).
 
+**A finished year's month files may be packed into one year file.** A ledger
+may pack each finished year into one file, kept for ever, rather than delete its
+month files once they pass `monthly_window`. The packing is written once and
+turned on in each ledger's own declaration. The switch is one field,
+`monthly_keep_days`, whose null packs nothing, so no ledger's behaviour changes
+until its declaration says so. A pass packs years before it absorbs months,
+which keeps it from deleting a file it wrote. A year waits for its next January,
+and a smaller wait is refused rather than silently lengthened. The year is built
+one month at a time: for the eval ledger at September 2026's rate, that holds
+about a quarter of the memory a whole-year build holds, 0.33 GB against 1.41 GB,
+measured once on a laptop. The first live pass times it on a runner. A year file
+sits in a folder of its own, `yearly/<YYYY>/<YYYY>.parquet`, because a shard
+fetches a watermark together with every file beside it: a year file beside the
+year watermark would be downloaded on every wake, one more file every year.
+
 **2026-09-30: the alarm is on what a shard downloads, and it is 128 MB.** Over
 it, a shard still runs its tasks and lands its record, then exits 1: stopping
 first would stop the deletes that make the tree lighter, and the downloads are
@@ -804,5 +877,5 @@ one live action is the closed-day fold
 - [committing.md](committing.md) - how every other job commits, and why the gardener stages its own files.
 - [../contracts/state-ledgers.md](../contracts/state-ledgers.md) - the gardener's ledger, and what one of its rows holds.
 - [../contracts/ledger-registry.md](../contracts/ledger-registry.md) - the grain that ledger files at, and the builders that refuse it.
-- [../contracts/persistence.md](../contracts/persistence.md) - the two roots a compaction writes under, and how a ledger is read back from all three kinds of file.
+- [../contracts/persistence.md](../contracts/persistence.md) - the two roots a compaction writes under, and how a ledger is read back from every kind of file.
 - [../../concepts/atomic-deletes.md](../../concepts/atomic-deletes.md) - what one delete at a time buys.

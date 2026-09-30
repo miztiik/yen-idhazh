@@ -331,24 +331,29 @@ def compact_file(
 def held_months(listing: FileListing, state_dir: Path, which: LedgerName) -> list[str]:
     """Every UTC month a ledger may hold a row in, oldest first, from file names alone.
 
-    The twin of `ledger.held_months`, which reads the two compact indexes: here
+    The twin of `ledger.held_months`, which reads the three compact indexes: here
     the months come from the names of the compact files those indexes list and
     of the raw day folders, so no file is opened. A month named only by a compact
-    file, or only by a raw day, is held either way.
+    file, or only by a raw day, is held either way, and a year file names all
+    twelve of its months.
     """
     months = {day[:7] for day in raw_days(listing, state_dir, which)}
-    shapes = {Period.DAILY: 3, Period.MONTHLY: 2}
+    shapes = {Period.DAILY: 3, Period.MONTHLY: 2, Period.YEARLY: 2}
     for period, depth in shapes.items():
         folder = ledger.watermark_path(state_dir, which, period).parent
         for parts in _below(listing, folder):
             if len(parts) != depth:
                 continue
             stem = Path(parts[-1]).stem
-            covers = "-".join((*parts[:-1], stem))
+            covers = stem if period is Period.YEARLY else "-".join((*parts[:-1], stem))
             try:
                 found = compact_file(listing, state_dir, which, period, covers)
             except ValueError:
                 continue
-            if found is not None:
+            if found is None:
+                continue
+            if period is Period.YEARLY:
+                months.update(f"{covers}-{number:02d}" for number in range(1, 13))
+            else:
                 months.add(covers[:7])
     return sorted(months)

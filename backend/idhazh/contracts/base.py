@@ -42,6 +42,8 @@ DATE_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}$"
 # follows what a browser fetches and a ledger's follows what a run writes, so
 # the two came apart and this pattern belongs to the mirrors.
 MONTH_PATTERN: Final = r"^\d{4}-\d{2}$"
+# `<YYYY>`: a UTC year, the stamp a compact yearly period carries.
+YEAR_PATTERN: Final = r"^\d{4}$"
 # UTC, second precision, no offset spelling. A payload timestamp leaves the
 # process as text, so it is pinned as text: one spelling means a re-serialized
 # payload is byte-identical to the one that was read.
@@ -182,6 +184,7 @@ WORK_JOB: Final = ServerJob.WORK
 SchemaVersion = Annotated[str, StringConstraints(pattern=SCHEMA_VERSION_PATTERN)]
 DateStamp = Annotated[str, StringConstraints(pattern=DATE_PATTERN)]
 MonthStamp = Annotated[str, StringConstraints(pattern=MONTH_PATTERN)]
+YearStamp = Annotated[str, StringConstraints(pattern=YEAR_PATTERN)]
 Timestamp = Annotated[str, StringConstraints(pattern=TIMESTAMP_PATTERN)]
 Slug = Annotated[str, StringConstraints(pattern=SLUG_PATTERN)]
 ItemId = Annotated[str, StringConstraints(pattern=ITEM_ID_PATTERN)]
@@ -202,8 +205,9 @@ FILE_ID_NAME_PATTERN: Final = (
 )
 FileIdName = Annotated[str, StringConstraints(pattern=FILE_ID_NAME_PATTERN)]
 
-#: What one ledger file covers: a UTC day, `2026-09-23`, or a UTC month, `2026-08`.
-PeriodStamp = DateStamp | MonthStamp
+#: What one ledger file covers: a UTC day, `2026-09-23`, a UTC month, `2026-08`, or a
+#: UTC year, `2026`.
+PeriodStamp = DateStamp | MonthStamp | YearStamp
 
 _STEM_PATTERN: Final = re.compile(SLUG_PATTERN)
 

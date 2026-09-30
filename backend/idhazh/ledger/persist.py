@@ -14,7 +14,9 @@ under `state/compact/` from rows that already carry the identity their raw file
 gave them, and keeps it: a compact file says which writer first filed each row,
 never that the compaction did, so a re-run's second attempt can still replace
 its first after the day was compacted. `render_period` builds that same file and
-writes nothing, for a pass that only reports.
+writes nothing, for a pass that only reports. `render_grouped_period` builds one
+from groups of rows held one group at a time, each group its own row group, for
+a period too big to hold whole - a year, built one month at a time.
 
 Two formats behind one door: parquet, and JSON lines a person can read in a
 pull request. `ledger/parquet.py` is the only module that imports the engine, and
@@ -34,7 +36,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
@@ -93,10 +95,12 @@ class StoredRow[C: Contract]:
 
 @dataclass(frozen=True, slots=True)
 class PeriodFile:
-    """One compact period's file, built: where it goes and every byte of it."""
+    """One compact period's file, built: where it goes, every byte of it, and its rows."""
 
     path: Path
     data: bytes
+    #: How many rows the file holds.
+    rows: int
 
 
 @cache
@@ -109,12 +113,12 @@ def _knobs() -> LedgerConfig:
 def _refuse_a_period_the_tier_cannot_take(
     covers: str, *, tier: Tier, period: Period | None
 ) -> None:
-    """`covers` is a day for a raw or daily file, and a month for a monthly one."""
+    """`covers` is a day for a raw or daily file, else the month or year its period covers."""
     if not covers_fits(covers, tier=tier, period=period):
         raise ValueError(
             f"covers {covers!r} is not the shape a {tier.value} "
             f"{period.value + ' ' if period else ''}file covers: a raw or daily file "
-            "covers YYYY-MM-DD and a monthly file covers YYYY-MM"
+            "covers YYYY-MM-DD, a monthly file covers YYYY-MM and a yearly file covers YYYY"
         )
 
 
@@ -171,8 +175,7 @@ def _unit(ledger: LedgerName, covers: str, identity: WriterIdentity) -> uuid.UUI
     )
 
 
-def _rendered(
-    stored: Sequence[Mapping[str, Any]],
+def _envelope(
     *,
     model: type[Contract],
     ledger: LedgerName,
@@ -184,11 +187,12 @@ def _rendered(
     fmt: Format,
     compression: Compression,
     written_at_ms: int,
-) -> tuple[uuid.UUID, bytes]:
-    """One file's bytes: identifiers minted, envelope assembled, rows rendered.
+    content_sha256: str,
+) -> tuple[uuid.UUID, dict[bytes, bytes]]:
+    """One file's envelope as the bytes it is kept as, beside the `file_id` minted for it.
 
-    Returns the minted `file_id` beside the bytes, because a raw file is named
-    by it and a compact one is named by its period.
+    The `file_id` comes back because a raw file is named by it and a compact one
+    by its period.
     """
     unit = _unit(ledger, covers, identity)
     name = filenames.file_id(unit=unit, attempt=identity.attempt, written_at_ms=written_at_ms)
@@ -209,13 +213,50 @@ def _rendered(
         identity=identity,
         unit_id=unit,
         file_id=name,
-        content_sha256=hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest(),
+        content_sha256=content_sha256,
         writer=writer,
         writer_version=engine,
         compression=compression,
         built_from=built_from,
     ).as_metadata()
+    return name, envelope
+
+
+def _rendered(
+    stored: Sequence[Mapping[str, Any]],
+    *,
+    model: type[Contract],
+    ledger: LedgerName,
+    covers: str,
+    identity: WriterIdentity,
+    tier: Tier,
+    period: Period | None,
+    built_from: int | None,
+    fmt: Format,
+    compression: Compression,
+    written_at_ms: int,
+) -> tuple[uuid.UUID, bytes]:
+    """One file's bytes: identifiers minted, envelope assembled, rows rendered.
+
+    Returns the minted `file_id` beside the bytes, because a raw file is named
+    by it and a compact one is named by its period.
+    """
+    name, envelope = _envelope(
+        model=model,
+        ledger=ledger,
+        covers=covers,
+        identity=identity,
+        tier=tier,
+        period=period,
+        built_from=built_from,
+        fmt=fmt,
+        compression=compression,
+        written_at_ms=written_at_ms,
+        content_sha256=hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest(),
+    )
     if fmt is Format.PARQUET:
+        from idhazh.ledger import parquet
+
         return name, parquet.render(
             _columns(model), stored, envelope=envelope, compression=compression
         )
@@ -335,8 +376,41 @@ def persist(
 
 
 def _inside(day: str, covers: str) -> bool:
-    """Whether a raw day falls inside a compact period: the day itself, or a day of the month."""
+    """Whether a raw day falls inside a compact period: the day, or a day of its month or year."""
     return day == covers or day.startswith(f"{covers}-")
+
+
+def _refuse_rows_outside_the_period[C: Contract](
+    rows: Sequence[StoredRow[C]], *, model: type[C], ledger: LedgerName, covers: str
+) -> None:
+    """Every row is one `model` row, filed into this ledger inside this period, or none is kept.
+
+    A compact file replaces its whole period, so a row filed anywhere else is
+    refused rather than allowed to overwrite a finished period with a stranger's.
+    """
+    strays = sorted({type(held.row).__name__ for held in rows if type(held.row) is not model})
+    if strays:
+        raise TypeError(f"one file holds rows of one contract, and {model.__name__} met {strays}")
+    outside = sorted(
+        {
+            f"{held.identity.ledger.value} {held.identity.covers}"
+            for held in rows
+            if held.identity.ledger is not ledger or not _inside(held.identity.covers, covers)
+        }
+    )
+    if outside:
+        raise ValueError(
+            f"a compact {ledger.value} file covering {covers} was handed rows filed under "
+            f"{outside}. A compact write replaces the whole period, so every row must have "
+            "been filed inside it"
+        )
+
+
+def _stored[C: Contract](rows: Sequence[StoredRow[C]]) -> list[dict[str, Any]]:
+    """Each row as the cells a file holds: its identity cells, then its contract's own."""
+    return [
+        held.identity.model_dump(mode="json") | held.row.model_dump(mode="json") for held in rows
+    ]
 
 
 def render_period[C: Contract](
@@ -361,26 +435,11 @@ def render_period[C: Contract](
     overwrite a finished period with a stranger's row.
     """
     _refuse_a_period_the_tier_cannot_take(covers, tier=Tier.COMPACT, period=period)
-    strays = sorted({type(held.row).__name__ for held in rows if type(held.row) is not model})
-    if strays:
-        raise TypeError(f"one file holds rows of one contract, and {model.__name__} met {strays}")
-    outside = sorted(
-        {
-            f"{held.identity.ledger.value} {held.identity.covers}"
-            for held in rows
-            if held.identity.ledger is not ledger or not _inside(held.identity.covers, covers)
-        }
-    )
-    if outside:
-        raise ValueError(
-            f"a compact {ledger.value} file covering {covers} was handed rows filed under "
-            f"{outside}. A compact write replaces the whole period, so every row must have "
-            "been filed inside it"
-        )
+    _refuse_rows_outside_the_period(rows, model=model, ledger=ledger, covers=covers)
     knobs = _knobs()
     compression = _compression(knobs.format, Tier.COMPACT, knobs)
     _, data = _rendered(
-        [held.identity.model_dump(mode="json") | held.row.model_dump(mode="json") for held in rows],
+        _stored(rows),
         model=model,
         ledger=ledger,
         covers=covers,
@@ -392,7 +451,72 @@ def render_period[C: Contract](
         compression=compression,
         written_at_ms=int(datetime.now(UTC).timestamp() * 1000),
     )
-    return PeriodFile(compact_path(state_dir, ledger, period, covers, fmt=knobs.format), data)
+    path = compact_path(state_dir, ledger, period, covers, fmt=knobs.format)
+    return PeriodFile(path, data, len(rows))
+
+
+def render_grouped_period[C: Contract](
+    state_dir: Path,
+    groups: Iterable[Sequence[StoredRow[C]]],
+    *,
+    model: type[C],
+    ledger: LedgerName,
+    period: Period,
+    covers: PeriodStamp,
+    identity: WriterIdentity,
+    built_from: int,
+) -> PeriodFile:
+    """One compact period's file built one group of rows at a time, and written nowhere.
+
+    The rows, envelope and digest `render_period` would give for every group's
+    rows in order, refused the same way. In parquet each group that holds a row
+    is one row group, so its statistics bound that group alone and a reader
+    filtering on a date can skip the rest; and only one group is held at a time,
+    so a year is built one month at a time. JSON lines has no row groups and is
+    built whole.
+    """
+    _refuse_a_period_the_tier_cannot_take(covers, tier=Tier.COMPACT, period=period)
+    knobs = _knobs()
+    compression = _compression(knobs.format, Tier.COMPACT, knobs)
+    written_at_ms = int(datetime.now(UTC).timestamp() * 1000)
+    digest = hashlib.sha256()
+    counted = 0
+
+    def checked() -> Iterator[list[dict[str, Any]]]:
+        nonlocal counted
+        for group in groups:
+            _refuse_rows_outside_the_period(group, model=model, ledger=ledger, covers=covers)
+            stored = _stored(group)
+            digest.update(json_lines.rows_bytes(stored))
+            counted += len(stored)
+            yield stored
+
+    def envelope() -> dict[bytes, bytes]:
+        return _envelope(
+            model=model,
+            ledger=ledger,
+            covers=covers,
+            identity=identity,
+            tier=Tier.COMPACT,
+            period=period,
+            built_from=built_from,
+            fmt=knobs.format,
+            compression=compression,
+            written_at_ms=written_at_ms,
+            content_sha256=digest.hexdigest(),
+        )[1]
+
+    if knobs.format is Format.PARQUET:
+        from idhazh.ledger import parquet
+
+        data = parquet.render_groups(
+            _columns(model), checked(), envelope=envelope, compression=compression
+        )
+    else:
+        whole = [cells for stored in checked() for cells in stored]
+        data = json_lines.render(whole, envelope=envelope())
+    path = compact_path(state_dir, ledger, period, covers, fmt=knobs.format)
+    return PeriodFile(path, data, counted)
 
 
 def persist_period[C: Contract](

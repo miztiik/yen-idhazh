@@ -135,9 +135,10 @@ def test_a_raw_day_index_refuses_a_file_count_even_when_the_count_is_right() -> 
 
 
 @pytest.mark.parametrize(
-    ("name", "period"), [("a-daily-index", "daily"), ("a-monthly-index", "monthly")]
+    ("name", "period"),
+    [("a-daily-index", "daily"), ("a-monthly-index", "monthly"), ("a-yearly-index", "yearly")],
 )
-def test_a_compact_index_accepts_an_ordered_daily_and_an_ordered_monthly_index(
+def test_a_compact_index_accepts_an_ordered_daily_monthly_and_yearly_index(
     name: str, period: str
 ) -> None:
     payload = _sample("compact-index", name)
@@ -156,6 +157,16 @@ def test_a_daily_index_refuses_an_entry_that_covers_a_month_by_ledger_and_period
     error = _refusal(CompactIndex, payload | {"entries": [*payload["entries"], a_month]})
 
     _names_the_file(error, payload["ledger"], payload["period"], a_month["covers"])
+
+
+def test_a_yearly_index_refuses_an_entry_that_covers_a_month_by_ledger_and_period() -> None:
+    """A year and a month are both stamps, so a yearly index must say it lists years."""
+    payload = _sample("compact-index", "a-yearly-index")
+    a_month = _sample("compact-index", "a-monthly-index")["entries"][-1]
+
+    error = _refusal(CompactIndex, payload | {"entries": [*payload["entries"], a_month]})
+
+    _names_the_file(error, payload["ledger"], payload["period"], a_month["covers"], "YYYY")
 
 
 def test_a_compact_index_refuses_entries_out_of_order_by_ledger_and_period() -> None:
@@ -181,9 +192,14 @@ def test_a_compact_index_refuses_a_period_it_lists_twice_by_ledger_and_period() 
 
 
 @pytest.mark.parametrize(
-    ("name", "through"), [("a-daily-watermark", "2026-09-23"), ("a-monthly-watermark", "2026-08")]
+    ("name", "through"),
+    [
+        ("a-daily-watermark", "2026-09-23"),
+        ("a-monthly-watermark", "2026-08"),
+        ("a-yearly-watermark", "2025"),
+    ],
 )
-def test_a_watermark_accepts_a_day_on_a_daily_one_and_a_month_on_a_monthly_one(
+def test_a_watermark_accepts_a_day_a_month_or_a_year_on_a_watermark_of_that_period(
     name: str, through: str
 ) -> None:
     mark = Watermark.model_validate(_sample("watermark", name))
@@ -199,6 +215,16 @@ def test_a_daily_watermark_refuses_to_stand_on_a_month_by_ledger_and_period() ->
     error = _refusal(Watermark, payload | {"through": a_month})
 
     _names_the_file(error, payload["ledger"], payload["period"], a_month)
+
+
+def test_a_monthly_watermark_refuses_to_stand_on_a_year_by_ledger_and_period() -> None:
+    """A month and a year are both stamps, and a monthly compaction resumes after a month."""
+    payload = _sample("watermark", "a-monthly-watermark")
+    a_year = _sample("watermark", "a-yearly-watermark")["through"]
+
+    error = _refusal(Watermark, payload | {"through": a_year})
+
+    _names_the_file(error, payload["ledger"], payload["period"], a_year)
 
 
 def test_a_watermark_refuses_a_run_id_that_is_only_the_run_number() -> None:

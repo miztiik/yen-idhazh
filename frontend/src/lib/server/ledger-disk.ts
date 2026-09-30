@@ -64,7 +64,7 @@ export async function sliceFromDisk(stateDir: string, ledger: LedgerName, option
 	}
 }
 
-/** The same answer as `ledgerReach()`, from the two indexes on disk. Reads no data file and starts no engine. */
+/** The same answer as `ledgerReach()`, from the indexes on disk. Reads no data file and starts no engine. */
 export async function reachFromDisk(stateDir: string, ledger: LedgerName): Promise<LedgerReach> {
 	const keeper = diskKeeper(stateDir);
 	try {

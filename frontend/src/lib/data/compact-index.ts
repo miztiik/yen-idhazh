@@ -28,10 +28,10 @@
 import type { LedgerName } from './slice-shapes';
 
 /** The `CompactIndex` stamp this build reads: `CompactIndex.schema_version()`. */
-export const COMPACT_INDEX_STAMP = '2026-09-27';
+export const COMPACT_INDEX_STAMP = '2026-09-30';
 
 /** How much time one compact file covers. Also the directory name. */
-export const COMPACT_PERIODS = ['daily', 'monthly'] as const;
+export const COMPACT_PERIODS = ['daily', 'monthly', 'yearly'] as const;
 
 export type Period = (typeof COMPACT_PERIODS)[number];
 
@@ -56,7 +56,8 @@ const STAMP = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$/;
 /** What `covers` looks like in each period. */
 const COVERS: Record<Period, RegExp> = {
 	daily: /^\d{4}-\d{2}-\d{2}$/,
-	monthly: /^\d{4}-\d{2}$/
+	monthly: /^\d{4}-\d{2}$/,
+	yearly: /^\d{4}$/
 };
 
 /** Why an index was not acted on, in words the console can print. */
