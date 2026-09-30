@@ -53,12 +53,9 @@ recorded a premise at all.
 Both the summary and the article body are untrusted (Guardrail #11). They print as
 inert terminal text and are sanitized on the way to the note field.
 
-**A draw only reaches the months still at full grain.** The scores ledger
-(`state/raw/scores/`) keeps item-level rows for the monthly window of
-`config/gardener/compact-scores.json`, and an older month exists only as a
-summary, which holds no row to label. So the report prints the
-months the draw could see and the months that have aged out, and a run against a
-ledger with no full-grain month left refuses instead of reporting a draw of
+**A draw reaches every row the ledger holds.** The scores ledger
+(`state/raw/scores/`) keeps every row for ever, so no month is out of reach,
+and a run against a ledger with no row refuses instead of reporting a draw of
 zero.
 """
 
@@ -75,7 +72,7 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from idhazh import config  # noqa: E402
 from idhazh.contracts.label_row import LabelRow, LabelTag, LabelVerdict  # noqa: E402
-from idhazh.evals import archive, evidence, labels  # noqa: E402
+from idhazh.evals import evidence, labels  # noqa: E402
 from idhazh.evals.writer import records as _score_records  # noqa: E402
 from idhazh.ledger import STATE_DIRNAME  # noqa: E402
 from idhazh.sanitize import sanitize  # noqa: E402
@@ -100,21 +97,12 @@ SKIP: Final = object()
 def _ledger(state_dir: Path) -> list[dict[str, str]]:
     """Every committed row, oldest day first, read through the ledger door.
 
-    A ledger with no full-grain month left is refused by name rather than
-    reported as an empty draw. The two look identical from the row count and
-    need opposite actions: one waits for the pipeline to run, the other cannot
-    be fixed by waiting at all.
+    A ledger with no row is refused by name rather than reported as an empty
+    draw, because a draw of zero reads as a finding and this is only a ledger
+    the pipeline has not filled yet.
     """
     rows = list(_score_records(state_dir))
     if not rows:
-        summarised = archive.archived_months(state_dir)
-        if summarised:
-            raise SystemExit(
-                "every month of the scores ledger has aged out of "
-                f"the full-grain window - {', '.join(summarised)} exist only as summaries "
-                f"at {archive.archive_relpath('<YYYY-MM>')}, and a summary holds no row to "
-                f"label. {archive.RAW_WINDOW_NOTE}"
-            )
         raise SystemExit("the scores ledger holds no row")
     return rows
 
@@ -159,7 +147,6 @@ def report(
     settings: config.Settings,
     *,
     scorer: str,
-    archived: Sequence[str] = (),
 ) -> None:
     """What the draw holds and what is still missing, both stated plainly."""
     evaluation = settings.app.evaluation
@@ -175,10 +162,6 @@ def report(
     if missing:
         short = ", ".join(f"decile {index}: {count} short" for index, count in missing.items())
         print(f"shortfall        {short}")
-    if archived:
-        # Named, because a draw cannot reach these months and the row count
-        # above gives no hint that they were ever there.
-        print(f"aged out         {', '.join(archived)} - summarised, no row left to label")
     print(RULE)
 
     if len(days) < evaluation.label_min_run_days:
@@ -276,7 +259,6 @@ def main() -> int:
     evaluation = settings.app.evaluation
     state_dir = REPO_ROOT / STATE_DIRNAME
     records = _ledger(state_dir)
-    archived = archive.archived_months(state_dir)
     scorer = _live_scorer(records)
 
     if not labels.eligible(records, scorer_version=scorer):
@@ -294,7 +276,7 @@ def main() -> int:
         scorer_version=scorer,
         per_decile=evaluation.label_draw_per_decile,
     )
-    report(queue, records, settings, scorer=scorer, archived=archived)
+    report(queue, records, settings, scorer=scorer)
 
     named = Path(args.evidence) if args.evidence else REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
     package = evidence.index(named)
@@ -348,9 +330,8 @@ def main() -> int:
                 "labelled_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "seconds_spent": max(1, round(time.monotonic() - started)),
                 "note": note or None,
-                # Copied off the score row now, not re-joined later. The row this
-                # was drawn from lives fourteen months; the label lives for ever,
-                # and these three are what its tag vocabulary is measured against.
+                # Copied off the score row now, not re-joined later, so the label
+                # carries what its tag vocabulary is measured against on its own.
                 "unsupported_numbers": int(item["unsupported_numbers"] or 0),
                 "hedge_dropped": item["hedge_dropped"].strip().lower() == "true",
                 "extraction_suspect": item["extraction_suspect"].strip().lower() == "true",

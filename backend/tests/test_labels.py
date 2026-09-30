@@ -18,9 +18,7 @@ the archive cannot be relied on to hold.
 from __future__ import annotations
 
 import ast
-import contextlib
 import csv
-import io
 import json
 import shutil
 import sys
@@ -579,13 +577,12 @@ class TestTheRow:
             a_label(seconds_spent=0)
 
     def test_the_row_carries_the_counterweights_its_tags_are_measured_against(self) -> None:
-        """A label outlives the score row it was drawn from, so it copies these three.
+        """A label copies the three counterweights its tags are measured against.
 
-        The scores ledger keeps the scores task's full-grain window of
-        item-level rows. Re-joining on `output_digest` stops working the day
-        that month is archived, and the three counterweights the tag vocabulary
-        mirrors are exactly what would be lost - which is the precision and
-        recall the sixty labels are drawn to buy.
+        The scores ledger keeps every row, so a re-join on `output_digest` still
+        works, but a label that carries its own three is read with no second
+        file beside it - and they are exactly the precision and recall the sixty
+        labels are drawn to buy.
         """
         mirrored = {
             "wrong_number": "unsupported_numbers",
@@ -713,34 +710,3 @@ class TestTheLoopStaysOpen:
         assert filled == set(LabelRow.model_fields) - {"version"}, (
             "the queue fills every column but the schema stamp, which defaults"
         )
-
-    def test_the_queue_says_which_months_a_draw_can_no_longer_reach(self) -> None:
-        """A row count gives no hint that a month was ever there.
-
-        The scores ledger becomes a summary past the scores task's full-grain
-        window, and a summary holds no row to
-        label. The report names those months rather than leaving the operator to
-        infer them from a shortfall.
-        """
-        printed: list[str] = []
-        records = ledger()
-        settings = config.load(CONFIG_DIR)
-        scorer = live_scorer(records)
-        queue = labels.draw(
-            records,
-            draw_id="d1",
-            scorer_version=scorer,
-            per_decile=settings.app.evaluation.label_draw_per_decile,
-        )
-
-        with contextlib.redirect_stdout(io.StringIO()) as captured:
-            label_queue.report(
-                queue,
-                records,
-                settings,
-                scorer=scorer,
-                archived=["2025-11", "2025-12"],
-            )
-        printed = captured.getvalue().splitlines()
-
-        assert any("aged out" in line and "2025-11, 2025-12" in line for line in printed)

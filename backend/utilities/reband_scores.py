@@ -4,11 +4,9 @@ The eval ledger records the band that was written at score time. That is the
 right history to keep, but it is the wrong column to read when the question is
 "what would these rows be under the current band function?"
 
-**It reaches only the months still at full grain.** Re-banding needs each row's
-own `hhem`, `coverage`, `unsupported_numbers` and `hedge_dropped`, and a month
-past the scores task's full-grain window keeps distributions rather than
-rows. Those months are named in the report and are not re-banded - deliberately
-lost, and printed rather than silently missing from the denominator.
+**It reaches every row the ledger holds.** Re-banding needs each row's own
+`hhem`, `coverage`, `unsupported_numbers` and `hedge_dropped`, and the scores
+ledger keeps every row for ever, so no month is left out of the denominator.
 """
 
 from __future__ import annotations
@@ -25,7 +23,7 @@ from idhazh.config import load
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.evals import archive, writer
+from idhazh.evals import writer
 from idhazh.evals.score import band
 
 REQUIRED_COLUMNS = ("band", "hhem", "unsupported_numbers", "coverage", "hedge_dropped")
@@ -84,20 +82,8 @@ def read_ledger(state_dir: Path) -> list[dict[str, str]]:
     Every row comes through the ledger door into today's contract, so each one
     carries every column the contract names and none arrives as a missing key
     inside the arithmetic.
-
-    A ledger whose every month has been summarised is refused by name. It is not
-    an empty ledger and it is not a fresh clone: the rows existed and are gone,
-    and only a message that says so stops somebody re-running this and believing
-    the pipeline never scored anything.
     """
     if not ledger.held_days(state_dir, LedgerName.SCORES):
-        summarised = archive.archived_months(state_dir)
-        if summarised:
-            raise ValueError(
-                "every month of the scores ledger has aged "
-                f"out of the full-grain window - {', '.join(summarised)} exist only as "
-                f"summaries, and a band is a function of one row. {archive.RAW_WINDOW_NOTE}"
-            )
         raise ValueError(
             f"{state_dir.as_posix()} holds no day of the scores ledger, raw or compacted, "
             "so there is no row to re-band"
@@ -148,17 +134,12 @@ def _display_path(path: Path) -> str:
         return path.name
 
 
-def lines_for(report: RebandReport, path: Path, *, archived: Sequence[str] = ()) -> list[str]:
+def lines_for(report: RebandReport, path: Path) -> list[str]:
     moved = sum(report.moves.values())
     lines = [
         f"scores: {_display_path(path)}",
         f"rows: {report.rows}",
     ]
-    if archived:
-        lines.append(
-            f"not re-banded: {', '.join(archived)} - summarised out of the full-grain "
-            "window, so those months have no row to band"
-        )
     lines.append("recorded bands:")
     lines.extend(
         f"  {name}: {report.recorded[name]} ({_share(report.recorded[name], report.rows)})"
@@ -199,15 +180,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     config = load(args.config).app.evaluation
     report = reband(read_ledger(args.state), config)
-    print(
-        "\n".join(
-            lines_for(
-                report,
-                args.state,
-                archived=archive.archived_months(args.state),
-            )
-        )
-    )
+    print("\n".join(lines_for(report, args.state)))
     return 0
 
 

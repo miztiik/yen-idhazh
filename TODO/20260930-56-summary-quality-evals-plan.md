@@ -4,6 +4,8 @@
 
 **Level**: 5 (CLAUDE.md section 6). It deletes a persisted contract, adds a period to the saved file format, and renames a committed ledger. The person's rulings below are the design consultation; the ESCALATE triggers name what still stops a worker.
 
+**Status**: row 1 is done (#1170). Row 2 is built and merges as built (#1172), by the person's ruling R5 on trigger 4. Row 3 is next. Row 4, added by R5, makes the browser read only the byte ranges it needs, and then shortens the wait before a year a published ledger reads is packed.
+
 **Chain** (CLAUDE.md section 0d). **Intent**: the person's rulings of 2026-09-30, section 0. **Contract**: `backend/idhazh/contracts/` and the pages each row names. **Code**: the three rows.
 
 Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md). Running pool of two. Settle a design question by asking Fowler and Carmack in parallel. Merge by hand on green CI (GitHub refuses auto-merge here).
@@ -16,7 +18,7 @@ AUTHORIZED (the person, 2026-09-30). Read CLAUDE.md, docs/how-to/execute-a-plan.
 docs/how-to/ship-a-pr.md and docs/how-to/run-the-gates.md, then this plan's section 0
 and section 1, and each row just before you dispatch it.
 
-Rows 1 and 2 share no file and run side by side. Row 3 waits for row 1. Plan 50's
+Rows 1 and 2 share no file and run side by side. Row 3 waits for row 1, and row 4 for row 2. Plan 50's
 row 14 (the upkeep checkout fetches names) is in flight in another session and edits
 the gardener's file walkers: whichever of the two merges second takes main in first.
 Plan 50's row 15 (build the score month summary) is withdrawn by the ruling below.
@@ -37,6 +39,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | R2 | **The ledger `scores` becomes `summary-quality-evals`.** "scores" is one of seven ledger names with "score" in them and says nothing about what is scored | Plan 50's open question "Does `scores` become `summary-quality`?", and plan 52's row 7 note that it stays the owner's call. `summary-quality` alone is kept free for plan 36's fitted quality thresholds |
 | R3 | **The shared packing gains a year period.** When a year is done, its month files are packed into one year file and then deleted, and no row is lost. It is written once, and a ledger turns it on in its own declaration | Month files deleted outright once they pass `monthly_window` |
 | R4 | **The daily ID files stop growing by one file a day**, with no summary. The dedupe still sees every measurement ever taken | `evals.writer.indexed_observations`, declared unbounded in `docs/concepts/growing-reads.md` until a month summary landed |
+| R5 | **Row 2 merges as built, and row 4 follows.** Trigger 4 fired: the browser downloads a whole file, so one month read out of a year file costs 11.97 times that month's own file. Until row 4 lands, a ledger the site reads packs a year only 367 days after it ends, so no console read reaches a year file. Row 4 makes the browser fetch only the byte ranges it needs - measured at 1.03 times the month file outside a browser - and then drops that wait to the 77 days every other ledger waits | Holding row 2 until the browser reads byte ranges |
 
 ### Hard scope
 
@@ -53,14 +56,16 @@ A worker commits and pushes the moment its gates pass, and measures after.
 2. A migration that cannot read every committed row back cell for cell before it deletes the old files.
 3. Any `dry_run` moving from `true` to `false` on a compaction or retention task.
 4. Row 2's measurement: reading one month out of a year file costs the browser more than twice what reading that month's own file costs today.
+5. Row 4's measurement, in a real browser: reading one month out of a year file by byte ranges costs more than twice the bytes of that month's own file, or a console panel reading it that way draws later on a throttled connection than it does reading the whole month file today, or GitHub Pages serves a `.parquet` file compressed, so a byte range would count from the compressed body.
 
 ## 1. Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The score month summary is retired, and no eval row is ever deleted | - | A | IN-FLIGHT | p56r1 | - | p56-r1-worker |
+| 1 | The score month summary is retired, and no eval row is ever deleted | - | A | DONE | p56r1 | #1170 | p56-r1-worker |
 | 2 | The shared packing gains a year period | - | A | NOT STARTED | - | - | - |
 | 3 | The eval ledger becomes `summary-quality-evals`, and its ID files stop growing | 1 | B | NOT STARTED | - | - | - |
+| 4 | The browser reads a year file by byte ranges, and a published ledger's year waits 77 days | 2 | B | NOT STARTED | - | - | - |
 
 ## 2. Deviations and rulings to date
 
@@ -109,6 +114,17 @@ A worker commits and pushes the moment its gates pass, and measures after.
 - **Merge window:** the news run writes these rows every run, so this row merges as plan 50's row 9 did: no `digest.yml` or `idhazh-gardener.yml` run queued or running, and the migration run again just before the merge.
 - **Acceptance gates:** as row 1, plus the frontend tests of every file the rename touches.
 - **Oracle:** every row the old folders held reads back from the new ones; no committed path under `state/` contains `/scores/`; the dedupe finds every measurement it found before the move.
+
+### Row #4 - The browser reads a year file by byte ranges, and a published ledger's year waits 77 days
+
+- **Scope (R5).** The query door (`frontend/src/lib/data/slice-query.ts`) fetches every compact file whole and hands the bytes to the engine (`registerFileBuffer`). A year file is instead registered by its address, so the engine asks the host only for the byte ranges a panel's query needs: the footer, then the row groups of the months asked for. A year file holds one row group per month, so one month's rows are one contiguous range. Day and month files stay fetched whole unless the measurement says ranges pay for them too.
+- **What has to keep working:** the engine's seal (`enable_external_access` off, `allowed_directories` naming what may be read) admits the registered address and nothing else. A year file changes only when a pass rewrites it, and a range is never read against a newer file than the one its footer came from; the index entry's rows and bytes are already the file's version (`dataVersion`).
+- **Measure in a real browser (trigger 5).** In Chromium through Playwright, with the site served by a server that honours `Range` (for example `vite preview`), one console panel over one month: the bytes and requests of reading that month out of the year fixture by ranges, against fetching the month file whole, and the time to draw with the network throttled to a slow mobile profile. On the live site, one `.parquet` asked for with a range and `Accept-Encoding: gzip`: whether it comes back `206` with no `Content-Encoding`. `ledger.published` is empty today, so the live site may serve no `.parquet`; if it still serves none, ask the person before publishing a file only for this check.
+- **When the measurement holds:** the published floor in `backend/idhazh/config.py` goes (`_refuse_a_published_reach_that_grows_or_falls_short` requires `monthly_keep_days` of at least `console.max_window_days` plus `compact_after_days`, 367 days today). A published ledger then waits what every ledger waits, `daily_keep_days` plus 32: 77 days with today's settings. Its tests in `backend/tests/contracts/test_gardener_config.py` change with it.
+- **Design questions for dispatch (Fowler and Carmack):** whether day and month files move to ranges too; where the engine's ranges are cached, since the door's own cache holds whole files; how many requests one panel may make before a slow connection pays more than it saves.
+- **Files touched (expected):** `frontend/src/lib/data/slice-query.ts`, `slice-reader.ts` and the engine setup beside them; `frontend/tests/ledger-door.spec.ts` and one browser spec that counts requests and bytes; `backend/idhazh/config.py`; `backend/tests/contracts/test_gardener_config.py`; `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/concepts/config/idhazh-gardener.md`; this plan's Reckoner line.
+- **Acceptance gates:** `ruff check .`, `mypy backend`, `pytest backend/tests/contracts`, `svelte-check`, the logic and browser specs the shared selector names, and the browser smoke of the console (CLAUDE.md section 12).
+- **Oracle:** a panel over a month held in the year fixture draws the same rows by ranges as it drew from the whole file, and every request it made for the year file names a byte range; a published ledger declaring `monthly_keep_days` 77 loads.
 
 ## Dependent plans
 

@@ -54,7 +54,7 @@ else (`retention.dated_days`).
 **It is one function because it used to be three, and they disagreed.** Measured on
 this checkout on 2026-09-08, before the fix:
 
-| Stem | `retention` | `evals.writer` | `evals.archive` |
+| Stem | `retention` | `evals.writer` | the month summaries' reader |
 | --- | --- | --- | --- |
 | `2025-01` | a month | a month | a month |
 | `2025-00` | a stray | **a month** | **a month** |
@@ -62,8 +62,8 @@ this checkout on 2026-09-08, before the fix:
 | `0000-01` | a stray | **a month** | **a month** |
 | `2025-01` in Arabic-Indic digits | a stray | **a month** | **a month** |
 
-So `2025-13.csv` was left alone in `state/feed-health/` and was summarised into
-`state/score-archive/2025-13.json` and then **deleted** in `state/scores/` - one name,
+So `2025-13.csv` was left alone in `state/feed-health/` and was summarised and then
+**deleted** in `state/scores/` - one name,
 two dispositions, and the destructive one landing on the ledger that holds the evidence
 behind every published quality claim. The `history` job of `idhazh-gardener.yml` force-pushes `main`
 ([../../CLAUDE.md](../../CLAUDE.md) section 8), so a file it removed would not come
@@ -75,8 +75,8 @@ check while a writer names its own file `2025-01`. That is two files
 claiming one month, and a fold would summarise over one of them. CPython's date parser
 happens to refuse that stem today, but through how it compiles its digit class rather
 than through anything this rule asked for, and a detail is not a rule - so the check is
-written out, and `backend/tests/gardener/tasks/test_telemetry_aggregate_task.py::test_the_month_readers_all_agree_on_what_a_month_is`
-holds all four readers to it.
+written out, and `backend/tests/gardener/tasks/test_telemetry_aggregate_task.py::test_a_file_that_is_not_a_month_shard_is_never_a_candidate`
+holds the one reader left to it.
 
 Authority: Guardrail #5 - a structural fix rather than a third copy of the rule.
 
@@ -100,7 +100,7 @@ this replaced accepted a day stem in Arabic-Indic digits and left the refusal to
 `date.fromisoformat` one level further down. An empty directory never reaches that
 level, so an empty month directory named in another script's digits survived every
 read. `backend/tests/test_day_partition.py` holds every day-tree reader to the rule,
-as `test_the_month_readers_all_agree_on_what_a_month_is` does one grain over.
+as `test_a_file_that_is_not_a_month_shard_is_never_a_candidate` does one grain over.
 
 Authority: Guardrail #5, 2026-09-11. `day_partition` is a **peer** of `month_partition`
 rather than a replacement: both grains are live, so both modules are.
@@ -300,7 +300,6 @@ Authority: owner, 2026-09-06.
 | Counterfactual scores | `state/counterfactual-scores/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-14 and a **day directory** since 2026-09-22. The plan stage writes the run's own digest date and nothing else, so the day closes when the day's last run finishes. It is the one collection here whose day directory is created even when the run has no rows for it: the plan job's commit step names the directory, and `git add` under `set -e` aborts on a path that is not there. Its only reader opens a trailing window, and the gardener's `counterfactual-scores` task deletes what falls below it. |
 | Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `telemetry.publish.public_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
 | Folded item health | `state/item-health-summary/<YYYY-MM>.csv` | `retention.compact_month`, written by `ledger.write_item_health_summary` | Written once, when the item-health month passes the `full-grain` series of `config/gardener/telemetry-aggregate.json` (14 months). It stays **monthly** while the ledger below it files by day, because it summarises a month and a day file of a month's totals is a shape nothing consumes - so the summary is where the two grains meet, reading the month's days through `ledger.load_days` and writing one file. Closed the moment it is written; the rows it summarises go later, when the item-health compaction's `monthly_window` passes, and nothing writes the summary again. No file is committed yet. |
-| Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by the gardener's `scores` task | Written once, when the scores month passes the `full-grain` series of `config/gardener/scores.json` (14 months), and only after it reconciles against a second reading of that month's day files. Nothing writes one today: it was built from the CSV day files, which moved to the ledger door, so the `scores` compaction stays report-only until it is built from the door's rows. It stays **monthly** while the ledger below it files by day, for the reason the folded item health gives: it summarises a month. Closed the moment it is written. No file is committed yet. |
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `stages.assemble.stage_assemble` rebuilds only `month_of(plan.date)`. |
 | Published addresses | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` | Partitioned by **day**, not by month. The caller hands the date and the writer appends to that day alone, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
 | Day metrics | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` | Partitioned by **day**. One record per published day, mirroring the published tree it is derived from, and closed the moment that day is. The site opens only the dates a page names, so nothing walks the tree. |
@@ -315,9 +314,9 @@ Authority: owner, 2026-09-06.
 | Span rollup | `state/span-rollup/<YYYY>/<MM>/<DD>/` | `telemetry.spans` | Partitioned by **month** until 2026-09-22 and a **day directory** since. It is the one ledger here that made both moves in one pass, because a month shard is a file every run of that month appends to - the exact shape the day directory exists to end. Its published mirror under `frontend/public/span-rollup/` stays monthly, which is the split [a ledger and its mirror](#a-ledger-and-its-mirror-may-file-at-different-grains) describes. |
 | Traces | `state/traces/<YYYY>/<MM>/<DD>/` | `telemetry.traces` | Partitioned by **day** the whole time, and a **day directory** since 2026-09-22 - the day used to be a prefix on the filename. A trace carries no date cell, so the run id is what says which day it belongs under. It is JSON lines rather than CSV, which is the whole of what it does differently, and the gardener's `traces` task deletes whole files past its window rather than folding them: a trace is a lookup, and a fold of it would invent a total nobody reads. |
 
-The two collections with nothing committed are not aspirational. Both writers ship and
-both are tested; neither has fired, because the oldest committed month is `2026-08` and
-both ages are fourteen months.
+The collection with nothing committed is not aspirational. Its writer ships and is
+tested; it has not fired, because the oldest committed month is `2026-08` and its age
+is fourteen months.
 
 ## The last unfrozen partition is frozen now
 

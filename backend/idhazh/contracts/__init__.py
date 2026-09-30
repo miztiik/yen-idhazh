@@ -92,7 +92,6 @@ from idhazh.contracts.run_manifest import (
 )
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.contracts.run_timeline import RunTimelineRow
-from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
@@ -177,7 +176,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PublishedRow,
     RunPlan,
     RunTimelineRow,
-    ScoreArchive,
     SearchIndex,
     SeenRow,
     SimilarityHoldoutPair,

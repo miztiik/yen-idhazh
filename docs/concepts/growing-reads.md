@@ -137,14 +137,11 @@ spread is zero.
 rather than hidden.** `indexed_observations` opens one file a partition, and the
 index moved from month files to day files with the ledger it describes - so **2
 opens became 23, and it gains about 365 a year**. The bytes did not move: the same
-digests are spread over more files, 21 more header lines. The ledger bound is what
-would answer it - an index day goes once a `state/score-archive/<YYYY-MM>.json`
-covers its month. **Nothing builds an archive today**: it was built from the
-scores ledger's CSV day files, which moved to the ledger door, so the count
-grows until an archive is built from the door's rows and the `scores` task is
-flipped live
-([../architecture/publishing/retention.md](../architecture/publishing/retention.md)).
-Until then the read is [unbounded](#unbounded-and-it-says-so), and listed there.
+digests are spread over more files, 21 more header lines. **No index day is ever
+dropped**: every eval row is kept for ever and nothing summarises a month, and an
+index day dropped would make every measurement in it new again. So the read is
+[unbounded](#unbounded-and-it-says-so), and listed there; what stops it growing
+by a file a day is packing the index days into fewer files, never dropping one.
 A cover was rejected rather than overlooked, for the reason the paragraph above
 gives. `fingerprint.append_new` is the same shape one size down: it
 carries digests rather than built rows, and the set stops growing when the inputs
@@ -244,7 +241,7 @@ reads are here and not how many. These are `backend/`'s;
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests. That bounds the bytes a measurement costs, not the number of files: while no archive is built, the file count grows with every recorded day, and `indexed_observations` is listed under [unbounded](#unbounded-and-it-says-so) for it |
+| `evals.writer.recorded_observations` | `state/score-index/` | every observation identity, as 76-byte digests. That bounds the bytes a measurement costs, not the number of files: every index day is kept, so the file count grows with every recorded day, and `indexed_observations` is listed under [unbounded](#unbounded-and-it-says-so) for it |
 | `ledger.write_segment` on `LedgerName.COUNTERFACTUAL_SCORES` | one writer file of `state/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day, through `ledger.load_days` | one date |
 | `ledger.load_story_similarity_pairs` | one day file of `state/content-similarity-judge/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
@@ -279,7 +276,7 @@ reads are here and not how many. These are `backend/`'s;
 | `measure_retrieval.report` | every published day and every committed month shard | it asks whether the index names every published item. A window would compare the days inside it and say nothing about the ones outside, which is the only place a dropped item can hide. It is a verb a person types, off the daily path, and it was a gated test until 2026-09-22 |
 | `ledger_families.listing` | every file under every ledger's folder in `state/` | the question is how many files each ledger holds, and only a listing answers it. It is a verb a person types, off the daily path, and its test drives it from a registry and a state tree the test writes (2026-09-27) |
 | the gardener's `run-tasks` listing, `gardener_publish.read_the_listing` | the name and size of every file under the folders one shard's tasks own or read, from one `git ls-tree -r -l` over the commit, and for a file the clone never downloaded one GitHub trees API request per listed folder. No file content | a task deletes what its window no longer keeps, so it has to see every name it owns. What still grows is the number of names listed, one entry a file: measured 2026-09-30, the whole repository held 3,493 files and 980 of them under `state/`. What no longer grows with the tree is what the shard downloads: its checkout holds only code and config, and a task fetches only the day or month folders it reads. Every row carries that as `downloaded_bytes` beside the owned folders' weight as `cone_bytes`, and a shard over `max_downloaded_mb` - committed at 128, an estimate - exits 1 once its record has landed ([the reasoning](../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
-| `evals.writer.indexed_observations`, which `recorded_observations` calls every time a work shard or assemble files a measurement | every day file of `state/score-index/`, one a recorded day once the closed-day fold has settled it | **awaiting a person's approval.** An observation key carries no date, so a window would let a measurement re-taken outside it read as new, and no bounded input answers "do we already hold this one?". The bound was the `scores` task dropping an index day once a month archive covers it, and no archive is built since the scores ledger moved to the ledger door, so the read opens one more file for every day recorded: 23 on 2026-09-13, and about 365 more a year. Building the archive from the door's rows would bound it again, and whether to do that is the person's call |
+| `evals.writer.indexed_observations`, which `recorded_observations` calls every time a work shard or assemble files a measurement | every day file of `state/score-index/`, one a recorded day once the closed-day fold has settled it | **Declared until the index days are packed.** An observation key carries no date, so a window would let a measurement re-taken outside it read as new, and no bounded input answers "do we already hold this one?". Every eval row is kept for ever and nothing summarises a month, so no index day is ever dropped, and the read opens one more file for every day recorded: 23 on 2026-09-13, and about 365 more a year. The index days will be packed into fewer files, so the read stops growing by a file a day and still sees every measurement ever taken |
 | `evals.writer.records` | every row of the scores ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row and `grader_length_bias.py` joins every row. Each is a verb a person types, off the daily path |
 | `data_wrangler.py refill`'s score read, `measure_ledgers.py`, and `server_memory_mark.py` when it names no day | every row of the ledger each one reads, through `ledger.load_ledger_rows` | each is an operator verb whose question is the whole history; none runs on the daily path |
 | `backend/utilities/migrate_to_parquet.py` | every CSV day left under `state/item-health/`, `state/scores/` and `state/host-fingerprint/` | a migration moves every day there is, once. It is deleted when no CSV of the three is left on `main` |

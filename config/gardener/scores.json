@@ -8,20 +8,9 @@
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
   "owns": [
-    "state/score-index",
-    "state/score-archive"
+    "state/score-index"
   ],
-  "series": {
-    "archive": {
-      "unit": "forever"
-    },
-    "full-grain": {
-      "unit": "months",
-      "value": 14
-    }
-  },
   "window": {
-    "unit": "months",
-    "value": 14
+    "unit": "forever"
   }
 }

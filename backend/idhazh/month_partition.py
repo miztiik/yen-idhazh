@@ -1,16 +1,16 @@
 """What a `<YYYY-MM>` partition file is called, in one place.
 
 Six directories used to be pruned by month - `state/seen/`, `state/feed-health/`,
-`state/item-health/`, `state/item-health-summary/`, `state/scores/` and
-`state/score-archive/`, plus the browser's copy under
+`state/item-health/`, `state/item-health-summary/`, `state/scores/` and the
+scores ledger's month summaries, plus the browser's copy under
 `frontend/public/telemetry/` - and each one used to carry its own answer to "is
 this name a month?". The answers disagreed. Measured 2026-09-08: `retention`
 refused `2025-13`, `2025-00`, `0000-01` and a stem written in Arabic-Indic
-digits, while `evals.writer` and `evals.archive` accepted all four. So
-`2025-13.csv` was left alone in `state/feed-health/` and was archived and then
-DELETED in `state/scores/` - one name, two dispositions, and the destructive one
-landing on the ledger that holds the evidence behind every published quality
-claim.
+digits, while `evals.writer` and the month summaries' reader accepted all four.
+So `2025-13.csv` was left alone in `state/feed-health/` and was summarised and
+then DELETED in `state/scores/` - one name, two dispositions, and the
+destructive one landing on the ledger that holds the evidence behind every
+published quality claim.
 
 **`state/feed-health/` and `state/seen/` file by day now**, so they walk
 through `day_partition` instead and the month rule no longer reaches them. The

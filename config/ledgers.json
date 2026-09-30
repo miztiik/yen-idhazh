@@ -313,21 +313,6 @@
       ]
     },
     {
-      "name": "score-archive",
-      "lifecycle_status": "active",
-      "description": "Monthly summaries of old scores, kept after that month's day files are deleted.",
-      "onboarded": "2026-09-27",
-      "ledgers": [
-        {
-          "name": "score-archive",
-          "grain": "month",
-          "prefix": ["score-archive"],
-          "stem": null,
-          "suffix": ".json"
-        }
-      ]
-    },
-    {
       "name": "gardener",
       "lifecycle_status": "active",
       "description": "One record per gardener shard per wake: what each of its tasks saw, took and left.",

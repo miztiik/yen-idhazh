@@ -190,10 +190,9 @@ def month_shards(directory: Path) -> list[Path]:
 
     Anything else in there is left alone. A directory this walks is one a task
     deletes from, so it names what it recognises rather than deleting what it
-    does not - and it recognises what `month_partition` recognises, which is the
-    same thing `evals.writer` and `evals.archive` recognise. Those three used to
-    hold three different answers, and `2025-13.csv` was left alone here and
-    deleted there.
+    does not - and it recognises what `month_partition` recognises. Three
+    readers used to hold three different answers, and `2025-13.csv` was left
+    alone here and deleted there.
     """
     return month_partition.month_files(directory, ".csv")
 

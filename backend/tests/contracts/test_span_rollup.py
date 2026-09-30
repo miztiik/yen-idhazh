@@ -8,7 +8,6 @@ from idhazh.contracts.base import Contract
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.visual_decision import VisualDecision
 
@@ -30,13 +29,12 @@ _ROLLUP_KEY_AND_STAMP: frozenset[str] = frozenset(
 )
 
 #: Every committed ledger a span-rollup row could restate a measurement of, and
-#: where it lives. `state/scores/` holds the raw eval rows and, once a month is
-#: folded, the archive - a rollup must not restate either.
+#: where it lives. `state/scores/` holds the eval rows - a rollup must not
+#: restate them.
 _LEDGERS_A_ROLLUP_MUST_NOT_RESTATE: dict[str, type[Contract]] = {
     "state/item-health": ItemHealthRow,
     "state/host-fingerprint": HostFingerprintRow,
-    "state/scores (raw rows)": EvalRow,
-    "state/scores (archived)": ScoreArchive,
+    "state/scores": EvalRow,
     "state/visuals": VisualDecision,
 }
 
@@ -45,8 +43,8 @@ def _column_names(contract: type[Contract]) -> frozenset[str]:
     """Every column or field name a ledger spells.
 
     A CSV ledger row spells its columns in `csv_columns`; a JSON payload like the
-    visual decision or the score archive has no CSV form, so its field names are
-    what a collision would be measured against.
+    visual decision has no CSV form, so its field names are what a collision
+    would be measured against.
     """
     columns = getattr(contract, "csv_columns", None)
     if callable(columns):

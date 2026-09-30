@@ -238,27 +238,19 @@ _SERIES: Final[Mapping[str, Mapping[str, _Series]]] = MappingProxyType(
                 "aggregate": _Series(LedgerName.ITEM_HEALTH_SUMMARY),
             }
         ),
-        "scores": MappingProxyType(
-            {
-                FULL_GRAIN: _Series(LedgerName.SCORES),
-                "archive": _Series(LedgerName.SCORE_ARCHIVE),
-            }
-        ),
     }
 )
 
 #: The summary series of a task, which has to outlive its full-grain series or
 #: a month is deleted before it was ever summarised.
-_SUMMARY_SERIES: Final[Mapping[str, str]] = MappingProxyType(
-    {"telemetry-aggregate": "aggregate", "scores": "archive"}
-)
+_SUMMARY_SERIES: Final[Mapping[str, str]] = MappingProxyType({"telemetry-aggregate": "aggregate"})
 
 #: Each task whose files a console read can still open, and the series that
 #: reaches that far - None for a task's own window. A task that keeps series
 #: keeps its window equal to its full-grain one, so that series stands for it.
 _CONSOLE_READS: Final[tuple[tuple[str, str | None], ...]] = (
     ("feed-health", None),
-    ("scores", FULL_GRAIN),
+    ("scores", None),
     ("telemetry-aggregate", FULL_GRAIN),
     ("telemetry-aggregate", PUBLIC_COPY),
 )
@@ -535,8 +527,8 @@ def _refuse_a_series_the_task_cannot_keep(tasks: Mapping[str, TaskPolicy]) -> No
         carries = isinstance(policy, RetentionPolicy) and bool(policy.series)
         if name not in _SERIES and carries:
             raise ValueError(
-                f"{_where(name)} keeps series. Only "
-                f"{', '.join(sorted(_SERIES))} keep several series at once"
+                f"{_where(name)} keeps series, and only "
+                f"{', '.join(sorted(_SERIES))} may keep several series at once"
             )
     for keeper_name, allowed in _SERIES.items():
         keeper = tasks.get(keeper_name)

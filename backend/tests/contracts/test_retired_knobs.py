@@ -69,7 +69,9 @@ def test_every_removed_name_is_sent_somewhere_or_said_to_be_gone() -> None:
     """The map is what the refusal message reads, so it is the map that is asserted.
 
     Every cleanup age that left `observability` went to the declaration of the
-    gardener task that spends it, so its replacement names that file.
+    gardener task that spends it, so its replacement names that file. The two
+    score ages also say why no number is set there: every eval row is kept for
+    ever.
     """
     assert dict(SUPERSEDED_COLLECT_NAMES) == {
         "quarantine_after_failures": "availability_strikes_before_rest"
@@ -78,9 +80,11 @@ def test_every_removed_name_is_sent_somewhere_or_said_to_be_gone() -> None:
     assert {name for name, successor in SUPERSEDED_RETENTION_NAMES.items() if not successor} == gone
     for name, successor in SUPERSEDED_RETENTION_NAMES.items():
         if successor:
-            assert " in config/gardener/" in successor and successor.endswith(".json"), (
+            assert " in config/gardener/" in successor and ".json" in successor, (
                 f"observability.{name} is sent to {successor!r}, which names no declaration"
             )
+    for name in ("scores_full_grain_months", "score_archive_keep_months"):
+        assert "keeps every eval row for ever" in SUPERSEDED_RETENTION_NAMES[name]
 
 
 def test_an_unrelated_knob_in_a_block_with_no_removed_name_is_untouched() -> None:

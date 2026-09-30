@@ -379,7 +379,7 @@ def test_a_series_task_names_every_series_it_keeps_and_no_other(
 
 def test_only_the_tasks_that_keep_several_series_carry_series(tmp_path: Path) -> None:
     declared = fixture("traces", series={"full-grain": MONTHS})
-    assert "Only scores, telemetry-aggregate keep several series" in refused(
+    assert "only telemetry-aggregate may keep several series at once" in refused(
         a_garden(tmp_path, traces=declared)
     )
 
@@ -394,9 +394,7 @@ def test_a_task_that_keeps_series_keeps_its_window_as_its_full_grain_series(
     )
 
 
-@pytest.mark.parametrize(
-    ("name", "summary"), [("telemetry-aggregate", "aggregate"), ("scores", "archive")]
-)
+@pytest.mark.parametrize(("name", "summary"), [("telemetry-aggregate", "aggregate")])
 @pytest.mark.parametrize(("months", "loads"), [(13, False), (14, False), (15, True)])
 def test_a_summary_series_sits_above_the_rows_it_summarises(
     tmp_path: Path, name: str, summary: str, months: int, loads: bool
@@ -496,7 +494,7 @@ def test_with_no_picture_window_the_cleanup_keeps_every_picture(tmp_path: Path) 
     config.load_gardener(config_dir)
 
 
-@pytest.mark.parametrize("name", ["scores", "telemetry-aggregate"])
+@pytest.mark.parametrize("name", ["telemetry-aggregate"])
 def test_a_task_that_summarises_whole_months_carries_no_ceiling(tmp_path: Path, name: str) -> None:
     """A ceiling could stop part way through a month, and the next summary would be partial."""
     declared = fixture(name, max_deletes_per_run=50)

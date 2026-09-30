@@ -12,7 +12,6 @@ pass here reads the census and never touches a file of it.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -38,7 +37,6 @@ from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.item_health_summary import percentile
 from idhazh.contracts.knobs.gardener import MonthsWindow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.evals import archive as score_archive
 from idhazh.retention import compact_month, month_shards, oldest_month_kept
 from idhazh.telemetry.publish import public_telemetry
 
@@ -311,31 +309,6 @@ def test_the_task_summarises_the_expired_month_and_not_the_month_beside_it(
     assert totals_from_aggregate(ledger.load_item_health_summary(target)) == (
         totals_from_shard([expired_text])
     )
-
-
-def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
-    """One rule for the two directories still filing by month."""
-    state = tmp_path / "state"
-    readers: dict[str, tuple[Path, str, Callable[[], list[Path]]]] = {
-        "retention.month_shards": (
-            ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY),
-            ".csv",
-            lambda: month_shards(ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)),
-        ),
-        "evals.archive.archive_files": (
-            ledger.tree_root(state, LedgerName.SCORE_ARCHIVE),
-            ".json",
-            lambda: score_archive.archive_files(state),
-        ),
-    }
-    for directory, suffix, _ in readers.values():
-        directory.mkdir(parents=True)
-        for stem in ("2025-01", "2025-12", *NOT_MONTHS, *OTHER_STRAYS):
-            (directory / f"{stem}{suffix}").write_text("header\n", encoding="utf-8")
-
-    found = {name: [path.stem for path in read()] for name, (_, _, read) in readers.items()}
-
-    assert found == {name: ["2025-01", "2025-12"] for name in readers}
 
 
 def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:

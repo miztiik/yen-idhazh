@@ -5,8 +5,7 @@
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
   "monthly_window": {
-    "unit": "months",
-    "value": 15
+    "unit": "forever"
   },
   "owns": [
     "state/raw/scores",

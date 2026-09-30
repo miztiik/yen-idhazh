@@ -6,7 +6,7 @@
 
 Three neighbours own the rest of the question. [schemas.md](schemas.md) owns the shape of a row and the rule that decides a grain. [../../concepts/partitions.md](../../concepts/partitions.md) owns what counts as a day file and a month name. [ledger-registry.md](ledger-registry.md) owns which ledgers exist, where each one sits, and the check that stops the build when the code and `config/ledgers.json` disagree. This page is the per-ledger answer: this ledger, this grain, this reason.
 
-Every ledger here is append-only except three that rewrite a whole file: `state/item-health-summary/` and `state/score-archive/` rewrite a month's summary, and `state/day-metrics/` rewrites one day's record when that day is corrected. The section on the first says why.
+Every ledger here is append-only except two that rewrite a whole file: `state/item-health-summary/` rewrites a month's summary, and `state/day-metrics/` rewrites one day's record when that day is corrected. The section on the first says why.
 
 ## A ledger partitions only when its read carries a time window
 
