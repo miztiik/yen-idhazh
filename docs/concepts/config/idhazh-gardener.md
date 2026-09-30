@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -13,10 +13,10 @@ what a knob is at all is [../config.md](../config.md).
 
 | Knob | Committed | What it decides |
 | --- | --- | --- |
-| `version` | `2026-09-28` | The UTC day this file's shape last changed |
+| `version` | `2026-09-30` | The UTC day this file's shape last changed |
 | `attempts` | `6` | How many times one shard may try to push before it gives up with exit 3 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
-| `max_cone_mb` | `768` | The most the folders one shard owns may weigh, in megabytes of 1024 x 1024 bytes, before the shard exits 1. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate ([why 768](../../architecture/publishing/idhazh-gardener.md#what-a-shards-folders-weigh)) |
+| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate. Its first reset is to about twice the largest `downloaded_bytes` the first thirty scheduled wakes record ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
 
 **`attempts` must be above `shards`.** Every shard of a wake pushes to one
 branch at once, so the last one to land has lost a race to every other shard
@@ -43,6 +43,7 @@ Every declaration carries these keys, whatever its kind:
 | `dry_run` | `bool`, no default | True reports what a live pass would take and takes nothing |
 | `max_deletes_per_run` | a count, or `null` | The most one pass deletes. `null` is no ceiling and `0` is a survey. A collection pruned through GitHub's API spends a request a delete, so `null` there can use up the token's hourly allowance on one backlog |
 | `owns` or `owns_everything_else_under` | a list of folders | Exactly one of the two. `owns` names repository-relative folders; the second is the complement: every folder under its roots that no other task owns and no ledger family claims |
+| `reads` | a list of folders, default `[]` | Folders the task reads and does not own. Their file names are listed for it from the commit, whichever shard it lands in, and it may fetch and open their files; it never writes or deletes there. A task that asks about a folder it neither owns nor reads is refused rather than answered empty. A folder it owns, or one inside or around one, is refused here, and the complement task declares none |
 | `appends_to` | a list of ledger names, default `[]` | The ledgers a task files a report of its own into, through the ledger door: one new raw file under the wake's day, on a dry run too, because a report is what a dry run is for. Appending is not owning: the door mints each file's name, so it can overwrite nothing, and the runner refuses a report anywhere else before anything is staged |
 
 Each kind adds its own keys, and a key on the wrong kind is refused by name:
@@ -52,7 +53,7 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 | `retention` | `series`, one window per series, for two tasks alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`, and `scores` keeps `full-grain` and `archive`. `fold`, `{after_days, dry_run}`, on a task that owns a CSV day tree - a tree that files one small file per writer under each day's folder: once `after_days` whole days have passed since a day ended (default 1), its files become one `settled.csv`. The fold has a `dry_run` of its own because it changes no answer a reader gets ([how it runs](../../architecture/publishing/idhazh-gardener.md#the-closed-day-fold)) |
 | `collection` | `collection` (required): `workflow-artifacts` or `workflow-runs`, the GitHub collection it deletes from, and the file is named for it. Its `window` is whole days and nothing else, because a pass counts a member's age in days |
 | `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_days` (1). Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the two periods are how far back it keeps, and `max_periods_per_run` is its budget |
-| `history` | `every_days`, how many whole days apart two rewrites may run. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
+| `history` | `every_days`, how many whole days apart two rewrites may run; `push_attempts`, how many pushes one run makes in all, at least 1; `push_retry_delay_seconds`, how long a run waits after a refused push before it squashes again, at least 0. None of the three has a default. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
 
 ## The retention declarations that ship
 
@@ -70,7 +71,7 @@ Why each tree gets the age it has is
 
 | Task | Owns | Window | Why that window |
 | --- | --- | --- | --- |
-| `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source |
+| `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health` and `state/compact/item-health`, which `compact-item-health` owns, so it finds its due months whichever shard it lands in |
 | `scores` | `state/score-index`, `state/score-archive` | 14 months: `full-grain` 14 months, `archive` forever | an index day goes once an archive covers its month. It builds no archive now: the archive was built from the CSV day files, which moved to the ledger door, so `compact-scores` stays report-only until an archive is built from the door's rows |
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
 | `host-fingerprint` | `state/host-fingerprint` | 14 months | retired: its module is deleted and nothing runs it. The declaration stays because its window is the floor `compact-host-fingerprint` must reach, and the published machine shard is folded from that ledger, so it keeps at least `public_machine_keep_months` |
@@ -132,12 +133,25 @@ matrix.
 | --- | --- | --- |
 | `window` | `{unit: days, value: 60}` | How many days of history a squash keeps |
 | `every_days` | `30` | How many whole days apart two squashes may run |
+| `push_attempts` | `3` | How many pushes one run makes in all. Git refuses a push when `main` moved after the run read it, and each refusal is followed by the whole squash again on the new tip. After the last refusal the run is not recorded, so the squash is due again at the next daily wake |
+| `push_retry_delay_seconds` | `60` | How long a run waits after a refused push before it fetches `main` and squashes again |
 | `owns` | `["corpus"]` | The one file the task writes, `corpus/corpus.meta.json`, sits under it |
 | `dry_run` | `false` | The squash has run live since 2026-08-28 by owner decision (`CLAUDE.md` section 8), so the declaration transcribes a live squash rather than starting one |
 
 Both numbers were `finetune.prune_keep_days` and `finetune.prune_every_days` until
 2026-09-28. They moved here because the squash is the only thing that reads them,
 and a copy left in `config/idhazh.json` is now refused by name, pointing here.
+
+**Three pushes a minute apart is an estimate, and one number decides whether it
+fits.** A run pays for its clone and its install once, then for one whole squash
+a push and one wait before each push after the first. So three pushes fit the
+history job's 30 minutes only while one squash takes under about 8 minutes on
+the runner. A squash replays every commit after its boundary - about 4,800 when
+the window is full, at September 2026's rate of about 80 commits a day - and that
+replay has not been timed on a runner. The first due run's step time is the
+measurement that settles it. A job stopped at its timeout has pushed nothing and
+recorded nothing, so the squash is due again at the next wake, as after a last
+refused push. The person's ruling of 2026-09-29 added the two keys.
 
 **Every other switch ships `dry_run: true`**, and a contract test holds the
 committed tree to that. It finds every `dry_run` a declaration carries, a
@@ -157,7 +171,7 @@ names the file an operator edits and the rule it broke.
 | A file whose name is not lower-case words joined by hyphens | The name is the task |
 | Two tasks that own one folder, or a folder inside the other's, whatever their status | Both would delete in it. A retired task keeps its claim |
 | More than one task using the complement form | Each would claim what the other claims |
-| An owned entry that is a file | A shard checks out folders, so a file would match nothing |
+| An owned entry that is a file | A shard lists the files under each folder a task owns, so a file would list nothing |
 | `seen` keeping less than `collect.seen_window_days` | The planner still reads those days |
 | `counterfactual-scores` keeping less than `lens_weights.window_days` | A reader still opens those days |
 | `telemetry-aggregate` or `scores` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |

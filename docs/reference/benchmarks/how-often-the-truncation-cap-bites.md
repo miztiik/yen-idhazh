@@ -107,7 +107,7 @@ has now run at the new fingerprint and still cannot answer it**, because the
 `date` input would overwrite a published day, so the priced run summarized
 different articles from its baseline and no quality comparison may be drawn from
 the pair ([what the doubled window and the doubled cap
-cost](../pipeline-cost.md#what-the-doubled-window-and-the-doubled-cap-cost-measured-2026-09-09)).
+cost](a-run-at-the-doubled-window-and-cap.md)).
 One run of eval rows now exists on the far side of the boundary. What settles
 the question is a second run at this same fingerprint over a frozen article set,
 against rows written at the same fingerprint - not against anything older, since

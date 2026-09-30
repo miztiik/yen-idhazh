@@ -31,11 +31,9 @@ def run(context: TaskContext) -> Pass:
     """Take the index days an archive covers, and any summary past its series."""
     from idhazh import day_partition, day_shards, ledger
     from idhazh.config import FULL_GRAIN
-    from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
     from idhazh.contracts.knobs.gardener import ForeverWindow, RetentionPolicy
     from idhazh.contracts.ledger_name import LedgerName
-    from idhazh.evals import archive as score_archive
-    from idhazh.gardener import retention_files
+    from idhazh.gardener import named_trees, retention_files
 
     policy = context.policy
     series = policy.series if isinstance(policy, RetentionPolicy) and policy.series else {}
@@ -48,12 +46,12 @@ def run(context: TaskContext) -> Pass:
     index = retention_files.owned_tree(context, ledger.tree_root(state, LedgerName.SCORE_INDEX))
     kept = retention_files.owned_tree(context, ledger.tree_root(state, LedgerName.SCORE_ARCHIVE))
 
-    summaries = score_archive.archive_files(state) if kept is not None else []
+    summaries = named_trees.month_files(context.listing, kept, ".json") if kept is not None else []
     covered = {summary.stem for summary in summaries}
     index_days = [
         shard
         for shard in (
-            day_shards.shard_files(index, days=UNBOUNDED_WINDOW) if index is not None else ()
+            named_trees.shard_files(context.listing, index) if index is not None else ()
         )
         if keep_from is not None
         and day_shards.date_of(shard)[:7] < keep_from

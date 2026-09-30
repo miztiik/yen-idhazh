@@ -30,9 +30,10 @@ agree on purpose.
 the shard say which of a wake's records this is; `duration_ms` is this task's
 own wall clock and `work_ended_at` is the instant its shard finished working and
 started to publish, so a slow push is never read as a slow task. `cone_bytes`
-is what the shard's owned folders weighed at the commit it checked out, the
-same on every row of one record, so where the weight sits is read off the
-record rather than measured again.
+is what the shard's owned folders weighed at the commit it checked out, and
+`downloaded_bytes` is the part of what its tasks read that it had to download.
+Both are the same on every row of one record, so where the weight sits is read
+off the record rather than measured again.
 
 **A task that folds says so on the same row.** `dry_run`, `deleted` and
 `bytes_freed` describe the task's window. A retention task that owns a CSV day
@@ -94,6 +95,11 @@ class CollectionPruneRow(Contract):
     __schema_stem__: ClassVar[str] = "collection-prune-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-30",
+            change="downloaded_bytes, additive: file content the shard downloaded for its tasks.",
+            why="A shard checks out only code, so what it paid is what its tasks downloaded.",
+        ),
+        ChangelogEntry(
             version="2026-09-28T22:07",
             change="fold_dry_run, folded_days, folded_files, additive; empty with no fold.",
             why="A task folds its closed days on its own switch, and says what it folded.",
@@ -110,8 +116,8 @@ class CollectionPruneRow(Contract):
         ),
         ChangelogEntry(
             version="2026-09-17",
-            change="Initial shape: the collection, the window, the ceiling, where it stopped.",
-            why="Deleting one member at a time needs a record of where the next pass starts.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -222,8 +228,21 @@ class CollectionPruneRow(Contract):
         description=(
             "What the folders the shard's tasks own weighed at the commit it checked "
             "out, in bytes, read once a shard and written on every row of its record. "
-            "The code every shard checks out is not counted. Empty when nobody read "
-            "the commit: a task run by hand in a checkout reads none."
+            "A file's size is git's where the clone holds the file and GitHub's trees "
+            "API's where it does not, so a file the shard never downloaded still "
+            "counts. The code every shard checks out is not counted. Empty when nobody "
+            "read the commit: a task run by hand in a checkout reads none."
+        ),
+    )
+    downloaded_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "What the shard downloaded for its tasks, in bytes: the content of every "
+            "file a task fetched before it read it. The same on every row of its "
+            "record. The code and config every shard checks out are not counted. Empty "
+            "when nothing could be downloaded: a task run by hand reads the files its "
+            "checkout already holds."
         ),
     )
     fold_dry_run: bool | None = Field(

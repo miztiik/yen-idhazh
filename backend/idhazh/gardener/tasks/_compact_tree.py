@@ -8,6 +8,12 @@ data first, index next, watermark last - and nothing touches the disk until
 decisions from the same reads, and the list a dry run reports is the list a
 live run carries out, file for file.
 
+**Names come from the task's listing, and content is fetched before it is
+read.** The raw day folders, the listings, which compact files exist and what
+each weighs are all read off the listing. The watermarks and the indexes are
+fetched once, before they are read, and each step fetches the day or month
+folders it opens before it opens one.
+
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
 that lands the pass refuses a path on both lists, so one pass that did either
 would stall every later wake. `write` and `delete` refuse it at the moment it
@@ -30,6 +36,8 @@ from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.gardener import named_trees
+from idhazh.gardener.file_listing import FileListing
 from idhazh.ledger import StoredRow
 
 
@@ -72,6 +80,9 @@ class CompactTree:
 
     state_dir: Path
     ledger: LedgerName
+    #: The files under the folders the compaction owns, which is where every
+    #: name the pass decides from comes from.
+    listing: FileListing
     #: The newest day and month compacted, or None when that period never has been.
     daily_through: str | None
     monthly_through: str | None
@@ -87,29 +98,53 @@ class CompactTree:
     looked: set[Path] = field(default_factory=set)
 
     @classmethod
-    def read(cls, state_dir: Path, ledger_name: LedgerName) -> CompactTree:
-        """The two watermarks, the two indexes and the raw day folder names, read once."""
-        marks: dict[Period, str | None] = {}
+    def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
+        """The two watermarks, the two indexes and the raw day folder names, read once.
+
+        The indexes' folder and each watermark's own folder are fetched first,
+        and a watermark is fetched without the day or month folders beside it.
+        """
+        marks = {period: ledger.watermark_path(state_dir, ledger_name, period) for period in Period}
+        indexes = {
+            period: ledger.compact_index_path(state_dir, ledger_name, period) for period in Period
+        }
+        listing.fetch(
+            {index.parent for index in indexes.values()},
+            beside=[mark for mark in marks.values() if listing.holds(mark)],
+        )
+        through: dict[Period, str | None] = {}
         entries: dict[Period, dict[str, CompactEntry]] = {}
         for period in Period:
-            mark = ledger.watermark_path(state_dir, ledger_name, period)
-            marks[period] = (
-                _read(Watermark, mark, ledger_name, period).through if mark.is_file() else None
+            mark = marks[period]
+            through[period] = (
+                _read(Watermark, mark, ledger_name, period).through
+                if listing.holds(mark)
+                else None
             )
-            index = ledger.compact_index_path(state_dir, ledger_name, period)
-            listed = _read(CompactIndex, index, ledger_name, period) if index.is_file() else None
-            entries[period] = {entry.covers: entry for entry in listed.entries} if listed else {}
-        raw_days = ledger.raw_days(state_dir, ledger_name)
+            index = indexes[period]
+            held = _read(CompactIndex, index, ledger_name, period) if listing.holds(index) else None
+            entries[period] = {entry.covers: entry for entry in held.entries} if held else {}
+        raw_days = named_trees.raw_days(listing, state_dir, ledger_name)
         return cls(
             state_dir=state_dir,
             ledger=ledger_name,
-            daily_through=marks[Period.DAILY],
-            monthly_through=marks[Period.MONTHLY],
+            listing=listing,
+            daily_through=through[Period.DAILY],
+            monthly_through=through[Period.MONTHLY],
             daily=entries[Period.DAILY],
             monthly=entries[Period.MONTHLY],
             raw_days=raw_days,
             listed=len(raw_days),
         )
+
+    def raw_day_folder(self, day: str) -> Path:
+        """The raw folder one UTC day's writer files sit in."""
+        return ledger.raw_root(self.state_dir, self.ledger).joinpath(day[:4], day[5:7], day[8:10])
+
+    def daily_month_folder(self, month: str) -> Path:
+        """The folder a `YYYY-MM` month's daily compact files sit in."""
+        first = ledger.compact_path(self.state_dir, self.ledger, Period.DAILY, f"{month}-01")
+        return first.parent
 
     def load[C: Contract](self, path: Path, *, model: type[C]) -> list[StoredRow[C]]:
         """One ledger file's rows beside their identity, read as the pass decides."""
@@ -123,11 +158,11 @@ class CompactTree:
         self.changes.append(Change(path=path, data=data, size=len(data)))
 
     def delete(self, path: Path) -> None:
-        """Decide to delete one file, weighing it now."""
+        """Decide to delete one file, weighing it by the listing now."""
         if any(change.path == path and change.data is not None for change in self.changes):
             raise ValueError(f"{path.name} was written earlier in this pass and may not be deleted")
         self.looked.add(path)
-        self.changes.append(Change(path=path, data=None, size=path.stat().st_size))
+        self.changes.append(Change(path=path, data=None, size=self.listing.size_of(path)))
 
     def write_index(self, period: Period) -> None:
         """Decide to rewrite one period's index from what the pass holds now."""
@@ -160,11 +195,13 @@ class CompactTree:
         """Carry out every change in the order it was decided. A dry run never calls this.
 
         A deleted file takes any date folder it leaves empty with it, so the next
-        listing of the raw tree does not meet a day that holds nothing.
+        listing of the raw tree does not meet a day that holds nothing. A file
+        deleted by its name alone - a raw listing past its keep - may never have
+        been downloaded, and its deletion lands from the name.
         """
         for change in self.changes:
             if change.data is None:
-                change.path.unlink()
+                change.path.unlink(missing_ok=True)
                 day_partition.drop_empty_day_dirs(change.path)
             else:
                 atomic_write.write_atomic_bytes(change.path, change.data)

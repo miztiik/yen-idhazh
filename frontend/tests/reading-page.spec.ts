@@ -956,8 +956,8 @@ test.describe('one card, and every publisher on it is a way in', () => {
 		).toEqual([MEMBERS[1], MEMBERS[0]]);
 		expect(
 			await pills.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href'))),
-			'a publisher name is not a link to that story on this page'
-		).toEqual([`#${MEMBERS[1]}`, `#${MEMBERS[0]}`]);
+			'a publisher name must reach its dated page even when the home page has no target element'
+		).toEqual([`/${FOLD_DAY}/#${MEMBERS[1]}`, `/${FOLD_DAY}/#${MEMBERS[0]}`]);
 
 		// A story no group holds keeps the sentence and gets no stack, because the
 		// count and the names answer different questions.
@@ -1029,10 +1029,25 @@ test.describe('one card, and every publisher on it is a way in', () => {
 			timeout: 15_000
 		});
 		await expect(card, 'the story opened but the page did not go to it').toBeInViewport();
+		await expect(card, 'the publisher link did not focus its story').toBeFocused();
 		// Our summary of THEIR piece, with their own way out under it. That is why
 		// the name links here rather than straight out to the publisher.
 		await expect(card.locator('[data-item-summary]')).toContainText('Beta');
 		await expect(card.locator('a[href^="https://beta.test/"]')).toHaveCount(1);
+	});
+
+	test('a copied publisher link opens its folded story from another page', async ({ page }) => {
+		await openFolded(page);
+		const address = await page.locator(`[data-coverage-pill="${MEMBERS[0]}"]`).getAttribute('href');
+		expect(address).toBe(`/${FOLD_DAY}/#${MEMBERS[0]}`);
+		await page.goto('/archive/');
+		await page.goto(address!);
+		await dayReady(page, 'the copied publisher link never loaded its day');
+		const card = page.locator(`article.item[id="${MEMBERS[0]}"]`);
+		await expect(card).toHaveCount(1);
+		await expect(card).toBeInViewport();
+		await expect(card).toBeFocused();
+		await expect(card.locator('[data-item-summary]')).toContainText('Beta');
 	});
 
 	test('the pager does not offer stories the fold took off the page', async ({ page }) => {
