@@ -223,7 +223,7 @@ narrower one's full width, so a change that put them end to end fails even
 though every number stayed right
 ([../../../frontend/tests/console-memory-held.spec.ts](../../../frontend/tests/console-memory-held.spec.ts)).
 What the readings say, and what the model behind the four-part shape is, are in
-[../../reference/pipeline-cost.md](../../reference/pipeline-cost.md#the-machines-own-reading-arrived-and-the-survival-now-makes-sense).
+[Interpreting machine memory](../../reference/pipeline-cost.md#how-much-of-the-runners-memory-a-run-needs).
 
 ## The two rates on a shard row are measured before they are drawn
 
