@@ -16,10 +16,10 @@
  * **A missing index stops the build; a missing data file does not.** The
  * browser asks for a published ledger's indexes before anything else, so a
  * published ledger without both is published wrongly and a 404 would be the only
- * sign of it (the person's ruling, 2026-09-30). A data file an index names and
- * the tree lacks is one lost day: the rest is copied, the build log names the
- * file and the fix, and the browser's query door answers `unreachable` for a
- * span that reaches it - degrade, do not fail (CLAUDE.md section 1a).
+ * sign of it. A data file an index names and the tree lacks is one lost day: the
+ * rest is copied, the build log names the file and the fix, and the browser's
+ * query door answers `unreachable` for a span that reaches it - degrade, do not
+ * fail (CLAUDE.md section 1a).
  *
  * **Every path is built from checked parts.** A ledger name is lower-case words
  * joined by hyphens, and a `covers` value is a UTC day or month in digits, or

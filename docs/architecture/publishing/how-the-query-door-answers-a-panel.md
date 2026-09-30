@@ -186,16 +186,16 @@ which files.
 **What it weighs, and what bounds it.** On 2026-09-30 the three ledgers were
 9.47 MB, summed from the sizes their committed indexes give: `item-health` 4.71 MB
 over 59 days, `scores` 4.45 MB over 59 and `host-fingerprint` 0.31 MB over 28,
-with 0.87 MB of it files that hold no row. A local build that day held exactly
-that under `state/`: 152 files and 9,468,609 bytes with three empty month
-indexes, 6.4 percent of the site. The archive does not grow it: a ledger
+with 0.87 MB of it files that hold no row. That was 6.4 percent of a full site
+build that day. The archive does not grow it: a ledger
 keeps at most `daily_keep_days` plus 31 day files and the month files its
 `monthly_window` keeps. Each ledger's index directory has a
 `page_weight.payload_ceilings_bytes` key of 2,200 gzipped bytes, at least twice
 its longest index, and `backend/tests/contracts/test_page_ceilings.py` fails when
 a keep window grows past it. The longest today is a 76-entry day index: 1,006
-bytes at gzip -5 through the CI runner's zlib, and 970 through zlib-ng on
-Windows. **The data files carry no ceiling, and no gate yet
+bytes at gzip -5 through the CI runner's zlib. Size a key from the runner's
+reading, because zlib-ng, which some local Python builds use, reads the same
+index about 4 percent smaller. **The data files carry no ceiling, and no gate yet
 weighs what one span reads.** Summed from the same indexes, a 30-day span is about
 0.18 MB of `host-fingerprint`, 3.53 MB of `item-health` and 3.43 MB of `scores`
 (estimate): each of the last two alone is more than the 3.4 MB a cold console load
