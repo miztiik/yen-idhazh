@@ -287,12 +287,12 @@
 									<tr data-fleet-job={line.row}>
 										<td class="run">{line.runId}</td>
 										<td class="job">{line.job}</td>
-										<td class="number shard"><span class="narrow-word" aria-hidden="true">shard </span>{line.shard ?? 'not recorded'}</td>
+										<td class="number shard"><span class="narrow-word" aria-hidden="true">{'shard '}</span>{line.shard ?? 'not recorded'}</td>
 										<td class="machine">{line.machine}</td>
 										{#if line.seconds === null}
-											<td class="number seconds"><span class="narrow-word" aria-hidden="true">seconds </span>not recorded</td>
+											<td class="number seconds"><span class="narrow-word" aria-hidden="true">{'seconds '}</span>not recorded</td>
 										{:else}
-											<td class="number seconds">{Math.round(line.seconds)}<span class="narrow-word" aria-hidden="true"> seconds</span></td>
+											<td class="number seconds">{Math.round(line.seconds)}<span class="narrow-word" aria-hidden="true">{' seconds'}</span></td>
 										{/if}
 										<td class="number speed">{line.rate === null ? 'no speed reading' : rateWords(line.rate)}</td>
 									</tr>
@@ -427,45 +427,52 @@
 		}
 
 		tbody tr {
-			display: grid;
-			grid-template-columns: minmax(0, 1fr) auto auto;
-			grid-template-areas:
-				'run job shard'
-				'machine seconds speed';
-			column-gap: var(--space-2);
+			display: flex;
+			flex-wrap: wrap;
+			align-items: baseline;
+			column-gap: var(--space-3);
 			padding-block: var(--space-1);
 			border-block-end: 1px solid var(--color-rule);
 		}
 
-		td {
+		/* The break between the two lines, so each line keeps its own widths. */
+		tbody tr::before {
+			content: '';
+			flex-basis: 100%;
+			order: 4;
+		}
+
+		td,
+		.number {
 			padding: 0;
 			border: 0;
+			text-align: start;
 			white-space: normal;
 		}
 
 		.run {
-			grid-area: run;
+			order: 1;
 			overflow-wrap: anywhere;
 		}
 
 		.job {
-			grid-area: job;
+			order: 2;
 		}
 
 		.shard {
-			grid-area: shard;
+			order: 3;
 		}
 
 		.machine {
-			grid-area: machine;
+			order: 5;
 		}
 
 		.seconds {
-			grid-area: seconds;
+			order: 6;
 		}
 
 		.speed {
-			grid-area: speed;
+			order: 7;
 		}
 
 		.narrow-word {
