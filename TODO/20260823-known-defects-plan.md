@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-30
 
-**Twenty-seven defects are open.** Three of them need evidence or a ruling before any code
+**Twenty-nine defects are open.** Three of them need evidence or a ruling before any code
 is worth writing, and two more wait on one design ruling; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -25,7 +25,9 @@ its squash merges in local time, and one account setting is the first thing to
 try. Defects 49 to 52 were filed on 2026-09-30, when plan 50 closed, from what
 its workers found outside their own rows. Defect 50 was already fixed that day;
 defect 51 is the third that needs evidence, because one abort is not enough to
-find its cause.
+find its cause. Defects 53 and 54 were filed the same day from two findings plan
+50's rows wrote down and never filed, and 54 has a date: the first squash that
+rewrites history is due on 2026-10-29.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -86,6 +88,94 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 50 | A publisher link on the home page named a story the page did not draw, so a news run's site build failed | 2 | CLOSED 2026-09-30 (PR #1168) |
 | 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - not reproduced; a second abort opens a row** |
 | 52 | Reading one month of a packed ledger downloads every month file of its year | 3 | **OPEN - costs nothing until a compaction runs live** |
+| 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
+| 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
+
+## 54 - The first squash that rewrites history may not fit in its 30-minute job (OPEN)
+
+**The first corpus squash that collapses commits is due at the upkeep wake of
+2026-10-29, and at the only measured rate one replay needs about twice the
+job's limit.** `corpus/corpus.meta.json` records the last run on 2026-09-29, and
+`config/gardener/corpus-squash.json` sets `every_days` to 30 and `window` to 60
+days. The `history` job of `.github/workflows/idhazh-gardener.yml` has
+`timeout-minutes: 30`. That squash collapses every commit authored at or before
+00:00 UTC on 2026-08-30 into one new root and replays every commit after it,
+less the merge commits, which a rebase drops. Counted on `main` on 2026-09-30, it
+would collapse 437 commits and replay 2,465. The seven days 2026-09-23 to
+2026-09-29 added 489 commits, about 70 a day, so the replay reaches about 4,400
+commits by 2026-10-29 - an estimate. One replay of 1,001 commits took 824 s on
+the Windows development machine, about 0.82 s a commit, and nobody has timed one
+on `ubuntu-latest`. At that rate 4,400 commits take about 61 minutes, and the
+job's 30 minutes hold about 2,190, fewer than the 2,465 already there. The 4,800 on
+[the gardener's config page](../docs/concepts/config/idhazh-gardener.md#the-history-declaration-corpus-squash),
+from September's average of about 80 commits a day, gives about 66 minutes.
+
+**Doing nothing costs a squash that fails every day and bounds nothing.** A job
+stopped at its limit has pushed nothing and recorded no run, so `main` is safe.
+But the squash is then due again at the next day's wake, is stopped again, and
+goes on that way every day, 30 runner minutes each time. The history it exists
+to bound keeps growing meanwhile: the workflow's own header puts the article
+text alone at about 154 MB a year.
+
+**The home is the `history` job's `timeout-minutes`, and a person picks the
+move.** One move is to raise it. GitHub stops any job at 6 hours, which leaves
+room for all three of the squash's `push_attempts`, each a whole replay, at the
+Windows rate. What that costs is the quiet time the force push is placed in:
+`backend/tests/workflows/test_triggers.py` checks that the push, at the latest
+start it allows plus the three jobs' limits, lands before 07:23 UTC, the
+earliest a digest run was seen to start. With 30 minutes it lands by 07:09, so a
+limit of 44 minutes or more also needs a new wake time or a new rule, or that
+test goes red. The other move is to time one replay on `ubuntu-latest` first and
+set the limit from that number. The squash program's dry run stops before the
+replay, so this needs a run that replays and does not push, before 2026-10-29.
+Level 2 - that test and the comment above the workflow's cron line hold the 30.
+
+Found by plan 50's row 13 (#1167), whose worker timed the replay, and filed on
+2026-09-30, when plan 50 closed.
+
+## 53 - The `traces` upkeep task cannot date eight old trace files, so it never deletes them (OPEN)
+
+**Eight trace files sit where the task that deletes old traces cannot date
+them, so it will never delete them.** They are
+`state/traces/2026/09/22-<run>-<shard>.jsonl`, 687,103 bytes in all, in the flat
+shape traces had before #1067 moved 104 flat traces into day folders at 05:22
+UTC on 2026-09-23. Two runs of 2026-09-22 wrote these eight, in eight work
+commits from 20:37 UTC that day to 00:28 UTC the next; the traces of that day's
+three earlier runs moved, and these did not. The `traces` task,
+`backend/idhazh/gardener/tasks/traces.py`, dates each file with `trace_date` in
+`backend/idhazh/telemetry/traces.py`. That function reads the day from the
+folders and returns None for any path that is not year, month, day and file
+below `state/traces/`. These eight are year, month and file, so the task passes
+over them: at its wake on 2026-09-30 it selected the 124 files in the day
+folders from 2026-09-15 to 2026-09-23, and none of these eight, though their
+names say 2026-09-22.
+
+**The other fault plan 50's row 10 found is still true, and the code is not
+its cause.** Day folders still sit past the window. The task keeps a trace while
+it is less than 7 days old (`window` in `config/gardener/traces.json`, which
+replaced `observability.trace_window_days`), so on 2026-09-30 the nine day
+folders from 2026-09-15 to 2026-09-23 are past it: 124 files, 10,488,025 bytes.
+The 52 files and 4,386,597 bytes that the row counted past it, 2026-09-15 to
+2026-09-18, are among them. The task selects them and deletes none because it
+runs report-only (`dry_run: true`), as a new upkeep task does until a person
+reads its records and turns it live
+([`docs/concepts/config/idhazh-gardener.md`](../docs/concepts/config/idhazh-gardener.md)).
+That switch clears them, and no function changes.
+
+**The home is `trace_date`, or the eight files' paths.** Either that function
+learns the flat shape, `<YYYY>/<MM>/<DD>-<rest>.jsonl`, or the eight files move
+into `state/traces/2026/09/22/`, where it already dates them. That move is the
+`traces` shape of `backend/utilities/migrate_to_day_shards.py`: it turns the day
+prefix into a folder and reads the tree back through `trace_date`. Nobody has
+run it on these eight, and none of their names is already in that folder. The
+move costs one commit of eight renames and no code; a second shape in
+`trace_date` is a rule kept alive for eight files. Until the task deletes live
+these eight cost nothing the other old traces do not; from that day they stay
+for good. Level 2 - `trace_date` decides what the `traces` task deletes, and
+`backend/tests/test_telemetry.py` holds the paths it refuses.
+
+Found on 2026-09-26 by plan 50's row 10, while it was held, and filed on
+2026-09-30, when plan 50 closed.
 
 ## 52 - Reading one month of a packed ledger downloads every month file of its year (OPEN)
 
