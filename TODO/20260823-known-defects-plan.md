@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-30
 
-**Twenty-four defects are open.** Two of them need evidence or a ruling before any code
+**Twenty-two defects are open.** Two of them need evidence or a ruling before any code
 is worth writing, and two more wait on one design ruling; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -18,9 +18,10 @@ reads the same machine ledger raw, and calls every run written in two halves
 unreadable. Defect 37 came from the same row's browser check: in the dark theme
 two of the chart colours look the same, and that row put them side by side.
 Defects 38 to 47 were filed on 2026-09-28 from what plan 51's rows found outside
-their own files: 38 and 39 wait on one Susan ruling about which machines get a
-colour, and each of the other eight names the change or the plan row that fixes
-it. Defect 48 was filed the same day, while plan 51's row 5 merged: GitHub stamps
+their own files. 38 and 39 closed on 2026-09-30, when plan 51's row 8 made a
+machine's colour its speed and the counters reader kept each shard's
+fingerprint; each of the other eight names the change or the plan row that
+fixes it. Defect 48 was filed the same day, while plan 51's row 5 merged: GitHub stamps
 its squash merges in local time, and one account setting is the first thing to
 try.
 **This file cannot
@@ -68,13 +69,13 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 35 | The chart loading flag flips at import, so the waiting sentence goes while the box is still empty | 2 | CLOSED 2026-09-27 |
 | 36 | The band above every console route calls every run written in two halves unreadable | 2 | **OPEN - merge or settle is the one ruling it needs** |
 | 37 | Two colours of the dark chart ramp look the same, so two machines read as one | 2 | **OPEN - one colour to pick, then every pair measured again** |
-| 38 | The machine colours go to the first machines by an arbitrary key, not to the most-placed ones | 2 | **OPEN - a Susan ruling first: do the most-placed machines get the colours?** |
-| 39 | The run-counter records name no machine, so the Hardware route counts 10 machines where there are 8 | 3 | **OPEN - rides on defect 38's ruling** |
+| 38 | The machine colours go to the first machines by an arbitrary key, not to the most-placed ones | 2 | CLOSED 2026-09-30 |
+| 39 | The run-counter records name no machine, so the Hardware route counts 10 machines where there are 8 | 3 | CLOSED 2026-09-30 |
 | 40 | The canary never writes a job in two halves, so no built page tests the merge | 2 | **OPEN - the canary builder writes one job in two halves** |
 | 41 | Span sentences print "in these 1 days" at the one-day window | 1 | **OPEN - one rule for a count and its noun** |
 | 42 | The processor-share tiles print "under 1%" past their own bottom edge | 1 | **OPEN - one panel's tiles** |
 | 43 | A section that follows the days control changes height and moves the page under the reader | 2 | **OPEN - one layout rule, not a fix per panel** |
-| 44 | One hatch means two things on the console: no reading, and time counted twice | 2 | **OPEN - plan 51's row 8 and a plan 52 row take one half each** |
+| 44 | One hatch means two things on the console: no reading, and time counted twice | 2 | **OPEN - the no-reading half is done; a plan 52 row takes the run timeline's** |
 | 45 | A change to `Panel.svelte` does not buy the console tests on a pull request | 2 | **OPEN - one pattern in the selector and a truth-table case** |
 | 46 | `DateSeries` cannot draw the settings-change rule that gate 6 asks of every trend | 2 | **OPEN - plan 52's row 26, before a date series is judged** |
 | 47 | The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 | 2 | **OPEN - a plan 52 route row gives each section an id** |
@@ -184,6 +185,11 @@ thing with no reading.
 plan 52 row that redraws `RunTimelinePanel.svelte` resolves what its overrun is
 drawn with instead. Level 2 - two panels, each checked by name in both themes.
 
+**The first half is done**, 2026-09-30: the memory board draws an item with no
+reading in the reserved grey's stripes from `absentHatch`, at
+`console.absent_hatch_degrees`, the same hatch the machine-kinds panel draws a
+machine with no speed reading in. What is left is the run timeline's overrun.
+
 Found on 2026-09-27 by plan 51's row 4, which built the hatch builder.
 
 ## 43 - A section that follows the days control changes height and moves the page under the reader (OPEN)
@@ -241,41 +247,6 @@ rows are checked by name.
 
 Found on 2026-09-27 by plan 51's row 1, which built the merge.
 
-## 39 - The run-counter records name no machine, so the Hardware route counts 10 machines where there are 8 (OPEN)
-
-**A job's counter records carry no machine identifier**, so the Hardware route
-cannot tie them to the machine record of the job that wrote them, and it counts
-10 machine identities for 8 machines. The extra identities feed the ramp's
-`Other machines` group, which is where defect 38 bites.
-
-**The home is the same ruling as defect 38.** Either the reader ties each
-counter record to its job's machine record, or the writer stamps the machine on
-each counter record; the second changes a persisted ledger and is a Level 5 on
-its own. Level 3 as filed - two ledgers meet on one page.
-
-Found on 2026-09-27 by plan 51's row 1.
-
-## 38 - The machine colours go to the first machines by an arbitrary key, not to the most-placed ones (OPEN)
-
-**The Hardware route hands out its machine colours in key order, and the key is
-arbitrary on purpose** (`frontend/src/lib/charts/machine-colour.ts`): the machine
-record's fingerprint, or the processor's model name where no record reached the
-run. When the ramp runs out of colours, the machines left over are folded into
-`Other machines`, so which machine gets a bar of its own is decided by how its
-key happens to sort, not by how often it ran. Plan 51's row 1 found that inside
-`Other machines` the other AMD EPYC 9V74 records hold 27 placements, more than
-the 25 on the named AMD EPYC 9V74 bar.
-
-**The home is a Susan ruling, then the machine colour code.** The question is
-whether the most-placed machines take the colours first. Plan 51's row 8 already
-rules that the machine ramp becomes ordered by speed on the panel it redraws
-(its decision 5), so the ruling also says whether speed or placements decides
-which machines are left without a colour. Level 2 - the three panels that draw or
-count machines take their colours from `machine-colour.ts`, so each is checked by
-name.
-
-Found on 2026-09-27 by plan 51's row 1.
-
 ## 37 - Two colours of the dark chart ramp look the same, so two machines read as one (OPEN)
 
 **The chart ramp is meant to tell eight series apart, and in the dark theme it
@@ -297,6 +268,9 @@ part of the first. The readout under the plot names every bar and the order is t
 on every day, so a reader who looks can tell them apart. A reader who glances
 cannot, so the panel fails the two-second check on the dark theme, which is the
 default. Any chart that draws both stops has the same fault, wherever they land.
+Since 2026-09-30 the machine panels colour a machine by its speed, one hue in
+steps, so they no longer draw these two stops; the fault stays with every other
+chart that does.
 
 **The fix is one colour, then every pair measured again.** Pick a new dark
 `--chart-6` that is at least 10 from every other stop and from `--chart-change`,
