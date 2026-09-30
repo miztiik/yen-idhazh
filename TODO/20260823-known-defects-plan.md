@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-30
 
-**Twenty-four defects are open.** Two of them need evidence or a ruling before any code
+**Twenty-seven defects are open.** Three of them need evidence or a ruling before any code
 is worth writing, and two more wait on one design ruling; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -22,7 +22,10 @@ their own files: 38 and 39 wait on one Susan ruling about which machines get a
 colour, and each of the other eight names the change or the plan row that fixes
 it. Defect 48 was filed the same day, while plan 51's row 5 merged: GitHub stamps
 its squash merges in local time, and one account setting is the first thing to
-try.
+try. Defects 49 to 52 were filed on 2026-09-30, when plan 50 closed, from what
+its workers found outside their own rows. Defect 50 was already fixed that day;
+defect 51 is the third that needs evidence, because one abort is not enough to
+find its cause.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -79,6 +82,105 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 46 | `DateSeries` cannot draw the settings-change rule that gate 6 asks of every trend | 2 | **OPEN - plan 52's row 26, before a date series is judged** |
 | 47 | The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 | 2 | **OPEN - a plan 52 route row gives each section an id** |
 | 48 | GitHub stamps its squash merges in local time, `+02:00`, not UTC | 1 | **OPEN - one account setting to try, then one merge to read** |
+| 49 | The local test selector sends a backend test helper to every frontend group | 2 | **OPEN - two patterns in the selector and their truth-table cases** |
+| 50 | A publisher link on the home page named a story the page did not draw, so a news run's site build failed | 2 | CLOSED 2026-09-30 (PR #1168) |
+| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - not reproduced; a second abort opens a row** |
+| 52 | Reading one month of a packed ledger downloads every month file of its year | 3 | **OPEN - costs nothing until a compaction runs live** |
+
+## 52 - Reading one month of a packed ledger downloads every month file of its year (OPEN)
+
+**A gardener task that reads one month file downloads every month file of that
+year.** A month file is `state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet`, so it
+sits in its year's folder beside up to eleven others. Since #1173 an upkeep shard
+downloads only what its tasks read, and it widens its checkout by whole folders,
+so a step that opens one month file fetches the whole year folder: up to twelve
+files where it needed one. The extra counts against the shard's 128 MB
+`max_downloaded_mb` alarm. A month of the scores ledger was about 3.5 MB in
+September 2026, so a full year folder of it is about 40 MB, an estimate. It costs
+nothing today: every compaction is report-only, and on 2026-09-30 `main` held 146
+day files and no month file. It starts when a compaction runs live and a task
+reads a month it packed, such as the census summary, `telemetry-aggregate`, whose
+first month falls due about late 2027 (an estimate).
+
+**The home is the month file's path.** The gardener page already names the fix:
+give each month file a folder of its own, once the readings show the cost
+([`docs/architecture/publishing/idhazh-gardener.md`](../docs/architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)).
+Plan 56's row 2 would pack a finished year's month files into one year file,
+`state/compact/<ledger>/yearly/<YYYY>.parquet`, so the new path is chosen with that
+layout in view. Level 3 - the compaction writes the path and the browser's ledger
+reader reads it.
+
+Found on 2026-09-30 by plan 50's row 14 (#1173), while its checkout was designed.
+
+## 51 - The canary builder's score-key step aborted once at exit, after printing its whole answer (OPEN)
+
+**Once, a program that had finished its work aborted on its way out, and the
+site build that called it failed.** In `main`'s CI run 36655319104, attempt 1, the
+browser job's step "Build the site from the canaries" ran
+`python backend/utilities/build_canary_day.py --scored-keys` at 01:30:51 UTC on
+2026-09-30. It printed its whole answer, the eight canary keys as JSON, then died
+with "terminate called without an active exception" (SIGABRT), so
+`frontend/scripts/build-canary.mjs` failed the build. The same tree had passed on
+its pull request (#1166), and a re-run of the failed job passed at 06:40 UTC. The
+site's next publication waited about five hours for that re-run.
+
+**The home is the program that aborted, not its caller.** The likely cause is a
+native thread still running when Python exits, now that this program opens
+parquet files - an estimate, not reproduced. One abort is not enough to find it,
+so a second one opens a row to reproduce and fix it. A retry in
+`build-canary.mjs` would hide the same fault from every other program that opens
+parquet, so it is not the fix (CLAUDE.md Guardrail #5). Level 2 - the canary
+build, and every browser group behind it, read this program's answer.
+
+Found on 2026-09-30 by plan 50's row 9, on the merge of #1166.
+
+## 50 - A publisher link on the home page named a story the page did not draw, so a news run's site build failed (CLOSED 2026-09-30)
+
+**A news run's site build failed on one link.** Content refresh run 36639197643
+failed at 01:11 UTC on 2026-09-30, in its assemble job's "Build the site" step:
+SvelteKit's prerender found that `/` linked to `/#world-32bhzh97bx1nk7s5` and that
+no element on `/` had that id. The link was a publisher name on a grouped story,
+an "Also covered by" pill in `frontend/src/lib/components/ItemMeta.svelte`,
+written as a bare `#<item id>`. The home page does not draw a folded or paged
+card in its first HTML, so the fragment named nothing. None of that run's 49 new
+stories reached a reader until the fix below, because the later runs published
+their own day and not that one.
+
+**Filed and closed the same day.** #1168, merged at 12:20 UTC on 2026-09-30,
+writes each publisher link as the dated address `<base>/<YYYY-MM-DD>/#<item id>`,
+which loads the day and shows the story. `frontend/tests/reading-page.spec.ts`
+asserts that address, and
+[`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md)
+records the rule. The same change recovered the run's saved results and published
+its 49 stories. **Do not re-run that run's failed jobs** while GitHub still allows
+it, until about 2026-10-29: a re-run uses the code of the run's own commit, which
+files the item-health, scores and host-fingerprint rows as CSV again. If one was
+re-run, run `backend/utilities/migrate_to_parquet.py --run-id 2026-09-29-1`, then
+its `--check`, and commit what it moved.
+
+## 49 - The local test selector sends a backend test helper to every frontend group (OPEN)
+
+**An edit to a backend test helper selects every group the local selector
+knows**, where the backend test modules that import it would do.
+`npm --prefix frontend run test:changed` takes its choice from `selectPaths` in
+`frontend/scripts/test-scope.ts`, which knows a backend test module only as
+`test_*.py` at most one folder below `backend/tests/`. A helper such as
+`backend/tests/workflows/_harness.py` or
+`backend/tests/workflows/_ledger_derivation.py` matches no rule, so it falls to
+the last one, "shared or unknown input; full coverage": the whole backend suite,
+all eight frontend groups, and so a canary site build. Counted on `main` on
+2026-09-30, the same rule catches all 14 helpers under `backend/tests/` and the 14
+test modules two folders down, in `backend/tests/gardener/tasks/`. A row that
+edits one helper is asked to run the whole local suite for it.
+
+**The home is `test-scope.ts`**: send a file under `backend/tests/` that is not a
+test module to the backend group alone, since no frontend test or script reads
+one; let the test-module rule match at any depth; and add both cases to the truth
+table in `frontend/scripts/tests/test-scope.test.mjs`. Defect 45 changes the same
+file. Level 2 - the truth table is the dependant to check.
+
+Found on 2026-09-29 by the worker of plan 50's row 12, whose change edited one of
+them.
 
 ## 48 - GitHub stamps its squash merges in local time, `+02:00`, not UTC (OPEN)
 
