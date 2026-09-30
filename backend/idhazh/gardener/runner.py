@@ -39,6 +39,11 @@ not hold yet is left out and logged: nothing has written one, and the task's
 first write makes it. A complement task is answered only from the commit, so a
 caller that could not read it is refused before any task runs.
 
+**Every task is handed the listing of the files under its folders.** One
+listing a shard, of every folder its tasks own, handed in by whoever built it or
+read off the disk here when nobody did; each task sees the part that covers its
+own folders, and learns what is there from it rather than from the disk.
+
 **What a task touched must sit inside what it owns.** Every path it took and
 every file it wrote is checked, on a dry run too, because the check is over the
 selection rather than over what was deleted. A path outside is exit 2, and
@@ -88,6 +93,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import closed_day_fold, registry, report, shards
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
+from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
 from idhazh.site_weight import BYTES_PER_MB
@@ -249,6 +255,18 @@ def folders_of(
         else:
             missing.append(folder)
     return Folders(walk=tuple(walk), missing=tuple(missing), absent=tuple(absent))
+
+
+def listed_folders(policy: TaskPolicy, folders: Folders) -> tuple[str, ...]:
+    """The folders a task's listing covers: every folder it owns, or what its complement swept.
+
+    A declared folder the commit does not hold is listed too, and answers empty,
+    so a task that asks about it learns there is nothing there rather than being
+    refused.
+    """
+    if policy.owns is None:
+        return folders.walk
+    return tuple(policy.owns)
 
 
 def _nothing_reached(name: str, policy: TaskPolicy) -> Pass:
@@ -479,6 +497,7 @@ def run(
     git_sha: str,
     committed_folders: frozenset[str] | None,
     cone_bytes: Mapping[str, int] | None,
+    listing: FileListing | None,
     package: ModuleType = shipped_tasks,
     clock: Callable[[], datetime] = utc_now,
     say: Callable[[str], None] = print,
@@ -491,6 +510,8 @@ def run(
     `cone_bytes` is what each of those owned folders weighs at that commit. All
     three are read by whoever calls this, before any task runs, because reading
     them starts git; None for the last two means nobody could read the commit.
+    `listing` is the files under every folder the tasks own; None lists them off
+    the disk here.
     """
     refused = history_tasks_among(names, settings.tasks)
     if refused:
@@ -532,6 +553,13 @@ def run(
         resolved = {
             name: folders_of(name, settings.tasks, repo_root, committed_folders) for name in names
         }
+        covered = {
+            name: listed_folders(settings.tasks[name], resolved[name]) for name in names
+        }
+        if listing is None:
+            listing = FileListing.from_disk(
+                repo_root, {folder for folders in covered.values() for folder in folders}
+            )
         for name in names:
             context = TaskContext(
                 state_dir=state_dir,
@@ -544,6 +572,7 @@ def run(
                 shard=shard,
                 git_sha=git_sha,
                 owned_folders=resolved[name].walk,
+                listing=listing.within(covered[name]),
             )
             done = _run_one(name, bound[name], context, resolved[name])
             _refuse_a_path_outside(done, settings.tasks)

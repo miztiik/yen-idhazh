@@ -145,6 +145,7 @@ def test_a_hand_run_reads_no_commit_and_records_no_weight(
         git_sha=git(checkout, "rev-parse", "HEAD").strip(),
         committed_folders=None,
         cone_bytes=None,
+        listing=None,
         package=a_package("garden_tasks_ok", monkeypatch),
         clock=lambda: WAKE,
         say=lambda _: None,

@@ -40,7 +40,7 @@ def run(context: TaskContext) -> Pass:
     from idhazh.contracts.item_health import ItemHealthRow
     from idhazh.contracts.knobs.gardener import ForeverWindow, RetentionPolicy
     from idhazh.contracts.ledger_name import LedgerName
-    from idhazh.gardener import retention_files
+    from idhazh.gardener import named_trees, retention_files
     from idhazh.telemetry.publish import public_telemetry
 
     policy = context.policy
@@ -52,6 +52,7 @@ def run(context: TaskContext) -> Pass:
     public_from = retention_files.first_kept_month(series.get("public-copy", never), context.today)
     aggregate_from = retention_files.first_kept_month(series.get("aggregate", never), context.today)
     state = context.state_dir
+    listing = context.listing
     folds = retention_files.owned_tree(
         context, ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)
     )
@@ -63,7 +64,7 @@ def run(context: TaskContext) -> Pass:
         for month in ledger.held_months(state, LedgerName.ITEM_HEALTH)
         if keep_from is not None
         and month < keep_from
-        and not ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, month).is_file()
+        and not listing.holds(ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, month))
     ]
     summaries = {
         month: retention.compact_month(
@@ -84,12 +85,12 @@ def run(context: TaskContext) -> Pass:
                 )
     copies = [
         copy
-        for copy in (retention.month_shards(public) if public is not None else [])
+        for copy in (named_trees.month_files(listing, public, ".csv") if public is not None else [])
         if public_from is not None and copy.stem < public_from
     ]
     old_folds = [
         fold
-        for fold in (retention.month_shards(folds) if folds is not None else [])
+        for fold in (named_trees.month_files(listing, folds, ".csv") if folds is not None else [])
         if aggregate_from is not None and fold.stem < aggregate_from
     ]
     aged = [

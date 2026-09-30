@@ -90,6 +90,7 @@ def ran(
             git_sha=git(checkout, "rev-parse", "HEAD").strip(),
             committed_folders=None,
             cone_bytes=None,
+            listing=None,
             package=tasks,
             clock=lambda: WAKE,
             say=said.append,

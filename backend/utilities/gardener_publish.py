@@ -357,6 +357,7 @@ def run_and_land(
         git_sha=sha,
         committed_folders=committed,
         cone_bytes=checkout.cone_bytes([*owned, *swept]),
+        listing=None,
         package=package,
         clock=clock,
         say=say,

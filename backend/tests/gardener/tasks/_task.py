@@ -21,6 +21,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.gardener import TaskPolicy
 from idhazh.gardener import registry, runner
 from idhazh.gardener.context import TaskContext
+from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.one_at_a_time import Pass
 
 from ._oracle_tree import REMOVALS, RUN_ID, TODAY
@@ -80,6 +81,7 @@ def context_for(
         shard=0,
         git_sha=GIT_SHA,
         owned_folders=folders.walk,
+        listing=FileListing.from_disk(root, runner.listed_folders(policy, folders)),
     )
 
 
