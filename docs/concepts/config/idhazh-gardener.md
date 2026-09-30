@@ -71,7 +71,7 @@ Why each tree gets the age it has is
 
 | Task | Owns | Window | Why that window |
 | --- | --- | --- | --- |
-| `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source |
+| `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health` and `state/compact/item-health`, which `compact-item-health` owns, so it finds its due months whichever shard it lands in |
 | `scores` | `state/score-index`, `state/score-archive` | 14 months: `full-grain` 14 months, `archive` forever | an index day goes once an archive covers its month. It builds no archive now: the archive was built from the CSV day files, which moved to the ledger door, so `compact-scores` stays report-only until an archive is built from the door's rows |
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
 | `host-fingerprint` | `state/host-fingerprint` | 14 months | retired: its module is deleted and nothing runs it. The declaration stays because its window is the floor `compact-host-fingerprint` must reach, and the published machine shard is folded from that ledger, so it keeps at least `public_machine_keep_months` |
@@ -171,7 +171,7 @@ names the file an operator edits and the rule it broke.
 | A file whose name is not lower-case words joined by hyphens | The name is the task |
 | Two tasks that own one folder, or a folder inside the other's, whatever their status | Both would delete in it. A retired task keeps its claim |
 | More than one task using the complement form | Each would claim what the other claims |
-| An owned entry that is a file | A shard checks out folders, so a file would match nothing |
+| An owned entry that is a file | A shard lists the files under each folder a task owns, so a file would list nothing |
 | `seen` keeping less than `collect.seen_window_days` | The planner still reads those days |
 | `counterfactual-scores` keeping less than `lens_weights.window_days` | A reader still opens those days |
 | `telemetry-aggregate` or `scores` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |
