@@ -16,6 +16,8 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Keep inputs unchanged during a check. If a test dirties tracked files, fix its output location rather than bypassing the input check.
 - Drive migrations and failure states with bounded fixtures. Confirm the fixture reaches the behavior under test; do not skip an assertion because its required control or data is absent.
 - Before moving a document or changing a table, check for tests and tools that read it. Repair those inputs as well as Markdown links.
+- Before and after splitting tests, compare the collected test cases, allowing only the intended module-path changes. A passing remainder does not prove that no tests were lost.
+- For a structural contract move, compare its on-demand schema before and after, then run import and type checks. Preserve class docstrings: Pydantic includes them in schema descriptions.
 - Use the complete project build command. For byte comparisons, use one fixed `BUILD_VERSION` across both builds so generated identifiers do not change. Never measure output from a failed build.
 - Compare CI's actual candidate and failure with your local tree before attributing a regression. A conflict-free merge does not prove that the combined changes work.
 
