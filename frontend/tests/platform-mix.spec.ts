@@ -390,4 +390,28 @@ test.describe('the window, the states and the rows the door hands over', () => {
 		const highestSlow = Math.min(...dots.squares.filter((square) => square.row === 'slow').map((square) => square.y));
 		expect(highestSlow).toBeGreaterThanOrEqual(lowestFast);
 	});
+
+	test('a day stands as a block no wider than the busiest day is tall, and its outline is that block', () => {
+		// One day in a wide plot, where the column could hold all thirty in a row.
+		const rows = [...jobsOf(18, 'slow', 'Slow One', 10), ...jobsOf(12, 'fast', 'Fast One', 40)];
+		const jobs = fleetJobs(rows);
+		const view = fleetView(jobs, options(jobs, { start: '2026-09-12', end: '2026-09-12', windowDays: 1 }));
+		const dots = fleetDots(view, { frame: frame(1400, 220), density: 6, padding: 0.2, maxPx: 8, gapPx: 1 });
+		expect(dots).not.toBeNull();
+		if (dots === null) return;
+		// Thirty jobs: five abreast and six high, the square root rounded down.
+		const across = new Set(dots.squares.map((square) => square.x)).size;
+		const high = new Set(dots.squares.map((square) => square.y)).size;
+		expect([across, high]).toEqual([5, 6]);
+		// The slowest machine still fills the bottom lines.
+		const lowestFast = Math.max(...dots.squares.filter((square) => square.row === 'fast').map((square) => square.y));
+		const highestSlow = Math.min(...dots.squares.filter((square) => square.row === 'slow').map((square) => square.y));
+		expect(highestSlow).toBeGreaterThanOrEqual(lowestFast);
+		// The outline of the day held open is the extent of its squares.
+		expect(dots.blocks).toHaveLength(1);
+		const [block] = dots.blocks;
+		expect(block.left).toBeCloseTo(Math.min(...dots.squares.map((square) => square.x)), 6);
+		expect(block.right).toBeCloseTo(Math.max(...dots.squares.map((square) => square.x + square.size)), 6);
+		expect(block.top).toBeCloseTo(Math.min(...dots.squares.map((square) => square.y)), 6);
+	});
 });

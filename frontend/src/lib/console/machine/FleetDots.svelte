@@ -122,12 +122,13 @@
 			{/each}
 		</g>
 
-		{#if picked !== null && geometry.columns[picked] !== undefined}
+		{#if picked !== null && geometry.blocks[picked] !== undefined}
+			{@const block = geometry.blocks[picked]}
 			<rect
-				x={geometry.columns[picked] - geometry.bandwidth / 2 - HELD}
-				y={box.top - HELD}
-				width={geometry.bandwidth + HELD * 2}
-				height={box.bottom - box.top + HELD}
+				x={block.left - HELD}
+				y={block.top - HELD}
+				width={block.right - block.left + HELD * 2}
+				height={box.bottom - block.top + HELD}
 				fill="none"
 				stroke="var(--color-text)"
 				stroke-width="1"
@@ -143,7 +144,7 @@
 				stroke="var(--color-text-tertiary)"
 				stroke-opacity="0.5"
 				data-fleet-guide
-			/>hown
+			/>
 		{/if}
 	</svg>
 	<ChartReadout {readout} at={shown} {name} maxShare={readoutMaxShare} {restingNote} {hint} />

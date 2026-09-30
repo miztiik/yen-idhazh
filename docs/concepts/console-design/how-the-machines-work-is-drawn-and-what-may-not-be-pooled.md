@@ -46,7 +46,10 @@ The chart rules these panels obey are
  most of the readings - 102 of 176 on 2026-09-30 - and would otherwise take most
  of the steps for itself. The stronger the colour, the faster the machine, in
  both themes. The ramp is assigned once for the page, so the machine-kinds
- panel, the machine cards and the machine split colour one machine alike.
+ panel, the machine cards and the machine split colour one machine alike. The
+ key over the machine-kinds plot names each step by the medians of the kinds on
+ it, and leaves out a step no kind lands on, because a chip that names nothing
+ is a chip a reader has to learn to skip.
 - **`--chart-8`, the grey, is reserved for "Machine not recorded" and is given
  to no machine.** An absence is not a machine and must not take a machine's
  hue. A known machine none of whose jobs took a speed reading is that grey in
@@ -118,8 +121,11 @@ The chart rules these panels obey are
  it is **one square a job**, a column a day - a bar over a handful of
  placements reads as "this much" and invites a rate the count cannot support,
  while a square a job reads as "these ones", because every mark is a job a
- reader can point at. **It switches at 160 as a declared estimate and not a
- measurement** - see the design rationale below.
+ reader can point at. A day's squares stand as a block no wider than the
+ busiest day's is tall, so a day's height is its count and the slowest machine
+ stays at the bottom however wide a column is; a day in one long row would turn
+ "slowest at the bottom" into "slowest at the left". **It switches at 160 as a
+ declared estimate and not a measurement** - see the design rationale below.
 - **Over that floor the count is one bar a day, split by the kind of machine
  that ran its jobs, slowest at the bottom.** The panel's title asks which
  machines ran our jobs, day by day, and a ranked list answers which is biggest
@@ -138,7 +144,10 @@ The chart rules these panels obey are
  could misstate. No machine recorded is always its own row, last, and never
  folded. A click or Enter on a day lists every job of it under the plot, each
  under its own machine's name, so a fold hides no machine from a reader who
- asks.
+ asks. The day held open is outlined at the size of its bar or its squares, the
+ strip under the plot stays on it until the list closes, and on a phone a job
+ takes two lines rather than scrolling sideways, because the speed at the end of
+ the row is what ties a job to its colour.
 - **None of the empty states is tinted and none gets the reserved box.** The
  route is prerendered and reads `state/` at build time, so there is no fetch,
  no waiting state and no unreachable state. Every nothing here is settled at

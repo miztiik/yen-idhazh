@@ -118,14 +118,16 @@
 	const readout = $derived(fleetReadout(view, hatch));
 	const sentence = $derived(fleetSentence(view));
 	const folds = $derived(foldSentences(view));
-	const keyed = $derived(ramp.steps.some((step) => step.low !== null));
+	/** The steps at least one kind of machine lands on. A step no kind reaches
+	 * names nothing, so the key leaves it out. */
+	const landed = $derived(ramp.steps.filter((step) => step.low !== null && step.high !== null));
+	const keyed = $derived(landed.length > 0);
 	const spanText = $derived(windowDays === 1 ? 'the last day' : `the last ${windowDays} days`);
 	/** One sentence, whose last clause names the span in the digits every
 	 * Hardware subtitle uses, so the page reads alike from panel to panel. */
 	const note = $derived(
-		'We do not pick the machine: the platform hands us one at the start of every job, so a slow ' +
-			'week can be the machine rather than the code - each day split by the kind that ran its jobs, ' +
-			`over the last ${windowDays} days.`
+		'The platform picks the machine for every job, so a slow week can be the machine and not the ' +
+			`code - each day split by the kind that ran its jobs, over the last ${windowDays} days.`
 	);
 	const hint =
 		"Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest. Click or Enter lists that day's jobs.";
@@ -197,10 +199,10 @@
 					<p class="speed-key" data-fleet-speed-key>
 						<span class="key-lead">The stronger the colour, the faster the machine.</span>
 						<span class="key-end">Slower</span>
-						{#each ramp.steps as step (step.step)}
+						{#each landed as step (step.step)}
 							<span class="key-step" data-fleet-speed-step={step.step}>
 								<span class="chip" style="background: {step.colour}"></span>
-								{step.low === null || step.high === null ? 'none' : stepText(step.low, step.high)}
+								{stepText(step.low ?? 0, step.high ?? 0)}
 							</span>
 						{/each}
 						<span class="key-end">Faster</span>
@@ -279,13 +281,20 @@
 							</thead>
 							<tbody>
 								{#each view.lines[open] as line, at (at)}
+									<!-- Below the console's stacking width a job takes two lines, run, job
+									     and shard over machine, seconds and speed, and the two numbers
+									     carry their own words because the heading row is not shown. -->
 									<tr data-fleet-job={line.row}>
-										<td>{line.runId}</td>
-										<td>{line.job}</td>
-										<td class="number">{line.shard ?? 'not recorded'}</td>
-										<td>{line.machine}</td>
-										<td class="number">{line.seconds === null ? 'not recorded' : Math.round(line.seconds)}</td>
-										<td class="number">{line.rate === null ? 'no speed reading' : rateWords(line.rate)}</td>
+										<td class="run">{line.runId}</td>
+										<td class="job">{line.job}</td>
+										<td class="number shard"><span class="narrow-word" aria-hidden="true">shard </span>{line.shard ?? 'not recorded'}</td>
+										<td class="machine">{line.machine}</td>
+										{#if line.seconds === null}
+											<td class="number seconds"><span class="narrow-word" aria-hidden="true">seconds </span>not recorded</td>
+										{:else}
+											<td class="number seconds">{Math.round(line.seconds)}<span class="narrow-word" aria-hidden="true"> seconds</span></td>
+										{/if}
+										<td class="number speed">{line.rate === null ? 'no speed reading' : rateWords(line.rate)}</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -392,6 +401,76 @@
 	.number {
 		text-align: end;
 		font-variant-numeric: tabular-nums;
+	}
+
+	/* The words a number carries when the heading row is not shown. */
+	.narrow-word {
+		display: none;
+	}
+
+	/* The console's stacking width. Six columns do not fit a phone, and a list
+	   that scrolls sideways hides the speed that ties a job to its colour, so a
+	   job takes two lines: run, job and shard, then machine, seconds and speed.
+	   The heading row stays for a screen reader and leaves the page. */
+	@media (max-width: 48rem) {
+		.jobs {
+			overflow-x: visible;
+		}
+
+		thead {
+			position: absolute;
+			inline-size: 1px;
+			block-size: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+
+		tbody tr {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto auto;
+			grid-template-areas:
+				'run job shard'
+				'machine seconds speed';
+			column-gap: var(--space-2);
+			padding-block: var(--space-1);
+			border-block-end: 1px solid var(--color-rule);
+		}
+
+		td {
+			padding: 0;
+			border: 0;
+			white-space: normal;
+		}
+
+		.run {
+			grid-area: run;
+			overflow-wrap: anywhere;
+		}
+
+		.job {
+			grid-area: job;
+		}
+
+		.shard {
+			grid-area: shard;
+		}
+
+		.machine {
+			grid-area: machine;
+		}
+
+		.seconds {
+			grid-area: seconds;
+		}
+
+		.speed {
+			grid-area: speed;
+		}
+
+		.narrow-word {
+			display: inline;
+		}
 	}
 
 	.close {

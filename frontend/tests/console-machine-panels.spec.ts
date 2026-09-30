@@ -538,6 +538,8 @@ test.describe('which machines ran our jobs, day by day', () => {
 		expect(rows.at(-1)).toBe('Machine not recorded');
 		await expect(panel.locator('[data-fleet-speed-key]')).toContainText('Slower');
 		await expect(panel.locator('[data-fleet-speed-key]')).toContainText('tokens a second');
+		// A step no kind of machine lands on names nothing, so the key leaves it out.
+		await expect(panel.locator('[data-fleet-speed-key]')).not.toContainText('none');
 	});
 
 	test('a click or Enter lists the day and the strip keeps it, Escape or Close shuts the list, and focus comes back', async ({
@@ -585,6 +587,26 @@ test.describe('which machines ran our jobs, day by day', () => {
 		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		const text = await panel.innerText();
 		expect(text).not.toMatch(/\d\s*%|percent|probability|chance of/i);
+	});
+
+	test('on a phone a listed job takes two lines, and the list never scrolls sideways', async ({ page }) => {
+		// Six columns do not fit 390px. A list that scrolled sideways hid the speed,
+		// which is what ties a job to its colour.
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto('/console/machine/');
+		const panel = page.locator('[data-console-panel-id="platform-mix"]');
+		await panel.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
+		const plot = panel.locator('svg[data-chart-name="machine-fleet"]');
+		await expect(plot).toBeVisible();
+		await plot.focus();
+		await page.keyboard.press('Enter');
+		const jobs = panel.locator('[data-fleet-jobs]');
+		await expect(jobs).toHaveCount(1);
+		expect(await jobs.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(0);
+		const box = await jobs.boundingBox();
+		const speed = await jobs.locator('tbody tr').first().locator('td').last().boundingBox();
+		if (box === null || speed === null) throw new Error('the list or its speed cell has no box');
+		expect(speed.x + speed.width, 'the speed cell runs past the list').toBeLessThanOrEqual(box.x + box.width);
 	});
 });
 

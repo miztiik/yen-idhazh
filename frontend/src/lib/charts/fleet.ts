@@ -502,12 +502,24 @@ export interface FleetDots {
 	/** The side of every square. */
 	size: number;
 	squares: FleetSquare[];
+	/** Each day's squares as one block, so the day held open is outlined at its own size. */
+	blocks: FleetBlock[];
+}
+
+/** Where one day's squares stand: their left and right edges and the top of the highest. */
+export interface FleetBlock {
+	left: number;
+	right: number;
+	top: number;
 }
 
 /** One square a job, a column a day, filled from the bottom in row order.
  *
- * The squares of a day stand several abreast where its column is wide, and the
- * side is the largest up to `maxPx` that lets the busiest day fit the plot.
+ * A day's squares stand as a block no wider than the busiest day's is tall: as
+ * many abreast as the square root of the busiest day's count, and never more
+ * than the column holds. Every day is then one width and its height is its
+ * count, and the slowest machine stays at the bottom however wide the column.
+ * The side is the largest up to `maxPx` that lets the busiest day fit the plot.
  * `gapPx` of ground parts every square from the next.
  */
 export function fleetDots(
@@ -523,27 +535,33 @@ export function fleetDots(
 		view.rows.reduce((sum, row) => sum + (row.counts[index] ?? 0), 0)
 	);
 	const busiest = Math.max(...perDay);
+	const square = Math.max(1, Math.floor(Math.sqrt(busiest)));
 
-	const fits = (side: number): boolean => {
-		const across = Math.max(1, Math.floor((width + opts.gapPx) / (side + opts.gapPx)));
-		const high = Math.ceil(busiest / across);
-		return high * (side + opts.gapPx) - opts.gapPx <= box.innerHeight;
-	};
+	const abreast = (side: number): number =>
+		Math.min(square, Math.max(1, Math.floor((width + opts.gapPx) / (side + opts.gapPx))));
+	const fits = (side: number): boolean =>
+		Math.ceil(busiest / abreast(side)) * (side + opts.gapPx) - opts.gapPx <= box.innerHeight;
 	let size = Math.max(1, Math.floor(opts.maxPx));
 	while (size > 1 && !fits(size)) size -= 1;
-	const across = Math.max(1, Math.floor((width + opts.gapPx) / (size + opts.gapPx)));
+	const across = abreast(size);
+	const step = size + opts.gapPx;
 
+	const blocks: FleetBlock[] = view.days.map((_, day) => {
+		const wide = Math.max(1, Math.min(across, perDay[day]));
+		const left = columns[day] - (wide * step - opts.gapPx) / 2;
+		const lines = Math.ceil(perDay[day] / across);
+		return { left, right: left + wide * step - opts.gapPx, top: box.bottom - lines * step + opts.gapPx };
+	});
 	const squares: FleetSquare[] = [];
 	view.days.forEach((_, day) => {
-		const wide = Math.min(across, perDay[day]);
-		const left = columns[day] - (wide * (size + opts.gapPx) - opts.gapPx) / 2;
+		const left = blocks[day].left;
 		let at = 0;
 		for (const row of view.rows) {
 			for (let count = 0; count < (row.counts[day] ?? 0); count += 1) {
 				const line = Math.floor(at / across);
 				squares.push({
-					x: left + (at % across) * (size + opts.gapPx),
-					y: box.bottom - (line + 1) * (size + opts.gapPx) + opts.gapPx,
+					x: left + (at % across) * step,
+					y: box.bottom - (line + 1) * step + opts.gapPx,
 					size,
 					colour: row.colour,
 					drawing: row.drawing,
@@ -560,7 +578,8 @@ export function fleetDots(
 		bandwidth: width,
 		ticks: dayTicks(view.days, { density: opts.density, columns }),
 		size,
-		squares
+		squares,
+		blocks
 	};
 }
 
