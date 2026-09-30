@@ -25,13 +25,14 @@ def _owns(policy: TaskPolicy) -> str:
 
 
 def tasks(settings: GardenerSettings) -> list[str]:
-    """One line a task: its status, its kind, how long it keeps, and what it owns."""
+    """One line a task: its status, its kind, how long it keeps, what it owns and what it reads."""
     if not settings.tasks:
         return ["no task is declared: config/gardener/ holds no declaration"]
     return [
         f"{name}: {policy.lifecycle_status.value} {policy.kind}, keeps "
         f"{_window(policy.window)}, {'reports only' if policy.dry_run else 'deletes'}, "
         f"owns {_owns(policy)}"
+        + (f", reads {', '.join(policy.reads)}" if policy.reads else "")
         for name, policy in settings.tasks.items()
     ]
 

@@ -10,6 +10,13 @@ take its rows. Each day is read settled, through the ledger door, because a
 re-run files a second attempt beside the first and folding both would count an
 item twice.
 
+**Both item-health folders are read here and owned by the compaction.** The
+declaration names them under `reads`, so their names are listed for this task
+whichever shard it lands in, and a due month is found from those names alone.
+Only a due month's folders are fetched, and the compact index with them: the
+ledger door decides from that index which files serve a day, and an index the
+checkout lacked would read as no compact file at all.
+
 The browser's copy of each month under `frontend/public/telemetry/` goes once it
 is past the public-copy series. A summary past the aggregate series is deleted
 outright; while that series is `forever`, none is.
@@ -37,6 +44,7 @@ def run(context: TaskContext) -> Pass:
 
     from idhazh import config, day_partition, ledger, retention
     from idhazh.config import FULL_GRAIN
+    from idhazh.contracts.file_envelope import Period
     from idhazh.contracts.item_health import ItemHealthRow
     from idhazh.contracts.knobs.gardener import ForeverWindow, RetentionPolicy
     from idhazh.contracts.ledger_name import LedgerName
@@ -61,11 +69,36 @@ def run(context: TaskContext) -> Pass:
 
     due = [
         month
-        for month in ledger.held_months(state, LedgerName.ITEM_HEALTH)
+        for month in named_trees.held_months(listing, state, LedgerName.ITEM_HEALTH)
         if keep_from is not None
         and month < keep_from
         and not listing.holds(ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, month))
     ]
+    if due:
+        raw = ledger.raw_root(state, LedgerName.ITEM_HEALTH)
+        index = ledger.compact_index_path(state, LedgerName.ITEM_HEALTH, Period.DAILY)
+        listing.fetch(
+            [
+                index.parent,
+                *(raw.joinpath(month[:4], month[5:7]) for month in due),
+                *(
+                    ledger.compact_path(
+                        state, LedgerName.ITEM_HEALTH, Period.DAILY, f"{month}-01"
+                    ).parent
+                    for month in due
+                ),
+            ],
+            beside=[
+                found
+                for month in due
+                if (
+                    found := named_trees.compact_file(
+                        listing, state, LedgerName.ITEM_HEALTH, Period.MONTHLY, month
+                    )
+                )
+                is not None
+            ],
+        )
     summaries = {
         month: retention.compact_month(
             ledger.load_days(

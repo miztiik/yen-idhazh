@@ -337,7 +337,8 @@ def run_and_land(
         say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
     owned = sorted({folder for name in names for folder in settings.tasks[name].owns or ()})
-    committed = checkout.committed_folders(owned)
+    read = sorted({folder for name in names for folder in settings.tasks[name].reads})
+    committed = checkout.committed_folders([*owned, *read])
     swept = find_the_swept_folders(names, settings, repo_root, committed)
     lacking = [folder for folder in swept if not (repo_root / folder).is_dir()]
     if lacking and checkout.is_sparse():

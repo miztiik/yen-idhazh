@@ -20,6 +20,7 @@ import pytest
 from idhazh import day_partition, day_shards, ledger, month_partition, retention
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import named_trees
 from idhazh.gardener.file_listing import FileListing
@@ -243,3 +244,51 @@ def test_a_compact_file_is_found_by_the_name_the_disk_finds(tmp_path: Path) -> N
         assert named_trees.compact_file(
             listing, state, RAW, Period.DAILY, covers
         ) == ledger.compact_file(state, RAW, Period.DAILY, covers)
+
+
+def an_index(state: Path, period: Period, covers: Iterable[str]) -> None:
+    """One compact index naming these periods, as the compaction writes it."""
+    held = CompactIndex(
+        version=CompactIndex.schema_version(),
+        ledger=RAW,
+        period=period,
+        entries=[CompactEntry(covers=each, rows=1, bytes=1) for each in covers],
+    )
+    path = ledger.compact_index_path(state, RAW, period)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(held.to_json(), encoding="ascii", newline="\n")
+
+
+def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name(
+    tmp_path: Path,
+) -> None:
+    """One month only in a month file, one only in day files, one only in raw days.
+
+    The door reads the two indexes; the names give the same months from the
+    files those indexes list, and a raw `index/` folder of listings names no month.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    compact = {
+        ledger.compact_path(state, RAW, Period.MONTHLY, "2026-07"),
+        ledger.compact_path(state, RAW, Period.DAILY, "2026-08-01"),
+        ledger.compact_path(state, RAW, Period.DAILY, "2026-08-02"),
+        ledger.watermark_path(state, RAW, Period.DAILY),
+    }
+    raw = ledger.raw_root(state, RAW)
+    plant(
+        tmp_path,
+        [
+            *(path.relative_to(tmp_path).as_posix() for path in compact),
+            (raw / "2026/09/29/a.parquet").relative_to(tmp_path).as_posix(),
+            (raw / "index/2025-12-31.json").relative_to(tmp_path).as_posix(),
+        ],
+    )
+    an_index(state, Period.MONTHLY, ["2026-07"])
+    an_index(state, Period.DAILY, ["2026-08-01", "2026-08-02"])
+    compacted = ledger.watermark_path(state, RAW, Period.DAILY).parent.parent
+    listing = FileListing.from_disk(
+        tmp_path, [raw.relative_to(tmp_path).as_posix(), compacted.relative_to(tmp_path).as_posix()]
+    )
+
+    assert ledger.held_months(state, RAW) == ["2026-07", "2026-08", "2026-09"]
+    assert named_trees.held_months(listing, state, RAW) == ledger.held_months(state, RAW)

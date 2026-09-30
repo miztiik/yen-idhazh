@@ -244,12 +244,14 @@ def folders_of(
     walk: list[str] = []
     missing: list[str] = []
     absent: list[str] = []
-    for folder in policy.owns:
+    owned = set(policy.owns)
+    for folder in (*policy.owns, *policy.reads):
         present = (repo_root / folder).is_dir()
         if committed is not None and folder not in committed:
             absent.append(folder)
         elif present:
-            walk.append(folder)
+            if folder in owned:
+                walk.append(folder)
         elif committed is None:
             absent.append(folder)
         else:
@@ -258,7 +260,7 @@ def folders_of(
 
 
 def listed_folders(policy: TaskPolicy, folders: Folders) -> tuple[str, ...]:
-    """The folders a task's listing covers: every folder it owns, or what its complement swept.
+    """The folders a task's listing covers: every folder it owns or reads, or its complement's.
 
     A declared folder the commit does not hold is listed too, and answers empty,
     so a task that asks about it learns there is nothing there rather than being
@@ -266,7 +268,7 @@ def listed_folders(policy: TaskPolicy, folders: Folders) -> tuple[str, ...]:
     """
     if policy.owns is None:
         return folders.walk
-    return tuple(policy.owns)
+    return (*policy.owns, *policy.reads)
 
 
 def _nothing_reached(name: str, policy: TaskPolicy) -> Pass:
@@ -307,11 +309,13 @@ def _run_one(
     folded: closed_day_fold.Folded | None = None
     for folder in folders.absent:
         logger.info(
-            "%s owns %s, which the commit does not hold yet, so it walks none", name, folder
+            "%s names %s, which the commit does not hold yet, so it lists nothing there",
+            name,
+            folder,
         )
     if folders.missing:
         logger.error(
-            "%s owns %s, which the commit holds and this checkout does not",
+            "%s names %s, which the commit holds and this checkout does not",
             name,
             ", ".join(folders.missing),
         )

@@ -3,8 +3,8 @@
 Two shapes, and they answer one question at two sizes. `GardenerConfig` is
 `config/idhazh_gardener.json`: how many shards a wake splits into, how many
 times a shard may try to land its record, and how much one shard may check out.
-`TaskPolicy` is one file under `config/gardener/`: one task, what it owns, how
-far back it keeps, and whether it may delete at all.
+`TaskPolicy` is one file under `config/gardener/`: one task, what it owns and
+what it only reads, how far back it keeps, and whether it may delete at all.
 
 **Every default reports and deletes nothing.** A task has no default for
 `dry_run`, so a declaration says which it is in so many words. That is the same
@@ -25,6 +25,7 @@ vocabulary of their own here.
 from __future__ import annotations
 
 from enum import StrEnum
+from pathlib import PurePosixPath
 from typing import Annotated, Final, Literal, Self
 
 from pydantic import Field, model_validator
@@ -225,6 +226,14 @@ class _Declared(Model):
             "the folder it lands in stays with whichever task owns it."
         ),
     )
+    reads: list[RelPath] = Field(
+        default_factory=list,
+        description=(
+            "The repository-relative folders this task reads and does not own. Their file "
+            "names are listed for it and it may open their files; it never writes or "
+            "deletes there. A folder it neither owns nor reads is refused when it asks."
+        ),
+    )
 
     @model_validator(mode="after")
     def _one_way_of_owning(self) -> Self:
@@ -234,6 +243,24 @@ class _Declared(Model):
                 "what a task may touch is either a list of folders or everything under a "
                 "root that nothing else owns"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _reads_only_what_it_does_not_own(self) -> Self:
+        if self.reads and self.owns is None:
+            raise ValueError(
+                "a task that owns everything else under a root already lists every folder "
+                "there, so it declares no reads"
+            )
+        for read in self.reads:
+            for owned in self.owns or ():
+                inner, outer = PurePosixPath(read).parts, PurePosixPath(owned).parts
+                if inner[: len(outer)] == outer or outer[: len(inner)] == inner:
+                    raise ValueError(
+                        f"{read} is in reads and {owned} is in owns, and one is or holds "
+                        "the other: a folder a task owns is listed for it already, so "
+                        "reads names only folders it does not own"
+                    )
         return self
 
     def claims(self) -> tuple[str, ...]:

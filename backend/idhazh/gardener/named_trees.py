@@ -326,3 +326,29 @@ def compact_file(
         if listing.holds(found):
             return found
     return None
+
+
+def held_months(listing: FileListing, state_dir: Path, which: LedgerName) -> list[str]:
+    """Every UTC month a ledger may hold a row in, oldest first, from file names alone.
+
+    The twin of `ledger.held_months`, which reads the two compact indexes: here
+    the months come from the names of the compact files those indexes list and
+    of the raw day folders, so no file is opened. A month named only by a compact
+    file, or only by a raw day, is held either way.
+    """
+    months = {day[:7] for day in raw_days(listing, state_dir, which)}
+    shapes = {Period.DAILY: 3, Period.MONTHLY: 2}
+    for period, depth in shapes.items():
+        folder = ledger.watermark_path(state_dir, which, period).parent
+        for parts in _below(listing, folder):
+            if len(parts) != depth:
+                continue
+            stem = Path(parts[-1]).stem
+            covers = "-".join((*parts[:-1], stem))
+            try:
+                found = compact_file(listing, state_dir, which, period, covers)
+            except ValueError:
+                continue
+            if found is not None:
+                months.add(covers[:7])
+    return sorted(months)
