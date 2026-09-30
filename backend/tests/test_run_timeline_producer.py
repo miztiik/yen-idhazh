@@ -17,7 +17,7 @@ from typing import Final
 import pytest
 from conftest import seed_item_health
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_timeline import STEP_COLUMNS, RunTimelineRow
@@ -53,7 +53,7 @@ def census_row(
         source_id="example",
         stage=ItemStage.PUBLISH,
         outcome=ItemOutcome.OK,
-        shard=shard,
+        machine_shard=shard,
         item_started_at=started_at,
         item_total_ms=total_ms,
         fetch_ms=fetch_ms,
@@ -70,9 +70,9 @@ def census(tmp_path: Path) -> Path:
     """One day of a run whose two shards overlap, written where the reader looks.
 
     Four items. The first two are shard 0 back to back; the third is shard 1 and
-    starts while the first is still running, which is the overlap the `shard`
-    column exists to tell apart from a contradiction. The fourth never reached a
-    shard at all.
+    starts while the first is still running, which is the overlap the
+    `machine_shard` column exists to tell apart from a contradiction. The fourth
+    never reached a shard at all.
     """
     state = tmp_path / "state"
     seed_item_health(
@@ -120,10 +120,10 @@ def census(tmp_path: Path) -> Path:
 
 
 def project(census: Path) -> list[RunTimelineRow]:
+    """The day's census as the publisher reads it - settled through the ledger door - projected."""
     return run_timeline.project(
-        day_shards.settled_day(
-            ledger.tree_root(census, LedgerName.ITEM_HEALTH), DAY, ledger.ITEM_HEALTH_KEY, ItemHealthRow
-        )
+        row.csv_row()
+        for row in ledger.load_days(census, LedgerName.ITEM_HEALTH, [DAY], model=ItemHealthRow)
     )
 
 

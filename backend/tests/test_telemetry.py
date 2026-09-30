@@ -24,7 +24,6 @@ from conftest import (
     REPO_ROOT,
     fold,
     read_text,
-    seed_item_health,
 )
 from pydantic import StringConstraints, TypeAdapter, ValidationError
 
@@ -826,11 +825,6 @@ def cut_article(*, before: int, after: int) -> Article:
     return Article.model_validate(payload)
 
 
-def records(path: Path) -> list[dict[str, str]]:
-    with path.open(encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
-
-
 def test_a_cut_item_carries_both_counts_and_the_cut_is_the_difference() -> None:
     """The comparison is the test for a cut, so both counters ride the same row.
 
@@ -1122,103 +1116,6 @@ def test_a_row_written_before_the_pre_cap_column_reads_as_unmeasured() -> None:
     assert row.source_words_before_cap is None
 
 
-#: The header a run wrote before the truncation counters existed, and the point
-#: of building it is that no run of this checkout can produce one. Eleven names
-#: every row has always filled plus the three body counts of that generation -
-#: `source_words_before_cap` is deliberately absent, because that is the column
-#: the migration below has to add to a file it did not write.
-AN_OLDER_GENERATION: Final = (
-    "version",
-    "date",
-    "run_id",
-    "item_id",
-    "url_key",
-    "canonical_url",
-    "vertical",
-    "source_id",
-    "stage",
-    "outcome",
-    "code",
-    "source_chars",
-    "source_words",
-    "summary_words",
-)
-
-
-def a_day_file_from_before_the_cap_counter(path: Path, rows: list[ItemHealthRow]) -> None:
-    """One day file under that header, written the way a run of the day wrote it.
-
-    Every cell comes from the row's own `csv_row`, so the file cannot drift from
-    the contract it is meant to predate - only the column list is older.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.writer(handle, lineterminator="\n")
-        out.writerow(AN_OLDER_GENERATION)
-        for row in rows:
-            payload = row.csv_row()
-            out.writerow([payload[name] for name in AN_OLDER_GENERATION])
-
-
-def test_a_day_file_from_before_the_cap_counter_still_takes_todays_row(tmp_path: Path) -> None:
-    """The Oracle, second half: append to a file written under an older header.
-
-    `require_matching_header` compares the header tuple exactly, so the commit
-    that gave the contract a column stops the file the pipeline is appending to
-    until it is widened by the same column. That is a failed scheduled run, not
-    a failed lint. This is the run a release blocker would fail, and it also
-    proves the widened file can carry a real value - an absence check on its own
-    passes on a file nothing was ever written to.
-
-    **The narrow file is built, not checked out.** It used to be a byte copy of
-    the newest committed shard, which made the test pass or fail on which day
-    the archive happened to end at: a widening landing before that shard
-    migrated turned it red on a pull request that touched neither
-    (`CLAUDE.md` section 13). A header this checkout cannot write is the input
-    the question actually needs, and it carries the case the archive no longer
-    holds - a row from before the cap counters, whose cell has to migrate to
-    empty rather than to a number nobody measured.
-    """
-    date_ = plan().date
-    state = tmp_path / "state"
-    target = ledger.path(state, LedgerName.ITEM_HEALTH, date_) / day_shards.SETTLED_NAME
-    earlier = telemetry.classify_item(
-        planned=item(),
-        article=article(),
-        summary=summary(),
-        date=date_,
-        run_id=f"{date_}-1",
-    )
-    a_day_file_from_before_the_cap_counter(target, [earlier])
-    before = records(target)
-    assert "source_words_before_cap" not in before[0], "the fixture is not older than the column"
-
-    fresh = telemetry.classify_item(
-        planned=item(),
-        article=cut_article(before=2610, after=1923),
-        summary=summary(),
-        date=date_,
-        run_id=f"{date_}-9",
-    )
-    assert (date_, fresh.run_id, fresh.item_id) not in ledger.recorded_item_health(target)
-
-    assert seed_item_health(state, date_, [fresh]) == 1
-
-    after = records(target)
-    assert ledger.read_header(target) == ItemHealthRow.csv_columns()
-    assert len(after) == 2, "the migration dropped or duplicated a row"
-    assert after[0]["item_id"] == earlier.item_id
-    assert after[0]["source_words"] == before[0]["source_words"], (
-        "the widening moved a cell an earlier run wrote"
-    )
-    assert after[0]["source_words_before_cap"] == "", (
-        "a row from before the counter never measured the full body, and a number "
-        "here would read as an article nothing cut"
-    )
-    assert after[-1]["source_words_before_cap"] == "2610"
-    assert after[-1]["source_words"] == "1923"
-
-
 # --- Which worker wrote the row ---------------------------------------------
 
 
@@ -1274,8 +1171,8 @@ def test_every_case_of_the_classifier_carries_the_shard() -> None:
             run_id="2026-08-21-1",
             shard=6,
         )
-        assert row.shard == 6, f"{name} lost the shard"
-        assert row.csv_row()["shard"] == "6", f"{name} did not write the shard"
+        assert row.machine_shard == 6, f"{name} lost the shard"
+        assert row.csv_row()["machine_shard"] == "6", f"{name} did not write the shard"
 
 
 def test_shard_zero_is_a_worker_and_an_empty_cell_is_not() -> None:
@@ -1301,10 +1198,10 @@ def test_shard_zero_is_a_worker_and_an_empty_cell_is_not() -> None:
         run_id="2026-08-21-1",
     )
 
-    assert worker.csv_row()["shard"] == "0"
-    assert unclaimed.csv_row()["shard"] == ""
-    assert ItemHealthRow.from_csv_row(worker.csv_row()).shard == 0
-    assert ItemHealthRow.from_csv_row(unclaimed.csv_row()).shard is None
+    assert worker.csv_row()["machine_shard"] == "0"
+    assert unclaimed.csv_row()["machine_shard"] == ""
+    assert ItemHealthRow.from_csv_row(worker.csv_row()).machine_shard == 0
+    assert ItemHealthRow.from_csv_row(unclaimed.csv_row()).machine_shard is None
 
 
 def test_a_row_written_before_the_shard_column_reads_as_unclaimed() -> None:
@@ -1320,11 +1217,11 @@ def test_a_row_written_before_the_shard_column_reads_as_unclaimed() -> None:
         stage=ItemStage.PUBLISH,
         outcome=ItemOutcome.OK,
     ).csv_row()
-    old.pop("shard")
+    old.pop("machine_shard")
 
     row = ItemHealthRow.from_csv_row(old)
 
-    assert row.shard is None
+    assert row.machine_shard is None
 
 
 # --- The event envelope ------------------------------------------------------

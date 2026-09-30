@@ -10,10 +10,10 @@ the post-merge settlement covers declares its reader in `ledger.keyed_paths`; a
 day tree declares it in `ledger.keys._TREE_SHAPES`. Driving only the first is how
 nine of fourteen ledgers were refused for a day with every test green.
 
-Everything is driven from three small committed fixtures, read inside the test
-that needs it. Nothing walks the committed ledger (`CLAUDE.md` section 13) - the
-question is what the utility does to a file, and a fixture holds a header the
-archive can no longer produce.
+Everything is driven from two small committed fixtures and one day file a test
+builds, each read or built inside the test that needs it. Nothing walks the
+committed ledger (`CLAUDE.md` section 13) - the question is what the utility
+does to a file, and a fixture holds a header the archive can no longer produce.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ import pytest
 from conftest import FIXTURES_DIR
 
 from idhazh import ledger
-from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair import DROPPED_CELLS, StorySimilarityPair
 from idhazh.telemetry import prune
@@ -36,10 +36,10 @@ from utilities import widen_ledger_header
 DATE = "2026-09-18"
 TARGET = "content-similarity-judge-scored-pairs"
 
-#: The day tree this drives end to end. It is the one with a retired-heading set,
-#: so it exercises the half of the lookup a model alone cannot: the reader and
-#: the headings it still places have to arrive from the same registry entry.
-TREE_TARGET = LedgerName.ITEM_HEALTH
+#: The day tree this drives end to end. Feed health is a day tree the widener
+#: names, and five of its columns are optional ones an older generation lacked,
+#: so a day file under the narrower header re-files and every row still reads.
+TREE_TARGET = LedgerName.FEED_HEALTH
 TREE_DATE = "2026-09-16"
 
 #: The header this ledger carried before the judge-call stamp was appended.
@@ -49,11 +49,21 @@ NARROW = FIXTURES_DIR / "state" / "scored-pairs-before-the-stamp.csv"
 #: committed day file as it stood before that column left on 2026-09-21.
 WIDE = FIXTURES_DIR / "state" / "scored-pairs-carrying-the-decode-digest.csv"
 
-#: A day tree's file at a header the pipeline really wrote, two rows of it kept:
-#: `state/item-health/2026/09/16/before-partition.csv` as it stands committed.
-#: It moves in both directions at once - the machine probe's columns are not in
-#: it yet, and three cells the reader has since retired still are.
-STALE_TREE_DAY = FIXTURES_DIR / "state" / "item-health-before-the-machine-probe-widened-it.csv"
+#: A feed-health header narrower than the one this checkout writes: the row's
+#: first nine columns, without the five that name the address asked and what its
+#: robots file said. Built rather than read off the archive, so the case is on
+#: disk whatever day the archive happens to end at.
+NARROWER_TREE_HEADER: Final = (
+    "version",
+    "run_id",
+    "date",
+    "feed_id",
+    "checked_at",
+    "outcome",
+    "status",
+    "items",
+    "detail",
+)
 
 #: The ledgers in the vocabulary that neither registry names a reader for.
 #: Named rather than counted, because a count that falls by one says a ledger lost
@@ -101,16 +111,37 @@ def a_fresh_pair(path: Path) -> StorySimilarityPair:
     )
 
 
+def a_feed_verdict(feed_id: str) -> FeedHealthRow:
+    """One feed's verdict for `TREE_DATE`, with none of the five later columns filled."""
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
+        run_id=f"{TREE_DATE}-1",
+        date=TREE_DATE,
+        feed_id=feed_id,
+        checked_at=f"{TREE_DATE}T06:00:00Z",
+        outcome=FetchOutcome.OK,
+        status=200,
+        items=4,
+    )
+
+
 def a_stale_tree_day(state_dir: Path) -> Path:
-    """One day file of a DAY TREE, at a header the archive really produced.
+    """One day file of a DAY TREE, under a header narrower than the one it writes now.
 
     Put where the tree's own path helper puts it: a day directory rather than a
-    dated file, which is the move that took these five ledgers out of
-    `ledger.keyed_paths` in the first place.
+    dated file, which is the move that took the day trees out of
+    `ledger.keyed_paths` in the first place. Named for the bytes a committed head
+    already held, which is the file a narrower generation survives in. Every cell
+    comes from the row's own `csv_row`, so only the column list is older.
     """
-    path = ledger.path(state_dir, LedgerName.ITEM_HEALTH, TREE_DATE) / ledger.BEFORE_PARTITION_NAME
+    path = ledger.path(state_dir, TREE_TARGET, TREE_DATE) / ledger.BEFORE_PARTITION_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(STALE_TREE_DAY, path)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.writer(handle, lineterminator="\n")
+        out.writerow(NARROWER_TREE_HEADER)
+        for row in (a_feed_verdict("wire"), a_feed_verdict("lab")):
+            cells = row.csv_row()
+            out.writerow([cells[name] for name in NARROWER_TREE_HEADER])
     return path
 
 
@@ -343,8 +374,7 @@ def test_a_day_tree_re_files_onto_the_column_list_its_contract_holds_now(
     A day tree is where a writer holds its own file, so there is no append to
     refuse the stale header the way `require_matching_header` refuses one on a
     shared file - the fold is what rewrites it, and the fold has no ledger
-    argument. That is precisely why an operator needs this door, and it is why
-    the ledger that measured stale in the archive is the ledger the test drives.
+    argument. That is precisely why an operator needs this door.
 
     Read by name on both sides, so a row that lost the wrong cell fails here
     rather than passing a width check that only counts columns. Then read again
@@ -353,45 +383,20 @@ def test_a_day_tree_re_files_onto_the_column_list_its_contract_holds_now(
     """
     path = a_stale_tree_day(tmp_path)
     before = rows_of(path)
-    retired = set(ledger.read_header(path)) - set(ItemHealthRow.csv_columns())
-    assert retired, "the fixture has to carry a heading the contract stopped naming"
+    added = set(FeedHealthRow.csv_columns()) - set(ledger.read_header(path))
+    assert added, "the fixture has to predate a column the contract names now"
 
     report = widen_ledger_header.widen(TREE_TARGET, state_dir=tmp_path, write=True)
 
     assert [entry.changed for entry in report] == [True]
     assert [entry.rows for entry in report] == [len(before)]
-    assert ledger.read_header(path) == ItemHealthRow.csv_columns()
+    assert ledger.read_header(path) == FeedHealthRow.csv_columns()
 
     after = rows_of(path)
-    kept = [name for name in before[0] if name not in retired]
     for old, new in zip(before, after, strict=True):
-        assert {name: new[name] for name in kept} == {name: old[name] for name in kept}
-        assert ItemHealthRow.from_csv_row(new).item_id == old["item_id"]
-
-
-def test_a_day_tree_carries_its_retired_headings_with_its_reader(tmp_path: Path) -> None:
-    """The bite proof for the test above: both halves come off one registry entry.
-
-    `migrate_header` refuses any heading it cannot place rather than dropping
-    cells silently, so a lookup that found the day tree's model but not its
-    retired-heading set would leave every committed day file unrepairable - the
-    same dead end as no lookup at all, reached by a different route.
-
-    The carried set is passed empty here rather than edited, which is the same
-    call the re-file makes with the wrong half of the entry.
-    """
-    path = a_stale_tree_day(tmp_path)
-    before = path.read_bytes()
-
-    with pytest.raises(ValueError, match="cannot place"):
-        ledger.migrate_header(
-            path, ItemHealthRow.csv_columns(), ledger.refiler(ItemHealthRow), carried=()
-        )
-
-    assert path.read_bytes() == before, "the refusal moves nothing"
-    assert set(ledger.read_header(path)) - set(ItemHealthRow.csv_columns()) <= (
-        ledger.segment_carried(LedgerName.ITEM_HEALTH)
-    ), "the entry that makes the re-file above succeed"
+        assert {name: new[name] for name in old} == old
+        assert all(new[name] == "" for name in added), "a column the day never had is empty"
+        assert FeedHealthRow.from_csv_row(new).feed_id == old["feed_id"]
 
 
 def test_every_store_in_the_vocabulary_resolves_except_the_four_named_here(
@@ -423,6 +428,6 @@ def test_every_store_in_the_vocabulary_resolves_except_the_four_named_here(
             refused.add(name)
 
     assert refused == UNREGISTERED
-    assert len(widen_ledger_header.LEDGERS) - len(refused) == 9, (
-        "nine of thirteen; the other four are named in UNREGISTERED with the reason"
+    assert len(widen_ledger_header.LEDGERS) - len(refused) == 6, (
+        "six of ten; the other four are named in UNREGISTERED with the reason"
     )

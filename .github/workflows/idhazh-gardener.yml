@@ -176,10 +176,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # The parquet engine, because every shard writes its record through the
-      # ledger door whatever its tasks are.
       - name: Install
-        run: pip install -e '.[parquet]'
+        run: pip install -e .
 
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst

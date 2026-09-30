@@ -10,7 +10,7 @@ being wrong, which is the only reason this row carries both.
 
 **Every other cell is a fold of the item ledger, never a second account.** A
 sum, a maximum or a count over the shard's own item rows - so a reader that
-wants an item's own number opens `state/item-health/` and a reader that wants
+wants an item's own number opens the item-health ledger and a reader that wants
 the shard's totals reads this. Nothing here restates a cell that already sits on
 the host row.
 

@@ -70,10 +70,11 @@ and the memory samples are untracked, and later steps upload them.
 
 **Staging a path ten jobs share is a repair, not a fix, and the machine record is
 where that was settled.** A head that ten jobs of one run stage, commit and push
-is a head no rebase loop can give a single writer. Each job writes
-`state/host-fingerprint/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`
-instead - a name no second writer can take - and the work job stages the day
-directory. Ledger by ledger, so one revert takes one ledger.
+is a head no rebase loop can give a single writer. Each job files its row through
+the ledger door instead, as
+`state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/<file_id>.parquet` - a name no
+second writer can take - and the job stages `state` whole. Ledger by ledger, so
+one revert takes one ledger.
 
 **Since 2026-09-22 there is no head above it.** The day directory used to be a
 staging area called `state/segments/` that a later fold read into a `<DD>.csv`
@@ -84,10 +85,11 @@ gone.
 **There are two ways to lose the push race, and they need different answers.**
 
 The plan job only records what it saw, and so does a work shard. Every row they
-append has one writer: a shard's rows go to
-`state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, which names
-the one writer that can take it. Two sides of a lost race are therefore two
-different paths, and the rebase applies both whole.
+append has one writer: a shard's rows go to a CSV named
+`state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, or through
+the ledger door to a raw file under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, and
+either name belongs to the one writer that can take it. Two sides of a lost race
+are therefore two different paths, and the rebase applies both whole.
 
 **No path in the plan job is a derived `state/` ledger any more, and that closes
 the exception this section used to carry.** A day head was derived from the
@@ -167,9 +169,9 @@ in it may carry a space, and the workflow tests held a second copy of the same
 list. It never names the day's directory. The `shard-visuals-*`
 artifacts unpack this run's rendered charts into that same directory and no producer in
 the assemble job can make them again, so the two payload files are named one at a
-time. `frontend/public/telemetry/` is a full rewrite of `state/item-health/`,
-which is why it is regenerated and not unioned: a union of two rewrites is a file
-with every row twice.
+time. `frontend/public/telemetry/` is a full rewrite of a month of the
+item-health ledger, which is why it is regenerated and not unioned: a union of
+two rewrites is a file with every row twice.
 
 **Eight `state/` paths left this list on 2026-09-22 and the reason is the same
 for all of them.** Seven are written once - item-health, host-fingerprint,
@@ -390,11 +392,12 @@ scheduled run rebuilds it, and timing the merge is the thing that prevents it.
 
 **A column the contract says it dropped is dropped on the way in.** One slice of
 this is not a timing problem at all. `ItemHealthRow` already declares, in
-`DROPPED_CELLS`, every heading it stopped naming that nothing replaced - it has
-to, because `ledger.migrate_header` refuses to append to a committed day file
-whose heading is neither a current column nor one the reader says it carries. So
-the committed side of that row has read those headings since the day each one
-left. The per-item payload a work shard seals did not, and run 35537015073 lost
+`DROPPED_CELLS`, every heading it stopped naming that nothing replaced - it had
+to while the census was a CSV day tree, because `ledger.migrate_header` refused
+to append to a committed day file whose heading was neither a current column nor
+one the reader said it carried. So the committed side of that row has read those
+headings since the day each one left. The per-item payload a work shard seals
+did not, and run 35537015073 lost
 its digest to the gap: `cgroup_peak_bytes` left the row at 22:22, the rebuild at
 23:24 read payloads sealed at 20:54, and `extra="forbid"` refused a key the
 same contract had already promised to tolerate. The row now reads both sides off

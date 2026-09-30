@@ -59,9 +59,10 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 Each deletes what it owns past its window, and each ships `dry_run: true`. The
 windows were keys in `config/idhazh.json` until 2026-09-28 and moved here with
 no value changed, because each task is the only thing that reads its number.
-Six of them also fold the closed days of the CSV day trees they own, and that
-fold ships live, `fold.dry_run: false`: `telemetry-aggregate`, `scores`,
-`feed-health`, `host-fingerprint`, `counterfactual-scores` and `span-rollup`.
+Four of them also fold the closed days of the CSV day trees they own, and that
+fold ships live, `fold.dry_run: false`: `scores` (its `score-index`),
+`feed-health`, `counterfactual-scores` and `span-rollup`. The item-health, scores
+and host-fingerprint rows moved to the ledger door, so no fold reads them.
 The digest workflow ran that same fold live on every run until the gardener
 took it over, and a fold changes no answer a reader gets.
 Why each tree gets the age it has is
@@ -69,10 +70,10 @@ Why each tree gets the age it has is
 
 | Task | Owns | Window | Why that window |
 | --- | --- | --- | --- |
-| `telemetry-aggregate` | `state/item-health`, `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads; the browser's copy ages with its source |
-| `scores` | `state/scores`, `state/score-index`, `state/score-archive` | 14 months: `full-grain` 14 months, `archive` forever | the same 14; the archive is the evidence behind every quality claim once the rows are gone |
+| `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source |
+| `scores` | `state/score-index`, `state/score-archive` | 14 months: `full-grain` 14 months, `archive` forever | an index day goes once an archive covers its month. It builds no archive now: the archive was built from the CSV day files, which moved to the ledger door, so `compact-scores` stays report-only until an archive is built from the door's rows |
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
-| `host-fingerprint` | `state/host-fingerprint` | 14 months | the published machine shard is folded from it, so it keeps at least `public_machine_keep_months` |
+| `host-fingerprint` | `state/host-fingerprint` | 14 months | retired: its module is deleted and nothing runs it. The declaration stays because its window is the floor `compact-host-fingerprint` must reach, and the published machine shard is folded from that ledger, so it keeps at least `public_machine_keep_months` |
 | `seen` | `state/seen` | 90 days | at least `collect.seen_window_days`, the days the collector reads |
 | `counterfactual-scores` | `state/counterfactual-scores` | 30 days | at least `lens_weights.window_days`, the days a reader opens |
 | `traces` | `state/traces` | 7 days | a trace is opened to see one recent run, and the span rollup is the record that stays |
@@ -94,6 +95,13 @@ Each ships `dry_run: true`, and each owns its ledger's two folders,
 | `compact-gardener` | `gardener`, the gardener's own record | the defaults: day files for 45 to 76 days, then 13 month files | no task limited this ledger before it moved, so nothing sets a floor, and the owner kept the defaults (2026-09-27) |
 | `compact-visual-prunes` | `visual-prunes`, the picture cleanup's report of every pass | the defaults | the same |
 | `compact-feed-retirements` | `feed-retirements`, the addresses the pipeline stopped fetching | day files for 45 to 76 days, then 60 month files | a retirement the window deletes is a feed the pipeline asks for again, so it keeps five years (owner, 2026-09-27). The price: an address retired more than 60 months ago is asked for once more, and is retired again if it is still gone |
+| `compact-item-health` | `item-health`, the census | day files for 45 to 76 days, then 15 month files | its floor is the `full-grain` series of `telemetry-aggregate`, 14 months, and a month is summarised before this can delete it |
+| `compact-scores` | `scores`, the eval ledger | day files for 45 to 76 days, then 15 month files | its floor is the `full-grain` series of `scores`, 14 months. It stays report-only until the score archive is built from the door's rows |
+| `compact-host-fingerprint` | `host-fingerprint`, the machine record | day files for 45 to 76 days, then 14 month files | its floor is the retired `host-fingerprint` window, 14 months, which `public_machine_keep_months` holds |
+
+**The last three are the ledgers the console reads**, and the console reads their
+packed files, so until a person turns them on it shows data up to the day their
+migration ran ([../../architecture/contracts/persistence.md](../../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).
 
 ## The collection declarations that ship
 
@@ -170,7 +178,7 @@ names the file an operator edits and the rule it broke.
 | An `aggregate` or `archive` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |
 | A `public-copy` series that is not equal to the `full-grain` series | The copy is the browser's copy of that ledger |
 | A `feed-health` window, a `full-grain` series or a `public-copy` series under the month files the widest console read selects | A panel blanks for a month that ran |
-| `host-fingerprint` keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from it |
+| The retired `host-fingerprint` declaration keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from the host-fingerprint ledger, and that window is the floor its compaction must reach |
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
 | A compaction not called `compact-<ledger>` | One compaction a ledger, found by name |

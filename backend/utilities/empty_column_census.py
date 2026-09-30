@@ -1,7 +1,7 @@
 """Which published column has a heading on every row and a value on none.
 
-**An operator script, never a test.** Answering it means opening every committed
-day file of every ledger, which costs more as the archive grows (CLAUDE.md
+**An operator script, never a test.** Answering it means reading every row every
+ledger holds, which costs more as the archive grows (CLAUDE.md
 Guardrail #12) and which section 13 forbids a test to do. It would put a fuse on
 the answer besides: a test asserting a column empty goes red the day that column
 first fills, which is a date on the calendar rather than an edit anybody made. So
@@ -24,36 +24,35 @@ records a failure nothing has hit yet is empty and correct, and one whose probe
 is absent on every runner this project has met is empty and dead. This report
 cannot tell the two apart; it says which columns are worth asking about.
 
-**Why the headings are pooled rather than read from the newest file.** A day file
-carries the columns the run that wrote it named, so an archive spanning a schema
-change holds several widths. Reading one file's header would report every column
-added since as missing, and every column dropped before as present.
+**Why every heading is present.** Every row is read through the ledger door into
+today's contract, so each carries every column the contract names, and the "never
+under any heading" list can fire only on a ledger that holds no row.
 """
 
 from __future__ import annotations
 
-import csv
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
 from idhazh.contracts.host_fingerprint import COLUMN_READERS as HOST_READERS
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
 from idhazh.contracts.item_health import RETIRED_CELLS, UNREAD_CELLS, ItemHealthRow
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 
 
 class Ledger(NamedTuple):
-    """One day-partitioned ledger, and what it takes to read its headings."""
+    """One ledger the door files, and what it takes to read its rows."""
 
     #: What the report calls it, in the words a person uses for the thing.
     title: str
-    #: Which ledger it is. Where its day files live is the registry's answer.
+    #: Which ledger it is. Where its files live is the door's answer.
     which: LedgerName
+    #: The contract the door reads its rows into.
+    model: type[ItemHealthRow] | type[HostFingerprintRow]
     #: The columns the contract names today.
     columns: tuple[str, ...]
     #: Headings an earlier run wrote, and the column each is read into now. A
@@ -69,6 +68,7 @@ LEDGERS: Final[tuple[Ledger, ...]] = (
     Ledger(
         title="item health",
         which=LedgerName.ITEM_HEALTH,
+        model=ItemHealthRow,
         columns=tuple(ItemHealthRow.csv_columns()),
         carried=RETIRED_CELLS,
         unread=frozenset(
@@ -78,6 +78,7 @@ LEDGERS: Final[tuple[Ledger, ...]] = (
     Ledger(
         title="host fingerprint",
         which=LedgerName.HOST_FINGERPRINT,
+        model=HostFingerprintRow,
         columns=tuple(HostFingerprintRow.csv_columns()),
         carried={},
         unread=frozenset(),
@@ -98,11 +99,11 @@ class Census(NamedTuple):
     filled: frozenset[str]
     headed: frozenset[str]
     rows: int
-    files: int
+    days: int
 
 
 def census(root: Path, subject: Ledger) -> Census:
-    """Open every committed day file of one ledger and pool what it carries.
+    """Read every row one ledger holds, through the ledger door, and pool what it carries.
 
     **This is the growing read.** A bounded input cannot answer it: the question
     is whether ANY run has ever written the column, and a window answers only
@@ -111,25 +112,19 @@ def census(root: Path, subject: Ledger) -> Census:
     """
     filled: set[str] = set()
     headed: set[str] = set()
+    days: set[str] = set()
     rows = 0
-    files = 0
-    folder = ledger.tree_root(root / ledger.STATE_DIRNAME, subject.which)
-    for path in day_shards.shard_files(folder, days=UNBOUNDED_WINDOW):
-        files += 1
-        with path.open(encoding="utf-8", newline="") as handle:
-            reader = csv.DictReader(handle)
-            headed.update(
-                subject.carried.get(name, name) for name in reader.fieldnames or ()
-            )
-            for row in reader:
-                rows += 1
-                filled.update(
-                    subject.carried.get(name, name)
-                    for name, cell in row.items()
-                    if cell and cell.strip()
-                )
+    state_dir = root / ledger.STATE_DIRNAME
+    for row in ledger.load_ledger_rows(state_dir, subject.which, model=subject.model):
+        cells = row.csv_row()
+        rows += 1
+        days.add(cells["date"])
+        headed.update(subject.carried.get(name, name) for name in cells)
+        filled.update(
+            subject.carried.get(name, name) for name, cell in cells.items() if cell and cell.strip()
+        )
     known = frozenset(subject.columns)
-    return Census(frozenset(filled) & known, frozenset(headed) & known, rows, files)
+    return Census(frozenset(filled) & known, frozenset(headed) & known, rows, len(days))
 
 
 def reader_of(title: str, column: str) -> str:
@@ -149,7 +144,7 @@ def report(root: Path) -> int:
         missing = tuple(name for name in subject.columns if name not in found.headed)
         print(f"\n## {subject.title}")
         print(
-            f"{found.files} day files, {found.rows} rows, "
+            f"{found.days} days, {found.rows} rows, "
             f"{len(subject.columns)} columns the contract names, "
             f"{len(found.headed)} of them under a heading somewhere"
         )

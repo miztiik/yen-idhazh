@@ -10,11 +10,12 @@ import pytest
 from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
 
-from idhazh import assemble, cli, config
+from idhazh import assemble, cli, config, ledger
 from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest, RunRecord
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.evals import sampling, writer
+from idhazh.evals import sampling
 from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.work import stage_work
 
@@ -165,7 +166,7 @@ def test_a_run_with_the_scorer_off_writes_no_row_and_names_no_instrument(
 
     assert record.evaluation_enabled is False
     assert record.scorer_version is None
-    assert not writer.ledger_days(tmp_path / "state")
+    assert not ledger.held_days(tmp_path / "state", LedgerName.SCORES)
 
 
 def test_a_scored_run_names_the_instrument_that_wrote_its_rows(

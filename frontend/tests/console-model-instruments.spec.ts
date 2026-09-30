@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readDayShards } from '../src/lib/server/payload';
+import { canaryScoreRows } from './support/canary-records';
 import {
 	DRAWN_BY,
 	EVAL_PANELS,
@@ -38,21 +38,19 @@ import {
  */
 
 const REPO = resolve(process.cwd(), '..');
-const CANARY_SCORES = resolve(REPO, 'backend', 'var', 'canary', 'state', 'scores');
 
 const CONFIG = JSON.parse(readFileSync(resolve(REPO, 'config', 'idhazh.json'), 'utf8')) as {
 	console?: { default_window_days?: number };
 };
 
-/** The canary ledger, as rows of strings, exactly as the page's reader sees it.
+/** The canary's score record, as rows of strings, exactly as the page's reader sees it.
  *
- * Through `readDayShards` rather than a directory listing here: the ledger files
- * `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so a `readdir` of `*.csv` over the
- * root finds nothing and leaves every assertion below passing on an empty set.
+ * Through the page's own reader rather than a directory listing here: the record
+ * comes from its packed files, so a listing of any other shape finds nothing and
+ * leaves every assertion below passing on an empty set.
  */
-function canaryRows(): EvalInput[] {
-	if (!existsSync(CANARY_SCORES)) return [];
-	return readDayShards(CANARY_SCORES, -1).rows as EvalInput[];
+async function canaryRows(): Promise<EvalInput[]> {
+	return (await canaryScoreRows()) as EvalInput[];
 }
 
 /** The value at a fraction of a sorted list, written out rather than imported. */
@@ -346,7 +344,7 @@ test.describe('the panels, in a browser', () => {
 	});
 
 	test('THE ORACLE: what the page drew is what the built ledger holds', async ({ page }) => {
-		const rows = canaryRows();
+		const rows = await canaryRows();
 		expect(
 			rows.length,
 			'the canary score ledger is missing. Build it: python backend/utilities/build_canary_day.py'
@@ -374,7 +372,7 @@ test.describe('the panels, in a browser', () => {
 		// let it rise above a mark - a day that fell through the doubt line is the
 		// day the panel was opened for, and an axis that clipped it would answer a
 		// question nobody asked.
-		const rows = canaryRows();
+		const rows = await canaryRows();
 		expect(
 			rows.length,
 			'the canary score ledger is missing. Build it: python backend/utilities/build_canary_day.py'

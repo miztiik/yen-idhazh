@@ -53,6 +53,7 @@
 		wideningPreset
 	} from '$lib/console/waiting';
 	import Reserved from '$lib/components/Reserved.svelte';
+	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
@@ -675,6 +676,11 @@
 			{/if}
 		</p>
 	{/if}
+
+	<!-- Beside the line above, and for the same reason: the article and score
+	     records are read when the site is built, and every panel built on one
+	     of them is empty, or stops early, for one reason the record owns. -->
+	<RecordNotes notes={data.recordNotes} />
 
 	<!-- One sentence, no chart. It is what stops this route hiding the panel on
 	     another route that explains its own numbers. -->

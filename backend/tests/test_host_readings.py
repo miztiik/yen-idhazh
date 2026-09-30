@@ -831,12 +831,12 @@ def test_one_sampler_call_reaches_every_row_and_they_cannot_disagree() -> None:
 
     assert once.shard_cells()["cpu_model"] == once.cpu_model
     assert once.runner_name == "ubuntu-4core-3", (
-        "the label is still read here, and `state/host-fingerprint/` is what writes it down"
+        "the label is still read here, and the host-fingerprint ledger is what writes it down"
     )
     assert "runner_name" not in once.shard_cells(), (
         "the item row retired the column on 2026-09-17; the host record carries it once a job"
     )
-    assert once.shard_cells()["job"] is None, (
+    assert once.shard_cells()["machine_job"] is None, (
         "no file on the host names the workflow job, so nothing may invent one"
     )
 
@@ -879,7 +879,7 @@ def test_every_host_cell_the_sampler_names_is_a_column_the_item_row_declares() -
         "os_swap_total_bytes",
         "os_mem_available_min_bytes",
         "cpu_model",
-        "job",
+        "machine_job",
     }
     assert sampled <= set(ItemHealthRow.model_fields)
     assert not {field.name for field in fields(host.HostCells)} - set(every_reading.cells()), (

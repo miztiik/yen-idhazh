@@ -1,6 +1,6 @@
 # Architecture overview
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-29
 
 How the whole system fits together, in one page. Every box here has a deeper
 document behind it; this page exists so you can find the right one.
@@ -28,7 +28,7 @@ flowchart LR
  direction TB
  D1["frontend/public/digest/&lt;Y&gt;/&lt;M&gt;/&lt;D&gt;/digest.json"]
  D2["...&lt;item_id&gt;.json"]
- D3["state/scores.csv"]
+ D3["state/raw/scores/"]
  end
 
  subgraph fe["frontend/ - GitHub Pages"]

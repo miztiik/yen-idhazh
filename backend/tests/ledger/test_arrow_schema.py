@@ -15,7 +15,10 @@ import pytest
 from pydantic import Field
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, Sha256
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger.arrow_schema import Column, ColumnType, columns_of
 
@@ -29,7 +32,7 @@ class Colour(StrEnum):
 
 
 class Rank(IntEnum):
-    """An integer enum, which the table does not name yet."""
+    """An integer enum, which is stored as its number."""
 
     FIRST = 1
 
@@ -85,6 +88,8 @@ class EveryAnnotation(Contract):
     maybe_flag: bool | None = None
     colour: Colour
     maybe_colour: Colour | None = None
+    rank: Rank
+    maybe_rank: Rank | None = None
     run_ids: tuple[RunId, ...] = Field(default=())
 
 
@@ -105,6 +110,8 @@ def test_every_row_of_the_table_maps_to_its_column_and_its_nullability() -> None
         "maybe_flag": Column("maybe_flag", ColumnType.BOOL, nullable=True),
         "colour": Column("colour", ColumnType.STRING, nullable=False),
         "maybe_colour": Column("maybe_colour", ColumnType.STRING, nullable=True),
+        "rank": Column("rank", ColumnType.INT64, nullable=False),
+        "maybe_rank": Column("maybe_rank", ColumnType.INT64, nullable=True),
         "run_ids": Column("run_ids", ColumnType.STRING_LIST, nullable=False),
     }
 
@@ -117,15 +124,17 @@ def test_the_columns_come_in_the_contracts_own_field_order() -> None:
 
 @pytest.mark.parametrize(
     "annotation",
-    [Rank, list[str], dict[str, str], Literal["a", "b"], tuple[int, ...], tuple[str, str]],
-    ids=["int-enum", "list", "dict", "literal", "tuple-of-int", "fixed-tuple"],
+    [list[str], dict[str, str], Literal["a", "b"], tuple[int, ...], tuple[str, str]],
+    ids=["list", "dict", "literal", "tuple-of-int", "fixed-tuple"],
 )
 def test_an_annotation_the_table_does_not_name_is_refused_by_name(annotation: object) -> None:
     with pytest.raises(TypeError, match=r"field is declared .* no column type"):
         columns_of(_one_field(annotation))
 
 
-@pytest.mark.parametrize("model", [VisualPruneRow, FeedRetirementRow])
-def test_every_field_of_the_two_contracts_moving_first_maps(model: type[Contract]) -> None:
-    """The first two ledgers to move through the door must not stop at their first write."""
+@pytest.mark.parametrize(
+    "model", [VisualPruneRow, FeedRetirementRow, ItemHealthRow, EvalRow, HostFingerprintRow]
+)
+def test_every_field_of_a_contract_the_door_files_maps(model: type[Contract]) -> None:
+    """A ledger moved onto the door must not stop at its first write."""
     assert [column.name for column in columns_of(model)] == list(model.model_fields)

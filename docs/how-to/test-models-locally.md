@@ -1,6 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-29
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
 fast loop, not a different answer.
@@ -198,7 +198,7 @@ backend/var/run/2026-08-22/items/*.summary.json what the model wrote
 backend/var/run/2026-08-22/items/*.eval.json what it scored
 frontend/public/digest/2026/08/22/digest.json the published day
 frontend/public/digest/2026/08/22/*.json any published visual
-state/scores.csv one row per scored item
+state/raw/scores/2026/08/22/*.parquet one row per scored item
 ```
 
 ## Read the timings

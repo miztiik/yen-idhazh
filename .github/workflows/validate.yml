@@ -108,11 +108,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # `.[parquet]` rather than `.`: `idhazh plan` below reads every retirement
-      # through the ledger door and can file one, and the door's files are
-      # parquet.
       - name: Install
-        run: pip install -e ".[parquet]"
+        run: pip install -e .
 
       - id: decide
         run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"

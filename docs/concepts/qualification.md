@@ -1,6 +1,6 @@
 # Qualification
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-29
 
 How a candidate model is judged before it may be adopted, and what a run that
 judged it actually proves.
@@ -224,7 +224,7 @@ Both limbs are arithmetic over committed rows. Neither runs a model.
 
 | Limb | What is read | Trips when |
 | --- | --- | --- |
-| Unsupported numbers | share of `state/scores.csv` rows with `unsupported_numbers > 0` | the rate doubles, or rises 5 points absolute |
+| Unsupported numbers | share of scores-ledger rows with `unsupported_numbers > 0` | the rate doubles, or rises 5 points absolute |
 | Copying without a faithfulness cost | mean `extractiveness` and mean `hhem` | extractiveness up 0.10 or more while hhem is flat or up |
 
 Segment by `model_id`, at one fixed `scorer_version`, over a rolling
@@ -261,7 +261,7 @@ summaries the checker doubted, the three doubt signals apart, summaries outside
 the length the prompt asked for, and the two token rates.
 
 **A measure only one side recorded is named, never drawn.** Both token rates
-arrived on `state/item-health/<YYYY>/<MM>/<DD>/` part way through its life, so a
+arrived on the item-health ledger part way through its life, so a
 boundary older than that has nothing on the left. Drawing a track from an absent
 value would be a claim about a run nobody instrumented, so those rows print as a
 sentence under the plot saying which side is missing. Zero and absent are not

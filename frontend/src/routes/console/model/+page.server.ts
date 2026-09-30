@@ -6,7 +6,7 @@ import {
 	summarizeConfig,
 	uiConfig
 } from '$lib/server/config';
-import { countersWithoutScores, recordingNotes } from '$lib/console/recording';
+import { countersWithoutScores, recordingNotes, recordNotes } from '$lib/console/recording';
 import {
 	evalColumnLabels,
 	evalDays,
@@ -40,10 +40,10 @@ import {
 import { stacked } from '$lib/charts/stacked';
 import { windowOfDays } from '$lib/charts/viewport';
 import { renderToSvg } from '$lib/server/chart-render';
+import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
 import {
 	dayMetrics,
-	evalRows,
-	itemHealthRows,
+	latestDate,
 	loadDay,
 	publishedDates,
 	shardDays
@@ -125,8 +125,12 @@ export async function load() {
 	// One cover, in days: both ledgers this route reads file by day.
 	const widestDays = Math.max(...console.window_presets);
 	const days = shardDays(widestDays);
-	const { rows } = evalRows(days);
-	const itemRows = itemHealthRows(days).rows;
+	// Both from their packed files, so both stop at the newest packed day and say
+	// so on the page rather than drawing the days after it as quiet ones.
+	const scores = await evalRows(days);
+	const items = await itemHealthRows(days);
+	const { rows } = scores;
+	const itemRows = items.rows;
 	const modelOnDate = modelByDate(rows);
 	const itemHealthByDate = byDate(itemRows);
 	const bands = summarizeConfig().bands;
@@ -334,6 +338,16 @@ export async function load() {
 		summarizeBands: bands,
 		console,
 		chart: chartConfig(),
+		// What the page says about the two records it read before any panel draws
+		// from them: one not packed yet, one that did not load, or one packed some
+		// days short of the newest published day.
+		recordNotes: recordNotes(
+			[
+				{ record: 'article', read: items.read },
+				{ record: 'score', read: scores.read }
+			],
+			latestDate(undefined, 1)
+		),
 		today
 	};
 }

@@ -48,6 +48,7 @@
 	import Icon from '$lib/icons/Icon.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import RankedList from '$lib/components/RankedList.svelte';
+	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import RunLengths from '$lib/components/RunLengths.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
@@ -59,6 +60,11 @@
 	import type { ModelDay, SourceDoubt } from './+page.server';
 
 	let { data } = $props();
+
+	/** A record this build could not read at all. Its note above already says why
+	 * the page is empty, so the sentence that reads an empty page as a model that
+	 * has written nothing yet would be false beside it. */
+	const recordUnread = $derived(data.recordNotes.some((note) => note.kind !== 'behind'));
 
 	/** The same key the other two routes read, so the operator's choice of span
 	 * follows him between them rather than resetting on every click. */
@@ -515,11 +521,18 @@
 		<a class="carry-link" href="{base}/console/machine/">Machine &rarr;</a>
 	</p>
 
+	<!-- Above every panel, because every panel here is built on the article and
+	     score records, and a record that is late or unread empties all of them for
+	     one reason. -->
+	<RecordNotes notes={data.recordNotes} />
+
 	{#if data.modelWork.length === 0 && data.throughputDays.length === 0}
 		<h2 class="console-h2">What the model did</h2>
-		<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model="empty">
-			The model has not summarised anything yet. This fills as days publish.
-		</p>
+		{#if !recordUnread}
+			<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model="empty">
+				The model has not summarised anything yet. This fills as days publish.
+			</p>
+		{/if}
 	{:else}
 		<div data-model-section>
 			<h2 class="console-h2">What the model did</h2>

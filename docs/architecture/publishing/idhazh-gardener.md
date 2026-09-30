@@ -67,8 +67,8 @@ the shard's owned folders the commit holds and every folder directly under
 `state/`, and the runner turns that into `TaskContext.owned_folders` before any
 task runs. A folder the commit holds and the checkout lacks fails its task,
 because a wrong checkout would otherwise report a silent zero. A declared folder
-the commit does not hold yet - `state/score-archive/` before the first month is
-archived - is left out and logged, and the task's first write makes it. A
+the commit does not hold yet - a ledger's `state/compact/` folder before its first
+day is packed - is left out and logged, and the task's first write makes it. A
 complement task's folders come from the commit alone, so a folder somebody left
 in the checkout and never committed is not the sweep's to take, and
 `idhazh gardener run-task`, which starts no process and so reads no commit,
@@ -343,9 +343,15 @@ writers leave, into one file a day and then one file a month, and deletes what
 it moved.** A raw file holds one writer's rows for one day, so a ledger gains a
 file on every run, and at a few rows a file a parquet file is mostly its footer.
 One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
-by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so a fourth
-ledger is one declaration and no Python. Three ship - for `gardener`,
-`visual-prunes` and `feed-retirements` - and all three only report. The files it
+by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
+ledger is one declaration and no Python. Six ship - for `gardener`,
+`visual-prunes`, `feed-retirements`, `item-health`, `scores` and
+`host-fingerprint` - and all six only report. The last three are the ledgers the
+console reads, and the console reads their packed files, so until a person turns
+those three on it shows data up to the day their migration ran
+([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
+**`scores` stays report-only until the score archive is built from the door's
+rows** ([below](#design-rationale)). The files it
 writes are laid out in
 [../contracts/persistence.md](../contracts/persistence.md#the-two-roots), and
 its knobs are in
@@ -370,7 +376,7 @@ flowchart TB
     DHOLD["the day waits: a run may still be writing"]
     TAKE["4. take it: read and settle its raw files,<br/>write its listing, its day file and daily.json,<br/>delete the raw files, daily/watermark.json last"]
     DRY{"dry_run?"}
-    REPORT["report every path, land the record only<br/>all three compactions, today"]
+    REPORT["report every path, land the record only<br/>all six compactions, today"]
     LAND["land every write and delete<br/>in the shard's one commit"]
   end
 
@@ -536,12 +542,13 @@ the files it read. It changes no answer a reader gets
 ([../../concepts/partitions.md](../../concepts/partitions.md)).
 
 **The retention task that owns each tree folds it**, when its declaration
-carries a `fold` block: `feed-health`, `host-fingerprint`,
-`counterfactual-scores`, `scores` (with `score-index`), `telemetry-aggregate`
-(`item-health`) and `span-rollup`, whose window is `forever` so the fold is its
+carries a `fold` block: `feed-health`, `counterfactual-scores`, `scores` (its
+`score-index`) and `span-rollup`, whose window is `forever` so the fold is its
 only live action. Which trees a task folds is read off the folders it walks, so
 one job writes each tree a wake and no tree is checked out twice. No
-`candidate-models` tree is committed under `state/`, so nothing folds one.
+`candidate-models` tree is committed under `state/`, so nothing folds one. The
+item-health, scores and host-fingerprint ledgers are not CSV day trees any more,
+so no fold reads them: their compaction packs them.
 
 | Step | What happens |
 | --- | --- |
@@ -555,7 +562,7 @@ one job writes each tree a wake and no tree is checked out twice. No
 the window's `dry_run`, and the runner lands the fold's writes and deletions
 whenever the fold is live - a live fold inside a dry task would otherwise change
 the disk and stage nothing. Every path the fold touches is held to what the task
-owns, like every other. All six folds ship live, because they copy the fold
+owns, like every other. All four folds ship live, because they copy the fold
 `digest.yml` ran after each day's commit until the gardener took it over; every
 window beside them still only reports.
 
@@ -702,6 +709,16 @@ fold, because what it took is then a list nothing has checked (Fowler and
 Carmack). A day is closed one whole day after it ends, the compaction's rule: of
 755 writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after
 its day ended (Carmack's reading).
+
+**The `scores` compaction stays report-only until the score archive is built
+from the door's rows.** The `scores` task used to summarise a month past its
+`full-grain` series into `state/score-archive/<YYYY-MM>.json`, and it built that
+summary from the month's CSV day files and hashed their bytes. Those files are
+gone, so the task builds no archive now; it keeps only the score index and the
+summaries already written. Turned live, the compaction's monthly window would
+delete a month's rows with no summary written for them, and the summary is the
+evidence behind every quality claim once the rows are gone. Building it from the
+door's rows changes the archive's own shape, so it is a change of its own.
 
 ## See also
 

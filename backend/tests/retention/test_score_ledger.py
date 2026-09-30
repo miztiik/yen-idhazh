@@ -1,36 +1,36 @@
-"""When is a score month summarised, and what must reconcile before its days are deleted?
+"""Which score-index days and score summaries does the scores task take, and which must it keep?
 
 The pass under test is the gardener's `scores` task, run through the shipped
-module and the committed declaration. `pruned` reads what one pass took and
-wrote back into the words these tests ask in: which months it archived, which
-day and index files it took, which summaries it deleted outright.
+module and the committed declaration. The eval ledger's own rows are filed
+through the ledger door and kept by its compaction, so this task archives no
+month and deletes no row. It takes an index day once a summary covers that
+day's month and the month is past the full-grain window, and it takes a
+summary once the summary is past the archive's own series. `pruned` reads what
+one pass took back into the words these tests ask in.
 """
 
 from __future__ import annotations
 
 import csv
 import hashlib
-import io
 import json
-import logging
 import re
+import shutil
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_scores
 from gardener.tasks._task import declared, run_task
 
-from idhazh import day_partition, day_shards, ledger
-from idhazh.contracts.base import ServerJob
+from idhazh import day_shards, ledger
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import MonthsWindow, RetentionPolicy
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
-from idhazh.gardener.one_at_a_time import PruneInterruptedError
 from idhazh.retention import oldest_month_kept
 
 from ._trees import (
@@ -53,8 +53,7 @@ def full_grain_months() -> int:
 class Pruned:
     """What one pass of the scores task took and wrote."""
 
-    archived: tuple[str, ...]
-    days_removed: tuple[str, ...]
+    written: tuple[str, ...]
     index_days_removed: tuple[str, ...]
     hard_deleted: tuple[str, ...]
     dry_run: bool
@@ -77,11 +76,10 @@ def pruned(
     )
     under = {
         which: f"{ledger.tree_relpath(which)}/"
-        for which in (LedgerName.SCORES, LedgerName.SCORE_INDEX, LedgerName.SCORE_ARCHIVE)
+        for which in (LedgerName.SCORE_INDEX, LedgerName.SCORE_ARCHIVE)
     }
     return Pruned(
-        archived=tuple(Path(path).stem for path in outcome.written),
-        days_removed=tuple(p for p in outcome.taken if p.startswith(under[LedgerName.SCORES])),
+        written=tuple(outcome.written),
         index_days_removed=tuple(
             p for p in outcome.taken if p.startswith(under[LedgerName.SCORE_INDEX])
         ),
@@ -125,8 +123,8 @@ def score_row(*, day: str, run: int, number: int) -> EvalRow:
             "unsupported_numbers": number % 3,
             "hedge_dropped": number % 4 == 0,
             "extraction_suspect": number % 5 == 0,
-            "source_word_count": 1320,
-            "source_seen_word_count": 1320 - (number % 2) * 40,
+            "source_words_before_cap": 1320,
+            "source_words": 1320 - (number % 2) * 40,
             "score_ms": 1000 + number,
             "scored_at": f"{day}T06:18:02Z",
         }
@@ -134,301 +132,210 @@ def score_row(*, day: str, run: int, number: int) -> EvalRow:
 
 
 def score_history(state_dir: Path, months: list[str]) -> None:
-    """Two real score days a month, written through the real producer."""
+    """Two real score days a month, filed through the real writer, index and all."""
     for index, month in enumerate(months):
         for day_of_month in (4, 17):
             day = f"{month}-{day_of_month:02d}"
-            score_writer.append_segment(
+            seed_scores(
                 state_dir,
                 [score_row(day=day, run=1, number=index * 100 + offset) for offset in range(6)],
                 run_id=f"{day}-1",
-                attempt=1,
-                job=ServerJob.ASSEMBLE,
-                shard=0,
             )
 
 
-def a_score_tree(tmp_path: Path) -> Path:
-    state = tmp_path / "state"
-    score_history(state, months_back(TODAY, HISTORY_MONTHS))
+def archive_history(state: Path, months: Iterable[str], *, scratch: Path) -> None:
+    """A committed month summary for each month, built by the archive module itself.
+
+    Nothing in the pipeline builds one any more, so the test builds each the
+    way a committed one was built: the month's rows, read back through the
+    ledger door and written out as the CSV the summariser reads, under `scratch`
+    and outside the state tree.
+    """
+    scratch.mkdir(parents=True, exist_ok=True)
+    columns = EvalRow.csv_columns()
+    for month in months:
+        shard = scratch / f"{month}.csv"
+        rows = ledger.load_days(state, LedgerName.SCORES, ledger.month_days(month), model=EvalRow)
+        with shard.open("w", encoding="utf-8", newline="") as handle:
+            out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+            out.writeheader()
+            out.writerows(row.csv_row() for row in rows)
+        built = score_archive.summarise(
+            [shard], month=month, observation_key=score_writer.OBSERVATION_KEY
+        )
+        score_archive.write(score_archive.archive_path(state, month), built)
+
+
+@pytest.fixture(scope="module")
+def built_tree(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Twenty months of scores, with a summary for every month past the full-grain window.
+
+    Built once for the module, because filing twenty months through the writer
+    is the slow part of every case here, and copied by `a_score_tree` so that
+    each case changes a tree of its own.
+    """
+    root = tmp_path_factory.mktemp("score-tree")
+    state = root / "state"
+    months = months_back(TODAY, HISTORY_MONTHS)
+    score_history(state, months)
+    boundary = oldest_month_kept(TODAY, full_grain_months())
+    archive_history(
+        state, [month for month in months if month < boundary], scratch=root / "scratch"
+    )
     return state
 
 
-def score_months(state: Path) -> list[str]:
-    """The months the score ledger's day shards fall in, oldest first."""
-    return sorted(
-        day_shards.shards_by_month(ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW)
-    )
+def a_score_tree(tmp_path: Path, built: Path) -> Path:
+    """This case's own copy of the built tree."""
+    state = tmp_path / "state"
+    shutil.copytree(built, state)
+    return state
 
 
-def score_bytes(state: Path) -> dict[str, bytes]:
-    """Every score shard's bytes, keyed by its path below the state tree."""
+def index_months(state: Path) -> list[str]:
+    """The months the score index still holds a day of, oldest first."""
+    return sorted({day_shards.date_of(shard)[:7] for shard in score_writer.index_days(state)})
+
+
+def everything(state: Path) -> dict[str, bytes]:
+    """Every file under the state tree, by its path below it, with its bytes."""
     return {
-        day.relative_to(state).as_posix(): day.read_bytes()
-        for day in score_writer.ledger_days(state)
+        path.relative_to(state).as_posix(): path.read_bytes()
+        for path in sorted(state.rglob("*"))
+        if path.is_file()
     }
 
 
-def test_a_score_month_past_the_window_is_summarised_and_then_deleted(tmp_path: Path) -> None:
-    """The whole point: the day files go, and everything they could still answer stays."""
-    state = a_score_tree(tmp_path)
-    boundary = oldest_month_kept(TODAY, full_grain_months())
-    doomed = [month for month in score_months(state) if month < boundary]
-    assert doomed, "the fixture has to reach past the window or this proves nothing"
-    taken = [
-        f"{ledger.STATE_DIRNAME}/{shard.relative_to(state).as_posix()}"
-        for shard in score_writer.ledger_days(state)
-        if day_shards.date_of(shard)[:7] in doomed
-    ]
-
-    result = pruned(state)
-
-    assert result.archived == tuple(doomed)
-    assert result.dry_run is False
-    assert list(result.days_removed) == taken, (
-        "the day files a live run removed are not the ones a dry run would name"
-    )
-    assert score_months(state) == [
-        month for month in months_back(TODAY, HISTORY_MONTHS) if month >= boundary
-    ]
-    for month in doomed:
-        emptied = ledger.tree_root(state, LedgerName.SCORES) / month[:4] / month[5:7]
-        assert not emptied.exists(), f"{month} left an empty month directory behind"
-    assert score_archive.archived_months(state) == doomed
-    # Every archived month reads back through its contract and still adds up.
-    for month in doomed:
-        stored = score_archive.read(score_archive.archive_path(state, month))
-        assert stored.month == month
-        assert sum(cohort.rows for cohort in stored.cohorts) == stored.source_rows
-        assert len(stored.observation_digests) == stored.source_rows
-
-
 def test_a_score_month_inside_the_window_is_untouched(tmp_path: Path) -> None:
+    """The window guards an index day, not only the summary beside it.
+
+    Every month here has a summary, so what keeps each index day is the
+    full-grain window alone.
+    """
     state = tmp_path / "state"
-    score_history(state, months_back(TODAY, 3))
-    held = score_bytes(state)
+    months = months_back(TODAY, 3)
+    score_history(state, months)
+    archive_history(state, months, scratch=tmp_path / "scratch")
+    held = everything(state)
 
     result = pruned(state)
 
     assert result.changed is False
-    assert result.archived == ()
-    assert result.days_removed == ()
-    assert score_bytes(state) == held
-    assert score_archive.archived_months(state) == []
+    assert result.index_days_removed == ()
+    assert result.hard_deleted == ()
+    assert everything(state) == held
 
 
-def test_a_score_dry_run_writes_nothing_and_still_counts_both_sides(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+def test_a_score_dry_run_names_what_it_would_take_and_changes_nothing(
+    tmp_path: Path, built_tree: Path
 ) -> None:
-    """The dry run's own deliverable is the byte ratio, so it has to compute it.
+    """A dry run's deliverable is the list, so it names both kinds of file and moves no byte.
 
-    A dry run that reported only a file list would leave the person deciding
-    whether to switch the deletion on with no idea what the archive costs
-    (Guardrail #10). It summarises, measures both sides, and writes nothing.
+    A finite archive age, so a summary is past its series and the dry run has
+    one of each to name.
     """
-    state = a_score_tree(tmp_path)
-    held = score_bytes(state)
+    state = a_score_tree(tmp_path, built_tree)
+    held = everything(state)
 
-    with caplog.at_level(logging.INFO):
-        result = pruned(state, dry_run=True)
+    result = pruned(state, dry_run=True, archive_months=15)
 
     assert result.dry_run is True
-    assert result.archived
-    assert result.days_removed, "a dry run that names no file is not a deliverable"
-    measured = re.search(r"into (\d+) bytes of archive, from (\d+) bytes", caplog.text)
-    assert measured, "the dry run did not say what the archive would weigh"
-    assert int(measured[1]) > 0 and int(measured[2]) > 0
-    assert score_bytes(state) == held
-    assert score_archive.archived_months(state) == []
-    assert not (ledger.tree_root(state, LedgerName.SCORE_ARCHIVE)).exists()
+    assert result.index_days_removed, "a dry run that names no index day is not a deliverable"
+    assert result.hard_deleted, "a dry run that names no summary is not a deliverable"
+    assert result.written == ()
+    assert everything(state) == held
 
 
-def test_a_month_with_real_volume_summarises_to_a_fraction_of_its_shard(tmp_path: Path) -> None:
-    """The measurement the policy rests on, pinned as a direction rather than a figure.
-
-    Two costs make up an archive: one digest per distinct measurement, which is
-    64 hex characters against a whole CSV row of thirty-odd columns, and a fixed
-    block of moments per cohort. The first is what saves the bytes and the
-    second is what a thin month pays anyway - so a twelve-row month really does
-    summarise LARGER than it held, and a month with a run's worth of rows in it
-    does not. Fourteen-month-old months are the full ones, which is why this
-    direction is the one that matters. The measured figure and its date are in
-    `docs/reference/pipeline-cost.md`.
-    """
-    state = tmp_path / "state"
-    day = "2025-01-09"
-    score_writer.append_segment(
-        state,
-        [score_row(day=day, run=1, number=n) for n in range(200)],
-        run_id=f"{day}-1",
-        attempt=1,
-        job=ServerJob.ASSEMBLE,
-        shard=0,
-    )
-    days = score_writer.ledger_days(state)
-    source_bytes = sum(path.stat().st_size for path in days)
-
-    built = score_archive.summarise(
-        days, month=day[:7], observation_key=score_writer.OBSERVATION_KEY
-    )
-    archive_bytes = len(built.to_json().encode("utf-8"))
-
-    assert built.source_rows == 200
-    assert len(built.cohorts) == 1
-    assert archive_bytes * 2 < source_bytes, (
-        f"{archive_bytes} bytes of archive against {source_bytes} of rows is not a saving"
-    )
-
-
-def test_a_second_score_run_over_a_settled_tree_moves_no_byte(tmp_path: Path) -> None:
-    state = a_score_tree(tmp_path)
+def test_a_second_score_run_over_a_settled_tree_moves_no_byte(
+    tmp_path: Path, built_tree: Path
+) -> None:
+    state = a_score_tree(tmp_path, built_tree)
     pruned(state)
-    settled = {
-        path.relative_to(state).as_posix(): path.read_bytes()
-        for path in sorted(state.rglob("*"))
-        if path.is_file()
-    }
+    settled = everything(state)
 
     again = pruned(state)
 
     assert again.changed is False
-    assert {
-        path.relative_to(state).as_posix(): path.read_bytes()
-        for path in sorted(state.rglob("*"))
-        if path.is_file()
-    } == settled
+    assert everything(state) == settled
 
 
-def test_a_score_file_the_reader_cannot_place_stops_the_prune(tmp_path: Path) -> None:
-    """A stray is refused now, where the month reader used to walk past it.
+def test_a_score_file_the_reader_cannot_place_stops_the_prune(
+    tmp_path: Path, built_tree: Path
+) -> None:
+    """A stray is refused, where a reader that skipped it would walk past it.
 
-    `day_partition.day_files` refuses a name it cannot place, so a ledger holding
-    one is unreadable rather than partly readable - and the prune it stops is the
-    one that deletes. It is the stronger of the two behaviours and it is why this
-    ledger went to the day tree's rule rather than keeping its own: a file the
-    reader skips is a month it might summarise without.
+    `day_shards.shard_files` refuses a name it cannot place, so an index holding
+    one is unreadable rather than partly readable - and the prune it stops is
+    the one that deletes. It is the stronger of the two behaviours: a file the
+    reader skips is a day it might decide about without.
     """
-    state = tmp_path / "state"
-    score_history(state, months_back(TODAY, HISTORY_MONTHS))
-    stray = ledger.tree_root(state, LedgerName.SCORES) / "notes.csv"
+    state = a_score_tree(tmp_path, built_tree)
+    stray = ledger.tree_root(state, LedgerName.SCORE_INDEX) / "notes.csv"
     stray.write_text("nothing the contract knows\n", encoding="utf-8")
-    before = {
-        path.relative_to(state).as_posix(): path.read_bytes()
-        for path in sorted(state.rglob("*"))
-        if path.is_file()
-    }
+    before = everything(state)
 
     with pytest.raises(ValueError, match=re.escape("notes.csv")):
         pruned(state)
 
-    assert {
-        path.relative_to(state).as_posix(): path.read_bytes()
-        for path in sorted(state.rglob("*"))
-        if path.is_file()
-    } == before, "the refused pass deleted something anyway"
+    assert everything(state) == before, "the refused pass deleted something anyway"
 
 
-def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived(
-    tmp_path: Path,
+def test_a_month_shaped_name_in_the_archive_folder_is_never_taken_as_a_summary(
+    tmp_path: Path, built_tree: Path
 ) -> None:
-    """The defect this row exists for, on the one ledger where it deleted a file.
+    """The defect this test exists for, on the one path here that deletes by month name.
 
-    `prune_scores` summarises a month past the window and then unlinks its day
-    files. Its reader used to accept any seven characters of the right shape, so
-    `2025-13.csv` was archived into `state/score-archive/` and then deleted here,
-    while `prune_feed_health` - reading the strict rule - left the same name
-    alone. Nothing in this repository writes `2025-13.csv`, so nothing could have
-    said afterwards what was in it, and the gardener's history job force-pushes
-    `main`.
-
-    **The day tree closes it harder than the strict month rule did.** A
-    month-shaped name at the root of a day tree is a name
-    `day_partition.day_files` cannot place, so the whole read is refused and this
-    prune archives nothing at all - where the strict rule merely walked past the
-    file. The name survives either way; what is stronger here is that a half-read
-    ledger can no longer produce a summary.
+    A summary past the archive's own series is deleted by its `<YYYY-MM>` stem.
+    A reader that accepted any seven characters of the right shape would take
+    `2025-13.json` for a month older than the series and delete it. Nothing in
+    this repository writes that name, so nothing could say afterwards what was
+    in it, and the gardener's history job force-pushes `main`. The archive
+    folder is read by the strict month rule, so a name that is not a month is
+    never a summary and never goes.
     """
-    state = tmp_path / "state"
-    score_history(state, months_back(TODAY, HISTORY_MONTHS))
+    state = a_score_tree(tmp_path, built_tree)
     strays = {
-        ledger.tree_root(state, LedgerName.SCORES) / f"{stem}.csv": f"{stem} was never written\n"
+        ledger.tree_root(state, LedgerName.SCORE_ARCHIVE) / f"{stem}.json": (
+            f"{stem} was never written\n"
+        )
         for stem in NOT_MONTHS
     }
     for path, text in strays.items():
         path.write_text(text, encoding="utf-8")
 
-    with pytest.raises(ValueError, match="day directory"):
-        pruned(state)
+    result = pruned(state, archive_months=15)
 
+    assert result.hard_deleted, "a finite archive age took no summary, so this proves nothing"
+    assert not set(result.hard_deleted) & set(NOT_MONTHS)
     assert {path: path.read_text(encoding="utf-8") for path in strays} == strays
-    assert not (ledger.tree_root(state, LedgerName.SCORE_ARCHIVE)).exists(), (
-        "a ledger the reader cannot walk produced a summary anyway"
-    )
-
-
-def test_an_archive_that_does_not_reconcile_leaves_its_days(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Nothing is deleted on the strength of a summary nobody checked.
-
-    The read-back is not enough on its own: a file that parses can still
-    describe a different month. So the reconcile recomputes from the day files
-    and compares, and a disagreement raises with every one of them still on disk.
-    """
-    state = a_score_tree(tmp_path)
-    boundary = oldest_month_kept(TODAY, full_grain_months())
-    by_month = day_shards.shards_by_month(
-        ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW
-    )
-    doomed = [day for month, days in by_month.items() if month < boundary for day in days]
-    assert doomed
-    honest = score_archive.read
-
-    def one_row_short(path: Path) -> object:
-        stored = honest(path)
-        return stored.model_copy(update={"source_rows": stored.source_rows + 1})
-
-    monkeypatch.setattr(score_archive, "read", one_row_short)
-
-    with pytest.raises(PruneInterruptedError) as stopped:
-        pruned(state)
-
-    chain: list[str] = []
-    error: BaseException | None = stopped.value
-    while error is not None:
-        chain.append(str(error))
-        error = error.__cause__
-    assert any("does not reconcile" in said for said in chain), chain
-
-    assert all(day.exists() for day in doomed), (
-        "a day file was unlinked against a summary that disagreed"
-    )
 
 
 def test_the_archive_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
-    tmp_path: Path,
+    tmp_path: Path, built_tree: Path
 ) -> None:
-    state = a_score_tree(tmp_path)
+    state = a_score_tree(tmp_path, built_tree)
     policy = declared()["scores"]
     assert isinstance(policy, RetentionPolicy) and policy.series is not None
     assert policy.series["archive"].unit == "forever"
+    before = score_archive.archived_months(state)
+    assert before, "the fixture holds no summary, so this proves nothing"
 
     result = pruned(state)
 
     assert result.hard_deleted == ()
-    assert score_archive.archived_months(state)
+    assert score_archive.archived_months(state) == before
 
 
-def test_a_hard_delete_takes_the_archive_only_after_the_month_has_been_archived(
-    tmp_path: Path,
+def test_a_finite_archive_age_takes_the_summaries_past_it_and_keeps_the_rest(
+    tmp_path: Path, built_tree: Path
 ) -> None:
-    """A finite archive age must sit above the full-grain window, and does.
+    """A summary goes once it is past the archive's own series, and no other does.
 
-    Fifteen against fourteen, so the month that is deleted outright is one that
-    was summarised on an earlier pass rather than one that never was.
+    A finite age must sit above the full-grain window, and here it does: fifteen
+    against fourteen, so every summary it takes is of a month whose index days
+    were already past the window.
     """
-    state = a_score_tree(tmp_path)
-    pruned(state)
+    state = a_score_tree(tmp_path, built_tree)
     before = score_archive.archived_months(state)
     assert len(before) > 1
 
@@ -443,131 +350,79 @@ def test_a_hard_delete_takes_the_archive_only_after_the_month_has_been_archived(
     ]
 
 
-def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repeat(
-    tmp_path: Path,
+def test_an_archived_month_whose_index_went_is_still_refused_as_a_repeat(
+    tmp_path: Path, built_tree: Path
 ) -> None:
-    """The row's Oracle, both halves.
+    """After the pass takes a month's index, every measurement in it is still held.
 
-    First: the archive's source hash and row count match the day files, its
-    observation digests are one-for-one with their own observation keys,
-    and its moments recompute exactly - checked against the raw CSV rather than
-    by calling the summariser again, so the oracle cannot pass by agreeing with
-    the code it is checking.
-
-    Second, and the one that matters most: after the rows are gone, every
-    measurement they held is still refused as a repeat. Without that, the day a
-    month is deleted every row in it becomes scoreable again as if it were new.
+    The index is what a run dedupes against, and the task takes a month's index
+    days only because a summary carries the same digests. Without that, the day
+    the index went every row of the month would be scoreable again as if it
+    were new.
     """
-    state = a_score_tree(tmp_path)
+    state = a_score_tree(tmp_path, built_tree)
     boundary = oldest_month_kept(TODAY, full_grain_months())
-    by_month = day_shards.shards_by_month(
-        ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW
-    )
-    month = next(name for name in sorted(by_month) if name < boundary)
-    days = sorted(by_month[month])
-    raw = [
-        record
-        for day in days
-        for record in csv.DictReader(io.StringIO(day.read_text(encoding="utf-8")))
-    ]
-    rolling = hashlib.sha256()
-    for day in days:
-        rolling.update(day.read_bytes())
-    fingerprint = rolling.hexdigest()
-    keys = {tuple(row[name] for name in score_writer.OBSERVATION_KEY) for row in raw}
-    hhem_by_cohort: dict[tuple[str, ...], list[float]] = {}
-    for row in raw:
-        cohort = tuple(row[name] for name in score_archive.COHORT_KEY)
-        hhem_by_cohort.setdefault(cohort, []).append(float(row["hhem"]))
-    doomed = list(raw)
+    month = next(name for name in index_months(state) if name < boundary)
+    replayed = ledger.load_days(state, LedgerName.SCORES, ledger.month_days(month), model=EvalRow)
+    assert replayed, "the month holds no row, so this proves nothing"
 
     pruned(state)
 
-    stored = score_archive.read(score_archive.archive_path(state, month))
-    assert stored.source_sha256 == fingerprint
-    assert stored.source_rows == len(raw)
-    assert set(stored.observation_digests) == {score_archive.digest_of(key) for key in keys}
-    assert len(stored.observation_digests) == len(keys)
-    for group in stored.cohorts:
-        values = hhem_by_cohort[group.key]
-        moment = group.measurements["hhem"]
-        assert moment.n == len(values)
-        assert moment.sum == pytest.approx(sum(values))
-        assert moment.sum_squares == pytest.approx(sum(value * value for value in values))
-        assert moment.min == pytest.approx(min(values))
-        assert moment.max == pytest.approx(max(values))
-
-    # The second half. Every row of the deleted month, offered again.
-    assert not any(day.exists() for day in days)
-    replayed = [
-        EvalRow.model_validate({key: value for key, value in row.items() if value != ""})
-        for row in doomed
-    ]
-    assert (
-        score_writer.append_segment(
-            state,
-            replayed,
-            run_id=f"{month}-28-9",
-            attempt=1,
-            job=ServerJob.ASSEMBLE,
-            shard=0,
-        )
-        == 0
-    ), "a deleted month made its measurements new again"
-    assert not any(day.exists() for day in days), (
-        "the replay recreated a day file the archive replaced"
+    assert month not in index_months(state), "the pass kept the month's index, so this proves nothing"
+    assert seed_scores(state, replayed, run_id=f"{month}-28-9") == 0, (
+        "a month whose index went made its measurements new again"
     )
+    assert month not in index_months(state), "the replay wrote an index day the summary replaced"
 
 
-def test_the_index_goes_with_the_rows_it_describes(tmp_path: Path) -> None:
-    """An index that outlives its source is a lookup that misses for ever.
+def test_an_index_day_goes_once_an_archive_covers_its_month(
+    tmp_path: Path, built_tree: Path
+) -> None:
+    """An index day past the window goes once a summary carries its digests, and not before.
 
-    The archive carries those digests, so nothing here removes the last record
-    of a measurement - which is why the drop is guarded on the archive being on
-    disk rather than on the rows being gone.
+    The summary carries those digests, so nothing here removes the last record
+    of a measurement - which is why the drop is guarded on the summary being on
+    disk rather than on the month's age alone.
     """
-    state = a_score_tree(tmp_path)
+    state = a_score_tree(tmp_path, built_tree)
     boundary = oldest_month_kept(TODAY, full_grain_months())
-    before = {day_shards.date_of(shard)[:7] for shard in score_writer.index_days(state)}
+    before = index_months(state)
     assert any(month < boundary for month in before), "the fixture never reaches past the window"
+    taken = [
+        f"{ledger.STATE_DIRNAME}/{shard.relative_to(state).as_posix()}"
+        for shard in score_writer.index_days(state)
+        if day_shards.date_of(shard)[:7] < boundary
+    ]
+    held = score_writer.recorded_observations(state)
 
     dry = pruned(state, dry_run=True)
     assert dry.index_days_removed, "a dry run that names no index file is not a deliverable"
-    assert score_writer.index_days(state), "a dry run deleted the index"
+    assert index_months(state) == before, "a dry run deleted the index"
 
     live = pruned(state)
     assert live.index_days_removed == dry.index_days_removed, (
         "the index files a live run removed are not the ones a dry run named"
     )
-    after = {day_shards.date_of(shard)[:7] for shard in score_writer.index_days(state)}
-    assert after == {month for month in before if month >= boundary}
+    assert list(live.index_days_removed) == taken
+    assert index_months(state) == [month for month in before if month >= boundary]
     # Every measurement the deleted index held is still refused, because the
-    # archive beside it carries the same digests.
-    assert score_writer.recorded_observations(state)
+    # summary beside it carries the same digests.
+    assert score_writer.recorded_observations(state) == held
 
 
-def test_an_index_day_no_archive_covers_is_left_alone(tmp_path: Path) -> None:
+def test_an_index_day_no_archive_covers_is_left_alone(tmp_path: Path, built_tree: Path) -> None:
     """The guard on the drop, asked from the side that would lose a record.
 
-    A day file removed by hand, or by a prune whose archive would not reconcile,
-    leaves the index as the only thing that remembers those measurements.
-    Dropping it there would silently make every one of them new again, so the
-    drop is guarded on the archive being on disk rather than on the rows being
-    gone.
+    A month nobody summarised - and nothing in the pipeline builds a summary
+    now - leaves the index as the only thing that remembers its measurements,
+    because a run dedupes against the index and never reads a row. Dropping it
+    there would silently make every one of them new again, so the drop is
+    guarded on a summary being on disk rather than on the month's age.
     """
-    state = a_score_tree(tmp_path)
+    state = a_score_tree(tmp_path, built_tree)
     orphan = "2020-03-04"
-    score_writer.append_segment(
-        state,
-        [score_row(day=orphan, run=1, number=1)],
-        run_id=f"{orphan}-1",
-        attempt=1,
-        job=ServerJob.ASSEMBLE,
-        shard=0,
-    )
-    for day in day_shards.one_day(ledger.tree_root(state, LedgerName.SCORES), orphan):
-        day.unlink()
-        day_partition.drop_empty_day_dirs(day)
+    unsummarised = score_row(day=orphan, run=1, number=1)
+    assert seed_scores(state, [unsummarised], run_id=f"{orphan}-1") == 1
     assert day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), orphan), (
         "the index for the orphaned day was never written, so this proves nothing"
     )
@@ -577,4 +432,6 @@ def test_an_index_day_no_archive_covers_is_left_alone(tmp_path: Path) -> None:
     assert day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), orphan), (
         "the last record of those measurements went, and no archive carries them"
     )
-    assert score_writer.recorded_observations(state)
+    assert score_writer.observation_digest(
+        unsummarised.model_dump(mode="json")
+    ) in score_writer.recorded_observations(state)

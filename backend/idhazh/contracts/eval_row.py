@@ -1,7 +1,7 @@
-"""One row of the committed eval ledger (`state/scores.csv`).
+"""One row of the committed eval ledger (`state/raw/scores/`).
 
-Every field is a scalar, because the ledger is a CSV that is appended by CI and
-read by the dashboard, never recomputed at read time.
+Every field is a scalar, because each is one column of a ledger file: CI writes
+the row once and the dashboard reads it, never recomputed at read time.
 
 The row is deliberately self-describing - it carries `date`, `source_url` and
 `title` - so that a row still means something after the day it describes has
@@ -12,6 +12,7 @@ ever enabled, not after.
 from __future__ import annotations
 
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field, model_validator
@@ -28,6 +29,7 @@ from idhazh.contracts.base import (
     Timestamp,
     Url,
     UrlKey,
+    renamed_keys,
     without_retired_keys,
 )
 
@@ -44,15 +46,33 @@ _DELTA_PLACES = 6
 #: **This is a contract, not a courtesy.** A work shard seals one `.eval.json`
 #: per item and two later jobs read it back hours afterwards, so a key this row
 #: stopped naming is one `extra="forbid"` would refuse on a payload that is
-#: exactly what its author meant to write - and the run would lose its day.
-#: `ledger.migrate_header` refuses any heading it cannot place for the same
-#: reason, so a column deleted above without an entry here leaves every
-#: committed day file unappendable.
+#: exactly what its author meant to write - and the run would lose its day. A
+#: file the ledger door reads back is refused for the same reason, so a column
+#: deleted above without an entry here makes every ledger file that still holds
+#: it refused on read.
 #:
-#: **Both sides of the row read this one set.** A committed day file reaches it
-#: through `ledger.SCORES_CARRIED`; the per-item payload reaches it through the
-#: before-validator below.
+#: **Both sides of the row read this one set.** A file the ledger door reads
+#: back and the per-item payload both reach it through the before-validator
+#: below.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset({"coverage", "new_fact_rate"})
+
+#: Headings and keys this row renamed, old name first, read under the new name.
+#: `attempt` named which try at the summary produced the text, while the ledger
+#: file's own `attempt` names the workflow re-run, so one word had two meanings
+#: in one ledger. The three word counts take the names item-health gives the
+#: same facts: before the cap, after it, and the summary's length.
+#:
+#: **Both sides of the row read this one map**, for the reason `DROPPED_CELLS`
+#: gives: a sealed `.eval.json` reaches it through the before-validator below,
+#: and a committed CSV heading through `from_csv_row`.
+RENAMED_CELLS: Final = MappingProxyType(
+    {
+        "attempt": "summary_attempt",
+        "source_word_count": "source_words_before_cap",
+        "source_seen_word_count": "source_words",
+        "summary_word_count": "summary_words",
+    }
+)
 
 
 class ConfidenceBand(StrEnum):
@@ -87,10 +107,15 @@ class BandReason(StrEnum):
 
 
 class EvalRow(Contract):
-    """The Evaluate stage's output, appended once per item."""
+    """The Evaluate stage's output, filed once per item."""
 
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-29",
+            change="attempt is summary_attempt; the three word counts take item-health's names.",
+            why="attempt meant two tries in one ledger, and one count had two names.",
+        ),
         ChangelogEntry(
             version="2026-09-24",
             change="coverage and new_fact_rate go; coherence and semantic_coverage arrive.",
@@ -107,11 +132,6 @@ class EvalRow(Contract):
             why="It keyed the eval window, and the window stopped being keyed on a stamp.",
         ),
         ChangelogEntry(
-            version="2026-09-12T18:40",
-            change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
-            why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
-        ),
-        ChangelogEntry(
             version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -126,7 +146,14 @@ class EvalRow(Contract):
     title: UntrustedLine
     vertical: Slug
     model_id: Slug
-    attempt: int = Field(ge=1)
+    summary_attempt: int = Field(
+        ge=1,
+        description=(
+            "Which try at writing the summary produced the text this row scores, taken "
+            "from the summary itself. Not the workflow re-run counter: the ledger file "
+            "that holds the row carries that one in its own attempt column."
+        ),
+    )
 
     hhem: Score = Field(ge=0.0, le=1.0, description="Faithfulness against the text the model saw.")
     hhem_full: Score = Field(
@@ -171,11 +198,11 @@ class EvalRow(Contract):
             "rows, and true on exactly 1 row, which read 748 words of a 748-word "
             "article and was never cut. Of the 430 rows on the new side, 4 were cut "
             "and all 4 are flagged, and the flag agrees with the word counts on 430 "
-            "of 430. Prefer the pair source_word_count > source_seen_word_count for "
+            "of 430. Prefer the pair source_words_before_cap > source_words for "
             "any new reader: it is true exactly when the body was cut, on every row "
             "carrying both, with no version branch to get wrong. The pair has one "
             "hole of its own, and it prints as a hole - 142 of the 3,113 rows carry a "
-            "null source_word_count, 4.6 percent, every one of them on the old side, "
+            "null source_words_before_cap, 4.6 percent, every one of them on the old side, "
             "and unknown is printed as unknown rather than as uncut. Its one reader "
             "is frontend/src/lib/server/model-work.ts, which counts it only over rows "
             "stamped from CUT_FLAG_MEANS_A_CUT_FROM."
@@ -214,25 +241,26 @@ class EvalRow(Contract):
     )
     band: ConfidenceBand
 
-    source_word_count: int | None = Field(
+    source_words_before_cap: int | None = Field(
         default=None,
         ge=0,
         description=(
             "The article before the truncation cap, counted by Article.source_word_count. "
             "Null when the length is not knowable: the pre-cap body is never persisted, "
             "so a truncated row stamped before 2026-08-27T21:00 has no full length to "
-            "recover. Rows stamped before 2026-08-27T20:00 recount the post-cap text."
+            "recover. Rows stamped before 2026-08-27T20:00 recount the post-cap text. "
+            "The same fact, under the same name, as item-health's source_words_before_cap."
         ),
     )
-    source_seen_word_count: int = Field(
+    source_words: int = Field(
         default=0,
         ge=0,
         description=(
             "What the model actually got, after truncation. Counted the same way as "
-            "source_word_count, so the difference between the two is the cut."
+            "source_words_before_cap, so the difference between the two is the cut."
         ),
     )
-    summary_word_count: int = Field(ge=0)
+    summary_words: int = Field(ge=0)
     pipeline_fingerprint: Sha256 | None = Field(
         default=None,
         description=(
@@ -241,7 +269,7 @@ class EvalRow(Contract):
             "ledger column survive here alone, because the console reads this column to "
             "draw the model-change boundaries on every day whose identity is a digest "
             "rather than a named input manifest, and it is the only source of them. "
-            "Remove it, and the column from state/scores/, once no score row the widest "
+            "Remove it, and its column from the scores ledger, once no score row the widest "
             "console window can reach carries one."
         ),
     )
@@ -281,9 +309,9 @@ class EvalRow(Contract):
     )
 
     # Appended at the end, and not filed next to `hedge_dropped` where they belong
-    # by meaning. The ledger is a committed append-only CSV with rows already in
-    # it; a column inserted mid-row shifts every historical cell one place right
-    # under a reader that maps by position. Meaning loses to layout here.
+    # by meaning. The ledger was a committed append-only CSV with rows already in
+    # it; a column inserted mid-row would have shifted every historical cell one
+    # place right under a reader that maps by position. Meaning lost to layout here.
     #
     # Null and not 0.0, for the same reason: 0.0 is a measurement that says the
     # article marked nothing. A row written before these existed measured neither,
@@ -387,9 +415,11 @@ class EvalRow(Contract):
         refuses, so the run that wrote the payload loses its whole day.
 
         The keys come from `DROPPED_CELLS` rather than from a list of their own,
-        so the CSV side and the JSON side cannot name different sets.
+        so the CSV side and the JSON side cannot name different sets. A key this
+        row renamed is read under its new name, from `RENAMED_CELLS`, and only
+        when the new name is absent, so a payload carrying both keeps its own.
         """
-        return without_retired_keys(data, *DROPPED_CELLS)
+        return renamed_keys(without_retired_keys(data, *DROPPED_CELLS), RENAMED_CELLS)
 
     @model_validator(mode="after")
     def _delta_is_rebuilt_not_trusted(self) -> Self:
@@ -407,10 +437,10 @@ class EvalRow(Contract):
         happen to sit side by side - the defect this rule closes was two
         different counters over one string, and only a comparison could see it.
         """
-        full = self.source_word_count
-        if full is not None and self.source_seen_word_count > full:
+        full = self.source_words_before_cap
+        if full is not None and self.source_words > full:
             raise ValueError(
-                "source_seen_word_count is a cut of source_word_count, so it is not more"
+                "source_words is a cut of source_words_before_cap, so it is not more"
             )
         return self
 
@@ -422,10 +452,9 @@ class EvalRow(Contract):
     def csv_row(self) -> dict[str, str]:
         """Every cell a string, keyed by column name.
 
-        The same serialization `evals.writer.append_segment` reaches by dumping the model
-        and picking the columns, spelled once here instead. A segment of these
-        rows is written and read back by the generic machinery in `idhazh.ledger`,
-        which takes a row that can write itself and never a dict somebody built.
+        The cells the ledger door files when `evals.writer.file_measurements`
+        hands it the model, spelled as strings once here for a reader that wants
+        a CSV line. The door itself takes the model, never a dict somebody built.
         """
         payload = self.model_dump(mode="json")
         return {
@@ -435,7 +464,11 @@ class EvalRow(Contract):
 
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
-        """One row read back. An empty cell is an absent optional, which is what a CSV can say."""
+        """One row read back. An empty cell is an absent optional, which is what a CSV can say.
+
+        A heading this row renamed is read under its new name, as the JSON side is.
+        """
+        cells = renamed_keys(row, RENAMED_CELLS)
         return cls.model_validate(
-            {name: (row[name] or None) for name in cls.model_fields if name in row}
+            {name: (cells[name] or None) for name in cls.model_fields if name in cells}
         )

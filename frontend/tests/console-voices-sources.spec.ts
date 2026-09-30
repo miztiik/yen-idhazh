@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { rangeMarks } from '../src/lib/charts/series';
 import { sourceCuts, SOURCE_CUT_ROWS } from '../src/lib/server/model-work';
-import { readCsv, readDayShards } from '../src/lib/server/payload';
+import { canaryArticleRows, heldRows } from './support/canary-records';
 
 /**
  * Sources cut short, drawn against the cap that cuts them.
@@ -29,14 +29,17 @@ const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
  * and the oracle would be reading whichever came first. */
 const PLOT = '[data-source-cuts="range"]';
 
-/** Every item-health row the canary wrote.
+/** Every article row the canary packed, read once before the tests below run.
  *
- * Through `readDayShards`, the reader the page's own server uses, so a grain
- * change in the ledger cannot leave this oracle comparing the page against an
- * empty set. The ledger files `<YYYY>/<MM>/<DD>.csv`.
+ * Through the reader the page's own server uses, so a change in how the record
+ * is filed cannot leave this oracle comparing the page against an empty set.
  */
+const articles = heldRows(canaryArticleRows);
+
+test.beforeAll(articles.load);
+
 function ledger(): Record<string, string>[] {
-	return readDayShards(join(CANARY, 'state', 'item-health'), -1).rows;
+	return articles.rows();
 }
 
 interface Article {
@@ -45,7 +48,7 @@ interface Article {
 	after: number | null;
 }
 
-/** The window's articles, recomputed from the CSV rather than from the module
+/** The window's articles, recomputed from the record's rows rather than from the module
  * the page uses. The oracle is that a drawn mark equals what a second,
  * independent reading of the ledger produces.
  *

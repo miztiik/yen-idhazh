@@ -17,7 +17,7 @@ why these are knobs rather than constants, is [../config.md](../config.md).
 
 | Knob | Default | What it switches off |
 | --- | --- | --- |
-| `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in `state/scores.csv`. |
+| `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in the scores ledger. |
 | `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
 | `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
@@ -112,11 +112,11 @@ that mapping yet, because no console read opens one of its shards today
 
 | Ledger | Full grain | Summary after it | Declared in |
 | --- | --- | --- | --- |
-| `state/item-health/` | 14 months | forever, in `state/item-health-summary/` | `config/gardener/telemetry-aggregate.json`, series `full-grain` and `aggregate` |
-| `state/scores/` | 14 months | forever, in `state/score-archive/` | `config/gardener/scores.json`, series `full-grain` and `archive` |
+| the item-health ledger, `state/raw/item-health/` and `state/compact/item-health/` | 14 months before a month is summarised; its rows go when the 15-month `monthly_window` of its compaction passes | forever, in `state/item-health-summary/` | `config/gardener/telemetry-aggregate.json`, series `full-grain` and `aggregate`, and `config/gardener/compact-item-health.json` |
+| the scores ledger, `state/raw/scores/` and `state/compact/scores/` | the 15-month `monthly_window` of its compaction, once that compaction is live | none written today: `state/score-archive/` was built from the CSV day files, and nothing builds it from the door's rows yet | `config/gardener/compact-scores.json` |
 | `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
 | `state/feed-health/` | 14 months | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/feed-health.json` |
-| `state/host-fingerprint/` | 14 months | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/host-fingerprint.json` |
+| the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`, with the floor it must reach in the retired `config/gardener/host-fingerprint.json` |
 | `state/span-rollup/` | forever - nobody has said how long a span total is wanted | none | `config/gardener/span-rollup.json` |
 
 And one for each published copy, because a reader fetches those and our own disk
@@ -127,7 +127,7 @@ is not what bounds them:
 | `frontend/public/telemetry/` | 14 months, the `public-copy` series of `config/gardener/telemetry-aggregate.json` | the `full-grain` series of the same file, which it must equal |
 | `frontend/public/run-days/` | `public_run_days_keep_months` (14) | nothing - the source is the day payloads, whose retention is the archive's |
 | `frontend/public/day-metrics/` | `public_day_metrics_keep_months` (14) | nothing - `state/day-metrics/` has no age of its own |
-| `frontend/public/machine/` | `public_machine_keep_months` (14) | the window of `config/gardener/host-fingerprint.json`, which may not sit below it - the shard is folded from that tree and from `state/item-health/` |
+| `frontend/public/machine/` | `public_machine_keep_months` (14) | the window of the retired `config/gardener/host-fingerprint.json`, which may not sit below it - the shard is folded from the host-fingerprint and item-health ledgers |
 | `frontend/public/span-rollup/` | `public_span_rollup_keep_months` (14) | nothing |
 
 **Two ages left this table on 2026-09-16.** `public_scores_keep_months` and
@@ -169,9 +169,11 @@ refuses a `public-copy` series that differs from the `full-grain` series of
 `telemetry-aggregate`, in both directions: a published month whose source has
 been folded away is a rate nobody can check, and a source month with no
 published copy is a window the console cannot draw. The machine shard is folded
-from `state/host-fingerprint/`, so that task's window is refused below
-`public_machine_keep_months`. The other three copies have no state ledger behind
-them and are bounded by their own knob alone.
+from the host-fingerprint ledger, so the retired `host-fingerprint` declaration's
+window is refused below `public_machine_keep_months`. That window is the floor
+the host-fingerprint compaction's `monthly_window` must reach, because the
+compaction is what deletes the ledger's rows now. The other three copies have no
+state ledger behind them and are bounded by their own knob alone.
 
 **This block sets the ages. Which policy a tree is under - fold, delete or keep
 - is [../adaptive-pruning.md](../adaptive-pruning.md)**, which is also where an age is
@@ -265,11 +267,13 @@ the folded aggregate costs a measured 63.8 bytes a row over four stages - about
 above the `full-grain` series, or a month would be deleted before it was ever
 folded; the gardener loader refuses the pair otherwise.
 
-**What the `full-grain` series of `telemetry-aggregate` governs is
-`state/item-health/`, and nothing else.** Past the window a month is folded to
-one row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv` and the
-full-grain shard is deleted, by the gardener's `telemetry-aggregate` task. What
-survives is every count and every timing total; what goes is the
+**What the `full-grain` series of `telemetry-aggregate` governs is the
+item-health ledger, and nothing else.** Past the window a month is summarised to
+one row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv` by the
+gardener's `telemetry-aggregate` task, which reads the month through the ledger
+door. The rows themselves go later, when the item-health compaction's
+`monthly_window` passes, so a month is always summarised before anything can take
+its rows. What survives is every count and every timing total; what goes is the
 per-item detail, which is what the console's failure list offers and no rate
 needs. Folding the committed `state/item-health/2026-08.csv` on 2026-08-30 turned
 4,167 rows and 1,270,452 bytes into 24 rows and 1,531 bytes - **829.8 times
@@ -282,17 +286,17 @@ estimate. The conclusion drawn from the estimate - keep the aggregate forever -
 stands, and the measurement only strengthens it.
 
 **Each of these ages is one task's own window, and that task spends it.** The
-`telemetry-aggregate` task folds `state/item-health/` past its `full-grain`
+`telemetry-aggregate` task summarises an item-health month past its `full-grain`
 series and unlinks the browser's copy of that month past its `public-copy`
 series; the `feed-health` task deletes `state/feed-health/` past its window; and
-the `scores` task archives `state/scores/` past its `full-grain` series before
-deleting the shard. Its `archive` series is `forever`, so nothing has ever
-deleted an archive. The `host-fingerprint` task deletes `state/host-fingerprint/`
-past its window; that was the one committed day-filed ledger with no age at all
-until 2026-09-19.
+the `scores` task deletes a `state/score-index/` day once an archive covers its
+month. Its `archive` series is `forever`, so nothing has ever deleted an archive.
+The item-health, scores and host-fingerprint rows are deleted by each ledger's
+compaction past its `monthly_window`, and the retired `host-fingerprint` task
+runs no more.
 
-**A score month is summarised before it is deleted, and it is the only ledger here
-with a summary in front of the deletion.** The archive is
+**A score month has to be summarised before it is deleted, and nothing
+summarises one today.** The archive is
 `state/score-archive/<YYYY-MM>.json`: the shard's SHA-256 and row count, one
 digest per distinct measurement, and one cohort per (date, run, row version,
 model, pipeline, scorer) carrying counts, ten faithfulness deciles, three bands,
@@ -301,7 +305,12 @@ the boolean signal counts, the cut counts, the premise-digest counts and
 necessary rather than tidy: the ledger is the evidence behind every published
 quality claim, and `evals.writer` refuses a repeat measurement by reading the
 rows - so a shard deleted with no index would make every measurement in it
-scoreable again as if it were new. **Measured 2026-09-03 over both committed
+scoreable again as if it were new. The `scores` task built the archive from a
+month's CSV day files and hashed their bytes, and those files are gone, so no
+month is archived now and the `scores` compaction stays report-only until an
+archive is built from the door's rows
+([../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#design-rationale)).
+**Measured 2026-09-03 over both committed
 shards: 4,266,655 bytes of shard become 557,290 bytes of archive, 13.1 percent,
 and three reads gave byte-identical results so the spread is zero.** What that
 buys, in years, is in
@@ -333,7 +342,9 @@ together, on **2027-10-01**. The sight date was 2026-11-30 while that ledger
 filed by month, because a whole month shard survived if any of its days was in
 range; at day grain the file the window stops naming is the file that goes.
 Reading committed files against a fixed calendar is deterministic, so the spread
-is zero.
+is zero. The item-health and scores rows have since moved to the ledger door, so
+they no longer go on that date: they go when each compaction's `monthly_window`
+passes, once a person turns that compaction on.
 
 ## See also
 

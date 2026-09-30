@@ -75,6 +75,22 @@ dependencies = [
     #
     # Beneficiary: one reading of robots.txt on every interpreter we support.
     "protego==0.6.2",
+    # The parquet engine behind the ledger door. Beneficiary: every ledger read
+    # or written through the door, all of it through the one module that imports
+    # the engine, `backend/idhazh/ledger/parquet.py`.
+    #
+    # In every install rather than an optional extra, because which jobs reach
+    # the door cannot be read off the workflows: a Node script can start Python,
+    # and a verb can be held in a variable. A job that opens a door file without
+    # the engine fails on the first one it opens.
+    #
+    # Cost: a few seconds on each install that never opens a parquet file. An
+    # estimate from GitHub's own step timings on ubuntu-latest, 2026-09-29: a
+    # plain install took 10 to 16 s (mean 12.9, n=13) and an install with the
+    # engine 13 to 22 s (mean 15.2, n=10). That is about 2 s apart on average,
+    # inside the spread between runs, and 12 s at the widest. pyarrow 25.0.1
+    # declares no dependencies of its own, so it moves no version already there.
+    "pyarrow>=21",
 ]
 
 [project.optional-dependencies]
@@ -110,19 +126,6 @@ dev = [
     # One observation, so no spread. Beneficiary: workflow routing regression gate.
     "PyYAML>=6.0",
     "ruff>=0.9",
-    # The parquet engine, so the suite can drive the ledger door's parquet half.
-    # Spelled as this project's own extra rather than a second pin, so the floor
-    # lives in one place.
-    "idhazh[parquet]",
-]
-# The parquet engine behind the ledger door. Beneficiary: the one module that
-# writes and reads parquet, `backend/idhazh/ledger/parquet.py`. An optional extra
-# rather than a runtime dependency, because it is the largest thing the project
-# installs and most jobs never touch a parquet file: only a job that does
-# installs `.[parquet]`. Its size and install time on ubuntu-latest are recorded
-# in docs/architecture/contracts/persistence.md.
-parquet = [
-    "pyarrow>=21",
 ]
 # The faithfulness scorer. A 250M cross-encoder, but transformers plus torch is
 # hundreds of megabytes, so it stays out of the default install and out of the

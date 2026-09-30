@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from conftest import seed_item_health
+from conftest import seed_host_fingerprint, seed_item_health
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
@@ -128,7 +128,7 @@ def health_row(*, day: str, run: int, number: int, stage: ItemStage) -> ItemHeal
 
 
 def item_health_history(state_dir: Path, months: list[str]) -> None:
-    """A real item-health shard per month, written through the real appender."""
+    """Two item-health days per month, filed through the ledger door."""
     for index, month in enumerate(months):
         for day_of_month in (4, 17):
             day = f"{month}-{day_of_month:02d}"
@@ -145,11 +145,13 @@ def item_health_history(state_dir: Path, months: list[str]) -> None:
 
 
 def totals_from_shard(texts: Iterable[str]) -> dict[tuple[str, str], tuple[int, int, int]]:
-    """Rows, failures and total milliseconds per (date, stage), read off the CSVs.
+    """Rows, failures and total milliseconds per (date, stage), read off CSV text.
 
     Recomputed here from the raw text rather than by calling `compact_month`, so the
     oracle cannot pass by agreeing with the code it is checking. It takes a
-    month's day files together, because a month is what one aggregate covers.
+    month's census together, because a month is what one aggregate covers. The
+    ledger door files parquet, so a caller renders the rows it read back with
+    `ledger.render_file` before handing them here.
     """
     totals: dict[tuple[str, str], tuple[int, int, int]] = {}
     for text in texts:
@@ -164,54 +166,45 @@ def totals_from_shard(texts: Iterable[str]) -> dict[tuple[str, str], tuple[int, 
 
 
 def item_health_days(state_dir: Path) -> list[Path]:
-    """Every item-health file, oldest first, through the pipeline's own walk.
+    """Every raw item-health file, oldest first, through the ledger door's own listing.
 
-    A day is a directory of writer-owned files, so a day answers with as many
-    paths as writers reached it. The whole ledger, because a retention test asks
-    what the prune left and a window would hide the months it took.
+    A day is a folder of raw files, one file per write, so a day answers with as
+    many paths as writes reached it. The whole ledger, because a retention test
+    asks what a pass left and a window would hide the months it took.
     """
-    return list(
-        day_shards.shard_files(ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), days=UNBOUNDED_WINDOW)
-    )
+    return [held.path for held in ledger.list_raw_files(state_dir, LedgerName.ITEM_HEALTH)]
 
 
 def item_health_months(state_dir: Path) -> list[str]:
-    """Which months the item-health day tree still holds, oldest first.
+    """Which months the item-health ledger still holds, oldest first.
 
-    The boundary the prune works on is still a month; only the files below it are
-    days, so a test about what the prune kept asks in months.
+    Read off folder and index names by the ledger door, so no file is opened. A
+    pass works on months; only the files below one are days, so a test about
+    what a pass kept asks in months.
     """
-    return sorted(
-        day_shards.shards_by_month(ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), days=UNBOUNDED_WINDOW)
-    )
+    return ledger.held_months(state_dir, LedgerName.ITEM_HEALTH)
 
 
 def month_holding(shard: Path) -> str:
-    """The `<YYYY-MM>` a writer's file is filed under, read off its own path.
+    """The `<YYYY-MM>` a file is filed under, read off its own path.
 
-    A day is a directory now, so a writer's file sits one level deeper than the
-    day file `day_partition.month_of` reads. One helper rather than a slice in
-    each test, so a tree that changes shape again moves one line.
+    A day is a directory, so a file sits one level deeper than the day file
+    `day_partition.month_of` reads. A writer's CSV file and a raw file of the
+    ledger door both sit in a `<YYYY>/<MM>/<DD>` folder, so one helper reads
+    either, and a tree that changes shape again moves one line.
     """
     return day_shards.date_of(shard)[:7]
 
 
 def census_of(state_dir: Path, date: str) -> list[ItemHealthRow]:
-    """One row per item one named day recorded, settled the way the fold settles it.
+    """One row per item one named day recorded, settled the way the ledger door settles it.
 
-    The read the gardener's `telemetry-aggregate` task itself makes. A test that
-    opened the day's own path would open a directory, and one that opened a single
-    file inside it would answer for one writer rather than for the day.
+    The read the gardener's `telemetry-aggregate` task itself makes, bounded to
+    one day. A test that opened the day's own folder would open a directory, and
+    one that opened a single file inside it would answer for one write rather
+    than for the day.
     """
-    return [
-        ItemHealthRow.from_csv_row(cells)
-        for cells in day_shards.settled_day(
-            ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH),
-            date,
-            ledger.ITEM_HEALTH_KEY,
-            ItemHealthRow,
-        )
-    ]
+    return ledger.load_days(state_dir, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow)
 
 
 def totals_from_aggregate(
@@ -280,37 +273,26 @@ def feed_health_months(state_dir: Path) -> list[str]:
 def host_fingerprint_history(
     state_dir: Path, months: list[str], *, day_of_month: int = 11
 ) -> None:
-    """A real host-fingerprint file per month, written through the real producer.
+    """One machine row per month, filed through the ledger door.
 
-    `write_segment` and not a hand-rolled CSV: a day is a directory of
-    writer-owned files, so a test that opened the day's own path would create a
-    file where the directory belongs and every later read would refuse the tree.
+    `seed_host_fingerprint` files each row under the writer the job that drew
+    the machine uses, so each month gets one raw file where a run leaves it.
     """
-    for index, month in enumerate(months):
-        day = f"{month}-{day_of_month:02d}"
-        ledger.write_segment(
-            state_dir,
-            LedgerName.HOST_FINGERPRINT,
-            [
-                HostFingerprintRow(
-                    version=HostFingerprintRow.schema_version(),
-                    date=day,
-                    run_id=f"{day}-1",
-                    shard=index,
-                    cpu_model="AMD EPYC 7763 64-Core Processor",
-                )
-            ],
-            run_id=f"{day}-1",
-            attempt=1,
-            job=ServerJob.PLAN,
-            shard=0,
-        )
+    seed_host_fingerprint(
+        state_dir,
+        [
+            HostFingerprintRow(
+                version=HostFingerprintRow.schema_version(),
+                date=f"{month}-{day_of_month:02d}",
+                run_id=f"{month}-{day_of_month:02d}-1",
+                shard=index,
+                cpu_model="AMD EPYC 7763 64-Core Processor",
+            )
+            for index, month in enumerate(months)
+        ],
+    )
 
 
 def host_fingerprint_months(state_dir: Path) -> list[str]:
-    """Which months the host-fingerprint day tree still holds, oldest first."""
-    return sorted(
-        day_shards.shards_by_month(
-            ledger.tree_root(state_dir, LedgerName.HOST_FINGERPRINT), days=UNBOUNDED_WINDOW
-        )
-    )
+    """Which months the host-fingerprint ledger still holds, oldest first, from names alone."""
+    return ledger.held_months(state_dir, LedgerName.HOST_FINGERPRINT)

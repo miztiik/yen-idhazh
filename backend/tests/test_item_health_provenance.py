@@ -2,10 +2,11 @@
 
 `ItemHealthRow` has 123 columns and nine other contracts also have a `date`, so
 the scan's whole job is telling a module that fills a cell from one that uses
-the same word. Every fixture here is a source tree or a day file built under
-`tmp_path`. Nothing reads `backend/idhazh/` or the committed archive, which both
-grow, so nothing here costs more as they do (CLAUDE.md section 13) - and a built
-tree can carry the shape the real one has never produced.
+the same word. Every fixture here is a source tree, or census rows filed through
+the ledger door, built under `tmp_path`. Nothing reads `backend/idhazh/` or the
+committed archive, which both grow, so nothing here costs more as they do
+(CLAUDE.md section 13) - and a built tree can carry the shape the real one has
+never produced.
 
 The one exception is the grouping check, which reads `csv_columns()`. That is a
 contract and not a collection: it is 119 names today and 119 names on a five
@@ -15,11 +16,13 @@ year old clone.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
+
+from conftest import seed_item_health
 
 from idhazh import ledger
-from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger import BEFORE_PARTITION_NAME
+from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from utilities import item_health_provenance as provenance
 
 COLUMNS = frozenset(
@@ -43,12 +46,34 @@ def module(root: Path, name: str, source: str) -> None:
     path.write_text(source, encoding="utf-8", newline="\n")
 
 
-def day(root: Path, name: str, header: str, *rows: str) -> None:
-    """One writer's file of the built ledger, at the path the walk expects."""
-    folder = ledger.tree_root(root / ledger.STATE_DIRNAME, LedgerName.ITEM_HEALTH)
-    path = folder / "2026" / "09" / name / BEFORE_PARTITION_NAME
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join([header, *rows]) + "\n", encoding="utf-8", newline="\n")
+def census(root: Path, date: str, *cells: dict[str, Any]) -> None:
+    """One writer's census rows for `date`, filed through the ledger door under `root`.
+
+    Each row is a published item carrying the cells a case names and nothing
+    else, so the columns it fills are the ones the row cannot do without plus
+    those cells.
+    """
+    rows = []
+    for number, extra in enumerate(cells, start=1):
+        url = f"https://wire.example.org/{date}/{number}"
+        rows.append(
+            ItemHealthRow.model_validate(
+                {
+                    "version": ItemHealthRow.schema_version(),
+                    "date": date,
+                    "run_id": f"{date}-1",
+                    "item_id": f"ai-{number:010d}",
+                    "url_key": derive_url_key(url),
+                    "canonical_url": url,
+                    "vertical": "ai",
+                    "source_id": "wire",
+                    "stage": ItemStage.PUBLISH,
+                    "outcome": ItemOutcome.OK,
+                }
+                | extra
+            )
+        )
+    assert seed_item_health(root / ledger.STATE_DIRNAME, date, rows) == len(rows)
 
 
 def test_every_column_falls_in_exactly_one_group() -> None:
@@ -246,42 +271,29 @@ def test_the_module_that_declares_the_row_produces_nothing(tmp_path: Path) -> No
 
 def test_an_empty_cell_is_not_a_value(tmp_path: Path) -> None:
     """Empty means the run measured nothing, which is the answer the report gives."""
-    day(tmp_path, "01", "date,fetch_ms,cpu_busy_pct", "2026-09-01,12,")
+    census(tmp_path, "2026-09-01", {"fetch_ms": 12, "cpu_busy_pct": None})
 
-    filled, rows, files = provenance.archive_columns(tmp_path, COLUMNS)
+    filled, rows, days = provenance.archive_columns(tmp_path, COLUMNS)
 
     assert filled == {"date", "fetch_ms"}
-    assert (rows, files) == (1, 1)
+    assert (rows, days) == (1, 1)
 
 
-def test_a_retired_heading_counts_for_the_column_that_replaced_it(tmp_path: Path) -> None:
-    """Every older day file heads its first call `call_1_*`, and a reader sees it.
+def test_every_recorded_day_is_read(tmp_path: Path) -> None:
+    """The growing read is over the whole ledger, so the count has to be the whole ledger."""
+    census(tmp_path, "2026-09-03", {"fetch_ms": 1})
+    census(tmp_path, "2026-09-04", {"fetch_ms": 2}, {"fetch_ms": 3})
 
-    `ItemHealthRow.from_csv_row` maps those headings forward, so a report that
-    skipped them would call a filled column empty.
-    """
-    day(tmp_path, "02", "date,call_1_prefill_ms", "2026-09-02,940")
+    _, rows, days = provenance.archive_columns(tmp_path, COLUMNS)
 
-    filled, _, _ = provenance.archive_columns(tmp_path, COLUMNS)
-
-    assert "label_prefill_ms" in filled
-
-
-def test_every_day_file_is_read(tmp_path: Path) -> None:
-    """The growing read is over the whole tree, so the count has to be the whole tree."""
-    day(tmp_path, "03", "date,fetch_ms", "2026-09-03,1")
-    day(tmp_path, "04", "date,fetch_ms", "2026-09-04,2", "2026-09-04,3")
-
-    _, rows, files = provenance.archive_columns(tmp_path, COLUMNS)
-
-    assert (rows, files) == (3, 2)
+    assert (rows, days) == (3, 2)
 
 
 def test_a_missing_ledger_reads_as_nothing(tmp_path: Path) -> None:
-    """A fresh clone has no `state/item-health/`, and the report still runs."""
-    filled, rows, files = provenance.archive_columns(tmp_path, COLUMNS)
+    """A fresh clone holds no census row, and the report still runs."""
+    filled, rows, days = provenance.archive_columns(tmp_path, COLUMNS)
 
-    assert (filled, rows, files) == (frozenset(), 0, 0)
+    assert (filled, rows, days) == (frozenset(), 0, 0)
 
 
 def test_a_type_is_printed_without_its_optional() -> None:

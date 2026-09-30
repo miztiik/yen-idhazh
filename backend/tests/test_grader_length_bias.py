@@ -19,19 +19,16 @@ is what makes their answers predictable enough to check arithmetic against.
 
 from __future__ import annotations
 
-import csv
 import json
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_scores
 
-from idhazh import ledger
-from idhazh.contracts.base import ServerJob, derive_text_digest
+from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import evidence as evidence_writer
 from utilities import grader_length_bias as bias
 
@@ -71,48 +68,27 @@ def a_package(directory: Path, items: list[EvidenceItem]) -> Path:
     return directory
 
 
-def a_ledger(state: Path, rows: list[dict[str, object]]) -> Path:
-    """The real ledger shape and the real layout: a state directory of day files.
+def a_ledger(state: Path, rows: list[EvalRow]) -> Path:
+    """The real ledger: each day's rows filed by the writer the pipeline files with.
 
-    Filed by each row's own `date`, under the name the assemble job that scored
-    the day would take - a fixture that spelled the layout itself would be a
-    second writer, and the two could disagree without either being wrong. An
-    empty ledger still writes one day file, so the no-rows case reads a ledger
-    that exists and holds nothing rather than a ledger that is not there.
+    Filed under each row's own `date`, by the assemble job that scored the day -
+    a fixture that spelled the layout itself would be a second writer, and the
+    two could disagree without either being wrong.
     """
-    names = EvalRow.csv_columns()
-    by_day: dict[str, list[dict[str, object]]] = {"2026-08-22": []} if not rows else {}
-    for row in rows:
-        by_day.setdefault(str(row["date"])[:10], []).append(row)
-    for day, kept in sorted(by_day.items()):
-        path = ledger.day_shard_path(
-            state,
-            LedgerName.SCORES,
-            date=day,
-            run_id=f"{day}-1",
-            attempt=1,
-            job=ServerJob.ASSEMBLE,
-            shard=0,
-        )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=names, lineterminator="\n")
-            writer.writeheader()
-            for row in kept:
-                writer.writerow({name: row[name] for name in names})
+    for day in sorted({row.date for row in rows}):
+        seed_scores(state, [row for row in rows if row.date == day], run_id=f"{day}-1")
     return state
 
 
-def a_ledger_row(
-    item: EvidenceItem, *, full_words: int | None, seen_words: int
-) -> dict[str, object]:
+def a_ledger_row(item: EvidenceItem, *, full_words: int | None, seen_words: int) -> EvalRow:
+    """The committed row fixture, keyed to one evidence item, with the two lengths given."""
     payload = EvalRow.from_json(read_text(ROW_FIXTURE)).model_dump(mode="json")
     payload["url_key"] = item.url_key
     payload["output_digest"] = item.output_digest
     payload["scorer_version"] = item.scorer_version
-    payload["source_word_count"] = "" if full_words is None else full_words
-    payload["source_seen_word_count"] = seen_words
-    return payload
+    payload["source_words_before_cap"] = full_words
+    payload["source_words"] = seen_words
+    return EvalRow.model_validate(payload)
 
 
 class SupportDensity:
@@ -269,16 +245,16 @@ class TestTheCutSplitReadsTheArithmetic:
         """`truncation_flagged` changed meaning on 2026-08-28. The two counters did not."""
         cut = an_item(a_premise(50), SUMMARY, name="cut")
         whole = an_item(a_premise(60), SUMMARY, name="whole")
-        a_package(tmp_path, [cut, whole])
+        package = a_package(tmp_path / "evidence", [cut, whole])
         ledger = a_ledger(
-            tmp_path,
+            tmp_path / "state",
             [
                 a_ledger_row(cut, full_words=4000, seen_words=1923),
                 a_ledger_row(whole, full_words=600, seen_words=600),
             ],
         )
 
-        by_key = {pair.key: pair.cut for pair in bias.load_pairs(tmp_path, ledger)}
+        by_key = {pair.key: pair.cut for pair in bias.load_pairs(package, ledger)}
 
         assert by_key[evidence_writer.key_of(cut.model_dump(mode="json"))] is True
         assert by_key[evidence_writer.key_of(whole.model_dump(mode="json"))] is False
@@ -286,12 +262,12 @@ class TestTheCutSplitReadsTheArithmetic:
     def test_a_row_with_no_pre_cap_length_is_unknown_not_uncut(self, tmp_path: Path) -> None:
         """The migration emptied 142 rows rather than guessing. An empty cell is not a False."""
         item = an_item(a_premise(50), SUMMARY, name="emptied")
-        a_package(tmp_path, [item])
+        package = a_package(tmp_path / "evidence", [item])
         ledger = a_ledger(
-            tmp_path, [a_ledger_row(item, full_words=None, seen_words=1923)]
+            tmp_path / "state", [a_ledger_row(item, full_words=None, seen_words=1923)]
         )
 
-        (pair,) = bias.load_pairs(tmp_path, ledger)
+        (pair,) = bias.load_pairs(package, ledger)
 
         assert pair.cut is None
 
@@ -303,15 +279,15 @@ class TestTheReport:
             an_item(a_premise(50), SUMMARY, name="short"),
             an_item(a_premise(2000), SUMMARY, name="long"),
         ]
-        a_package(tmp_path, items)
+        package = a_package(tmp_path / "evidence", items)
         ledger = a_ledger(
-            tmp_path,
+            tmp_path / "state",
             [
                 a_ledger_row(items[0], full_words=50, seen_words=50),
                 a_ledger_row(items[1], full_words=4000, seen_words=1923),
             ],
         )
-        pairs = bias.load_pairs(tmp_path, ledger)
+        pairs = bias.load_pairs(package, ledger)
         wide = bias.single_slice_geometry(pairs, NARROW)
         readings = bias.read(SupportDensity(), pairs, narrow=NARROW, wide=wide)
 

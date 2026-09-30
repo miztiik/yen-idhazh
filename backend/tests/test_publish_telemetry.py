@@ -2,22 +2,24 @@ from __future__ import annotations
 
 import csv
 import inspect
+import os
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT
+from conftest import REPO_ROOT, writer_identity
 from pydantic import ValidationError
 
-from idhazh import day_shards, retention
+from idhazh import ledger, retention
 from idhazh.contracts.item_health import (
     FailureCode,
     ItemHealthRow,
     ItemOutcome,
     ItemStage,
 )
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_telemetry import GAP_NAMED_STAGES, PublicTelemetryRow
 from idhazh.telemetry.publish.dispatch import publish_all
 from idhazh.telemetry.publish.public_telemetry import (
@@ -59,26 +61,25 @@ def _row(**overrides: object) -> ItemHealthRow:
     return ItemHealthRow.model_validate(payload)
 
 
-def _write_item_health(state: Path, rows: list[ItemHealthRow]) -> None:
-    """File each row in its own day, as that day's settled fold.
+def _write_item_health(state: Path, rows: list[ItemHealthRow], *, attempt: int = 1) -> None:
+    """File each day's rows through the ledger door, under one writer a day.
 
-    A day already written is replaced whole, so a fixture that re-states a day is
-    a correction rather than a second copy of it.
+    Every call files a day under the same writer, so a day re-stated at a higher
+    `attempt` is that writer's re-run and replaces the first filing whole. That
+    is how a correction reaches the ledger; a second writer would have left both
+    rows on disk and the first one read.
     """
     by_day: dict[str, list[ItemHealthRow]] = {}
     for row in rows:
         by_day.setdefault(row.date, []).append(row)
     for date, day_rows in by_day.items():
-        path = (
-            state / "item-health" / date[:4] / date[5:7] / date[8:10] / day_shards.SETTLED_NAME
+        ledger.persist(
+            state,
+            day_rows,
+            ledger=LedgerName.ITEM_HEALTH,
+            covers=date,
+            identity=writer_identity(f"{date}-1", attempt=attempt),
         )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(
-                handle, fieldnames=ItemHealthRow.csv_columns(), lineterminator="\n"
-            )
-            writer.writeheader()
-            writer.writerows(row.csv_row() for row in day_rows)
 
 
 def test_publish_telemetry_drops_url_keys_urls_and_detail(tmp_path: Path) -> None:
@@ -569,16 +570,18 @@ def test_a_shard_that_disagrees_inside_the_prefix_is_still_refused(tmp_path: Pat
         read_shard(shard)
 
 
-def _month_shard(state: Path, month: str, rows: list[ItemHealthRow]) -> None:
-    """One month of the ledger, as the day files that month really holds.
+def _month_shard(
+    state: Path, month: str, rows: list[ItemHealthRow], *, attempt: int = 1
+) -> None:
+    """One month of the ledger, as the days that month really holds.
 
     Named for the month because the mirror this feeds is still monthly: the
-    publisher folds a month from its day files, so a test about which months are
+    publisher folds a month from its days, so a test about which months are
     written states its fixture in months and the writer spreads it (`month` is
     asserted against the rows so a fixture cannot drift from its own name).
     """
     assert all(row.date[:7] == month for row in rows), "a row outside the month it is filed under"
-    _write_item_health(state, rows)
+    _write_item_health(state, rows, attempt=attempt)
 
 
 _OPENED: list[str] = []
@@ -586,8 +589,8 @@ _WATCHING = False
 
 
 def _audit(event: str, args: tuple[object, ...]) -> None:
-    if _WATCHING and event == "open" and args and isinstance(args[0], str):
-        _OPENED.append(args[0])
+    if _WATCHING and event == "open" and args and isinstance(args[0], str | os.PathLike):
+        _OPENED.append(os.fspath(args[0]))
 
 
 sys.addaudithook(_audit)
@@ -595,12 +598,13 @@ sys.addaudithook(_audit)
 
 @contextmanager
 def _partitions_opened(source_dir: Path) -> Iterator[list[str]]:
-    """Every ledger partition opened inside the block, by name.
+    """Every ledger file opened inside the block, once each, by name.
 
     An audit hook rather than a stopwatch, because a stopwatch on this box cannot
     tell one partition from twelve: a sibling row measured 16.6 percent
     run-to-run variance on identical work. What a read opens is arithmetic and
-    has no spread at all (Guardrail #10).
+    has no spread at all (Guardrail #10). A raw file is opened once for its
+    envelope and once for its rows, so a name is counted once.
 
     A deliberate copy of the hook in `test_console_payloads_producer.py` rather
     than a fixture the two share: an audit hook cannot be removed once
@@ -620,28 +624,31 @@ def _partitions_opened(source_dir: Path) -> Iterator[list[str]]:
         prefix = str(source_dir)
         names.extend(
             sorted(
-                Path(path).relative_to(source_dir).as_posix()
-                for path in _OPENED
-                if path.startswith(prefix)
+                {
+                    Path(path).relative_to(source_dir).as_posix()
+                    for path in _OPENED
+                    if path.startswith(prefix)
+                }
             )
         )
         _OPENED.clear()
 
 
 def test_the_cover_is_the_months_the_caller_names(tmp_path: Path) -> None:
-    """The two cases of the cover, counted in file handles rather than timed.
+    """The two cases of the cover, counted in files opened rather than timed.
 
     The daily caller passes the one month it appended to, so the ordinary pass
-    opens that month's days and nothing else - one day file here, out of twelve
-    months of them. `months=None` opens all twelve, which is the unbounded case the
-    module's own docstring declares, and it is unbounded on purpose: a fresh clone
-    has to rebuild a mirror it never published.
+    opens that month's files and nothing else - one day's file here, out of
+    twelve months of them. `months=None` opens all twelve, which is the
+    unbounded case the module's own docstring declares, and it is unbounded on
+    purpose: a fresh clone has to rebuild a mirror it never published.
 
     **This is the count the day grain moves**, and the test states it rather than
-    hiding it: a month is now a directory of day files, so the backfill's handle
-    count is the ledger's DAY count where it used to be its month count. The
-    fixture gives each month one day so the two numbers can still be compared; the
-    committed ledger gives a month about thirty.
+    hiding it: a month is a folder of days and a day a folder of its writers'
+    files, so the backfill's handle count is the ledger's FILE count where it
+    used to be its month count. The fixture gives each month one day and each
+    day one writer so the two numbers can still be compared; the committed
+    ledger gives a month about thirty days of several writers each.
 
     The backfill has to run first, because a month whose mirror is missing is
     read whatever the caller asked for. That is the same escape the fresh clone
@@ -652,17 +659,19 @@ def test_the_cover_is_the_months_the_caller_names(tmp_path: Path) -> None:
     months = [f"2026-{month:02d}" for month in range(1, 13)]
     for month in months:
         _month_shard(state, month, [_row(date=f"{month}-05", run_id=f"{month}-05-1")])
-    source_dir = state / "item-health"
+    source_dir = ledger.raw_root(state, LedgerName.ITEM_HEALTH)
+    held = sorted(path.relative_to(source_dir).as_posix() for path in source_dir.rglob("*.*"))
 
     with _partitions_opened(source_dir) as backfill:
         publish(state_root=state, public_root=public)
     with _partitions_opened(source_dir) as daily:
         publish(state_root=state, public_root=public, months={"2026-09"})
 
-    assert backfill == [
-        f"2026/{month:02d}/05/{day_shards.SETTLED_NAME}" for month in range(1, 13)
-    ]
-    assert daily == [f"2026/09/05/{day_shards.SETTLED_NAME}"]
+    assert [name.rsplit("/", 1)[0] for name in held] == [
+        f"2026/{month:02d}/05" for month in range(1, 13)
+    ], "one writer's file a month, or the counts below compare nothing"
+    assert backfill == held
+    assert daily == [name for name in held if name.startswith("2026/09/")]
 
 
 def test_a_frozen_month_is_not_rebuilt_once_it_has_been_published(tmp_path: Path) -> None:
@@ -817,7 +826,7 @@ def test_a_correction_to_a_closed_month_rewrites_only_that_month(tmp_path: Path)
     september_bytes = september.read_bytes()
     september_mtime = september.stat().st_mtime_ns
 
-    _month_shard(state, "2026-08", [_row(summary_words=41)])
+    _month_shard(state, "2026-08", [_row(summary_words=41)], attempt=2)
     written = publish(state_root=state, public_root=public, months={"2026-08"})
 
     assert [path.name for path in written] == ["2026-08.csv"]

@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 One question, asked of every file this project writes:
 
@@ -169,10 +169,10 @@ is the count of month shards a console read opens, and no read opens a visual
 | --- | --- | --- | --- |
 | `state/seen/` | Delete (lookup) | `collect.seen_window_days` | `ledger.load_seen` opens the day files that window names and nothing else, so an older day answers no question anybody asks. The one age here counted in days, so the prune keeps exactly the files the read opens |
 | `state/feed-health/` | Delete (lookup) | 14 months, the window of `config/gardener/feed-health.json` | a per-feed-per-run record, not a total worth keeping. The quarantine reads 31 days and the console reaches 367 inclusive days, a year and a day |
-| `state/host-fingerprint/` | Delete (lookup) | 14 months, the window of `config/gardener/host-fingerprint.json` | one job's silicon on one run, so a total over an old month names no machine. The gardener loader refuses a window below `public_machine_keep_months`, because the published shard is folded from this tree |
+| `state/raw/host-fingerprint/`, `state/compact/host-fingerprint/` | Delete (lookup) | 14 months, the `monthly_window` of `config/gardener/compact-host-fingerprint.json`; the retired `config/gardener/host-fingerprint.json` keeps the 14-month floor it must reach | one job's silicon on one run, so a total over an old month names no machine. The gardener loader refuses the retired declaration's window below `public_machine_keep_months`, because the published shard is folded from this ledger |
 | `state/traces/` | Delete (lookup) | 7 days, the window of `config/gardener/traces.json` | a trace is what an operator opens to see one recent run step by step. No committed instance yet |
-| `state/item-health/` | **Fold** -> `state/item-health-summary/` | 14 months, the `full-grain` series of `config/gardener/telemetry-aggregate.json` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |
-| `state/scores/` | **Fold** -> `state/score-archive/` | 14 months, the `full-grain` series of `config/gardener/scores.json` | it is the evidence behind every published quality claim, so the summary is written, read back and reconciled first |
+| `state/raw/item-health/`, `state/compact/item-health/` | **Fold** -> `state/item-health-summary/` | summarised at 14 months, the `full-grain` series of `config/gardener/telemetry-aggregate.json`; the rows go at 15 months, the `monthly_window` of `config/gardener/compact-item-health.json` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |
+| `state/raw/scores/`, `state/compact/scores/` | **Fold** -> `state/score-archive/`, which nothing builds today | 15 months, the `monthly_window` of `config/gardener/compact-scores.json`, and that compaction stays report-only until the archive is built from the door's rows | it is the evidence behind every published quality claim, so the summary is written, read back and reconciled first |
 | `state/visuals/` | **Fold** -> `state/visual-aggregate/` | `observability.visuals_full_grain_months` | one row per attempt at a picture, and `none` is the majority outcome by design - so the cause breakdown has to outlive the attempts. The [fold key](#the-visual-fold-key-is-eight-terms-and-it-could-not-wait) is what decides that, and it is settled. No committed instance yet |
 | `state/item-health-summary/` | Keep | forever, the `aggregate` series of `config/gardener/telemetry-aggregate.json` | the fold costs a measured 63.8 bytes a row over four stages - about 93 KB a year against the shard's 77 MB - and deleting it would make a year-over-year comparison unanswerable. No committed instance yet |
 | `state/score-archive/` | Keep | forever, the `archive` series of `config/gardener/scores.json` | the same argument. No committed instance yet |
@@ -209,10 +209,10 @@ is the program the `history` job of `idhazh-gardener.yml` runs to do it
 | --- | --- | --- | --- |
 | `frontend/public/digest/<Y>/<M>/<D>/digest.json`, `run.json` | **Keep, always** | never | the record that a day happened. The archive is the product, so age is not a reason to remove any of it |
 | `frontend/public/digest/<Y>/<M>/<D>/*.svg` | Delete (asset) | `retention.image_months`, **13** | the item survives without its picture, which is what makes a visual the one published thing safe to remove. Not because it is the bigger half - it is not: 491 visuals weighing 6,244,624 bytes against 24,543,254 bytes of day payload in the same tree on 2026-09-13 |
-| `frontend/public/telemetry/` | Delete (projection) | 14 months, the `public-copy` series of `config/gardener/telemetry-aggregate.json` | the browser's copy of `state/item-health/`, refused at any value but its source's |
+| `frontend/public/telemetry/` | Delete (projection) | 14 months, the `public-copy` series of `config/gardener/telemetry-aggregate.json` | the browser's copy of the item-health ledger, refused at any value but its source's |
 | `frontend/public/run-days/` | Delete | `observability.public_run_days_keep_months` | a reduction of the day payloads to counts. It has no state ledger to be paired with |
 | `frontend/public/day-metrics/` | Delete | `observability.public_day_metrics_keep_months` | bounds the published copy without claiming to bound the ledger, which has no age of its own |
-| `frontend/public/machine/` | Delete | `observability.public_machine_keep_months` | the source is one appended CSV, so the copy is where a month boundary first exists |
+| `frontend/public/machine/` | Delete | `observability.public_machine_keep_months` | the source is the host-fingerprint and item-health ledgers, and the copy is the first place a month is one file before their compactions run live |
 | `frontend/public/span-rollup/` | Delete | `observability.public_span_rollup_keep_months` | the record starts 2026-09-06, so for its first year this deletes nothing |
 | `frontend/public/console/band.json` | Keep | none needed | one file, rewritten whole each run. Question 1 stops here |
 | `frontend/public/source-health.json` | Keep | none needed | one file, rewritten whole each run |

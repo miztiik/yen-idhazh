@@ -20,10 +20,17 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import (
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    REPO_ROOT,
+    read_text,
+    seed_scores,
+    writer_identity,
+)
 from pydantic import ValidationError
 
-from idhazh import cli, day_shards, ledger
+from idhazh import cli, day_partition, day_shards, ledger
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
@@ -84,13 +91,11 @@ def put(
     attempt: int = 1,
 ) -> int:
     """One writer's measurements, filed the way a finished run files them."""
-    return writer.append_segment(
+    return seed_scores(
         state,
         rows,
         run_id=run_id if run_id is not None else a_scoring_run(rows[0].date),
         attempt=attempt,
-        job=ServerJob.ASSEMBLE,
-        shard=0,
     )
 
 
@@ -429,21 +434,18 @@ def test_a_row_still_carrying_the_two_retired_cells_reads_through_the_migration(
 def test_a_committed_shard_under_the_wide_header_still_parses_row_by_row() -> None:
     """The CSV half of the same migration, driven from a bounded fixture.
 
-    A day shard an earlier run wrote names both retired headings in its header
+    A day file an earlier run wrote names both retired headings in its header
     line. `from_csv_row` has to place the cells it still knows and drop the two
-    it does not, and `ledger.SCORES_CARRIED` has to name them so the header
-    repair can re-file the file rather than refusing it.
+    it does not, because the one-time move onto the ledger door reads every old
+    CSV day of the eval ledger through it.
     """
     row = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
-    wide_columns = (*EvalRow.csv_columns(), "coverage", "new_fact_rate")
     wide_cells = {**row.csv_row(), "coverage": "0.62", "new_fact_rate": "0.5"}
 
     read_back = EvalRow.from_csv_row(wide_cells)
 
     assert read_back.hhem == row.hhem
     assert read_back.csv_row().keys() == set(EvalRow.csv_columns())
-    unplaceable = set(wide_columns) - set(EvalRow.csv_columns()) - ledger.SCORES_CARRIED
-    assert unplaceable == set(), "a heading the repair cannot place leaves the day unappendable"
 
 
 def test_an_eval_row_written_before_this_column_still_loads() -> None:
@@ -506,9 +508,9 @@ def test_a_truncated_article_files_two_different_lengths() -> None:
     row = _row_for(article)
 
     assert article.truncated, "the fixture has to be an article that was actually cut"
-    assert row.source_word_count == article.source_word_count == 5240
-    assert row.source_seen_word_count == article.word_count == 4310
-    assert row.source_seen_word_count < row.source_word_count, "930 words never reached the model"
+    assert row.source_words_before_cap == article.source_word_count == 5240
+    assert row.source_words == article.word_count == 4310
+    assert row.source_words < row.source_words_before_cap, "930 words never reached the model"
 
 
 def test_an_untruncated_article_reads_the_same_length_twice() -> None:
@@ -517,7 +519,7 @@ def test_an_untruncated_article_reads_the_same_length_twice() -> None:
     row = _row_for(article)
 
     assert not article.truncated
-    assert row.source_word_count == row.source_seen_word_count == 1320
+    assert row.source_words_before_cap == row.source_words == 1320
 
 
 def test_the_lengths_do_not_move_when_the_scored_text_does() -> None:
@@ -546,8 +548,8 @@ def test_the_lengths_do_not_move_when_the_scored_text_does() -> None:
         scored_at="2026-08-21T06:18:02Z",
     )
 
-    assert other.source_word_count == row.source_word_count
-    assert other.source_seen_word_count == row.source_seen_word_count
+    assert other.source_words_before_cap == row.source_words_before_cap
+    assert other.source_words == row.source_words
 
 
 def test_an_old_payload_that_was_cut_cannot_say_how_long_the_article_was() -> None:
@@ -562,8 +564,8 @@ def test_an_old_payload_that_was_cut_cannot_say_how_long_the_article_was() -> No
     row = _row_for(article.model_copy(update={"source_word_count": None}))
 
     assert article.truncated
-    assert row.source_word_count is None
-    assert row.source_seen_word_count == 4310, "the seen count is still a measurement"
+    assert row.source_words_before_cap is None
+    assert row.source_words == 4310, "the seen count is still a measurement"
 
 
 def test_an_old_payload_that_was_never_cut_knows_its_own_length() -> None:
@@ -576,7 +578,7 @@ def test_an_old_payload_that_was_never_cut_knows_its_own_length() -> None:
     row = _row_for(article.model_copy(update={"source_word_count": None}))
 
     assert not article.truncated
-    assert row.source_word_count == row.source_seen_word_count == 1320
+    assert row.source_words_before_cap == row.source_words == 1320
 
 
 # --- The flag that says extract cut the body ---------------------------------
@@ -964,12 +966,13 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
     promises it is not - and it would do it silently, because a shorter set reads
     as a fresh clone.
 
-    So one row list is written twice: once through the writer, which files by day,
-    and once into the month layout this row retired, spelled out here because it
-    is not in the tree any more and a parity claim needs both sides present at
-    once. The set is compared, not the count: one observation is re-taken under a
-    different scorer version, so a comparison that only counted rows would pass on
-    a tree that had lost the re-take and gained a repeat.
+    So one row list is written twice: once through the writer, which files by day
+    through the ledger door, and once into the month layout this row retired,
+    spelled out here as plain CSV files because it is not in the tree any more and
+    a parity claim needs both sides present at once. The set is compared, not the
+    count: one observation is re-taken under a different scorer version, so a
+    comparison that only counted rows would pass on a tree that had lost the
+    re-take and gained a repeat.
     """
     january = [_measurement(number) for number in range(6)]
     february = [
@@ -984,20 +987,19 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
     day_grain = tmp_path / "day" / "state"
     assert put(day_grain, rows) == len(rows)
 
-    month_grain = tmp_path / "month" / "state"
+    month_grain = tmp_path / "month"
+    month_grain.mkdir(parents=True)
     by_month: dict[str, list[EvalRow]] = {}
     for row in rows:
         by_month.setdefault(row.date[:7], []).append(row)
     for month, month_rows in by_month.items():
-        path = ledger.tree_root(month_grain, LedgerName.SCORES) / f"{month}.csv"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        _write_shard(path, month_rows)
+        _write_shard(month_grain / f"{month}.csv", month_rows)
 
     # Both cases are read back off their own files, so neither can agree with the
     # code that wrote it by being computed from the row list twice.
     at_month = {
         writer.observation_digest(record)
-        for shard in sorted((ledger.tree_root(month_grain, LedgerName.SCORES)).glob("*.csv"))
+        for shard in sorted(month_grain.glob("*.csv"))
         for record in csv.DictReader(shard.open("r", encoding="utf-8", newline=""))
     }
     at_day = writer.recorded_observations(day_grain)
@@ -1007,11 +1009,7 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
         f"{len(at_month - at_day)} measurements the month grain held are missing at day grain, "
         f"and {len(at_day - at_month)} appeared that it did not hold"
     )
-    produced = {
-        writer.observation_digest(record)
-        for day in writer.ledger_days(day_grain)
-        for record in csv.DictReader(day.open("r", encoding="utf-8", newline=""))
-    }
+    produced = {writer.observation_digest(record) for record in writer.records(day_grain)}
     indexed = {digest for path in writer.index_days(day_grain) for digest in _digests_of(path)}
     assert not produced - indexed, (
         f"the index lacks {len(produced - indexed)} digests the rows produce"
@@ -1019,7 +1017,9 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
     assert not indexed - produced, (
         f"the index holds {len(indexed - produced)} the rows cannot produce"
     )
-    assert len(writer.ledger_days(day_grain)) == 2, "the two days were not written separately"
+    assert len(ledger.held_days(day_grain, LedgerName.SCORES)) == 2, (
+        "the two days were not written separately"
+    )
 
 
 def _digests_of(path: Path) -> set[str]:
@@ -1106,22 +1106,50 @@ def test_a_summary_that_does_not_describe_its_days_says_which_part(tmp_path: Pat
         )
 
 
-def test_the_dedupe_reads_the_live_rows_and_the_archived_digests(tmp_path: Path) -> None:
-    """Decision 2's whole reason for storing the digests, asserted directly."""
+def _archive_month(state: Path, month: str, *, scratch: Path) -> None:
+    """Summarise one month of the rows the ledger holds into its committed archive file.
+
+    Nothing in the pipeline builds a month summary any more, so a case that needs
+    one builds it with the archive module's own summariser and writer. The
+    summariser reads CSV, so the month's rows are written out under `scratch`
+    first, outside the state tree.
+    """
+    shard = scratch / f"{month}.csv"
+    shard.parent.mkdir(parents=True, exist_ok=True)
+    _write_shard(
+        shard,
+        ledger.load_days(state, LedgerName.SCORES, ledger.month_days(month), model=EvalRow),
+    )
+    built = score_archive.summarise([shard], month=month, observation_key=writer.OBSERVATION_KEY)
+    score_archive.write(score_archive.archive_path(state, month), built)
+
+
+def _drop_index_days(state: Path, month: str) -> None:
+    """Take one month's index days away, as the scores task does once an archive covers it."""
+    for shard in writer.index_days(state):
+        if day_shards.date_of(shard)[:7] == month:
+            shard.unlink()
+            day_partition.drop_empty_day_dirs(shard)
+
+
+def test_the_dedupe_reads_the_live_index_and_the_archived_digests(tmp_path: Path) -> None:
+    """Decision 2's whole reason for storing the digests, asserted directly.
+
+    The index is the live half, and a month's index days go once an archive
+    covers that month, so after they go the archive alone gives the same answer.
+    """
     state = tmp_path / "state"
     rows = [_archive_row(number) for number in range(3)]
     assert put(state, rows) == 3
     live = writer.recorded_observations(state)
 
-    days = writer.ledger_days(state)
     month = rows[0].date[:7]
-    built = score_archive.summarise(days, month=month, observation_key=writer.OBSERVATION_KEY)
-    score_archive.write(score_archive.archive_path(state, month), built)
-    for day in days:
-        day.unlink()
+    _archive_month(state, month, scratch=tmp_path / "month")
+    _drop_index_days(state, month)
 
+    assert not writer.index_days(state), "the live half is still there, so this proves nothing"
     assert writer.recorded_observations(state) == live
-    assert put(state, rows) == 0, "a deleted day made its rows new again"
+    assert put(state, rows) == 0, "a dropped index day made its rows new again"
 
 
 def test_an_archive_is_written_whole_or_not_at_all(tmp_path: Path) -> None:
@@ -1150,7 +1178,7 @@ def test_an_archive_is_written_whole_or_not_at_all(tmp_path: Path) -> None:
 # are not read at all.
 #
 # Every fixture here is built in the test (Guardrail #12, CLAUDE.md section 13). None
-# of it reads `state/scores/`.
+# of it reads the committed `state/` tree.
 
 
 def _opened_bytes(
@@ -1200,23 +1228,21 @@ def _measurement(number: int) -> EvalRow:
     )
 
 
-def _a_days_file(
-    state: Path, which: LedgerName, date: str, *, shard: int = 0
-) -> Path:
-    """Where this section's one writer files a day of rows or of digests.
+def _an_index_file(state: Path, date: str) -> Path:
+    """Where this section's one writer files a day of digests.
 
-    A day is a directory of writer-owned files, so a test that builds one by
-    hand names the file inside it. Every case here files as the run that scored
-    that day; a case that needs a second writer names its own shard.
+    A day of the index is a directory of writer-owned files, so a test that
+    builds one by hand names the file inside it. Every case here files as the
+    run that scored that day.
     """
     return ledger.day_shard_path(
         state,
-        which,
+        LedgerName.SCORE_INDEX,
         date=date,
         run_id=a_scoring_run(date),
         attempt=1,
         job=ServerJob.ASSEMBLE,
-        shard=shard,
+        shard=0,
     )
 
 
@@ -1227,17 +1253,28 @@ def _cells_in(day: list[Path]) -> Iterator[dict[str, str]]:
             yield from csv.DictReader(handle)
 
 
-def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
-    """A ledger holding `rows`, with each row written `copies` times.
+#: Who files the rows `_seeded` lays down: a writer of its own, so its file is
+#: never taken for a later write of the work unit `put` files as.
+ROWS_ONLY_PRODUCER: Final = "tests.test_evals:rows-only"
 
-    More than one copy is a real state, not a contrivance: two segments of one
-    day can each carry the same observation, and the compaction settles them when
-    it folds. It is also the case that separates "the read grows with the rows"
-    from "the read grows with the measurements".
+
+def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
+    """A ledger holding `rows` with no index beside them, each row filed `copies` times.
+
+    Filed through the ledger door and not through the writer, so no digest is
+    minted: this is what a day looks like when its rows arrived from something
+    that never knew the index existed. More than one copy is a real state, not a
+    contrivance: two writers of one day can each file the same observation, and
+    the reader settles them. It is also the case that separates "the read grows
+    with the rows" from "the read grows with the measurements".
     """
-    shard = _a_days_file(state, LedgerName.SCORES, rows[0].date)
-    shard.parent.mkdir(parents=True, exist_ok=True)
-    _write_shard(shard, [row for row in rows for _ in range(copies)])
+    ledger.persist(
+        state,
+        [row for row in rows for _ in range(copies)],
+        ledger=LedgerName.SCORES,
+        covers=rows[0].date,
+        identity=writer_identity(a_scoring_run(rows[0].date), producer=ROWS_ONLY_PRODUCER),
+    )
 
 
 def _indexed(state: Path, date: str) -> set[str]:
@@ -1252,8 +1289,10 @@ def _day_digests(state: Path, date: str) -> set[str]:
     The one read of the score rows in this section, and it is here so a test can
     say what the index is supposed to mirror without asking the index.
     """
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORES), date)
-    return {writer.observation_digest(record) for record in _cells_in(day)}
+    return {
+        writer.observation_digest(row.model_dump(mode="json"))
+        for row in ledger.load_days(state, LedgerName.SCORES, [date], model=EvalRow)
+    }
 
 
 def _index_bytes(state: Path, date: str) -> bytes:
@@ -1288,10 +1327,11 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
 ) -> None:
     """Guardrail #12, as bytes rather than as a clock.
 
-    Two trees hold the same 200 measurements. One day file carries each row once,
-    the other carries it ten times, so the rows are ten times the bytes and the
-    identities are identical. What the writer opens has to be the same figure,
-    and the score rows have to be absent from it entirely.
+    Two trees hold the same 200 measurements. One carries each row once, the
+    other carries it ten more times in a second writer's file, so the rows are
+    eleven times the bytes and the identities are identical. What the writer
+    opens has to be the same figure, and the score rows have to be absent from
+    it entirely.
     """
     rows = [_measurement(number) for number in range(200)]
     lean = tmp_path / "lean" / "state"
@@ -1303,8 +1343,11 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
     thin = _opened_bytes(monkeypatch, lean, lambda: writer.recorded_observations(lean))
     thick = _opened_bytes(monkeypatch, fat, lambda: writer.recorded_observations(fat))
 
-    day = ledger.path(fat, LedgerName.SCORES, rows[0].date).relative_to(fat).as_posix()
-    opened_there = [name for name in thick if name.startswith(f"{day}/") or name == f"{day}.csv"]
+    rows_live_under = [
+        f"{tier}/{LedgerName.SCORES.value}/"
+        for tier in (ledger.paths.RAW_DIRNAME, ledger.paths.COMPACT_DIRNAME)
+    ]
+    opened_there = [name for name in thick if name.startswith(tuple(rows_live_under))]
     assert not opened_there, f"the writer opened {opened_there}, which is what this row removes"
     assert thin == thick, (
         "the writer's read moved with the rows: "
@@ -1318,22 +1361,23 @@ def test_an_archived_month_whose_rows_are_gone_still_refuses_its_observations(
 ) -> None:
     """The half that cannot be bounded, and the reason the archive keeps digests.
 
-    A month past the scores task's full-grain window has no rows left. Its
-    digests are the only record those measurements were ever made, so dropping
-    them would make every one of them new again on the day the rows went.
+    A month past the scores task's full-grain window keeps no index once an
+    archive covers it, and here its rows are gone as well. Its digests are the
+    only record those measurements were ever made, so dropping them would make
+    every one of them new again on the day the rest went.
     """
     state = tmp_path / "state"
     rows = [_measurement(number) for number in range(3)]
     assert put(state, rows) == 3
 
-    days = writer.ledger_days(state)
     month = rows[0].date[:7]
-    built = score_archive.summarise(days, month=month, observation_key=writer.OBSERVATION_KEY)
-    score_archive.write(score_archive.archive_path(state, month), built)
-    for day in days:
-        day.unlink()
+    _archive_month(state, month, scratch=tmp_path / "month")
+    _drop_index_days(state, month)
+    for held in ledger.list_raw_files(state, LedgerName.SCORES):
+        held.path.unlink()
 
-    assert put(state, rows) == 0, "a deleted day made its rows new again"
+    assert not ledger.held_days(state, LedgerName.SCORES), "the rows are still there"
+    assert put(state, rows) == 0, "a month whose rows went made its rows new again"
 
 
 def test_a_tree_with_rows_and_no_index_answers_the_same_as_one_with_an_index(
@@ -1369,11 +1413,11 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
     """The invariant the pair rests on, asserted over the files rather than a return value.
 
     Nothing on the read path compares an index against the rows beside it, so
-    keeping the two in step is the append's job: it writes the rows and the
-    digests it minted in one call, and every writer of `state/scores/` in this
+    keeping the two in step is the writer's job: it files the rows and the
+    digests it minted in one call, and every writer of the scores ledger in this
     repository goes through it.
 
-    Held over the day files after several calls and two days in different months,
+    Held over the files after several calls and two days in different months,
     because the two ways to break it are silent. A row filed under one day whose
     digest lands under another, or a row written with no digest at all, both
     leave a green return value and surface weeks later as a measurement counted
@@ -1390,7 +1434,7 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
     assert put(state, january) == 0, "a held measurement came back as new"
     assert put(state, february) == 2
 
-    days = [day_shards.date_of(day) for day in writer.ledger_days(state)]
+    days = ledger.held_days(state, LedgerName.SCORES)
     assert days == ["2026-01-09", "2026-02-03"], f"both days were not written: {days}"
     for date in days:
         assert _indexed(state, date) == _day_digests(state, date), (
@@ -1402,7 +1446,7 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
 def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Path) -> None:
     """The one gap the pair cannot close by itself, its cost, and what closes it.
 
-    A day file can grow behind the index's back - rows appended by something that
+    A day can gain rows behind the index's back - rows filed by something that
     never knew the index existed, which is what a long-lived branch meets when
     it merges a `main` older than the index. Nothing detects it, because
     detecting it means reading the rows every run, which is the bill the index
@@ -1410,32 +1454,34 @@ def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Pat
 
     So the writer under-reports, and this pins both halves of that. The repeat
     lands, the day settles against `OBSERVATION_KEY`, and the ledger is left
-    counting the measurement once - which is the promise the file makes.
+    counting the measurement once - which is the promise the ledger makes.
     Under-reporting is the safe direction precisely because it has a repair;
     over-reporting would leave a digest whose row nothing ever wrote.
 
     The repair for the index itself is `rebuild_index`, which adds the digests
     the rows produce and the index does not hold. The second tree is the same
-    defect with that repair applied.
+    defect with that repair applied. The repeat is filed by a later run of the
+    day, because a later attempt of the first run would replace that run's rows
+    rather than sit beside them.
     """
     held = [_measurement(number) for number in range(4)]
     behind = [_measurement(70), _measurement(71)]
     date = held[0].date
-    a_scores_day = LedgerName.SCORES
+    a_later_run = f"{date}-2"
 
     stale = tmp_path / "stale" / "state"
     assert put(stale, held) == 4
-    _write_shard(_a_days_file(stale, a_scores_day, date, shard=1), behind)
+    _seeded(stale, behind)
 
-    assert put(stale, behind, attempt=2) == 2, (
+    assert put(stale, behind, run_id=a_later_run) == 2, (
         "an index behind its rows refused a measurement it has never seen, "
         "so this tree was not the stale one"
     )
-    written = list(writer.records(stale))
-    settled = day_shards.settled_day(
-        ledger.tree_root(stale, LedgerName.SCORES), date, writer.OBSERVATION_KEY, EvalRow
+    on_disk = ledger.load(
+        [filed.path for filed in ledger.list_raw_files(stale, LedgerName.SCORES)], model=EvalRow
     )
-    assert len(written) == 8, f"the repeat did not land: {len(written)} rows on disk"
+    settled = ledger.load_days(stale, LedgerName.SCORES, [date], model=EvalRow)
+    assert len(on_disk) == 8, f"the repeat did not land: {len(on_disk)} rows on disk"
     assert len(settled) == len(_day_digests(stale, date)) == 6, (
         f"the settled day holds {len(settled)} rows for "
         f"{len(_day_digests(stale, date))} measurements"
@@ -1443,10 +1489,10 @@ def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Pat
 
     repaired = tmp_path / "repaired" / "state"
     assert put(repaired, held) == 4
-    _write_shard(_a_days_file(repaired, a_scores_day, date, shard=1), behind)
+    _seeded(repaired, behind)
     writer.rebuild_index(repaired, [date])
 
-    assert put(repaired, behind, attempt=2) == 0, (
+    assert put(repaired, behind, run_id=a_later_run) == 0, (
         "the repaired index let a held measurement back in"
     )
     assert _indexed(repaired, date) == _day_digests(repaired, date)
@@ -1486,8 +1532,9 @@ def test_the_index_costs_a_fixed_number_of_bytes_an_observation(tmp_path: Path) 
 # the rows beside it, both faults below turn into the same fault, and every
 # assertion here passes on a fixture that no longer holds the shape it names.
 # Rebuilding the index and then spoiling it in one direction per day costs two
-# file writes and says what it means on any key. The rows are two day files and
-# nothing appends to them, so the tree is fixed in size (Guardrail #12).
+# file writes and says what it means on any key. The rows are the fixture's two
+# committed day files and nothing appends to them, so the tree is fixed in size
+# (Guardrail #12).
 
 INDEX_REBUILD: Final = FIXTURES_DIR / "evals" / "index-rebuild"
 REBUILD_DAYS: Final = ("2026-01-09", "2026-02-11")
@@ -1511,7 +1558,7 @@ def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None
     """
     for path in day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date):
         path.unlink()
-    target = _a_days_file(state, LedgerName.SCORE_INDEX, date)
+    target = _an_index_file(state, date)
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("w", encoding="utf-8", newline="") as handle:
         out = csv.DictWriter(handle, fieldnames=writer.index_columns(), lineterminator="\n")
@@ -1519,8 +1566,18 @@ def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None
         out.writerows(rows)
 
 
+def _committed_rows(date: str) -> list[EvalRow]:
+    """One fixture day's rows, read off the CSV day file they were committed as."""
+    folder = INDEX_REBUILD / "scores" / date[:4] / date[5:7] / date[8:10]
+    return [EvalRow.from_csv_row(cells) for cells in _cells_in(sorted(folder.glob("*.csv")))]
+
+
 def _drifted_tree(tmp_path: Path) -> Path:
     """The committed rows, with each day's index spoilt in one direction.
+
+    The rows were committed as CSV day files, so they are filed through the
+    ledger door here with no digest minted, as rows a run left; the index beside
+    them is still a CSV day tree and is copied as committed.
 
     `2026-01-09` gains a digest no row of that day can produce, which is what a
     restore that rolled a row back leaves behind. `2026-02-11` loses one its rows
@@ -1528,7 +1585,11 @@ def _drifted_tree(tmp_path: Path) -> Path:
     on opposite sides of the answer, so a one-directional check cannot pass.
     """
     state = tmp_path / "state"
-    shutil.copytree(INDEX_REBUILD, state)
+    shutil.copytree(
+        INDEX_REBUILD / "score-index", ledger.tree_root(state, LedgerName.SCORE_INDEX)
+    )
+    for date in REBUILD_DAYS:
+        _seeded(state, _committed_rows(date))
     writer.rebuild_index(state, REBUILD_DAYS)
 
     grown = _index_rows(state, "2026-01-09")
@@ -1544,11 +1605,10 @@ def _rows_produce(state: Path, days: Sequence[str]) -> set[str]:
     against another read of itself, which is the only comparison that can catch
     a digest the rows cannot produce.
     """
-    held: set[str] = set()
-    for date in days:
-        day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORES), date)
-        held |= {writer.observation_digest(row) for row in _cells_in(day)}
-    return held
+    return {
+        writer.observation_digest(row.model_dump(mode="json"))
+        for row in ledger.load_days(state, LedgerName.SCORES, days, model=EvalRow)
+    }
 
 
 def test_a_rebuilt_index_holds_every_digest_the_rows_produce_and_keeps_the_rest(
@@ -1620,13 +1680,14 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
     """
     state = _drifted_tree(tmp_path)
     untouched = _index_bytes(state, "2026-01-09")
+    rows_of = f"{ledger.paths.RAW_DIRNAME}/{LedgerName.SCORES.value}"
 
     opened = _opened_bytes(monkeypatch, state, lambda: writer.rebuild_index(state, ["2026-02-11"]))
 
-    assert not [name for name in opened if name.startswith("scores/2026/01/09/")], (
+    assert not [name for name in opened if name.startswith(f"{rows_of}/2026/01/09/")], (
         f"a day nobody named was read: {sorted(opened)}"
     )
-    assert [name for name in opened if name.startswith("scores/2026/02/11/")], (
+    assert [name for name in opened if name.startswith(f"{rows_of}/2026/02/11/")], (
         "the rows of the named day were never read"
     )
     assert _index_bytes(state, "2026-01-09") == untouched

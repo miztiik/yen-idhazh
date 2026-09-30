@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-29
 
 Three surfaces stand on every console route: the strip - the route tabs and the
 days control on one row - the sentence under it that says how complete the
@@ -236,7 +236,7 @@ project has not taken.
 **The shard that committed no row is counted against a number from another
 file.** The denominator is `shards` on the day's `run.json` - what the plan asked
 the matrix for, recorded before any work job existed. The numerator is how many
-work jobs filed a row in `state/host-fingerprint/`. Taking both off the host rows
+work jobs filed a row in the host-fingerprint ledger. Taking both off the host rows
 would make them equal by construction: `N shards reported nothing` could never be
 anything but zero, and the guard that refuses a run with more shards than the
 plan sized would read `len(kept) > len(kept)`. A number that cannot disagree with

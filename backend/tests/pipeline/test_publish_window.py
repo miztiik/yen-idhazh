@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
-import csv
 import json
 import logging
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, fold, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    REPO_ROOT,
+    SEED_COMMIT,
+    read_text,
+)
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
-from idhazh import assemble, atomic_write, config, day_shards, ledger, rank, telemetry
+from idhazh import assemble, atomic_write, config, ledger, rank, telemetry
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import StalePayloadError
+from idhazh.contracts.base import ServerJob, StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
@@ -451,11 +457,10 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
         read_text(tmp_path / "public" / "digest" / "2026" / "08" / "21" / "run.json")
     )
 
-    for shard in day_shards.one_day(
-        ledger.tree_root(tmp_path / "state", LedgerName.ITEM_HEALTH), run_plan.date
+    for held in ledger.list_raw_files(
+        tmp_path / "state", LedgerName.ITEM_HEALTH, days=[run_plan.date]
     ):
-        with shard.open(encoding="utf-8", newline="") as handle:
-            assert tuple(csv.DictReader(handle).fieldnames or ()) == ItemHealthRow.csv_columns()
+        assert held.envelope.row_schema_version == ItemHealthRow.schema_version()
     assert len(rows) == len(run_plan.items)
     assert ok > 0
     assert failed > 0
@@ -471,11 +476,8 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
 
 
 def health_rows(state_dir: Path, date: str) -> list[ItemHealthRow]:
-    """Every item-health row the committed day holds, settled across its files."""
-    settled = day_shards.settled_day(
-        ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
-    )
-    return [ItemHealthRow.from_csv_row(record) for record in settled]
+    """Every item-health row the committed day holds, settled across its raw files."""
+    return ledger.load_days(state_dir, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow)
 
 
 def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
@@ -488,9 +490,9 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
     the job is cancelled. A run stopped here had measured every item and
     recorded none of it.
 
-    The shard leaves them in its own segment, which it commits. The fold that
-    puts them in the head is `assemble`'s, and the next run's `plan` job runs the
-    same fold for exactly this case - a run that died before its assemble.
+    The shard files them through the ledger door into a raw file of its own,
+    which it commits, and every reader settles that file with whatever else the
+    day holds - so no later step has to run for the rows to count.
     """
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
@@ -505,20 +507,17 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
         )
-    recorded, _ = stage_record(run_plan, settings=settings)
+    recorded, _ = stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT)
 
-    assert day_shards.one_day(ledger.tree_root(state, LedgerName.ITEM_HEALTH), run_plan.date), (
-        "the shard committed nothing, so the catch-up fold would have nothing to read"
+    filed = ledger.list_raw_files(state, LedgerName.ITEM_HEALTH, days=[run_plan.date])
+    assert [held.envelope.identity.job for held in filed] == [ServerJob.WORK], (
+        "the shard filed no raw file of its own, so its rows would leave with the runner"
     )
-    fold(state, run_plan.date)
 
     rows = health_rows(state, run_plan.date)
     assert recorded == len(rows) == len(run_plan.items)
     assert {row.run_id for row in rows} == {run_plan.run_id}
     assert [row.item_id for row in rows] == [item.item_id for item in run_plan.items]
-    assert ledger.read_header(
-        ledger.path(state, LedgerName.ITEM_HEALTH, run_plan.date) / day_shards.SETTLED_NAME
-    ) == (ItemHealthRow.csv_columns())
 
 
 def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
@@ -526,10 +525,10 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
 ) -> None:
     """The Oracle, second half: two writers, one row per item per run.
 
-    A repeat is not free. `public_telemetry` copies every row into the file the
-    console reads, and nothing collapses two identical lines afterwards - so a
-    second copy is one item counted twice on the
-    dashboard, forever, in a ledger that cannot correct a row.
+    Assemble files a row for every planned item, the worker's items included, so
+    the day holds two rows for each item the worker recorded. A reader that kept
+    both would count one item twice on every panel that reads this ledger, so
+    the settled day has to be exactly what the worker filed.
     """
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
@@ -543,15 +542,14 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
         )
-    stage_record(run_plan, settings=settings)
-    fold(state, run_plan.date)
+    stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT)
     after_the_worker = health_rows(state, run_plan.date)
 
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
     rows = health_rows(state, run_plan.date)
     keys = [(row.date, row.run_id, row.item_id) for row in rows]
-    assert rows == after_the_worker, "assemble re-wrote rows the worker had already committed"
+    assert rows == after_the_worker, "assemble's rows displaced rows the worker had already filed"
     assert len(keys) == len(set(keys)) == len(run_plan.items)
     # The dedupe only bites because both writers file under one run id. If the
     # two derivations ever part, every row lands twice.
@@ -561,15 +559,17 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
 def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """A run cancelled after its workers is re-run, and the shard files nothing new.
+    """A run cancelled after its workers is re-run, and the day reads the same rows.
 
     Nothing published in between, so `_next_run_n` hands the replay the same run
-    id - which is exactly what makes its rows the same rows.
+    id - which is exactly what makes its rows the same rows. The replay files
+    the same work unit again, so the reader keeps its later file in place of
+    the first rather than beside it.
     """
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
-    committed = ledger.path(tmp_path / "state", LedgerName.ITEM_HEALTH, run_plan.date) / day_shards.SETTLED_NAME
+    state = tmp_path / "state"
     with a_server_that_refuses_every_completion() as server:
         stage_work(
             run_plan,
@@ -578,14 +578,13 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
         )
-    stage_record(run_plan, settings=settings)
-    fold(tmp_path / "state", run_plan.date)
-    after_one_run = committed.read_bytes()
+    stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT)
+    after_one_run = health_rows(state, run_plan.date)
 
-    stage_record(run_plan, settings=settings)
-    fold(tmp_path / "state", run_plan.date)
+    stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT)
 
-    assert committed.read_bytes() == after_one_run
+    assert after_one_run, "the first run recorded nothing, so the replay proves nothing"
+    assert health_rows(state, run_plan.date) == after_one_run
 
 
 def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
@@ -674,8 +673,7 @@ def test_a_shard_records_its_own_items_and_nobody_else_s(
             model_endpoint=server.endpoint,
         )
 
-    stage_record(run_plan, settings=settings, shard=0, shards=2)
-    fold(tmp_path / "state", run_plan.date)
+    stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT, shard=0, shards=2)
 
     mine = [item.item_id for item in shard_of(run_plan, shard=0, shards=2)]
     assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == mine
@@ -698,8 +696,9 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     interrupted = run_plan.items[1]
     (items_dir / f"{interrupted.item_id}.summary.json").unlink()
 
-    recorded, _ = stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    fold(tmp_path / "state", run_plan.date)
+    recorded, _ = stage_record(
+        run_plan, settings=config.load(CONFIG_DIR), commit_sha=SEED_COMMIT
+    )
 
     settled = [item.item_id for item in run_plan.items if item.item_id != interrupted.item_id]
     assert recorded == len(settled)
@@ -736,35 +735,29 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
                 shards=2,
                 model_endpoint=server.endpoint,
             )
-        stage_record(run_plan, settings=settings, shard=shard, shards=2)
+        stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT, shard=shard, shards=2)
         stage_job_clock(
             run_plan,
             settings=settings,
             state_root=common.STATE_ROOT,
+            commit_sha=SEED_COMMIT,
             shard=shard,
             metrics_path=capture,
         )
 
-    fold(state, run_plan.date)
     rows = health_rows(state, run_plan.date)
-    counted = [
-        HostFingerprintRow.from_csv_row(record)
-        for record in day_shards.settled_day(
-            ledger.tree_root(state, LedgerName.HOST_FINGERPRINT),
-            run_plan.date,
-            ledger.HOST_FINGERPRINT_KEY,
-            HostFingerprintRow,
-        )
-    ]
+    counted = ledger.load_days(
+        state, LedgerName.HOST_FINGERPRINT, [run_plan.date], model=HostFingerprintRow
+    )
 
-    assert {row.shard for row in rows} == {row.shard for row in counted} == {0, 1}
+    assert {row.machine_shard for row in rows} == {row.shard for row in counted} == {0, 1}
     assert [row.server_prompt_tokens for row in counted] == [23411, 23411], (
         "each shard files what its own server counted"
     )
     assert len(rows) == len(run_plan.items)
     for shard in (0, 1):
         mine = {item.item_id for item in shard_of(run_plan, shard=shard, shards=2)}
-        assert {row.item_id for row in rows if row.shard == shard} == mine
+        assert {row.item_id for row in rows if row.machine_shard == shard} == mine
         assert mine, "a shard with no items would make the set comparison pass on nothing"
 
 
@@ -793,18 +786,20 @@ def test_the_census_assemble_adds_names_no_machine(
             shards=2,
             model_endpoint=server.endpoint,
         )
-    stage_record(run_plan, settings=settings, shard=0, shards=2)
+    stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT, shard=0, shards=2)
 
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
     rows = health_rows(state, run_plan.date)
     worked = {item.item_id for item in shard_of(run_plan, shard=0, shards=2)}
     assert len(rows) == len(run_plan.items)
-    assert {row.item_id for row in rows if row.shard == 0} == worked
-    assert {row.item_id for row in rows if row.shard is None} == {
+    assert {row.item_id for row in rows if row.machine_shard == 0} == worked
+    assert {row.item_id for row in rows if row.machine_shard is None} == {
         item.item_id for item in run_plan.items
     } - worked
-    assert any(row.shard is None for row in rows), "the run left nothing for assemble to census"
+    assert any(row.machine_shard is None for row in rows), (
+        "the run left nothing for assemble to census"
+    )
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:

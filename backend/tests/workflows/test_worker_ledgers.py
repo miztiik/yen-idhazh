@@ -7,10 +7,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT
+from conftest import REPO_ROOT, writer_identity
+from retention._trees import health_row
 
 from idhazh import ledger, path_classes, telemetry
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.telemetry.publish import day_metrics
 
@@ -49,7 +51,6 @@ from ._harness import (
     _step,
     _steps,
     _substitute,
-    _write,
     requires_bash,
     requires_space_free_paths,
 )
@@ -288,7 +289,7 @@ def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:
     otherwise file a `--job` value nothing here ever reads. Where its row LANDS is
     somebody else's question: `test_ledger_staging.py` charges every job with the
     ledgers the verbs in its own `run:` bodies write, so a new probing job is held
-    to staging `state/host-fingerprint` without an edit anywhere.
+    to staging `state/raw/host-fingerprint` without an edit anywhere.
     """
     workflow = _load_workflows()["digest.yml"]
     probing = {
@@ -351,40 +352,36 @@ def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     promise the eval ledger makes about itself.
 
     **The two now travel as one commit rather than as two staged heads.** A work
-    shard writes its rows into `state/scores/<day>/` and its digests into
-    `state/score-index/<day>/`, both named for that shard of that run, and both
-    are inside the one path the shard stages - so there is no order in which one
-    is committed and the other is not.
+    shard files its rows through the ledger door under `state/raw/scores/` and
+    writes its digests into `state/score-index/<day>/`, and both are inside the
+    one path the shard stages - so there is no order in which one is committed
+    and the other is not.
 
-    Neither is handed back any more. A file named for one writer is computed by
+    Neither is handed back any more. A file one writer filed is computed by
     nothing else, so restoring the tip's copy would delete this shard's own and
     the producer would not write it again. That is why both trees left the
     derived set on 2026-09-22.
 
-    Both directories are in a fresh checkout, because `git add` on a path that is
-    not there aborts the whole step.
+    The path the shard stages is in a fresh checkout, because `git add` on a path
+    that is not there aborts the whole step. That path is `state` whole, which
+    `test_every_path_the_work_job_stages_is_in_a_fresh_checkout` holds to being
+    committed. The two folders inside it need not be: the raw one holds nothing
+    until a shard files into it, and nothing again once the compaction has packed
+    every day in it.
     """
     staged = COMMIT_STAGED_PATHS["work"]
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
     for tree in (
-        ledger.tree_relpath(LedgerName.SCORES),
+        ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.SCORES).as_posix(),
         ledger.tree_relpath(LedgerName.SCORE_INDEX),
     ):
-        assert any(_under(tree, path) for path in staged), (
-            f"{tree} is written by this shard and no path in {staged} carries it"
-        )
+        carriers = [path for path in staged if _under(tree, path)]
+        assert carriers, f"{tree} is written by this shard and no path in {staged} carries it"
         assert not any(_under(tree, path) for path in refreshed), (
-            f"{tree} holds a file named for one writer, so handing it back deletes it"
+            f"{tree} holds a file one writer filed, so handing it back deletes it"
         )
-        assert (REPO_ROOT / tree).is_dir()
-        tracked = subprocess.run(
-            ["git", "ls-files", tree],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.split()
-        assert tracked, f"{tree} must be in a fresh checkout"
+        for carrier in carriers:
+            assert (REPO_ROOT / carrier).is_dir(), f"{carrier} must be in a fresh checkout"
 
 
 def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_union() -> None:
@@ -452,7 +449,7 @@ def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_u
 @requires_bash
 @requires_space_free_paths
 def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
-    """Eight workers, one branch, one segment each.
+    """Eight workers, one branch, one raw file each.
 
     They run in turn from clones taken before any of them pushed, so every one
     after the first finds a base that has already moved - which is the state a
@@ -461,46 +458,45 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     eight truly concurrent pushes cannot be made deterministic in a test.
 
     They wrote one shared file until 2026-09-18 and a union merge driver is what
-    made that survive a race. Each shard writes into the day directory under the
-    name its own run, attempt, job and shard index spell now, so the eight sides
-    of the race are eight adds of eight paths and no merge driver is asked to
-    settle anything.
+    made that survive a race. Each shard files its census through the ledger
+    door now, which names every raw file with an id no other write can take, so
+    the eight sides of the race are eight adds of eight paths and no merge
+    driver is asked to settle anything.
 
-    The names come from the producer rather than being spelled here. A shard is
-    two digits in a committed name and the workflow hands the job a bare number,
-    so a name written by hand here would not be a name a run can produce.
+    The files come from the ledger door rather than being spelled here, so each
+    name is one a run can produce. A raw file is binary, so what landed is
+    compared by the blob git stored rather than by its text.
     """
     staged_paths, settings = _commit_call("work")
     env = _isolated_env(tmp_path)
     origin, _ = _scripted_origin(tmp_path, env, staged_paths)
     shards = range(8)
-    written = {
-        shard: ledger.day_shard_relpath(
-            LedgerName.ITEM_HEALTH,
-            date=SUBSTITUTED_DATE,
-            run_id=f"{SUBSTITUTED_DATE}-1",
-            attempt=1,
-            job=ServerJob.WORK,
-            shard=shard,
-        )
-        for shard in shards
-    }
-    assert len(set(written.values())) == len(shards), "two shards were given one name"
+    run_id = f"{SUBSTITUTED_DATE}-1"
+    written: dict[int, str] = {}
     runners = []
     for shard in shards:
         runner = tmp_path / f"shard-{shard}"
         _git(tmp_path, env, "clone", str(origin), str(runner))
-        _write(runner / written[shard], f"header\nshard-{shard}\n")
+        state = runner / ledger.STATE_DIRNAME
+        [filed] = ledger.persist(
+            state,
+            [health_row(day=SUBSTITUTED_DATE, run=1, number=shard, stage=ItemStage.PUBLISH)],
+            ledger=LedgerName.ITEM_HEALTH,
+            covers=SUBSTITUTED_DATE,
+            identity=writer_identity(run_id, job=ServerJob.WORK, shard=shard),
+        )
+        written[shard] = f"{ledger.STATE_DIRNAME}/{filed.relative_to(state).as_posix()}"
         runners.append(runner)
+    assert len(set(written.values())) == len(shards), "two shards were given one name"
 
     results = [_run_commit_script(runner, env, staged_paths, settings) for runner in runners]
 
     assert [result.returncode for result in results] == [0] * len(runners)
-    for shard in shards:
-        assert _git(origin, env, "show", f"main:{written[shard]}").splitlines() == [
-            "header",
-            f"shard-{shard}",
-        ]
+    for shard, runner in zip(shards, runners, strict=True):
+        landed = _git(origin, env, "rev-parse", f"main:{written[shard]}").strip()
+        assert landed == _git(runner, env, "hash-object", written[shard]).strip(), (
+            f"shard {shard}'s rows did not land as it filed them"
+        )
     assert not any(_mid_rebase(runner) for runner in runners)
 
 

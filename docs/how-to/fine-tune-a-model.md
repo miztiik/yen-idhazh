@@ -343,7 +343,7 @@ only way they differ:
  a week of five runs a day is 18.6 MB against the 500 MB Guardrail #2 allows.
 - **`refill`** reaches everything older than that, because the committed ledger
  and the committed digest hold between them every half of a training row except
- the article body - and the body has an address. `state/scores.csv` names the
+ the article body - and the body has an address. The scores ledger names the
  canonical URL, the model and the fingerprint; the day payload under
 `frontend/public/digest/` holds the title and the summary.
 

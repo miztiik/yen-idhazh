@@ -747,7 +747,7 @@ export function memoryBoard(
 		const load = numberCell(row, 'load_1m');
 		return {
 			itemId: (row.item_id ?? '').trim(),
-			shard: numberCell(row, 'shard') ?? 0,
+			shard: numberCell(row, 'machine_shard') ?? 0,
 			startedAt: (row.item_started_at ?? '').trim(),
 			serverEndBytes: numberCell(row, 'llama_rss_bytes'),
 			workerBytes: numberCell(row, 'python_rss_bytes'),
@@ -781,7 +781,7 @@ export function memoryBoard(
 	const planned = new Map<number, number>();
 	for (const row of rows) {
 		const count = numberCell(row, 'shard_item_count');
-		const at = numberCell(row, 'shard');
+		const at = numberCell(row, 'machine_shard');
 		if (count !== null && at !== null) planned.set(at, count);
 	}
 	const headroomFrom = items.filter((one) => !one.headroom.empty).length;
@@ -917,14 +917,14 @@ export function clockAgreement(
 		};
 	}
 	const mine = health.filter((row) => row.run_id === run.runId);
-	const withShard = mine.filter((row) => (row.shard ?? '') !== '');
+	const withShard = mine.filter((row) => (row.machine_shard ?? '') !== '');
 	const grain: ClockView['grain'] =
 		withShard.length === mine.length && mine.length > 0 ? 'shard' : 'run';
 
 	const pairs: ClockPair[] =
 		grain === 'shard'
 			? run.reported.map((shard) => {
-					const rows = withShard.filter((row) => Number(row.shard) === shard.shard);
+					const rows = withShard.filter((row) => Number(row.machine_shard) === shard.shard);
 					return pair(
 						`shard ${shard.shard}`,
 						pooledReadRate(rows),

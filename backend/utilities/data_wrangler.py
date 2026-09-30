@@ -50,7 +50,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
-from idhazh.evals import archive, writer
+from idhazh.evals import archive
 from idhazh.ledger import STATE_DIRNAME
 from idhazh.stages import common
 from idhazh.stages.common import Fetcher, published_days
@@ -341,16 +341,8 @@ class _Rebuildable(NamedTuple):
 
 
 def _ledger_rows(state_dir: Path) -> list[EvalRow]:
-    """Every scored row the committed ledger holds, across every month shard.
-
-    An empty CSV cell is dropped rather than passed as an empty string, so an
-    optional column that was blank when the row was written reads back as the
-    default it was written with instead of failing validation.
-    """
-    return [
-        EvalRow.model_validate({key: value for key, value in raw.items() if value != ""})
-        for raw in writer.records(state_dir)
-    ]
+    """Every scored row the scores ledger holds, read through the ledger door and settled once."""
+    return ledger.load_ledger_rows(state_dir, LedgerName.SCORES, model=EvalRow)
 
 
 def _digest_items(digest_root: Path) -> dict[str, _Entry]:
@@ -464,23 +456,22 @@ def refill(
     teaching.
 
     **How far back it reaches is now a configured number.** Every candidate comes
-    from a ledger row, and `state/scores/` keeps the scores task's full-grain
+    from a ledger row, and the scores ledger keeps the scores task's full-grain
     window of rows before a month
     becomes a summary. A summarised month carries no address and no digest, so
     there is nothing to re-fetch and nothing to join - those months are counted
     and named rather than left as a gap in the ledger count above.
     """
     summarised = archive.archived_months(state_dir)
-    if not writer.ledger_days(state_dir):
-        where = ledger.tree_root(state_dir, LedgerName.SCORES).as_posix()
+    if not ledger.held_days(state_dir, LedgerName.SCORES):
         if summarised:
             print(
-                f"{where} holds no day file - {', '.join(summarised)} have aged out of "
+                f"the scores ledger holds no day - {', '.join(summarised)} have aged out of "
                 f"the full-grain window and a summary carries no address to re-fetch. "
                 f"{archive.RAW_WINDOW_NOTE}"
             )
         else:
-            print(f"{where} holds no day file")
+            print("the scores ledger holds no day")
         return 1
     if not digest_root.is_dir():
         print(f"{digest_root.as_posix()} is not a directory")

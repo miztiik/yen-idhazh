@@ -21,9 +21,6 @@ from typing import TYPE_CHECKING, Final, NamedTuple
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
-from idhazh.contracts.eval_row import (
-    DROPPED_CELLS as DROPPED_EVAL_CELLS,
-)
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -31,7 +28,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
     DROPPED_CELLS as DROPPED_FIT_CELLS,
 )
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
-from idhazh.contracts.item_health import DROPPED_CELLS, RETIRED_CELLS, ItemHealthRow
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.span_rollup import SpanRollupRow
@@ -174,7 +171,8 @@ COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
 #: keeping. `item_id` is deliberately absent: it is a slot on a page, not an
 #: identity. It carries no date either - re-measuring an article a year later is
 #: the same measurement - so it is the one key here that settles two rows of one
-#: day file and leaves the cross-day question to `evals.writer.append_segment`.
+#: day and leaves the cross-day question to the dedupe in
+#: `evals.writer.file_measurements`, which reads the index.
 OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
 
 
@@ -215,28 +213,27 @@ def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
 
 
 def _item_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
-    """A row that names the job which ran the item beats one that does not.
+    """A row that names the machine which ran the item beats one that does not.
 
-    `ITEM_HEALTH_KEY` carries no `job` cell, and two jobs write a row for the
+    `ITEM_HEALTH_KEY` carries no machine cell, and two jobs write a row for the
     same item: a work shard as the item settles, and assemble over the whole day
     afterwards. For an item a shard sealed a record for the two rows agree cell
     for cell (`telemetry.census_row` prefers the sealed row on both sides), so
     this decides nothing. For an item no shard sealed one, the shard's rebuild
-    carries `job` and `shard` - the one moment either is known - and assemble's
-    rebuild leaves both empty, because it runs once for the whole day on a
-    machine that read none of the items.
+    carries `machine_job` and `machine_shard` - the one moment either is known -
+    and assemble's rebuild leaves both empty, because it runs once for the whole
+    day on a machine that read none of the items.
 
     Until 2026-09-18 that was settled by arrival order: the work job committed
-    first and the append kept the first row for a key. `day_shards.settled_rows`
-    reads filenames in sorted order, where `assemble` comes before `work`, so
-    the order would have silently reversed. The preference says out loud what
-    the order used to decide.
+    first and the append kept the first row for a key. A reader that sorts files
+    by name puts `assemble` before `work`, so the order would have silently
+    reversed. The preference says out loud what the order used to decide.
 
     It beats attempt order too. A later attempt that reached no item leaves
-    `job` empty, and a row carrying the identity is better evidence than a row
-    that does not, whichever run wrote it.
+    `machine_job` empty, and a row carrying the machine is better evidence than
+    a row that does not, whichever run wrote it.
     """
-    return bool(later.get("job")) and not kept.get("job")
+    return bool(later.get("machine_job")) and not kept.get("machine_job")
 
 
 #: The keys whose repeats can disagree, and how each one picks a winner.
@@ -263,22 +260,12 @@ def preference_for(key: tuple[str, ...]) -> Preference | None:
 
 
 #: The headings a day file an earlier run wrote still carries that the current
-#: row no longer names. Two kinds, and the difference is what happens to the
-#: cell: `from_csv_row` reads a RETIRED heading into the column that replaced
-#: it, and a DROPPED heading has no replacement - the file still re-files, and
-#: the cell goes, which is the point of dropping it.
-ITEM_HEALTH_CARRIED: Final[frozenset[str]] = frozenset(RETIRED_CELLS) | DROPPED_CELLS
-
-
-#: The same, for the judged-pair ledger. One column has left this row and none has
-#: moved, so there is no retired half: `from_csv_row` reads a day file by the
-#: names the contract holds now and the dropped heading simply goes.
+#: judged-pair row no longer names. A dropped heading has no replacement - the
+#: file still re-files, and the cell goes, which is the point of dropping it. One
+#: column has left this row and none has moved, so there is no retired half:
+#: `from_csv_row` reads a day file by the names the contract holds now and the
+#: dropped heading simply goes.
 STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
-
-
-#: The same again, for the eval ledger. Two columns have left that row and none
-#: has moved, so a committed shard still re-files and the two cells go.
-SCORES_CARRIED: Final[frozenset[str]] = DROPPED_EVAL_CELLS
 
 
 #: The same again, for the fitted line's day files.
@@ -297,10 +284,7 @@ class _TreeShape(NamedTuple):
 #: declared table rather than a rule a reader re-derives: the key is a fact about
 #: the ledger and a second copy of it is how two readers start disagreeing.
 _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
-    LedgerName.ITEM_HEALTH: _TreeShape(ITEM_HEALTH_KEY, ItemHealthRow, ITEM_HEALTH_CARRIED),
-    LedgerName.HOST_FINGERPRINT: _TreeShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
     LedgerName.SPAN_ROLLUP: _TreeShape(SPAN_ROLLUP_KEY, SpanRollupRow),
-    LedgerName.SCORES: _TreeShape(OBSERVATION_KEY, EvalRow, SCORES_CARRIED),
     LedgerName.SCORE_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
     LedgerName.CANDIDATE_MODELS: _TreeShape(VALIDATION_KEY, ValidationRow),
     LedgerName.FEED_HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
@@ -362,6 +346,9 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
     LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),
+    LedgerName.ITEM_HEALTH: _DoorShape(ITEM_HEALTH_KEY, ItemHealthRow),
+    LedgerName.SCORES: _DoorShape(OBSERVATION_KEY, EvalRow),
+    LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
 }
 
 

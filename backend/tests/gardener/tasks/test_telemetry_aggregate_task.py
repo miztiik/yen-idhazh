@@ -4,6 +4,10 @@ The pass under test is the shipped task, run through its module and the
 committed declaration. `pruned` reads what one pass took and wrote back into
 the words these tests ask in: which months it folded, which browser copies and
 which summaries it deleted.
+
+The census rows themselves are not this task's: they sit under the ledger door,
+and the `item-health` compaction's monthly window is what deletes them. So a
+pass here reads the census and never touches a file of it.
 """
 
 from __future__ import annotations
@@ -23,21 +27,18 @@ from retention._trees import (
     a_state_tree,
     census_of,
     health_row,
-    item_health_days,
     item_health_months,
-    month_holding,
     months_back,
     totals_from_aggregate,
     totals_from_shard,
 )
 
 from idhazh import config, ledger
-from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.item_health_summary import percentile
 from idhazh.contracts.knobs.gardener import MonthsWindow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import archive as score_archive
-from idhazh.gardener.one_at_a_time import PruneInterruptedError
 from idhazh.retention import compact_month, month_shards, oldest_month_kept
 from idhazh.telemetry.publish import public_telemetry
 
@@ -100,51 +101,69 @@ def summary_stems(state: Path) -> list[str]:
     )
 
 
+def census_files(state: Path) -> dict[str, bytes]:
+    """Every file the census holds under the ledger door, by path, with its bytes."""
+    root = ledger.raw_root(state, LedgerName.ITEM_HEALTH)
+    return {
+        path.relative_to(state).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def census_text(state: Path, month: str) -> str:
+    """One month of the census as CSV text, read through the ledger door the way the task reads it.
+
+    `totals_from_shard` recomputes its totals from text rather than from
+    `compact_month`, so the oracle cannot pass by agreeing with the code it
+    checks.
+    """
+    rows = ledger.load_days(
+        state, LedgerName.ITEM_HEALTH, ledger.month_days(month), model=ItemHealthRow
+    )
+    return ledger.render_file(ItemHealthRow.csv_columns(), [row.csv_row() for row in rows])
+
+
 def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> None:
-    """Every day inside the window is byte-identical, and every day outside is gone."""
+    """Every month past the window is summarised, and no census file is touched.
+
+    A month inside the window keeps its full grain and gets no summary. The
+    months past it are summarised and their rows stay where they were: deleting
+    them is the compaction's, whose monthly window reaches further back.
+    """
     state = a_state_tree(tmp_path)
-    before = {day: day.read_bytes() for day in item_health_days(state)}
-    assert sorted({month_holding(day) for day in before}) == months_back(TODAY, HISTORY_MONTHS)
+    before = census_files(state)
+    assert item_health_months(state) == months_back(TODAY, HISTORY_MONTHS)
 
     result = pruned(state)
 
     kept = oldest_month_kept(TODAY, full_grain_months())
     assert full_grain_months() == 14, "a 366-day console read can open fourteen month shards"
     assert kept == "2025-07", "fourteen months ending in August 2026 starts in July 2025"
-    assert list(result.folded) == sorted(
-        {month for month in months_back(TODAY, HISTORY_MONTHS) if month < kept}
-    )
-    assert len(result.folded) == HISTORY_MONTHS - full_grain_months()
-    expired = [day for day in before if month_holding(day) < kept]
-    assert expired, "the fixture has to reach past the window or this proves nothing"
-    for day, bytes_before in before.items():
-        if month_holding(day) < kept:
-            assert not day.exists(), f"{day.name} is past the window and must be gone"
-        else:
-            assert day.read_bytes() == bytes_before, f"{day.name} is inside the window"
-    assert item_health_months(state) == [
-        month for month in months_back(TODAY, HISTORY_MONTHS) if month >= kept
+    assert list(result.folded) == [
+        month for month in months_back(TODAY, HISTORY_MONTHS) if month < kept
     ]
-    assert not expired[0].parent.exists()
+    assert len(result.folded) == HISTORY_MONTHS - full_grain_months()
+    assert summary_stems(state) == list(result.folded), "a month inside the window was summarised"
+    assert census_files(state) == before, "the pass deleted or rewrote a census file"
+    assert item_health_months(state) == months_back(TODAY, HISTORY_MONTHS)
 
 
 def test_the_fold_loses_no_total(tmp_path: Path) -> None:
     """The grain changes; the answer does not."""
     state = a_state_tree(tmp_path)
     kept = oldest_month_kept(TODAY, full_grain_months())
-    doomed: dict[str, list[str]] = {}
-    for day in item_health_days(state):
-        month = month_holding(day)
-        if month < kept:
-            doomed.setdefault(month, []).append(day.read_text(encoding="utf-8"))
+    doomed = {
+        month: census_text(state, month) for month in item_health_months(state) if month < kept
+    }
     assert doomed, "the fixture has to reach past the window or this proves nothing"
 
     pruned(state)
 
-    for month, texts in doomed.items():
+    for month, text in doomed.items():
         target = ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, month)
         assert totals_from_aggregate(ledger.load_item_health_summary(target)) == (
-            totals_from_shard(texts)
+            totals_from_shard([text])
         ), f"{month} lost a total in the fold"
 
 
@@ -199,14 +218,16 @@ def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
     state = a_state_tree(tmp_path)
     before = {
         path.relative_to(state).as_posix(): path.read_bytes()
-        for path in sorted(state.rglob("*.csv"))
+        for path in sorted(state.rglob("*"))
+        if path.is_file()
     }
 
     result = pruned(state, dry_run=True)
 
     after = {
         path.relative_to(state).as_posix(): path.read_bytes()
-        for path in sorted(state.rglob("*.csv"))
+        for path in sorted(state.rglob("*"))
+        if path.is_file()
     }
     assert result.dry_run is True
     assert result.folded, "it still has to report what it would have done"
@@ -224,8 +245,9 @@ def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
     written = summary_stems(state)
     again = pruned(state)
 
+    assert written, "the first pass has to summarise a month or the rest proves nothing"
     assert written == sorted(first.folded)
-    assert again.folded == (), "the shards are gone, so a second fold has nothing to do"
+    assert again.folded == (), "a month already summarised is not folded again"
     assert again.hard_deleted == ()
     assert summary_stems(state) == written
 
@@ -260,8 +282,15 @@ def test_the_window_is_counted_in_months_and_not_in_thirty_day_steps() -> None:
 OTHER_STRAYS: Final = ("notes", "2025-1", "README", "2025-01.csv")
 
 
-def test_the_task_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: Path) -> None:
-    """Two-sided on purpose, and the fold is read back before a day is unlinked."""
+def test_the_task_summarises_the_expired_month_and_not_the_month_beside_it(
+    tmp_path: Path,
+) -> None:
+    """Two-sided on purpose: one day past the window, one day inside it.
+
+    The month past the window is summarised and the summary is read back; the
+    month inside keeps its full grain and gets none. Neither loses a census row,
+    because the rows are the compaction's to delete.
+    """
     state = tmp_path / "state"
     keep_from = oldest_month_kept(TODAY, full_grain_months())
     expired_day = f"{months_back(TODAY, full_grain_months() + 1)[0]}-09"
@@ -269,19 +298,18 @@ def test_the_task_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: Pa
     assert expired_day[:7] < keep_from <= kept_day[:7], "the fixture must straddle the boundary"
     for day in (expired_day, kept_day):
         seed_item_health(state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)])
-    expired_path = ledger.path(state, LedgerName.ITEM_HEALTH, expired_day)
-    kept_path = ledger.path(state, LedgerName.ITEM_HEALTH, kept_day)
-    expired_texts = [shard.read_text(encoding="utf-8") for shard in sorted(expired_path.iterdir())]
+    expired_text = census_text(state, expired_day[:7])
+    before = census_files(state)
 
     result = pruned(state)
 
-    assert not expired_path.exists(), "the expired day is still there, so nothing was taken"
-    assert kept_path.exists(), "the day inside the window was taken"
     assert list(result.folded) == [expired_day[:7]]
-    assert item_health_months(state) == [kept_day[:7]]
+    assert summary_stems(state) == [expired_day[:7]], "the month inside the window was summarised"
+    assert census_files(state) == before, "the pass deleted or rewrote a census file"
+    assert item_health_months(state) == [expired_day[:7], kept_day[:7]]
     target = ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, expired_day[:7])
     assert totals_from_aggregate(ledger.load_item_health_summary(target)) == (
-        totals_from_shard(expired_texts)
+        totals_from_shard([expired_text])
     )
 
 
@@ -396,28 +424,43 @@ def test_a_checkout_with_no_published_copies_takes_no_copy(tmp_path: Path) -> No
     assert result.public_deleted == ()
 
 
-def test_a_fold_that_cannot_be_read_back_leaves_the_shard_and_its_copy(
+def test_a_checkout_that_holds_no_summary_yet_still_writes_its_first(tmp_path: Path) -> None:
+    """The first summary is what makes the summary folder, so the fold cannot wait for it.
+
+    The runner hands a task only the folders the commit holds, and a checkout
+    that has never summarised a month holds no `state/item-health-summary/`. A
+    fold that waited for that folder would never write its first summary, and
+    the compaction would later delete the month's rows with nothing kept of them.
+    """
+    state = a_state_tree(tmp_path)
+    assert not ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY).exists()
+
+    result = pruned(state)
+
+    assert result.folded, "no month was summarised"
+    assert summary_stems(state) == sorted(result.folded)
+
+
+def test_a_fold_that_cannot_be_read_back_leaves_the_browser_copy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Nothing is deleted on the strength of a write nobody checked, the day file nor its copy."""
+    """Nothing is deleted on the strength of a write nobody checked, not even a copy.
+
+    Every summary is written and read back before the pass lists a single file
+    to delete, so a summary that does not read back stops the pass before its
+    first deletion - which the runner records as a pass that reached no member.
+    """
     state, public = a_published_tree(tmp_path)
     doomed = [
-        day
-        for day in item_health_days(state)
-        if month_holding(day) < oldest_month_kept(TODAY, full_grain_months())
+        month
+        for month in item_health_months(state)
+        if month < oldest_month_kept(TODAY, full_grain_months())
     ]
     assert doomed, "the fixture has to reach past the window or this proves nothing"
     monkeypatch.setattr(ledger, "load_item_health_summary", lambda _path: [])
 
-    with pytest.raises(PruneInterruptedError) as stopped:
+    with pytest.raises(ValueError, match="did not read back"):
         pruned(state)
 
-    chain: list[str] = []
-    error: BaseException | None = stopped.value
-    while error is not None:
-        chain.append(str(error))
-        error = error.__cause__
-    assert any("did not read back" in said for said in chain), chain
-    assert doomed[0].exists(), "the first day file was unlinked after an unverified write"
-    assert public_telemetry.shard_path(public, month_holding(doomed[0])).exists()
+    assert public_telemetry.shard_path(public, doomed[0]).exists()
     assert len(month_shards(public)) == HISTORY_MONTHS

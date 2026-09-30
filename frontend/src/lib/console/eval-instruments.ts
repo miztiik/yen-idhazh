@@ -86,9 +86,9 @@ export const DRAWN_BY: Readonly<Record<string, string>> = {
 	extraction_suspect: 'recorded-only',
 	determinism_violation: 'recorded-only',
 	// Already drawn, now declared.
-	summary_word_count: 'summary-length',
-	source_word_count: 'summary-length',
-	source_seen_word_count: 'summary-length',
+	summary_words: 'summary-length',
+	source_words_before_cap: 'summary-length',
+	source_words: 'summary-length',
 	score_ms: 'score-cost'
 };
 
@@ -113,8 +113,8 @@ export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 	source_digest: 'A digest of the article text, kept for the same reason.',
 	scorer_version: 'Which checker ran. It says the instrument changed, not that the summaries did.',
 	scored_at: 'When the check ran, which is not always the day it scored.',
-	attempt:
-		'Which try wrote the row. Measured 2026-09-06 over 6,966 rows: every one of them is the first try.'
+	summary_attempt:
+		'Which try wrote the summary. Measured 2026-09-06 over 6,966 rows: every one of them is the first try.'
 };
 
 /** The ledger rows this module reads, as the CSV reader hands them over. */
