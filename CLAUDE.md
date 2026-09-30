@@ -238,28 +238,27 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 ## 10. Anti-Patterns (Do NOT)
 
-- Reinterpret, downgrade, substitute, or scope-narrow a source or instruction the user named explicitly, without surfacing it as a scope change for sign-off (STOP-AND-SURFACE). **Declining on a limitation without pricing it is the same thing** - it is scope-narrowing to zero, and section 0d names what is owed instead: do it, price it, or name the measurement that would settle it.
-- Assume a backend exists in production.
-- Hardcode tunables, source lists, model refs, thresholds, or magic strings. They live in `config/`.
-- Put a unit of work in the file that routes to it.
-- Ship a surface that is still under development without a config flag, default off, carrying its removal condition on the line that declares it (Guardrail #6).
-- Change a frontend contract copy without changing the Pydantic model, or the reverse. The two tests that bind them are not optional.
-- Store absolute / backslash paths in any persisted artifact.
-- Let fetched text reach a system prompt, a shell argument, a file path, or an outbound URL (Guardrail #11).
-- Build custom HTTP / retry / parsing / validation / extraction systems when a mature OSS library exists.
-- Swallow exceptions or silently coerce invalid input - fail fast at the boundary.
-- Mock in tests by default, or let any test touch the network.
-- Commit a model weight, a downloaded binary, or a reproducible run intermediate.
-- Add a runtime telemetry / analytics / error-tracking SDK.
-- Ship a feature that depends on a runtime backend, an account, or a push notification.
-- Add a framework / library / build tool without naming its cost and its beneficiary feature.
-- Mint a new persisted field without stamping the schema `version` date, appending a `changelog` entry, and writing the read-side migration in the same commit.
-- Raise the runner budget to fit a feature. The 6 h job and the 1 GB site are GitHub's rather than ours, so an agent cannot move them and is not asked to (Guardrail #2) - the required next move is to name the design that does fit and what it traded: fewer items, a smaller model, a shorter context, a shard that splits.
-- Quote a Guardrail #2 number as a refusal without saying what crossing it does. "It busts the 10 GB cache" stops nothing on its own: that one is GitHub's to evict and it costs a re-download. Only the job timeout and the 1 GB site end the argument.
-- Let `TODO/`, chat logs, `AGENTS.md`, or a private agent note store become the source of truth for anything. They are caches of `docs/`.
-- Make a domain-neutral process doc project-specific (section 5).
-- Pre-create empty modules "for later".
-- Skip the docs update.
+- Reinterpret, downgrade, substitute or narrow an explicitly named source or instruction without reporting the proposed scope change as STOP-AND-SURFACE and getting user approval. A limitation is not a refusal: do it, price a change or name what measurement would settle it (section 0d).
+- Assume a runtime backend, or ship features requiring one, an account or push notifications.
+- Hardcode tunables, source lists, model references, thresholds or magic strings; use `config/`.
+- Put a unit's execution in the file that routes to it.
+- Ship unfinished surfaces without a default-off config flag and a removal condition on its declaring line (Guardrail #6).
+- Let the Pydantic model and frontend copy drift; update both and run both binding tests.
+- Persist absolute paths or backslashes.
+- Let fetched text reach a system prompt, shell arguments, file paths or outbound URLs (Guardrail #11).
+- Build custom HTTP, retry, parsing, validation or extraction systems when a mature OSS library exists.
+- Swallow exceptions or silently coerce invalid input; fail fast at the boundary.
+- Use mocks in tests without an explicit request, or let tests access the network.
+- Commit model weights, downloaded binaries or reproducible run intermediates.
+- Add runtime telemetry, analytics or error-tracking SDKs.
+- Add frameworks, libraries or build tools without naming their cost and beneficiary feature.
+- Add persisted fields without a schema `version` date, `changelog` entry and read-side migration in the same commit.
+- Raise platform limits to fit a feature: GitHub kills a 6 h job, and Pages refuses a site over 1 GB. Name a viable design and its trade-offs; scope changes require user approval.
+- Use runner figures as a refusal without stating their consequences. Cache eviction costs a re-download, not a failed run (Guardrail #2).
+- Treat `TODO/`, chat logs, [AGENTS.md](AGENTS.md) or private memory as authority. They are caches of `docs/`.
+- Make a domain-neutral process document project-specific (section 5).
+- Create empty modules for later.
+- Skip the documentation update.
 
 ## 11. Schema Versioning
 
