@@ -90,8 +90,10 @@ and [weight rules](site-weight.md).
   Separate digest cron lines identify the delayed slot. Inspect actual runs before
   changing cadence; do not infer completed work from cron expressions.
 - Only the gardener's `history` job may force-push, under
-  [CLAUDE.md section 8](../../CLAUDE.md). It checks whether a rewrite is due and
-  refuses if the remote tip moved. A quiet cron window cannot replace that check.
+  [CLAUDE.md section 8](../../CLAUDE.md). It checks whether a rewrite is due, and
+  pushes with a lease on the tip it read, so git refuses the push if another run
+  pushed meanwhile; it then squashes again on the new tip, up to `push_attempts`
+  pushes in all. A quiet cron window cannot replace that lease.
 - A skipped speed case must not skip the remaining measurement jobs. A failed one
   still blocks dependent runtime work. Label missing results; do not emit a complete
   model dossier from partial evidence. Skipping also moves the weight download cost.

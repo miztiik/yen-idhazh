@@ -39,7 +39,11 @@ JUST_AFTER_THE_CUT: Final = "2026-04-16T00:00:01Z"
 
 
 def a_declaration(**changes: Any) -> dict[str, Any]:
-    """The squash's declaration, keeping 60 days, live, with some keys changed."""
+    """The squash's declaration, keeping 60 days, live, with some keys changed.
+
+    Three pushes, as committed, and no wait between them, so a case that loses
+    a race costs git's time and never a sleep.
+    """
     return {
         "dry_run": False,
         "every_days": 30,
@@ -47,6 +51,8 @@ def a_declaration(**changes: Any) -> dict[str, Any]:
         "lifecycle_status": "active",
         "max_deletes_per_run": None,
         "owns": ["corpus"],
+        "push_attempts": 3,
+        "push_retry_delay_seconds": 0,
         "window": {"unit": "days", "value": 60},
     } | changes
 
@@ -109,8 +115,9 @@ class History:
         return self.clone("job")
 
     def clone(self, name: str) -> Path:
+        """A clone that reaches origin through git's transport, by a `file://` address."""
         checkout = self.root / name
-        git(self.root, "clone", "--quiet", str(self.origin), str(checkout))
+        git(self.root, "clone", "--quiet", self.origin.as_uri(), str(checkout))
         return checkout
 
     def on_origin(self, *args: str) -> str:
@@ -136,11 +143,9 @@ def last_run_on_origin(history: History) -> str | None:
     return meta.last_run
 
 
-@pytest.fixture
-def history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> History:
-    """Six commits either side of the cut, the root a month before it."""
-    quiet_git(tmp_path, monkeypatch)
-    built = History(tmp_path, declared=a_declaration())
+def the_six_commits(root: Path, **changes: Any) -> History:
+    """Six commits either side of the cut, the root a month before it, under this declaration."""
+    built = History(root, declared=a_declaration(**changes))
     built.add("2026-03-01T09:00:00Z", "the root")
     built.add("2026-03-10T09:00:00Z", "an old change")
     built.add(AT_THE_CUT, "a change at the cut")
@@ -148,6 +153,35 @@ def history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> History:
     built.add("2026-05-01T09:00:00Z", "a recent change")
     built.add("2026-06-01T09:00:00Z", "a harvest", {"corpus/corpus.jsonl": '{"row": 1}\n'})
     return built
+
+
+@pytest.fixture
+def history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> History:
+    """Six commits either side of the cut, the root a month before it."""
+    quiet_git(tmp_path, monkeypatch)
+    return the_six_commits(tmp_path)
+
+
+def a_racer_after_every_replay(checkout: Path, racer: Path, body: str) -> None:
+    """Another run, pushing to origin from `racer` each time the job's replay finishes.
+
+    A `post-rewrite` hook in the job's own clone. Git runs it when the replay
+    after the squash finishes: after the program read its tip and before it
+    pushes, which is the window a forcing push would delete a commit in and the
+    one the lease exists for. `body` runs in `racer`, with the job's own git
+    variables cleared so it cannot write to the job's repository.
+    """
+    hook = checkout / ".git" / "hooks" / "post-rewrite"
+    hook.write_text(
+        "#!/bin/sh\n"
+        "cat >/dev/null\n"
+        "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX\n"
+        f'cd "{racer.as_posix()}" || exit 1\n'
+        f"{body}\n",
+        encoding="ascii",
+        newline="\n",
+    )
+    hook.chmod(0o755)
 
 
 def test_the_squash_collapses_the_commits_at_or_before_the_cut_and_keeps_every_later_one(
@@ -350,9 +384,104 @@ def test_a_wake_with_nothing_old_enough_records_the_run_and_pushes_without_force
     assert history.on_origin("rev-parse", "main").strip() == recorded
 
 
-def test_a_tip_that_moved_while_it_ran_is_refused_and_the_run_is_not_recorded(
+def test_a_commit_that_lands_after_the_tip_was_read_is_refused_by_the_lease_and_kept_by_the_retry(
     history: History, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """The oracle: the lease refuses the push, and a squash redone on the new tip keeps the commit.
+
+    The other run pushes when the job's replay finishes, after the program read
+    its tip and before its first push, where a forcing push would delete it. It
+    changes three files, one of them the file the record writes, so the pass
+    after the refusal has to record from the new tip's copy of that file.
+    """
+    checkout = history.publish()
+    tip = git(checkout, "rev-parse", "HEAD").strip()
+    racer = history.clone("racer")
+    harvested = CorpusMeta(version=CorpusMeta.schema_version(), harvested_date="2026-06-14")
+    raced = commit(
+        racer,
+        "2026-06-14T09:00:00Z",
+        "a run pushed meanwhile",
+        {
+            "docs/raced.md": "a run pushed meanwhile\n",
+            "corpus/corpus.jsonl": '{"row": 1}\n{"row": 2}\n',
+            "corpus/corpus.meta.json": harvested.to_json(),
+        },
+    )
+    a_racer_after_every_replay(checkout, racer, "git push --quiet origin HEAD:refs/heads/main")
+
+    assert squash(checkout) == corpus_history.EXIT_OK
+
+    said = capsys.readouterr()
+    assert said.err.count(corpus_history.MAIN_MOVED[0]) == 1, "one push was refused, and one only"
+    assert f"  this job checked out {tip}" in said.err
+    assert f"  origin/main is now {raced}" in said.err
+    assert "waiting 0 s, then squashing again on the new tip: push 2 of 3" in said.err
+    assert corpus_history.DUE_AGAIN not in said.err
+    assert f"push 2 of 3 starts from {raced}" in said.out
+    chain = history.chain()
+    assert [line.split(" ", 1)[1] for line in chain] == [
+        "corpus: squash history older than 60 days",
+        "a change just after the cut",
+        "a recent change",
+        "a harvest",
+        "a run pushed meanwhile",
+        f"corpus: pruned {TODAY}",
+    ]
+    replayed, recorded = (line.split(" ", 1)[0] for line in chain[-2:])
+    assert replayed != raced, "the commit is replayed inside the rewritten history"
+    assert tree(history.origin, replayed) == tree(racer, raced), "a file it changed is missing"
+    assert history.on_origin("diff", "--name-only", replayed, recorded).split() == [
+        "corpus/corpus.meta.json"
+    ]
+    meta = CorpusMeta.from_json(history.on_origin("show", "main:corpus/corpus.meta.json"))
+    assert (meta.harvested_date, meta.last_run) == ("2026-06-14", TODAY)
+
+
+def test_a_run_whose_every_push_is_refused_leaves_main_to_the_other_writer_and_stays_due(
+    history: History, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The oracle: after the last refused push, exit 1, nothing of this run on main, and no stamp.
+
+    The other run pushes after every replay, so every pass finds `main` moved
+    again. Three pushes and no fourth, because the declaration says three.
+    """
+    checkout = history.publish()
+    published = git(checkout, "rev-parse", "HEAD").strip()
+    racer = history.clone("racer")
+    identity = " ".join(f'"{part}"' for part in SEED_IDENTITY)
+    a_racer_after_every_replay(
+        checkout,
+        racer,
+        'echo "a run pushed meanwhile" >> docs/raced.md\n'
+        "git add docs/raced.md\n"
+        f'git {identity} commit --quiet -m "a run pushed meanwhile"\n'
+        "git push --quiet origin HEAD:refs/heads/main",
+    )
+
+    assert squash(checkout) == corpus_history.EXIT_TIP_MOVED
+
+    err = capsys.readouterr().err
+    assert err.count(corpus_history.MAIN_MOVED[0]) == 3, "three pushes in all, as declared"
+    assert err.count(corpus_history.DUE_AGAIN) == 1
+    assert err.splitlines()[-1] == corpus_history.DUE_AGAIN
+    assert history.on_origin("rev-parse", "main").strip() == git(racer, "rev-parse", "HEAD").strip()
+    assert history.on_origin("log", "--format=%s", f"{published}..main").splitlines() == [
+        "a run pushed meanwhile"
+    ] * 3
+    assert last_run_on_origin(history) is None
+
+
+def test_with_one_push_a_tip_that_moved_is_refused_as_it_always_was(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One push and no second pass: the refusal, its words and its exit code are the old ones.
+
+    The other run pushed after the job's checkout and before the program ran,
+    so the lease refuses the only push there is.
+    """
+    quiet_git(tmp_path, monkeypatch)
+    history = the_six_commits(tmp_path, push_attempts=1)
     checkout = history.publish()
     tip = git(checkout, "rev-parse", "HEAD").strip()
     racer = history.clone("racer")
@@ -362,9 +491,36 @@ def test_a_tip_that_moved_while_it_ran_is_refused_and_the_run_is_not_recorded(
     assert squash(checkout) == corpus_history.EXIT_TIP_MOVED
 
     err = capsys.readouterr().err
-    assert f"  this job checked out {tip}" in err and f"  origin/main is now {raced}" in err
+    assert err.splitlines()[-5:] == [
+        "main moved while the prune was rewriting it, so nothing was pushed",
+        f"  this job checked out {tip}",
+        f"  origin/main is now {raced}",
+        "pushing would discard every commit between the two.",
+        "the prune is unstamped, so it is due again at the next daily wake.",
+    ]
+    assert err.count(corpus_history.MAIN_MOVED[0]) == 1
     assert history.on_origin("rev-parse", "main").strip() == raced
     assert last_run_on_origin(history) is None
+
+
+def test_a_wake_with_nothing_old_enough_that_loses_its_push_records_the_run_on_the_new_tip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The plain push loses the same race, and the pass after it records on top of the winner."""
+    quiet_git(tmp_path, monkeypatch)
+    history = History(tmp_path, declared=a_declaration())
+    history.add("2026-05-01T09:00:00Z", "the root")
+    history.add("2026-06-01T09:00:00Z", "a recent change")
+    checkout = history.publish()
+    racer = history.clone("racer")
+    raced = commit(racer, "2026-06-15T09:00:00Z", "a run pushed meanwhile", {"docs/raced.md": "x\n"})
+    git(racer, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+
+    assert squash(checkout) == corpus_history.EXIT_OK
+
+    assert capsys.readouterr().err.count(corpus_history.MAIN_MOVED[0]) == 1
+    assert history.on_origin("rev-parse", "main~1").strip() == raced, "history was rewritten"
+    assert last_run_on_origin(history) == TODAY
 
 
 def test_a_dry_run_says_what_it_would_collapse_and_writes_nothing(

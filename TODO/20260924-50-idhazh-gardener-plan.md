@@ -356,7 +356,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
 | 11 | The index and watermark shapes are declared | 2 | C | DONE | p50r11 | #1136 | p50-r11-worker |
 | 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | DONE | p50r12 | #1161 | p50-r12-worker-2 |
-| 13 | The squash runs unless the run was cancelled, and its push takes a lease and retries | 8 | J | IN-FLIGHT | p50r13 | - | p50-r13-worker |
+| 13 | The squash runs unless the run was cancelled, and its push takes a lease and retries | 8 | J | DONE | p50r13 | #1167 | p50-r13-worker |
 
 **Row 13 came from the person's answers to row 8's open questions, 2026-09-29** (deviations 161 and 162). It shares `.github/workflows/idhazh-gardener.yml` and `docs/architecture/publishing/idhazh-gardener.md` with row 9, so it merges after row 9 and takes `main` in first (deviation 165).
 

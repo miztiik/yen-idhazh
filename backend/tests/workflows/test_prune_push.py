@@ -3,13 +3,13 @@
 `idhazh-gardener.yml`'s history job squashes everything older than the boundary
 and force-pushes the result. A force push is a whole-ref operation: it replaces
 the branch with this checkout, so a commit another run pushed in the meantime is
-deleted and nothing records that it existed. Until now the only thing holding
-that off was a cron minute placed in the one idle gap the serial digest
-schedule leaves, and a gap is not a lock.
+deleted and nothing records that it existed. A cron minute placed in the one
+idle gap the serial digest schedule leaves lowers the odds, and a gap is not a
+lock, so the push carries a lease on the tip the job read.
 
-These drive the push in `backend/utilities/corpus_history.py` against real
-repositories. The squash in front of it is driven end to end by
-`backend/tests/gardener/test_corpus_history.py`.
+These drive one push of `backend/utilities/corpus_history.py` against real
+repositories. The squash in front of it, and the passes after a refused push,
+are driven end to end by `backend/tests/gardener/test_corpus_history.py`.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ def test_the_prune_refuses_to_force_over_a_commit_that_landed_while_it_ran(
 ) -> None:
     """The oracle: a commit pushed between the checkout and the push survives.
 
-    Without the re-fetch this push replaces `main` with a history the racing
+    Without the lease this push replaces `main` with a history the racing
     commit is not in, and the only copy of it left is the other run's log line
     saying it had pushed. The words are pinned whole: they are what an operator
     reads, and they have not changed since the push was a program of its own.
@@ -183,10 +183,10 @@ def test_a_prune_that_squashed_nothing_still_refuses_a_tip_that_moved(
 def test_the_history_step_runs_the_shipped_program_and_nothing_else() -> None:
     """One step squashes, records and pushes, so the decision to force stays in one process.
 
-    The tip the push compares against has to be read before the rewrite, and
-    the program reads it itself, so no step hands a commit or a flag to a later
-    one through the job's environment. The day it squashes against is the due
-    step's own reading, so the job reads the clock once.
+    The tip the lease names has to be read before the rewrite, and the program
+    reads it itself, so no step hands a commit or a flag to a later one through
+    the job's environment. The day it squashes against is the due step's own
+    reading, so the job reads the clock once.
     """
     workflow = _load_workflows()["idhazh-gardener.yml"]
     step = _step(workflow, "history", "name", PRUNE_PUSH_STEP)
