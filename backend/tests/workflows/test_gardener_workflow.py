@@ -318,7 +318,8 @@ def test_the_plan_job_runs_the_standard_library_planner_before_any_install() -> 
     }
 
 
-def test_a_shard_checks_out_its_cone_and_the_code_and_runs_the_landing_program() -> None:
+def test_a_shard_checks_out_only_its_code_and_runs_the_landing_program() -> None:
+    """No folder a task owns or reads is checked out: its names come from the commit."""
     workflow = gardener()
     job = _job(workflow, RUN_TASKS)
     assert (job.get("needs"), str(job["timeout-minutes"])) == (PLAN, "20")
@@ -334,10 +335,10 @@ def test_a_shard_checks_out_its_cone_and_the_code_and_runs_the_landing_program()
 
     steps = _steps(workflow, RUN_TASKS)
     (checkout,) = _checkouts(workflow, RUN_TASKS)
-    assert _sparse(checkout) == ["config", "backend", ".github", "${{ matrix.cone }}"]
+    assert _sparse(checkout) == ["config", "backend", ".github"]
     assert (str(checkout["fetch-depth"]), checkout["filter"]) == ("1", "blob:none")
     assert steps[1].get("run") == "git config index.sparse true", (
-        "the index turns sparse right after the checkout, before any reset can expand it"
+        "the index turns sparse right after the checkout, before any widening can expand it"
     )
     assert any(step.get("run") == "pip install -e ." for step in steps)
 
