@@ -1,12 +1,12 @@
 # Prune a collection
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
 
-Two routes, one core. `idhazh telemetry prune` takes day files out of a ledger
-under `state/`. The gardener's two collection tasks take members out of a
+Two routes, one core. `idhazh telemetry prune` takes day files out of a CSV day
+ledger under `state/`. The gardener's two collection tasks take members out of a
 collection GitHub holds for us. Both delete one member at a time, both stop at a
 ceiling, and both say where the next pass resumes. What "atomic" means here and
 why a range is not one is in
@@ -73,7 +73,7 @@ way is exit 1, and its row says where the next pass starts.
 ## Prune day files out of a ledger
 
 ```
-idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-26
+idhazh telemetry prune --target feed-health --since 2026-08-24 --until 2026-08-26
 ```
 
 Both ends are named and both are inclusive, so `--since X --until X` is one day.
@@ -83,12 +83,12 @@ Both ends are named and both are inclusive, so `--since X --until X` is one day.
 range you typed is taken whole unless you ask for a smaller bite:
 
 ```
-idhazh telemetry prune --target scores --since 2025-01-01 --until 2025-12-31 \
+idhazh telemetry prune --target counterfactual-scores --since 2025-01-01 --until 2025-12-31 \
   --no-dry-run --max-deletes 30
 ```
 
-Which ledgers this may be pointed at, which two are refused by name, and why
-`scores` and `score-index` are pruned as a pair are in
+Which ledgers this may be pointed at, which two are refused by name, and why the
+three ledgers the console reads are not targets are in
 [../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days).
 
 ## Failure modes

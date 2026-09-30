@@ -402,7 +402,7 @@ def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> 
             summary=REFILL_PUBLISHED.summary,
             output_digest=recorded.output_digest,
             model_id=recorded.model_id,
-            attempt=recorded.attempt,
+            attempt=recorded.summary_attempt,
             source_truncated=article.truncated,
             generated_at=recorded.scored_at,
             status=SummaryStatus.OK,

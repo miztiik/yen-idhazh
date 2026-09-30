@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -363,7 +363,7 @@ they yield`.
 | Permission | What did the site's own `robots.txt` say? | `robots_outcome` on the health row |
 | Reading | Is the address answering now? | `discover.streak` and `discover.resting` |
 | Retirement | Has a run stopped asking this address for good? | `state/raw/feed-retirements/` |
-| Publishing record | What has it been offered, and what did it publish? | `state/item-health/` |
+| Publishing record | What has it been offered, and what did it publish? | the item-health ledger |
 
 **No column combines two of them.** A single credibility score across the four
 was refused for the reason it was refused everywhere else on this page: four

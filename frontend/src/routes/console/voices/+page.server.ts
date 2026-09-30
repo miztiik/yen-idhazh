@@ -1,10 +1,12 @@
 import { chartConfig, collectConfig, consoleConfig } from '$lib/server/config';
+import { recordNotes } from '$lib/console/recording';
+import { itemHealthRows } from '$lib/server/ledger-rows';
 import {
 	feedResults,
+	latestDate,
 	reliabilityPublished,
 	shardDays,
 	sourceHealthView,
-	itemHealthRows,
 	type DayYield,
 	type FeedResult,
 	type SourceHealthRow,
@@ -616,7 +618,10 @@ export async function load() {
 	// whatever the operator picks, so one read at this width covers every preset.
 	const widest = Math.max(...console.window_presets);
 	const days = shardDays(widest);
-	const itemRows = itemHealthRows(days).rows;
+	// From its packed files, so it stops at the newest packed day and says so on
+	// the page rather than drawing the days after it as quiet ones.
+	const items = await itemHealthRows(days);
+	const itemRows = items.rows;
 	const quarantineAfter = collectConfig().availability_strikes_before_rest;
 	const results = feedResults(days);
 	const troubled = trouble(results, quarantineAfter);
@@ -671,6 +676,10 @@ export async function load() {
 		// How a chart labels its axis. The feed strip's date axis reads it, and an
 		// operator moves it without editing a component.
 		chart: chartConfig(),
+		// What the page says about the article record before the cut-short table
+		// draws from it: not packed yet, did not load, or packed some days short of
+		// the newest published day.
+		recordNotes: recordNotes([{ record: 'article', read: items.read }], latestDate(undefined, 1)),
 		today: new Date().toISOString().slice(0, 10)
 	};
 }

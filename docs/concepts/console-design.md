@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-29
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -148,7 +148,7 @@ no full stop.**
  length (words)` and never `words`. A bracket reads as a footnote, and a label
  a reader meets before any of the numbers is not a footnote.
 - **An axis title may not be a ledger column name.** `source words` is how the
- file spells `source_word_count` and `source_words`. A term from a subsystem is
+ file spells `source_words_before_cap` and `source_words`. A term from a subsystem is
  not a term for a user (`CLAUDE.md` section 0b), and this is the rule two
  bullets above - no ledger column name on screen - applied to the label rather
  than to the cell.

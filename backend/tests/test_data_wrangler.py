@@ -22,18 +22,17 @@ from conftest import (
     refetched,
     refill_page,
     refill_recorded,
+    seed_scores,
 )
 
 from idhazh import config, corpus
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.corpus import Published
-from idhazh.evals import writer
 from idhazh.fetch import FetchResult
 from utilities import data_wrangler
 
@@ -318,11 +317,9 @@ def app() -> AppConfig:
 
 
 def a_ledger(tmp_path: Path, rows: Sequence[EvalRow]) -> Path:
-    """A state directory holding the day shards those rows belong in."""
+    """A state directory holding those rows, filed by the writer a run files with."""
     state = tmp_path / "state"
-    writer.append_segment(
-        state, rows, run_id="2026-08-20-1", attempt=1, job=ServerJob.ASSEMBLE, shard=0
-    )
+    seed_scores(state, rows, run_id="2026-08-20-1")
     return state
 
 

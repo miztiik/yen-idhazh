@@ -151,13 +151,13 @@ def _shard_cells(
     exactly what a person comparing two runs needs - the readings are the machine
     cells beside them. The processor and the runner label come from the one
     `host_facts` call this shard's counters row reads as well, so the two rows
-    cannot name two different machines. `job` rides with them for the same
-    reason: with `shard` it is the key that reaches this job's host record, and a
-    key filled from two places is a key that can disagree with itself.
+    cannot name two different machines. `machine_job` rides with them for the same
+    reason: with `machine_shard` it is the key that reaches this job's host record,
+    and a key filled from two places is a key that can disagree with itself.
     """
     model = settings.models.summarizer
     return {
-        "shard": shard,
+        "machine_shard": shard,
         "shard_item_count": shard_item_count,
         **facts.shard_cells(),
         "model_id": model.id,

@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -713,27 +713,19 @@ an injection canary in `canaries.spec.ts`
 ([../reference/agent-notes/gates-and-builds.md](../reference/agent-notes/gates-and-builds.md#running-the-gates)).
 
 **The canary day carries every ledger the console reads.** The run manifest, the
-feed-health rows and the score rows are all written by `build_canary_day.py`;
-the item-health rows are written by `build:canary`. The score rows are shaped
-for the compression plot rather than picked at random - eight items from 38 to
-6100 source words, so the log x axis spans four decades, and each of the five
-configured target zones has at least one mark under it. Four rows carry the
-truncation flag and three of those have a source word count, so the plot draws
-three diamonds; the other two rows have no source count and cannot be placed.
-A chart state the fixture does not reach is a chart state this suite
-cannot test.
-
-**Known defect: the canary item ids do not satisfy the item-id grammar.**
-`frontend/scripts/build-canary.mjs` writes ids like `tail-1-0` and `cut-a-0`,
-and `ITEM_ID_PATTERN` in `backend/idhazh/contracts/base.py` takes two trailing
-shapes and neither of them - at least two decimal digits, or sixteen Crockford
-base32 symbols - so 76 of the 87 canary rows would be refused by `ItemHealthRow`
-if anything validated them. Nothing does: the browser suite reads the CSV
-directly, and the published projection carries `item_id` as an opaque key on
-purpose, because a committed shard has no writer left to re-mint an id if that
-grammar moves. It bites the day something validates the
-canary rows through the contract. Fixing it means padding the index in the two
-id builders and re-running the builder; nothing else reads those ids.
+feed-health rows and the score rows are all written by `build_canary_day.py`.
+The item-health and machine rows are made by `build:canary` as CSV beside the
+state tree, and `build_canary_day.py --file-fixture-rows` files them through the
+ledger door, which validates every row against its contract. The fixture then
+packs the item-health, scores and host-fingerprint ledgers with their own
+compaction tasks turned live, because the console reads only packed days. The
+score rows are shaped for the compression plot rather than picked at random -
+eight items from 38 to 6100 source words, so the log x axis spans four decades,
+and each of the five configured target zones has at least one mark under it.
+Four rows carry the truncation flag and three of those have a source word count,
+so the plot draws three diamonds; the other two rows have no source count and
+cannot be placed. A chart state the fixture does not reach is a chart state this
+suite cannot test.
 
 **The preview port derives from the checkout, so two worktrees cannot share one
 server.** `playwright.config.ts` hashes its own directory into a port between

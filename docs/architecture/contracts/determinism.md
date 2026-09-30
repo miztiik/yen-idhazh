@@ -1,6 +1,6 @@
 # The Recorded Input Manifest
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-29
 
 What a run records about its own inputs, where each value is read from, and the one alarm built on that record. This page owns the enumeration and what the record cannot see.
 
@@ -52,7 +52,7 @@ The declared inputs are the weights digest, the quantisation, the runtime build,
 
 **Prompts and templates are digested, never stored.** A prompt in a committed payload would put text into a permanent record that nothing downstream needs, and the digest answers the only question anyone asks of it: did it move?
 
-**There is one comparison and it is `changed_inputs`.** It names the input that moved, which is what a reader and the console's model-change boundary both need; a digest over the whole record could only say that one did. `PipelineInputs.fingerprint()` was that digest, and it went on 2026-09-21 with the decode stamp beside it - nothing called either, and both existed to answer "did two runs ask for the same thing?", which is a question about determinism and not a property this pipeline claims. Rows in `state/scores/` written before the manifest replaced the digest still carry their own stamp; nothing rebuilds one, and expanding them was never possible in any case (see the rejected alternatives below).
+**There is one comparison and it is `changed_inputs`.** It names the input that moved, which is what a reader and the console's model-change boundary both need; a digest over the whole record could only say that one did. `PipelineInputs.fingerprint()` was that digest, and it went on 2026-09-21 with the decode stamp beside it - nothing called either, and both existed to answer "did two runs ask for the same thing?", which is a question about determinism and not a property this pipeline claims. Rows in the scores ledger written before the manifest replaced the digest still carry their own stamp; nothing rebuilds one, and expanding them was never possible in any case (see the rejected alternatives below).
 
 ## The one alarm
 
@@ -248,7 +248,7 @@ the record lie (Guardrail #10).
 | Raise when `LLAMA_CPP_BUILD` is absent, the way a missing weights digest raises | It would stop every developer run and every test that composes the stages, to protect a field that explains a run rather than gating one. A recorded absence stamps apart from every pinned run, says the same thing, and still runs. |
 | Write the run record from `stage_work` | A shard's checkout is discarded when the job ends, so the record would never reach a committed file. |
 | Have `assemble` rebuild the record from config | It runs on another machine after the server is gone, so it would record its own runner class and its own host as the ones that summarized nothing. |
-| Backfill the stamps already in `state/scores/` | They predate any recorded runtime, so expanding them means manufacturing a measurement nobody took (Guardrail #10). They stay unexpandable, and that is the honest record. |
+| Backfill the stamps already in the scores ledger | They predate any recorded runtime, so expanding them means manufacturing a measurement nobody took (Guardrail #10). They stay unexpandable, and that is the honest record. |
 | Identify a run by the model slug | A slug does not move when the prompt, the truncation cap or the runtime build moves, and all three move the words. |
 | Digest the request envelope instead of asking the server for its template | The envelope is our own shape and the prompt and output-schema digests already carry it. Reconstructing a template the server owns restates config under a name that promises an observation. |
 

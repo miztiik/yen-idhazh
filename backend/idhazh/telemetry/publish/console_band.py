@@ -22,13 +22,12 @@ owns it, never re-derived from a wider one:
   `discover.streak` and `discover.resting`, because those are the reducers the
   pipeline itself rested a feed by, and a page that ran its own would contradict
   the run that produced it;
-- the model facts come from one day's item-health shard and that day's own
-  day-metrics record, each keyed to the newest day the manifests hold;
-- the free-swap pair comes from that same item-health shard, which is the only
+- the model facts come from one day of the item-health ledger and that day's
+  own day-metrics record, each keyed to the newest day the manifests hold;
+- the free-swap pair comes from that same item-health day, which is the only
   place either cell is recorded;
 - the machine facts come from `frontend/public/machine/`, the published fold of
-  `state/item-health/` and `state/host-fingerprint/`, whose read `machine`
-  declares;
+  the item-health and host-fingerprint ledgers, whose read `machine` declares;
 - the compaction lag comes from the fold this run already ran, handed in by the
   caller. It is never a listing taken here, because the fold runs first and the
   directory is empty by the time this file is written.
@@ -41,7 +40,6 @@ it (Guardrail #6).
 
 from __future__ import annotations
 
-import csv
 import math
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -50,7 +48,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, day_partition, day_shards, discover, ledger
+from idhazh import assemble, day_partition, discover, ledger
 from idhazh.contracts.console_band import (
     BandRun,
     BandSize,
@@ -1309,9 +1307,10 @@ def publish(
       and the article counts;
     - `state/feed-health/` over the widest span, through `ledger.load_health`,
       which opens the day files that span names and no others;
-    - the newest day's item-health shard and its day-metrics record, one file
-      each;
-    - the host rows for the days the widest span reaches, one file a day;
+    - the newest day's item-health rows through `ledger.load_days`, which opens
+      that one day's files, and its day-metrics record, one file;
+    - the host rows for the days the widest span reaches, through
+      `ledger.load_days`, which opens the files of those days and no others;
     - the newest day's run manifest, one file, for the shard count each of that
       day's runs planned.
 
@@ -1435,35 +1434,28 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
 def _machine_rows(
     state_root: Path, *, within_days: int, anchor: str
 ) -> list[Mapping[str, str]]:
-    """The `work` host rows the widest span reaches, as raw cells.
+    """The `work` host rows the widest span reaches, as the cells a CSV line spells.
 
-    Raw rather than through `HostFingerprintRow`, because refusing a run is the
-    band's whole point here: a row that will not validate is one of the two hosts
-    this has to notice, and validating it away would silently drop the evidence.
-
-    The job is read off the cell rather than through the contract, for that same
-    reason, and a row whose cell is missing or empty is kept - `job` defaults to
-    the work job in the contract, so a blank cell is that job. Every other job
-    writes a host row too, and they are not this slice: the plan and assemble jobs
-    run one shard each, so pooling them into a shard count would answer about a
+    Read through the ledger door, so every row was validated by its contract when
+    it was filed and each day is settled on its own: a re-run's host replaces its
+    first attempt's, and one shard of one run is one host. Every other job writes
+    a host row too, and they are not this slice: the plan and assemble jobs run
+    one shard each, so pooling them into a shard count would answer about a
     matrix nobody dispatched. `machine.PUBLISHED_JOB` carries the same reason for
     the published series.
 
-    The files of one day over `within_days`, which is `max(console.window_presets)`,
-    so the cost is set by a committed knob and not by how much the archive has
-    accumulated (Guardrail #12). A day nothing wrote opens nothing.
+    The days of `within_days`, which is `max(console.window_presets)`, so the
+    cost is set by a committed knob and not by how much the archive has
+    accumulated (Guardrail #12). A day nothing wrote reads nothing.
     """
-    found: list[Mapping[str, str]] = []
-    root = ledger.tree_root(state_root, LedgerName.HOST_FINGERPRINT)
-    for day in day_partition.days_in_window(anchor, within_days):
-        for source in day_shards.one_day(root, day):
-            with source.open("r", encoding="utf-8", newline="") as handle:
-                found.extend(
-                    row
-                    for row in csv.DictReader(handle)
-                    if (row.get("job") or machine.PUBLISHED_JOB) == machine.PUBLISHED_JOB
-                )
-    return found
+    days = day_partition.days_in_window(anchor, within_days)
+    return [
+        row.csv_row()
+        for row in ledger.load_days(
+            state_root, LedgerName.HOST_FINGERPRINT, days, model=HostFingerprintRow
+        )
+        if row.job == machine.PUBLISHED_JOB
+    ]
 
 
 def _planned_shards(digest_root: Path, newest_date: str | None) -> dict[str, int]:

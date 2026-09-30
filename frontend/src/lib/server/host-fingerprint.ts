@@ -1,15 +1,17 @@
 /** What machine each job of a run drew, read at build time from `state/`.
  *
- * `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` has been written since
- * 2026-09-16 and, until this module, nothing read a cell of it. One row a job:
- * the processor's family, model and stepping, the instruction-set flags an
- * inference runtime dispatches on, the cache, the memory bandwidth, and the
- * platform's own name for where it put the machine
- * (`docs/reference/host-metrics.md`).
+ * `state/host-fingerprint/` has been written since 2026-09-16 and, until this
+ * module, nothing read a cell of it. One row a job: the processor's family,
+ * model and stepping, the instruction-set flags an inference runtime dispatches
+ * on, the cache, the memory bandwidth, and the platform's own name for where it
+ * put the machine (`docs/reference/host-metrics.md`).
  *
- * **Bounded, like every other read on this route.** It takes the day files a
- * window reaches and no more, so another published day adds a file this call
- * never opens once the cover is filled (`CLAUDE.md` Guardrail #12).
+ * **Read from its packed files, through the query door**, like the article and
+ * score records (`ledger-rows.ts`): the newest days a window reaches and no more,
+ * so another published day adds a file this call never opens once the cover is
+ * filled (`CLAUDE.md` Guardrail #12). A job's two halves - the machine before
+ * its heaviest step, its clock after the last item - are one row once packed,
+ * because the clock step files the whole row.
  *
  * **The row shape and the flag vocabulary are copied by hand, and two tests
  * hold the copy in step.** `backend/tests/contracts/test_frontend_field_set.py`
@@ -27,14 +29,10 @@
  * `machine-counters.ts`, and it adds no published telemetry column.
  */
 
-import { join } from 'node:path';
-import {
-	dayShardFiles,
-	HOST_FINGERPRINT_KEY,
-	LEDGER_WINDOW_DAYS,
-	mergedDayShards,
-	STATE_ROOT
-} from './payload';
+// Relative, not `$lib`: the browser suite loads this module in plain Node.
+import { sliceFromDisk } from './ledger-disk';
+import { datedFirst, newestRows, type LedgerTable } from './ledger-rows';
+import { LEDGER_WINDOW_DAYS, STATE_ROOT } from './payload';
 
 /** Which workflow job produced a row. `ServerJob` in `contracts/base.py`. */
 export const SERVER_JOB = [
@@ -124,6 +122,47 @@ export interface HostFingerprintRow {
  */
 export type HostFingerprint = Required<HostFingerprintRow> & { fingerprint: string };
 
+/** Every column of the row above, in its order: what a read asks the door for.
+ *
+ * Written as a set keyed by the interface, so the compiler refuses a column the
+ * interface names and this set does not, and a name the interface does not
+ * know - and the interface is the copy the field-set test already holds to the
+ * contract. A second list that could drift is the one thing this is not.
+ */
+export const HOST_FINGERPRINT_COLUMNS = Object.keys({
+	version: true,
+	date: true,
+	run_id: true,
+	job: true,
+	shard: true,
+	fingerprint: true,
+	cpu_model: true,
+	cpu_vendor: true,
+	cpu_family: true,
+	cpu_model_number: true,
+	cpu_stepping: true,
+	microcode: true,
+	cores: true,
+	threads: true,
+	l3_cache_bytes: true,
+	mhz_max: true,
+	mhz_at_probe: true,
+	flags: true,
+	boot_seconds: true,
+	memcpy_gib_s: true,
+	memcpy_probe_mib: true,
+	vm_size: true,
+	vm_location: true,
+	vm_zone: true,
+	vm_fault_domain: true,
+	runner_name: true,
+	measured_at: true,
+	model_load_ms: true,
+	job_seconds: true,
+	server_prompt_tokens: true,
+	server_prompt_seconds: true
+} satisfies Record<keyof HostFingerprintRow, true>) as (keyof HostFingerprintRow)[];
+
 function text(cell: string | undefined): string | null {
 	const trimmed = (cell ?? '').trim();
 	return trimmed === '' ? null : trimmed;
@@ -147,24 +186,36 @@ function serverJob(cell: string | undefined): ServerJob | null {
 	return SERVER_JOB.find((job) => job === named) ?? null;
 }
 
-/** The newest `days` day files of the machine record, as typed rows, one a job.
+/** The newest `days` days of the machine record, as the text cells the counters
+ * read, and how the read went.
  *
- * A job writes its row in two halves - the machine before its heaviest step,
- * its clock after the last item - and they arrive here as one row, so what a
- * job cost sits beside the machine it ran on (`mergedDayShards`).
+ * One row a job a run, as packed. The route reads it once and hands the rows to
+ * `fingerprintsOf`, `machineRecordDays` and the counters, so the three cannot
+ * answer over different days.
+ */
+export async function machineRecord(
+	days: number = LEDGER_WINDOW_DAYS,
+	root: string = STATE_ROOT
+): Promise<LedgerTable> {
+	return newestRows(root, 'host-fingerprint', days, HOST_FINGERPRINT_COLUMNS, (start, end) =>
+		sliceFromDisk(root, 'host-fingerprint', {
+			columns: [...datedFirst(HOST_FINGERPRINT_COLUMNS)],
+			from: start,
+			to: end
+		})
+	);
+}
+
+/** The machine record's rows as typed rows, one a job.
  *
  * A row with no run id, no fingerprint, or a job this build cannot place is
  * skipped rather than refused: the page degrades to the processor name the
  * counters ledger carries, and a refusal here would take a whole console route
  * down over one stray line (`CLAUDE.md` section 1a).
  */
-export function hostFingerprints(
-	days: number = LEDGER_WINDOW_DAYS,
-	root: string = STATE_ROOT
-): HostFingerprint[] {
-	const table = mergedDayShards(join(root, 'host-fingerprint'), HOST_FINGERPRINT_KEY, days);
+export function fingerprintsOf(rows: readonly Record<string, string>[]): HostFingerprint[] {
 	const found: HostFingerprint[] = [];
-	for (const row of table.rows) {
+	for (const row of rows) {
 		const runId = text(row.run_id);
 		const fingerprint = text(row.fingerprint);
 		const job = serverJob(row.job);
@@ -209,27 +260,21 @@ export function hostFingerprints(
 	return found;
 }
 
-/** The dates the machine record opened a day file for, whether or not it kept a row.
+/** The dates the machine record holds any row for, whether or not a row names its machine.
  *
- * The fact `hostFingerprints` cannot carry. A day with no file is a day the
- * record did not run, and a day whose file holds only its header is a day it
- * ran and what it wrote did not survive - which is the whole difference between
- * an instrument that had not started and a measurement that was destroyed.
+ * The fact `fingerprintsOf` cannot carry. A day whose rows all lack a
+ * fingerprint is a day the record ran and what it measured about the machine
+ * did not survive - the clock's half landed and the probe's did not - which is
+ * the whole difference between an instrument that had not started and a
+ * measurement that was destroyed. A day with no row at all is a day the record
+ * did not run: packing writes an empty file for every quiet day, so an empty
+ * file says nothing more than that.
  *
- * Bounded by the same cover and the same call the rows are read with, so the
- * two can never answer over different days.
- *
- * One entry a date, however many files the date holds. A day is one file today
- * and a directory of writer-owned files once more than one job writes the
- * record, and the question here is which days the record opened at all.
+ * Over the same rows the fingerprints are taken from, so the two can never
+ * answer over different days.
  */
-export function machineRecordDays(
-	days: number = LEDGER_WINDOW_DAYS,
-	root: string = STATE_ROOT
-): string[] {
-	return [
-		...new Set(dayShardFiles(join(root, 'host-fingerprint'), days).map((shard) => shard.date))
-	];
+export function machineRecordDays(rows: readonly Record<string, string>[]): string[] {
+	return [...new Set(rows.map((row) => row.date ?? '').filter((date) => date !== ''))];
 }
 
 /** The flags a card draws a chip for, in the order the probe records them.

@@ -299,10 +299,10 @@ def test_every_workflow_that_commits_a_ledger_says_which_of_its_runs_may_overlap
     """A `state/` writer that neither groups its runs nor is named here is an accident.
 
     `measure.yml` was the last one to miss a group. It is dispatched by hand
-    many times a day and its `runtime` job pushes one host row into a day file
-    that every other dispatch of that day also appends to, so two of them racing
-    lose a row at the rebase - and the step is `continue-on-error`, so the run
-    stays green while the record goes.
+    many times a day, and its `runtime` job pushes one host row. That row is a
+    raw file of its own now, named for its writer, so two dispatches no longer
+    race one day file; they still push to one branch, and the group makes a
+    second bench wait for the first rather than race it.
 
     A workflow whose runs are meant to overlap says so by appearing in
     `RUNS_MAY_OVERLAP` rather than by leaving the key out, so the difference

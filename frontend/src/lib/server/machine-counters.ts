@@ -1,13 +1,14 @@
 /** What each work shard's machine did, per shard and per run, read at build time.
  *
- * Two ledgers meet here and neither is derived from the other.
- * `state/host-fingerprint/<Y>/<M>/<D>.csv` carries what the model server itself
+ * Two ledgers meet here and neither is derived from the other. The machine
+ * record, `state/host-fingerprint/`, carries what the model server itself
  * counted reading prompts, what the job's clock said, and which processor the
- * host drew. `state/item-health/<Y>/<M>/<D>.csv` carries what every item cost,
- * which folded by shard gives the cache, the written tokens, the longest
+ * host drew. The article record, `state/item-health/`, carries what every item
+ * cost, which folded by shard gives the cache, the written tokens, the longest
  * sequence, the memory high-water mark, the time no named stage claimed and
- * the time an item waited before its worker started it. The run's planned
- * shard count comes from its own manifest and from nowhere else.
+ * the time an item waited before its worker started it. Both are read from
+ * their packed files through the query door. The run's planned shard count
+ * comes from its own manifest and from nowhere else.
  *
  * **The read rate is the server's and the write rate is the ledger's, on
  * purpose.** Reading is the one quantity two instruments measure, so the two
@@ -34,23 +35,16 @@
  * the shards it was made from and the shards the run planned - so a page can
  * tell never measured from measured on three of sixteen without guessing.
  *
- * Imports nothing at runtime beyond the shared CSV readers: the browser suite
- * loads this module in plain Node, where no Vite alias resolves.
+ * Imports nothing that needs a Vite alias: the browser suite loads this module
+ * in plain Node, where no alias resolves.
  */
 
-import { join } from 'node:path';
 // Relative, not `$lib`, for the reason in the module docstring.
 import { itemRead } from '../charts/machine';
 import { inferenceConfig, runConfig } from './config';
-import {
-	DIGEST_ROOT,
-	HOST_FINGERPRINT_KEY,
-	itemHealthRows,
-	LEDGER_WINDOW_DAYS,
-	loadManifests,
-	mergedDayShards,
-	STATE_ROOT
-} from './payload';
+import { machineRecord } from './host-fingerprint';
+import { itemHealthRows } from './ledger-rows';
+import { DIGEST_ROOT, LEDGER_WINDOW_DAYS, loadManifests } from './payload';
 
 /** How far the two clocks may sit apart before one of them is wrong, in percent.
  *
@@ -717,7 +711,9 @@ function oneRun(
 
 	const folds = new Map<number, ItemFold>();
 	for (const row of health) {
-		const shard = measured(row.shard ?? '');
+		// The machine the item's readings were taken on. The row's own writer cells
+		// are never read: they name the job that filed the row, not the one it ran on.
+		const shard = measured(row.machine_shard ?? '');
 		if (shard === null) continue;
 		let carry = folds.get(shard);
 		if (carry === undefined) {
@@ -874,6 +870,10 @@ export function machineCounters(
 	for (const row of health) {
 		const runId = row.run_id ?? '';
 		if (!runId) continue;
+		// The same rule the machine rows take above, on the job whose machine took
+		// the item's readings. Empty is a row written before that cell was, or the
+		// day's census, which names no machine and is skipped by its shard below.
+		if ((row.machine_job ?? '') !== '' && row.machine_job !== READ_JOB) continue;
 		const held = itemsByRun.get(runId);
 		if (held === undefined) itemsByRun.set(runId, [row]);
 		else held.push(row);
@@ -898,17 +898,14 @@ export function machineCounters(
 	return { runs, refused };
 }
 
-/** One row per job per run of the machine record, read from the committed ledger.
+/** One row per job per run of the machine record, read from its packed files.
  *
- * A job's two halves arrive as one row (`mergedDayShards`). A shard whose rows
- * fill one cell two different ways arrives as it was, so `mergeHost` still sees
- * both and refuses the run by name.
- *
- * Through `STATE_ROOT` like every other ledger read, so a test can point the
- * whole tree at a fixture and a canary build cannot reach the real one.
+ * A job's two halves are one row once packed. Through `STATE_ROOT` like every
+ * other ledger read, so a test can point the whole tree at a fixture and a
+ * canary build cannot reach the real one.
  */
-export function hostRows(days: number = LEDGER_WINDOW_DAYS): Record<string, string>[] {
-	return mergedDayShards(join(STATE_ROOT, 'host-fingerprint'), HOST_FINGERPRINT_KEY, days).rows;
+export async function hostRows(days: number = LEDGER_WINDOW_DAYS): Promise<Record<string, string>[]> {
+	return (await machineRecord(days)).rows;
 }
 
 /** What each run's plan decided its shard count was, by run id.
@@ -949,14 +946,11 @@ export function machineLimits(): MachineLimits {
  * The one caller a route needs. Reading happens here and nowhere else, so
  * `machineCounters` stays drivable from a fixture.
  *
- * `days` covers all three reads - both day-sharded ledgers and the manifests -
- * so they can never answer over different days.
+ * `days` covers all three reads - both packed ledgers and the manifests - so
+ * they can never answer over different days.
  */
-export function loadMachineCounters(days: number = LEDGER_WINDOW_DAYS): MachineCounters {
-	return machineCounters(
-		hostRows(days),
-		itemHealthRows(days).rows,
-		plannedShards(days),
-		machineLimits()
-	);
+export async function loadMachineCounters(days: number = LEDGER_WINDOW_DAYS): Promise<MachineCounters> {
+	const hosts = await hostRows(days);
+	const health = await itemHealthRows(days);
+	return machineCounters(hosts, health.rows, plannedShards(days), machineLimits());
 }

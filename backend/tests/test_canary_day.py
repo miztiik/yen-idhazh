@@ -15,54 +15,71 @@ state the chart can draw is the defect this file guards against.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final
 
 from conftest import FIXTURES_DIR
 
 from idhazh import config, ledger
+from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.sources import SourceForm
 from idhazh.evals import writer
 from utilities import build_canary_day
 
-EVALUATION: Final = config.load().app.evaluation
-SUMMARIZE: Final = config.load().app.summarize
-BANDS: Final = config.load().app.summarize.bands
-ITEMS: Final = build_canary_day.published_items(EVALUATION, FIXTURES_DIR / "canaries")
-ROWS: Final = build_canary_day.score_rows(ITEMS, EVALUATION)
-#: The rows the compression plot can place. A row with no recorded article
-#: length has no x, so the plot drops it and says how many it dropped.
-PLOTTED: Final = [row for row in ROWS if row.source_word_count is not None]
+
+def evaluation() -> EvaluationConfig:
+    """The committed evaluation settings the day is scored under."""
+    return config.load().app.evaluation
+
+
+def published() -> list[DigestItem]:
+    """The day's published items, read off the canary fixtures by the test that asks."""
+    return build_canary_day.published_items(evaluation(), FIXTURES_DIR / "canaries")
+
+
+def scored() -> list[EvalRow]:
+    """The day's score rows, one per published item."""
+    return build_canary_day.score_rows(published(), evaluation())
+
+
+def plotted() -> list[EvalRow]:
+    """The rows the compression plot can place.
+
+    A row with no recorded article length has no x, so the plot drops it and
+    says how many it dropped.
+    """
+    return [row for row in scored() if row.source_words_before_cap is not None]
 
 
 def source_words(row: EvalRow) -> int:
     """The article's length before the cut, where the fixture recorded one.
 
-    `EvalRow.source_word_count` is nullable because a row written before
+    `EvalRow.source_words_before_cap` is nullable because a row written before
     2026-08-27 whose article was truncated has no full length anywhere. Two
     fixture rows are in that state on purpose - it is the state the sentence
-    under the plot counts - so every caller here reads `PLOTTED` and a None
+    under the plot counts - so every caller here reads `plotted()` and a None
     reaching this function is a broken fixture rather than a row the chart has
     to survive.
     """
-    assert row.source_word_count is not None, f"{row.item_id} records no article length"
-    return row.source_word_count
+    assert row.source_words_before_cap is not None, f"{row.item_id} records no article length"
+    return row.source_words_before_cap
 
 
 def test_every_published_item_is_scored() -> None:
     """A day whose ledger names items the digest does not carry disagrees with itself."""
-    assert [row.item_id for row in ROWS] == [item.item_id for item in ITEMS]
-    assert {row.date for row in ROWS} == {build_canary_day.DATE}
+    rows = scored()
+    assert [row.item_id for row in rows] == [item.item_id for item in published()]
+    assert {row.date for row in rows} == {build_canary_day.DATE}
 
 
 def test_the_published_band_and_the_ledger_band_agree() -> None:
     """Two files, one judgement. The console and the digest page read different ones."""
-    assert [row.band for row in ROWS] == [item.band for item in ITEMS]
+    assert [row.band for row in scored()] == [item.band for item in published()]
 
 
 def test_the_fixture_covers_every_confidence_band() -> None:
-    assert {row.band for row in ROWS} == set(ConfidenceBand)
+    assert {row.band for row in scored()} == set(ConfidenceBand)
 
 
 def test_a_truncated_item_is_drawn_and_an_untruncated_one_is_too() -> None:
@@ -71,12 +88,13 @@ def test_a_truncated_item_is_drawn_and_an_untruncated_one_is_too() -> None:
     Counted over the rows the plot can place, not over every row the day scored.
     A flagged row with no length before the cut has no x, so it is a cut the
     ledger records and not a diamond the plot draws. The day holds one of those,
-    and over `ROWS` this test would pass on a fixture whose every flagged row was
-    unplaceable - a plot drawing no diamond at all.
+    and over every scored row this test would pass on a fixture whose every
+    flagged row was unplaceable - a plot drawing no diamond at all.
     """
-    flagged = [row for row in PLOTTED if row.truncation_flagged]
+    placed = plotted()
+    flagged = [row for row in placed if row.truncation_flagged]
     assert flagged, "no row draws a truncation diamond"
-    assert len(flagged) < len(PLOTTED), "every row draws a diamond, so no row draws a dot"
+    assert len(flagged) < len(placed), "every row draws a diamond, so no row draws a dot"
 
 
 def test_the_truncation_flag_follows_the_configured_rule() -> None:
@@ -88,11 +106,11 @@ def test_the_truncation_flag_follows_the_configured_rule() -> None:
     other. Over the committed ledger it did - the flag was true on exactly one
     row, and that row read 748 words of a 748-word article.
     """
-    for row in PLOTTED:
+    for row in plotted():
         # A cut page is a page the model saw less of. The two columns are the
         # only record of how much less, and a row missing one of them says
         # nothing about the cut either way.
-        assert (row.source_seen_word_count < source_words(row)) == row.truncation_flagged
+        assert (row.source_words < source_words(row)) == row.truncation_flagged
 
 
 def test_some_rows_record_no_article_length_and_still_score() -> None:
@@ -103,9 +121,10 @@ def test_some_rows_record_no_article_length_and_still_score() -> None:
     count printed beside it would be over a denominator nobody stated. Two rows,
     not one, so a page printing whatever number it found cannot pass by luck.
     """
-    unrecorded = [row for row in ROWS if row.source_word_count is None]
+    rows = scored()
+    unrecorded = [row for row in rows if row.source_words_before_cap is None]
     assert len(unrecorded) == 2, "the plot has no unplaceable row to report"
-    assert len(PLOTTED) == len(ROWS) - 2
+    assert len(plotted()) == len(rows) - 2
     # One either side of the cut. Cut and unplaceable together is the real
     # historical state - a row written before the pre-cap length was persisted
     # has no full length to recover - and it is the row the day's count holds
@@ -115,13 +134,13 @@ def test_some_rows_record_no_article_length_and_still_score() -> None:
     for row in unrecorded:
         # It scored, it banded, and the model read something. Only the length
         # before the cut is missing.
-        assert row.source_seen_word_count > 0
-        assert row.summary_word_count > 0
+        assert row.source_words > 0
+        assert row.summary_words > 0
 
 
 def test_source_lengths_cross_more_than_one_decade() -> None:
     """The x axis is a log one and labels whole decades, so one decade labels once."""
-    lengths = [source_words(row) for row in PLOTTED]
+    lengths = [source_words(row) for row in plotted()]
     assert min(lengths) * 10 < max(lengths)
 
 
@@ -131,13 +150,14 @@ def test_every_configured_target_zone_carries_a_mark() -> None:
     A step with nothing under it is a rule the chart states and the fixture
     never tests it against.
     """
-    floors = sorted(band.min_source_words for band in BANDS)
+    floors = sorted(band.min_source_words for band in config.load().app.summarize.bands)
+    placed = plotted()
     assert len(floors) > 1, "the config has one target zone, so this asserts nothing"
     for index, floor in enumerate(floors):
         ceiling = floors[index + 1] if index + 1 < len(floors) else None
         under = [
             row
-            for row in PLOTTED
+            for row in placed
             if source_words(row) >= floor and (ceiling is None or source_words(row) < ceiling)
         ]
         assert under, f"no scored item sits in the target zone above {floor} source words"
@@ -145,15 +165,16 @@ def test_every_configured_target_zone_carries_a_mark() -> None:
 
 def test_a_summary_stays_inside_the_axis_the_chart_draws() -> None:
     """The y domain is zero to the longest summary the ladder can publish."""
-    ceiling = SUMMARIZE.decoder_words_max()
-    for row in ROWS:
-        assert 0 < row.summary_word_count <= ceiling
+    ceiling = config.load().app.summarize.decoder_words_max()
+    for row in scored():
+        assert 0 < row.summary_words <= ceiling
 
 
 def test_the_digest_and_the_ledger_agree_on_which_items_were_cut() -> None:
     """One rule, two files. A reader is told what the console counts."""
-    assert [item.truncated for item in ITEMS] == [row.truncation_flagged for row in ROWS]
-    assert any(item.truncated for item in ITEMS), "no published item was cut"
+    items = published()
+    assert [item.truncated for item in items] == [row.truncation_flagged for row in scored()]
+    assert any(item.truncated for item in items), "no published item was cut"
 
 
 def test_one_published_item_is_both_an_abstract_and_cut() -> None:
@@ -168,7 +189,11 @@ def test_one_published_item_is_both_an_abstract_and_cut() -> None:
     Exactly one, because the browser suite addresses it and two would make the
     assertion there depend on which one Playwright found first.
     """
-    both = [item for item in ITEMS if item.source_form is SourceForm.ABSTRACT and item.truncated]
+    both = [
+        item
+        for item in published()
+        if item.source_form is SourceForm.ABSTRACT and item.truncated
+    ]
 
     assert len(both) == 1, "no published item is both an abstract and cut"
     # Composed by `assemble.reader_note`, never spelled in the builder. The share
@@ -179,46 +204,56 @@ def test_one_published_item_is_both_an_abstract_and_cut() -> None:
     )
 
 
-def scored_day(state: Path) -> Path:
-    """The file the builder's own scoring run leaves in the day directory."""
-    return ledger.day_shard_path(
-        state,
-        LedgerName.SCORES,
-        date=build_canary_day.DATE,
-        run_id=build_canary_day.SCORE_RUN_ID,
-        attempt=build_canary_day.SCORE_ATTEMPT,
-        job=build_canary_day.SCORE_JOB,
-        shard=build_canary_day.SCORE_SHARD,
-    )
+def filed_rows(state: Path) -> list[EvalRow]:
+    """The day's score rows as the ledger door reads them back."""
+    return ledger.load_days(state, LedgerName.SCORES, [build_canary_day.DATE], model=EvalRow)
 
 
-def test_the_ledger_header_is_the_contract(tmp_path: Path) -> None:
-    """Written by the pipeline's writer, so the column order cannot be invented here."""
-    build_canary_day.append_scores(tmp_path, ITEMS, EVALUATION)
+def test_the_scores_are_filed_by_the_pipelines_writer(tmp_path: Path) -> None:
+    """Filed by the writer the pipeline files with, so no shape can be invented here.
 
-    assert writer.read_header(scored_day(tmp_path)) == EvalRow.csv_columns()
+    The rows read back through the ledger door are the rows the builder scored,
+    field for field, and the index beside them holds one digest for each of
+    them, which only the writer writes.
+    """
+    rows = scored()
+    assert build_canary_day.file_scores(tmp_path, published(), evaluation()) == len(rows)
+
+    assert filed_rows(tmp_path) == rows
+    assert writer.indexed_observations(tmp_path) == {
+        writer.observation_digest(row.model_dump(mode="json")) for row in rows
+    }
 
 
 def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:
-    """The rows are a function of the fixture, never of how often it was built."""
+    """The rows are a function of the fixture, never of how often it was built.
+
+    Compared as the rows the door reads back rather than as bytes, because each
+    raw file names the instant it was written.
+    """
+    items, settings = published(), evaluation()
     written = []
     for index in range(3):
         state = tmp_path / f"run-{index}"
-        assert build_canary_day.append_scores(state, ITEMS, EVALUATION) == len(ITEMS)
-        written.append(scored_day(state).read_bytes())
+        assert build_canary_day.file_scores(state, items, settings) == len(items)
+        written.append(filed_rows(state))
 
     assert written[0] == written[1] == written[2]
 
 
-def test_appending_the_same_day_twice_adds_nothing(tmp_path: Path) -> None:
+def test_filing_the_same_day_twice_adds_nothing(tmp_path: Path) -> None:
     """The second write is the same measurement, so the writer drops it.
 
     The builder clears its state directory before writing, so this is the belt
     behind that brace: a ledger that survived the clear still cannot double.
     """
-    scored = scored_day(tmp_path)
-    assert build_canary_day.append_scores(tmp_path, ITEMS, EVALUATION) == len(ITEMS)
-    once = scored.read_bytes()
+    items, settings = published(), evaluation()
+    assert build_canary_day.file_scores(tmp_path, items, settings) == len(items)
+    once = filed_rows(tmp_path)
+    files = ledger.list_raw_files(tmp_path, LedgerName.SCORES)
 
-    assert build_canary_day.append_scores(tmp_path, ITEMS, EVALUATION) == 0
-    assert scored.read_bytes() == once
+    assert build_canary_day.file_scores(tmp_path, items, settings) == 0
+    assert filed_rows(tmp_path) == once
+    assert ledger.list_raw_files(tmp_path, LedgerName.SCORES) == files, (
+        "a second write that filed nothing still left a file"
+    )

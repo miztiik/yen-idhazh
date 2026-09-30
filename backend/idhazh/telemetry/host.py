@@ -393,19 +393,19 @@ class HostFacts:
     def shard_cells(self) -> dict[str, str | None]:
         """The two a shard reads once and notes on every item it records.
 
-        `job` is here rather than beside `shard` in the caller because the pair
-        it forms is the join, and a key column filled in one place cannot drift
-        from the machine cells filled in another.
+        `machine_job` is here rather than beside `machine_shard` in the caller
+        because the pair it forms is the join, and a key column filled in one
+        place cannot drift from the machine cells filled in another.
 
         **`runner_name` left on 2026-09-17 and stays on this class.** The item
         row no longer has the column - the host record carries the label once a
-        job, and `job` with `shard` is how an item reaches that record. What is
-        still read here is the one call that takes it, so nothing else has to
-        open the environment a second time.
+        job, and `machine_job` with `machine_shard` is how an item reaches that
+        record. What is still read here is the one call that takes it, so
+        nothing else has to open the environment a second time.
         """
         return {
             "cpu_model": self.cpu_model,
-            "job": None if self.job is None else self.job.value,
+            "machine_job": None if self.job is None else self.job.value,
         }
 
 

@@ -774,7 +774,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "record":
         record.stage_record(
-            common._load_plan(date), settings=settings, shard=args.shard, shards=args.shards
+            common._load_plan(date),
+            settings=settings,
+            commit_sha=args.commit,
+            shard=args.shard,
+            shards=args.shards,
         )
         return 0
 
@@ -783,6 +787,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             common._load_plan(date),
             settings=settings,
             state_root=common.STATE_ROOT,
+            commit_sha=args.commit,
             shard=args.shard,
             job=args.job,
         )
@@ -793,6 +798,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             common._load_plan(date),
             settings=settings,
             state_root=common.STATE_ROOT,
+            commit_sha=args.commit,
             shard=args.shard,
             job=args.job,
             job_started_at=int(args.job_started_at) if args.job_started_at else None,

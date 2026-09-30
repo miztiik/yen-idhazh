@@ -15,7 +15,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health
+
+from idhazh.contracts.base import ServerJob, derive_url_key
+from idhazh.contracts.item_health import ItemHealthRow
 from utilities import pipeline_artifact_analyzer as analyzer
+
+#: The UTC day, the run and the item the census row below is filed under. The
+#: item id is one the census accepts; the shorter one `capture_of` uses is not.
+DAY = "2026-09-14"
+RUN_ID = "2026-09-14-34852763827"
+ITEM_ID = "india-5tnmq7gbk3xj9wcd"
 
 
 def capture_of(
@@ -213,30 +224,67 @@ def test_a_list_of_objects_becomes_one_table_and_a_list_of_words_a_list() -> Non
     assert "Nothing came back under `claims`." in document
 
 
-def day_ledger(path: Path) -> Path:
-    """One item-health row, with the cells this report joins on and no others."""
-    path.write_text(
-        "run_id,item_id,shard,outcome,failure_code,canonical_url,source_id,source_words,"
-        "summary_words,label_kind,label_prefill_ms,label_decode_ms,label_input_tokens,"
-        "label_output_tokens,label_cached_tokens,label_finish_reason,summary_kind,"
-        "summary_prefill_ms,summary_decode_ms,summary_input_tokens,summary_output_tokens,"
-        "summary_cached_tokens,summary_finish_reason,visual_plan_ms,visual_plan_tokens_written\n"
-        "34852763827,india-5tnmq7gb,2,ok,,https://example.org/wind-farm,dna-india,353,95,"
-        "label,6180,5861,3886,279,0,stop,summarize_and_plan,"
-        "6214,3188,4214,512,3886,length,1178,192\n",
-        encoding="utf-8",
-        newline="\n",
+def census_row() -> ItemHealthRow:
+    """One item-health row carrying both calls' costs, as a run that recorded them files it.
+
+    Built on the committed published-row fixture, so every cell this report does
+    not read keeps a value the contract already accepts.
+    """
+    published = json.loads(read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"))
+    url = "https://example.org/wind-farm"
+    return ItemHealthRow.model_validate(
+        {
+            **published,
+            "date": DAY,
+            "run_id": RUN_ID,
+            "item_id": ITEM_ID,
+            "canonical_url": url,
+            "url_key": derive_url_key(url),
+            "vertical": "india",
+            "source_id": "dna-india",
+            "source_words": 353,
+            "summary_words": 95,
+            "machine_job": ServerJob.WORK,
+            "machine_shard": 2,
+            "model_calls": 2,
+            "label_kind": "label",
+            "label_prefill_ms": 6180,
+            "label_decode_ms": 5861,
+            "label_input_tokens": 3886,
+            "label_output_tokens": 279,
+            "label_cached_tokens": 0,
+            "label_finish_reason": "stop",
+            "summary_kind": "summarize_and_plan",
+            "summary_prefill_ms": 6214,
+            "summary_decode_ms": 3188,
+            "summary_input_tokens": 4214,
+            "summary_output_tokens": 512,
+            "summary_cached_tokens": 3886,
+            "summary_finish_reason": "length",
+            "prefill_ms": 12394,
+            "decode_ms": 9049,
+            "input_tokens": 8100,
+            "output_tokens": 791,
+            "cached_tokens": 3886,
+            "visual_plan_ms": 1178,
+            "visual_plan_tokens_written": 192,
+        }
     )
-    return path
+
+
+def census_day(state: Path) -> Path:
+    """The day's census filed through the ledger door, the way a finished run leaves it."""
+    seed_item_health(state, DAY, [census_row()])
+    return state
 
 
 def test_an_older_capture_fills_its_costs_from_the_day_ledger(tmp_path: Path) -> None:
     """A capture written before costs were recorded still answers what it cost."""
-    ledger = day_ledger(tmp_path / "14.csv")
+    state = census_day(tmp_path / "state")
     pair = {"label": capture_of("label"), "summary": capture_of("summary")}
 
-    rows = analyzer.from_ledger(ledger)
-    filled = analyzer.merged(pair, rows["india-5tnmq7gb"])
+    rows = analyzer.from_ledger(state, DAY)
+    filled = analyzer.merged(pair, rows[ITEM_ID])
     document = analyzer.render(filled, head=0, tail=0)
 
     assert "| 1 | label | 12.0 s | 6,180 | 5,861 | 3,886 | 0 | 3,886 | 279 |" in document
@@ -246,20 +294,54 @@ def test_an_older_capture_fills_its_costs_from_the_day_ledger(tmp_path: Path) ->
 
 def test_the_report_names_the_story_so_the_summary_can_be_checked(tmp_path: Path) -> None:
     """A summary is right or wrong against a source, so the source is section 1."""
-    ledger = day_ledger(tmp_path / "14.csv")
+    state = census_day(tmp_path / "state")
     pair = {"label": capture_of("label"), "summary": capture_of("summary")}
 
-    rows = analyzer.from_ledger(ledger)
-    document = analyzer.render(
-        analyzer.merged(pair, rows["india-5tnmq7gb"]), head=0, tail=0
-    )
+    rows = analyzer.from_ledger(state, DAY)
+    document = analyzer.render(analyzer.merged(pair, rows[ITEM_ID]), head=0, tail=0)
 
     assert document.index("## 1. The story these calls read") < document.index("## 2. ")
     assert "| link | <https://example.org/wind-farm> |" in document
     assert "| outlet | dna-india |" in document
     assert "| length | 353 words of article, 95 words of summary |" in document
-    assert "| run | 34852763827, shard 2 |" in document
+    assert f"| run | {RUN_ID}, shard 2 |" in document
     assert "read section 5 beside it" in document
+
+
+def test_the_health_flag_names_a_day_and_the_report_fills_from_it(tmp_path: Path) -> None:
+    """`--health` takes the run's UTC day and reads that day's census through the door."""
+    state = census_day(tmp_path / "state")
+    captures = tmp_path / "captures"
+    captures.mkdir()
+    for call in analyzer.CALL_ORDER:
+        (captures / f"{ITEM_ID}.{call}.json").write_text(
+            json.dumps({"call": call, "item_id": ITEM_ID, "prompt": "the prompt", "reply": "{}"}),
+            encoding="utf-8",
+            newline="\n",
+        )
+    out = tmp_path / "report.md"
+    asked = [str(captures), "--item", ITEM_ID, "--health", DAY]
+
+    returned = analyzer.main([*asked, "--state", str(state), "--out", str(out)])
+
+    document = out.read_text(encoding="utf-8")
+    assert returned == 0
+    assert "| 1 | label | 12.0 s | 6,180 | 5,861 | 3,886 | 0 | 3,886 | 279 |" in document
+    assert f"| run | {RUN_ID}, shard 2 |" in document
+
+
+def test_a_day_the_ledger_holds_no_row_for_is_refused(tmp_path: Path) -> None:
+    """A mistyped day must not read as a run that recorded no cost."""
+    captures = tmp_path / "captures"
+    captures.mkdir()
+    (captures / f"{ITEM_ID}.label.json").write_text(
+        json.dumps({"call": "label", "item_id": ITEM_ID}), encoding="utf-8", newline="\n"
+    )
+
+    with pytest.raises(SystemExit) as refused:
+        analyzer.main([str(captures), "--health", DAY, "--state", str(tmp_path / "state")])
+
+    assert refused.value.code == 2
 
 
 def test_the_capture_keeps_the_link_the_ledger_would_have_been_pruned_of() -> None:
@@ -289,7 +371,7 @@ def test_a_pair_with_no_costs_says_so_and_names_the_flag_that_fixes_it() -> None
     document = analyzer.render(pair, head=0, tail=0)
 
     assert "No call in this pair recorded what it cost" in document
-    assert "--health state/item-health/<yyyy>/<mm>/<dd>.csv" in document
+    assert "--health <YYYY-MM-DD>" in document
 
 
 def test_a_prompt_holding_a_code_fence_does_not_break_out_of_its_block() -> None:

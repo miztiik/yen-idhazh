@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import seed_feed_health, seed_scores, seed_span_rollup
+from conftest import seed_feed_health, seed_scores, seed_span_rollup, writer_identity
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob, derive_url_key
@@ -94,7 +94,7 @@ def _eval_row(month: str) -> EvalRow:
         title="A grid story",
         vertical="energy",
         model_id="energy-model",
-        attempt=1,
+        summary_attempt=1,
         hhem=0.9,
         hhem_full=0.9,
         hhem_delta=0.0,
@@ -102,7 +102,7 @@ def _eval_row(month: str) -> EvalRow:
         compression=0.2,
         extractiveness=0.4,
         band=ConfidenceBand.HIGH,
-        summary_word_count=60,
+        summary_words=60,
         pipeline_fingerprint="b" * 64,
         output_digest="c" * 64,
         scorer_version="hhem-2.1",
@@ -291,16 +291,15 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
         # Two work jobs a run, reading 100 and 50 tokens a second, so the band's
         # spread has two hosts to spread between. The manifest above says the
         # plan asked for two, which is the other half of that check. Each shard
-        # files its own row, which is how a run leaves them.
+        # files its own row through the ledger door, which is how a run leaves
+        # them.
         for shard, seconds in ((0, 10.0), (1, 20.0)):
-            ledger.write_segment(
+            ledger.persist(
                 state,
-                LedgerName.HOST_FINGERPRINT,
                 [_host_row(month, shard=shard, prompt=1000, seconds=seconds)],
-                run_id=run_id,
-                attempt=1,
-                job=ServerJob.WORK,
-                shard=shard,
+                ledger=LedgerName.HOST_FINGERPRINT,
+                covers=stamp,
+                identity=writer_identity(run_id, job=ServerJob.WORK, shard=shard),
             )
         record = state / "day-metrics" / month[:4] / month[5:7] / "01.json"
         record.parent.mkdir(parents=True, exist_ok=True)
@@ -907,28 +906,36 @@ def test_a_tree_with_no_run_says_so_rather_than_printing_a_zero(tmp_path: Path) 
     assert band.months == []
 
 
-def test_a_run_whose_shards_disagree_is_refused_whole(tree: tuple[Path, Path]) -> None:
-    """Two hosts answered for one shard and neither can be added to the other.
-    A page that prints half a reconcilable run is worse than one that says which
-    run it cannot read."""
+def test_a_re_run_that_drew_another_machine_replaces_the_first_host(
+    tree: tuple[Path, Path],
+) -> None:
+    """A second attempt at one shard is read in place of the first, never beside it.
+
+    GitHub re-runs a failed job into the same run id, and the second try can land
+    on another machine. The ledger door keeps one work unit's highest attempt, so
+    the band reads one host for the shard - the re-run's - and the run still
+    reads, rather than being refused as two hosts that cannot be added together.
+    """
     state, digest = tree
     moved = _host_row(NEWEST, shard=1, prompt=1000, seconds=20.0).model_copy(
         update={"cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C"}
     )
-    ledger.write_segment(
+    ledger.persist(
         state,
-        LedgerName.HOST_FINGERPRINT,
         [moved],
-        run_id=f"{NEWEST_DAY}-1",
-        attempt=2,
-        job=ServerJob.WORK,
-        shard=1,
+        ledger=LedgerName.HOST_FINGERPRINT,
+        covers=NEWEST_DAY,
+        identity=writer_identity(f"{NEWEST_DAY}-1", attempt=2, job=ServerJob.WORK, shard=1),
     )
 
     band = _band(state, digest)
 
     machine_route = next(route for route in band.routes if route.id is RouteId.MACHINE)
-    assert machine_route.worst == "1 run cannot be read"
+    assert machine_route.worst == "2 shards read 2.00x apart"
+    read = ledger.load_days(
+        state, LedgerName.HOST_FINGERPRINT, [NEWEST_DAY], model=HostFingerprintRow
+    )
+    assert {row.shard: row.cpu_model for row in read}[1] == "INTEL(R) XEON(R) PLATINUM 8573C"
 
 
 def test_more_hosts_than_the_plan_asked_for_refuses_the_run(tree: tuple[Path, Path]) -> None:
@@ -942,14 +949,12 @@ def test_more_hosts_than_the_plan_asked_for_refuses_the_run(tree: tuple[Path, Pa
     nobody dispatched, and the run is refused rather than published half-read.
     """
     state, digest = tree
-    ledger.write_segment(
+    ledger.persist(
         state,
-        LedgerName.HOST_FINGERPRINT,
         [_host_row(NEWEST, shard=2, prompt=1000, seconds=20.0)],
-        run_id=f"{NEWEST_DAY}-1",
-        attempt=1,
-        job=ServerJob.WORK,
-        shard=2,
+        ledger=LedgerName.HOST_FINGERPRINT,
+        covers=NEWEST_DAY,
+        identity=writer_identity(f"{NEWEST_DAY}-1", job=ServerJob.WORK, shard=2),
     )
 
     band = _band(state, digest)
@@ -987,15 +992,14 @@ def test_a_shard_that_filed_no_host_row_is_counted_against_the_plan(
     did not, and the run's totals are short by whatever it did.
     """
     state, digest = tree
-    ledger.day_shard_path(
-        state,
-        LedgerName.HOST_FINGERPRINT,
-        date=NEWEST_DAY,
-        run_id=f"{NEWEST_DAY}-1",
-        attempt=1,
-        job=ServerJob.WORK,
-        shard=1,
-    ).unlink()
+    (silent,) = [
+        held.path
+        for held in ledger.list_raw_files(
+            state, LedgerName.HOST_FINGERPRINT, days={NEWEST_DAY}
+        )
+        if held.envelope.identity.shard == 1
+    ]
+    silent.unlink()
 
     band = _band(state, digest)
 
@@ -1124,15 +1128,13 @@ def _health_row(stamp: str, index: int) -> ItemHealthRow:
 
 
 def _a_writers_day(state: Path, stamp: str, rows: int, *, shard: int) -> None:
-    """One job's slice of `item-health`, filed under the day its rows name."""
-    ledger.write_segment(
+    """One job's slice of `item-health`, filed through the door under the day its rows name."""
+    ledger.persist(
         state,
-        LedgerName.ITEM_HEALTH,
         [_health_row(stamp, index) for index in range(rows)],
-        run_id=f"{stamp}-1",
-        attempt=1,
-        job=ServerJob.WORK,
-        shard=shard,
+        ledger=LedgerName.ITEM_HEALTH,
+        covers=stamp,
+        identity=writer_identity(f"{stamp}-1", job=ServerJob.WORK, shard=shard),
     )
 
 
@@ -1171,7 +1173,7 @@ def _band_after_folding(state: Path, digest: Path) -> Any:
 def test_the_band_carries_the_day_the_record_reaches_and_no_backlog(
     tree: tuple[Path, Path],
 ) -> None:
-    """A fold of two days, and the band still says nothing is behind.
+    """Rows filed on two days, and the band still says nothing is behind.
 
     The backlog these three fields were added for cannot happen now. A writer
     files its own path under the day its rows name, so a run that died two days

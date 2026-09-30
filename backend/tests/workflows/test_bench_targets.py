@@ -9,19 +9,17 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from conftest import REPO_ROOT, SEED_COMMIT, read_text
 
-from idhazh import cli, config, day_shards, ledger
+from idhazh import cli, config, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.gardener import closed_day_fold
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
 from utilities import (
@@ -58,6 +56,7 @@ from ._harness import (
     BUDGETS_JOB,
     COMMIT_PROGRAM,
     COMMIT_STAGED_PATHS,
+    COMMIT_STEPS,
     FINGERPRINT_BENCH_JOB,
     FINGERPRINT_COMMAND,
     FINGERPRINT_JOB_FLAG,
@@ -65,8 +64,11 @@ from ._harness import (
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
     _artifact_upload,
+    _bash,
+    _commit_call,
     _declared_dispatch_inputs,
     _expression,
+    _isolated_env,
     _job,
     _load_workflows,
     _mapping,
@@ -77,14 +79,12 @@ from ._harness import (
     _step,
     _steps,
     _string_list,
+    requires_bash,
 )
 
 #: The step that stands the tokenizer up for the budgets job. Named here rather
 #: than in the shared harness because one module reads it.
 BUDGETS_START_STEP = "Start the tokenizer"
-
-#: A wake late enough that the day the probe wrote is closed behind it.
-A_WAKE_AFTER_THE_PROBE = datetime(2026, 10, 1, tzinfo=UTC)
 
 pytestmark = pytest.mark.workflow
 
@@ -372,42 +372,61 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     )
 
     silicon.stage_fingerprint(
-        plan, settings=settings, state_root=bench_root, shard=0, job=ServerJob.RUNTIME
+        plan,
+        settings=settings,
+        state_root=bench_root,
+        commit_sha=SEED_COMMIT,
+        shard=0,
+        job=ServerJob.RUNTIME,
     )
     silicon.stage_fingerprint(
-        plan, settings=settings, state_root=production_root, shard=0, job=ServerJob.WORK
+        plan,
+        settings=settings,
+        state_root=production_root,
+        commit_sha=SEED_COMMIT,
+        shard=0,
+        job=ServerJob.WORK,
     )
-    # The probe writes a writer file into its own root's day, and only the
-    # production root is folded: the gardener's host-fingerprint task walks
-    # `state/host-fingerprint` and nothing folds a trial root. The bench root is
-    # INSIDE the production root, so a fold that walked one directory higher
-    # would settle the bench's row into the ledger the console reads - and the
-    # call below is how that is asked rather than assumed.
-    folded = closed_day_fold.fold(
-        production_root,
-        [LedgerName.HOST_FINGERPRINT],
-        now=A_WAKE_AFTER_THE_PROBE,
-        after_days=DEFAULT_CLOSED_AFTER_DAYS,
-        dry_run=False,
+    # Each probe files a raw file under its own root's `raw/` folder. The bench
+    # root is INSIDE the production root, so a reader that walked the whole
+    # production tree would count the bench's machine as production's - and the
+    # reads below are how that is asked rather than assumed: each root's own
+    # ledger reader, the one the console panels use, returns its own row alone.
+    production_rows = ledger.load_days(
+        production_root, LedgerName.HOST_FINGERPRINT, [plan.date], model=HostFingerprintRow
     )
-    assert [day.day for day in folded.days] == ["2026-09-17"]
+    bench_rows = ledger.load_days(
+        bench_root, LedgerName.HOST_FINGERPRINT, [plan.date], model=HostFingerprintRow
+    )
+    assert [row.job for row in production_rows] == [ServerJob.WORK], (
+        "the bench's machine reached the ledger the console reads"
+    )
+    assert [row.job for row in bench_rows] == [ServerJob.RUNTIME], (
+        "a production machine reached the bench's own ledger"
+    )
 
     written = {
         path.relative_to(tmp_path).as_posix()
-        for path in tmp_path.rglob("*.csv")
-        if LedgerName.HOST_FINGERPRINT in path.parts
+        for path in tmp_path.rglob("*")
+        if path.is_file() and LedgerName.HOST_FINGERPRINT in path.parts
     }
-    bench_day = f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}/2026/09/17"
-    production_day = f"{ledger.STATE_DIRNAME}/{LedgerName.HOST_FINGERPRINT}/2026/09/17"
-    bench_files = sorted(path for path in written if path.startswith(f"{bench_day}/"))
-    assert len(bench_files) == 1, "a probe row landed off its own day"
-    assert not bench_files[0].endswith(day_shards.SETTLED_NAME), "the fold reached the bench"
-    assert written - set(bench_files) == {f"{production_day}/{day_shards.SETTLED_NAME}"}, (
-        "the production probe's row landed off its own day, or its day did not fold"
+    day = plan.date.replace("-", "/")
+    bench_raw = ledger.raw_root(Path(BENCH_LEDGER_ROOT), LedgerName.HOST_FINGERPRINT)
+    production_raw = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.HOST_FINGERPRINT)
+    bench_files = sorted(
+        path for path in written if path.startswith(f"{bench_raw.as_posix()}/{day}/")
     )
+    production_files = sorted(
+        path for path in written if path.startswith(f"{production_raw.as_posix()}/{day}/")
+    )
+    assert len(bench_files) == 1, "the bench probe's row landed off its own day"
+    assert len(production_files) == 1, "the production probe's row landed off its own day"
+    assert written == {*bench_files, *production_files}, "a probe row landed outside both days"
 
     staged = COMMIT_STAGED_PATHS["bench"]
-    assert staged == [f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}"]
+    assert len(staged) == 1 and bench_files[0].startswith(f"{staged[0]}/"), (
+        f"the bench commits {staged}, which does not hold the file its probe wrote"
+    )
     for path in COMMIT_STAGED_PATHS["plan"] + COMMIT_STAGED_PATHS["work"]:
         assert not path.startswith(f"{BENCH_LEDGER_ROOT}/"), (
             f"a production job stages {path}, which is under the bench's own tree"
@@ -421,10 +440,40 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
         f"digest.yml names {BENCH_CANDIDATE_CONFIG}, so a daily job would redirect its "
         f"ledgers under {BENCH_LEDGER_ROOT}/ and stage them with `state`"
     )
-    assert (REPO_ROOT / staged[0]).is_dir(), (
-        "`git add` on a path that is not there aborts the whole step, so the bench "
-        "ledger ships with a header and no rows"
+
+
+@requires_bash
+def test_a_bench_whose_probe_wrote_nothing_says_so_and_stages_nothing(tmp_path: Path) -> None:
+    """`git add` on a path that is not there aborts the whole step.
+
+    No commit holds the bench's machine folder open: the ledger door files one
+    raw file per write and has no empty file to seed a folder with. So the step
+    asks whether the one folder it stages is there, and commits only then. Run
+    in a checkout without that folder, it prints its nothing-staged message and
+    exits 0 without starting the commit program.
+    """
+    step = _step(_load_workflows()["measure.yml"], BENCH_SERVER_JOB, "name", COMMIT_STEPS["bench"])
+    body = _script(step, COMMIT_STEPS["bench"])
+    staged, settings = _commit_call("bench")
+    (folder,) = staged
+    asked = [words for line in body.splitlines() if "-d" in (words := line.split())]
+    assert len(asked) == 1 and folder in asked[0], (
+        f"the step does not ask whether {folder}, the one folder it stages, is there"
     )
+    shell = _bash()
+    assert shell is not None
+
+    done = subprocess.run(
+        [shell, "-c", body],
+        cwd=tmp_path,
+        env={**_isolated_env(tmp_path), **settings},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == settings["NOTHING_STAGED_MESSAGE"], done.stdout
 
 
 def test_the_bench_reads_its_own_config_when_it_records_the_machine() -> None:

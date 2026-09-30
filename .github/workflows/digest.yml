@@ -126,12 +126,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # `.[parquet]` rather than `.`: the plan reads every retirement back
-      # through the ledger door and files a new one through it, and the door's
-      # files are parquet. The engine is an optional extra, so only a job that
-      # touches the door installs it.
       - name: Install
-        run: pip install -e ".[parquet]"
+        run: pip install -e .
 
       - id: decide
         env:
@@ -305,6 +301,7 @@ jobs:
           set -euo pipefail
           python -m idhazh fingerprint \
             --date "${{ steps.decide.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --shard 0 \
             --job plan
 
@@ -362,6 +359,7 @@ jobs:
           set -euo pipefail
           python -m idhazh job-clock \
             --date "${{ steps.decide.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --job plan \
             --shard 0 \
             --job-started-at "${JOB_STARTED_AT:-}"
@@ -508,6 +506,7 @@ jobs:
           set -euo pipefail
           python -m idhazh fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --shard ${{ matrix.shard }} \
             --job work
 
@@ -634,6 +633,7 @@ jobs:
         run: |
           python -m idhazh record \
             --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }}
 
@@ -712,6 +712,7 @@ jobs:
           set -euo pipefail
           python -m idhazh job-clock \
             --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --job work \
             --shard ${{ matrix.shard }} \
             --job-started-at "${JOB_STARTED_AT:-}" \
@@ -998,11 +999,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # `.[parquet]` rather than `.`: assemble files a low-yield retirement and
-      # publishes every retirement on record, both through the ledger door, whose
-      # files are parquet.
       - name: Install
-        run: pip install -e ".[parquet]"
+        run: pip install -e .
 
       - uses: actions/download-artifact@v8
         with:
@@ -1025,6 +1023,7 @@ jobs:
           set -euo pipefail
           python -m idhazh fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --shard 0 \
             --job assemble
 

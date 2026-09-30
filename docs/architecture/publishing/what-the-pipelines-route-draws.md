@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-29
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds three of its panels - where a run's time went, what one item cost
@@ -207,8 +207,8 @@ days, and drives the one picked day from both figures.
 
 ## Time per item, by stage
 
-Stage timing medians read from `state/item-health/<YYYY>/<MM>/<DD>/`, not from
-`state/scores.csv`. The item-health ledger has one row per planned item, so it
+Stage timing medians read from the item-health ledger, not from the scores
+ledger. The item-health ledger has one row per planned item, so it
 can answer "is it getting slower" even when the scorer did not run; the score
 ledger owns faithfulness and scorer time for the scored subset, and never carried
 these columns.

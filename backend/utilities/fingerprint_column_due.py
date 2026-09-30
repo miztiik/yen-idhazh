@@ -12,9 +12,9 @@ map on every build.
 That is a fact about the rows, so a person asks the rows. This prints the
 answer and changes nothing.
 
-A day is read the way the ledger's own readers read one: every writer's file
-in the day's directory and the day's `settled.csv`, settled into one row per
-measurement, so a row held by both is counted once. The read is bounded by
+A day is read the way the ledger's own readers read one: through the ledger
+door, each day settled on its own into one row per measurement, so a row filed
+twice is counted once. The read is bounded by
 `console.max_window_days` rather than by how much the archive has accumulated
 (CLAUDE.md Guardrail #12).
 """
@@ -26,7 +26,7 @@ import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.ledger_name import LedgerName
 
@@ -58,19 +58,20 @@ def main(argv: list[str] | None = None) -> int:
     settings = json.loads((args.config_root / "idhazh.json").read_text(encoding="utf-8"))
     window = settings["console"]["max_window_days"]
     today = args.today or datetime.now(tz=UTC).date()
-    scores_root = ledger.tree_root(args.state_root, LedgerName.SCORES)
+    days = [(today - timedelta(days=offset)).isoformat() for offset in range(window)]
 
-    read = 0
+    # A row is filed under the day its own `date` names, so grouping on that
+    # cell gives back each day the door settled.
+    settled: dict[str, list[dict[str, str]]] = {}
+    for row in ledger.load_days(args.state_root, LedgerName.SCORES, days, model=EvalRow):
+        cells = row.csv_row()
+        settled.setdefault(cells["date"], []).append(cells)
+
+    read = len(settled)
     stamped_days: list[str] = []
     stamped_rows = 0
-    for offset in range(window):
-        day = (today - timedelta(days=offset)).isoformat()
-        if not day_shards.one_day(scores_root, day):
-            continue
-        read += 1
-        rows = _stamped_rows(
-            day_shards.settled_day(scores_root, day, ledger.OBSERVATION_KEY, EvalRow)
-        )
+    for day, cells_of_day in settled.items():
+        rows = _stamped_rows(cells_of_day)
         if rows:
             stamped_days.append(day)
             stamped_rows += rows

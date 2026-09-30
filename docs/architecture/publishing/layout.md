@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-29
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what a day is once five runs have added to it. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -36,7 +36,7 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/run.json append-only runs[] for that dat
 frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json  optional visual, drawn in the browser
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
-state/scores/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice
+state/raw/scores/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice
 state/score-index/<YYYY>/<MM>/<DD>/ the identity of every measurement that day holds, 76 bytes each
 state/score-archive/<YYYY-MM>.json a score month past its full-grain window, as totals plus a dedupe index
 ```
@@ -193,7 +193,7 @@ The engineering half is driven by arithmetic rather than preference. Segmented d
 
 ### Two append paths, and only one of them deduplicates
 
-`idhazh.ledger.extend_ledger_file` writes every row it is handed. `idhazh.evals.writer.append_segment` refuses a row whose address, inputs, words and scorer version it already holds. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
+`idhazh.ledger.extend_ledger_file` writes every row it is handed. `idhazh.evals.writer.file_measurements` files no row whose address, inputs, words and scorer version it already holds. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
 
 So the blind path stays blind, and each caller that owns a repeat is now named next to it. Two of the four ledgers absorb a repeat at read time: `load_seen` and `load_published` keep the earliest of two rows, so a duplicate costs bytes and never moves a date. The health pair does not, and that is stated rather than guarded: `discover.resting` counts failures to decide a quarantine, so a duplicated failure counts twice. Measured on this checkout 2026-08-27, the published ledger held 2,097 rows and 2,097 distinct addresses in the flat file it has since moved off.
 

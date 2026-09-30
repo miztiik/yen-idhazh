@@ -491,7 +491,7 @@ test('the two on-record counts have no reader left in the source', () => {
 	const totals = files.filter((path) => /\btotalRows\b/.test(readFileSync(path, 'utf8')));
 	expect(totals.map((path) => path.slice(SRC.length + 1))).toEqual([]);
 
-	// `itemHealthRows` stays as the ledger reader in `payload.ts`, which the
+	// `itemHealthRows` stays as the ledger reader in `ledger-rows.ts`, which the
 	// timings, the throughput and the source table all still need. What must not
 	// come back is a payload key of that name, or anything reading one.
 	const shipped = files.filter((path) =>

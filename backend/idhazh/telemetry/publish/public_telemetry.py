@@ -1,24 +1,25 @@
 """Publish the browser-safe telemetry projection.
 
-The source ledger lives under `state/item-health/` and carries fields the browser
-must never receive. This module writes a narrow monthly projection under
-`frontend/public/telemetry/`, which is the only item-health data the console
-fetches at runtime.
+The source is the item-health ledger (`state/raw/item-health/`), and it carries
+fields the browser must never receive. This module writes a narrow monthly
+projection under `frontend/public/telemetry/`, which is the only item-health data
+the console fetches at runtime.
 
 **The two grains differ on purpose.** The ledger files by day, because a run
 writes one day and a removal takes one day. The mirror files by month, because
 its grain follows what a browser fetches and the console prices a window in month
-files. So a month here is folded from that month's day files - at most 31 of them
-- and `docs/concepts/partitions.md` owns both rules.
+files. So a month here is folded from that month's days - at most 31 of them -
+and `docs/concepts/partitions.md` owns both rules.
 
 The projection's shape is `PublicTelemetryRow`, not a list of names here. This
 module owns *when* a shard is written and *from what*; the contract owns which
 cells may cross and what each one may hold (Guardrail #3).
 
 It owns *where* a shard sits too, through `shard_path`. The gardener's
-`telemetry-aggregate` task deletes a copy in the same pass that folds the days
-it copies, and it finds the copy by the `<YYYY-MM>.csv` name `shard_path`
-spells, through `retention.month_shards`, rather than by a spelling of its own.
+`telemetry-aggregate` task deletes a copy once it is past that task's
+public-copy series, and it finds the copy by the `<YYYY-MM>.csv` name
+`shard_path` spells, through `retention.month_shards`, rather than by a spelling
+of its own.
 """
 
 from __future__ import annotations
@@ -31,9 +32,8 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, day_shards, ledger
+from idhazh import config, ledger
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_telemetry import FORBIDDEN_COLUMNS, PublicTelemetryRow
 
@@ -71,18 +71,15 @@ def shard_relpath(month: str) -> str:
     return f"frontend/public/{PUBLIC_TELEMETRY_DIRNAME}/{month}.csv"
 
 
-def _settled_day(source_dir: Path, date: str) -> list[PublicTelemetryRow]:
-    """One day of the census, settled, as the rows a reader is allowed to see.
+def _settled_days(state_root: Path, days: list[str]) -> list[PublicTelemetryRow]:
+    """These days of the census, settled, as the rows a reader is allowed to see.
 
-    `day_shards.settled_day` reads every row through `ItemHealthRow` first, so a
-    file missing a column the census promises is refused there by name and this
-    never has to check the header itself.
+    Read through the ledger door as `ItemHealthRow`s, each day settled on its
+    own, and projected to the public shape here.
     """
     return [
-        PublicTelemetryRow.from_csv_row(cells)
-        for cells in day_shards.settled_day(
-            source_dir, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
-        )
+        PublicTelemetryRow.from_csv_row(row.csv_row())
+        for row in ledger.load_days(state_root, LedgerName.ITEM_HEALTH, days, model=ItemHealthRow)
     ]
 
 
@@ -172,34 +169,32 @@ def publish(
     re-run does not.
 
     **The ledger files by day and this mirror files by month**, so a month is
-    folded from that month's days through `day_shards.dates_by_month`, and each
-    of those days is settled. Settled rather than concatenated, because a day is
-    a directory of writer-owned files: a re-run's second attempt sits beside the
-    first, and publishing both would show a reader one item twice. Its input is
-    one month, so a named month opens at most 31 days.
+    read as that month's days - the months from `ledger.held_months`, each day
+    through `ledger.load_days` - and each of those days is settled on its own.
+    Settled rather than concatenated, because a day holds every writer's rows: a
+    re-run's second attempt sits beside the first, and publishing both would show
+    a reader one item twice. Its input is one month, so a named month reads at
+    most 31 days.
 
     Cover: the months the caller names. The daily caller passes the one month it
     appended to, so an ordinary run reads one month's days whatever the ledger
     holds. `None` is unbounded on purpose - a fresh clone has to rebuild a mirror
     it never published, and a cover in months would leave it permanently short of
     one. What bounds the ledger is retention rather than this read: the
-    gardener's `telemetry-aggregate` task keeps fourteen months at full grain.
-    That cap has never had a candidate to take - the oldest partition on disk is
-    2026-08 and the task first reaches it on 2027-10-01 - so
-    the unbounded case reads every partition there has ever been. **The day grain
-    makes that case about thirty times wider in file handles and not one row
-    wider**, and the listing behind it grows by one directory entry a day rather
-    than one a month.
+    item-health compaction deletes a month past the monthly window of
+    `config/gardener/compact-item-health.json`. That compaction is report-only
+    today, so nothing has been deleted and the unbounded case reads every
+    partition there has ever been. **The day grain makes that case about thirty
+    times wider in file handles and not one row wider**, and the listing behind
+    it grows by one directory entry a day rather than one a month.
     """
-    source_dir = ledger.tree_root(state_root, LedgerName.ITEM_HEALTH)
     public_root.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    by_month = day_shards.dates_by_month(source_dir, days=UNBOUNDED_WINDOW)
-    for month in sorted(by_month):
+    for month in ledger.held_months(state_root, LedgerName.ITEM_HEALTH):
         target = shard_path(public_root, month)
         if months is not None and month not in months and target.exists():
             continue
-        rows = [row for date in by_month[month] for row in _settled_day(source_dir, date)]
+        rows = _settled_days(state_root, ledger.month_days(month))
         if _write_if_changed(target, rows):
             written.append(target)
     if ensure_month is not None and all(path.stem != ensure_month for path in written):

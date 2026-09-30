@@ -1,14 +1,14 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 The console's interactive charts read a published projection of item health. They
-never read `state/item-health/` directly.
+never read the item-health ledger directly.
 
 ## Published shards
 
-`backend/idhazh/telemetry/publish/public_telemetry.py` reads
-`state/item-health/<YYYY>/<MM>/<DD>/` and writes
+`backend/idhazh/telemetry/publish/public_telemetry.py` reads a month of the
+item-health ledger through `ledger.load_days` and writes
 `frontend/public/telemetry/<YYYY-MM>.csv`. The browser fetches these monthly
 shards on demand as the operator pans the viewport.
 
@@ -16,10 +16,10 @@ shards on demand as the operator pans the viewport.
 They take their grain from different things - the ledger from what a run writes
 and what a removal takes away, the mirror from what a browser fetches - and
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains)
-owns both rules. This module is the bridge: `day_partition.days_by_month` groups
-the day files, and a month is projected whole from at most 31 of them. What it
-cost, stated rather than implied: the unbounded case opens about thirty times as
-many file handles for the same rows, and the count is asserted in
+owns both rules. This module is the bridge: `ledger.held_months` names the months
+the ledger holds, and a month is projected whole from its days, each settled on
+its own. What it cost, stated rather than implied: the unbounded case opens about
+thirty times as many file handles for the same rows, and the count is asserted in
 `backend/tests/test_publish_telemetry.py` rather than described here.
 
 **This is a month partition, and it now honours the freeze rule.** The pattern -
@@ -122,7 +122,7 @@ uncut. The column list, and why the count travels instead of the text, is
 `fetch_ms`, `extract_ms`, `summarize_ms`, `prefill_ms`, `decode_ms`,
 `input_tokens`, `output_tokens` and `cached_tokens` joined the projection on
 2026-09-05. Every run since 2026-08-23 has measured them and written them to
-`state/item-health/`, and the projection dropped all eight on the way out - so
+the item-health ledger, and the projection dropped all eight on the way out - so
 the console could show that a stage failed and never how long the stage took.
 
 They cross on the same terms the two word counts do: they are durations and
@@ -335,9 +335,10 @@ months, and the gardener loader refuses any value that is not equal to the
 `full-grain` series of the same file: this
 file is the browser's copy of that ledger, so a published month whose source has
 been folded away is a rate nobody can check, and a source month with no published
-copy is a window the console cannot draw. Since 2026-09-03 the two files go
-together: the gardener's `telemetry-aggregate` task folds the ledger month,
-unlinks the shard, and unlinks this copy of it in the same pass
+copy is a window the console cannot draw. The gardener's `telemetry-aggregate`
+task summarises the ledger month and unlinks this copy of it in the same pass;
+the month's rows go later, when the item-health compaction's `monthly_window`
+passes, so the source always outlives its copy
 ([../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md#every-tree-names-its-own-cleanup-age)).
 
 Three things about that deletion are worth stating on this page rather than only
@@ -350,11 +351,9 @@ on the pruner's:
  over it (`CLAUDE.md` section 8). Measured 2026-09-02 on this checkout, a live
  run would take nothing today; the first shard it takes is `2026-08.csv` on
  **2027-10-01**.
-- **A copy is never deleted before its source.** The aggregate is written and
- read back, then the ledger shard is unlinked, then this copy. A run that dies
- between the last two leaves a published month with nothing behind it, and the
- next run takes it - that pass walks this directory rather than the shards being
- folded, which is the only way it can see a copy whose source is already gone.
+- **A copy never goes before its month is summarised.** The summary is written
+ and read back, then this copy is unlinked, and the month's rows stay until the
+ item-health compaction takes them.
 - **The reader never asks for one that went.** `telemetryMonths` lists this
  directory at build time and `monthsToFetch` filters on that list, so a deleted
  month is absent from `data.telemetryMonths` and no widening ever names it.
@@ -374,10 +373,12 @@ keeps reading a projection it cannot see all of.
 The console's `What the model did` section is not drawn from the published
 shards. It is computed while the site is built, out of two private ledgers:
 
-- `state/scores/<YYYY>/<MM>/<DD>/` - one row per scored item.
-- `state/item-health/<YYYY>/<MM>/<DD>/` - one row per planned item per run.
+- the scores ledger, under `state/raw/scores/` and `state/compact/scores/` - one
+  row per scored item.
+- the item-health ledger, under `state/raw/item-health/` and
+  `state/compact/item-health/` - one row per planned item per run.
 
-Neither file is served and neither crosses to a browser. What reaches the page
+Neither ledger is served and neither crosses to a browser. What reaches the page
 is a count of that day's items, never a row and never a score. The derivation is
 [frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts),
 which sits under `$lib/server/` so SvelteKit refuses to bundle it for a browser.
@@ -387,7 +388,7 @@ says only where each figure comes from.
 
 | On screen | Counts | Read from |
 | --- | --- | --- |
-| Summaries today | rows the score ledger holds for the day | `scores.csv` |
+| Summaries today | rows the score ledger holds for the day | the scores ledger |
 | Marked "not sure" | rows in the lowest confidence band | `band` |
 | Numbers not in the article | rows asserting a figure the article never gave | `unsupported_numbers` |
 | "Maybe" told as fact | rows that turned the article's hedge into an assertion | `hedge_dropped` |
@@ -399,7 +400,7 @@ says only where each figure comes from.
 | What one summary cost | every timed article in the window, binned by doublings of the clock, with the median and the 95th taken over the values | `summarize_ms` |
 | What checking one summary cost | the same binning over the checker's own clock, with its own median and 95th | `score_ms` |
 | Which sources the checker doubts | summaries carrying a low band, a figure the article did not give, or a flattened hedge, grouped by the source the article came from | `band`, `unsupported_numbers`, `hedge_dropped`, joined to `source_id` on `url_key` |
-| How long the summaries came out | the lowest, middle and highest summary length of each run, against the band its own articles were asked for | `summary_word_count`, `source_word_count`, `summarize.bands` |
+| How long the summaries came out | the lowest, middle and highest summary length of each run, against the band its own articles were asked for | `summary_words`, `source_words_before_cap`, `summarize.bands` |
 | What the model change moved | ten measures either side of the newest day the model id changed, each as a ratio against its own value before | `model_id` plus the columns above, and the two token rates |
 
 `hhem` still decides the band and it never prints. A faithfulness score is a
@@ -573,8 +574,8 @@ above.
 ## What the machine did - read at build time, never published
 
 The same arrangement as the model section above, over two private ledgers read
-together: `state/host-fingerprint/`, one machine row per job per shard per run,
-and `state/item-health/`, one row per item. The machine record holds what
+together: the host-fingerprint ledger, one machine row per job per shard per run,
+and the item-health ledger, one row per item. The machine record holds what
 llama-server itself counted and what the job clock read; the item ledger holds
 what the summarize stage copied out of each reply. The reader is
 [frontend/src/lib/server/machine-counters.ts](../../../frontend/src/lib/server/machine-counters.ts),
@@ -654,12 +655,13 @@ disagreed.
 that worked around them is gone with the ledger.** A run id carries the identity
 of the execution that made it, so two workflow runs can no longer compute one.
 From 2026-09-18 each model-server job writes its readings into its own file
-under the day it recorded, so no two writers open one file. `day_shards.settled_rows` settles
-those files by key and the later attempt wins, so a re-run corrects its first
-try instead of adding a second row. The union driver that made the repeat
+under the day it recorded, so no two writers open one file; each is a raw file
+through the ledger door now. The door's reader keeps the rows of the highest
+attempt at each writer, so a re-run corrects its first try instead of adding a
+second row. The union driver that made the repeat
 possible came off every head under `state/` on 2026-09-19, and
 `state/runtime-counters.csv` itself was deleted the day after - the four cells a
-reader still wanted moved onto `state/host-fingerprint/`, whose key is
+reader still wanted moved onto the host-fingerprint ledger, whose key is
 `(date, run_id, job, shard)`. See
 [../sources/item-health.md](../sources/item-health.md#the-structure).
 
