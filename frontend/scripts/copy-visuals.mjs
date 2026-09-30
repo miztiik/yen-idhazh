@@ -70,7 +70,7 @@ import {
 	statSync,
 	writeFileSync
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative as relativeTo, resolve, sep } from 'node:path';
 import { assetBaseUrl } from '../asset-base.js';
 // The allow-list and the projector itself, shared with the build-time reader in
 // `src/lib/server/payload.ts`. The `.ts` extension and the full relative path
@@ -264,10 +264,13 @@ const stateSource = process.env.STATE_ROOT
 	? resolve(process.env.STATE_ROOT)
 	: resolve('..', 'state');
 const stateTarget = join('static', 'state');
+/** The state root as the repository names it, so a refusal names the tree it
+ * read: a canary build reads another one than `state/`. */
+const stateLabel = relativeTo(resolve('..'), stateSource).split(sep).join('/');
 
 function stageLedgers() {
 	const ledgers = publishedLedgers();
-	const copy = ledgerCopy(stateSource, ledgers);
+	const copy = ledgerCopy(stateSource, ledgers, stateLabel);
 	if (copy.refused.length > 0) {
 		console.error('published ledgers: the build stops here, because a published ledger is not whole:');
 		for (const line of copy.refused) console.error(`  ${line}`);
@@ -283,7 +286,7 @@ function stageLedgers() {
 	for (const file of copy.missing) {
 		const [, ledger] = file.split('/');
 		console.log(
-			`::warning title=A published ledger file is missing::file-missing ${ledger} state/${file}: ` +
+			`::warning title=A published ledger file is missing::file-missing ${ledger} ${stateLabel}/${file}: ` +
 				'an index names it and it is not in the tree. The site is built without it, and the ' +
 				'console shows the days it covers as unreachable. Re-pack that day.'
 		);

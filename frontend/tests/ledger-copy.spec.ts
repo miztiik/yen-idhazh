@@ -95,9 +95,23 @@ test('an index that is not this ledger\'s, or names a path rather than a day, st
 test('a state root that is not there stops the build when a ledger is published, and only then', () => {
 	const gone = join(test.info().outputPath('nowhere'), 'state');
 	expect(ledgerCopy(gone, ['scores']).refused).toEqual([
-		`the state root ${gone} is not there, and ledger.published names scores`
+		'the state root state/ is not there, and ledger.published names scores'
 	]);
 	expect(ledgerCopy(gone, [])).toEqual({ files: [], refused: [], missing: [] });
+});
+
+test('a refusal names the state root the way the build was told to, never by its absolute path', () => {
+	// The canary build reads its own tree, and a line saying `state/` would send
+	// whoever reads it to the real one.
+	const tree = aWholeLedger('scores');
+	delete tree['compact/scores/index/monthly.json'];
+	expect(ledgerCopy(aStateTree(tree), ['scores'], 'backend/var/canary/state').refused).toEqual([
+		'scores: backend/var/canary/state/compact/scores/index/monthly.json is missing'
+	]);
+	const gone = join(test.info().outputPath('nowhere'), 'state');
+	expect(ledgerCopy(gone, ['scores'], 'backend/var/canary/state').refused).toEqual([
+		'the state root backend/var/canary/state/ is not there, and ledger.published names scores'
+	]);
 });
 
 test('the published list is read from the config, and a name that is not a ledger name is refused', () => {

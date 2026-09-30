@@ -140,15 +140,16 @@ function filesNamedIn(text, ledger, period) {
  *
  * @param {string} stateRoot
  * @param {readonly string[]} ledgers
+ * @param {string} [rootName] How a refusal names `stateRoot`: a repository path, never an absolute one.
  * @returns {LedgerCopy}
  */
-export function ledgerCopy(stateRoot, ledgers) {
+export function ledgerCopy(stateRoot, ledgers, rootName = 'state') {
 	/** @type {LedgerCopy} */
 	const copy = { files: [], refused: [], missing: [] };
 	if (ledgers.length === 0) return copy;
 	if (!existsSync(stateRoot) || !statSync(stateRoot).isDirectory()) {
 		copy.refused.push(
-			`the state root ${stateRoot} is not there, and ledger.published names ${ledgers.join(', ')}`
+			`the state root ${rootName}/ is not there, and ledger.published names ${ledgers.join(', ')}`
 		);
 		return copy;
 	}
@@ -161,12 +162,12 @@ export function ledgerCopy(stateRoot, ledgers) {
 			const index = `compact/${ledger}/index/${period}.json`;
 			const at = join(stateRoot, ...index.split('/'));
 			if (!existsSync(at)) {
-				copy.refused.push(`${ledger}: state/${index} is missing`);
+				copy.refused.push(`${ledger}: ${rootName}/${index} is missing`);
 				continue;
 			}
 			const named = filesNamedIn(readFileSync(at, 'utf8'), ledger, period);
 			if (typeof named === 'string') {
-				copy.refused.push(`${ledger}: state/${index} ${named}`);
+				copy.refused.push(`${ledger}: ${rootName}/${index} ${named}`);
 				continue;
 			}
 			files.add(index);
