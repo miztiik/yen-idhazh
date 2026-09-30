@@ -111,23 +111,20 @@ declaration, and this is the order:
 3. Check the list against what you expect. On 2027-10-01 the retention tasks
  name two trees - `frontend/public/telemetry/2026-08.csv` and the day files under
  `state/feed-health/2026/08/`. A third name, or a month that is not the oldest,
- means a boundary is wrong and the switch waits. The item-health and scores rows
- are not on that list: their compactions delete them, and a compaction's own list
- is read as
+ means a boundary is wrong and the switch waits. The item-health rows are not on
+ that list: their compaction deletes them, and a compaction's own list is read as
  [the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-dry-run-does-and-what-the-record-says)
- says.
-4. Do not turn `compact-scores` on yet. The `scores` task built the score archive
- from the CSV day files, which moved to the ledger door, so it builds none now;
- until an archive is built from the door's rows, a live `compact-scores` would
- delete months with no summary written for them
- ([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md#design-rationale)).
+ says. The eval rows are on no list at all, because nothing deletes one.
+4. `compact-scores` keeps every month: its `monthly_window` is `forever`, so a
+ live pass packs the eval rows into fewer files and drops none of them
+ ([../concepts/evaluation.md](../concepts/evaluation.md#design-rationale)).
 5. Only then set that task's `dry_run` to `false` in its own declaration, in a
  commit that changes nothing else.
 
 **The console ledgers' packing tasks are the ones to turn on first.**
 `compact-item-health`, `compact-scores` and `compact-host-fingerprint` ship
 report-only, and the console reads their packed files, so until they run live it
-shows data up to the day the migration ran. `compact-scores` waits for step 4.
+shows data up to the day the migration ran.
 
 **Each task is switched on by itself, and the picture cleanup is a task of its
 own.** `visual-prune` files a row under `state/raw/visual-prunes/` saying what it
@@ -144,7 +141,7 @@ What each ledger keeps, and why, is on the doc that owns it:
 [../architecture/sources/health.md](../architecture/sources/health.md) for feed
 health, [../architecture/sources/item-health.md](../architecture/sources/item-health.md)
 for the item census, [../concepts/evaluation.md](../concepts/evaluation.md) for
-the score archive, and
+the eval ledger, and
 [../architecture/publishing/layout.md](../architecture/publishing/layout.md) for
 the whole committed tree.
 

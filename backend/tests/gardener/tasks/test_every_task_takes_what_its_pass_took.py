@@ -59,11 +59,10 @@ _REPLACED_NO_PASS: Final = {
 #: owns, why, and the test file that holds what it does now.
 _NO_LONGER_ITS_PASS: Final = {
     "scores": (
-        "the pass built each month's summary under state/score-archive/ from the CSV day "
-        "files, then took the score-index days that summary covered. Those rows moved to "
-        "the ledger door and no summary is built from the door's rows yet, so the task "
-        "writes none, and an index day stays until a summary covers its month; "
-        "backend/tests/retention/test_score_ledger.py holds what it does now"
+        "the pass built a summary of each month from the CSV day files, then took the "
+        "score-index days that summary covered. Every eval row is kept for ever now and "
+        "nothing summarises a month, so the task writes nothing and takes no index day; "
+        "test_scores_task.py holds what it does now"
     ),
 }
 
