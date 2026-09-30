@@ -23,14 +23,13 @@ STEP 0 - COLD START. Read CLAUDE.md, docs/how-to/execute-a-plan.md, docs/how-to/
 and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (the Status
 Reckoner, the only tracker) and each row just before you dispatch it.
 
-STEP 1 - WHERE IT STANDS (2026-09-30, about 11:00 UTC). Run git worktree list, gh pr list
-and git branch -r to check it. Rows 1 to 9 and 11 to 13 have merged (#1127, #1131, #1142,
-#1139, #1145, #1141, #1151, #1156, #1166, #1136, #1161, #1167) and row 10 is collapsed.
-Rows 14 and 15, the person's answers to the questions below, are in flight (STEP 3).
-The first scheduled idhazh-gardener.yml run, 36675626269 at 05:55 UTC 2026-09-30,
-passed every job: each shard pushed its tasks' records, the closed-day fold ran live,
-and the squash was not due. Section 0's three plan-54 reads ran before row 5 and all
-three came back empty.
+STEP 1 - WHERE IT STANDS (2026-09-30, about 16:30 UTC). Every row is resolved. Rows 1 to 9
+and 11 to 14 have merged (#1127, #1131, #1142, #1139, #1145, #1141, #1151, #1156, #1166,
+#1136, #1161, #1167, #1173), row 10 is collapsed and row 15 is withdrawn (deviation 171).
+What is left is STEP 6, which a closing pull request carries. The first scheduled
+idhazh-gardener.yml run, 36675626269 at 05:55 UTC 2026-09-30, passed every job: each
+shard pushed its tasks' records, the closed-day fold ran live, and the squash was not
+due. Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
 STEP 2 - ROW 13 MERGED as #1167 on 2026-09-30, in the quiet hour after news run
 36691004577, and its worktree and branch are removed. Its worker wrote the change and
@@ -42,21 +41,15 @@ machine; ubuntu-latest is not measured. A pass still running at the job's 30-min
 limit is killed before it pushes, so nothing is lost and the squash is due again the
 next day (WATCH).
 
-STEP 3 - ROWS 14 AND 15 ARE IN FLIGHT. The person answered the three questions this step
-asked, on 2026-09-30 (deviations 168 and 169):
+STEP 3 - ROW 14 MERGED, ROW 15 WITHDRAWN. The person answered the three questions this
+step asked, on 2026-09-30 (deviations 168 and 169):
   a. The growing upkeep checkout (deviation 163): a new row, row 14, whose checkout
-     fetches file names only, plus the files a task reads. It also takes deviation 164,
-     so the third question, which applied only if the person declined this one, needs
-     no answer.
-  b. The scores month archive (deviation 157): a new row in this plan, row 15, builds
-     the archive from the door's rows.
-Both were dispatched after row 13 merged: row 14 to p50-r14-worker in worktree p50r14,
-row 15 to p50-r15-worker in worktree p50r15, with running reports at
-%TEMP%\p50r14\report.md and %TEMP%\p50r15\report.md. They run two-wide although they
-share files (deviation 170). The second of the two to merge takes main in and resolves
-the shared files in its own branch, and the owner reads that resolution before merging
-it. Fowler and Carmack ruled both rows' design questions on 2026-09-30, and their
-rulings are the rows' decisions.
+     fetches file names only, plus the files a task reads. It also took deviation 164,
+     so the third question, which applied only if the person declined this one, needed
+     no answer. Row 14 merged as #1173 at 16:11 UTC (deviation 172).
+  b. The scores month archive (deviation 157): row 15 was to build it from the door's
+     rows. The person's later ruling in plan 56 retires the summary instead, so row 15
+     is withdrawn (deviation 171).
 
 STEP 4 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -281,6 +274,9 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 168 | 14 | STEP 3's first question, and row 8's third open question (deviation 163): a person approves the growing `run-tasks` checkout or names its bound | A new row, row 14: the checkout fetches file names only, plus the files a task reads. It also takes deviation 164, because a task that lists names from the commit sees every folder whichever shard it lands in. So STEP 3's third question, asked only for a declined first answer, needs none | The person, 2026-09-30 |
 | 169 | 15 | STEP 3's second question (deviation 157): does a row build the scores month archive from the door's rows | A new row in this plan, row 15, chosen over a row in plan 52 and over approving the growing read as it is. Row 9 opened the gap, so this plan closes it | The person, 2026-09-30 |
 | 170 | 14, 15 | Section 1: a row is ready only when it shares no `Files touched` entry with a row in flight | Rows 14 and 15 share `backend/idhazh/gardener/tasks/scores.py`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/concepts/growing-reads.md` and `docs/concepts/config/idhazh-gardener.md`, and run two-wide anyway, as rows 9 and 13 did (deviation 165). Row 15 reads rows that a task in another shard may own, so until row 14 lands, its task fails rather than build a summary from rows it cannot see (row 15 decision 3). The second of the two to merge takes `main` in and resolves the shared files in its own branch | Plan owner, 2026-09-30 |
+| 171 | 15 | Deviation 169: row 15 builds the score month summary from the door's rows | Withdrawn. At 10:58 UTC the person ruled in plan 56 (rule R1 of `TODO/20260930-56-summary-quality-evals-plan.md`) that no row of the eval ledger is ever deleted and the month summary goes; plan 56's row 1 retires it. Row 15's worker had built and tested the row - its builder matched the old one on three months, 2026-08 and 2026-09 among them - and pushed nothing. Its branch stays on this machine, and its findings for plan 56 are in `%TEMP%\p50r15\report.md`. Deviation 170's pairing and row 14's scope item 6 for the `scores` task fall away | The person, 2026-09-30, through plan 56 |
+| 172 | 14 | Row 14 decisions 2, 4, 5 and 6 as written | Merged as #1173 with six departures, each named in its pull request. Each commit is built in a temporary index and a deletion is one more line of one `update-index` call, because `git reset --mixed` fails with downloads blocked once `main` has moved. The push uses `--no-thin`, because GitHub refuses a thin push with downloads blocked. A size comes from git where the clone holds the file and from GitHub's trees API otherwise, and a cut-off reply is refused. `telemetry-aggregate` reads both item-health folders, raw and compact. The alarm is `max_downloaded_mb` at 128 MB, an estimate to reset to about twice the largest download of the first 30 runs. A later task in a shard sees what an earlier one wrote or deleted | Row 14's worker, with Carmack and Fowler, 2026-09-30 |
+| 173 | all | Closing (execute-a-plan.md): every defect a worker named goes to a fix or a row | The closing pull request hands four to `TODO/20260823-known-defects-plan.md`: the local test selector counting two backend test helpers as inputs every frontend group shares (deviation 145); the news run whose site build failed on a link to a missing anchor (run 36639197643); the one exit abort of `build_canary_day.py --scored-keys` (deviation 167); and row 14's finding that reading one month of a packed ledger downloads every month file of its year. The download alarm's first reset goes beside the knob in `docs/concepts/config/idhazh-gardener.md`, and the first rewriting squash's two checks (deviation 82, row 13 decision 4) go to the gardener page. Plan 13's row 3 names the switch that replaced `retention.dry_run`, and plan 52's row 12 points at this file's last commit for row 10's measurements | Plan owner, 2026-09-30 |
 
 ## 0. Operating contract
 
@@ -349,7 +345,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | DONE | p50r12 | #1161 | p50-r12-worker-2 |
 | 13 | The squash runs unless the run was cancelled, and its push takes a lease and retries | 8 | J | DONE | p50r13 | #1167 | p50-r13-worker |
 | 14 | The upkeep checkout fetches file names only, plus the files a task reads | 13 | K | DONE | p50r14 | #1173 | p50-r14-worker |
-| 15 | The score archive is built from the door's rows | - | K | IN-FLIGHT | p50r15 | - | p50-r15-worker |
+| 15 | The score archive is built from the door's rows | - | K | WITHDRAWN | p50r15 | - | p50-r15-worker |
 
 **Row 13 came from the person's answers to row 8's open questions, 2026-09-29** (deviations 161 and 162). It shares `.github/workflows/idhazh-gardener.yml` and `docs/architecture/publishing/idhazh-gardener.md` with row 9, so it merges after row 9 and takes `main` in first (deviation 165).
 
