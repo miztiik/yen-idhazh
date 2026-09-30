@@ -34,7 +34,7 @@ const FIXTURE = path.resolve(here, '..', '..', 'tests', 'fixtures', 'ledger-door
 const PACKED = path.join('compact', 'host-fingerprint');
 
 /** A state tree holding only the fixture's packed days up to and including `through`,
- *  and a month index that names no month, as the packing writes one. */
+ *  and a month and a year index that name nothing, as the packing writes them. */
 function packedUpTo(through: string): string {
 	const root = mkdtempSync(path.join(tmpdir(), 'idhazh-packed-'));
 	const index = JSON.parse(
@@ -49,8 +49,10 @@ function packedUpTo(through: string): string {
 	}
 	mkdirSync(path.join(root, PACKED, 'index'), { recursive: true });
 	writeFileSync(path.join(root, PACKED, 'index', 'daily.json'), JSON.stringify(index));
-	const months = JSON.parse(readFileSync(path.join(FIXTURE, PACKED, 'index', 'monthly.json'), 'utf8')) as object;
-	writeFileSync(path.join(root, PACKED, 'index', 'monthly.json'), JSON.stringify({ ...months, entries: [] }));
+	for (const period of ['monthly', 'yearly']) {
+		const coarser = JSON.parse(readFileSync(path.join(FIXTURE, PACKED, 'index', `${period}.json`), 'utf8')) as object;
+		writeFileSync(path.join(root, PACKED, 'index', `${period}.json`), JSON.stringify({ ...coarser, entries: [] }));
+	}
 	return root;
 }
 
