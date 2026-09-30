@@ -163,7 +163,9 @@ def take_files(
     def delete(item: Aged) -> None:
         if before_delete is not None:
             before_delete(item)
-        item.path.unlink()
+        # A file decided on by its name alone may never have been downloaded. The
+        # deletion lands from its name, so there may be nothing on disk to remove.
+        item.path.unlink(missing_ok=True)
         after_delete(item.path)
 
     return take(

@@ -28,6 +28,11 @@ file's own folder, and then checks that every listed file it brought is on
 disk. A file the commit holds and the checkout lacks is fetched or the task
 fails; it is never taken for a member that is not there. What the widening
 added is what the shard downloaded for its tasks, and the record says so.
+
+**A task sees what the shard's earlier tasks changed.** One task may read a
+folder another task of its shard owns, so after each task the listing drops
+what it deleted and adds what it wrote. A later task then decides from the
+tree the shard will commit, and never fetches a file an earlier task deleted.
 """
 
 from __future__ import annotations
@@ -266,9 +271,11 @@ class FileListing:
         """Put these folders' files, and the files directly beside these files, on disk.
 
         One widening of the checkout for the whole call, which a partial clone
-        serves with one download. A folder the commit does not hold is passed
-        over, because there is nothing in it to read. Every listed file brought
-        is on disk afterwards, or this raises naming the first one missing.
+        serves with one download, by exactly the entries that bring a file the
+        checkout lacks: a folder whose files an earlier task of this shard wrote
+        is on disk already. A folder the commit does not hold is passed over,
+        because there is nothing in it to read. Every listed file brought is on
+        disk afterwards, or this raises naming the first one missing.
         """
         entries: list[str] = []
         for folder in folders:
@@ -282,10 +289,14 @@ class FileListing:
             if relative not in self.sizes:
                 raise ValueError(f"{relative} is not a file the listing holds")
             entries.append(relative)
-        brought = sorted({path for entry in entries for path in self._brought(entry)})
+        wanted = {entry: self._brought(entry) for entry in entries}
+        brought = sorted({path for paths in wanted.values() for path in paths})
         absent = [path for path in brought if not (self.repo_root / path).is_file()]
         if absent and self.checkout.widen is not None:
-            self.checkout.widen(entries)
+            lacking = set(absent)
+            self.checkout.widen(
+                [entry for entry, paths in wanted.items() if lacking.intersection(paths)]
+            )
         missing = [path for path in absent if not (self.repo_root / path).is_file()]
         if missing:
             raise FileNotFetchedError(
@@ -295,6 +306,23 @@ class FileListing:
             )
         for path in absent:
             self.checkout.added[path] = self.sizes[path]
+
+    def settled(self, *, written: Iterable[str], deleted: Iterable[str]) -> FileListing:
+        """This listing after one task's changes, for the tasks of the shard that run later.
+
+        A deleted file is no longer listed. A written file is listed with what it
+        weighs on disk, where the task left it, when it sits under a listed folder.
+        """
+        sizes = dict(self.sizes)
+        for path in deleted:
+            sizes.pop(path, None)
+        for path in written:
+            on_disk = self.repo_root / path
+            if on_disk.is_file() and any(_inside(path, folder) for folder in self.folders):
+                sizes[path] = on_disk.stat().st_size
+        return FileListing(
+            folders=self.folders, sizes=dict(sorted(sizes.items())), checkout=self.checkout
+        )
 
     def downloaded(self) -> dict[str, int] | None:
         """What the shard's widenings added, in bytes, under each folder it listed.

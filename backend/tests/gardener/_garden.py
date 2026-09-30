@@ -16,11 +16,12 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
 from types import ModuleType
-from typing import Final
+from typing import Any, Final
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR
@@ -34,6 +35,13 @@ COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.jso
 #: Who the seed commits are by. Not the repository's identity, on purpose: a
 #: commit the gardener made is told from the seed by its author.
 SEED_IDENTITY: Final = ("-c", "user.name=Scripted Origin", "-c", "user.email=origin@example.invalid")
+
+#: One download a partial clone starts for itself, as a `GIT_TRACE` log records
+#: it: a fetch handed the ids of the files it lacks on its input.
+LAZY_FETCH: Final = re.compile(r"run_command: .*fetch.*--filter=blob:none --stdin")
+
+#: How GitHub's trees API is asked for everything under one tree.
+_TREE_ROUTE: Final = re.compile(r"git/trees/([0-9a-f]{40})\?recursive=1")
 
 
 def a_config(root: Path, *declarations: Path) -> Path:
@@ -132,3 +140,65 @@ def a_hook(origin: Path, body: str) -> None:
     hook = origin / "hooks" / "pre-receive"
     hook.write_text(f"#!/bin/sh\n{body}\n", encoding="ascii", newline="\n")
     hook.chmod(0o755)
+
+
+def a_partial_clone(root: Path, origin: Path, *cone: str, name: str = "shard") -> Path:
+    """A wake's shard: a depth-1 partial clone of `origin` whose checkout holds only `cone`.
+
+    A `file://` address, because a plain local clone copies every file and would
+    hide a file the shard never downloaded; the origin serves the filter a
+    partial clone asks for, and the objects it asks for later.
+    """
+    git(origin, "config", "uploadpack.allowFilter", "true")
+    git(origin, "config", "uploadpack.allowAnySHA1InWant", "true")
+    shard = root / name
+    git(
+        root,
+        "clone",
+        "--quiet",
+        "--filter=blob:none",
+        "--depth=1",
+        "--sparse",
+        origin.as_uri(),
+        str(shard),
+    )
+    git(shard, "sparse-checkout", "set", "--cone", *cone)
+    git(shard, "config", "index.sparse", "true")
+    return shard
+
+
+def lazy_fetches(trace: Path) -> int:
+    """How many downloads a partial clone started for itself, in a `GIT_TRACE` log."""
+    if not trace.is_file():
+        return 0
+    logged = trace.read_text(encoding="utf-8", errors="replace").splitlines()
+    return sum(1 for line in logged if LAZY_FETCH.search(line))
+
+
+class OriginTrees:
+    """GitHub's trees API, answered by the origin's own git, which holds the same trees.
+
+    A tree id names one set of files wherever it is read, so the sizes the
+    origin's git prints for a tree are the sizes GitHub reports for it. The
+    shape of GitHub's own reply is held by `test_github_trees.py`, against a
+    reply recorded from GitHub.
+    """
+
+    def __init__(self, origin: Path) -> None:
+        self._origin = origin
+        #: Every tree asked about, in order.
+        self.asked: list[str] = []
+
+    def read(self, path: str) -> dict[str, Any]:
+        found = _TREE_ROUTE.fullmatch(path)
+        assert found is not None, f"only a whole tree is asked for, not {path}"
+        self.asked.append(found[1])
+        tree: list[dict[str, Any]] = []
+        for record in git(self._origin, "ls-tree", "-r", "-l", "-z", found[1]).split("\0"):
+            if record:
+                described, name = record.split("\t", 1)
+                mode, kind, sha, size = described.split()
+                tree.append(
+                    {"path": name, "mode": mode, "type": kind, "sha": sha, "size": int(size)}
+                )
+        return {"sha": found[1], "tree": tree, "truncated": False}

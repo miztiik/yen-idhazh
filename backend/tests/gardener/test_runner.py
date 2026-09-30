@@ -235,14 +235,17 @@ def test_a_report_outside_the_ledgers_a_task_appends_to_today_stops_the_shard(
     assert commits_on(origin) == before
 
 
-def test_a_folder_the_commit_holds_and_the_checkout_lacks_fails_its_task(
+def test_a_folder_the_checkout_lacks_is_still_listed_from_the_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A checkout that left out a folder the commit holds is a wrong checkout, not a zero."""
-    _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
-    shutil.rmtree(checkout / "state" / "rehearsal")
+    """Members come from the commit's names, so a folder the checkout lacks is not a zero.
 
-    outcome, _ = ran(
+    The deletion lands from the name alone, and the file the window keeps stays.
+    """
+    origin, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
+    shutil.rmtree(checkout / "state" / "old-days")
+
+    outcome, said = ran(
         ("compact-gardener", "old-days", "rehearsal"),
         settings,
         checkout,
@@ -250,10 +253,14 @@ def test_a_folder_the_commit_holds_and_the_checkout_lacks_fails_its_task(
         monkeypatch,
     )
 
-    assert outcome.exit_code == EXIT_TASK_FAILED
+    assert outcome.exit_code == EXIT_OK, said
     rows = rows_of(outcome.record)
-    assert rows["rehearsal"].stopped_because is StopReason.FAILED
-    assert rows["old-days"].stopped_because is StopReason.EXHAUSTED
+    assert (rows["old-days"].stopped_because, rows["old-days"].deleted) == (
+        StopReason.EXHAUSTED,
+        1,
+    )
+    assert on_origin(origin, f"state/old-days/{AGED}") is None, "the deletion did not land"
+    assert on_origin(origin, f"state/old-days/{FRESH}") == "fresh\n", "a kept file went"
 
 
 def test_a_folder_the_commit_does_not_hold_yet_is_walked_as_nothing(

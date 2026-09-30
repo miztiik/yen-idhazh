@@ -195,11 +195,13 @@ class CompactTree:
         """Carry out every change in the order it was decided. A dry run never calls this.
 
         A deleted file takes any date folder it leaves empty with it, so the next
-        listing of the raw tree does not meet a day that holds nothing.
+        listing of the raw tree does not meet a day that holds nothing. A file
+        deleted by its name alone - a raw listing past its keep - may never have
+        been downloaded, and its deletion lands from the name.
         """
         for change in self.changes:
             if change.data is None:
-                change.path.unlink()
+                change.path.unlink(missing_ok=True)
                 day_partition.drop_empty_day_dirs(change.path)
             else:
                 atomic_write.write_atomic_bytes(change.path, change.data)

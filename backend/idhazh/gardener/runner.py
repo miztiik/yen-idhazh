@@ -21,28 +21,33 @@ and `backend/utilities/corpus_history.py` binds it itself; run here, it would
 only stamp the day it last ran and hold off the next real rewrite by a whole
 cadence. So a shard or a hand run that names one is exit 2 before anything runs.
 
-**A shard's weight is an alarm, not a gate.** What the folders its tasks own
-weighed at its commit arrives as data, read by the program that runs git, and
-lands on every row as `cone_bytes`. Over `max_cone_mb` the shard says so,
-naming its three heaviest folders, still runs every task and lands its record,
-and exits 1: stopping would save nothing the checkout has not already paid for,
-and it would stop the very passes that could shrink the tree.
+**What a shard downloads is an alarm, not a gate.** What the folders its tasks
+own weighed at its commit arrives as data, read by the program that runs git,
+and lands on every row as `cone_bytes`. What its tasks downloaded to read lands
+beside it as `downloaded_bytes`. Over `max_downloaded_mb` the shard says so,
+naming its three heaviest folders, lands its record, and exits 1: the downloads
+are paid for by the time the number is known, and stopping would only stop the
+passes that shrink the tree.
 
 **A task that fails still has a row.** Its row says `failed`, its siblings still
 run, and the shard exits 1 when nothing worse happened. What it had already done
 is on the row, because the core carries it out of any failure part way.
 
 **Every task is handed the folders it walks, judged against the commit.** A
-folder the commit holds and the checkout lacks fails the task, because a wrong
-checkout would otherwise report a silent zero. A declared folder the commit does
-not hold yet is left out and logged: nothing has written one, and the task's
-first write makes it. A complement task is answered only from the commit, so a
-caller that could not read it is refused before any task runs.
+folder the commit holds is walked whether the checkout holds it or not, because
+a task learns its members from the commit's names and fetches only what it
+reads. A declared folder the commit does not hold yet is left out and logged:
+nothing has written one, and the task's first write makes it. A complement task
+is answered only from the commit, so a caller that could not read it is refused
+before any task runs.
 
 **Every task is handed the listing of the files under its folders.** One
-listing a shard, of every folder its tasks own, handed in by whoever built it or
-read off the disk here when nobody did; each task sees the part that covers its
-own folders, and learns what is there from it rather than from the disk.
+listing a shard, of every folder its tasks own or read, handed in by whoever
+built it or read off the disk here when nobody did; each task sees the part
+that covers its own folders, and learns what is there from it rather than from
+the disk. After each task the listing takes in what that task deleted and
+wrote, so a later task reading the same folder sees the tree the shard will
+commit.
 
 **What a task touched must sit inside what it owns.** Every path it took and
 every file it wrote is checked, on a dry run too, because the check is over the
@@ -187,14 +192,10 @@ def owner_of(name: str, tasks: Mapping[str, TaskPolicy]) -> Callable[[str], bool
 
 @dataclass(frozen=True, slots=True)
 class Folders:
-    """The folders one task walks, worked out before it runs, and the two kinds it cannot."""
+    """The folders one task walks, worked out before it runs, and the ones nothing has made yet."""
 
     #: What the task walks, in the order it walks them.
     walk: tuple[str, ...]
-    #: Folders the commit holds and this checkout lacks. A checkout that left out
-    #: a folder it should have held turns every deletion under it into a silent
-    #: zero, so the task fails rather than report one.
-    missing: tuple[str, ...]
     #: Declared folders the commit does not hold yet, because nothing has written
     #: one. There is nothing there to walk, and the task's first write makes it.
     absent: tuple[str, ...]
@@ -214,9 +215,11 @@ def folders_of(
     """Which folders a task walks, judged against the commit when the caller could read it.
 
     `committed` is every folder the commit holds that a declaration names, and
-    every folder directly under `state/`, read by the program that runs git.
-    None means nobody could read the commit - `idhazh gardener run-task` starts
-    no process - and the checkout is then taken as it stands.
+    every folder directly under `state/`, read by the program that runs git. A
+    folder it holds is walked whatever the checkout holds, because the task's
+    names come from the commit. None means nobody could read the commit -
+    `idhazh gardener run-task` starts no process - and the checkout is then
+    taken as it stands.
 
     A complement task cannot be answered without the commit. What it owns is
     whatever nothing else claims, and read off a working tree that set would
@@ -238,25 +241,16 @@ def folders_of(
                 if _a_child_of(folder, policy.claims()) and owns(folder)
             )
         )
-        here = [folder for folder in swept if (repo_root / folder).is_dir()]
-        gone = [folder for folder in swept if not (repo_root / folder).is_dir()]
-        return Folders(walk=tuple(here), missing=tuple(gone), absent=())
+        return Folders(walk=swept, absent=())
     walk: list[str] = []
-    missing: list[str] = []
     absent: list[str] = []
-    owned = set(policy.owns)
     for folder in (*policy.owns, *policy.reads):
-        present = (repo_root / folder).is_dir()
-        if committed is not None and folder not in committed:
+        held = (repo_root / folder).is_dir() if committed is None else folder in committed
+        if not held:
             absent.append(folder)
-        elif present:
-            if folder in owned:
-                walk.append(folder)
-        elif committed is None:
-            absent.append(folder)
-        else:
-            missing.append(folder)
-    return Folders(walk=tuple(walk), missing=tuple(missing), absent=tuple(absent))
+        elif folder in policy.owns:
+            walk.append(folder)
+    return Folders(walk=tuple(walk), absent=tuple(absent))
 
 
 def listed_folders(policy: TaskPolicy, folders: Folders) -> tuple[str, ...]:
@@ -313,23 +307,15 @@ def _run_one(
             name,
             folder,
         )
-    if folders.missing:
-        logger.error(
-            "%s names %s, which the commit holds and this checkout does not",
-            name,
-            ", ".join(folders.missing),
-        )
+    try:
+        outcome = held.run(context)
+        failed = outcome.stopped_because is StopReason.FAILED
+    except PruneInterruptedError as stop:
+        logger.error("%s failed part way: %s", name, stop)
+        outcome = stop.so_far
+    except Exception:
+        logger.exception("%s failed before it reached a member", name)
         outcome = _nothing_reached(name, context.policy)
-    else:
-        try:
-            outcome = held.run(context)
-            failed = outcome.stopped_because is StopReason.FAILED
-        except PruneInterruptedError as stop:
-            logger.error("%s failed part way: %s", name, stop)
-            outcome = stop.so_far
-        except Exception:
-            logger.exception("%s failed before it reached a member", name)
-            outcome = _nothing_reached(name, context.policy)
     policy = context.policy
     if not failed and isinstance(policy, RetentionPolicy) and policy.fold is not None:
         try:
@@ -370,6 +356,22 @@ def _touched(ran: _Ran) -> tuple[str, ...]:
     taken = () if ran.context.policy.kind == TaskKind.COLLECTION else ran.outcome.taken
     settled, replaced = _fold_changes(ran)
     return (*taken, *ran.outcome.written, *settled, *replaced)
+
+
+def _landed(ran: _Ran) -> tuple[set[str], set[str]]:
+    """What a task changed in the tree, and so lands: the paths it wrote, and the ones it deleted.
+
+    A dry run's writes and deletions are only reported, so they land nowhere. A
+    report lands dry run or not, because it is what a dry run exists to produce,
+    and a fold lands on its own switch, so a live fold inside a dry task lands
+    too. What a collection task takes lives on GitHub, not in this repository.
+    """
+    live = not ran.context.policy.dry_run
+    folding = ran.folded is not None and not ran.folded.dry_run
+    settled, replaced = _fold_changes(ran) if folding else ((), ())
+    wrote = {*(ran.outcome.written if live else ()), *ran.outcome.appended, *settled}
+    took = ran.outcome.taken if live and ran.context.policy.kind != TaskKind.COLLECTION else ()
+    return wrote, {*took, *replaced}
 
 
 def _refuse_a_path_outside(ran: _Ran, tasks: Mapping[str, TaskPolicy]) -> None:
@@ -419,6 +421,7 @@ def _record(
     identity: WriterIdentity,
     ended: str,
     cone_bytes: int | None,
+    downloaded_bytes: int | None,
 ) -> Path:
     """The shard's one record: every task's row, in one file under the gardener's ledger."""
     rows: list[CollectionPruneRow] = [
@@ -429,6 +432,7 @@ def _record(
             duration_ms=each.duration_ms,
             work_ended_at=ended,
             cone_bytes=cone_bytes,
+            downloaded_bytes=downloaded_bytes,
             folded=each.folded,
         )
         for each in ran
@@ -468,25 +472,26 @@ def history_tasks_among(names: Sequence[str], tasks: Mapping[str, TaskPolicy]) -
 
 
 def over_the_ceiling(
-    cone_bytes: Mapping[str, int], *, ceiling_mb: int, shard: int
+    downloaded: Mapping[str, int], *, ceiling_mb: int, shard: int
 ) -> str | None:
-    """What a shard over `max_cone_mb` says, naming its heaviest folders, or None when under.
+    """What a shard over `max_downloaded_mb` says, naming its heaviest folders, or None when under.
 
-    Over means strictly more than the ceiling: a shard that weighs exactly the
-    ceiling is inside it.
+    `downloaded` is what the shard's tasks downloaded under each folder it
+    listed. Over means strictly more than the ceiling: a shard that downloaded
+    exactly the ceiling is inside it.
     """
-    total = sum(cone_bytes.values())
+    total = sum(downloaded.values())
     if total <= ceiling_mb * BYTES_PER_MB:
         return None
-    heaviest = sorted(cone_bytes.items(), key=lambda held: (-held[1], held[0]))
+    heaviest = sorted(downloaded.items(), key=lambda held: (-held[1], held[0]))
     named = ", ".join(
         f"{folder} {weight / BYTES_PER_MB:.1f} MB" for folder, weight in heaviest[:_HEAVIEST_NAMED]
     )
     return (
-        f"shard {shard}: its owned folders weigh {total / BYTES_PER_MB:.1f} MB ({total:,} "
-        f"bytes) at this commit, over max_cone_mb {ceiling_mb} in "
-        f"config/idhazh_gardener.json. The heaviest: {named}. Its tasks still run and its "
-        "record still lands, and the shard exits 1"
+        f"shard {shard}: its tasks downloaded {total / BYTES_PER_MB:.1f} MB ({total:,} bytes) "
+        f"of file content, over max_downloaded_mb {ceiling_mb} in "
+        f"config/idhazh_gardener.json. The heaviest: {named}. Its tasks ran and its record "
+        "still lands, and the shard exits 1"
     )
 
 
@@ -510,12 +515,13 @@ def run(
 
     `git_sha` is the commit this checkout is at, which the record's envelope
     names. `committed_folders` is what that commit holds of the folders these
-    tasks own, and every folder directly under `state/` (`folders_of`).
-    `cone_bytes` is what each of those owned folders weighs at that commit. All
+    tasks own or read, and every folder directly under `state/` (`folders_of`).
+    `cone_bytes` is what each of the owned folders weighs at that commit. All
     three are read by whoever calls this, before any task runs, because reading
     them starts git; None for the last two means nobody could read the commit.
-    `listing` is the files under every folder the tasks own; None lists them off
-    the disk here.
+    `listing` is the files under every folder the tasks own or read; None lists
+    them off the disk here. What the tasks downloaded is read off it once they
+    have run.
     """
     refused = history_tasks_among(names, settings.tasks)
     if refused:
@@ -532,13 +538,6 @@ def run(
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
 
     weighed = None if cone_bytes is None else sum(cone_bytes.values())
-    too_heavy = (
-        None
-        if cone_bytes is None
-        else over_the_ceiling(cone_bytes, ceiling_mb=settings.config.max_cone_mb, shard=shard)
-    )
-    if too_heavy is not None:
-        say(too_heavy)
     started = clock()
     today = started.date()
     job = ServerJob.RUN_TASKS
@@ -551,6 +550,7 @@ def run(
         git_sha=git_sha,
     )
     ran: list[_Ran] = []
+    too_heavy: str | None = None
     try:
         # Every task's folders before the first task runs, so a task the commit
         # cannot answer for stops the shard with nothing yet done.
@@ -582,6 +582,13 @@ def run(
             _refuse_a_path_outside(done, settings.tasks)
             _refuse_an_append_outside(done, today.isoformat())
             ran.append(done)
+            written, taken = _landed(done)
+            listing = listing.settled(written=written, deleted=taken)
+        downloaded = listing.downloaded()
+        if downloaded is not None:
+            too_heavy = over_the_ceiling(
+                downloaded, ceiling_mb=settings.config.max_downloaded_mb, shard=shard
+            )
         ended = clock().strftime(_INSTANT)
         record = _record(
             ran,
@@ -590,6 +597,7 @@ def run(
             identity=identity,
             ended=ended,
             cone_bytes=weighed,
+            downloaded_bytes=None if downloaded is None else sum(downloaded.values()),
         )
     except ShardRefusedError as refusal:
         say(f"shard {shard}: {refusal}")
@@ -601,26 +609,16 @@ def run(
         if each.folded is not None:
             for line in report.fold_lines(each.name, each.folded):
                 say(line)
-    live = [each for each in ran if not each.context.policy.dry_run]
-    # A fold lands on its own switch, so a live fold inside a dry task still lands.
-    folding = [each for each in ran if each.folded is not None and not each.folded.dry_run]
+    if too_heavy is not None:
+        say(too_heavy)
     recorded = record.relative_to(repo_root).as_posix()
-    wrote = {path for each in live for path in each.outcome.written}
-    wrote |= {path for each in folding for path in _fold_changes(each)[0]}
-    # A report lands dry run or not: it is what a dry run exists to produce.
-    reported = {path for each in ran for path in each.outcome.appended}
-    deleted = {
-        path
-        for each in live
-        if each.context.policy.kind != TaskKind.COLLECTION
-        for path in each.outcome.taken
-    }
-    deleted |= {path for each in folding for path in _fold_changes(each)[1]}
+    wrote = {path for each in ran for path in _landed(each)[0]}
+    deleted = {path for each in ran for path in _landed(each)[1]}
     landing = Shard(
         index=shard,
         task_names=tuple(names),
         record_path=recorded,
-        written_paths=frozenset({recorded, *wrote, *reported}),
+        written_paths=frozenset({recorded, *wrote}),
         deleted_paths=frozenset(deleted),
         message=f"gardener: {', '.join(names)} on {today.isoformat()}",
     )

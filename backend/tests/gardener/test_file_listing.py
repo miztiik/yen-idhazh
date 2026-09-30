@@ -135,3 +135,45 @@ def test_a_file_entry_brings_only_the_files_beside_it(tmp_path: Path) -> None:
         listing.fetch(beside=["state/compact/x/daily/watermark.json"])
 
     assert "(1 such files)" in str(refused.value), "a file entry brought a folder beside it"
+
+
+def test_a_folder_whose_files_are_on_disk_is_not_widened_for(tmp_path: Path) -> None:
+    """Only the entries that bring an absent file reach the checkout, in one call."""
+    a_checkout(tmp_path)
+    asked: list[Sequence[str]] = []
+    listing = FileListing.from_commit(
+        tmp_path,
+        ["state/seen", "state/lacking"],
+        [
+            TreeEntry(path="state/seen/2026/09/01.csv", blob="1" * 40, size=1),
+            TreeEntry(path="state/lacking/2026-09.csv", blob="2" * 40, size=5),
+        ],
+        {},
+        widen=asked.append,
+    )
+
+    with pytest.raises(FileNotFetchedError):
+        listing.fetch(["state/seen", "state/lacking"])
+
+    assert asked == [["state/lacking"]]
+
+
+def test_a_later_task_sees_what_an_earlier_one_deleted_and_wrote(tmp_path: Path) -> None:
+    """A deleted file is gone from the listing; a written one is there, weighed on disk."""
+    listing = FileListing.from_disk(a_checkout(tmp_path), ["state/seen"])
+    written = tmp_path / "state/seen/2026/09/03.csv"
+    written.write_text("eeeee", encoding="ascii")
+    elsewhere = tmp_path / "state/other/y.csv"
+    elsewhere.write_text("f", encoding="ascii")
+
+    later = listing.settled(
+        written=["state/seen/2026/09/03.csv", "state/other/y.csv"],
+        deleted=["state/seen/2026/09/01.csv"],
+    )
+
+    assert later.files_under("state/seen") == [
+        "state/seen/2026/09/02.csv",
+        "state/seen/2026/09/03.csv",
+    ]
+    assert later.size_of("state/seen/2026/09/03.csv") == 5
+    assert listing.holds("state/seen/2026/09/01.csv"), "the earlier listing changed"

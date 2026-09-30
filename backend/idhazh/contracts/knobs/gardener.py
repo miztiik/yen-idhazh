@@ -2,7 +2,7 @@
 
 Two shapes, and they answer one question at two sizes. `GardenerConfig` is
 `config/idhazh_gardener.json`: how many shards a wake splits into, how many
-times a shard may try to land its record, and how much one shard may check out.
+times a shard may try to land its record, and how much one shard may download.
 `TaskPolicy` is one file under `config/gardener/`: one task, what it owns and
 what it only reads, how far back it keeps, and whether it may delete at all.
 
@@ -56,18 +56,18 @@ class PrunableCollection(StrEnum):
 # --- config/idhazh_gardener.json ---------------------------------------------
 
 
-#: The most one shard's owned folders may weigh at the commit it checked out, in
-#: megabytes of 1024 * 1024 bytes. An estimate, not a measurement of a limit
-#: (Guardrail #10): the heaviest shard's trees sit inside a 390-day and a
-#: 14-month window, which at the rates read on 2026-09-28 fill at about 550 to
-#: 600 MB, and this leaves about 30 percent of room for the rates to rise. The
-#: first scheduled runs' checkout times say whether a shard that size still
-#: fits its job.
-DEFAULT_MAX_CONE_MB: Final = 768
+#: The most file content one shard may download for its tasks, in megabytes of
+#: 1024 * 1024 bytes. An estimate, not a measurement of a limit (Guardrail #10):
+#: a shard checks out only code and config, and a task downloads the day or
+#: month folders it reads - a month of the scores ledger measured 3.5 MB on
+#: 2026-09-30 - so this leaves room for a compaction that catches up on several
+#: months at once. Move it to about twice the largest `downloaded_bytes` of the
+#: first thirty scheduled wakes.
+DEFAULT_MAX_DOWNLOADED_MB: Final = 128
 
 
 class GardenerConfig(Model):
-    """How a wake is split into shards, how hard each tries to land, and how much one may hold."""
+    """How a wake is split into shards, how hard each tries to land, and how much one may fetch."""
 
     version: DateStamp = Field(
         description="The UTC day this file's shape was last changed, as YYYY-MM-DD."
@@ -87,14 +87,15 @@ class GardenerConfig(Model):
             "fewer tasks, so no shard is ever empty."
         ),
     )
-    max_cone_mb: int = Field(
-        default=DEFAULT_MAX_CONE_MB,
+    max_downloaded_mb: int = Field(
+        default=DEFAULT_MAX_DOWNLOADED_MB,
         ge=1,
         description=(
-            "The most one shard's owned folders may weigh at the commit it checked out, "
-            "in megabytes of 1024 * 1024 bytes. The code every shard checks out is not "
+            "The most file content one shard may download for its tasks, in megabytes "
+            "of 1024 * 1024 bytes. The code and config every shard checks out are not "
             "counted. A shard over it still runs its tasks and lands its record, then "
-            "exits 1 naming the size, this ceiling and its three heaviest folders."
+            "exits 1 naming what it downloaded, this ceiling and its three heaviest "
+            "folders."
         ),
     )
 
