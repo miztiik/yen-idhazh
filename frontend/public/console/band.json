@@ -1,7 +1,7 @@
 {
   "compaction_lag_days": 0,
-  "covers_through": "2026-09-30",
-  "generated_at": "2026-09-30T11:34:37Z",
+  "covers_through": null,
+  "generated_at": "2026-09-30T11:33:19Z",
   "months": [
     "2026-08",
     "2026-09"
