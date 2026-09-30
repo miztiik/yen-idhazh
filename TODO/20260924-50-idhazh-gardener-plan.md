@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row, about 06:40 UTC, when the person ruled on row 9's two open questions, and about 07:30 UTC, when the fourth owner had merged row 8 and dispatched rows 12 and 9 side by side (deviation 137), and about 08:40 UTC, when row 12 had merged and row 9 was dispatched again from main (deviation 146), and about 21:45 UTC, when row 9's pull request was green and waiting for a quiet hour, and the person's answers to row 8's open questions added row 13 (deviations 161 to 165).
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row, about 06:40 UTC, when the person ruled on row 9's two open questions, and about 07:30 UTC, when the fourth owner had merged row 8 and dispatched rows 12 and 9 side by side (deviation 137), and about 08:40 UTC, when row 12 had merged and row 9 was dispatched again from main (deviation 146), and about 21:45 UTC, when row 9's pull request was green and waiting for a quiet hour, and the person's answers to row 8's open questions added row 13 (deviations 161 to 165), and 2026-09-30, about 07:00 UTC, when row 9 had merged, row 13's pull request was open, and the fifth owner handed the plan over at the person's request.
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -23,61 +23,62 @@ STEP 0 - COLD START. Read CLAUDE.md, docs/how-to/execute-a-plan.md, docs/how-to/
 and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (the Status
 Reckoner, the only tracker) and each row just before you dispatch it.
 
-STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At the last
-update (2026-09-29, 21:45 UTC) rows 1 to 8, 11 and 12 had merged (#1127, #1131, #1142,
-#1139, #1145, #1141, #1151, #1156, #1136, #1161) and row 10 is collapsed. Rows 9 and 13
-are in flight (STEP 2). If a worker ended without a report, read its worktree, its
-pushed branch and its report under %TEMP% before dispatching it again. The
-owner's worktree, p50own, holds no unpushed work.
-Section 0's three plan-54 reads ran before row 5 and all three came back empty.
+STEP 1 - WHERE IT STANDS (2026-09-30, about 07:00 UTC). Run git worktree list, gh pr list
+and git branch -r to check it. Rows 1 to 9, 11 and 12 have merged (#1127, #1131, #1142,
+#1139, #1145, #1141, #1151, #1156, #1166, #1136, #1161) and row 10 is collapsed. Row 13 is
+the one row left (STEP 2). Three findings wait on the person (STEP 3). The first
+scheduled idhazh-gardener.yml run, 36675626269 at 05:55 UTC 2026-09-30, passed every
+job: each shard pushed its tasks' records, the closed-day fold ran live, and the squash
+was not due. Section 0's three plan-54 reads ran before row 5 and all three came back
+empty.
 
-STEP 2 - DISPATCH. Row 8's findings are deviations 118 to 131 and three open questions
-for a person (section "Open questions for a person, from row 8"); ESCALATE trigger 1 was
-answered with A3 (deviation 130). The person answered the first two questions on
-2026-09-29, which is row 13, and the third is still open (deviation 163). Refill a slot on
-a report, never on a merge. Two workers started together return together (deviation 94).
-  row 8              merged as #1156 at 07:05 UTC 2026-09-29, after its branch took main
-                     in and CI went green, with no digest.yml or prune.yml run queued or
-                     running. Worktree p50r8 and its branch are removed
-  row 12             merged as #1161 at 08:26 UTC 2026-09-29 by its worker (deviation
-                     138), with no digest.yml or idhazh-gardener.yml run queued or
-                     running. Its departures from the row are deviations 139 to 144.
-                     Worktree p50r12 and its branch are removed
-  row 9              IN-FLIGHT. Pull request #1166, branch
-                     p50r9-the-console-ledgers-become-parquet, worktree p50r9, was green
-                     at caf193824 on 2026-09-29 19:42 UTC and waits for a quiet hour.
-                     The steps left: no digest.yml or idhazh-gardener.yml run queued or
-                     running; merge origin/main into the branch; run
-                     backend/utilities/migrate_to_parquet.py again with --run-id
-                     2026-09-29-1, then its --check, and commit what it moved; push;
-                     wait for CI green; check again that no run is queued or running;
-                     merge; remove worktrees p50r9 and p50r9fe and both branches.
-                     The worker notes are %TEMP%\p50r9w5\report.md.
-                     History: it finished in two waves from about 12:40 UTC 2026-09-29
-                     (deviations 153 and 160). Its first worker ended with nothing
-                     committed (deviation 146), and its second pushed five commits
-                     (deviations 147 to 152).
-                     The person's rulings are deviations 135 and 136, read with 112,
-                     132 and 133. It deletes CSV trees a digest run writes, so it
-                     merges as row 3 was merged (deviation 52): no digest.yml
-                     or idhazh-gardener.yml run queued or running, and the migration run
-                     again just before the merge. sliceFromDisk() is on main in
-                     frontend/src/lib/server/ledger-disk.ts; do not build it here.
-                     A plain git push here is refused (403); push with
-                     git -c credential.helper= -c 'credential.helper=!gh auth
-                     git-credential' push origin <branch>
-  row 13             IN-FLIGHT from about 21:50 UTC 2026-09-29. Worker p50-r13-worker in
-                     worktree p50r13, branch p50r13-the-squash-push-takes-a-lease-and-retries,
-                     report %TEMP%\p50r13\report.md. It merges after row 9 and takes
-                     main in first (deviation 165), in the same quiet-hour rule as row 9
+STEP 2 - FINISH ROW 13. Pull request #1167, branch
+p50r13-the-squash-push-takes-a-lease-and-retries, worktree p50r13. Its worker wrote the
+change, broke seven of its lines one at a time and saw a test go red for each
+(%TEMP%\p50r13\report.md), then ended without a commit (deviation 166). The owner
+committed the work as 2d0e42e47, merged main at d58e711ab with no conflict, ran the
+row's gates (ruff, mypy on the two changed modules, and 110 tests in four modules, all
+passing), pushed, opened the pull request, and stamped row 13's Reckoner line DONE with
+#1167 in the branch.
+  1. Wait for CI green. If main moved meanwhile, merge origin/main into the branch, keep
+     the branch's DONE line for row 13 if this file conflicts, push, and wait again.
+  2. Merge only while no digest.yml or idhazh-gardener.yml run is queued or running
+     (deviations 52 and 54), because it edits the workflow that force-pushes main.
+  3. Remove worktree p50r13 and its local branch (STEP 5).
+  Row 13 decision 4 is settled as 3 pushes, 60 seconds apart. The worker timed one
+  replay of 1,001 commits at 824 s on the Windows development machine; ubuntu-latest is
+  not measured. A pass still running at the job's 30-minute limit is killed before it
+  pushes, so nothing is lost and the squash is due again the next day (WATCH).
 
-STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
+STEP 3 - ASK THE PERSON, in one message in CLAUDE.md section 0c form. Each answer becomes
+a row in this plan, or a row in a named receiving plan, before this plan closes
+(execute-a-plan.md, closing section).
+  a. Deviation 163, the growing upkeep checkout. Each run-tasks job downloads the content
+     of every file in the folders its tasks own, and most of it is never read. Options:
+     a new row whose checkout fetches file names plus only the files a task reads (about
+     500 to 1,000 lines with tests, an estimate; it also takes deviation 164), or approve
+     the growing read as it is. The owner recommended the new row. The person asked the
+     question and has not chosen.
+  b. Deviation 157, the scores month archive. The scores task no longer builds one, so
+     one read grows by a file a day and compact-scores stays report-only. Should a new row
+     build the archive from the door's rows? Two docs lines wait on the same answer:
+     docs/architecture/publishing/idhazh-gardener.md's design-rationale entry "The scores
+     compaction stays report-only until the score archive is built from the door's rows",
+     and docs/concepts/growing-reads.md's unapproved read of
+     evals.writer.indexed_observations (Guardrail #12).
+  c. Deviation 164, only if the person declines (a): telemetry-aggregate reads a folder
+     its shard may not check out. It needs a row of its own; its first month is due
+     about late 2027.
+
+STEP 4 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
 (CLAUDE.md section 9). No local full-suite run, and no run through
 backend/utilities/gate_lock.py: that lock is shared by every worktree on this machine, and
-one run waited 27 minutes behind another plan's.
+one run waited 27 minutes behind another plan's. A plain git push is refused (403) here;
+push with git -c credential.helper= -c 'credential.helper=!gh auth git-credential'
+push origin <branch>.
 
-STEP 4 - MERGE. GitHub refuses auto-merge on this repository, so merge by hand when CI is
+STEP 5 - MERGE. GitHub refuses auto-merge on this repository, so merge by hand when CI is
 green: gh pr merge <N> --repo miztiik/yen-idhazh --squash --delete-branch, run from outside
 the repository, then confirm with gh pr view and remove the worktree and its local branch.
 Run from a worktree, gh pr merge exits 1 even when the merge worked. A row that changes a
@@ -86,17 +87,34 @@ workflow a scheduled run is using, or a file a scheduled job also writes, reads 
 next to each other, so the second of two open pull requests conflicts on this file. Merge
 origin/main into its branch, keep both lines and push. Never rebase and force-push.
 
-STEP 5 - CLOSE. When every row is DONE or COLLAPSED, follow the closing section of
-execute-a-plan.md.
+STEP 6 - CLOSE. When every row is DONE or COLLAPSED and each question in STEP 3 has an
+answer and a receiving row, follow the closing section of execute-a-plan.md. Read every
+worker report again and trace each defect it names to a fix or a row: the reports are
+%TEMP%\p50r1 to p50r13, p50r9w4, p50r9w5, p50r9w8, p50r9fe, p50r9docs and p50r9fin, each
+with a report.md, on the machine that ran them. Then sweep: worktree p50own (branch
+p50-owner-records-row-7-rulings, nothing unpushed), worktree p50r13 once row 13 merged,
+and the folder yen-idhazh.worktrees\p50r9fe, which git no longer tracks and which an
+esbuild.exe started by VS Code's Svelte language server held open; delete it once that
+server has stopped.
 
 WATCH, whoever owns the plan on the day:
-  2026-09-30 02:40   the first idhazh-gardener.yml run (cron 00:40 UTC, created about two
-                     hours late): every task is report-only except the squash, and each
-                     task's record lands under state/raw/gardener. Once row 12 has
-                     merged, its fold is live as well
+  any day            do not re-run the failed jobs of digest run 36639197643. A re-run
+                     uses the code of that run's own commit, which files the three
+                     migrated records as CSV again. If one was re-run, run
+                     backend/utilities/migrate_to_parquet.py again with --run-id
+                     2026-09-29-1, then its --check, and commit what it moved
+  any day            main's CI on #1166's merge commit, run 36655319104, failed once in
+                     its browser job: build_canary_day.py --scored-keys printed its whole
+                     answer, then aborted ("terminate called without an active
+                     exception", SIGABRT). The re-run passed and the site published at
+                     06:40 UTC 2026-09-30. If that abort comes back, open a row for it
+                     rather than re-running (deviation 167)
   about 2026-10-29   the first squash that rewrites history replays six September merge
                      commits. If one carried a change of its own, the program stops with
-                     exit 2 before any push, for a person (deviation 82)
+                     exit 2 before any push, for a person (deviation 82). Read how long
+                     one replay took in the history job's log: if it is more than about a
+                     third of the job's 30 minutes, lower push_attempts or raise
+                     timeout-minutes (row 13 decision 4)
 ```
 
 ### Deviations and owner rulings to date
@@ -270,6 +288,8 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 163 | - | Row 8's third open question: a person approves the growing `run-tasks` checkout or names its bound | The person asked why it grows when the ledgers carry an index and a watermark. Read against row 9's branch: each shard's checkout downloads the content of every file in the folders its tasks own, before any task runs. Compaction already finds its due days from the watermark and the folder names, the retention tasks decide from the dates in paths, and deleting a file needs only its name, so most of the download is never read. 33 MB of the heaviest shard's 48 MB is `frontend/public/digest`, which keeps every day for ever, so "about a year" in `docs/concepts/growing-reads.md` is wrong for it. Put to the person again: a new row whose checkout fetches file names plus only the files a task reads, or approve the read as it is | The person's question, 2026-09-29; the reading is the plan owner's |
 | 164 | 9 | (not in the plan) | After row 9, `telemetry-aggregate` finds its due months in `state/raw/item-health/`, a folder `compact-item-health` owns. When the two tasks land in different shards, that folder is not in `telemetry-aggregate`'s checkout, so it finds no month and still reports success. Its first month falls due about late 2027 (an estimate, from the 14-month full-grain window). It goes to the row that answers deviation 163 if the person takes it, and to a row of its own before this plan closes if not | Plan owner, 2026-09-29 |
 | 165 | 13 | Section 1: `Depends-on` and the `Files touched` lists are the readiness test | Row 13 shares two files with row 9, the gardener workflow and its page, and starts before row 9 merges. Row 9 is green and waits only for a quiet hour, and the two rows edit different jobs of the workflow and different sections of the page. Row 13 merges after row 9 and takes `main` in first; a conflict there is resolved in row 13's branch | Plan owner, 2026-09-29 |
+| 166 | 13 | A worker commits, pushes and opens its row's pull request (STEP 4) | Row 13's worker ended at about 23:05 UTC 2026-09-29 with its change written and its seven bites run, but nothing committed. It was timing one replay of the whole history, for decision 4. The owner committed the work unchanged as 2d0e42e47, merged `main`, ran the row's gates and opened the pull request. Decision 4 keeps the worker's values, 3 pushes 60 seconds apart; the runner's replay time is read at the first real squash (WATCH) | Plan owner, 2026-09-30 |
+| 167 | 9 | (not in the plan) | `main`'s CI on row 9's merge commit failed once: in the browser job, `build_canary_day.py --scored-keys` printed its whole answer and then aborted with "terminate called without an active exception". The same tree had passed on the pull request, and a re-run of the failed job passed. The likely cause is a native thread still running when Python exits, now that this reader opens parquet (an estimate). Not reproduced, so no row yet; a second abort opens one | Row 9's merge worker; plan owner, 2026-09-30 |
 
 ## 0. Operating contract
 
