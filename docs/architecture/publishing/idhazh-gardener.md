@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -338,12 +338,14 @@ One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
 by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
 ledger is one declaration and no Python. Six ship - for `gardener`,
 `visual-prunes`, `feed-retirements`, `item-health`, `scores` and
-`host-fingerprint` - and all six only report. The last three are the ledgers the
-console reads, and the console reads their packed files, so until a person turns
-those three on it shows data up to the day their migration ran
+`host-fingerprint`. **`item-health` and `host-fingerprint` pack live**, and each
+packs a month 31 days after it ends (the person, 2026-09-30): the console reads
+their packed files and nothing newer, so a finished day reaches it within about
+48 hours. The other four only report. **`scores` stays report-only until the
+score archive is built from the door's rows** ([below](#design-rationale)), so the
+console shows its days up to the day its migration ran
 ([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
-**`scores` stays report-only until the score archive is built from the door's
-rows** ([below](#design-rationale)). The files it
+The files it
 writes are laid out in
 [../contracts/persistence.md](../contracts/persistence.md#the-two-roots), and
 its knobs are in
@@ -368,7 +370,7 @@ flowchart TB
     DHOLD["the day waits: a run may still be writing"]
     TAKE["4. take it: read and settle its raw files,<br/>write its listing, its day file and daily.json,<br/>delete the raw files, daily/watermark.json last"]
     DRY{"dry_run?"}
-    REPORT["report every path, land the record only<br/>all six compactions, today"]
+    REPORT["report every path, land the record only<br/>four of the six compactions, today"]
     LAND["land every write and delete<br/>in the shard's one commit"]
   end
 
@@ -506,6 +508,41 @@ absorbed.
 window, so no re-run can land there; a file that does is for a person to read.
 The rest of the pass still runs.
 
+### Both indexes, and a file that is missing
+
+**A ledger's two indexes exist together.** Whatever writes `index/daily.json`
+also writes `index/monthly.json` when the ledger has none, with no entries, and
+no pass deletes either. An empty `monthly.json` truthfully says no month is
+packed yet; a missing one says nothing, so a reader could not tell a lost list
+from a month never packed, and would have to ask the site for a file that is not
+there. The three console ledgers' month indexes were written this way on
+2026-09-30, by the packing's own code.
+
+**An index its watermark says was packed, and that is not there, stops the
+pass by name.** A pass that read it as empty would rewrite it naming only what
+this pass packs, and every period packed before would drop out of sight. The task
+fails that wake, and a person restores the file from git history.
+
+**A missing file has one of four names**, declared once as `LEDGER_FAULTS` in
+`frontend/src/lib/data/slice-shapes.ts`. The backend's copy is `LedgerFault` in
+`backend/idhazh/ledger/faults.py`, and
+`backend/tests/contracts/test_frontend_index_shapes.py` holds the two to one list.
+The query door carries the name on its answer
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)),
+and the gardener's logs and the backend's own ledger reader print it as
+`fault=<name>`, so one search finds a fault on both sides.
+
+| # | Name | What is missing | What the gardener does |
+| --- | --- | --- | --- |
+| 1 | `not-packed` | `index/daily.json`: no day of the ledger is packed | A first pass writes both indexes |
+| 2 | `index-missing` | `index/monthly.json`, while `index/daily.json` is there | Writes an empty one when no month was ever packed; stops the pass by name when the month watermark says one was |
+| 3 | `file-missing` | A file an index names | Refuses the month it would absorb, or the day it would take again, and keeps every raw file; a person restores the file from git history |
+| 4 | `day-missing` | A day between the first and the newest packed day that no index names | Refuses the month that holds it |
+
+**Three gaps are expected, and none of them is a fault**: a day newer than the
+newest packed day, an entry with `rows: 0`, and a `monthly.json` with no entries.
+None of them makes a reader ask for a file that is not there.
+
 ### What a dry run does, and what the record says
 
 **A dry run does all of the work and changes nothing.** It reads every file,
@@ -634,6 +671,32 @@ sooner could still be reached by one. The 30 is declared once, as
 `GITHUB_RERUN_DAYS` in `backend/idhazh/contracts/knobs/gardener.py`, and the
 floor is derived from it. A raw file that lands in an absorbed month anyway is
 refused and kept for a person (Carmack and Fowler).
+
+**2026-09-30: the two ledgers packed live wait 31 days, not the default 45.**
+Nothing written explained the other 14 days of 45, and 31 is the shortest wait
+that still catches every re-run GitHub allows. A shorter wait, such as 15 days,
+would need a month file rebuilt when a late re-run lands, which the packing
+refuses. The two declarations set 31 and the default stays 45 for the four that
+only report (Carmack; the person chose 31).
+
+**2026-09-30: a missing file has a name, and a ledger's two indexes always
+exist.** The person asked for missing files to be handled the way large data
+platforms handle them. Four of them agree on the shape, and this design copies it:
+
+| # | Platform | What it does |
+| --- | --- | --- |
+| 1 | Delta Lake | The first version of a table must hold its `metaData` action, so the log exists before any data file does, and readers take the files to read from the log rather than from a listing ([protocol](https://github.com/delta-io/delta/blob/master/PROTOCOL.md)). Its errors have fixed names, such as `DELTA_PATH_DOES_NOT_EXIST`, `DELTA_FILE_NOT_FOUND` and `DELTA_VERSIONS_NOT_CONTIGUOUS` for a gap in the log ([error classes](https://raw.githubusercontent.com/delta-io/delta/master/spark/src/main/resources/error/delta-error-classes.json)) |
+| 2 | Apache Iceberg | The table tracks individual data files rather than directories, and a scan is planned by reading the manifests of the current snapshot ([spec](https://iceberg.apache.org/spec/)) |
+| 3 | Apache Spark | A file a table names that is gone is `FAILED_READ_FILE.FILE_NOT_EXIST`, and the message names the fix, `REFRESH TABLE` ([error conditions](https://spark.apache.org/docs/latest/sql-error-conditions.html)). Skipping such files instead, `ignoreMissingFiles`, is an option a reader has to switch on ([file source options](https://spark.apache.org/docs/latest/sql-data-sources-generic-options.html)) |
+| 4 | Apache Hudi | The table keeps its own file listings, so a reader or writer need not ask storage whether a file exists ([metadata](https://hudi.apache.org/docs/metadata)) |
+
+Three choices follow from them. **An empty index is right, and an empty data
+file never is**: an empty `monthly.json` truthfully says no month is packed, while
+an empty day file standing in for a lost one would draw a lost day as a quiet one.
+**There is no list of allowed 404s**: it would be Spark's `ignoreMissingFiles`
+under another name, and a lost index would then look exactly like one never
+written. **`daily.json` carries no field naming the other indexes**: that would
+be a change to a stored shape to say what an empty file already says (Fowler).
 
 **2026-09-28: a first pass starts on the first of a month.** Starting at the
 oldest raw day would leave the daily index holding part of a month, and that

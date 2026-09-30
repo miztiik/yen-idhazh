@@ -17,6 +17,7 @@ Nothing here reads the committed `state/` or a clock the test did not set
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -416,7 +417,7 @@ def test_a_month_is_absorbed_whole_at_the_wake_after_its_days_and_each_date_is_r
 
 
 def test_a_month_the_daily_index_does_not_fully_name_is_refused_and_the_day_is_named(
-    tmp_path: Path,
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-08-05"))
@@ -429,12 +430,44 @@ def test_a_month_the_daily_index_does_not_fully_name_is_refused_and_the_day_is_n
     assert lost is not None
     lost.unlink()
 
-    outcome = compact(root, date(2026, 10, 20), max_periods_per_run=100)
+    with caplog.at_level(logging.ERROR):
+        outcome = compact(root, date(2026, 10, 20), max_periods_per_run=100)
 
     assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-08")
     assert watermark(root, Period.MONTHLY) is None
     assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-11") is not None
     assert ledger.list_ledger_files(state(root), VISUALS).holes == ("2026-08-10",)
+    assert refusals(caplog, "month=2026-08") == [f"fault={ledger.LedgerFault.DAY_MISSING}"]
+
+
+def test_a_month_whose_day_file_is_gone_is_refused_as_file_missing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The index names the day and the file is not there: absorbing would pack a month short."""
+    root = tmp_path / "checkout"
+    filed(root, a_pass("2026-08-05"))
+    compact(root, date(2026, 10, 20), max_periods_per_run=100)
+    lost = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-05")
+    assert lost is not None
+    lost.unlink()
+
+    with caplog.at_level(logging.ERROR):
+        outcome = compact(root, date(2026, 10, 20), max_periods_per_run=100)
+
+    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-08")
+    assert watermark(root, Period.MONTHLY) is None
+    assert refusals(caplog, "month=2026-08") == [f"fault={ledger.LedgerFault.FILE_MISSING}"]
+
+
+def refusals(caplog: pytest.LogCaptureFixture, naming: str) -> list[str]:
+    """The `fault=` word of every error the pass logged about one period."""
+    return [
+        word
+        for record in caplog.records
+        if record.levelno >= logging.ERROR and naming in record.getMessage()
+        for word in record.getMessage().split()
+        if word.startswith("fault=")
+    ]
 
 
 def test_a_month_waits_one_wake_for_a_re_run_still_waiting_in_it(tmp_path: Path) -> None:
@@ -466,6 +499,103 @@ def test_raw_files_that_land_in_a_month_already_absorbed_are_refused_and_kept(
     assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-08-15")
     assert late.is_file()
     assert watermark(root, Period.DAILY) == "2026-10-19", "the rest of the pass still ran"
+
+
+# --- the two indexes, and a file the index names that is gone ---------------------
+
+
+def monthly_index(root: Path) -> Path:
+    return ledger.compact_index_path(state(root), VISUALS, Period.MONTHLY)
+
+
+def test_a_pass_that_writes_the_daily_index_writes_an_empty_monthly_one_when_none_exists(
+    tmp_path: Path,
+) -> None:
+    """The oracle: a ledger never holds daily.json alone, so a reader asks for no file that is not there."""
+    root = tmp_path / "checkout"
+    filed(root, a_pass("2026-09-20"))
+
+    outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
+
+    held = CompactIndex.read(monthly_index(root))
+    assert (held.ledger, held.period, held.entries) == (VISUALS, Period.MONTHLY, [])
+    assert monthly_index(root).relative_to(root).as_posix() in outcome.written
+    assert watermark(root, Period.MONTHLY) is None, "an empty list is not a packed month"
+    assert disjoint(outcome)
+
+
+def test_a_ledger_packed_before_the_two_were_written_together_gains_its_monthly_index(
+    tmp_path: Path,
+) -> None:
+    """daily.json and its watermark, and no monthly.json: the next pass that writes a day adds it."""
+    root = tmp_path / "checkout"
+    filed(root, a_pass("2026-09-20"))
+    compact(root, date(2026, 9, 23), max_periods_per_run=31)
+    monthly_index(root).unlink()
+
+    outcome = compact(root, date(2026, 9, 24), max_periods_per_run=31)
+
+    assert CompactIndex.read(monthly_index(root)).entries == []
+    assert monthly_index(root).relative_to(root).as_posix() in outcome.written
+
+
+def test_a_pass_never_deletes_a_monthly_index_and_leaves_an_empty_one_as_it_is(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "checkout"
+    filed(root, a_pass("2026-09-20"))
+    compact(root, date(2026, 9, 23), max_periods_per_run=31)
+    before = monthly_index(root).read_bytes()
+
+    outcome = compact(root, date(2026, 9, 25), max_periods_per_run=31)
+
+    shown = monthly_index(root).relative_to(root).as_posix()
+    assert shown not in outcome.written and shown not in outcome.taken
+    assert monthly_index(root).read_bytes() == before
+    assert daily_covers(root)[-1] == "2026-09-23"
+
+
+@pytest.mark.parametrize("period", list(Period))
+def test_an_index_its_watermark_says_was_packed_that_is_not_there_stops_the_pass_by_name(
+    tmp_path: Path, period: Period
+) -> None:
+    """Read as empty, it would be rewritten naming only what this pass packs."""
+    root = tmp_path / "checkout"
+    if period is Period.DAILY:
+        filed(root, a_pass("2026-09-20"))
+        compact(root, date(2026, 9, 23), max_periods_per_run=31)
+    else:
+        a_month_file(root, "2026-01")
+    assert watermark(root, period) is not None
+    ledger.compact_index_path(state(root), VISUALS, period).unlink()
+    before = files_under(root)
+
+    with pytest.raises(ValueError, match=f"^{ledger.LedgerFault.INDEX_MISSING}: "):
+        compact(root, date(2026, 9, 24), max_periods_per_run=31)
+
+    assert files_under(root) == before
+
+
+def test_a_re_run_into_a_day_whose_packed_file_is_gone_is_refused_as_file_missing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Rebuilt from the re-run alone, the day would hold only the shards that ran again."""
+    root = tmp_path / "checkout"
+    filed(root, a_pass("2026-09-20"))
+    compact(root, date(2026, 9, 23), max_periods_per_run=31)
+    lost = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-20")
+    assert lost is not None
+    lost.unlink()
+    late = filed(root, a_pass("2026-09-20", before=222), attempt=2)
+
+    with caplog.at_level(logging.ERROR):
+        outcome = compact(root, date(2026, 9, 24), max_periods_per_run=31)
+
+    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-09-20")
+    assert late.is_file()
+    assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-20") is None
+    assert refusals(caplog, "day=2026-09-20") == [f"fault={ledger.LedgerFault.FILE_MISSING}"]
+    assert watermark(root, Period.DAILY) == "2026-09-22", "the rest of the pass still ran"
 
 
 def test_a_catch_up_pass_never_writes_a_path_it_deletes(tmp_path: Path) -> None:

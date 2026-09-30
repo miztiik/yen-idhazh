@@ -204,6 +204,49 @@ def test_the_rows_come_back_oldest_first_from_every_kind_of_file(
     assert 7 not in {row.payload_bytes_before for row in rows}
     assert "state/compact/visual-prunes/index/daily.json" in caplog.text
     assert "2026-08-03" in caplog.text
+    assert f"fault={ledger.LedgerFault.DAY_MISSING}" in caplog.text
+
+
+def test_a_named_file_that_is_not_there_is_named_file_missing_and_the_other_days_still_read(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An index naming a file that is gone is a fault, never an empty file read without a word."""
+    made = a_tree_with_every_kind_of_file(tmp_path)
+    made["first"].unlink()
+
+    with caplog.at_level(logging.WARNING):
+        rows = ledger.load_days(
+            tmp_path, WHICH, days("2026-08-01", "2026-08-02"), model=VisualPruneRow
+        )
+
+    assert [row.date for row in rows] == ["2026-08-02"]
+    lines = [record.getMessage() for record in caplog.records]
+    assert any(
+        f"fault={ledger.LedgerFault.FILE_MISSING}" in line
+        and "state/compact/visual-prunes/index/daily.json" in line
+        and "covers=2026-08-01" in line
+        for line in lines
+    ), lines
+
+
+def test_a_daily_index_alone_is_named_index_missing_and_an_empty_monthly_one_is_not(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The compaction writes the two together, so daily.json alone hides whatever months it packed."""
+    compacted(tmp_path, Period.DAILY, "2026-08-01", [a_pass("2026-08-01")])
+    indexed(tmp_path, Period.DAILY, ["2026-08-01"])
+
+    with caplog.at_level(logging.WARNING):
+        ledger.list_ledger_files(tmp_path, WHICH)
+    assert f"fault={ledger.LedgerFault.INDEX_MISSING}" in caplog.text
+    assert "state/compact/visual-prunes/index/monthly.json" in caplog.text
+
+    indexed(tmp_path, Period.MONTHLY, [])
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        found = ledger.list_ledger_files(tmp_path, WHICH)
+    assert caplog.text == ""
+    assert [source.covers for source in found.sources] == ["2026-08-01"]
 
 
 def test_a_day_both_indexes_name_is_read_once_from_its_month(

@@ -10,31 +10,37 @@
  *
  * - `ok`: `through` is the newest day `daily.json` names - the day a slice
  *   returns as its own `through`. `first` is the oldest day either index names,
- *   a month counting from its first day.
+ *   a month counting from its first day. `fault` is `index-missing` when there is
+ *   no `monthly.json`: `first` is then the oldest day `daily.json` names, so a
+ *   route anchored on it still draws every day the door can read.
  * - `quiet`: `daily.json` names no day yet.
- * - `missing`: there is no `daily.json`, so the ledger is not published.
+ * - `missing`: there is no `daily.json`, so the ledger is not published. Its
+ *   fault is `not-packed`.
  * - `unreachable`: `daily.json` is one this build will not act on, or could not
  *   be read, and the console says why. It carries no day, because the reach asks
- *   for none.
+ *   for none, and no fault, because it reads no file an index names.
  *
- * `monthly.json` only moves `first` back. When it is not there the ledger has no
- * months yet. When this build will not act on it, the reach is the days
- * `daily.json` names, and the console says why.
+ * `monthly.json` only moves `first` back. An empty one says no month is packed
+ * yet. When this build will not act on it, the reach is the days `daily.json`
+ * names, and the console says why.
  *
  * Each index is read the way a slice reads it, by `readIndexFrom()` in
- * `slice-reader.ts`, so a slice and a reach never disagree about what an index
- * says. Imports nothing tied to one environment, so a Node test loads it as it is.
+ * `slice-reader.ts`, a fault's console line is the slice's own `faultLine()`,
+ * and `first` is `firstNamed()` in `slice.ts`, so a slice and a reach never
+ * disagree about what an index says or print one fault twice. Imports nothing
+ * tied to one environment, so a Node test loads it as it is.
  */
 
 import type { PageKeeper } from './page-keeper';
-import { explainRefusal, LOG_PREFIX, readIndexFrom } from './slice-reader';
-import { LEDGER_NAMES, SliceRequestError, type DateStamp, type LedgerName } from './slice-shapes';
+import { firstNamed } from './slice';
+import { explainRefusal, faultLine, LOG_PREFIX, readIndexFrom } from './slice-reader';
+import { LEDGER_NAMES, SliceRequestError, type DateStamp, type LedgerFault, type LedgerName } from './slice-shapes';
 
 /** How far a ledger reaches, or which of three nothings it is. */
 export type LedgerReach =
-	| { state: 'ok'; first: DateStamp; through: DateStamp }
+	| { state: 'ok'; first: DateStamp; through: DateStamp; fault: Extract<LedgerFault, 'index-missing'> | null }
 	| { state: 'quiet' }
-	| { state: 'missing' }
+	| { state: 'missing'; fault: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreachable' };
 
 /** The oldest and the newest day `ledger` holds, from its two indexes as the page keeps them. */
@@ -46,23 +52,25 @@ export async function readReach(keeper: PageKeeper, ledger: LedgerName): Promise
 		readIndexFrom(keeper, ledger, 'daily'),
 		readIndexFrom(keeper, ledger, 'monthly')
 	]);
-	if (daily === null) return { state: 'missing' };
+	if (daily === null) {
+		keeper.warn(faultLine(ledger, { fault: 'not-packed' }));
+		return { state: 'missing', fault: 'not-packed' };
+	}
 	if ('refused' in daily) {
-		console.warn(`${LOG_PREFIX} ${ledger}: ${explainRefusal('daily', daily.refused)}, so how far it reaches is not known`);
+		keeper.warn(`${LOG_PREFIX} ${ledger}: ${explainRefusal('daily', daily.refused)}, so how far it reaches is not known`);
 		return { state: 'unreachable' };
 	}
+	if (monthly === null) keeper.warn(faultLine(ledger, { fault: 'index-missing' }));
 	const days = daily.index.entries;
 	if (days.length === 0) return { state: 'quiet' };
 	const through = days[days.length - 1].covers;
-	let first = days[0].covers;
-	if (monthly !== null && 'refused' in monthly) {
-		console.warn(
+	if (monthly === null) return { state: 'ok', first: days[0].covers, through, fault: 'index-missing' };
+	if ('refused' in monthly) {
+		keeper.warn(
 			`${LOG_PREFIX} ${ledger}: ${explainRefusal('monthly', monthly.refused)}, ` +
-				`so it reaches back only to ${first}, the oldest day daily.json names`
+				`so it reaches back only to ${days[0].covers}, the oldest day daily.json names`
 		);
-	} else if (monthly !== null && monthly.index.entries.length > 0) {
-		const oldestMonth = `${monthly.index.entries[0].covers}-01`;
-		if (oldestMonth < first) first = oldestMonth;
+		return { state: 'ok', first: days[0].covers, through, fault: null };
 	}
-	return { state: 'ok', first, through };
+	return { state: 'ok', first: firstNamed(days, monthly.index.entries), through, fault: null };
 }

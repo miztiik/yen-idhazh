@@ -15,7 +15,16 @@ would happen, naming the path, and the pass then fails before anything lands.
 
 A watermark or index this build cannot read stops the pass rather than being
 read as absent: a compaction that guessed where it had got to would rewrite, or
-delete, a period it had already finished.
+delete, a period it had already finished. So does an index that is not there
+while its period's watermark says the period was packed - the `index-missing`
+fault - because a pass that read it as empty would write a list that forgets
+every period packed before.
+
+**A ledger's two indexes exist together.** Whatever writes one writes the
+other too when the ledger has none yet, and that one is empty: a period with no
+watermark was never packed, so an empty list is the truth about it. A reader
+that finds `index/daily.json` alone can then tell a lost `index/monthly.json`
+from a month never packed, and asks for no file that is not there.
 """
 
 from __future__ import annotations
@@ -82,6 +91,8 @@ class CompactTree:
     raw_days: list[str]
     #: How many raw day folders the pass listed, before any step set a day aside.
     listed: int = 0
+    #: The periods whose index the pass found on disk.
+    indexed: frozenset[Period] = frozenset()
     changes: list[Change] = field(default_factory=list)
     #: Every file the pass read or weighed.
     looked: set[Path] = field(default_factory=set)
@@ -91,13 +102,25 @@ class CompactTree:
         """The two watermarks, the two indexes and the raw day folder names, read once."""
         marks: dict[Period, str | None] = {}
         entries: dict[Period, dict[str, CompactEntry]] = {}
+        indexed: set[Period] = set()
         for period in Period:
             mark = ledger.watermark_path(state_dir, ledger_name, period)
             marks[period] = (
                 _read(Watermark, mark, ledger_name, period).through if mark.is_file() else None
             )
             index = ledger.compact_index_path(state_dir, ledger_name, period)
-            listed = _read(CompactIndex, index, ledger_name, period) if index.is_file() else None
+            present = index.is_file()
+            if not present and marks[period] is not None:
+                shown = f"{ledger.STATE_DIRNAME}/{index.relative_to(state_dir).as_posix()}"
+                raise ValueError(
+                    f"{ledger.LedgerFault.INDEX_MISSING}: {shown} is not there, and "
+                    f"{mark.name} says the {period.value} period is packed through "
+                    f"{marks[period]}. Restore {index.name} from git history before the next "
+                    "wake; an empty one would forget every period packed before"
+                )
+            if present:
+                indexed.add(period)
+            listed = _read(CompactIndex, index, ledger_name, period) if present else None
             entries[period] = {entry.covers: entry for entry in listed.entries} if listed else {}
         raw_days = ledger.raw_days(state_dir, ledger_name)
         return cls(
@@ -109,6 +132,7 @@ class CompactTree:
             monthly=entries[Period.MONTHLY],
             raw_days=raw_days,
             listed=len(raw_days),
+            indexed=frozenset(indexed),
         )
 
     def load[C: Contract](self, path: Path, *, model: type[C]) -> list[StoredRow[C]]:
@@ -130,7 +154,20 @@ class CompactTree:
         self.changes.append(Change(path=path, data=None, size=path.stat().st_size))
 
     def write_index(self, period: Period) -> None:
-        """Decide to rewrite one period's index from what the pass holds now."""
+        """Decide to rewrite one period's index from what the pass holds now.
+
+        The other period's index is written with it when the ledger has none yet
+        and this pass has not written it, so a ledger never holds one without the
+        other. A period with no index has no watermark either - `read` refuses
+        that pair - so what the pass holds for it is nothing, and the index says so.
+        """
+        self._decide_index(period)
+        other = Period.MONTHLY if period is Period.DAILY else Period.DAILY
+        path = ledger.compact_index_path(self.state_dir, self.ledger, other)
+        if other not in self.indexed and not any(change.path == path for change in self.changes):
+            self._decide_index(other)
+
+    def _decide_index(self, period: Period) -> None:
         held = self.daily if period is Period.DAILY else self.monthly
         index = CompactIndex(
             version=CompactIndex.schema_version(),

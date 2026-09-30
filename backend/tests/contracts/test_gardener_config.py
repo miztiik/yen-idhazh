@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from conftest import CONFIG_DIR
 from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import ValidationError
 
@@ -23,6 +24,7 @@ from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import (
     DEFAULT_CLOSED_AFTER_DAYS,
     DEFAULT_COMPACT_AFTER_DAYS,
+    GITHUB_RERUN_DAYS,
     CollectionTaskPolicy,
     CompactionPolicy,
     FoldPolicy,
@@ -81,11 +83,24 @@ FOLD_ALREADY_RAN_LIVE: Final = (
     "the gardener took it over, and a fold changes no answer a reader gets"
 )
 
+#: Why two of the ledgers the console reads are packed at every wake.
+PACKED_FOR_THE_CONSOLE: Final = (
+    "the person, 2026-09-30: the console reads this ledger from its packed files "
+    "only, so a finished day is packed at the next wake and a month 31 days after "
+    "it ends; scores stays report-only until a month's summary is built from its "
+    "packed rows"
+)
+
+#: The two packing tasks a person turned live.
+PACKED_LIVE: Final = ("compact-host-fingerprint", "compact-item-health")
+
 #: Every switch that ships live, keyed by its task and by the key a person edits
 #: to turn it off, each beside the decision that put it there. Every other switch
 #: ships `dry_run: true`: a task earns its first deletion from a person reading
 #: its records, never from the change that added it.
 LIVE_BY_DECISION: Final = {
+    ("compact-host-fingerprint", "dry_run"): PACKED_FOR_THE_CONSOLE,
+    ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
     ("corpus-squash", "dry_run"): (
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
@@ -149,6 +164,30 @@ def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None
         "dry run, and one goes live only by a decision named in LIVE_BY_DECISION with its "
         "reason"
     )
+
+
+def test_the_two_packing_tasks_the_person_turned_on_pack_a_month_31_days_after_it_ends() -> None:
+    """31 is the shortest wait no GitHub re-run can outlast; scores keeps only reporting."""
+    tasks = config.load_gardener().tasks
+    for name in PACKED_LIVE:
+        policy = tasks[name]
+        assert isinstance(policy, CompactionPolicy), name
+        assert (policy.dry_run, policy.daily_keep_days) == (False, GITHUB_RERUN_DAYS + 1), name
+    scores = tasks["compact-scores"]
+    assert isinstance(scores, CompactionPolicy) and scores.dry_run
+
+
+@pytest.mark.parametrize("name", PACKED_LIVE)
+def test_a_live_packing_task_that_waits_30_days_is_refused_by_name(
+    tmp_path: Path, name: str
+) -> None:
+    """A month absorbed 30 days after it ends could still take a re-run's rows."""
+    config_dir = a_config(tmp_path, CONFIG_DIR / "gardener")
+    path = config_dir / "gardener" / f"{name}.json"
+    declared = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps(declared | {"daily_keep_days": 30}), encoding="ascii")
+    message = refused(config_dir)
+    assert f"config/gardener/{name}.json is refused" in message and "daily_keep_days" in message
 
 
 def test_every_csv_day_tree_is_folded_by_the_task_that_owns_it() -> None:

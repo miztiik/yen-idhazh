@@ -33,7 +33,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.resolve(here, '..', '..', 'tests', 'fixtures', 'ledger-door', 'state');
 const PACKED = path.join('compact', 'host-fingerprint');
 
-/** A state tree holding only the fixture's packed days up to and including `through`, and no months. */
+/** A state tree holding only the fixture's packed days up to and including `through`,
+ *  and a month index that names no month, as the packing writes one. */
 function packedUpTo(through: string): string {
 	const root = mkdtempSync(path.join(tmpdir(), 'idhazh-packed-'));
 	const index = JSON.parse(
@@ -48,6 +49,8 @@ function packedUpTo(through: string): string {
 	}
 	mkdirSync(path.join(root, PACKED, 'index'), { recursive: true });
 	writeFileSync(path.join(root, PACKED, 'index', 'daily.json'), JSON.stringify(index));
+	const months = JSON.parse(readFileSync(path.join(FIXTURE, PACKED, 'index', 'monthly.json'), 'utf8')) as object;
+	writeFileSync(path.join(root, PACKED, 'index', 'monthly.json'), JSON.stringify({ ...months, entries: [] }));
 	return root;
 }
 
@@ -66,12 +69,24 @@ test.describe('reading a packed record', () => {
 		}
 	});
 
-	test('a packed day missing from the middle makes the whole read unreadable, at that day', async () => {
+	test('a packed day missing from the middle makes the whole read unreadable, at that day, named day-missing', async () => {
 		// Every packed day from the first, and 2026-09-04 is named by neither index.
 		// Drawing the days either side of it would draw a gap as a quiet day.
 		const table = await machineRecord(-1, FIXTURE);
-		expect(table.read).toEqual({ state: 'unreadable', at: '2026-09-04' });
+		expect(table.read).toEqual({ state: 'unreadable', at: '2026-09-04', fault: 'day-missing' });
 		expect(table.rows).toEqual([]);
+	});
+
+	test('a packed file the list names and the disk lacks makes the read unreadable, named file-missing', async () => {
+		const root = packedUpTo('2026-09-03');
+		try {
+			rmSync(path.join(root, PACKED, 'daily', '2026', '09', '02.parquet'));
+			const table = await machineRecord(2, root);
+			expect(table.read).toEqual({ state: 'unreadable', at: '2026-09-02', fault: 'file-missing' });
+			expect(table.rows).toEqual([]);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	test('the newest day reads on its own, and every cell comes back as the day files spelled it', async () => {
@@ -196,18 +211,40 @@ test.describe('what a route says about the records it read', () => {
 	test('a record that did not load is a fault, named with the day that failed where there is one', () => {
 		const notes = recordNotes(
 			[
-				{ record: 'machine', read: { state: 'unreadable', at: '2026-09-04' } },
-				{ record: 'article', read: { state: 'unreadable', at: null } }
+				{ record: 'machine', read: { state: 'unreadable', at: '2026-09-04', fault: null } },
+				{ record: 'article', read: { state: 'unreadable', at: null, fault: null } }
 			],
 			'2026-09-29'
 		);
 		expect(notes.map((note) => note.kind)).toEqual(['unreadable', 'unreadable']);
 		expect(notes[0].text).toBe(
-			"The machine record's day for 4 Sep 2026 did not load, so nothing below that uses it has anything to show. This is a fault to fix, not a quiet day."
+			"The machine record's day for 4 Sep 2026 did not load, so nothing below that uses this record has anything to show. This is a fault to fix, not a quiet day."
 		);
 		expect(notes[1].text).toBe(
 			"The article record's list of packed days did not load, so nothing below that uses it has anything to show. This is a fault to fix, not a quiet day."
 		);
+	});
+
+	test('a missing file and a missing day each say which, because each has its own fix', () => {
+		const notes = recordNotes(
+			[
+				{ record: 'machine', read: { state: 'unreadable', at: '2026-09-04', fault: 'file-missing' } },
+				{ record: 'score', read: { state: 'unreadable', at: '2026-09-04', fault: 'day-missing' } }
+			],
+			'2026-09-29'
+		);
+		expect(notes).toEqual([
+			{
+				kind: 'unreadable',
+				records: ['machine'],
+				text: 'The machine record lists a packed file for 4 Sep 2026 that is not there, so nothing below that uses this record has anything to show. This is a fault to fix, not a quiet day.'
+			},
+			{
+				kind: 'unreadable',
+				records: ['score'],
+				text: 'The score record is missing 4 Sep 2026, a day between packed days, so nothing below that uses this record has anything to show. This is a fault to fix, not a quiet day.'
+			}
+		]);
 	});
 
 	test('a record packed short of the day before the newest published day says where it stops', () => {
@@ -248,7 +285,7 @@ test.describe('what a route says about the records it read', () => {
 		const notes = recordNotes(
 			[
 				{ record: 'article', read: { state: 'not-packed' } },
-				{ record: 'machine', read: { state: 'unreadable', at: '2026-09-04' } },
+				{ record: 'machine', read: { state: 'unreadable', at: '2026-09-04', fault: 'file-missing' } },
 				{ record: 'score', read: read('2026-09-25') }
 			],
 			'2026-09-29'

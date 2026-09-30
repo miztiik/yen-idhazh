@@ -9,6 +9,9 @@
  * ascending, comes back instead of a file set: drawing the days around a hole
  * would be an undercount nobody could see.
  *
+ * Where the ledger starts is worked out here too, `firstNamed()`, so the slice
+ * and the reach never disagree about which hole lies before it.
+ *
  * Pure: it takes the range and the two entry lists, and reads nothing else.
  */
 
@@ -34,6 +37,15 @@ export function daysBetween(from: DateStamp, to: DateStamp): DateStamp[] {
 		days.push(new Date(at).toISOString().slice(0, 10));
 	}
 	return days;
+}
+
+/** The oldest day either index names, a month counting from its first day. `daily`
+ *  names at least one day; a hole before this day is before the ledger starts,
+ *  and a hole from it on is a day the packing lost. */
+export function firstNamed(daily: readonly CompactEntry[], monthly: readonly CompactEntry[]): DateStamp {
+	const first = daily[0].covers;
+	const oldestMonth = monthly.length > 0 ? `${monthly[0].covers}-01` : null;
+	return oldestMonth !== null && oldestMonth < first ? oldestMonth : first;
 }
 
 /** The files that answer every day from `from` to `to`, one file a day. */

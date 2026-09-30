@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,13 +9,13 @@ import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry } from '../src/lib/da
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
 import { readReach } from '../src/lib/data/ledger-reach';
-import { pageKeeper, type EngineOpener, type PageKeeper } from '../src/lib/data/page-keeper';
+import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper } from '../src/lib/data/page-keeper';
 import { daysBetween, filesFor } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
 import { dataPath, indexPath, readSlice } from '../src/lib/data/slice-reader';
-import { checkedRequest, SliceRequestError, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
+import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository } from '../src/lib/server/config';
-import { sliceFromDisk } from '../src/lib/server/ledger-disk';
+import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 
 /**
  * THE ORACLE for the query door: a request is answered through exactly the
@@ -55,6 +56,8 @@ interface Asked {
 	path: string;
 	version: string | null;
 	cache: RequestCache | undefined;
+	/** What the recorded response answered: a status, or a fetch that threw. */
+	answered: number | 'throw';
 }
 
 /** Answers from the fixture files, unless `rules` names the path. */
@@ -65,7 +68,6 @@ function recorded(rules: Record<string, Rule> = {}): { fetcher: Fetcher; asked: 
 		expect(url.startsWith(root), `${url} is not under ${root}`).toBe(true);
 		const address = new URL(url);
 		const relative = decodeURIComponent(address.pathname.slice(new URL(root).pathname.length));
-		asked.push({ path: relative, version: address.searchParams.get('v'), cache: init.cache });
 		const file = path.join(STATE, ...relative.split('/'));
 		const onDisk = existsSync(file) ? new Uint8Array(readFileSync(file)) : null;
 		const rule = rules[relative];
@@ -73,6 +75,12 @@ function recorded(rules: Record<string, Rule> = {}): { fetcher: Fetcher; asked: 
 			typeof rule === 'function'
 				? rule(onDisk ?? new Uint8Array())
 				: (rule ?? (onDisk === null ? { status: 404 } : { status: 200, body: onDisk }));
+		asked.push({
+			path: relative,
+			version: address.searchParams.get('v'),
+			cache: init.cache,
+			answered: answer === 'throw' ? 'throw' : answer.status
+		});
 		if (answer === 'throw') throw new TypeError('Failed to fetch');
 		return new Response(answer.body === undefined ? null : answer.body.slice().buffer, { status: answer.status });
 	};
@@ -199,13 +207,11 @@ test.describe('which files a range needs', () => {
 });
 
 test.describe('the four states, before the engine is needed', () => {
-	test('a ledger with no daily index is missing, and nothing else is asked', async () => {
+	test('a ledger with no daily index is missing, not packed, and nothing else is asked', async () => {
 		const { fetcher, asked } = recorded({ [DAILY_INDEX]: { status: 404 } });
 		const engine = counted();
-		expect(await readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-01', '2026-09-02'))).toEqual({
-			state: 'missing',
-			rows: []
-		});
+		const { result } = await warnings(() => readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-01', '2026-09-02')));
+		expect(result).toEqual({ state: 'missing', rows: [], fault: 'not-packed' });
 		expect(asked.map((one) => one.path)).toEqual([DAILY_INDEX]);
 		expect(engine.opened()).toBe(0);
 	});
@@ -238,16 +244,16 @@ test.describe('the four states, before the engine is needed', () => {
 		expect(dataAsked(asked)).toEqual(['compact/host-fingerprint/daily/2026/09/05.parquet']);
 	});
 
-	test('a hole is unreachable at that day, and no data file is fetched', async () => {
+	test('a hole is unreachable at that day, named day-missing, and no data file is fetched', async () => {
 		const { fetcher, asked } = recorded();
 		const engine = counted();
 		const { result, warned } = await warnings(() =>
 			readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-02', '2026-09-05'))
 		);
-		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-04' });
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-04', fault: 'day-missing' });
 		expect(dataAsked(asked)).toEqual([]);
 		expect(engine.opened()).toBe(0);
-		expect(warned.join('\n')).toContain('2026-09-04 is named by neither index');
+		expect(warned.join('\n')).toContain('neither it nor monthly.json names 2026-09-04');
 	});
 
 	test('monthly.json is asked for only when the span starts before the oldest daily day', async () => {
@@ -268,12 +274,34 @@ test.describe('the four states, before the engine is needed', () => {
 		]);
 	});
 
-	test('with no monthly.json, a day before the oldest daily day is a hole', async () => {
+	test('with no monthly.json, a span that starts before the oldest daily day is index-missing', async () => {
 		const { fetcher } = recorded({ [MONTHLY_INDEX]: { status: 404 } });
 		const { result } = await warnings(() =>
 			readSlice(freshPage(fetcher), LEDGER, ask('2026-08-30', '2026-09-01'))
 		);
-		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30' });
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30', fault: 'index-missing' });
+	});
+
+	test('with no monthly.json, a span inside the daily days draws, and monthly.json is never asked for', async () => {
+		const { fetcher, asked } = recorded({ [MONTHLY_INDEX]: { status: 404 } });
+		const { result, warned } = await warnings(() =>
+			readSlice(freshPage(fetcher), LEDGER, ask('2026-08-31', '2026-09-01'))
+		);
+		expect(result, warned.join('\n')).toMatchObject({ state: 'ok', through: '2026-09-05' });
+		expect(asked.map((one) => one.path)).not.toContain(MONTHLY_INDEX);
+		expect(warned).toEqual([]);
+	});
+
+	test('a span that starts before the oldest day either index names is unreachable, and no fault', async () => {
+		// monthly.json names 2026-08, so the ledger starts on 2026-08-01. A day before it
+		// was never packed, so "re-pack that day" would send an operator to fix nothing.
+		const { fetcher } = recorded();
+		const { result, warned } = await warnings(() =>
+			readSlice(freshPage(fetcher), LEDGER, ask('2026-07-30', '2026-08-02'))
+		);
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-07-30', fault: null });
+		expect(warned.join('\n')).toContain("it starts before 2026-08-01, the oldest day either index names");
+		expect(warned.join('\n')).toContain("Clamp the span to the reach's first day");
 	});
 
 	test('an index stamped newer than this build is refused: both stamps on the console, no data fetched', async () => {
@@ -281,7 +309,7 @@ test.describe('the four states, before the engine is needed', () => {
 		const { result, warned } = await warnings(() =>
 			readSlice(freshPage(fetcher), LEDGER, ask('2026-08-30', '2026-09-02'))
 		);
-		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30' });
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30', fault: null });
 		expect(asked.map((one) => one.path)).toEqual([DAILY_INDEX]);
 		expect(warned.join('\n')).toContain('2099-01-01');
 		expect(warned.join('\n')).toContain(COMPACT_INDEX_STAMP);
@@ -301,7 +329,7 @@ test.describe('the four states, before the engine is needed', () => {
 		const { result } = await warnings(() =>
 			readSlice(freshPage(fetcher), LEDGER, ask('2026-08-30', '2026-09-01'))
 		);
-		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30' });
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30', fault: null });
 	});
 
 	const unreadable: [string, Rule][] = [
@@ -318,19 +346,19 @@ test.describe('the four states, before the engine is needed', () => {
 			const { result, warned } = await warnings(() =>
 				readSlice(freshPage(fetcher), LEDGER, ask('2026-09-01', '2026-09-02'))
 			);
-			expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-01' });
+			expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-01', fault: null });
 			expect(dataAsked(asked)).toEqual([]);
 			expect(warned.join('\n')).toContain('daily.json');
 		});
 	}
 
-	test('a named file that is not there is unreachable at the first day it covers in the span', async () => {
+	test('a named file that is not there is unreachable at the first day it covers in the span, named file-missing', async () => {
 		const { fetcher } = recorded({ 'compact/host-fingerprint/daily/2026/09/02.parquet': { status: 404 } });
 		const engine = counted();
 		const { result } = await warnings(() =>
 			readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-01', '2026-09-02'))
 		);
-		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02' });
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02', fault: 'file-missing' });
 		expect(engine.opened()).toBe(0);
 	});
 
@@ -342,7 +370,7 @@ test.describe('the four states, before the engine is needed', () => {
 		const { result, warned } = await warnings(() =>
 			readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-08-30', '2026-09-01'))
 		);
-		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30' });
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30', fault: null });
 		expect(engine.opened()).toBe(0);
 		const month = fixtureEntries('monthly').find((entry) => entry.covers === '2026-08');
 		expect(month, 'the fixture names no 2026-08 month file').toBeDefined();
@@ -376,7 +404,7 @@ test.describe('the four states, before the engine is needed', () => {
 				ask('2026-09-01', '2026-09-02')
 			)
 		);
-		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-01' });
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-01', fault: null });
 		expect(warned.join('\n')).toContain('no WebAssembly exception handling');
 	});
 });
@@ -554,14 +582,20 @@ test.describe('what a page keeps', () => {
 		expect(engine.registered).toHaveLength(2);
 	});
 
-	test('a file that is not there is kept as absent, and asked for once', async () => {
+	test('a file that is not there is kept as absent, asked for once, and told to the console once', async () => {
 		const { fetcher, asked } = recorded({ [dayFile('2026-09-02')]: { status: 404 } });
 		const page = freshPage(fetcher);
+		const told: string[] = [];
 		for (let turn = 0; turn < 2; turn += 1) {
-			const { result } = await warnings(() => readSlice(page, LEDGER, ask('2026-09-02', '2026-09-02')));
-			expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02' });
+			const { result, warned } = await warnings(() => readSlice(page, LEDGER, ask('2026-09-02', '2026-09-02')));
+			expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02', fault: 'file-missing' });
+			told.push(...warned);
 		}
 		expect(askedCounts(asked)).toEqual({ [DAILY_INDEX]: 1, [dayFile('2026-09-02')]: 1 });
+		expect(told).toEqual([
+			`[ledger] file-missing host-fingerprint state/${dayFile('2026-09-02')}: daily.json names it; it is not there. ` +
+				'Reload; if it stays, re-pack that day.'
+		]);
 	});
 
 	test('a file of the wrong length is neither registered nor kept, so the next slice fetches it again', async () => {
@@ -572,7 +606,7 @@ test.describe('what a page keeps', () => {
 		const engine = counted();
 		const page = freshPage(fetcher, engine);
 		const { result } = await warnings(() => readSlice(page, LEDGER, ask('2026-09-02', '2026-09-02')));
-		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02' });
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02', fault: null });
 		expect(engine.registered).toEqual([]);
 		expect(await readSlice(page, LEDGER, ask('2026-09-02', '2026-09-02'))).toMatchObject({ state: 'ok' });
 		expect(askedCounts(asked)[dayFile('2026-09-02')]).toBe(2);
@@ -640,10 +674,12 @@ test.describe('what a page keeps', () => {
 		expect(await readSlice(open, LEDGER, ask('2026-09-03', '2026-09-03'))).toMatchObject({ state: 'quiet' });
 		deployed = true;
 		const removed = await warnings(() => readSlice(open, LEDGER, ask('2026-08-31', '2026-08-31')));
-		expect(removed.result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-31' });
-		expect(removed.warned.join('\n')).toContain(`${dayFile('2026-08-31')} is named in daily.json and is not there`);
+		expect(removed.result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-31', fault: 'file-missing' });
+		expect(removed.warned.join('\n')).toContain(
+			`[ledger] file-missing host-fingerprint state/${dayFile('2026-08-31')}: daily.json names it; it is not there.`
+		);
 		const changed = await warnings(() => readSlice(open, LEDGER, ask('2026-09-05', '2026-09-05')));
-		expect(changed.result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-05' });
+		expect(changed.result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-05', fault: null });
 		expect(changed.warned.join('\n')).toContain(`arrived as ${repacked.byteLength} bytes`);
 		const reloaded = freshPage(fetcher);
 		expect(await readSlice(reloaded, LEDGER, ask('2026-08-31', '2026-08-31', { columns: ['date', 'run_id', 'shard'] }))).toEqual({
@@ -693,18 +729,22 @@ test.describe('how far a ledger reaches', () => {
 		expect(await readReach(freshPage(watched, engine), LEDGER)).toEqual({
 			state: 'ok',
 			first: '2026-08-01',
-			through: '2026-09-05'
+			through: '2026-09-05',
+			fault: null
 		});
 		expect(asked.map((one) => one.path).sort()).toEqual([DAILY_INDEX, MONTHLY_INDEX].sort());
 		expect(mostInFlight, 'the two indexes were asked for one after the other').toBe(2);
 		expect(engine.opened()).toBe(0);
 	});
 
-	test('with no monthly.json, it reaches back to the oldest day daily.json names', async () => {
+	test('with no monthly.json, it reaches back to the oldest day daily.json names, and names index-missing once', async () => {
 		const { fetcher } = recorded({ [MONTHLY_INDEX]: { status: 404 } });
 		const { result, warned } = await warnings(() => readReach(freshPage(fetcher), LEDGER));
-		expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05' });
-		expect(warned).toEqual([]);
+		expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', fault: 'index-missing' });
+		expect(warned).toEqual([
+			`[ledger] index-missing host-fingerprint state/${MONTHLY_INDEX}: it is not there, though daily.json is. ` +
+				'Run the upkeep again to write it; it lists nothing until a month is packed.'
+		]);
 	});
 
 	const unread: [string, Rule][] = [
@@ -716,7 +756,7 @@ test.describe('how far a ledger reaches', () => {
 		test(`a monthly.json that is ${what} leaves the days daily.json names, and the console says why`, async () => {
 			const { fetcher } = recorded({ [MONTHLY_INDEX]: rule });
 			const { result, warned } = await warnings(() => readReach(freshPage(fetcher), LEDGER));
-			expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05' });
+			expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', fault: null });
 			expect(warned.join('\n')).toMatch(/^\[ledger\] host-fingerprint: monthly\.json .*reaches back only to 2026-08-31/);
 		});
 
@@ -735,9 +775,10 @@ test.describe('how far a ledger reaches', () => {
 		expect(await readReach(freshPage(fetcher), LEDGER)).toStrictEqual({ state: 'quiet' });
 	});
 
-	test('a ledger with no daily.json is missing', async () => {
+	test('a ledger with no daily.json is missing, not packed', async () => {
 		const { fetcher } = recorded({ [DAILY_INDEX]: { status: 404 } });
-		expect(await readReach(freshPage(fetcher), LEDGER)).toStrictEqual({ state: 'missing' });
+		const { result } = await warnings(() => readReach(freshPage(fetcher), LEDGER));
+		expect(result).toStrictEqual({ state: 'missing', fault: 'not-packed' });
 	});
 
 	test('it refuses a ledger outside the closed set, and asks for nothing', async () => {
@@ -775,4 +816,132 @@ test.describe('how far a ledger reaches', () => {
 			expect([reach.state, drawn.state]).toEqual([state, state]);
 		});
 	}
+});
+
+/** A copy of the fixture's state tree in a fresh temporary folder, less the files named. */
+function fixtureTreeWithout(...without: string[]): string {
+	const root = mkdtempSync(path.join(tmpdir(), 'idhazh-door-'));
+	cpSync(STATE, root, { recursive: true });
+	for (const relative of without) rmSync(path.join(root, ...relative.split('/')));
+	return root;
+}
+
+test.describe('THE ORACLE for a missing file: a name, the state it draws, and one line', () => {
+	/** Each fault: what the tree lacks, a span that meets it, the answer, the reach, and the path its line names. */
+	const faults = [
+		{
+			fault: 'not-packed',
+			without: [DAILY_INDEX],
+			span: ['2026-09-01', '2026-09-02'],
+			answer: { state: 'missing', rows: [], fault: 'not-packed' },
+			reach: { state: 'missing', fault: 'not-packed' },
+			names: DAILY_INDEX
+		},
+		{
+			fault: 'index-missing',
+			without: [MONTHLY_INDEX],
+			span: ['2026-08-30', '2026-09-01'],
+			answer: { state: 'unreachable', rows: [], at: '2026-08-30', fault: 'index-missing' },
+			reach: { state: 'ok', first: '2026-08-31', through: '2026-09-05', fault: 'index-missing' },
+			names: MONTHLY_INDEX
+		},
+		{
+			fault: 'file-missing',
+			without: [dayFile('2026-09-02')],
+			span: ['2026-09-01', '2026-09-02'],
+			answer: { state: 'unreachable', rows: [], at: '2026-09-02', fault: 'file-missing' },
+			reach: { state: 'ok', first: '2026-08-01', through: '2026-09-05', fault: null },
+			names: dayFile('2026-09-02')
+		},
+		{
+			fault: 'day-missing',
+			without: [],
+			span: ['2026-09-02', '2026-09-05'],
+			answer: { state: 'unreachable', rows: [], at: '2026-09-04', fault: 'day-missing' },
+			reach: { state: 'ok', first: '2026-08-01', through: '2026-09-05', fault: null },
+			names: DAILY_INDEX
+		}
+	] as const;
+
+	test('the four are the whole list, in its order', () => {
+		expect(faults.map((one) => one.fault)).toEqual([...LEDGER_FAULTS]);
+	});
+
+	for (const one of faults) {
+		test(`${one.fault}: both entry points answer it, and a page prints its one line once`, async () => {
+			const rules: Record<string, Rule> = Object.fromEntries(
+				one.without.map((relative): [string, Rule] => [relative, { status: 404 }])
+			);
+			const page = freshPage(recorded(rules).fetcher);
+			const browser = await warnings(async () => [
+				await readSlice(page, LEDGER, ask(...one.span)),
+				await readSlice(page, LEDGER, ask(...one.span)),
+				await readReach(page, LEDGER)
+			]);
+			expect(browser.result).toEqual([one.answer, one.answer, one.reach]);
+			expect(browser.warned).toHaveLength(1);
+			expect(browser.warned[0].startsWith(`[ledger] ${one.fault} ${LEDGER} state/${one.names}: `), browser.warned[0]).toBe(true);
+
+			const root = fixtureTreeWithout(...one.without);
+			try {
+				const disk = await warnings(() => sliceFromDisk(root, LEDGER, ask(...one.span)));
+				expect(disk.result).toEqual(one.answer);
+				expect(disk.warned).toEqual(browser.warned);
+				const { result: reach } = await warnings(() => reachFromDisk(root, LEDGER));
+				expect(reach).toEqual(one.reach);
+			} finally {
+				rmSync(root, { recursive: true, force: true });
+			}
+		});
+	}
+
+	test('a reach and a slice that meet one fault on a page print it once between them', async () => {
+		const page = freshPage(recorded({ [MONTHLY_INDEX]: { status: 404 } }).fetcher);
+		const { warned } = await warnings(async () => {
+			await readReach(page, LEDGER);
+			return readSlice(page, LEDGER, ask('2026-08-30', '2026-09-01'));
+		});
+		expect(warned).toHaveLength(1);
+		expect(warned[0]).toContain(`index-missing ${LEDGER} state/${MONTHLY_INDEX}`);
+	});
+});
+
+test.describe('an empty monthly.json is a gap the design expects: nothing leads to a file that is not there', () => {
+	const EMPTY_MONTHS = { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'monthly', entries: [] };
+
+	test('a span that starts before the oldest daily day, and the reach, ask the site for no file it lacks', async () => {
+		const { fetcher, asked } = recorded({ [MONTHLY_INDEX]: { status: 200, body: encoded(EMPTY_MONTHS) } });
+		const page = freshPage(fetcher);
+		const { result: drawn, warned } = await warnings(() => readSlice(page, LEDGER, ask('2026-08-30', '2026-09-02')));
+		const { result: reach } = await warnings(() => readReach(page, LEDGER));
+		expect(drawn).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30', fault: null });
+		expect(reach).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', fault: null });
+		expect(asked.map((one) => one.path).sort()).toEqual([DAILY_INDEX, MONTHLY_INDEX].sort());
+		expect(asked.filter((one) => one.answered !== 200)).toEqual([]);
+		for (const fault of LEDGER_FAULTS) expect(warned.join('\n')).not.toContain(` ${fault} `);
+	});
+
+	test('at build time too, counted by a byte source that records every file it could not find', async () => {
+		const root = fixtureTreeWithout(MONTHLY_INDEX);
+		writeFileSync(path.join(root, ...MONTHLY_INDEX.split('/')), JSON.stringify(EMPTY_MONTHS));
+		try {
+			const disk = diskBytes(root);
+			const notThere: string[] = [];
+			const noted = (relative: string, bytes: Uint8Array | null): Uint8Array | null => {
+				if (bytes === null) notThere.push(relative);
+				return bytes;
+			};
+			const counting: ByteSource = {
+				index: async (relative) => noted(relative, await disk.index(relative)),
+				data: async (relative, version) => noted(relative, await disk.data(relative, version))
+			};
+			const page = pageKeeper(counting, counted().open);
+			const { result: drawn } = await warnings(() => readSlice(page, LEDGER, ask('2026-08-30', '2026-09-02')));
+			const { result: reach } = await warnings(() => readReach(page, LEDGER));
+			expect([drawn.state, reach.state]).toEqual(['unreachable', 'ok']);
+			expect(notThere).toEqual([]);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });
