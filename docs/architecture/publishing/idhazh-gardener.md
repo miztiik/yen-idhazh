@@ -707,18 +707,17 @@ month's check would call the days before it holes. The start asks the same
 function the window drops months by, `first_kept_month`, so a first pass never
 takes a day the same pass would drop (Carmack and Fowler).
 
-**2026-09-30: a finished year's month files may be packed into one year file.**
-The person ruled that month files past `monthly_window` need not be deleted: a
-ledger may instead pack each finished year into one file, kept for ever, and the
-packing is written once and turned on in each ledger's own declaration. Fowler
-and Carmack settled the rest. The switch is one field, `monthly_keep_days`,
-whose null packs nothing, so no ledger's behaviour changes until its declaration
-says so. A pass packs years before it absorbs months, which keeps it from
-deleting a file it wrote. A year waits for its next January, and a smaller wait
-is refused rather than silently lengthened. The year is built one month at a
-time: for the eval ledger at September 2026's rate, that holds about a quarter
-of the memory a whole-year build holds, 0.33 GB against 1.41 GB (Carmack, one
-laptop run; the first live pass times it on a runner).
+**A finished year's month files may be packed into one year file.** A ledger
+may pack each finished year into one file, kept for ever, rather than delete its
+month files once they pass `monthly_window`. The packing is written once and
+turned on in each ledger's own declaration. The switch is one field,
+`monthly_keep_days`, whose null packs nothing, so no ledger's behaviour changes
+until its declaration says so. A pass packs years before it absorbs months,
+which keeps it from deleting a file it wrote. A year waits for its next January,
+and a smaller wait is refused rather than silently lengthened. The year is built
+one month at a time: for the eval ledger at September 2026's rate, that holds
+about a quarter of the memory a whole-year build holds, 0.33 GB against 1.41 GB,
+measured once on a laptop. The first live pass times it on a runner.
 
 **2026-09-28: the weight ceiling is an alarm, and it is 768 MB.** Over it, a
 shard still runs its tasks and lands its record, then exits 1. Stopping first
