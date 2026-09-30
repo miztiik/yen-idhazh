@@ -33,8 +33,9 @@ import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
 import { memoryHeld } from '$lib/console/machine/memory-held';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
-import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
-import { fleetChart, fleetOverWindow, type FleetView } from '$lib/charts/fleet';
+import { machineKeys, machineRamp, type Placement } from '$lib/charts/machine-colour';
+import { FLEET_COLUMNS, fleetJobs } from '$lib/charts/fleet';
+import type { Row } from '$lib/data/ledger';
 import {
 	fingerprintsOf,
 	machineRecord,
@@ -93,8 +94,6 @@ export interface MachineWindow {
 	/** The spread of prompt reuse and reading speed over the span's items, one
 	 * entry per request the ledger's own columns name. */
 	reuse: PromptReuse;
-	/** What kinds of machine the platform gave us over this span, and how often. */
-	fleet: FleetView;
 	tokens: RunWork[];
 	/** Everything about the read-against-written comparison that is not a row:
 	 * the ratio each unit measured, which side it makes taller, and whether that
@@ -233,19 +232,43 @@ export async function load() {
 		.filter((day) => day.articles > 0)
 		.sort((left, right) => left.date.localeCompare(right.date));
 
-	// **One ramp for the whole page, assigned over every machine any panel can
-	// show at any preset.** Assigned per panel or per span, a machine would change
-	// colour when the operator moved the window - and comparing spans is what the
-	// control is for. The key set is bounded by the widest preset, so it is fixed
-	// for a build whatever the reader does.
+	// **One ramp for the whole page, cut over every machine any panel can show at
+	// any preset.** A machine's colour is its speed, stepped at the quantiles of
+	// every kind's median over this record, so moving the window cannot move a
+	// machine's colour. The record is bounded by the widest preset, so the steps
+	// are fixed for a build whatever the reader does.
+	//
+	// The machine-kinds panel reads the record's rows in the query door's own
+	// shape, the columns it draws and no others, and works everything else out
+	// itself. Every shard of the counters carries the fingerprint its packed row
+	// holds, so a shard and the job it ran are one machine rather than two.
+	const fleetRows: Row[] = machine.rows.map((row) =>
+		Object.fromEntries(FLEET_COLUMNS.map((column) => [column, row[column] ?? '']))
+	);
+	const jobs = fleetJobs(fleetRows);
+	const shards = counters.runs.flatMap((run) => run.reported);
 	const seen = [
-		...fingerprints.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpu_model })),
-		...counters.runs.flatMap((run) =>
-			run.reported.map((shard) => ({ fingerprint: null, cpuModel: shard.cpuModel }))
-		)
+		...jobs.map((job) => ({ fingerprint: job.fingerprint, cpuModel: job.cpuModel })),
+		...shards.map((shard) => ({ fingerprint: shard.fingerprint, cpuModel: shard.cpuModel }))
 	];
 	const keys = machineKeys(seen);
-	const ramp = machineRamp(seen.map(keys), console_.machine_colour_stops);
+	const placements: Placement[] = [
+		...jobs.map((job) => ({
+			machine: keys({ fingerprint: job.fingerprint, cpuModel: job.cpuModel }),
+			rate: job.rate
+		})),
+		// The counters add the shards the record never reached; their speed is the
+		// jobs' own, already counted once above.
+		...shards.map((shard) => ({
+			machine: keys({ fingerprint: shard.fingerprint, cpuModel: shard.cpuModel }),
+			rate: null
+		}))
+	];
+	const colour = {
+		stops: console_.machine_colour_stops,
+		floor: console_.machine_colour_floor_share
+	};
+	const ramp = machineRamp(placements, colour);
 
 	const dates = [
 		...new Set([...counters.runs.map((run) => run.date), ...health.map((row) => row.date ?? '')])
@@ -334,21 +357,6 @@ export async function load() {
 			articleCost: perArticle,
 			processorLost: lostToTenants,
 			diskReads: disk,
-			// Counted once a preset here rather than in a browser, which holds no
-			// ledger to count. At most eight kinds a span, so five presets is forty
-			// small objects.
-			fleet: fleetOverWindow(fingerprints, {
-				days,
-				minRows: console_.fleet_min_rows,
-				colourStops: console_.machine_colour_stops,
-				topKinds: console_.fleet_top_kinds,
-				recording: observability.host_fingerprint,
-				ramp,
-				keys,
-				start: span.start,
-				end: span.end,
-				lost: lostInSpan
-			}),
 			tokens,
 			work,
 			tokenTotals: tokens.reduce(
@@ -423,7 +431,7 @@ export async function load() {
 	// drew more than one kind, so a pooled rate was a number about neither.
 	const newestFingerprints = fingerprints.filter((row) => row.run_id === (newest?.runId ?? ''));
 	const split = splitByMachine(newest, {
-		colourStops: console_.machine_colour_stops,
+		colour,
 		// Two machines reporting one model name are not the same machine, so the
 		// digest is the key wherever the record reached the shard.
 		fingerprints: new Map(
@@ -436,7 +444,7 @@ export async function load() {
 	});
 	const machines: MachineCards = machineCards(newest, newestFingerprints, {
 		watchedFlags: flagNames,
-		colourStops: console_.machine_colour_stops,
+		colour,
 		recording: observability.host_fingerprint,
 		// The margin the probe sized its own buffer with, so a row this build grades
 		// is graded by the rule that wrote it rather than by a second copy of it.
@@ -463,9 +471,6 @@ export async function load() {
 	// who types his own gets the same arrays multiplied by it, in the browser.
 	const costShapes = costOverDays(opening.tokens, rate, { heightPx: chart.height_px });
 	const costPlot = costChart(costShapes, DEFAULT_COST_SHAPE, rate.currency);
-	// The fleet trend at the span the page opens on. It is drawn only where the
-	// count cleared the list floor, because under it the panel is a list.
-	const fleetPlot = fleetChart(opening.fleet.trend);
 
 	// Drawn on the server so every mark is on the page before a script runs, and
 	// stays there if none ever does. Colour leaves as a custom-property
@@ -525,8 +530,13 @@ export async function load() {
 		costSvg: await draw(costPlot, chart.height_px),
 		costGrid: costPlot.grid,
 		costShape: DEFAULT_COST_SHAPE,
-		fleetSvg: opening.fleet.drawBars ? await draw(fleetPlot, chart.height_px) : null,
-		fleetGrid: fleetPlot.grid,
+		// The machine-kinds panel's own rows and the page's ramp. The panel draws
+		// every span from these, so a span the reader picks costs a redraw and no
+		// second read.
+		fleetRows,
+		ramp,
+		lostDays,
+		recording: observability.host_fingerprint,
 		rate,
 		limits,
 		shardTimeoutMinutes: runConfig().shard_timeout_minutes,

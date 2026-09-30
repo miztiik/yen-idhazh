@@ -9,19 +9,23 @@
 	 * **The machine's name is on the card, in words, always.** The colour here
 	 * encodes a fact, so it is semantic and may never be the only carrier of it.
 	 */
-	import { isUnrecorded, machineColour } from '$lib/charts/machine-colour';
+	import { isUnrecorded, speedWords } from '$lib/charts/machine-colour';
 	import type { MachineSplit } from '$lib/charts/machine-split';
 
 	let { group }: { group: MachineSplit } = $props();
+
+	/** The speed the edge colour stands for, so the colour is never its only carrier. */
+	const speed = $derived(speedWords(group.identity));
 </script>
 
 <div
 	class="group"
 	data-machine-group={group.identity.key}
 	data-machine-name={group.identity.name}
-	data-machine-stop={group.identity.colourStop}
+	data-machine-step={group.identity.step ?? 'none'}
+	data-machine-speed={group.identity.rate ?? 'none'}
 	data-machine-unrecorded={isUnrecorded(group.identity) ? 'yes' : null}
-	style="--machine-edge: {machineColour(group.identity.colourStop)}"
+	style="--machine-edge: {group.identity.colour}"
 >
 	<p class="group-head">
 		<span class="group-name">{group.identity.name}</span>
@@ -30,9 +34,11 @@
 		</span>
 	</p>
 
-	{#if group.identity.folded.length > 0}
-		<p class="folded" data-machine-folded={group.identity.folded.length}>
-			Two or more machines share this row: {group.identity.folded.join(', ')}.
+	{#if speed !== null}
+		<p class="folded" data-machine-speed-words>
+			{speed === 'no speed reading'
+				? 'No speed reading for this kind of machine.'
+				: `This kind of machine reads at ${speed}, typically.`}
 		</p>
 	{/if}
 

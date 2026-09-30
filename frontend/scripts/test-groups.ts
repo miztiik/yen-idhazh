@@ -14,7 +14,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
 		'one-pass-reductions',
-		'preview-port',
+		'platform-mix', 'preview-port',
 		'processor-lost', 'prompt-reuse',
 		'run-axis', 'run-yield',
 		'settings-moved',

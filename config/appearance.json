@@ -15,6 +15,7 @@
     "width_px": 760
   },
   "console": {
+    "absent_hatch_degrees": 45,
     "band_outlier_rows": 10,
     "bandwidth_min_kinds": 3,
     "chart_coverage_pct": 5.0,
@@ -31,10 +32,12 @@
     "faithfulness_axis_floor_max": 75,
     "faithfulness_axis_step": 5,
     "feed_rows": 10,
+    "fleet_dot_max_px": 8,
     "fleet_min_rows": 160,
     "fleet_top_kinds": 4,
     "judged_panel_ids": [],
-    "machine_colour_stops": 7,
+    "machine_colour_floor_share": 0.4,
+    "machine_colour_stops": 5,
     "max_window_days": 366,
     "min_attempts_for_rate": 5,
     "min_window_days": 1,

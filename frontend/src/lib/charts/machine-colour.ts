@@ -1,23 +1,42 @@
-/** Which colour a machine takes, and why it is the same one at every span.
+/** Which colour a machine takes: its speed, as one hue in steps.
  *
- * Two panels on the hardware console draw a mark per machine and a third counts
- * them, so the three have to agree about which machine is which colour. They
- * agree by deriving it here from one key rather than by each assigning its own.
+ * Three panels on the hardware console draw a machine - the kinds the platform
+ * gave us day by day, one run's shards split by machine, and one card a machine
+ * - so the three have to agree about which machine is which colour. They agree
+ * by deriving it here, once for the page, from one list of placements.
  *
- * **Ascending by key, and the key is arbitrary on purpose.** The fingerprint
- * where the machine record reached a run, and the processor's own model-name
- * string where it did not. Sorting by speed or by draw count would encode an
- * ordering the chart ramp does not mean, and sorting by order of first
- * appearance would change a machine's colour when the operator changes the
- * window - which is the control the colour exists to survive.
+ * **The colour is the machine's speed, and nothing else.** A kind of machine
+ * takes the step of an ordered ramp its median prompt reading speed falls in -
+ * `server_prompt_tokens` over `server_prompt_seconds`, one reading a job that
+ * took one - and the steps are cut at the quantiles of every kind's median over
+ * the whole record the page holds. So a machine keeps its colour when the
+ * operator changes the span, and a stronger colour is a faster machine in
+ * either theme. The steps are cut from each kind's median rather than from
+ * every job's reading, because one machine gives most of the readings - 102 of
+ * 176 on 2026-09-30 - and would otherwise take most of the steps for itself.
  *
- * **Colour is never the only carrier.** Every identity here holds the machine's
- * name in words, and every row that takes an edge prints that name beside it.
+ * **Kinds on one step share its colour, so a colour never names a machine.**
+ * The name and the speed are printed beside every machine a panel draws. Until
+ * 2026-09-30 the colour was a hue a machine, handed out in the order of an
+ * arbitrary key, and a machine whose key sorted late went without a colour
+ * however often it ran.
  *
- * Pure and dependency-free, so the browser suite drives it in plain Node.
+ * **A kind is one fingerprint, not a processor name.** Two records of one
+ * processor read prompts at 8.7 and 12.3 tokens a second, measured 2026-09-30,
+ * so a name is not a speed.
+ *
+ * **Two greys sit outside the ramp.** A job whose machine nobody recorded is the
+ * reserved grey, flat. A known machine none of whose jobs took a speed reading
+ * is that grey in stripes, because it is a machine and not an absence.
+ *
+ * Pure, so the browser suite drives it in plain Node.
  */
 
+import { median } from 'd3-array';
+
+import { orderedRamp, RESERVED_GREY, RESERVED_GREY_INK } from './d3/ordered-colour';
 import { machineName } from './machine-name';
+import type { ChartToken } from './theme';
 
 /** The key the shards that recorded no machine are grouped under.
  *
@@ -34,22 +53,27 @@ export const UNRECORDED_NAME = 'Machine not recorded';
  *
  * An absence is not a machine and must not take a machine's hue.
  */
-export const UNRECORDED_STOP = 8;
+export const UNRECORDED_STOP = RESERVED_GREY;
 
-/** What the fold row is called once the ramp runs out. */
-export const FOLDED_NAME = 'Other machines';
+/** The one hue the speed ramp mixes. One hue, because a speed has a direction
+ * and nobody can rank several hues; the first chart hue, because it holds the
+ * most contrast against the panel in both themes. */
+export const MACHINE_HUE: ChartToken = '--chart-1';
 
-export const FOLDED_KEY = 'other-machines';
-
-/** One machine as the page draws it: a key, a name and a stop of the ramp. */
+/** One machine as the page draws it: a key, a name and the colour of its speed. */
 export interface MachineIdentity {
 	key: string;
 	/** The machine in words. On the row, always. */
 	name: string;
-	/** 1-based stop of `--chart-1` to `--chart-8`. */
-	colourStop: number;
-	/** The machines folded into this row, named in words. Empty on a real one. */
-	folded: string[];
+	/** The 1-based step of the speed ramp, slowest first. Null for a machine
+	 * none of whose jobs took a speed reading, and for no machine recorded. */
+	step: number | null;
+	/** The kind's median prompt reading speed over the record, in tokens a
+	 * second. Null where no job of the kind took a reading. */
+	rate: number | null;
+	/** The fill this machine is drawn in: a step of the ramp, or the reserved
+	 * grey. A machine with no speed reading is drawn in this grey as stripes. */
+	colour: string;
 }
 
 /** A machine as a caller knows it, before a colour has been decided. */
@@ -122,79 +146,144 @@ export function machineKey(fingerprint: string | null, cpuModel: string | null):
 	return machineKeys([{ fingerprint, cpuModel }])({ fingerprint, cpuModel });
 }
 
-/** The CSS custom property a stop resolves to. */
-export function machineColour(stop: number): string {
-	return `var(--chart-${stop})`;
-}
-
 /** Whether this identity is the one the ramp reserves for an absence. */
 export function isUnrecorded(identity: MachineIdentity): boolean {
 	return identity.key === UNRECORDED_KEY;
 }
 
-/** The ramp as a whole: the rows a legend draws, and where any key lands.
- *
- * `at` resolves every key handed in, folded ones included, so a caller never has
- * to ask whether the ramp ran out before it can draw a machine.
- */
-export interface MachineRamp {
-	rows: MachineIdentity[];
-	at: ReadonlyMap<string, MachineIdentity>;
+/** Whether this is a known machine that never took a speed reading, which is
+ * drawn as the grey in stripes rather than as a step of the ramp. */
+export function isUntimed(identity: MachineIdentity): boolean {
+	return identity.key !== UNRECORDED_KEY && identity.step === null;
 }
 
-/** Every distinct machine, in key order, with the stop it keeps at every span.
+/** Prompt tokens read a second, or null where either cell is missing or no time
+ * was spent. The one definition every caller computes a job's speed with. */
+export function promptRate(tokens: number | null, seconds: number | null): number | null {
+	if (tokens === null || seconds === null || !(seconds > 0) || !Number.isFinite(tokens)) return null;
+	return tokens / seconds;
+}
+
+/** A reading speed in words, to one decimal: `8.8 tokens a second`. */
+export function rateWords(rate: number): string {
+	return `${rate.toFixed(1)} tokens a second`;
+}
+
+/** The speed a machine's colour stands for, in words, so a colour is never the
+ * only carrier of it. Null for no machine recorded, which has no speed to say. */
+export function speedWords(identity: MachineIdentity): string | null {
+	if (isUnrecorded(identity)) return null;
+	return identity.rate === null ? 'no speed reading' : rateWords(identity.rate);
+}
+
+/** One job as the ramp takes it: which machine, and its reading speed where the
+ * job took one. */
+export interface Placement {
+	machine: MachineKey;
+	/** Prompt tokens read a second, or null where the job took no reading. */
+	rate: number | null;
+}
+
+/** One step of the ramp as a key names it. */
+export interface MachineStep {
+	step: number;
+	colour: string;
+	/** The slowest and the fastest kind median on this step over the record, or
+	 * null where no kind sits on it. A key names a step by the speeds that landed
+	 * on it, never by a cut, which is where the ramp divides and not a reading. */
+	low: number | null;
+	high: number | null;
+}
+
+/** The ramp as a whole: every machine, where any key lands, and each step. */
+export interface MachineRamp {
+	/** Every machine, slowest first, then the machines with no speed reading,
+	 * then no machine recorded. */
+	rows: MachineIdentity[];
+	at: ReadonlyMap<string, MachineIdentity>;
+	steps: MachineStep[];
+}
+
+/** Every machine in the placements, with the step its speed takes at every span.
  *
- * Shards that recorded no machine arrive under `UNRECORDED_KEY` and leave with
- * the reserved stop, whatever else is on the list.
- *
- * **Folding only happens when it has to.** With `stops` of seven, seven machines
- * take seven stops. An eighth is what folds: the first `stops - 1` keep a colour
- * of their own and everything past them becomes one row on the last stop,
- * naming its members. Handing the fold row a stop a machine already holds would
- * put two machines in one colour with nothing on the page to say so, and taking
- * the reserved grey would say the fold was an absence.
+ * `placements` is every job the page can show at any span, so the steps are cut
+ * over the whole record rather than the window on screen. `stops` is how many
+ * steps the ramp has and `floor` the share of the hue the slowest carries, both
+ * from `config/appearance.json`.
  */
-export function machineRamp(machines: readonly MachineKey[], stops: number): MachineRamp {
-	const byKey = new Map<string, string>();
-	for (const machine of machines) {
-		if (!byKey.has(machine.key)) byKey.set(machine.key, machine.name);
+export function machineRamp(
+	placements: readonly Placement[],
+	options: { stops: number; floor: number }
+): MachineRamp {
+	const byKey = new Map<string, { name: string; rates: number[] }>();
+	let unrecorded = false;
+	for (const placement of placements) {
+		const { key, name } = placement.machine;
+		if (key === UNRECORDED_KEY) {
+			unrecorded = true;
+			continue;
+		}
+		const held = byKey.get(key) ?? { name, rates: [] };
+		if (placement.rate !== null && Number.isFinite(placement.rate)) held.rates.push(placement.rate);
+		byKey.set(key, held);
 	}
-	const unrecorded = byKey.has(UNRECORDED_KEY);
-	byKey.delete(UNRECORDED_KEY);
 
-	const named = [...byKey.entries()].sort(([left], [right]) =>
-		left < right ? -1 : left > right ? 1 : 0
+	const kinds = [...byKey.entries()].map(([key, held]) => ({
+		key,
+		name: held.name,
+		rate: held.rates.length === 0 ? null : (median(held.rates) ?? null)
+	}));
+	const ramp = orderedRamp(
+		kinds.flatMap((kind) => (kind.rate === null ? [] : [kind.rate])),
+		options.stops,
+		MACHINE_HUE,
+		options.floor
 	);
-	const room = Math.max(1, Math.min(stops, UNRECORDED_STOP - 1));
 
-	const rows: MachineIdentity[] = [];
-	const at = new Map<string, MachineIdentity>();
-	const keep = named.length <= room ? named : named.slice(0, room - 1);
-	keep.forEach(([key, name], index) => {
-		const identity = { key, name, colourStop: index + 1, folded: [] };
-		rows.push(identity);
-		at.set(key, identity);
-	});
-	if (named.length > room) {
-		const folded = named.slice(room - 1);
-		const identity: MachineIdentity = {
-			key: FOLDED_KEY,
-			name: FOLDED_NAME,
-			colourStop: room,
-			folded: folded.map(([, name]) => name)
+	const identities: MachineIdentity[] = kinds.map((kind) => {
+		const step = ramp === null || kind.rate === null ? null : ramp.stepOf(kind.rate);
+		return {
+			key: kind.key,
+			name: kind.name,
+			step,
+			rate: kind.rate,
+			colour: ramp === null || step === null ? RESERVED_GREY_INK : ramp.colours[step - 1]
 		};
-		rows.push(identity);
-		for (const [key] of folded) at.set(key, identity);
-	}
+	});
+	// Slowest first, so every list a panel draws off this reads slower to faster.
+	identities.sort(
+		(a, b) =>
+			(a.rate === null ? 1 : 0) - (b.rate === null ? 1 : 0) ||
+			(a.rate ?? 0) - (b.rate ?? 0) ||
+			a.name.localeCompare(b.name) ||
+			a.key.localeCompare(b.key)
+	);
 	if (unrecorded) {
-		const identity: MachineIdentity = {
+		identities.push({
 			key: UNRECORDED_KEY,
 			name: UNRECORDED_NAME,
-			colourStop: UNRECORDED_STOP,
-			folded: []
-		};
-		rows.push(identity);
-		at.set(UNRECORDED_KEY, identity);
+			step: null,
+			rate: null,
+			colour: RESERVED_GREY_INK
+		});
 	}
-	return { rows, at };
+
+	const steps: MachineStep[] = Array.from({ length: options.stops }, (_, index) => {
+		const step = index + 1;
+		const on = identities.flatMap((identity) =>
+			identity.step === step && identity.rate !== null ? [identity.rate] : []
+		);
+		return {
+			step,
+			colour: ramp === null ? RESERVED_GREY_INK : ramp.colours[index],
+			low: on.length === 0 ? null : Math.min(...on),
+			high: on.length === 0 ? null : Math.max(...on)
+		};
+	});
+
+	return {
+		rows: identities,
+		at: new Map(identities.map((identity) => [identity.key, identity])),
+		steps
+	};
 }

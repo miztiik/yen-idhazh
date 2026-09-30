@@ -15,7 +15,8 @@
 		start,
 		end,
 		windowDays,
-		readoutMaxShare
+		readoutMaxShare,
+		hatchDegrees
 	}: {
 		board: MemoryBoardView;
 		/** What the run record says moved, over the whole page's reach. The panel
@@ -27,6 +28,8 @@
 		windowDays: number;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
+		/** `console.absent_hatch_degrees`. */
+		hatchDegrees: number;
 	} = $props();
 
 	const inSpan = $derived(moved.filter((one) => one.date >= start && one.date <= end));
@@ -39,5 +42,5 @@
 	note="One article can take the machine to its floor while the part of the run it sits in reads as normal, and how little the kernel had left is what decides whether a bigger model fits - one mark an item of the newest run."
 	wide
 >
-	<MemoryBoard {board} moved={inSpan} {windowDays} {readoutMaxShare} />
+	<MemoryBoard {board} moved={inSpan} {windowDays} {readoutMaxShare} {hatchDegrees} />
 </Panel>

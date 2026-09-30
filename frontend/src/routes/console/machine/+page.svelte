@@ -224,6 +224,7 @@
 				end={view.end}
 				windowDays={view.days}
 				readoutMaxShare={data.chart.readout_max_share}
+				hatchDegrees={data.console.absent_hatch_degrees}
 			/>
 		{:else if id === 'memory-held'}
 			<MemoryHeldPanel
@@ -289,12 +290,16 @@
 			<MachineCardsPanel machines={data.machines} />
 		{:else if id === 'platform-mix'}
 			<PlatformMixPanel
-				fleet={view.fleet}
+				rows={data.fleetRows}
+				ramp={data.ramp}
+				start={view.start}
+				end={view.end}
+				windowDays={view.days}
+				lost={data.lostDays}
+				recording={data.recording}
 				machineRecord={view.machineRecord}
-				svg={data.fleetSvg}
-				grid={data.fleetGrid}
 				chart={data.chart}
-				{windowDays}
+				knobs={data.console}
 			/>
 		{:else if id === 'tail-trend'}
 			<TailTrendPanel

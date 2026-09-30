@@ -1,122 +1,296 @@
 <script lang="ts">
-	/** What kind of machine the platform has been giving us lately.
+	/** Which machines ran our jobs, day by day.
 	 *
 	 * A count of what happened, never a rate: what the next job will draw is the
-	 * one thing this cannot say. The shape is a time axis rather than a ranked
-	 * list, because the question is about lately.
+	 * one thing this cannot say. One bar a day, each split by the kind of machine
+	 * that ran its jobs, and a machine's colour is its speed - stronger is faster,
+	 * slowest at the bottom where every day shares a baseline. Under
+	 * `console.fleet_min_rows` placements the bars become one square a job.
+	 *
+	 * It draws from the machine record's rows in the query door's own shape and
+	 * works everything else out here, so the list a pick opens reuses the rows
+	 * already in hand rather than asking for them again.
 	 */
-	import Chart from '$lib/charts/Chart.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import { fleetChart, fleetColumns, foldSentence, type FleetView } from '$lib/charts/fleet';
-	import type { RecordingNotes } from '$lib/console/recording';
-	import type { ChartConfig } from '$lib/server/config';
+	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
+	import { dateSeries } from '$lib/charts/d3/dateSeries';
+	import { emptyState } from '$lib/charts/d3/empty';
+	import { absentHatch } from '$lib/charts/d3/ordered-colour';
+	import {
+		fleetDots,
+		fleetJobs,
+		fleetReadout,
+		fleetSentence,
+		fleetSeries,
+		fleetView,
+		foldSentences
+	} from '$lib/charts/fleet';
+	import { chartWidth, frame, observeWidth } from '$lib/charts/frame';
+	import { rateWords, type MachineRamp } from '$lib/charts/machine-colour';
+	import FleetDots from '$lib/console/machine/FleetDots.svelte';
+	import type { LostDay, RecordingNotes } from '$lib/console/recording';
+	import type { Row } from '$lib/data/ledger';
+	import { longDate } from '$lib/format';
+	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
+	import { tick } from 'svelte';
 
 	let {
-		fleet,
+		rows,
+		ramp,
+		start,
+		end,
+		windowDays,
+		lost,
+		recording,
 		machineRecord,
-		svg,
-		grid,
 		chart,
-		windowDays
+		knobs
 	}: {
-		fleet: FleetView;
-		machineRecord: RecordingNotes;
-		svg: string | null;
-		grid: { left: number; right: number };
-		chart: ChartConfig;
+		/** The machine record's rows for `FLEET_COLUMNS`, over every day the page holds. */
+		rows: Row[];
+		/** The page's one ramp, so this panel and the machine cards colour a machine alike. */
+		ramp: MachineRamp;
+		/** The open span, inclusive UTC days, and how many days it covers. */
+		start: string;
+		end: string;
 		windowDays: number;
+		/** Days that published articles and kept no machine row. */
+		lost: LostDay[];
+		/** False where the machine record is switched off. */
+		recording: boolean;
+		machineRecord: RecordingNotes;
+		chart: ChartConfig;
+		knobs: Pick<
+			ConsoleConfig,
+			'fleet_min_rows' | 'fleet_top_kinds' | 'fleet_dot_max_px' | 'absent_hatch_degrees'
+		>;
 	} = $props();
 
-	/** The fleet trend, redrawn in the browser from the same counts the server
-	 * drew, so a span the operator picks gets the same bars as the first paint. */
-	const fleetOption = $derived(fleetChart(fleet.trend).option);
-	const fleetStrip = $derived(fleetColumns(fleet.trend));
-	/** What the fold bar holds, read off the fold the trend named rather than off
-	 * whichever series happens to be last. */
-	const foldLine = $derived(foldSentence(fleet.trend.fold));
+	/** How many value ticks the count axis aims for. */
+	const VALUE_TICKS = 4;
+	/** The share of a day's column left empty beside its bar. */
+	const PADDING = 0.2;
+	/** The ground between two squares, and a hatch's stripe and gap, in CSS px. */
+	const SQUARE_GAP = 1;
+	const HATCH_GAP = 3;
+	const HATCH_LINE = 1;
+
+	const jobs = $derived(fleetJobs(rows));
+	const view = $derived(
+		fleetView(jobs, {
+			ramp,
+			start,
+			end,
+			windowDays,
+			minRows: knobs.fleet_min_rows,
+			topKinds: knobs.fleet_top_kinds,
+			recording,
+			lost
+		})
+	);
+	const hatch = $derived(
+		absentHatch({ degrees: knobs.absent_hatch_degrees, gapPx: HATCH_GAP, linePx: HATCH_LINE })
+	);
+	let measured = $state<number | null>(null);
+	const box = $derived(frame(chartWidth(measured, chart.width_px), chart.height_px));
+	const bars = $derived(
+		view.shape === 'bars'
+			? dateSeries(fleetSeries(view), {
+					frame: box,
+					stacked: true,
+					density: chart.tick_density,
+					valueTicks: VALUE_TICKS,
+					padding: PADDING
+				})
+			: null
+	);
+	const squares = $derived(
+		view.shape === 'dots'
+			? fleetDots(view, {
+					frame: box,
+					density: chart.tick_density,
+					padding: PADDING,
+					maxPx: knobs.fleet_dot_max_px,
+					gapPx: SQUARE_GAP
+				})
+			: null
+	);
+	const readout = $derived(fleetReadout(view, hatch));
+	const sentence = $derived(fleetSentence(view));
+	const folds = $derived(foldSentences(view));
+	const keyed = $derived(ramp.steps.some((step) => step.low !== null));
+	const spanText = $derived(windowDays === 1 ? 'the last day' : `the last ${windowDays} days`);
+	const note = $derived(
+		'We do not pick the machine. The platform hands us one at the start of every job, so a slow ' +
+			'week can be the machine rather than the code. Each day is split by the kind of machine ' +
+			`that ran its jobs, over ${spanText}. It counts what we were given and predicts nothing ` +
+			'about the next job. The stronger the colour, the faster the machine.'
+	);
+	const hint =
+		"Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest. Click or Enter lists that day's jobs.";
+
+	/** The day whose jobs are listed under the plot, by date, so a new span
+	 * cannot leave the list on a column that now means another day. */
+	let openDay = $state<string | null>(null);
+	const open = $derived(openDay === null ? -1 : view.days.indexOf(openDay));
+	let list = $state<HTMLElement | null>(null);
+	let plot = $state<HTMLElement | null>(null);
+
+	async function pick(column: number): Promise<void> {
+		const day = view.days[column] ?? null;
+		openDay = day === openDay ? null : day;
+		await tick();
+		if (openDay === null) plot?.querySelector('svg')?.focus();
+		else list?.focus();
+	}
+
+	async function close(): Promise<void> {
+		openDay = null;
+		await tick();
+		plot?.querySelector('svg')?.focus();
+	}
+
+	function stepText(low: number, high: number): string {
+		return low.toFixed(1) === high.toFixed(1) ? low.toFixed(1) : `${low.toFixed(1)} to ${high.toFixed(1)}`;
+	}
 </script>
 
-<div
-	data-windowed="machine-fleet"
-	data-window-days={windowDays}
-	data-readout-none={fleet.drawBars
-		? undefined
-		: 'no chart is drawn here, only counts in a list; agreed with Susan'}
->
-	<Panel
-		heading="h3"
-		id="platform-mix"
-		title="What kinds of machine we keep being given"
-		note="A slow week explained by the draw is a week to re-run rather than to tune, and this counts what happened rather than predicting the next job - one bar a machine kind a day, over the last {windowDays} days."
-	>
-		{#if fleet.nothing === 'recording-off'}
+<div data-windowed="machine-fleet" data-window-days={windowDays}>
+	<Panel heading="h3" id="platform-mix" title="Which machines ran our jobs, day by day" {note}>
+		{#if view.nothing === 'recording-off'}
 			<p class="empty" data-machine-panel-empty="fleet-off">
 				Which machine a job draws is not being recorded, so there is nothing to count.
 			</p>
-		{:else if fleet.nothing === 'record-lost'}
+		{:else if view.nothing === 'record-lost'}
 			<p class="empty" data-machine-panel-empty="fleet-lost">
 				{machineRecord.recordDestroyed}
-				There is nothing left in these {fleet.days} days to count.
+				There is nothing left in {windowDays === 1 ? 'this day' : `these ${windowDays} days`} to count.
 			</p>
-		{:else if fleet.nothing === 'none'}
+		{:else if view.nothing === 'none'}
 			<p class="empty" data-machine-panel-empty="fleet-none">
 				Nothing has recorded which machine a job drew yet. This starts counting on the first run
 				after the record ships.
 			</p>
-		{:else if fleet.drawBars}
-			<!-- The title asks what has been given lately, so the shape is a time
-			     axis and not a ranked list. The ordering a list carried is the
-			     sentence above the plot: that is the loss, named rather than
-			     absorbed. -->
-			<div
-				data-fleet-days={fleet.trend.days.length}
-				data-fleet-series={fleet.trend.series.length}
-				data-fleet-folded={fleet.trend.folded}
-				data-fleet-top-kinds={fleet.trend.topKinds}
-				data-fleet-other={fleet.trend.other}
-				data-fleet-outside-top={fleet.trend.outsideTop}
-				data-panel-question="is it working"
-			>
-				<p class="reads" data-fleet-basis={fleet.placements}>
-					Over {fleet.placements} job placements in these {fleet.days} days,
-					{fleet.trend.days.length}
-					{fleet.trend.days.length === 1 ? 'day' : 'days'} of which recorded one. The kind we
-					are given most is {fleet.kinds[0].identity.name}, {fleet.kinds[0].placements} of
-					them.
-					{#if foldLine !== null}
-						<span data-fleet-fold={fleet.trend.folded}>{foldLine}</span>
-					{/if}
-				</p>
-				<Chart
-					svg={svg ?? ''}
-					option={fleetOption}
-					width={chart.width_px}
-					height={chart.height_px}
-					label="Job placements per day over {fleet.days} days, one bar per kind of machine. One group is one day."
-					readout={fleetStrip}
-					readoutName="machine-fleet"
-					readoutMaxShare={chart.readout_max_share}
-					{grid}
-					restingNote=", the newest day"
-					hint="Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest."
-				/>
-			</div>
 		{:else}
-			<ul class="shares" data-fleet-list={fleet.placements}>
-				{#each fleet.kinds as kind (kind.identity.key)}
-					<li data-fleet-kind={kind.identity.key} data-fleet-count={kind.placements}>
-						<strong>{kind.identity.name}</strong>: {kind.placements}
-						{kind.placements === 1 ? 'placement' : 'placements'}.
-					</li>
-				{/each}
-			</ul>
-			<p class="reads" data-fleet-under={fleet.minRows}>
-				{fleet.kinds.length}
-				{fleet.kinds.length === 1 ? 'machine' : 'machines'} on record,
-				{fleet.placements} placements over these {fleet.days} days. A bar chart of counts
-				this small would read as a distribution, and it is not one - this draws one at
-				{fleet.minRows}.
-			</p>
+			<div
+				class="body"
+				data-comparison="composition"
+				data-panel-question="is it working"
+				data-fleet-shape={view.shape}
+				data-fleet-days={view.days.length}
+				data-fleet-rows={view.rows.length}
+				data-fleet-placements={view.placements}
+				data-fleet-min-rows={view.minRows}
+			>
+				<p class="reads" data-fleet-basis={view.placements}>
+					{sentence}
+					{#each folds as fold (fold)}
+						<span data-fleet-fold>{fold}</span>
+					{/each}
+				</p>
+				{#if keyed}
+					<!-- The speed each colour stands for, named by the kinds that land on
+					     it over the whole record, so the key holds still when the span
+					     moves. The strip under the plot names every row. -->
+					<p class="speed-key" data-fleet-speed-key>
+						<span class="key-end">Slower</span>
+						{#each ramp.steps as step (step.step)}
+							<span class="key-step" data-fleet-speed-step={step.step}>
+								<span class="chip" style="background: {step.colour}"></span>
+								{step.low === null || step.high === null ? 'none' : stepText(step.low, step.high)}
+							</span>
+						{/each}
+						<span class="key-end">Faster</span>
+						<span class="key-unit">tokens a second, each kind's middle reading</span>
+					</p>
+				{/if}
+				<div
+					class="plot"
+					bind:this={plot}
+					use:observeWidth={(width) => (measured = width > 0 ? width : null)}
+					data-model-rule="no"
+					data-model-rule-name="platform-mix"
+					data-model-rule-none="which machine the platform hands a job does not depend on any model setting"
+				>
+					{#if bars !== null}
+						<DateSeries
+							geometry={bars}
+							empty={emptyState('quiet', 'No job was placed in this span.')}
+							name="machine-fleet"
+							label="Jobs a day over {spanText}, stacked by the kind of machine that ran them, slowest at the bottom."
+							width={box.width}
+							height={box.height}
+							{readout}
+							readoutMaxShare={chart.readout_max_share}
+							{hint}
+							lede
+							{hatch}
+							picked={open < 0 ? null : open}
+							onPick={pick}
+						/>
+					{:else if squares !== null}
+						<FleetDots
+							geometry={squares}
+							{readout}
+							name="machine-fleet"
+							label="One square a job, a column a day over {spanText}, coloured by the speed of the machine that ran it."
+							readoutMaxShare={chart.readout_max_share}
+							{hint}
+							picked={open < 0 ? null : open}
+							onPick={pick}
+						/>
+					{/if}
+				</div>
+				{#if open >= 0}
+					<!-- One tab stop for the whole list, where a pick moves focus, and
+					     Escape inside it closes it. -->
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+					<div
+						class="jobs"
+						bind:this={list}
+						role="region"
+						aria-label="Jobs on {longDate(view.days[open])}"
+						tabindex="0"
+						data-fleet-jobs={view.days[open]}
+						onkeydown={(event) => {
+							if (event.key === 'Escape') {
+								event.preventDefault();
+								void close();
+							}
+						}}
+					>
+						<table>
+							<caption>
+								{view.lines[open].length}
+								{view.lines[open].length === 1 ? 'job' : 'jobs'} on {longDate(view.days[open])}
+							</caption>
+							<thead>
+								<tr>
+									<th scope="col">Run</th>
+									<th scope="col">Job</th>
+									<th scope="col" class="number">Shard</th>
+									<th scope="col">Machine</th>
+									<th scope="col" class="number">Seconds</th>
+									<th scope="col" class="number">Speed</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each view.lines[open] as line, at (at)}
+									<tr data-fleet-job={line.row}>
+										<td>{line.runId}</td>
+										<td>{line.job}</td>
+										<td class="number">{line.shard ?? 'not recorded'}</td>
+										<td>{line.machine}</td>
+										<td class="number">{line.seconds === null ? 'not recorded' : Math.round(line.seconds)}</td>
+										<td class="number">{line.rate === null ? 'no speed reading' : rateWords(line.rate)}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+						<button type="button" class="close" onclick={() => void close()}>Close the list</button>
+					</div>
+				{/if}
+			</div>
 		{/if}
 	</Panel>
 </div>
@@ -129,18 +303,100 @@
 		color: var(--color-text-secondary);
 	}
 
-	.shares {
-		margin: var(--space-3) 0 0;
-		padding-inline-start: var(--space-5);
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-secondary);
-	}
-
 	.reads {
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-secondary);
+	}
+
+	.speed-key {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1) var(--space-3);
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		color: var(--color-text-tertiary);
+	}
+
+	.key-step {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.key-end {
+		font-weight: 600;
+		color: var(--color-text-secondary);
+	}
+
+	.chip {
+		display: inline-block;
+		inline-size: 12px;
+		block-size: 12px;
+		border-radius: 2px;
+	}
+
+	.plot {
+		margin-top: var(--space-3);
+	}
+
+	.jobs {
+		margin-top: var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--color-rule);
+		border-radius: var(--radius-md);
+		overflow-x: auto;
+	}
+
+	.jobs:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
+	}
+
+	table {
+		inline-size: 100%;
+		border-collapse: collapse;
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+	}
+
+	caption {
+		text-align: start;
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
+		padding-block-end: var(--space-2);
+	}
+
+	th,
+	td {
+		padding: var(--space-1) var(--space-2);
+		border-block-end: 1px solid var(--color-rule);
+		text-align: start;
+		white-space: nowrap;
+	}
+
+	.number {
+		text-align: end;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.close {
+		margin-top: var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+		background: none;
+		border: 1px solid var(--color-rule);
+		border-radius: var(--radius-sm);
+		padding: var(--space-1) var(--space-2);
+		cursor: pointer;
+	}
+
+	.close:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
 	}
 </style>

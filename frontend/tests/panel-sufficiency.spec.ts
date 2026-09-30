@@ -144,8 +144,10 @@ test.describe('the witness panel', () => {
 		await compiled('src/lib/charts/d3/EmptyState.svelte', 'EmptyState', [
 			['$lib/components/Reserved.svelte', './Reserved.server.mjs']
 		]);
+		await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
 		await compiled('src/lib/charts/d3/DateSeries.svelte', 'DateSeries', [
-			['./EmptyState.svelte', './EmptyState.server.mjs']
+			['./EmptyState.svelte', './EmptyState.server.mjs'],
+			['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs']
 		]);
 		await compiled('src/lib/components/Panel.svelte', 'Panel', []);
 		const module = await compiled('tests/fixtures/panels/WitnessPanel.svelte', 'WitnessPanel', [

@@ -16,13 +16,16 @@
  */
 
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { machineName } from '../src/lib/charts/machine-name';
 import {
 	machineRamp,
-	FOLDED_KEY,
+	MACHINE_HUE,
 	UNRECORDED_KEY,
 	UNRECORDED_NAME,
-	UNRECORDED_STOP
+	UNRECORDED_STOP,
+	type Placement
 } from '../src/lib/charts/machine-colour';
 import { splitByMachine } from '../src/lib/charts/machine-split';
 import {
@@ -34,8 +37,18 @@ import { ledgers, plan, type ShardReading } from './support/machine-rows';
 
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 21_600 };
 
-/** Seven stops for a machine, which is `console.machine_colour_stops`. */
-const STOPS = 7;
+/** `config/appearance.json` read off disk, so the steps are the page's own. */
+const CONSOLE = (
+	JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')) as {
+		console: { machine_colour_stops: number; machine_colour_floor_share: number };
+	}
+).console;
+
+/** The speed ramp's steps and floor, as the page reads them. */
+const COLOUR = { stops: CONSOLE.machine_colour_stops, floor: CONSOLE.machine_colour_floor_share };
+
+/** The reserved grey, as every machine that has no speed is drawn. */
+const GREY = `var(--chart-${UNRECORDED_STOP})`;
 
 /** A shard that reported all four figures, so it lands in a group. */
 function shard(
@@ -129,80 +142,137 @@ test.describe('what a processor is called', () => {
 });
 
 test.describe('which colour a machine takes', () => {
-	const keys = [
-		{ key: 'c81d9e0a', name: 'Intel Xeon Platinum 8573C' },
-		{ key: '3a7f0b1c', name: 'AMD EPYC 7763' },
-		{ key: UNRECORDED_KEY, name: '' }
-	];
+	/** A kind's jobs, each reading at the rate given. */
+	const jobs = (key: string, name: string, rates: (number | null)[]): Placement[] =>
+		rates.map((rate) => ({ machine: { key, name }, rate }));
 
-	test('the stop comes off the key, so a different arrival order gives the same stops', () => {
-		const forward = machineRamp(keys, STOPS);
-		const backward = machineRamp([...keys].reverse(), STOPS);
-		const stops = (ramp: ReturnType<typeof machineRamp>) =>
-			ramp.rows.map((row) => `${row.key}:${row.colourStop}`);
-		expect(stops(forward)).toEqual(stops(backward));
-		// Ascending by key: `3a7f0b1c` before `c81d9e0a`.
-		expect(forward.rows[0].key).toBe('3a7f0b1c');
-		expect(forward.rows[0].colourStop).toBe(1);
-		expect(forward.rows[1].colourStop).toBe(2);
+	test('five steps for a machine, which is console.machine_colour_stops', () => {
+		// Five, because a reader cannot rank many steps of one hue on a thin bar.
+		// The route, the config reader's fallback and this spec move together.
+		expect(COLOUR.stops).toBe(5);
+		expect(COLOUR.floor).toBe(0.4);
 	});
 
-	test('no two named machines share a stop, and the grey is reserved', () => {
-		const ramp = machineRamp(keys, STOPS);
-		const named = ramp.rows.filter((row) => row.key !== UNRECORDED_KEY);
-		expect(new Set(named.map((row) => row.colourStop)).size).toBe(named.length);
-		expect(named.every((row) => row.colourStop < UNRECORDED_STOP)).toBe(true);
-		const absent = ramp.rows.find((row) => row.key === UNRECORDED_KEY);
-		expect(absent?.colourStop).toBe(UNRECORDED_STOP);
+	test('a kind takes the step its median speed falls in, slowest first', () => {
+		// Medians by hand: 10, 20, 30, 40 and 50 tokens a second, one kind each.
+		const ramp = machineRamp(
+			[
+				...jobs('e', 'Fifth', [50, 49, 51]),
+				...jobs('a', 'First', [9, 10, 11]),
+				...jobs('c', 'Third', [30]),
+				...jobs('b', 'Second', [20, 20]),
+				...jobs('d', 'Fourth', [40, 38, 42])
+			],
+			COLOUR
+		);
+		expect(ramp.rows.map((row) => `${row.name}:${row.step}`)).toEqual([
+			'First:1',
+			'Second:2',
+			'Third:3',
+			'Fourth:4',
+			'Fifth:5'
+		]);
+		expect(ramp.rows.map((row) => row.rate)).toEqual([10, 20, 30, 40, 50]);
+		// The fastest step is the hue itself, and every step is that one hue.
+		expect(ramp.rows[4].colour).toBe(`var(${MACHINE_HUE})`);
+		expect(ramp.rows.every((row) => row.colour.includes(`var(${MACHINE_HUE})`))).toBe(true);
+		expect(ramp.steps.map((step) => [step.low, step.high])).toEqual([
+			[10, 10],
+			[20, 20],
+			[30, 30],
+			[40, 40],
+			[50, 50]
+		]);
+	});
+
+	test('the steps are cut from each kind, not from every job, so a busy machine takes one step', () => {
+		// One machine gives a hundred readings at 8, as one machine gave 102 of
+		// 176 on the committed record. Cut over every job, all four cuts land on
+		// 8 and the other four kinds share the top step; cut over the kinds' own
+		// medians, the five kinds take five steps.
+		const busy = jobs('busy', 'Busy', Array.from({ length: 100 }, () => 8));
+		const ramp = machineRamp(
+			[
+				...busy,
+				...jobs('b', 'B', [12]),
+				...jobs('c', 'C', [19]),
+				...jobs('d', 'D', [24]),
+				...jobs('e', 'E', [27])
+			],
+			COLOUR
+		);
+		expect(ramp.at.get('busy')?.step).toBe(1);
+		expect(new Set(ramp.rows.map((row) => row.step)).size).toBe(5);
+	});
+
+	test('a different arrival order gives the same steps', () => {
+		const placements = [...jobs('a', 'A', [9, 10]), ...jobs('b', 'B', [30]), ...jobs('c', 'C', [20])];
+		const forward = machineRamp(placements, COLOUR);
+		const backward = machineRamp([...placements].reverse(), COLOUR);
+		const steps = (ramp: ReturnType<typeof machineRamp>) =>
+			ramp.rows.map((row) => `${row.key}:${row.step}:${row.colour}`);
+		expect(steps(forward)).toEqual(steps(backward));
+	});
+
+	test('two kinds on one step share its colour, and each keeps its own name and speed', () => {
+		// Seven kinds on five steps: at least two steps hold two kinds.
+		const ramp = machineRamp(
+			[10, 11, 20, 30, 31, 40, 50].map((rate, index) => jobs(`k${index}`, `Kind ${index}`, [rate])).flat(),
+			COLOUR
+		);
+		const byStep = new Map<number, string[]>();
+		for (const row of ramp.rows) byStep.set(row.step ?? 0, [...(byStep.get(row.step ?? 0) ?? []), row.name]);
+		expect([...byStep.values()].some((names) => names.length > 1)).toBe(true);
+		expect(new Set(ramp.rows.map((row) => row.name)).size).toBe(7);
+	});
+
+	test('a machine with no reading and no machine at all are the grey, and no machine is last', () => {
+		const ramp = machineRamp(
+			[
+				...jobs(UNRECORDED_KEY, '', [15]),
+				...jobs('timed', 'Timed', [12]),
+				...jobs('untimed', 'Untimed', [null, null])
+			],
+			COLOUR
+		);
+		expect(ramp.rows.map((row) => row.key)).toEqual(['timed', 'untimed', UNRECORDED_KEY]);
+		const untimed = ramp.at.get('untimed');
+		expect(untimed?.step).toBeNull();
+		expect(untimed?.rate).toBeNull();
+		expect(untimed?.colour).toBe(GREY);
+		const absent = ramp.at.get(UNRECORDED_KEY);
 		expect(absent?.name).toBe(UNRECORDED_NAME);
-	});
-
-	test('every machine keeps its own colour right up to the stop count', () => {
-		const seven = Array.from({ length: STOPS }, (_, index) => ({
-			key: `k${index}`,
-			name: `Machine ${index}`
-		}));
-		const ramp = machineRamp(seven, STOPS);
-		expect(ramp.rows).toHaveLength(STOPS);
-		expect(ramp.rows.map((row) => row.folded.length)).toEqual(Array(STOPS).fill(0));
-	});
-
-	test('past the stop count the rest fold into one row that names them', () => {
-		const nine = Array.from({ length: 9 }, (_, index) => ({
-			key: `k${index}`,
-			name: `Machine ${index}`
-		}));
-		const ramp = machineRamp(nine, STOPS);
-		expect(ramp.rows).toHaveLength(STOPS);
-		const fold = ramp.rows.at(-1);
-		expect(fold?.key).toBe(FOLDED_KEY);
-		// Six keep a colour; the last three share the seventh and are listed.
-		expect(fold?.folded).toEqual(['Machine 6', 'Machine 7', 'Machine 8']);
-		// A folded key still resolves, so nothing has to ask whether it folded.
-		expect(ramp.at.get('k8')).toBe(fold);
-		expect(new Set(ramp.rows.map((row) => row.colourStop)).size).toBe(STOPS);
+		expect(absent?.colour).toBe(GREY);
+		// An absence takes no speed, even where its jobs read prompts.
+		expect(absent?.rate).toBeNull();
+		expect(ramp.at.get('timed')?.colour).not.toBe(GREY);
 	});
 });
 
 test.describe('reading against writing, machine by machine', () => {
-	const split = splitByMachine(onlyRun(FOUR_SHARDS), { colourStops: STOPS });
+	const split = splitByMachine(onlyRun(FOUR_SHARDS), { colour: COLOUR });
+	const named = (name: string) => split.groups.find((group) => group.identity.name === name);
 
-	test('one group per machine drawn, and the two spellings are one machine', () => {
+	test('one group per machine drawn, slowest first, and the two spellings are one machine', () => {
 		expect(split.groups).toHaveLength(3);
+		// Xeon reads at 10 a second and the EPYC at 60, so the Xeon comes first.
 		expect(split.groups.map((group) => group.identity.name)).toEqual([
-			'AMD EPYC 7763',
 			'Intel Xeon Platinum 8573C',
+			'AMD EPYC 7763',
 			UNRECORDED_NAME
 		]);
-		const xeon = split.groups[1];
+		const xeon = split.groups[0];
 		expect(xeon.shards).toBe(2);
+		expect(xeon.identity.step).toBe(1);
+		expect(named('AMD EPYC 7763')?.identity.step).toBe(COLOUR.stops);
 	});
 
 	test('every rate is that machine shards summed, never a mean of their rates', () => {
-		const [epyc, xeon] = split.groups;
+		const epyc = named('AMD EPYC 7763');
+		const xeon = named('Intel Xeon Platinum 8573C');
 		// EPYC: 12,000 tokens over 200 s. Xeon: 2,000 + 1,000 over 200 + 100.
-		expect(epyc.readTokensPerSecond).toBeCloseTo(60, 6);
-		expect(xeon.readTokensPerSecond).toBeCloseTo(3000 / 300, 6);
+		expect(epyc?.readTokensPerSecond).toBeCloseTo(60, 6);
+		expect(xeon?.readTokensPerSecond).toBeCloseTo(3000 / 300, 6);
 		// A mean of the Xeon shards' own rates is 10 as well only because both are
 		// 10, so tilt one to prove the sum is what is taken.
 		const tilted = splitByMachine(
@@ -215,17 +285,17 @@ test.describe('reading against writing, machine by machine', () => {
 					writeSeconds: 100
 				})
 			]),
-			{ colourStops: STOPS }
+			{ colour: COLOUR }
 		);
 		// Summed: 11,000 over 300 = 36.67. A mean of 10 and 90 would be 50.
 		expect(tilted.groups[0].readTokensPerSecond).toBeCloseTo(11_000 / 300, 6);
 	});
 
 	test('the write cost of a machine is that machine own two rates', () => {
-		const [epyc] = split.groups;
+		const epyc = named('AMD EPYC 7763');
 		// 60 read a second against 1,000 written over 100 s, which is 10.
-		expect(epyc.writeTokensPerSecond).toBeCloseTo(10, 6);
-		expect(epyc.writeCostRatio).toBeCloseTo(6, 6);
+		expect(epyc?.writeTokensPerSecond).toBeCloseTo(10, 6);
+		expect(epyc?.writeCostRatio).toBeCloseTo(6, 6);
 	});
 
 	test('the one headline is the machine that read the most tokens, and it is named', () => {
@@ -252,7 +322,7 @@ test.describe('reading against writing, machine by machine', () => {
 	});
 
 	test('a run whose shards all drew one machine says so and has no spread', () => {
-		const one = splitByMachine(onlyRun([FOUR_SHARDS[1], FOUR_SHARDS[2]]), { colourStops: STOPS });
+		const one = splitByMachine(onlyRun([FOUR_SHARDS[1], FOUR_SHARDS[2]]), { colour: COLOUR });
 		expect(one.groups).toHaveLength(1);
 		expect(one.oneMachine).toBe(true);
 		expect(one.spread).toBeNull();
@@ -260,15 +330,16 @@ test.describe('reading against writing, machine by machine', () => {
 	});
 
 	test('a run that named no machine at all pools, and the page is told to say so', () => {
-		const pooled = splitByMachine(onlyRun([FOUR_SHARDS[3]]), { colourStops: STOPS });
+		const pooled = splitByMachine(onlyRun([FOUR_SHARDS[3]]), { colour: COLOUR });
 		expect(pooled.noMachineNamed).toBe(true);
 		expect(pooled.groups).toHaveLength(1);
-		expect(pooled.groups[0].identity.colourStop).toBe(UNRECORDED_STOP);
+		expect(pooled.groups[0].identity.colour).toBe(GREY);
+		expect(pooled.groups[0].identity.name).toBe(UNRECORDED_NAME);
 	});
 
 	test('a run with no complete shard splits nothing rather than splitting zero', () => {
 		const bare = onlyRun([{ shard: 0 }, { shard: 1 }]);
-		const view = splitByMachine(bare, { colourStops: STOPS });
+		const view = splitByMachine(bare, { colour: COLOUR });
 		expect(view.empty).toBe(true);
 		expect(view.groups).toEqual([]);
 		expect(view.headline).toBeNull();
@@ -292,11 +363,11 @@ test.describe('reading against writing, machine by machine', () => {
 				writeSeconds: 100
 			})
 		];
-		const pooledByName = splitByMachine(onlyRun(rows), { colourStops: STOPS });
+		const pooledByName = splitByMachine(onlyRun(rows), { colour: COLOUR });
 		expect(pooledByName.groups).toHaveLength(1);
 
 		const byFingerprint = splitByMachine(onlyRun(rows), {
-			colourStops: STOPS,
+			colour: COLOUR,
 			fingerprints: new Map([
 				[0, '1111111111111111'],
 				[1, '2222222222222222']
@@ -305,5 +376,25 @@ test.describe('reading against writing, machine by machine', () => {
 		expect(byFingerprint.groups).toHaveLength(2);
 		expect(byFingerprint.groups.every((group) => group.identity.name === 'AMD EPYC 7763')).toBe(true);
 		expect(byFingerprint.spread).toBeCloseTo(6, 6);
+	});
+
+	test('a shard carries the fingerprint its machine record holds, so no map is needed', () => {
+		// The counters kept the processor name and dropped the digest until
+		// 2026-09-30, so a shard of a machine whose name has two digests became a
+		// third machine on the page. The packed row carries the digest; the shard
+		// keeps it.
+		const run = onlyRun([
+			{ ...FOUR_SHARDS[0], fingerprint: '1111111111111111' },
+			{ ...FOUR_SHARDS[0], shard: 1, fingerprint: '2222222222222222' }
+		]);
+		expect(run.reported.map((shard) => shard.fingerprint)).toEqual([
+			'1111111111111111',
+			'2222222222222222'
+		]);
+		const split = splitByMachine(run, { colour: COLOUR });
+		expect(split.groups.map((group) => group.identity.key).sort()).toEqual([
+			'1111111111111111',
+			'2222222222222222'
+		]);
 	});
 });
