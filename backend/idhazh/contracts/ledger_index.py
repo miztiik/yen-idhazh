@@ -5,21 +5,22 @@ of them, so each is a contract with its own stem and changelog:
 
 - `RawDayIndex` lists the raw files one day of one ledger holds.
 - `CompactIndex` lists the compact files one period of one ledger holds. It is
-  what a reader outside Python fetches to learn which days and months exist.
+  what a reader outside Python fetches to learn which days, months and years
+  exist.
 - `Watermark` says how far one period of one ledger has been compacted, which
   is where the next compaction resumes.
 
 Each is written whole, never appended to. `CompactEntry` is one line of a
 `CompactIndex` and has no file of its own, so it is a `Model`.
 
-**A day and a month are told apart by shape, and one function decides the
-shape.** A `PeriodStamp` holds either, so without a check a daily index could
-list a month and a daily watermark could stand on one. `covers_fits` in
+**A day, a month and a year are told apart by shape, and one function decides
+the shape.** A `PeriodStamp` holds any of them, so without a check a daily index
+could list a month and a daily watermark could stand on one. `covers_fits` in
 `file_envelope` is the rule the file envelope already applies to a compact
 file, so an index, a watermark and the file they describe cannot disagree about
-what a daily or a monthly period looks like.
+what a daily, a monthly or a yearly period looks like.
 
-Every day and month here is a UTC day and month, and every instant is UTC
+Every day, month and year here is a UTC one, and every instant is UTC
 (CLAUDE.md section 2).
 """
 
@@ -49,6 +50,7 @@ from idhazh.contracts.ledger_name import LedgerName
 _SHAPE: Final[dict[Period, str]] = {
     Period.DAILY: "a UTC day, YYYY-MM-DD",
     Period.MONTHLY: "a UTC month, YYYY-MM",
+    Period.YEARLY: "a UTC year, YYYY",
 }
 
 
@@ -129,8 +131,8 @@ class CompactEntry(Model):
 
     covers: PeriodStamp = Field(
         description=(
-            "The UTC day (`2026-09-23`) or the UTC month (`2026-08`) this one compact "
-            "file holds rows for."
+            "The UTC day (`2026-09-23`), the UTC month (`2026-08`) or the UTC year "
+            "(`2026`) this one compact file holds rows for."
         )
     )
     rows: int = Field(
@@ -149,13 +151,18 @@ class CompactEntry(Model):
 class CompactIndex(Contract):
     """Which compact files exist in one period of one ledger.
 
-    Sufficient on its own: a date is in monthly, or in daily, or it is not
-    available. The newest daily entry is the newest day compacted, which is
-    how a browser tells a day not yet compacted from a hole.
+    Sufficient on its own: a date is in yearly, or in monthly, or in daily, or it
+    is not available. The newest daily entry is the newest day compacted, which
+    is how a browser tells a day not yet compacted from a hole.
     """
 
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-30",
+            change="period may be yearly, and each of its entries covers a UTC year.",
+            why="A finished year's month files may be packed into one year file.",
+        ),
         ChangelogEntry(
             version="2026-09-27",
             change="Initial shape: the compact files one period of one ledger holds.",
@@ -166,8 +173,8 @@ class CompactIndex(Contract):
     ledger: LedgerName = Field(description="Which ledger the compact files belong to.")
     period: Period = Field(
         description=(
-            "`daily` or `monthly`: how much time each listed file covers, and which of the "
-            "ledger's two compact directories this index describes."
+            "`daily`, `monthly` or `yearly`: how much time each listed file covers, and "
+            "which of the ledger's compact directories this index describes."
         )
     )
     entries: list[CompactEntry] = Field(
@@ -179,7 +186,7 @@ class CompactIndex(Contract):
 
     @model_validator(mode="after")
     def _the_entries_ascend_once_each_at_the_period_s_grain(self) -> Self:
-        """A daily index lists days and a monthly one months, in order, each once."""
+        """A daily index lists days, a monthly one months and a yearly one years, in order."""
         where = f"the {self.ledger.value} {self.period.value} index"
         for entry in self.entries:
             if not covers_fits(entry.covers, tier=Tier.COMPACT, period=self.period):
@@ -209,6 +216,11 @@ class Watermark(Contract):
     __schema_stem__: ClassVar[str] = "watermark"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-30",
+            change="period may be yearly, and through then stands on a UTC year.",
+            why="A finished year's month files may be packed into one year file.",
+        ),
+        ChangelogEntry(
             version="2026-09-27",
             change="Initial shape: the newest period compacted, when, and by which run.",
             why="The next compaction has to know where to resume without reading the tree.",
@@ -217,12 +229,15 @@ class Watermark(Contract):
 
     ledger: LedgerName = Field(description="Which ledger this watermark belongs to.")
     period: Period = Field(
-        description="`daily` or `monthly`: which of the ledger's two compactions it tracks."
+        description=(
+            "`daily`, `monthly` or `yearly`: which of the ledger's compactions it tracks."
+        )
     )
     through: PeriodStamp = Field(
         description=(
             "The newest period fully compacted: a UTC day on a daily watermark, a UTC "
-            "month on a monthly one. The next run resumes after it."
+            "month on a monthly one and a UTC year on a yearly one. The next run resumes "
+            "after it."
         )
     )
     advanced_at: Timestamp = Field(
@@ -238,7 +253,7 @@ class Watermark(Contract):
 
     @model_validator(mode="after")
     def _through_is_at_the_period_s_grain(self) -> Self:
-        """A daily watermark stands on a day and a monthly one on a month."""
+        """A daily watermark stands on a day, a monthly one on a month, a yearly one on a year."""
         if not covers_fits(self.through, tier=Tier.COMPACT, period=self.period):
             raise ValueError(
                 f"the {self.ledger.value} {self.period.value} watermark stands at "

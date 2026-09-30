@@ -1,9 +1,10 @@
 /**
  * How is one slice answered from what the page keeps?
  *
- * The door reads `daily.json`, and `monthly.json` only when the span starts
- * before the oldest day `daily.json` names. It takes the coarsest file for each
- * day (`slice.ts`), has the page keeper hold the files that hold rows
+ * The door reads `daily.json`; `monthly.json` only when the span starts before
+ * the oldest day `daily.json` names; and `yearly.json` only when it starts before
+ * the oldest day those two name. It takes the coarsest file for each day
+ * (`slice.ts`), has the page keeper hold the files that hold rows
  * (`page-keeper.ts`), asks the engine one query over them (`slice-query.ts`),
  * and returns one of four states:
  *
@@ -11,7 +12,7 @@
  * - `quiet`: every day asked for is covered and no row matched, or the span lies
  *   wholly after the newest day compacted. A file whose entry says `rows: 0` is
  *   never fetched, so a span of quiet days loads no engine at all.
- * - `unreachable`: a day at or before the newest compacted day that neither index
+ * - `unreachable`: a day at or before the newest compacted day that no index
  *   names, a named file that did not arrive whole, an index this build will not
  *   act on, or an engine that could not answer. `at` is the first day that could
  *   not be answered, and the console says why.
@@ -20,6 +21,12 @@
  *
  * `through` is the newest day `daily.json` names. A day after it has not been
  * compacted yet, so it is clamped away rather than drawn as a zero.
+ *
+ * **A day in a packed year is read from its year file, fetched whole.** The page
+ * keeper checks every file against the length its entry gives before the engine
+ * sees it, so one month of a year costs the whole year's bytes; the gardener
+ * keeps a published ledger's month files long enough that the console's widest
+ * read never reaches one.
  *
  * **The address is composed here and nowhere else**, from the closed ledger
  * name, the period and a `covers` the index guard has already checked, so no
@@ -55,9 +62,12 @@ export function indexPath(ledger: LedgerName, period: Period): string {
 /** Where one compact file sits under the state root, named for what it covers. */
 export function dataPath(ledger: LedgerName, period: Period, covers: string): string {
 	const [year, month, day] = covers.split('-');
-	return period === 'daily'
-		? `compact/${ledger}/daily/${year}/${month}/${day}.parquet`
-		: `compact/${ledger}/monthly/${year}/${month}.parquet`;
+	const named: Record<Period, string> = {
+		daily: `daily/${year}/${month}/${day}`,
+		monthly: `monthly/${year}/${month}`,
+		yearly: `yearly/${year}/${year}`
+	};
+	return `compact/${ledger}/${named[period]}.parquet`;
 }
 
 /** The version a data file is asked for under. A file is written once, so its
@@ -129,16 +139,26 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	const until = request.to < through ? request.to : through;
 
 	let months: CompactEntry[] = [];
+	let years: CompactEntry[] = [];
 	if (request.from < days[0].covers) {
 		const monthly = await readIndexFrom(keeper, ledger, 'monthly');
 		if (monthly !== null && 'refused' in monthly) {
 			return unreachable(request.from, explainRefusal('monthly', monthly.refused));
 		}
 		if (monthly !== null) months = monthly.index.entries;
+		const firstOfMonths = months.length > 0 ? `${months[0].covers}-01` : null;
+		const oldest = firstOfMonths !== null && firstOfMonths < days[0].covers ? firstOfMonths : days[0].covers;
+		if (request.from < oldest) {
+			const yearly = await readIndexFrom(keeper, ledger, 'yearly');
+			if (yearly !== null && 'refused' in yearly) {
+				return unreachable(request.from, explainRefusal('yearly', yearly.refused));
+			}
+			if (yearly !== null) years = yearly.index.entries;
+		}
 	}
 
-	const selection = filesFor(request.from, until, days, months);
-	if ('hole' in selection) return unreachable(selection.hole, `${selection.hole} is named by neither index`);
+	const selection = filesFor(request.from, until, days, months, years);
+	if ('hole' in selection) return unreachable(selection.hole, `${selection.hole} is named by no index`);
 	const holding = selection.files.filter((file) => file.entry.rows > 0);
 	if (holding.length === 0) return { state: 'quiet', rows: [], through };
 
