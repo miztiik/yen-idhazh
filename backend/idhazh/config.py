@@ -694,6 +694,55 @@ def _old_tree_floor(ledger: LedgerName, tasks: Mapping[str, TaskPolicy]) -> Wind
     return None
 
 
+def _refuse_a_published_reach_that_grows_or_falls_short(
+    where: str,
+    policy: CompactionPolicy,
+    reach: int | None,
+    *,
+    appearance: AppearanceConfig,
+) -> None:
+    """What a browser fetches for a published ledger stays bounded, and covers the console.
+
+    Month files kept forever would make the monthly index a reader fetches first
+    grow with the archive, unless the ledger packs each finished year into one
+    file: its month files then last until their year is packed, and the yearly
+    index grows by one entry a year. A ledger that packs years keeps its month
+    files long enough that the widest console read, which ends on the newest day
+    compacted, never reaches a year file, because the door fetches a year file
+    whole to read any day of it. A ledger that deletes its month files reaches
+    back at least the widest span the console offers.
+    """
+    ledger = policy.ledger.value
+    if policy.monthly_keep_days is not None:
+        widest_read = appearance.console.max_window_days
+        floor = widest_read + policy.compact_after_days
+        if policy.monthly_keep_days < floor:
+            raise ValueError(
+                f"{where} packs each year {policy.monthly_keep_days} days after it ends, and "
+                f"{ledger} is in ledger.published. A console read reaches back "
+                f"console.max_window_days {widest_read} from the newest day compacted, which is "
+                f"compact_after_days {policy.compact_after_days} and more before the wake, so "
+                f"monthly_keep_days must be at least {floor}, or that read fetches a whole "
+                "year file to draw one month"
+            )
+        return
+    if reach is None:
+        raise ValueError(
+            f"{where} keeps monthly_window forever and {ledger} is in ledger.published, and "
+            "it sets no monthly_keep_days. A published ledger keeps its month files forever "
+            "only when it packs each finished year into one file, or what a reader's first "
+            "request fetches grows with the archive"
+        )
+    widest = max(appearance.console.window_presets)
+    if reach < widest:
+        raise ValueError(
+            f"{where} reaches back {reach} days with daily_keep_days "
+            f"{policy.daily_keep_days} and monthly_window "
+            f"{_spelled(policy.monthly_window)}, and console.window_presets offers "
+            f"{widest}. The widest span the console offers would have days no file holds"
+        )
+
+
 def _refuse_a_compaction_that_cuts_its_ledger(
     name: str,
     policy: CompactionPolicy,
@@ -702,7 +751,7 @@ def _refuse_a_compaction_that_cuts_its_ledger(
     app: AppConfig,
     appearance: AppearanceConfig,
 ) -> None:
-    """Once a ledger is compacted its two periods are its retention, so they must reach.
+    """Once a ledger is compacted its periods are its retention, so they must reach.
 
     The pair reaches back `daily_keep_days` plus `monthly_window`, counted at the
     fewest days those months can hold: a month file lives `monthly_window` after
@@ -725,20 +774,9 @@ def _refuse_a_compaction_that_cuts_its_ledger(
     monthly_kept = _days_kept(policy.monthly_window)
     reach = None if monthly_kept is None else policy.daily_keep_days + monthly_kept
     if ledger in app.ledger.published:
-        if reach is None:
-            raise ValueError(
-                f"{where} keeps monthly_window forever and {ledger.value} is in "
-                "ledger.published. A published ledger may not keep its month files "
-                "forever, or what a reader's first request fetches grows with the archive"
-            )
-        widest = max(appearance.console.window_presets)
-        if reach < widest:
-            raise ValueError(
-                f"{where} reaches back {reach} days with daily_keep_days "
-                f"{policy.daily_keep_days} and monthly_window "
-                f"{_spelled(policy.monthly_window)}, and console.window_presets offers "
-                f"{widest}. The widest span the console offers would have days no file holds"
-            )
+        _refuse_a_published_reach_that_grows_or_falls_short(
+            where, policy, reach, appearance=appearance
+        )
     floor = _old_tree_floor(ledger, tasks)
     if floor is None or isinstance(policy.monthly_window, ForeverWindow):
         return

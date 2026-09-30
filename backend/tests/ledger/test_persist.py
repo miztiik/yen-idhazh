@@ -528,8 +528,15 @@ def test_a_raw_write_refuses_a_period_that_is_not_a_day_before_anything_is_writt
     [
         (Period.DAILY, "2026-09", "is not the shape a compact daily"),
         (Period.MONTHLY, "2026-09-24", "is not the shape a compact monthly"),
+        (Period.MONTHLY, "2026", "is not the shape a compact monthly"),
+        (Period.YEARLY, "2026-09", "is not the shape a compact yearly"),
     ],
-    ids=["daily-covering-a-month", "monthly-covering-a-day"],
+    ids=[
+        "daily-covering-a-month",
+        "monthly-covering-a-day",
+        "monthly-covering-a-year",
+        "yearly-covering-a-month",
+    ],
 )
 def test_a_compact_write_refuses_a_period_of_the_wrong_shape_before_anything_is_written(
     period: Period, covers: str, refusal: str, tmp_path: Path

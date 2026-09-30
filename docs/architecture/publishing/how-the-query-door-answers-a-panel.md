@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -42,7 +42,7 @@ of four nothings without inspecting an error:
 | 1 | `ok`, with the rows | At least one row matched. The rows are what the files hold, sorted by the requested columns left to right; the door never merges two rows, because the compaction already wrote one row per record |
 | 2 | `quiet` | Every day asked for is covered and nothing matched, or the whole span lies after the newest day compacted. A filter that matches nothing is `quiet`, never an empty `ok` |
 | 3 | `missing` | The ledger has no `daily.json`, so it is not published |
-| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why: a day named by neither index, a named file that did not arrive whole, an index this build will not act on, or an engine that could not run the query |
+| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why: a day no index names, a named file that did not arrive whole, an index this build will not act on, or an engine that could not run the query |
 
 `ok` and `quiet` carry `through`, the newest day `daily.json` names - `null`
 before the first compaction - so a panel can say how far its data reaches. A day
@@ -52,17 +52,20 @@ drawn as a zero.
 ## Which files a span reads
 
 The ledger carries its own indexes, because a browser cannot list a directory:
-`state/compact/<ledger>/index/daily.json` and `index/monthly.json`, written by the
+`state/compact/<ledger>/index/daily.json`, `index/monthly.json` and, for a
+ledger whose compaction packs years, `index/yearly.json`, written by the
 gardener's compaction task and declared as `CompactIndex` in
 `backend/idhazh/contracts/ledger_index.py`.
 
-1. **`daily.json` first, and `monthly.json` only when the span starts before the
-   oldest day `daily.json` names.** A span of 30 days or less reads one index.
-2. **For each day, the coarsest period that holds it**: the month file when
-   `monthly.json` names that month, otherwise the day file. A day is read through
-   exactly one file, so a day both indexes name is read from the month - reading
-   it twice would double every number drawn from it.
-3. **A day neither index names, at or before `through`, is a hole**, and the answer
+1. **`daily.json` first; `monthly.json` only when the span starts before the
+   oldest day `daily.json` names; and `yearly.json` only when it starts before the
+   oldest day those two name.** A span of 30 days or less reads one index.
+2. **For each day, the coarsest period that holds it**: the year file when
+   `yearly.json` names that year, else the month file when `monthly.json` names
+   that month, otherwise the day file. A day is read through exactly one file, so
+   a day two indexes name is read from the coarser - reading it twice would double
+   every number drawn from it.
+3. **A day no index names, at or before `through`, is a hole**, and the answer
    is `unreachable` at the first one. Drawing the days around it would be an
    undercount nobody could see.
 4. **An entry with `rows: 0` is never fetched.** A span of quiet days loads no
@@ -70,6 +73,13 @@ gardener's compaction task and declared as `CompactIndex` in
 5. **A file whose decoded length differs from its entry's `bytes` is refused**, and
    so is one that does not arrive. The decoded length, never `Content-Length`,
    because Pages compresses what it serves.
+6. **A day in a packed year costs the whole year file.** The door fetches every
+   file whole, so drawing one month from a year fetches all twelve. The year file
+   is written one row group a month, which would let a reader that fetches by
+   byte range take one month's part, and this door does not. So the gardener
+   keeps a published ledger's month files at least `console.max_window_days` plus
+   `compact_after_days` after their year ends, and no read the console can widen
+   to reaches a year file; a span panned further back than that does.
 
 An index is asked for with `cache: 'no-store'`, so a page's one read of it gets
 what the site holds now rather than a copy an HTTP cache kept, and the page then
@@ -83,9 +93,9 @@ A page keeps what the door read for it, so nothing crosses the network or enters
 the engine twice. The keeper is `frontend/src/lib/data/page-keeper.ts`.
 
 - **Each index is read once a page and kept.** Every slice and every reach on the
-  page acts on the same `daily.json` and `monthly.json`. Two asks at the same
-  moment share one fetch. A 404 is kept, because it is an answer; a fetch that
-  threw is not, so the next ask tries again.
+  page acts on the same `daily.json`, `monthly.json` and `yearly.json`. Two asks
+  at the same moment share one fetch. A 404 is kept, because it is an answer; a
+  fetch that threw is not, so the next ask tries again.
 - **Each data file enters the engine once, and the page keeps its name, never its
   bytes.** A file is known by its path and the version its entry names. A
   browser's engine takes the buffer it is handed and leaves the page's copy empty,
@@ -121,16 +131,18 @@ route can anchor its span on the data rather than on the clock:
 
 | # | Answer | When |
 | --- | --- | --- |
-| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day either index names, a month counting from its first day |
+| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day any index names, a month counting from its first day and a year from its 1 January |
 | 2 | `quiet` | `daily.json` names no day yet |
 | 3 | `missing` | There is no `daily.json`, so the ledger is not published |
 | 4 | `unreachable` | `daily.json` is one this build will not act on, or could not be read. It carries no day, because the reach asks for none; the console says why |
 
-It reads both indexes at the same time through the page's keeper, so a slice
-asked after it reads neither again, and it starts no engine. A `monthly.json` this
-build will not act on leaves the days `daily.json` names, and the console says
-why. The logic is `frontend/src/lib/data/ledger-reach.ts`, which reads each index
-with the slice's own reader, so the two never disagree about what an index says.
+It reads all three indexes at the same time through the page's keeper, so a slice
+asked after it reads none again, and it starts no engine. A `monthly.json` or
+`yearly.json` this build will not act on leaves the days the other indexes name,
+and the console says why. A packed year counts from its 1 January even when the
+ledger's first rows came later in it. The logic is
+`frontend/src/lib/data/ledger-reach.ts`, which reads each index with the slice's
+own reader, so the two never disagree about what an index says.
 
 ## Where each file is asked for
 
@@ -141,6 +153,7 @@ already checked:
 - `<prefix>/state/compact/<ledger>/index/<period>.json`
 - `<prefix>/state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet`
 - `<prefix>/state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet`
+- `<prefix>/state/compact/<ledger>/yearly/<YYYY>.parquet`
 
 `<prefix>` is `visuals.asset_base_url` in `config/idhazh.json`, or SvelteKit's own
 repository prefix when that knob is empty, which is the shipped default. It comes
@@ -281,7 +294,7 @@ empty, so the second slice would hand it an empty file, while the Node engine
 copies and every Node test would pass. Weighed and refused on 2026-09-29.
 
 **No retry after a deploy.** A kept index that names a file the deploy re-packed
-or removed answers `unreachable` rather than reading both indexes again and
+or removed answers `unreachable` rather than reading the indexes again and
 retrying once. The retry is about twenty lines, and it would move a page's first
 and newest day under panels already drawn. It is the move if an open tab is ever
 seen answering `unreachable` after a deploy; nothing has shown one yet. Ruled on

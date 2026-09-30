@@ -1,12 +1,12 @@
 {
   "entries": [
     {
-      "bytes": 13639,
-      "covers": "2026-08",
-      "rows": 3
+      "bytes": 20449,
+      "covers": "2026",
+      "rows": 10
     }
   ],
   "ledger": "host-fingerprint",
-  "period": "monthly",
+  "period": "yearly",
   "version": "2026-09-30"
 }

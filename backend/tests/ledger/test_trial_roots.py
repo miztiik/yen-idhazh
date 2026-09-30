@@ -108,7 +108,13 @@ def test_a_path_that_walks_back_out_of_a_root_is_refused(tmp_path: Path) -> None
 
 @pytest.mark.parametrize(
     ("period", "covers"),
-    [(Period.DAILY, A_MONTH), (Period.MONTHLY, A_DAY), (Period.DAILY, "../../x")],
+    [
+        (Period.DAILY, A_MONTH),
+        (Period.MONTHLY, A_DAY),
+        (Period.DAILY, "../../x"),
+        (Period.YEARLY, A_MONTH),
+        (Period.YEARLY, "../x"),
+    ],
 )
 def test_a_compact_period_handed_the_wrong_shape_is_refused(
     period: Period, covers: str, tmp_path: Path

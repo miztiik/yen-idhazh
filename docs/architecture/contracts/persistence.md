@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -13,11 +13,12 @@ state/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.parquet    many writers, each file
 state/raw/<ledger>/index/<YYYY-MM-DD>.json               one day's listing
 state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet    one writer: what a compaction left
 state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet
+state/compact/<ledger>/yearly/<YYYY>.parquet             only where the compaction packs years
 state/compact/<ledger>/index/<period>.json
 state/compact/<ledger>/<period>/watermark.json
 ```
 
-`<ledger>` is always the `LedgerName` value. A **tier** is `raw` or `compact` - which root. A **period** is `daily` or `monthly` - how much time one compact file covers. The two words are never swapped.
+`<ledger>` is always the `LedgerName` value. A **tier** is `raw` or `compact` - which root. A **period** is `daily`, `monthly` or `yearly` - how much time one compact file covers. The two words are never swapped.
 
 **A raw file carries a minted name; a compact file carries a date.** Raw has many writers that never coordinate, so the minted `<file_id>` is what stops two of them taking one path. A compact period has exactly one writer, so its path is the period it covers and a reader can compute the address.
 
@@ -32,6 +33,7 @@ persist(state_dir, rows, *, ledger, covers, identity, fmt=None) -> list[Path]
 persist_period(state_dir, rows, *, model, ledger, period, covers, identity,
                built_from) -> Path
 render_period(...) -> PeriodFile      # the same file, built and written nowhere
+render_grouped_period(state_dir, groups, ...) -> PeriodFile   # one row group a group
 load(paths, *, model) -> list[rows]
 load_stored(paths, *, model) -> list[StoredRow]
 read_envelope(path) -> FileEnvelope
@@ -47,7 +49,7 @@ A producer hands over its rows, the ledger, the period and its writer identity. 
 
 The paths come back ascending by the day each file covers, never by path string. An empty call writes nothing and returns an empty list. Every file is built before the first is written, so a row refused on its third day leaves no file for the first two.
 
-**`persist` writes raw files only; a compaction writes a compact file through `persist_period`.** Its rows come from `load_stored` and each keeps the identity cells its raw file gave it - `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id`, declared once as `RowIdentity` in `backend/idhazh/contracts/file_envelope.py`. So a compact file says which writer first filed each row, never that the compaction did, and a re-run's second attempt can still replace its first after the day was compacted. The compaction's own identity goes in the envelope, which says who wrote the file. `covers` is the one period the file covers - `YYYY-MM-DD` for daily, `YYYY-MM` for monthly - and a row filed outside it, or into another ledger, is refused, because a compact write replaces the whole period and a stray would overwrite a finished one. `model` is passed rather than read off a row, so a period that held nothing is still a file with every column, and `built_from` records how many files were read to make it. `render_period` builds the same file and writes nothing, which is what a dry run reports from.
+**`persist` writes raw files only; a compaction writes a compact file through `persist_period`.** Its rows come from `load_stored` and each keeps the identity cells its raw file gave it - `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id`, declared once as `RowIdentity` in `backend/idhazh/contracts/file_envelope.py`. So a compact file says which writer first filed each row, never that the compaction did, and a re-run's second attempt can still replace its first after the day was compacted. The compaction's own identity goes in the envelope, which says who wrote the file. `covers` is the one period the file covers - `YYYY-MM-DD` for daily, `YYYY-MM` for monthly, `YYYY` for yearly - and a row filed outside it, or into another ledger, is refused, because a compact write replaces the whole period and a stray would overwrite a finished one. `model` is passed rather than read off a row, so a period that held nothing is still a file with every column, and `built_from` records how many files were read to make it. `render_period` builds the same file and writes nothing, which is what a dry run reports from. **`render_grouped_period` builds one from groups of rows, held one group at a time**, and in parquet each group that holds a row is one row group. The compaction packs a year with it, a month a group, so the pass never holds a whole year's rows and a reader that filters on a date can skip the other months. It adds the envelope to the footer after the last row group, because only then is the digest known, so `load` reads a parquet envelope from the file's key-value metadata, where every writer puts it.
 
 **A raw write into a paused or retired family from a pipeline job writes nothing**, returns an empty list and logs one warning, through `ledger.accepts_new_rows` ([ledger-registry.md](ledger-registry.md)). A `persist_period` write, and a raw write from `migrate`, `run-tasks` or `history` - the members of `MAINTENANCE_JOBS` beside `ServerJob` - are never skipped, because each files rows again that were already recorded.
 
@@ -88,19 +90,19 @@ The paths come back ascending by the day each file covers, never by path string.
 
 ## Reading a whole ledger
 
-**A ledger the compaction tends is read from three kinds of file, and each date from exactly one.** `backend/idhazh/ledger/ledger_files.py` asks the two compact indexes what exists: a date whose month `index/monthly.json` names is read from that month's file; else a date `index/daily.json` names is read from that day's file; else it is read from that day's raw files. The raw files of a day an index already names are a re-run's, waiting for the next compaction, and are not read. A date both indexes name is read from its month, with a warning, so a pass that stopped between writing a month and deleting its days cannot count a row twice.
+**A ledger the compaction tends is read from up to four kinds of file, and each date from exactly one.** `backend/idhazh/ledger/ledger_files.py` asks the compact indexes what exists: a date whose year `index/yearly.json` names is read from that year's file; else a date whose month `index/monthly.json` names is read from that month's file; else a date `index/daily.json` names is read from that day's file; else it is read from that day's raw files. The raw files of a day an index already names are a re-run's, waiting for the next compaction, and are not read. A date two indexes name is read from the coarser, with a warning, so a pass that stopped between writing a period and deleting what it absorbed cannot count a row twice.
 
 | Call | What it answers |
 | --- | --- |
 | `list_ledger_files(state_dir, ledger)` | every source a ledger is read from, oldest first - one compact file, or one raw day's files - and the holes |
 | `load_ledger_rows(state_dir, ledger, model=)` | the rows of every source, settled once by `settle_rows`. `model` and the key come from the door table in `ledger/keys.py`, so a reader cannot settle a ledger by another ledger's rule |
-| `load_days(state_dir, ledger, days, model=)` | the named UTC days' current rows, oldest day first - the bounded read. It opens the two indexes, the one compact file that serves each day, and the raw files of only the days no index names |
-| `held_days(state_dir, ledger)`, `held_months(state_dir, ledger)` | which days and months the ledger holds rows for, read from the indexes and the raw folder names alone, so no data file is opened |
+| `load_days(state_dir, ledger, days, model=)` | the named UTC days' current rows, oldest day first - the bounded read. It opens the three indexes, the one compact file that serves each day, and the raw files of only the days no index names. A day of a packed year opens that year's whole file, once |
+| `held_days(state_dir, ledger)`, `held_months(state_dir, ledger)` | which days and months the ledger holds rows for, read from the indexes and the raw folder names alone, so no data file is opened. A packed year names all its months and days |
 | `month_days(month)` | every UTC day of a `YYYY-MM` month, for a caller that reads a month through `load_days` |
 
 **`load_days` settles each day on its own**, as the CSV reader settled a day. So a key that carries no date - the eval ledger's - is settled within a day and never across days. The writer is what keeps one measurement off two days: it files a measurement only once.
 
-**A hole is served and reported.** From the first day the compact periods cover to the newest day `index/daily.json` names, every day must be named. A day that is not is a hole: its rows went somewhere no reader finds them. It is logged by name, and any raw files it still has are read. An index this build cannot read is read as absent, with a warning, so the reader serves the raw files it can still find rather than nothing.
+**A hole is served and reported.** From the first day the compact periods cover to the newest day they reach, every day must be named. A day that is not is a hole: its rows went somewhere no reader finds them. It is logged by name, and any raw files it still has are read. An index this build cannot read is read as absent, with a warning, so the reader serves the raw files it can still find rather than nothing.
 
 `ledger.load_retirements` and `ledger.load_visual_prunes` read this way and keep their signatures. Both ask about their ledger's whole history, so a window would answer a different question, and [growing-reads.md](../../concepts/growing-reads.md) lists both. A reader of item-health, scores or host-fingerprint names its days and calls `load_days`; one that calls `load_ledger_rows` is asking about the whole history, and growing-reads.md lists it too.
 

@@ -493,6 +493,28 @@ def test_a_compaction_carries_no_second_window_no_ceiling_and_no_month_a_re_run_
     assert "config/gardener/compact-gardener.json is refused" in message and field in message
 
 
+@pytest.mark.parametrize(
+    ("changes", "refusal"),
+    [
+        ({"monthly_keep_days": 77}, "It must be forever"),
+        ({"monthly_window": {"unit": "forever"}, "monthly_keep_days": 76}, "set at least 77"),
+        ({"monthly_window": {"unit": "forever"}, "monthly_keep_days": 77}, None),
+    ],
+    ids=["a-window-that-deletes-a-month-first", "a-wait-that-changes-nothing", "packs"],
+)
+def test_packing_years_keeps_every_month_until_its_year_and_waits_past_the_next_january(
+    tmp_path: Path, changes: dict[str, Any], refusal: str | None
+) -> None:
+    """A window would drop a month its year never gets; a wait below 77 acts as 77 does."""
+    config_dir = a_garden(tmp_path, compact_gardener=a_compaction("gardener", **changes))
+    if refusal is None:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "config/gardener/compact-gardener.json is refused" in message
+        assert refusal in message
+
+
 def published(config_dir: Path, *ledgers: str) -> Path:
     """The same config, with these ledgers in `ledger.published`."""
     app = config_dir / "idhazh.json"
@@ -502,21 +524,47 @@ def published(config_dir: Path, *ledgers: str) -> Path:
     return config_dir
 
 
+#: What a published ledger that packs years keeps its months for, at least: the
+#: console's widest read, 366 days, and the one day a compacted day lags a wake.
+PAST_THE_WIDEST_READ: Final = 367
+
+
 @pytest.mark.parametrize(
     ("changes", "refusal"),
     [
-        ({"monthly_window": {"unit": "forever"}}, "may not keep its month files forever"),
+        (
+            {"monthly_window": {"unit": "forever"}},
+            "keeps its month files forever only when it packs each finished year",
+        ),
         (
             {"daily_keep_days": 31, "monthly_window": {"unit": "days", "value": 40}},
             "would have days no file holds",
         ),
         ({"monthly_window": {"unit": "months", "value": 13}}, None),
+        (
+            {
+                "monthly_window": {"unit": "forever"},
+                "monthly_keep_days": PAST_THE_WIDEST_READ - 1,
+            },
+            f"monthly_keep_days must be at least {PAST_THE_WIDEST_READ}",
+        ),
+        (
+            {"monthly_window": {"unit": "forever"}, "monthly_keep_days": PAST_THE_WIDEST_READ},
+            None,
+        ),
     ],
-    ids=["forever", "short-of-the-widest-window", "long-enough"],
+    ids=[
+        "forever",
+        "short-of-the-widest-window",
+        "long-enough",
+        "packs-years-inside-the-widest-read",
+        "packs-years-past-the-widest-read",
+    ],
 )
-def test_a_published_ledger_reaches_the_widest_window_and_is_never_kept_forever(
+def test_a_published_ledger_reaches_the_widest_window_and_keeps_months_forever_only_packed(
     tmp_path: Path, changes: dict[str, Any], refusal: str | None
 ) -> None:
+    """What a reader fetches first stays bounded, and no console read fetches a year file."""
     compaction = a_compaction("gardener", **changes)
     config_dir = published(a_garden(tmp_path, compact_gardener=compaction), "gardener")
     if refusal is None:

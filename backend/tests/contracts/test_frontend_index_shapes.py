@@ -4,7 +4,7 @@
 by hand and carries the stamp it reads, because the query door runs in a browser
 that cannot import a Pydantic model. This holds that copy in step: each shape's
 field set, each field's TypeScript type and their order, the stamp against
-`CompactIndex.schema_version()`, and the two periods against `Period`. It also
+`CompactIndex.schema_version()`, and the periods against `Period`. It also
 holds two names the door carries beside the copy: every ledger it may query is a
 `LedgerName`, and the cell it filters days on is the ledger's own date cell.
 
@@ -134,7 +134,7 @@ def test_the_stamp_the_door_reads_is_the_one_the_contract_declares() -> None:
     )
 
 
-def test_the_two_periods_are_the_contract_s_own() -> None:
+def test_the_periods_are_the_contract_s_own() -> None:
     """A period is also a directory name, so a misspelt one addresses nothing."""
     assert constant_list(read_text(COPY), "COMPACT_PERIODS", COPY) == [p.value for p in Period]
 

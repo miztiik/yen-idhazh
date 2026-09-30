@@ -1,6 +1,6 @@
 """What one ledger's compact periods hold as a compaction pass finds them, and what it changes.
 
-A pass reads the two watermarks, the two period indexes and the names of the
+A pass reads the three watermarks, the three period indexes and the names of the
 raw day folders once, then decides period by period what to write and what to
 delete. Each decision is a `Change`, kept here in the order it must happen -
 data first, index next, watermark last - and nothing touches the disk until
@@ -23,6 +23,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import assert_never
 
 from idhazh import atomic_write, day_partition, ledger
 from idhazh.contracts.base import Contract
@@ -52,7 +53,7 @@ class Stop:
     """
 
     because: StopReason
-    #: The day or month the next pass takes first.
+    #: The day, month or year the next pass takes first.
     resume_from: str
 
 
@@ -72,12 +73,14 @@ class CompactTree:
 
     state_dir: Path
     ledger: LedgerName
-    #: The newest day and month compacted, or None when that period never has been.
+    #: The newest day, month and year compacted, or None when that period never has been.
     daily_through: str | None
     monthly_through: str | None
+    yearly_through: str | None
     #: Each period's index, by what each entry covers.
     daily: dict[str, CompactEntry]
     monthly: dict[str, CompactEntry]
+    yearly: dict[str, CompactEntry]
     #: Every UTC day with a raw folder that holds something, oldest first.
     raw_days: list[str]
     #: How many raw day folders the pass listed, before any step set a day aside.
@@ -88,7 +91,7 @@ class CompactTree:
 
     @classmethod
     def read(cls, state_dir: Path, ledger_name: LedgerName) -> CompactTree:
-        """The two watermarks, the two indexes and the raw day folder names, read once."""
+        """The three watermarks, the three indexes and the raw day folder names, read once."""
         marks: dict[Period, str | None] = {}
         entries: dict[Period, dict[str, CompactEntry]] = {}
         for period in Period:
@@ -105,8 +108,10 @@ class CompactTree:
             ledger=ledger_name,
             daily_through=marks[Period.DAILY],
             monthly_through=marks[Period.MONTHLY],
+            yearly_through=marks[Period.YEARLY],
             daily=entries[Period.DAILY],
             monthly=entries[Period.MONTHLY],
+            yearly=entries[Period.YEARLY],
             raw_days=raw_days,
             listed=len(raw_days),
         )
@@ -129,9 +134,21 @@ class CompactTree:
         self.looked.add(path)
         self.changes.append(Change(path=path, data=None, size=path.stat().st_size))
 
+    def entries(self, period: Period) -> dict[str, CompactEntry]:
+        """One period's index as the pass holds it now, by what each entry covers."""
+        match period:
+            case Period.DAILY:
+                return self.daily
+            case Period.MONTHLY:
+                return self.monthly
+            case Period.YEARLY:
+                return self.yearly
+            case _:
+                assert_never(period)
+
     def write_index(self, period: Period) -> None:
         """Decide to rewrite one period's index from what the pass holds now."""
-        held = self.daily if period is Period.DAILY else self.monthly
+        held = self.entries(period)
         index = CompactIndex(
             version=CompactIndex.schema_version(),
             ledger=self.ledger,
