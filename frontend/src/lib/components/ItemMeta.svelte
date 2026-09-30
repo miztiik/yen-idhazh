@@ -15,6 +15,7 @@
 	 * The way out sits at the trailing edge, so it lands in the same place on
 	 * every item however long the sentences beside it run.
 	 */
+	import { base } from '$app/paths';
 	import type { DigestCoverage, DigestItem } from '$lib/payload/types';
 	import ConfidenceChip from './ConfidenceChip.svelte';
 	import ReadAloud from './ReadAloud.svelte';
@@ -22,10 +23,12 @@
 
 	let {
 		item,
+		onDate,
 		stack = [],
 		onRead
 	}: {
 		item: DigestItem;
+		onDate: string;
 		/** The other newsrooms that ran this story, as links this page can reach.
 		 * Empty where a card stands alone, and then the count below prints instead. */
 		stack?: DigestCoverage[];
@@ -127,7 +130,7 @@
 		<span class="stack" data-item-stack={stack.length}>
 			<span class="stack-label">Also covered by</span>
 			{#each stack as other (other.item_id)}
-				<a class="pill" href="#{other.item_id}" data-coverage-pill={other.item_id}>
+				<a class="pill" href="{base}/{onDate}/#{other.item_id}" data-coverage-pill={other.item_id}>
 					{other.source_name}
 				</a>
 			{/each}

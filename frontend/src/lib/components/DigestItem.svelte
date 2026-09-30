@@ -221,7 +221,7 @@
 	</div>
 
 	<div class="item-rail">
-		<ItemMeta {item} {stack} {onRead} />
+		<ItemMeta {item} {onDate} {stack} {onRead} />
 	</div>
 </article>
 
