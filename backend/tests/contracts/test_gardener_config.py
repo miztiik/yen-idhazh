@@ -85,10 +85,9 @@ FOLD_ALREADY_RAN_LIVE: Final = (
 
 #: Why two of the ledgers the console reads are packed at every wake.
 PACKED_FOR_THE_CONSOLE: Final = (
-    "the person, 2026-09-30: the console reads this ledger from its packed files "
-    "only, so a finished day is packed at the next wake and a month 31 days after "
-    "it ends; scores stays report-only until a month's summary is built from its "
-    "packed rows"
+    "packed live by owner decision: the console reads this ledger from its packed "
+    "files only, so a finished day is packed within about two days and a month 31 "
+    "days after it ends"
 )
 
 #: The two packing tasks a person turned live.

@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 Which instruments run at all, and how long what they write is kept. The switches
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
@@ -324,7 +324,8 @@ beside it. `state/seen/` is not on that list at all because it is a lookup rathe
 than a measurement: an out-of-window day file is deleted by the `seen` task,
 whose window may not sit below `collect.seen_window_days`.
 
-**And every task ships in dry run.** Each declaration carries `dry_run: true`,
+**And every retention task ships in dry run.** Each retention declaration carries
+`dry_run: true`,
 so a pass lists every file a live pass would remove and removes none of them.
 The `history` job of `.github/workflows/idhazh-gardener.yml` squashes and force-pushes
 `main` on a schedule, so a state file deleted here stops being recoverable from
@@ -344,7 +345,8 @@ range; at day grain the file the window stops naming is the file that goes.
 Reading committed files against a fixed calendar is deterministic, so the spread
 is zero. The item-health and scores rows have since moved to the ledger door, so
 they no longer go on that date: they go when each compaction's `monthly_window`
-passes, once a person turns that compaction on.
+passes. The item-health compaction packs live; the scores one waits for a person
+to turn it on.
 
 ## See also
 

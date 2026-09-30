@@ -387,9 +387,9 @@ by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
 ledger is one declaration and no Python. Six ship - for `gardener`,
 `visual-prunes`, `feed-retirements`, `item-health`, `scores` and
 `host-fingerprint`. **`item-health` and `host-fingerprint` pack live**, and each
-packs a month 31 days after it ends (the person, 2026-09-30): the console reads
-their packed files and nothing newer, so a finished day reaches it within about
-48 hours. The other four only report. **`scores` stays report-only until the
+packs a month 31 days after it ends: the console reads their packed files and
+nothing newer, so a finished day reaches it within about 48 hours. The other
+four only report. **`scores` stays report-only until the
 score archive is built from the door's rows** ([below](#design-rationale)), so the
 console shows its days up to the day its migration ran
 ([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
@@ -570,8 +570,8 @@ also writes `index/monthly.json` when the ledger has none, with no entries, and
 no pass deletes either. An empty `monthly.json` truthfully says no month is
 packed yet; a missing one says nothing, so a reader could not tell a lost list
 from a month never packed, and would have to ask the site for a file that is not
-there. The three console ledgers' month indexes were written this way on
-2026-09-30, by the packing's own code.
+there. A ledger that holds `daily.json` alone and never packed a month gains an
+empty `monthly.json` at its next pass that writes a day.
 
 **An index its watermark says was packed, and that is not there, stops the
 pass by name.** A pass that read it as empty would rewrite it naming only what
@@ -727,16 +727,14 @@ sooner could still be reached by one. The 30 is declared once, as
 floor is derived from it. A raw file that lands in an absorbed month anyway is
 refused and kept for a person (Carmack and Fowler).
 
-**2026-09-30: the two ledgers packed live wait 31 days, not the default 45.**
-Nothing written explained the other 14 days of 45, and 31 is the shortest wait
-that still catches every re-run GitHub allows. A shorter wait, such as 15 days,
-would need a month file rebuilt when a late re-run lands, which the packing
-refuses. The two declarations set 31 and the default stays 45 for the four that
-only report (Carmack; the person chose 31).
+**The two ledgers packed live wait 31 days, not the default 45.** 31 is the
+shortest wait that still catches every re-run GitHub allows, and nothing needs
+the 14 days more that 45 waits. A shorter wait, such as 15 days, would need a
+month file rebuilt when a late re-run lands, which the packing refuses. The two
+declarations set 31, and the default stays 45 for the four that only report.
 
-**2026-09-30: a missing file has a name, and a ledger's two indexes always
-exist.** The person asked for missing files to be handled the way large data
-platforms handle them. Four of them agree on the shape, and this design copies it:
+**A missing file has a name, and a ledger's two indexes always exist.** Large
+table formats handle a missing file the same way, and this design copies them:
 
 | # | Platform | What it does |
 | --- | --- | --- |
@@ -745,13 +743,13 @@ platforms handle them. Four of them agree on the shape, and this design copies i
 | 3 | Apache Spark | A file a table names that is gone is `FAILED_READ_FILE.FILE_NOT_EXIST`, and the message names the fix, `REFRESH TABLE` ([error conditions](https://spark.apache.org/docs/latest/sql-error-conditions.html)). Skipping such files instead, `ignoreMissingFiles`, is an option a reader has to switch on ([file source options](https://spark.apache.org/docs/latest/sql-data-sources-generic-options.html)) |
 | 4 | Apache Hudi | The table keeps its own file listings, so a reader or writer need not ask storage whether a file exists ([metadata](https://hudi.apache.org/docs/metadata)) |
 
-Three choices follow from them. **An empty index is right, and an empty data
-file never is**: an empty `monthly.json` truthfully says no month is packed, while
-an empty day file standing in for a lost one would draw a lost day as a quiet one.
-**There is no list of allowed 404s**: it would be Spark's `ignoreMissingFiles`
-under another name, and a lost index would then look exactly like one never
-written. **`daily.json` carries no field naming the other indexes**: that would
-be a change to a stored shape to say what an empty file already says (Fowler).
+Three rules follow. **An empty index is right, and an empty data file never
+is**: an empty `monthly.json` truthfully says no month is packed, while an empty
+day file standing in for a lost one would draw a lost day as a quiet one. **No
+list of allowed 404s**: it would be Spark's `ignoreMissingFiles` under another
+name, and a lost index would then look exactly like one never written. **No
+field in `daily.json` names the other indexes**: it would change a stored shape
+to say what an empty file already says.
 
 **2026-09-28: a first pass starts on the first of a month.** Starting at the
 oldest raw day would leave the daily index holding part of a month, and that

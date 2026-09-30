@@ -16,7 +16,8 @@
  * it drops every file it handed the engine. A build reads many ledgers and days
  * in one process, and a development server reads `state/` again as it changes,
  * so a keeper that outlived the call would hold every file for the life of the
- * process and answer from indexes the disk no longer holds.
+ * process and answer from indexes the disk no longer holds. So a missing file's
+ * fault, named as a browser panel's answer names it, is printed once a call.
  */
 
 import { readFile } from 'node:fs/promises';

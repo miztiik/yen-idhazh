@@ -873,9 +873,10 @@ test.describe('THE ORACLE for a missing file: a name, the state it draws, and on
 				one.without.map((relative): [string, Rule] => [relative, { status: 404 }])
 			);
 			const page = freshPage(recorded(rules).fetcher);
+			const [from, to] = one.span;
 			const browser = await warnings(async () => [
-				await readSlice(page, LEDGER, ask(...one.span)),
-				await readSlice(page, LEDGER, ask(...one.span)),
+				await readSlice(page, LEDGER, ask(from, to)),
+				await readSlice(page, LEDGER, ask(from, to)),
 				await readReach(page, LEDGER)
 			]);
 			expect(browser.result).toEqual([one.answer, one.answer, one.reach]);
@@ -884,7 +885,7 @@ test.describe('THE ORACLE for a missing file: a name, the state it draws, and on
 
 			const root = fixtureTreeWithout(...one.without);
 			try {
-				const disk = await warnings(() => sliceFromDisk(root, LEDGER, ask(...one.span)));
+				const disk = await warnings(() => sliceFromDisk(root, LEDGER, ask(from, to)));
 				expect(disk.result).toEqual(one.answer);
 				expect(disk.warned).toEqual(browser.warned);
 				const { result: reach } = await warnings(() => reachFromDisk(root, LEDGER));

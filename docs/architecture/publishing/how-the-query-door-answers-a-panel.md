@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -41,13 +41,14 @@ of four nothings without inspecting an error:
 | --- | --- | --- |
 | 1 | `ok`, with the rows | At least one row matched. The rows are what the files hold, sorted by the requested columns left to right; the door never merges two rows, because the compaction already wrote one row per record |
 | 2 | `quiet` | Every day asked for is covered and nothing matched, or the whole span lies after the newest day compacted. A filter that matches nothing is `quiet`, never an empty `ok` |
-| 3 | `missing` | The ledger has no `daily.json`, so it is not published |
-| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why: a day named by neither index, a named file that did not arrive whole, an index this build will not act on, or an engine that could not run the query |
+| 3 | `missing` | The ledger has no `daily.json`, so it is not published. Its fault is `not-packed` |
+| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why. A file the ledger should hold and does not is named as one of four faults ([below](#when-a-file-is-missing)); the other causes are a span that starts before the oldest day either index names, a named file that arrived at the wrong length or could not be fetched, an index this build will not act on, and an engine that could not run the query |
 
 `ok` and `quiet` carry `through`, the newest day `daily.json` names - `null`
 before the first compaction - so a panel can say how far its data reaches. A day
 after `through` has not been compacted yet, so it is clamped away rather than
-drawn as a zero.
+drawn as a zero. `missing` and `unreachable` carry `fault`, the name of the
+missing file behind them, or `null` for an `unreachable` with another cause.
 
 ## Which files a span reads
 
@@ -62,13 +63,17 @@ gardener's compaction task and declared as `CompactIndex` in
    `monthly.json` names that month, otherwise the day file. A day is read through
    exactly one file, so a day both indexes name is read from the month - reading
    it twice would double every number drawn from it.
-3. **A day neither index names, at or before `through`, is a hole**, and the answer
-   is `unreachable` at the first one. Drawing the days around it would be an
-   undercount nobody could see.
+3. **A day neither index names, between the oldest day either index names and
+   `through`, is a hole**, and the answer is `unreachable` at the first one,
+   named `day-missing`. Drawing the days around it would be an undercount nobody
+   could see. A span that starts before the oldest named day is `unreachable` at
+   its first day with no fault: those days were never packed, and a route clamps
+   its span to the reach's `first` (below).
 4. **An entry with `rows: 0` is never fetched.** A span of quiet days loads no
    engine at all.
 5. **A file whose decoded length differs from its entry's `bytes` is refused**, and
-   so is one that does not arrive. The decoded length, never `Content-Length`,
+   so is one that does not arrive; one the site answers is not there is
+   `file-missing`. The decoded length, never `Content-Length`,
    because Pages compresses what it serves.
 
 An index is asked for with `cache: 'no-store'`, so a page's one read of it gets
@@ -94,6 +99,9 @@ the engine twice. The keeper is `frontend/src/lib/data/page-keeper.ts`.
   is kept as absent.
 - **The engine starts only when every file a slice needs has arrived whole**, so
   a slice that cannot be answered never loads it.
+- **Each console line is printed once for the page's life.** Every panel that
+  meets one missing file prints the same line, so fifteen panels on a page
+  print it once.
 
 `ledger.ts` makes one keeper when a panel first asks and keeps it until the page
 is reloaded. `sliceFromDisk()` makes a fresh one for each call, so it reads the
@@ -105,7 +113,7 @@ reads `state/` again as it changes.
 compacted after the page opened appears only after a reload. A day file the
 deploy re-packed or removed, and that the page had not read yet, answers
 `unreachable`, and the console says why - it arrived at a length its kept entry
-does not give, or it is not there. A reload fixes both.
+does not give, or it is not there, which is `file-missing`. A reload fixes both.
 
 **Why the index is kept rather than read again.** A console route anchors its
 span on a first and a newest day fixed for the page, and a panel that read a
@@ -121,9 +129,9 @@ route can anchor its span on the data rather than on the clock:
 
 | # | Answer | When |
 | --- | --- | --- |
-| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day either index names, a month counting from its first day |
+| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day either index names, a month counting from its first day. Its `fault` is `index-missing` when there is no `monthly.json`, and `first` is then the oldest day `daily.json` names |
 | 2 | `quiet` | `daily.json` names no day yet |
-| 3 | `missing` | There is no `daily.json`, so the ledger is not published |
+| 3 | `missing` | There is no `daily.json`, so the ledger is not published. Its fault is `not-packed` |
 | 4 | `unreachable` | `daily.json` is one this build will not act on, or could not be read. It carries no day, because the reach asks for none; the console says why |
 
 It reads both indexes at the same time through the page's keeper, so a slice
@@ -131,6 +139,43 @@ asked after it reads neither again, and it starts no engine. A `monthly.json` th
 build will not act on leaves the days `daily.json` names, and the console says
 why. The logic is `frontend/src/lib/data/ledger-reach.ts`, which reads each index
 with the slice's own reader, so the two never disagree about what an index says.
+
+## When a file is missing
+
+A packed ledger lists its own files in its two indexes, so a file it should hold
+and does not is a named fault, never an empty answer. The rule, the four names
+and what the gardener does about each are on the compaction's page
+([idhazh-gardener.md](idhazh-gardener.md#both-indexes-and-a-file-that-is-missing)).
+`LEDGER_FAULTS` in `frontend/src/lib/data/slice-shapes.ts` declares the names,
+and this is what each one draws:
+
+| # | Fault | What is missing | A slice answers | A reach answers |
+| --- | --- | --- | --- | --- |
+| 1 | `not-packed` | `daily.json` | `missing`, and the route's note says the record is not packed yet | `missing` |
+| 2 | `index-missing` | `monthly.json`, while `daily.json` is there | A span inside the days `daily.json` names draws; one that starts earlier is `unreachable` at its first day | `ok` from the oldest day `daily.json` names |
+| 3 | `file-missing` | A file an index names | `unreachable` from the first day that file covers in the span | Unchanged: a reach reads no data file |
+| 4 | `day-missing` | A day between the oldest and the newest packed day that neither index names | `unreachable` at that day | Unchanged |
+
+**Each fault prints one console line**, in one shape - the fault, the ledger,
+the committed path, what is wrong and what fixes it:
+
+```text
+[ledger] file-missing scores state/compact/scores/daily/2026/09/12.parquet: daily.json names it; it is not there. Reload; if it stays, re-pack that day.
+```
+
+The line names no span, so every panel that meets one fault prints the same
+line, and the page keeper prints it once for the page's life; a build-time call
+prints it once a call. The line is `faultLine()` in
+`frontend/src/lib/data/slice-reader.ts`. A route's note for a record uses the
+same names: a record whose packed file or packed day is missing says which,
+because each has its own fix (`recordNotes` in
+`frontend/src/lib/console/recording.ts`).
+
+**Three gaps are expected, and none of them is a fault or a request**: a day
+after the newest packed day is clamped away, an entry with `rows: 0` is never
+fetched, and an empty `monthly.json` names no month. None of them makes the door
+ask the site for a file that is not there, and `frontend/tests/ledger-door.spec.ts`
+counts what a byte source is asked to prove it.
 
 ## Where each file is asked for
 
