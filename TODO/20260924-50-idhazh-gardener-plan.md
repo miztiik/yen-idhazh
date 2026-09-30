@@ -1,16 +1,16 @@
 # Plan 50 - Idhazh Gardener: one utility tends every ledger
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 **Level**: 5 (CLAUDE.md section 6). It changes a persisted contract, the project's persistence format, and the one workflow that force-pushes `main`. The owner's rulings recorded in section 0 and in each row ARE the design consultation; the ESCALATE triggers name what still stops a worker.
 
-**Chain** (CLAUDE.md section 0d). **Intent**: [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md) is the north star this plan serves; section 0's intent map says which of its eleven statements this plan delivers and which it only clears the way for. Locally: one utility tends every ledger; its config decides what happens and when; it runs the decision tree every day; nothing depends on anything else. **Contract**: section 5 below declares every persisted shape, path, key and exit code in full. **Code**: the twelve rows.
+**Chain** (CLAUDE.md section 0d). **Intent**: [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md) is the north star this plan serves; section 0's intent map says which of its eleven statements this plan delivers and which it only clears the way for. Locally: one utility tends every ledger; its config decides what happens and when; it runs the decision tree every day; nothing depends on anything else. **Contract**: section 5 below declares every persisted shape, path, key and exit code in full. **Code**: the rows in section 1.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; **keep a running pool of parallel N = 2, refilling a slot the moment a worker returns its report and never waiting on a merge** - section 1 names the pairs that run two-wide; consult a persona only where two answers would lead to different code; AUTO-merge on green gates where no ESCALATE trigger fired; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row, about 06:40 UTC, when the person ruled on row 9's two open questions, and about 07:30 UTC, when the fourth owner had merged row 8 and dispatched rows 12 and 9 side by side (deviation 137), and about 08:40 UTC, when row 12 had merged and row 9 was dispatched again from main (deviation 146), and about 21:45 UTC, when row 9's pull request was green and waiting for a quiet hour, and the person's answers to row 8's open questions added row 13 (deviations 161 to 165), and 2026-09-30, about 07:00 UTC, when row 9 had merged, row 13's pull request was open, and the fifth owner handed the plan over at the person's request.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row, about 06:40 UTC, when the person ruled on row 9's two open questions, and about 07:30 UTC, when the fourth owner had merged row 8 and dispatched rows 12 and 9 side by side (deviation 137), and about 08:40 UTC, when row 12 had merged and row 9 was dispatched again from main (deviation 146), and about 21:45 UTC, when row 9's pull request was green and waiting for a quiet hour, and the person's answers to row 8's open questions added row 13 (deviations 161 to 165), and 2026-09-30, about 07:00 UTC, when row 9 had merged, row 13's pull request was open, and the fifth owner handed the plan over at the person's request, and about 09:40 UTC, when the sixth owner recorded the person's answers to STEP 3 as rows 14 and 15 (deviations 168 to 170).
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -23,52 +23,40 @@ STEP 0 - COLD START. Read CLAUDE.md, docs/how-to/execute-a-plan.md, docs/how-to/
 and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (the Status
 Reckoner, the only tracker) and each row just before you dispatch it.
 
-STEP 1 - WHERE IT STANDS (2026-09-30, about 07:00 UTC). Run git worktree list, gh pr list
-and git branch -r to check it. Rows 1 to 9, 11 and 12 have merged (#1127, #1131, #1142,
-#1139, #1145, #1141, #1151, #1156, #1166, #1136, #1161) and row 10 is collapsed. Row 13 is
-the one row left (STEP 2). Three findings wait on the person (STEP 3). The first
-scheduled idhazh-gardener.yml run, 36675626269 at 05:55 UTC 2026-09-30, passed every
-job: each shard pushed its tasks' records, the closed-day fold ran live, and the squash
-was not due. Section 0's three plan-54 reads ran before row 5 and all three came back
-empty.
+STEP 1 - WHERE IT STANDS (2026-09-30, about 11:00 UTC). Run git worktree list, gh pr list
+and git branch -r to check it. Rows 1 to 9 and 11 to 13 have merged (#1127, #1131, #1142,
+#1139, #1145, #1141, #1151, #1156, #1166, #1136, #1161, #1167) and row 10 is collapsed.
+Rows 14 and 15, the person's answers to the questions below, are in flight (STEP 3).
+The first scheduled idhazh-gardener.yml run, 36675626269 at 05:55 UTC 2026-09-30,
+passed every job: each shard pushed its tasks' records, the closed-day fold ran live,
+and the squash was not due. Section 0's three plan-54 reads ran before row 5 and all
+three came back empty.
 
-STEP 2 - FINISH ROW 13. Pull request #1167, branch
-p50r13-the-squash-push-takes-a-lease-and-retries, worktree p50r13. Its worker wrote the
-change, broke seven of its lines one at a time and saw a test go red for each
-(%TEMP%\p50r13\report.md), then ended without a commit (deviation 166). The owner
-committed the work as 2d0e42e47, merged main at d58e711ab with no conflict, ran the
-row's gates (ruff, mypy on the two changed modules, and 110 tests in four modules, all
-passing), pushed, opened the pull request, and stamped row 13's Reckoner line DONE with
-#1167 in the branch.
-  1. Wait for CI green. If main moved meanwhile, merge origin/main into the branch, keep
-     the branch's DONE line for row 13 if this file conflicts, push, and wait again.
-  2. Merge only while no digest.yml or idhazh-gardener.yml run is queued or running
-     (deviations 52 and 54), because it edits the workflow that force-pushes main.
-  3. Remove worktree p50r13 and its local branch (STEP 5).
-  Row 13 decision 4 is settled as 3 pushes, 60 seconds apart. The worker timed one
-  replay of 1,001 commits at 824 s on the Windows development machine; ubuntu-latest is
-  not measured. A pass still running at the job's 30-minute limit is killed before it
-  pushes, so nothing is lost and the squash is due again the next day (WATCH).
+STEP 2 - ROW 13 MERGED as #1167 on 2026-09-30, in the quiet hour after news run
+36691004577, and its worktree and branch are removed. Its worker wrote the change and
+broke seven of its lines one at a time, each turning a test red
+(%TEMP%\p50r13\report.md), then ended without a commit (deviation 166); the fifth owner
+committed, tested and opened it. Row 13 decision 4 is settled as 3 pushes, 60 seconds
+apart. The worker timed one replay of 1,001 commits at 824 s on the Windows development
+machine; ubuntu-latest is not measured. A pass still running at the job's 30-minute
+limit is killed before it pushes, so nothing is lost and the squash is due again the
+next day (WATCH).
 
-STEP 3 - ASK THE PERSON, in one message in CLAUDE.md section 0c form. Each answer becomes
-a row in this plan, or a row in a named receiving plan, before this plan closes
-(execute-a-plan.md, closing section).
-  a. Deviation 163, the growing upkeep checkout. Each run-tasks job downloads the content
-     of every file in the folders its tasks own, and most of it is never read. Options:
-     a new row whose checkout fetches file names plus only the files a task reads (about
-     500 to 1,000 lines with tests, an estimate; it also takes deviation 164), or approve
-     the growing read as it is. The owner recommended the new row. The person asked the
-     question and has not chosen.
-  b. Deviation 157, the scores month archive. The scores task no longer builds one, so
-     one read grows by a file a day and compact-scores stays report-only. Should a new row
-     build the archive from the door's rows? Two docs lines wait on the same answer:
-     docs/architecture/publishing/idhazh-gardener.md's design-rationale entry "The scores
-     compaction stays report-only until the score archive is built from the door's rows",
-     and docs/concepts/growing-reads.md's unapproved read of
-     evals.writer.indexed_observations (Guardrail #12).
-  c. Deviation 164, only if the person declines (a): telemetry-aggregate reads a folder
-     its shard may not check out. It needs a row of its own; its first month is due
-     about late 2027.
+STEP 3 - ROWS 14 AND 15 ARE IN FLIGHT. The person answered the three questions this step
+asked, on 2026-09-30 (deviations 168 and 169):
+  a. The growing upkeep checkout (deviation 163): a new row, row 14, whose checkout
+     fetches file names only, plus the files a task reads. It also takes deviation 164,
+     so the third question, which applied only if the person declined this one, needs
+     no answer.
+  b. The scores month archive (deviation 157): a new row in this plan, row 15, builds
+     the archive from the door's rows.
+Both were dispatched after row 13 merged: row 14 to p50-r14-worker in worktree p50r14,
+row 15 to p50-r15-worker in worktree p50r15, with running reports at
+%TEMP%\p50r14\report.md and %TEMP%\p50r15\report.md. They run two-wide although they
+share files (deviation 170). The second of the two to merge takes main in and resolves
+the shared files in its own branch, and the owner reads that resolution before merging
+it. Fowler and Carmack ruled both rows' design questions on 2026-09-30, and their
+rulings are the rows' decisions.
 
 STEP 4 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -87,15 +75,15 @@ workflow a scheduled run is using, or a file a scheduled job also writes, reads 
 next to each other, so the second of two open pull requests conflicts on this file. Merge
 origin/main into its branch, keep both lines and push. Never rebase and force-push.
 
-STEP 6 - CLOSE. When every row is DONE or COLLAPSED and each question in STEP 3 has an
-answer and a receiving row, follow the closing section of execute-a-plan.md. Read every
-worker report again and trace each defect it names to a fix or a row: the reports are
-%TEMP%\p50r1 to p50r13, p50r9w4, p50r9w5, p50r9w8, p50r9fe, p50r9docs and p50r9fin, each
-with a report.md, on the machine that ran them. Then sweep: worktree p50own (branch
-p50-owner-records-row-7-rulings, nothing unpushed), worktree p50r13 once row 13 merged,
-and the folder yen-idhazh.worktrees\p50r9fe, which git no longer tracks and which an
-esbuild.exe started by VS Code's Svelte language server held open; delete it once that
-server has stopped.
+STEP 6 - CLOSE. When every row is DONE or COLLAPSED, follow the closing section of
+execute-a-plan.md. Read every worker report again and trace each defect it names to a
+fix or a row: the reports are %TEMP%\p50r1 to p50r15, p50r9w4, p50r9w5, p50r9w8,
+p50r9fe, p50r9docs and p50r9fin, each with a report.md, on the machine that ran them.
+Then sweep: worktree p50own (branch p50-owner-records-row-7-rulings, nothing unpushed),
+the worktrees of rows 13 to 15 once each has merged, and the folder
+yen-idhazh.worktrees\p50r9fe, which git no longer tracks. On 2026-09-30 all of it was
+deleted but one file, which VS Code's Svelte language server still had loaded; delete
+the folder once that server has restarted.
 
 WATCH, whoever owns the plan on the day:
   any day            do not re-run the failed jobs of digest run 36639197643. A re-run
@@ -290,6 +278,9 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 165 | 13 | Section 1: `Depends-on` and the `Files touched` lists are the readiness test | Row 13 shares two files with row 9, the gardener workflow and its page, and starts before row 9 merges. Row 9 is green and waits only for a quiet hour, and the two rows edit different jobs of the workflow and different sections of the page. Row 13 merges after row 9 and takes `main` in first; a conflict there is resolved in row 13's branch | Plan owner, 2026-09-29 |
 | 166 | 13 | A worker commits, pushes and opens its row's pull request (STEP 4) | Row 13's worker ended at about 23:05 UTC 2026-09-29 with its change written and its seven bites run, but nothing committed. It was timing one replay of the whole history, for decision 4. The owner committed the work unchanged as 2d0e42e47, merged `main`, ran the row's gates and opened the pull request. Decision 4 keeps the worker's values, 3 pushes 60 seconds apart; the runner's replay time is read at the first real squash (WATCH) | Plan owner, 2026-09-30 |
 | 167 | 9 | (not in the plan) | `main`'s CI on row 9's merge commit failed once: in the browser job, `build_canary_day.py --scored-keys` printed its whole answer and then aborted with "terminate called without an active exception". The same tree had passed on the pull request, and a re-run of the failed job passed. The likely cause is a native thread still running when Python exits, now that this reader opens parquet (an estimate). Not reproduced, so no row yet; a second abort opens one | Row 9's merge worker; plan owner, 2026-09-30 |
+| 168 | 14 | STEP 3's first question, and row 8's third open question (deviation 163): a person approves the growing `run-tasks` checkout or names its bound | A new row, row 14: the checkout fetches file names only, plus the files a task reads. It also takes deviation 164, because a task that lists names from the commit sees every folder whichever shard it lands in. So STEP 3's third question, asked only for a declined first answer, needs none | The person, 2026-09-30 |
+| 169 | 15 | STEP 3's second question (deviation 157): does a row build the scores month archive from the door's rows | A new row in this plan, row 15, chosen over a row in plan 52 and over approving the growing read as it is. Row 9 opened the gap, so this plan closes it | The person, 2026-09-30 |
+| 170 | 14, 15 | Section 1: a row is ready only when it shares no `Files touched` entry with a row in flight | Rows 14 and 15 share `backend/idhazh/gardener/tasks/scores.py`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/concepts/growing-reads.md` and `docs/concepts/config/idhazh-gardener.md`, and run two-wide anyway, as rows 9 and 13 did (deviation 165). Row 15 reads rows that a task in another shard may own, so until row 14 lands, its task fails rather than build a summary from rows it cannot see (row 15 decision 3). The second of the two to merge takes `main` in and resolves the shared files in its own branch | Plan owner, 2026-09-30 |
 
 ## 0. Operating contract
 
@@ -357,8 +348,12 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 11 | The index and watermark shapes are declared | 2 | C | DONE | p50r11 | #1136 | p50-r11-worker |
 | 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | DONE | p50r12 | #1161 | p50-r12-worker-2 |
 | 13 | The squash runs unless the run was cancelled, and its push takes a lease and retries | 8 | J | DONE | p50r13 | #1167 | p50-r13-worker |
+| 14 | The upkeep checkout fetches file names only, plus the files a task reads | 13 | K | IN-FLIGHT | p50r14 | - | p50-r14-worker |
+| 15 | The score archive is built from the door's rows | - | K | IN-FLIGHT | p50r15 | - | p50-r15-worker |
 
 **Row 13 came from the person's answers to row 8's open questions, 2026-09-29** (deviations 161 and 162). It shares `.github/workflows/idhazh-gardener.yml` and `docs/architecture/publishing/idhazh-gardener.md` with row 9, so it merges after row 9 and takes `main` in first (deviation 165).
+
+**Rows 14 and 15 came from the person's answers to STEP 3, 2026-09-30** (deviations 168 and 169). They run two-wide although they share four files; the second to merge resolves them in its own branch (deviation 170).
 
 **Row 5 now depends on row 3 as well as row 4.** Its `visual-prune` task calls the parquet writer row 3 creates; dispatched after row 4 alone it would write CSV through a door that does not exist.
 
@@ -2302,13 +2297,84 @@ def squash_history(repo: Path, *, keep_days: int, now: datetime, message: str) -
 
 ---
 
+### Row #14 - The upkeep checkout fetches file names only, plus the files a task reads
+
+- **Scope:** the person's answer to STEP 3's first question, 2026-09-30 (deviation 168), which also takes deviation 164. Today each `run-tasks` shard is a partial clone (`filter: blob:none`, `fetch-depth: 1`) whose sparse checkout names `config`, `backend`, `.github` and every folder its tasks own (`${{ matrix.cone }}` in `.github/workflows/idhazh-gardener.yml`). Checking a folder out downloads the content of every file in it before any task runs, and most of it is never read: 33 MB of the heaviest shard's 48 MB is `frontend/public/digest` (deviation 163). After this row:
+  1. The shard's checkout holds only the code and config it runs. The names of every folder's files come from the commit the shard checked out (`git ls-tree`), never from the disk.
+  2. A task lists its members from those names. A retention task that decides from the date in a path downloads nothing, and deleting a file needs only its name: the deletion is staged from the name.
+  3. A task that reads a file's content gets exactly the folders that step reads - for example the one day a compaction packs, or the months `telemetry-aggregate` summarises. Before the step opens them, the shard widens its checkout by those whole day or month folders in one `git sparse-checkout add --stdin` call, so each step costs one fetch and every reader still opens a path (decision 2).
+  4. Deviation 164 closes: `telemetry-aggregate` lists `state/raw/item-health/` from the commit, so it finds its due months whichever shard it lands in, and reads the rows it summarises through item 3.
+  5. The shard's weight measures what it downloads. A partial clone knows no size for a file it never downloaded, so today's `cone_bytes()` would silently read almost nothing: `git ls-tree -l` prints `BAD` for such a file and the sum skips it. `cone_bytes` keeps its meaning, the weight of the owned folders at the commit, with sizes read from GitHub's trees API and matched to git's names by blob id; a name left without a size is refused. A new `downloaded_bytes` on the record says what the shard paid, and the size alarm moves to it under a renamed knob (decision 4). Both are changes to the record contract (section 5.1), with a version stamp and a changelog entry (CLAUDE.md section 11). The readings that `stat()` a file which will no longer be on disk - bytes freed by retention, the compaction's delete size, `visual-prune`'s tree weight - take their sizes from the same source. The `run-tasks` entry in `docs/concepts/growing-reads.md` is rewritten to say what still grows - the number of names in the listing - and what no longer does.
+  6. A task names in its declaration each folder it reads but does not own (`reads`, next to `owns`). Its shard lists those names too, and a folder the commit holds but the checkout lacks fails the task instead of reading as empty. `telemetry-aggregate` declares `state/raw/item-health`, and once row 15 has landed the `scores` task declares the two scores folders.
+- **Files touched (expected; the dispatch check confirms them):**
+  - `.github/workflows/idhazh-gardener.yml` (the `run-tasks` checkout), `backend/utilities/gardener_publish.py` (`Checkout.committed_folders`, `Checkout.add_to_the_checkout`, `Checkout.cone_bytes`, `run_and_land`, and how a deletion is staged)
+  - `backend/idhazh/gardener/context.py` (`TaskContext`), `backend/idhazh/gardener/runner.py` (`folders_of`, `over_the_ceiling`), `backend/idhazh/gardener/retention_files.py` (`owned_tree`, `whole_months_before`), and every task module under `backend/idhazh/gardener/tasks/` that walks the disk; the dispatch check lists them
+  - `backend/idhazh/ledger/ledger_files.py` (`held_months`, `load_days`), where a task reaches the disk through it
+  - `backend/idhazh/contracts/collection_prune.py` (`cone_bytes`, and the new `downloaded_bytes`), `backend/idhazh/contracts/knobs/gardener.py` (`max_cone_mb` and its renamed successor, and `reads`), `config/idhazh_gardener.json`, and the declarations under `config/gardener/` that gain `reads`
+  - `backend/tests/gardener/test_sparse_shard.py`, `backend/tests/gardener/test_cone_ceiling.py`, `backend/tests/workflows/test_gardener_workflow.py`, `backend/tests/workflows/_harness.py`, `backend/tests/gardener/tasks/_task.py`, `backend/tests/contracts/test_gardener_config.py`, and the task tests the change reaches
+  - `docs/concepts/growing-reads.md`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/concepts/config/idhazh-gardener.md`, `docs/reference/github-actions.md`
+  - `TODO/20260924-50-idhazh-gardener-plan.md` (this row's Reckoner line)
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, and `pytest backend/tests/gardener backend/tests/workflows backend/tests/contracts`. CI runs the full suite.
+- **Oracle:** against a real bare repository on disk, reached by a `file://` address with `uploadpack.allowFilter` set, and no network (CLAUDE.md section 13):
+  1. Over one fixture tree, a shard whose checkout holds only code and config writes the same record rows, apart from the shard's weight, and stages the same additions and deletions as today's full-folder checkout, for every task kind.
+  2. A shard whose tasks decide only from names downloads no file content outside its code and config. Count the downloads, for example from the lazy fetches `GIT_TRACE` logs.
+  3. `telemetry-aggregate`, planned into a different shard from `compact-item-health`, finds its due month in `state/raw/item-health/` and reads that month's rows. With `reads` removed from its declaration, the same fixture fails the task rather than reporting success.
+  4. A shard deletes a file it never downloaded, and the push lands the deletion.
+- **Merge window:** it edits the gardener workflow, so it merges only while no `digest.yml` or `idhazh-gardener.yml` run is queued or running (deviations 52 and 54), and after row 13 (deviation 170).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **The names come from the commit, never from the disk.** A deletion is staged against the commit, so the commit is what a task decides from. One listing per shard, of the folders its tasks own or read, reaches the tasks through `TaskContext`; the code lives in `backend/idhazh/gardener/`, and a second builder makes the same listing from a folder on disk so tests keep plain fixture files. The ledger door is not changed: the pipeline shares it, and a task calls it only on folders the checkout holds whole | The person's answer, 2026-09-30; the shape is Fowler's and Carmack's, 2026-09-30 |
+  | 2 | **Content arrives by whole day or month folder, one `git sparse-checkout add --stdin` per task step, before the step opens anything.** Rejected: reading blobs through `git cat-file`, which fetches once per file unless batched and hands bytes to readers that all open paths. Measured on the development machine: a month of the scores ledger is 31 files and 3.5 MB | Fowler and Carmack, 2026-09-30 |
+  | 3 | **A task never takes an absent file for an absent member.** A file the commit holds and the checkout lacks is fetched before it is read, or the task fails; it is never skipped, so deviation 164's defect cannot come back in another form | Plan owner, 2026-09-30 |
+  | 4 | **`cone_bytes` keeps its meaning, with sizes from GitHub's trees API; `downloaded_bytes` is new, and the alarm moves to it under a renamed knob.** Carmack would have replaced `cone_bytes` with a count of names and the bytes downloaded; a persisted contract's shape is Fowler's call (CLAUDE.md section 14), and keeping the field keeps every earlier record readable | Fowler, 2026-09-30, with Carmack's readings |
+  | 5 | **Every git call before the push runs with `GIT_NO_LAZY_FETCH=1`, except the named fetches.** On the development machine one `write-tree` without `--missing-ok` silently downloaded the whole commit, about 250 MB in 17 s | Carmack, 2026-09-30 |
+  | 6 | **Deletions are staged with one `git rm --cached --sparse --pathspec-from-file` per push attempt.** It staged 150 deletions of files never downloaded in 0.34 s and downloaded nothing; one call per file cost 0.15 s each | Carmack, 2026-09-30 |
+  | 7 | **One row, in commits that first move every disk walk onto a listing built from disk with no change in behaviour, and switch to the commit's listing last.** Fowler proposed splitting the `reads` declaration into a row of its own; it is scope item 6 instead, because row 15's own guard keeps it safe until this row lands (row 15 decision 3) | Fowler, 2026-09-30; plan owner |
+
+---
+
+### Row #15 - The score archive is built from the door's rows
+
+- **Scope:** the person's answer to STEP 3's second question, 2026-09-30 (deviation 169). The `scores` task wrote one summary a month, `state/score-archive/<YYYY-MM>.json` (`ScoreArchive` in `backend/idhazh/contracts/score_archive.py`, built by `backend/idhazh/evals/archive.py`), from that month's CSV day files, and only then dropped the month's `state/score-index/` days. Row 9 moved the scores rows behind the ledger door, those CSV files are gone, and `backend/idhazh/gardener/tasks/scores.py` says so ("No month is archived here any more"). So the index keeps every day, `evals.writer.indexed_observations` opens one more file each day, and `compact-scores` must stay report-only (deviation 157). After this row:
+  1. `evals/archive.py` builds a month's summary from that month's settled scores rows, read through the ledger door (`ledger.load_days` with `EvalRow`), never from a file's bytes. `summarise` and `reconcile` take rows, and the CSV reading goes.
+  2. `ScoreArchive.source_sha256` digests the month's settled rows rather than its day files, and `source_rows` counts those same settled rows, the ones the cohorts count (decision 2). No summary is committed yet, so the change is one changelog entry, which sets the version stamp, and nothing to migrate (CLAUDE.md section 11); the oldest entry gives way to the pointer to git, and the schema is generated again.
+  3. The `scores` task writes the summary of each month past its `full-grain` series that has none, reads it back, reconciles it against a second reading of the rows, and only then drops that month's index days, as it did before row 9.
+  4. The docs that say the scores compaction stays report-only until the archive is built from the door's rows now say it is built. Turning `compact-scores` or `scores` live stays a person's switch (decision 4). The entry for `indexed_observations` in `docs/concepts/growing-reads.md` states its new bound: the index days of the `full-grain` series, plus one summary a month.
+  5. `compact-scores` drops a month only when that month's summary is already on the commit the shard checked out and still reconciles with the month's rows (decision 5). Folding days into a month file needs no summary, because the digest reads rows and no packing changes them.
+- **Files touched (expected; the dispatch check confirms them):**
+  - `backend/idhazh/contracts/score_archive.py`, `backend/idhazh/evals/archive.py`, `backend/idhazh/gardener/tasks/scores.py`, `backend/idhazh/evals/writer.py` (the month's index digests, read by the guard), and the compaction code that drops a scores month (the dispatch check names it)
+  - `backend/tests/test_evals.py` (the archive tests), `backend/tests/retention/test_score_ledger.py`, and fixtures under `tests/fixtures/`
+  - `docs/architecture/publishing/idhazh-gardener.md`, `docs/concepts/growing-reads.md`, `docs/concepts/config/idhazh-gardener.md`, `docs/architecture/publishing/retention.md`, `docs/concepts/adaptive-pruning.md`, `docs/concepts/config/retention-ages.md`, `docs/concepts/evaluation.md`, `docs/concepts/partitions.md`, `docs/architecture/contracts/schemas.md`
+  - `TODO/20260924-50-idhazh-gardener-plan.md` (this row's Reckoner line)
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, and `pytest backend/tests/test_evals.py backend/tests/retention backend/tests/gardener backend/tests/contracts`. CI runs the full suite.
+- **Oracle:** on fixture rows filed through the ledger door, with no network (CLAUDE.md section 13):
+  1. For a fixture month, the summary built from the door's rows holds the same `cohorts`, `observation_digests` and row count as the old builder computed from the same rows written as CSV day files. This parity runs once, against the old builder, before that builder is deleted, and the report records it.
+  2. `reconcile` refuses a stored summary that disagrees with a second reading in any field, and names the field.
+  3. The `scores` task, given a month past its window with rows and no summary, writes the summary, reads it back, and then drops that month's index days. When the summary does not reconcile, or does not hold every observation the month's index days hold, it drops nothing and its record says it failed. The same check runs again before each index day is dropped.
+  4. A month that already has a summary is not built again.
+  5. `compact-scores`, handed a month past its window with no summary on the commit, drops nothing from that month.
+- **Merge window:** CI only. It changes no workflow and no file a scheduled job writes, and the first month due, August 2026, passes its 14-month window about October 2027 (an estimate).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **The summary is built from the door's rows, in this plan** | The person, 2026-09-30 |
+  | 2 | **`source_sha256` digests the month's settled rows as `ledger.load_days` returns them, sorted by day and then the ledger's key, written with the recipe `content_sha256` already uses (`json_lines.rows_bytes`), over the key and the columns the summary is built from.** A digest of the files would change whenever compaction repacks the same rows or the parquet library changes its bytes. The columns are limited so that a field added to `EvalRow` later does not change an earlier month's digest. A month of September's size, 10,623 rows, digests in 0.30 s and loads in about 1.7 s and 51 MiB on the development machine | Fowler and Carmack, 2026-09-30 |
+  | 3 | **A summary is written only from rows the task can see, and it covers every observation the month's index holds.** The check lives in the task, reads the month's index digests through `backend/idhazh/evals/writer.py`, which owns the index, and runs twice: before the summary is written, and before each index day is dropped, because a later index rebuild can add digests to an old day. An index digest with no row behind it also fails, for a person. Until row 14 lands, the rows sit in folders `compact-scores` owns, which may be in another shard, so this is what stops a short summary | Fowler and Carmack, 2026-09-30 |
+  | 4 | **Switching `compact-scores` or `scores` live is not this row's.** The row makes the switch safe; a person makes it (`TODO/20260905-13-switch-on-deletion-plan.md`) | Plan owner, 2026-09-30 |
+  | 5 | **A scores month file is deleted only when that month's summary is on the commit the shard checked out and still reconciles with the rows.** Deleting in the same pass as the build, or while the summary's push is still failing, could lose the month; waiting costs at most one day | Carmack and Fowler, 2026-09-30 |
+
+---
+
 ## Open questions for a person, from row 8
 
-Row 8 shipped each of these as the plan wrote it. None blocks a row; each needs a person, because it changes an owner's ruling, a trigger's subject or a growing read. **The person answered the first two on 2026-09-29 (deviations 161 and 162, carried by row 13) and asked about the third (deviation 163).**
+Row 8 shipped each of these as the plan wrote it. None blocks a row; each needs a person, because it changes an owner's ruling, a trigger's subject or a growing read. **The person answered the first two on 2026-09-29 (deviations 161 and 162, carried by row 13) and the third on 2026-09-30 (deviation 168, carried by row 14).**
 
 1. **Answered: `if: ${{ !cancelled() }}`.** The history job's start condition. It runs only when every `run-tasks` shard succeeded or none ran (row 8 decision 4). So one red shard skips that day's squash, which is then due again at the next wake, while a failed `plan` job does not skip it. Row 8's worker proposes `if: ${{ !cancelled() }}`: the squash would then run on a day a shard is red, and the red shard's work is retried at the next wake either way. Changing it overturns an owner ruling of 2026-09-24 and 2026-09-26.
 2. **Answered: the lease, with a configurable retry.** The gap between the tip check and the force push (ESCALATE trigger 2). `corpus_history.py` reads origin's tip, then pushes with `--force`; a commit landing between the two is lost. `--force-with-lease=refs/heads/main:<tip>` would make GitHub refuse the push instead. Any change here is trigger 2.
-3. **Open: the person asked why it grows at all, and was shown what the code does (deviation 163).** The `run-tasks` checkout is a growing read (Guardrail #12). Each shard checks out the folders its tasks own, and those grow with what the repository keeps while every task is report-only: the heaviest shard holds 46.3 MB today and grows about 1.4 MB a day. Section 5.6 said it stops growing once its tasks run live; for this shard that is false for about a year. `max_cone_mb: 768` turns a shard red before it grows unseen, and `docs/concepts/growing-reads.md` records the read. A person approves it or names the bound.
+3. **Answered: a new row, row 14, whose checkout fetches file names only, plus the files a task reads (deviation 168).** The person first asked why it grows at all, and was shown what the code does (deviation 163). The `run-tasks` checkout is a growing read (Guardrail #12). Each shard checks out the folders its tasks own, and those grow with what the repository keeps while every task is report-only: the heaviest shard holds 46.3 MB today and grows about 1.4 MB a day. Section 5.6 said it stops growing once its tasks run live; for this shard that is false for about a year. `max_cone_mb: 768` turns a shard red before it grows unseen, and `docs/concepts/growing-reads.md` records the read. A person approves it or names the bound.
 
 ## Dependent plans
 
