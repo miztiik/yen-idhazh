@@ -203,6 +203,22 @@ pushes the refused rewrite again. After `push_attempts` pushes in all it stops,
 unstamped, and the squash is due again at the next wake. The person's ruling,
 2026-09-29.
 
+**The first squash that rewrites history is due about 2026-10-29, and a person
+reads two things in its log.** No squash has collapsed a commit yet, so neither
+has been seen on a runner. The replay is a rebase, and a rebase flattens merge
+commits; the history it replays holds merge commits, six from September 2026.
+If one carried a change of its own, the replayed tree differs from the tip and
+the program stops with exit 2 before any push, for a person to decide; a replay
+that stops on a conflict ends the same way. And nobody has timed one replay on
+`ubuntu-latest`: on the Windows development machine 1,001 commits took 824 s,
+and the first squash replays about 4,800, so at that rate one replay alone would
+outlast the job (an estimate). Read the replay's time in the history job's log -
+a job stopped at its limit means one replay did not fit - and if one replay takes
+more than about a third of the job's 30 minutes, about 8 minutes once the clone,
+the install and the waits are paid
+([the budget](../../concepts/config/idhazh-gardener.md#the-history-declaration-corpus-squash)),
+lower `push_attempts` or raise the job's `timeout-minutes`.
+
 **`digest.yml` is not on this picture, and that is the point.** It writes
 today's rows, and every day the gardener acts on ended at least a whole day
 before, so a digest run and a gardener wake never want one file. A re-run is the

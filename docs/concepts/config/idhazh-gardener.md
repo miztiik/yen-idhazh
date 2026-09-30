@@ -16,7 +16,7 @@ what a knob is at all is [../config.md](../config.md).
 | `version` | `2026-09-30` | The UTC day this file's shape last changed |
 | `attempts` | `6` | How many times one shard may try to push before it gives up with exit 3 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
-| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
+| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate. Its first reset is to about twice the largest `downloaded_bytes` the first thirty scheduled wakes record ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
 
 **`attempts` must be above `shards`.** Every shard of a wake pushes to one
 branch at once, so the last one to land has lost a race to every other shard

@@ -1,6 +1,6 @@
 # 13 - Deletion switched on
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-30
 **Level**: 4 (structural: the first configuration in this repository that deletes committed files on a schedule)
 
 **Chain**: previous [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) | next [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md).
@@ -15,7 +15,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Plan 04 measured the growth, moved the cap into config and made the cleanup report its backlog - and left the fuse in. This plan takes it out. It sits **here** rather than at the end because the Pages cap is the first budget the group breaches: plan 12 changed the renderer and plans 15 to 18 each add a visual family, so from here the drawings pile up faster than anything removes them |
-| Hard scope - in | The adaptive-pruning concept doc and its compliance register, written against deletion that runs; `retention.image_months` given a value derived from plan 04's measurement; `retention.dry_run` set to false; the first real deletion watched |
+| Hard scope - in | The adaptive-pruning concept doc and its compliance register, written against deletion that runs; `retention.image_months` given a value derived from plan 04's measurement; `dry_run` in `config/gardener/visual-prune.json` set to false - the switch of the `visual-prune` upkeep task, which deletes rendered visuals, and which replaced `retention.dry_run` (the loader now refuses that key by name); the first real deletion watched |
 | Hard scope - out | Any change to what is drawn. Any ledger fold beyond what already exists. Deleting anything that is not a rendered visual - the day payload, the eval ledger and the labels are never deleted by age |
 | ESCALATE triggers | 1. A dry run's candidate list contains any path that is not a rendered visual. 2. The candidate count on the first real run exceeds `max_deletes_per_run`, meaning the backlog is larger than one run can clear and the window needs re-deriving before the fuse comes out. 3. The measured rate says the alarm is under 30 published days away - that is an incident, and deletion by age is the wrong instrument for it |
 | Chosen strategy | Write the doc against behaviour that runs, set the window, then flip the fuse and watch one real run. **The new renderer must already have shipped**, or flipping the fuse deletes a year of drawings from an engine that has been replaced, with a 200-item cap the only bound |
@@ -94,7 +94,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 4. Row #3 - The fuse comes out, and one run is watched
 
-- **Scope:** `retention.dry_run` becomes `false`; one scheduled run is watched end to end and its numbers recorded.
+- **Scope:** `dry_run` in `config/gardener/visual-prune.json` becomes `false`; one scheduled run is watched end to end and its numbers recorded. That key is the switch of the `visual-prune` upkeep task, which deletes rendered visuals; it replaced `retention.dry_run`, and the loader now refuses that key by name.
 - **Files touched:** `config/idhazh.json`, `tests/fixtures/contracts/app-config/tuned.json`, `docs/concepts/adaptive-pruning.md`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** the full suite; one dispatch; `idhazh site-weight` before and after; `idhazh check-publication`.
 - **Oracle:** After the run, **every published day still validates and every item that names a visual still has one** - the existing published-assets test, run over the whole corpus. Deletion that orphans a reference is the failure this row exists to avoid, and the site-size delta is the evidence it did something.
