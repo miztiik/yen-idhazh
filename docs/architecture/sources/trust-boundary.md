@@ -147,7 +147,7 @@ keeps the affected player wrappers, headline and short introduction from a
 2026-09-08 France24 capture. It omits unrelated layout and assets. The tests in
 [`test_extract.py`](../../../backend/tests/test_extract.py) require the notices
 to disappear, the article to survive and a short article to remain publishable.
-The [capture provenance and replay results](../../archive/measurements-2026-08.md#drift-review-and-source-extraction-2026-09-08)
+The [Current qualification requirements](../../concepts/qualification.md)
 record why these containers are removed. The test opens a fixed fixture, never
 the growing archive, and makes no network request.
 

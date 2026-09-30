@@ -43,7 +43,7 @@ land together, and the pre-flight below refuses either one arriving alone.
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
 | 6 | `run-tasks` | `gardener_publish.publish` | Stages exactly what the shard wrote and deleted, commits, pushes, and tries again on a newer tip if it lost |
-| 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has passed, or none ran: reads whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` |
+| 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has ended, unless the run was cancelled: reads whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` with a lease on the tip it read, squashing again on a new tip when the push is refused |
 
 **The split is round-robin over sorted names.** Every task the matrix runs - an
 active one whose kind is not `history`, which has a job of its own - is sorted by
@@ -88,7 +88,7 @@ it reads a key the model does not declare.
 **The job graph.** Three jobs, in order. `plan` prints the shards, one
 `run-tasks` job runs each shard - all of them at once - and `history` runs the
 corpus squash after them. The squash is not in the matrix: it rewrites `main`,
-so it runs alone, once every shard has pushed. Every task in the matrix only
+so it runs alone, once every shard has ended. Every task in the matrix only
 reports today; the squash is the one task that changes anything.
 
 ```mermaid
@@ -111,8 +111,7 @@ flowchart TB
     OK["exit 0"]
     ALARM["exit 1<br/>the record landed,<br/>naming the failed task<br/>or the weight"]
     LOST["exit 3<br/>attempts exhausted,<br/>nothing landed"]
-    SKIP["history job skipped:<br/>no squash this wake"]
-    HIST["history job:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main"]
+    HIST["history job, once every shard<br/>has ended, unless the run was cancelled:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main<br/>with a lease on the tip it read"]
   end
 
   subgraph TREE["The committed tree - state/"]
@@ -138,11 +137,11 @@ flowchart TB
   PUSHED -->|"no, attempts gone"| LOST
   CLEAN -->|"yes"| OK
   CLEAN -->|"no"| ALARM
-  OK -->|"every shard"| HIST
+  OK --> HIST
+  ALARM --> HIST
+  OUTSIDE --> HIST
+  LOST --> HIST
   IDLE --> HIST
-  ALARM -->|"any shard"| SKIP
-  OUTSIDE -->|"any shard"| SKIP
-  LOST -->|"any shard"| SKIP
   REAPPLY -->|"the record, and every live task's files"| RAW
   RAW -->|"a live compaction lists a due day"| RIDX
   RIDX -->|"then takes it into its day file"| COMPACT
@@ -162,22 +161,31 @@ flowchart TB
   class ANY,OWNED,LANDED,PUSHED,CLEAN decision;
   class OK yes;
   class OUTSIDE,LOST,ALARM no;
-  class IDLE,SKIP warn;
+  class IDLE warn;
   class RAW,RIDX,COMPACT,WM ledger;
   class OPS sysOps;
   class TREE sysPublish;
 ```
 
-**Any red shard skips the squash, and a failed plan does not.** The history job
-runs when the `run-tasks` jobs all passed or none ran. So a task that fails at
-every wake - a compaction that meets a hole, a shard over `max_cone_mb` - holds
-off every squash until a person acts. A `plan` job that fails skips the
-`run-tasks` jobs, and GitHub reads a skipped job as one the gate lets through,
-so the squash still runs. Both follow from the condition as the owner wrote it,
+**The squash runs unless the run was cancelled.** The history job waits for
+every `run-tasks` shard to end, so history is still rewritten last, and then runs
+on `if: ${{ !cancelled() }}`. A red shard does not hold it off: that shard's push
+has already ended, and its work is tried again at the next wake either way. A
+failed `plan` job, which skips every shard, does not hold it off either, and a
+person's cancel still stops it. The person's ruling, 2026-09-29. It replaced
 `always() && (needs.run-tasks.result == 'success' || needs.run-tasks.result == 'skipped')`,
-and both are with the owner, with `!cancelled()` as the recommended
-replacement: it runs the squash after a red shard, whose push has already ended,
-and a person's cancel still stops it.
+under which a task that failed at every wake - a compaction that meets a hole, a
+shard over `max_cone_mb` - held off every squash until a person acted.
+
+**The push carries a lease, and a refused push squashes again.**
+`corpus_history.py` pushes with `--force-with-lease=refs/heads/main:<tip>`,
+naming the tip it read before it rewrote anything, so git refuses the push if
+another run landed a commit meanwhile. The program then waits
+`push_retry_delay_seconds`, fetches `main`, and runs the whole squash again on
+the new tip, which replays the other run's commits with the rest. It never
+pushes the refused rewrite again. After `push_attempts` pushes in all it stops,
+unstamped, and the squash is due again at the next wake. The person's ruling,
+2026-09-29.
 
 **`digest.yml` is not on this picture, and that is the point.** It writes
 today's rows, and every day the gardener acts on ended at least a whole day
@@ -649,10 +657,10 @@ shard still runs its tasks and lands its record, then exits 1. Stopping first
 would stop the deletes that make the folders lighter, and the checkout has
 already paid for the bytes. The first figure proposed was 64 MB, a point for a
 person to decide at. The heaviest shard passes it within two weeks on growth
-its own windows allow, and while any red shard skips the squash, a ceiling that
-stays red stops the squash with it. 768 goes red only on growth past what the
-windows can hold (Carmack on the figure; Fowler agreed while the history job's
-condition stands).
+its own windows allow, and while a red shard skipped the squash, as it did until
+2026-09-29, a ceiling that stayed red stopped the squash with it. 768 goes red
+only on growth past what the windows can hold (Carmack on the figure; Fowler
+agreed while the history job's condition stood).
 
 **2026-09-28: the weight is `cone_bytes`, in whole bytes, and empty when nobody
 weighed it.** `bytes_freed` in the same row is bytes, a byte count is exact, and
@@ -679,16 +687,16 @@ Carmack).
 
 **2026-09-28: the history job checks out `main`, both times.** A checkout takes
 the commit the run was created at unless told otherwise, and the shards push
-after that. `corpus_history.py` compares its checkout with origin's tip and
-refuses when they differ, so without `ref: main` it would refuse on every due
-wake (Carmack).
+after that. `corpus_history.py` pushes with a lease on the tip its checkout
+holds, so without `ref: main` the first push of every due wake would be
+refused and the squash done a second time (Carmack).
 
 **2026-09-28: the shard adds the complement's folders to its own checkout.** The
 plan job reads config alone and cannot name the folders the complement sweeps:
 they are what the commit holds under `state/` that no declaration and no ledger
 claims, and that rule lives in the installed package. The runner fails a task
 whose folder the commit holds and the checkout lacks, so with an empty cone the
-complement failed at every wake, and a red shard skips the squash. The shard
+complement failed at every wake, and a red shard then skipped the squash. The shard
 adds those folders - 952 bytes on 2026-09-28 - then weighs them with the rest.
 Copying the ledger rule into the plan job would give one rule two writers
 (Fowler and Carmack).

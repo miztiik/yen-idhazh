@@ -1,454 +1,136 @@
 # Documentation Structure
 
-**Last Updated**: 2026-09-28
-How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
+**Last Updated**: 2026-09-30
 
-This reference is **domain-neutral** so it can be copied between projects unchanged (CLAUDE.md section 5).
+Where documentation belongs and what it must contain. Follow [CLAUDE.md](../../CLAUDE.md) section 5. These rules are domain-neutral except for the diagram accents under Project bindings.
 
 ## Diataxis tiers
 
-Every document belongs to exactly one tier:
+| Directory | Question |
+| --- | --- |
+| `docs/architecture/` | How does this subsystem work, and why? |
+| `docs/how-to/` | How do I perform this task? |
+| `docs/concepts/` | What does this concept mean? |
+| `docs/reference/` | What are the exact options, contracts or current readings? |
 
-| Tier | Directory | Reader question |
-| ------------ | -------------------- | ------------------------------------------------ |
-| Architecture | `docs/architecture/` | Why is it designed this way? |
-| How-to | `docs/how-to/` | How do I perform a specific task? |
-| Concepts | `docs/concepts/` | What is this concept / vocabulary? |
-| Reference | `docs/reference/` | What are the exact options / values / contracts? |
-
-Support tiers:
-
-- `docs/getting-started/` - onboarding entry points.
-- `docs/archive/` - historical / superseded material.
+Each page answers one question. Onboarding belongs under `docs/getting-started/`. Do not create archives to avoid deleting obsolete prose; git keeps it.
 
 ## Depth rule (maximum 3 levels)
 
-- Allowed: `docs/<tier>/<topic>/<file>.md`
-- Forbidden: `docs/<tier>/<topic>/<subtopic>/<file>.md` or deeper.
-
-A topic that needs deeper nesting is two topics. Split it.
+Use at most `docs/<tier>/<topic>/<file>.md`. Name a page for its question, never a sequence such as `part2`.
 
 ## Required elements (every doc)
 
-- One H1 title.
-- `**Last Updated**: YYYY-MM-DD` line directly under the title.
-- "See also" callout with cross-tier links (architecture <-> how-to <-> concepts <-> reference).
-- Content that stays in its tier (no mixed-purpose docs).
-- ASCII only - see CLAUDE.md section 5.
-- Any diagram drawn to [Diagrams](#diagrams) - it carries its own colours, because the renderer's default palette follows the reader's theme and the author only saw one of them.
+- One H1, followed by `**Last Updated**: YYYY-MM-DD`.
+- A short statement of the question the page answers.
+- Current content in the page's tier, written in ASCII.
+- A `## See also` section with useful cross-tier links.
+- Valid relative links, including their section anchors.
 
 ## Doc-class routing contract
 
-Docs fall into the typed classes below. Each has one audience, one mutability rule, one allowed content type, and one forbidden content type. Routing is enforced at PR review time, not by tooling. A decision is NOT its own class - when a choice clears the Guardrail #4 bar, its rationale lives as a `## Design rationale` / `## Rejected alternatives` section on whichever class below it impacts; there is no ADR file and no `docs/architecture/decisions/` directory.
-
-| Class | Path pattern | Audience | Mutability | Contains | Forbidden |
-| ----------------- | --------------------------------------- | ---------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------- |
-| **Subsystem doc** | `docs/architecture/<area>/*.md` | Engineer extending the subsystem | Living snapshot (edit in place) | Shape, layout, contracts, invariants, write/read paths (+ a `## Design rationale` for a decision the subsystem carries) | Long PR narrative; duplicate concept definitions |
-| **Concept doc** | `docs/concepts/*.md` | Anyone learning project vocabulary | Living, terse | One term, defined once, with cross-links | Duplication of any term defined elsewhere |
-| **How-to doc** | `docs/how-to/<verb>-<slug>.md` | Operator running a procedure | Living runbook | Ordered steps, inputs, validation, failure modes | Rationale prose; concept definitions |
-| **Reference doc** | `docs/reference/*.md` | Someone needing an exact value | Living table | Exact options, values, contracts, measurements with hardware + date | Narrative; procedure |
-| **Agent notes** | `docs/reference/agent-notes.md` (index) + `docs/reference/agent-notes/<tool-family>.md` | Anyone running commands in the repo | Living list | Environment and tool quirks that make a command lie about its result | Project behaviour, design rationale, product rules |
-| **Benchmark record** | `docs/reference/benchmarks/<what-was-measured>.md` | Anyone citing or re-running that run | Living, one question one answer - a re-run REPLACES the page and moves **Last Updated**; git history holds what it said | One run: its conditions, method, cases, raw figures, and what it settles and does not | The rule the figures justify; a figure a later run superseded; a date in the filename |
-| **Subject dossier** | `docs/reference/<family>/<slug>.md`, indexed by `docs/reference/<family>.md` | Anyone choosing, adopting or retiring one of a set of interchangeable subjects | Living, one current reading a quantity a subject - a new reading REPLACES the old and moves **Last Updated**; git history holds what it said | One subject: its identity, its one current reading of every quantity with hardware and date, its verdict, its lifecycle status, and a link to every record behind them | A second reading of one quantity; another subject's figures; a run's conditions and method, which is a benchmark record |
-| **Plan-doc** | `TODO/<YYYYMMDD>-<slug>-plan.md` | Next person picking up work | Single-snapshot; DELETED once distilled (git history is the ledger) | Phase status, active PR breakdown, TBD list, pointers | Rationale prose; decisions; rejected alternatives |
-
 ### Routing rules (decide a new statement's home)
 
-1. Current behaviour rule, published shape, tuning invariant, or subsystem contract? -> **Concept doc**, **how-to doc**, or **subsystem doc**. This is the default.
-2. Vocabulary term used across multiple subsystems? -> **Concept doc.** Defined once.
-3. Step-by-step procedure an operator runs? -> **How-to doc.** Cite the concept or subsystem doc for why.
-4. An exact value, threshold, or measurement someone will look up? -> **Reference doc.** A measurement carries its hardware and its date (CLAUDE.md Guardrail #10).
-5. "Which PRs land when"? -> **Plan-doc.** Carry pointers, not full rationale.
-6. Architecture choice with an actively explored rejected alternative, non-trivial reversal cost, and cross-system consequences? -> a `## Design rationale` / `## Rejected alternatives` section ON the living doc it impacts (concept / how-to / subsystem). No ADR file, no `decisions/` directory. If any leg is missing, just update the living doc's current-state text.
-7. Where a file or a whole directory belongs in the tree? -> the **repository-layout reference doc.** One page maps every top-level directory to what it holds, who writes it, and whether it is committed - so a new directory has to state its reason before it exists.
-8. A tool quirk, an environment trap, or a command whose result cannot be trusted at face value? -> the **agent-notes reference.** Not a private memory file - see below. It is one page until it stops being readable as one; then the stem path becomes an index and each child is named for the tool family whose output lies, so every inbound link keeps working.
-9. A benchmark run - a sweep, a candidate priced, two cases raced? -> its own **benchmark record**, and a link from the instrument log. Never an append to the log. See below.
-10. What happens to an artefact as it ages - kept, summarised, or removed, and on what age? -> the **concept doc** that owns that lifecycle, carrying a dated inventory of the artefacts and the rule that decides one it does not list. Not the repository-layout doc: that answers where a thing lives, and where it lives does not change when a run appends to it.
-11. A figure that belongs to one interchangeable subject rather than to the system - a component that can be swapped, where the same quantity means something else once it has been? -> that subject's **dossier**, reached through its index. The test is whether naming the figure needs the subject named first; where it does, the shared reference doc keeps only what is not per-subject and links to the dossier for what is.
-12. A diagram? -> inside the doc it explains, drawn to the rule in [Diagrams](#diagrams) below. It is never a page of its own and never an image file: a picture nobody can diff is a picture that goes stale silently.
+| Content | Home | Do not include |
+| --- | --- | --- |
+| Subsystem behavior, boundaries and design reasons | Living architecture page | PR narratives and copied concept definitions |
+| Shared vocabulary or policy | Concept page | A second definition elsewhere |
+| Steps, inputs, checks and failure handling | How-to page | Design debates |
+| Options, fields or current measurements | Reference page | Incident narratives |
+| Portable checks that make tool results trustworthy | Agent-notes reference | Workstation configuration or product rules |
+| One current benchmark answering one question | Benchmark record | Superseded runs or a second current answer |
+| One interchangeable component and its current readings | Subject dossier, linked from its index | Other components' figures |
+| Execution sequence and unfinished work | Plan under `TODO/` | Copied rationale, rejected alternatives or completed history |
+| Directory purpose and writers | Repository-layout reference | Retention policy |
+| What is retained, summarised or removed | Lifecycle concept page | A second directory inventory |
+
+Put a decision's reason under `## Design rationale` on the page it affects. Do not create an ADR register. Link to that reason elsewhere.
 
 ### A benchmark run gets its own page, and never the log's name
 
-A run is a fact about a day: these weights, that build, this corpus, that
-machine. The figure it produces is a fact about now, and only until the next run.
-Appending the run to the instrument log merges the two, and the page then carries
-several readings of one quantity in date order where only the ordering says which
-governs - which is the failure the three tests above exist to stop, arriving by
-the one door nobody guards, because each append is individually correct.
+Name the record for what it measures, without a date or sequence. A new run answering the same question replaces that record. Keep conditions, method, inputs, current figures, and what the result can and cannot settle. Keep enough information to reproduce a number still used by a current decision.
 
-So they separate:
+The shared reference holds one current reading per quantity and links to the record. A dossier holds the readings for one component. Remove a superseded reading rather than moving it into an appendix.
 
-- **The record holds the run.** Conditions, method, cases, raw figures, and what
-  it settles and does not. It is **frozen** once written: a later run does not
-  edit it, it gets its own record.
-- **The instrument log holds the figure now in force**, one per quantity, and
-  links to the record behind it. When a run supersedes a figure, the log's number
-  is replaced in the same commit - the old reading goes, and the record it came
-  from stays where it is.
-
-**The name says what was measured, never a sequence and never the family.**
-`2026-09-09-doubled-window-and-cap.md` is a name somebody can arrive at.
-`benchmark-2.md`, `measurements-3.md` and `perf-run-final.md` are not: the first
-two answer no question and the third will be wrong within a week. A record may
-not take the instrument log's name, because the log is where somebody arrives
-holding "what is the number today" and the record answers "what happened on that
-day" - two questions, and the log is the one every other doc links to.
-
-**A run whose figure nothing acts on still gets a record**, and the log gets no
-row. That is the honest outcome for an exploratory sweep, and it is cheaper than
-the alternative this project has already paid for twice: a number in the log
-that no config key reads, which a later reader treats as load-bearing.
-
-### An instrument a page cites stays; a migration whose rows have gone goes
-
-A page that prints a number owes a reader the way to take that number again.
-So **a utility under `backend/utilities/` that a live page cites as the
-instrument behind a figure is kept**, whatever else argues for deleting it:
-removing it turns every figure it produced into a number nobody can reproduce
-and nobody can challenge, which is the one failure a measurement page cannot
-survive (`CLAUDE.md` Guardrail #10). `measure_two_calls.py` and
-`measure_day_window.py` are protected by this, and so is every other utility
-named in a page under `docs/reference/benchmarks/`.
-
-**A migration is the opposite case.** It exists to move one ledger from one
-shape to another, it says so in its own first sentence, and once the last row
-it was written for has gone - aged out of its retention window, or re-filed by
-an engine that absorbed the job - it is a file nobody can run against anything.
-Keeping it costs a reader one more door to try and costs every gate one more
-file to lint, for a pass that would do nothing.
-
-**The three deleted on 2026-09-22 were all of the second kind.**
-`backfill_day_metrics.py` seeded `state/day-metrics/` for days published before
-the producer existed, and every published day carries its record now.
-`migrate_item_health.py` re-filed `state/item-health/` day files under a changed
-header, which `ledger.migrate_header` does through
-[`widen_ledger_header.py`](../architecture/contracts/schemas.md) for every ledger
-rather than one file per ledger. `measure_definition_placement.py` priced where
-the labelling vocabulary sits in a prompt, was cited by no page, and left no
-figure behind to reproduce.
-
-**The test is a citation, not an age.** An old instrument a page still cites
-stays; a migration written last week whose ledger has been re-filed goes.
-
-### A dossier is per subject; a record is per run
-
-A quantity that changes meaning when a component is swapped is not a property of
-the system. It is a property of the component. Collecting every such figure on
-one shared page makes a reader establish which subject a row was about before the
-row means anything, and it lets one quantity carry several current answers, one a
-subject - which is what the one-current-reading rule (CLAUDE.md Guardrail #10)
-cannot check.
-
-So the subject gets a page and the pages get an index:
-
-- **The dossier holds the subject.** Its identity, whatever says which one it is,
-  and one current reading of every quantity that is a property of it. A new
-  reading replaces the old in place.
-- **The index holds one row a subject**, with its lifecycle status and a link.
-  The status word lives on the dossier and nowhere else, so adopting or retiring
-  a subject is two edits rather than a search.
-- **The shared reference doc keeps what is not per-subject**, and links to the
-  dossier for what is.
-
-**A dossier is not a benchmark record.** The record is organised by question and
-frozen at one run; the dossier is organised by subject and edited in place. A
-record names the subject it ran against; a dossier links to every record taken
-against it. A figure that could sit on either belongs on the dossier, because the
-dossier answers "what is this subject" and the record answers "what happened that
-day".
-
-### A dated inventory carries the rule that outlives it
-
-An inventory - every artefact and its policy, every read and its cover, every
-directory and its owner - is correct on the day it ships and wrong the week
-after. It earns its place anyway, because the alternative is that every reader
-re-derives the answer for the thing in front of them.
-
-What makes one survive is not completeness. It is three things on the same page:
-
-- **A rule that answers for an entry the inventory does not list**, written as
-  questions rather than as a list, so it works on something nobody has created
-  yet.
-- **A date in the heading**, so a reader can price how stale the rows might be
-  without checking each one.
-- **One command that prints what exists**, so the gap between the inventory and
-  the world is a line to run rather than an act of memory.
-
-**A test that walks the tree and compares it to the inventory is not a fourth
-thing, and it is weaker than the three.** It can assert that a name appears and
-never that the answer beside the name is still right, so it is green on exactly
-the column that rots. It also grows its own maintenance cost with the thing it
-guards, which is usually the defect it was written to catch (CLAUDE.md Guardrail
-#12, and section 13 on what a test may read).
-
-**An entry with no answer is a row, not a gap.** Where an artefact has not been
-classified yet, the inventory says so in its own row, with the reason. One that
-silently omits what it could not place teaches a reader that the list is the
-world.
+Keep a utility that reproduces a current cited measurement. Remove a completed migration or unused measurement tool only after checking its callers and documentation links.
 
 ### A page answers one question, and length is a symptom rather than the fault
 
-A document does not go wrong by getting long. It goes wrong by holding **several
-answers to one question**, where only the order of the sections says which one
-governs - and the order is the one signal a reader who arrives by search never
-sees. That is also the engine that makes a page grow: somebody who cannot tell
-which statement is in force adds a new one instead of editing the old.
+There is no page-length limit. Apply these tests before adding material:
 
-So the guardrail is three tests over questions, and **no page here has a maximum
-length**.
+- **Split:** can two sections be used independently to answer different questions? Give each question a named page. Keep the original path as an index when needed for existing links.
+- **Delete:** does a later statement correct an earlier one? Keep the current answer. Retain one warning only when it prevents a still-plausible wrong action.
+- **Merge:** does a page have no useful purpose except as a section of another? Move it there and repair its links.
 
-**A split names a question. It never names a sequence.** `feature-part2.md` is
-not a split and never will be: part 2 answers no question of its own, it is the
-remainder of part 1, and a reader cannot arrive at it because nobody has ever
-held the question "the rest of that". A page whose title only makes sense after
-reading another page is a section of that page wearing a filename. The check is
-one line, and it is the merge test applied to whatever the split test produced:
-**say out loud the question somebody would be holding when they open the new
-page.** If that sentence needs the old page's title in it, do not split - the
-page was long and it was not confused, and a long page beats a set nobody can
-navigate.
-
-What a real split looks like: `pipeline-cost.md` became the producer and
-`site-weight.md` became what the reader downloads, because "how fast does
-the model write" and "how big is the page I ship" are two questions and a person
-arrives holding one or the other. What it never looks like: `measurements-1.md`
-and `measurements-2.md`.
-
-- **The split test.** Open the page at one section, read only that section, act
-  on it. If acting correctly needs a fact that lives in a different section of
-  the same page, the page has outgrown itself. Split it **along the question
-  each part answers**, and the stem path becomes an index so every inbound link
-  keeps working - rule 8 above, which is this test written for one doc class.
-- **The delete test.** A section a later section corrects is not history, it is
-  a second answer. Delete it in the commit that writes the correction; git holds
-  the bytes. Leave one sentence behind wherever a reader meeting only the new
-  text would re-propose the thing the correction killed. The plan-doc
-  single-snapshot rule below is this test written for one doc class.
-- **The merge test.** A page earns its existence by being where somebody arrives
-  with a question in hand. If the only way to reach it is a link on a page they
-  had to read anyway, it is a section of that page.
-
-**The tests are deliberately in tension, and fragmentation is the worse half.** A
-page that is too long costs a diluted answer; a page nobody opens costs a
-confident wrong one. Where the split test and the merge test disagree, the page
-stays whole.
-
-**The page you add to pays first.** A rule with no moment is a rule nobody runs,
-and the moment is when somebody already has the page open and already
-understands the material. Before you add a section, apply the split test to the
-page you are adding it to. Where that page already holds two questions, your new
-section starts the new page and takes its nearest sibling with it.
-
-**One addition buys at most one cut.** Nobody is asked to split a whole page, and
-a page needing four cuts gets them from four people who were each already there.
-That is what makes this scale where a migration project does not: the cost falls
-in proportion to how often a page is added to, so the pages growing fastest are
-the ones cut soonest.
-
-Where you judge the page whole, say so in the pull request in one line. A split
-declined on purpose and a split nobody considered produce the same diff, and
-only the sentence tells them apart.
+Do not split a coherent answer to meet a number. Before adding a section, apply the split test to its destination; one addition requires at most one related split. State why a large page remains whole when that is the right result.
 
 ### What a sentence has to do to stay
 
-**Keep the sentence a reader who skipped it would act wrongly without. Cut the
-sentence that only leaves them less well read.** Being uninformed is not a
-failure and acting wrongly is, and that asymmetry is the whole rule. Two checks
-fall out of it: a sentence that restates its own heading goes, and a sentence
-whose removal changes only what somebody knows rather than what they do goes.
+Keep current rules, their reasons and the checks that prevent wrong actions.
 
-**A rejected alternative is a fence, not a story.** It exists so nobody reopens a
-settled gate, and a fence needs a name and a reason rather than the minutes of
-the argument. The form is one sentence with three clauses - the rule now in
-force, the alternative named, and the cost it would carry.
-
-**Who decided, and when, is not one of them.** Git holds both, and a fence that
-names its author argues from authority where the cost is what settles it. A
-guardrail exception still carries the name and the dated line that granted it,
-and is listed below among the classes never cut.
-
-An alternative that was built and measured keeps its number and that number's
-conditions; one that was only argued keeps one clause. Safe to lose as a class:
-the sequence of the argument, every option nobody built, restatements of the
-winner in other words, and any sentence describing how a conclusion was reached
-rather than what it constrains.
-
-**A dated correction is kept only while its trap is still reachable.** Where the
-failure it describes is now refused by a schema, a gate or a type, the code says
-it earlier and better and the correction goes. Where a later reader would meet
-something that looks wrong on sight and "fix" it back, the correction stays - in
-one sentence, beside the thing that looks wrong, never in a history section.
-
-**An incident is not a rule.** A run id, a stack trace, a timeline of what broke
-at which minute: none of it constrains the next change. What constrains is the
-rule the incident produced, and that rule is true whether or not a reader knows
-where it came from. Write the rule and let git hold the day it was learned. Where
-the failure is still reachable, the clause above already keeps one sentence for
-it - that is a trap kept, not a licence for the story.
-
-**A page does not describe its own past.** "Until <date> this page said X" is a
-sentence about the document rather than about the system, so no reader acts
-differently for having read it. Correct the page and let the diff carry the
-correction.
-
-**A rationale carries its reason, not its byline.** A `## Design rationale` entry
-states what is true and why. Who decided it, and on what day, is in git. The one
-exception is the one the never-cut list names below: a guardrail adapted or
-excepted keeps the name and the dated line that granted it.
-
-**Six classes are not cut at any budget**: a stated commitment to a reader or an
-operator, the reason an absence or a zero is correct, a measurement's
-conditions, the cost clause of a decision, a still-reachable trap, and an
-exception with the authority line that granted it.
+- State what contributors must do or avoid. Preserve reader guarantees, safety boundaries, missing-data behavior and real costs.
+- Remove approval narratives, personal attributions and dates from rationale. Git holds that history; the requirement or exception remains. Follow `CLAUDE.md` for authorization limits.
+- Remove developer-machine paths, local hardware inventories and workstation-specific commands. Keep portable prerequisites and production requirements.
+- Delete incident timelines, run ids, stack traces, PR narratives, completed migrations and descriptions of what the page used to say. Do not move them into another doc.
+- Delete rejected-option catalogues. Keep at most one sentence when its reason prevents a plausible wrong change.
+- Keep a failure warning only while the failure is reachable, beside the action it constrains.
+- Keep a measurement only while a current decision uses it, with its conditions. Replace superseded readings.
 
 ### Which page to fix first
 
-**The property is how often a page enters a reader's or an agent's working set,
-never how big it is.** Size sets what one pass saves; frequency sets how many
-passes it is saved on, and the cost is paid on load rather than on existence. The
-order is pages on the bootstrap path, then pages read once per task, then once
-per subsystem, then once per question. At equal frequency the tie-break is how
-much a page has been appended to lately, because a page still growing is the one
-whose contradictions are freshest.
-
-The one thing here worth measuring is the bootstrap load itself - the tokens a
-reader has to hold before the first line of code is read. That names a budget
-rather than a threshold, and a budget is what leaves room for the working set.
+Start with pages routinely loaded by contributors and agents. At similar read frequency, prefer the page with the most repeated or superseded content.
 
 ### The tool that hands you the numbers
 
+Run before and after a documentation pass:
+
 ```text
 python backend/utilities/doc_load.py
-```
-
-It prints the bootstrap load and one row per page, and **it decides nothing**:
-every column is an input to one of the three tests above, and no number it prints
-is a threshold. There is no doc gate and no line-count lint, deliberately - a
-count is met by starting a second file, which is the fragmentation failure with
-none of the benefit.
-
-| Column | The test it feeds |
-| --- | --- |
-| `~tok` | the bootstrap load, against the working set you still have to hold |
-| `top h2` | the largest section as a share of the page. One section holding most of a page usually holds several answers - open it and ask the **split test** whether you can act on one section without another |
-| `from` | how many other pages link here. `1` means one page is the only way in, so the **merge test** asks whether that page owns this as a section; `0` is the same question, louder |
-| `super` | sections saying a later one corrects them. Each is a **delete test** candidate and never a verdict: keep the correction whose trap a reader can still walk into, cut the one the correction closed. A section correcting the page rather than the system is not a candidate - it is a cut |
-
-**Under the table it prints the required elements, and those are faults rather
-than numbers.** The elements listed above have one correct answer each, so the
-tool says missing where the columns can only say large: a title that is not one
-H1, a `**Last Updated**` that is absent or is not a date, no `## See also`, a
-non-ASCII character, a page nested past the depth rule, and a relative link whose
-target is not there. The last one is the reason the check exists at all - a wrong
-number of `../` resolves to a path that looks real, so nothing complains until a
-reader clicks it.
-
-**A fragment is half a link, so the anchor is checked too.** A section gets
-renamed or retired and the file it was in survives, so a deep link into it keeps
-resolving to the top of a page that may be thousands of lines long - the reader
-lands somewhere plausible and never learns what they were meant to read.
-
-**A `#` inside a code fence is a shell comment, and the tool knows that.** This
-is the one place a hand-rolled `grep` for the same rules reliably lies, which is
-why the check lives in the tool rather than in anybody's shell history.
-
-**It still fails nothing.** A fault printed beside the page that carries it is
-what this rule was ever going to get, for the same reason there is no length
-limit.
-
-Its token figure is about four characters a token - a declared estimate rather
-than a measurement (Guardrail #10), which is enough to compare pages and not enough to
-quote anywhere else. Run it before a docs pass to pick the page, and after one to
-see what moved.
-
-**`--changed` narrows it to the pages one change touched, and adds their rank.**
-
-```text
 python backend/utilities/doc_load.py --changed docs/concepts/config.md
 ```
 
-Rank is the row's place among every page by weight, and it is the one number the
-whole-tree table cannot tell you about your own page: whether the section you
-just added made a heavy page heavier. A path the standard does not govern is
-skipped in silence, because the caller is usually a CI step handing over
-whatever the diff listed.
+The token count estimates one token per four characters; it is not a tokenizer measurement. Use it to compare revisions, not as a length limit.
 
-That caller is the `docs` job in `ci.yml`, which writes these rows into the run
-summary of any change that touched a page. It gates nothing and can fail
-nothing - it exists because the rule is that the page you add to pays first, and
-a rule whose input nobody sees is a rule nobody runs.
+| Column | Inspect |
+| --- | --- |
+| `~tok` | How much context the page takes before work begins |
+| `top h2` | Whether one section contains several independent questions |
+| `from` | Whether readers can reach the page and whether it belongs elsewhere |
+| `super` | Whether corrections have accumulated instead of replacing old answers |
+
+The tool also reports missing required elements and broken paths or anchors. It reports rather than gates. Inspect the findings even when the command exits successfully. CI includes the changed-page report in its documentation summary.
 
 ### `docs/` is the memory
 
-Everything a future contributor or agent needs is written here, in a file that
-is reviewed in a PR and versioned in git. An agent tool may keep private notes;
-those notes are a **cache of what `docs/` already says**, never the only
-copy of anything.
-
-The test is simple: if a fact would be lost when those notes are cleared, or
-invisible to a person reading the repository, it is in the wrong place. Move it
-to the living doc that owns it, or - when it is execution craft rather than
-project knowledge - to the agent-notes reference. `AGENTS.md` and any private
-memory are derived; if either disagrees with `docs/`, `docs/` wins (CLAUDE.md
-section 5).
+Durable knowledge belongs in its owning page, reviewed and versioned. Private memory and `AGENTS.md` are disposable indexes or caches. They must not be the only copy of a rule.
 
 ### Process docs are domain-neutral
 
-Everything under `docs/how-to/` that describes *how work is done* - authoring a plan, executing a plan, distilling a plan, handling a scope change, shipping a PR, deploying - plus this reference, is written to be copied between projects unchanged. Such a doc cites `CLAUDE.md` by section number rather than restating a project-specific rule, and it uses neutral examples. Where a project binding is genuinely needed (a build command, a live URL, a gate command), it goes in a clearly marked "Project bindings" section at the end rather than being scattered through the prose. A process doc that cannot be stated neutrally says so explicitly and names why.
-
-### A docs-only change is normal; docs describing code nobody changed is the smell
-
-A change that touches only documentation is correct whenever the documentation
-IS the artefact - the engineering contract, a process doc, a concept page, a
-benchmark record, this reference, or any page that exists only to be read.
-Treating a docs-only diff as suspect on its own punishes exactly the work that
-keeps the rest honest.
-
-What is a smell is a documentation change that describes behaviour nobody
-altered. That is documentation drifting away from the code rather than tracking
-it, and it reads as authoritative to the next person either way.
-
-### The contract is subject to this rule too
-
-`CLAUDE.md` carries fences rather than full rationale prose, from 2026-09-12.
-The argument behind each of its rulings lives in
-[../archive/contract-history-2026-09.md](../archive/contract-history-2026-09.md).
-A page that every agent loads on every session is the page where a saved token
-is worth the most, and it is also the page least able to argue that it is the
-exception.
+Process how-to pages and this reference cite `CLAUDE.md` by section rather than copying project policy. Put necessary project-specific commands or values under Project bindings. State why a procedure cannot be domain-neutral when that applies.
 
 ### Cross-doc consistency mechanism
 
-- Living docs are the default source of truth for current shape. Edit them in place as the project changes.
-- A decision's rationale lives on the page it impacts, as a `## Design rationale` section; the immutable record of WHEN it changed is git history, not a frozen ADR file.
-- Plan-docs link ACROSS to the living doc that now owns the finding.
-- Concept docs link laterally and DOWN to operationalising subsystem docs and how-to docs.
+Edit current documentation in place. Define a concept once and link to it. Before moving a page or heading, find its readers, including tests and tools; repair them in the same change. A docs-only change is valid, but it must not claim that unchanged code gained new behavior.
 
 ### Plan-doc single-snapshot rule
 
-The top of a plan-doc is exactly one block - title, Last Updated, and one-paragraph Status. Previous status text is **deleted** at every phase boundary. Stacked "previous header" layers are a band-aid for missing snapshot semantics and are forbidden by CLAUDE.md Guardrail #5. History lives in `git blame` and merge-commit titles.
+A plan begins with one title, Last Updated line and current Status paragraph. Replace old status text at each phase boundary. Keep unfinished work in the plan and durable rules in their owning docs. Distil a completed plan, then delete it.
 
 ## Diagrams
 
-A diagram in this repository is Mermaid in a fenced ` ```mermaid ` block, and it **carries its own colours**. Nothing may be left to the renderer's default, because the renderer picks a light or a dark palette from the reader's own setting and the author only ever looked at one of them.
-
-**The failure is specific and it is always the same one.** A node styled with a pale fill and no explicit text colour is black-on-pale in light mode and white-on-pale in dark mode, and the second one is unreadable. Edge labels, subgraph titles and arrowheads are worse: they take the theme's foreground colour even when every node has been styled, so they turn white and vanish against a light page - or black and vanish against a dark one. The author sees a correct diagram and half the readers see holes in it.
-
-**So a diagram brings its own surface.** Every fill, every stroke and every piece of text is stated, on a dark ground that is legible under both settings. The cost is real and worth naming: a reader on a light page sees a dark panel rather than a diagram that blends into the prose. That is the trade - one diagram that is right for everybody, against two that are each right for half.
+Use Mermaid in a fenced `mermaid` block. Set the diagram's theme, surface, text, borders and arrows explicitly so it remains readable in both page themes.
 
 ### The opening line, which is not optional
 
-```
+```text
 %%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 ```
 
-`theme: base` is what stops the renderer choosing. Without it the `themeVariables` are merged into a palette that still flips. The five that are easy to forget are the five that break: `textColor` paints edge labels and subgraph titles, `edgeLabelBackground` paints the chip behind an edge label - left unset the renderer computes one, and it comes out a muddy olive - `lineColor` paints the arrows, and `clusterBkg` with `clusterBorder` paint the box a `subgraph` draws.
-
 ### The class vocabulary
 
-Seven classes, each with one meaning. A diagram uses the ones it needs and defines no others - a new class is a new meaning, and a meaning that appears in one diagram is a meaning no reader learns.
+Use these meanings consistently. Colour must not be the only signal.
 
-```
+```text
 classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
 classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
 classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
@@ -458,27 +140,13 @@ classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
 classDef ext fill:#2a2233,stroke:#6b5480,stroke-width:1px,stroke-dasharray:5 3,color:#e6e9f0;
 ```
 
-| Class | Shape it goes on | What it means |
-| --- | --- | --- |
-| `stage` | rectangle | A step that does work. The default; most nodes are this. |
-| `decision` | `{"..."}` diamond | A branch. Every arrow leaving one carries a label. |
-| `yes` | rectangle | The branch that continues, passes, or publishes. |
-| `no` | rectangle | The branch that stops, refuses, or fails. |
-| `warn` | rectangle | The branch that neither passes nor fails - held, degraded, or waiting on a person. |
-| `ledger` | `[("...")]` cylinder | Something persisted: a committed file, a ledger under `state/`, a cache. |
-| `ext` | rectangle, dashed | Something outside this repository. The dashes say "not ours" without a second colour. |
+`stage` means work; `decision` means a branch; `yes` and `no` mean outcomes. `warn` means held or degraded. Use `ledger` for persistence and `ext` for an external dependency. Label every arrow leaving a decision.
 
-**Green and red are the outcome, never the subject.** A node is `yes` because that path passed, not because it is a nice thing. A stage that happens to be about validation is `stage`. Used this way the two colours are worth reading; used decoratively they are worth nothing, and a reader stops trusting them everywhere else on the page.
+### Project bindings
 
-**Colour is never the only carrier.** `yes` and `no` sit on labelled arrows out of a diamond, so the meaning survives a monochrome print and a reader who cannot separate the two hues. A diagram that needs its colours to be understood is a diagram with a missing label.
+Group nodes in a `subgraph` only when the diagram crosses subsystem boundaries. Name each group for a real subsystem or workflow. Its accent colours the border and title, not the fill.
 
-### The third dimension: which part of the system a node belongs to
-
-The classes above say what a node **is** and what an outcome **means**. Neither says **where in the system it lives**, and a diagram that crosses two subsystems without saying so reads as one undifferentiated thing. So a node that belongs to a named part of the system sits inside a `subgraph`, and the subgraph carries that part's accent.
-
-**The accent is the border and the title, never the fill.** Every box keeps the same dark ground. This is the rule that stops the palette lying: a red-bordered box is not a red node, so the outcome colours above keep meaning exactly one thing. Boxes are background, nodes are foreground, and the two never compete.
-
-```
+```text
 classDef sysIngest fill:#1a1e27,stroke:#2e9c8a,stroke-width:1.5px,color:#7fe3d2;
 classDef sysExtract fill:#1a1e27,stroke:#4f7fd6,stroke-width:1.5px,color:#a8c4f5;
 classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
@@ -487,33 +155,16 @@ classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
 classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
 ```
 
-**This project is domain-neutral everywhere else on this page; the table below is the one exception, because an accent that is not the same colour on every page is worth nothing.** A project copying this page replaces the rows and keeps the rule.
-
-| Class | Covers | Where the reader goes next |
-| --- | --- | --- |
-| `sysIngest` | Feeds, first sighting, feed health, scoring and ranking - everything that decides what is a candidate | [../architecture/sources/](../architecture/sources/), the `plan` stage |
-| `sysExtract` | Fetch, extract, sanitize. The trust boundary is inside this one | [../architecture/extraction/](../architecture/extraction/), the `work` stage |
-| `sysModel` | The summariser calls, classification, the visual plan | [../architecture/summarize/](../architecture/summarize/), the `work` stage |
-| `sysPublish` | Assemble, the digest tree, the published site | [../architecture/publishing/](../architecture/publishing/), the `assemble` stage |
-| `sysEval` | Model validation, the bench, drift review, the eval ledger | [github-actions.md](github-actions.md), `validate.yml`, `measure.yml` |
-| `sysOps` | CI, the gardener, backfill, the operator console - work that serves the pipeline rather than the reader | [github-actions.md](github-actions.md), `ci.yml`, `idhazh-gardener.yml` |
-
-**Name the box for the thing a reader can go and look at.** `Content refresh - digest.yml` is a box title; `Stage 2` is not. The title is how a reader gets from the picture to the code, so it carries the workflow's own display name or the architecture directory's own name and nothing invented here (CLAUDE.md section 0b).
-
-**One accent per box, and a box only where it earns one.** A diagram entirely inside one subsystem needs no boxes at all - six grey rectangles in a labelled box say less than six grey rectangles. Boxes are for the diagram that crosses a boundary, which is the diagram where a reader asks "wait, which part is doing that?"
+These name ingestion, extraction, models, publication, evaluation and operations respectively.
 
 ### Checks before a diagram merges
 
-1. The `%%{init...}%%` line is present and names `theme: base`.
-2. Every node is in a class. An unstyled node is the bug this whole rule exists for.
-3. Every arrow out of a diamond has a label.
-4. `yes` and `no` mark outcomes, not subjects.
-5. Every `subgraph` carries a `sys*` accent, and its title names something a reader can go and open.
-6. Read it once with the page on light and once on dark. Both, not one.
+Check explicit colours, a class on every node, labelled branches, meaningful subsystem groups and readable output in both light and dark page themes.
 
 ## See also
 
-- [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - the constraints every doc honours.
-- [repository-layout.md](repository-layout.md) - the companion map: where a directory belongs, as this doc is where a document belongs.
-- [how-to/ship-a-pr.md](../how-to/ship-a-pr.md) - the PR lifecycle that triggers doc updates.
-- [how-to/distill-a-plan.md](../how-to/distill-a-plan.md) - how a finding in a plan-doc gets lifted into the right canonical home.
+- [repository-layout.md](repository-layout.md) - directory purposes and writers.
+- [../how-to/ship-a-pr.md](../how-to/ship-a-pr.md) - delivery workflow.
+- [../how-to/distill-a-plan.md](../how-to/distill-a-plan.md) - moving durable findings into docs.
+- [../concepts/principles.md](../concepts/principles.md) - project design principles.
+- [../../CLAUDE.md](../../CLAUDE.md) - engineering contract.

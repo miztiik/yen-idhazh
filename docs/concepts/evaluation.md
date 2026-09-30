@@ -201,7 +201,7 @@ production run scored, each pair scored twice and nothing else varied - once at
 today's `900/150/anchored` geometry, once at a 1,923-word window that holds every
 premise whole. Taken by `backend/utilities/grader_length_bias.py`; the figures,
 the hardware and the spread are in
-[../archive/measurements-2026-08.md](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs).
+[Current quality-verification requirements](qualification.md).
 
 | Windows the article takes today | Items | Today's score minus the whole-article score |
 | --- | ---: | ---: |
@@ -782,7 +782,7 @@ faithfulness score, rather than comparing two different measured subsets.
 non-article text**. Shorter sources with steady faithfulness warrant inspection;
 they do not prove that extraction failed. Short news and video introductions
 can be valid. Removing player notices also makes an extraction shorter while
-improving it. See the [issue 438 replay](../archive/measurements-2026-08.md#drift-review-and-source-extraction-2026-09-08)
+improving it. See the [Current qualification requirements](qualification.md)
 for the sample counts and the confirmed extraction defect.
 
 ### Current drift implementation gap

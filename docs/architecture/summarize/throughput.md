@@ -16,11 +16,11 @@ here. **The configured cap has moved twice since - to 5000 on 2026-08-29 and to
 10,000 on 2026-09-09** - so every rate on this page is a cap-2500 rate and is two
 moves behind the running config. The two conditions that revert the first move
 are in
-[The first run at cap 5000](../../archive/measurements-2026-08.md#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it),
+[Truncation measurement](../../reference/benchmarks/how-often-the-truncation-cap-bites.md),
 and what that run has to record is in
-[What the first run at cap 5000 must record](../../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record).
+[Recording a current measurement](../../reference/pipeline-cost.md#how-to-add-a-reading).
 What the move to 10,000 cost is measured in
-[How often the truncation cap actually bites](../../reference/pipeline-cost.md#how-often-the-truncation-cap-actually-bites-2026-09-09).
+[How often the truncation cap bites](../../reference/benchmarks/how-often-the-truncation-cap-bites.md).
 **Read is the end that moves.** A longer article is more prompt to take in;
 write does not move at all, because the summary length asked for comes from
 `article.band_source_words`, which is the count from before the cap cut it.
@@ -202,7 +202,7 @@ our stopwatch around the HTTP request; `prefill_ms + decode_ms` is what the
 server said the same request cost. Over the 2,317 committed rows that carry all
 three the difference - transport, JSON and validation - has a median of **79 ms
 against a median call of 122,432 ms**, and **0 of the 2,317 are negative**
-([../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#our-stopwatch-and-the-servers-own-clocks-agree-to-0066-percent)).
+([Checking the request and server measurements](../../reference/pipeline-cost.md#the-ledger-and-the-server-agree-about-the-read-rate)).
 So a slow day is the model and not the client, and there is no unnamed third
 phase hiding inside `summarize_ms`.
 
@@ -487,7 +487,7 @@ Write is 36.8 percent of model time - 232.7 minutes read against 135.7 minutes
 write on run `32742672105`, 2026-08-24 - so 1.055x buys about 1.9 percent of a
 run's wall-clock. **A second in-flight request inside one worker is therefore not
 a throughput lever on this hardware, and that line of work is closed**
-([Parallel decode on 4 vCPU](../../archive/measurements-2026-08.md#parallel-decode-on-4-vcpu)).
+([Current throughput measurement rules](../../reference/pipeline-cost.md#inference-throughput)).
 
 The lever that remains is the number of shards. Each shard is its own runner
 with its own 4 vCPU, so raising the shard count adds cores rather than dividing
@@ -497,7 +497,7 @@ run has now used it: the slowest worker fell from 113.1 minutes to 58.8, which
 is 1.92x, on a day whose total tokens were within 1 percent of the four-shard
 baseline's. It is not a paired measurement and it did not publish - the caveats
 and every other figure are under
-[Eight work shards](../../archive/measurements-2026-08.md#eight-work-shards).
+[Sizing parallel work](../../reference/pipeline-cost.md#where-the-work-jobs-bound-comes-from).
 
 ## The processor a shard draws moves read four times harder than any knob
 
