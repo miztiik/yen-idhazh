@@ -308,31 +308,35 @@ Per tier:
 
 ## 14. Agent Roster
 
-Seven persona advisors live under `.github/agents/`, each at a distinct altitude. **This table is the authority assignment, and it is what resolves a stalled debate**: the decision class names who rules.
+Use these responsibilities to resolve disagreements, not as a checklist of approvals. Add an advisor only for a distinct responsibility not already covered. All follow section 0b.
 
-| Agent                               | File               | Altitude, and the decisions it rules                                          |
-| ----------------------------------- | ------------------ | ----------------------------------------------------------------------------- |
-| Reader                              | `reader.agent.md`  | the person the digest is for - is it worth their two minutes? is the language plain? does the page work on a slow connection and a small screen? |
-| Editor                              | `editor.agent.md`  | what the digest covers and at what length - story selection, where a cut may fall by kind of writing, which themes to trade when a budget binds, whether a source earns its slot |
-| Jony (UI and UX)                        | `jony.agent.md`    | the published surface - page and typography, chart vs diagram vs nothing, the eval dashboard, what a visual must earn |
-| Susan (Craft and Delight)             | `susan.agent.md`   | whether a surface is good enough to ship - the sufficiency checks, elevation and colour systems, icon and chart craft, both themes, empty and degraded states |
-| Andre (AI and LLM)                    | `andre.agent.md`   | model pick on quality grounds, prompt strategy, constrained decoding, eval design and metric choice, the prompt-injection surface |
-| Fowler (Architecture and Engineering) | `fowler.agent.md`  | architecture, persisted contracts (stage payloads, eval ledger, run manifest, config, published payloads), schema versioning, test tiers, refactor safety, module structure, when to delete |
-| Carmack (Engine and Runtime)          | `carmack.agent.md` | inference runtime, model quantisation and fit, the runner budget, throughput, cache and shard economics, job timeouts |
+| Advisor | Responsibility |
+| --- | --- |
+| [Reader](.github/agents/reader.agent.md) | Reading experience, plain language, small screens and slow connections |
+| [Editor](.github/agents/editor.agent.md) | Coverage, story selection, length, cuts, topic balance and source value |
+| [Jony](.github/agents/jony.agent.md) | Published layout, typography and the choice of chart, diagram or no visual |
+| [Susan](.github/agents/susan.agent.md) | Readiness to ship: sufficiency, elevation, colour, icons, charts, both themes, empty and degraded states |
+| [Andre](.github/agents/andre.agent.md) | Model quality, prompts, constrained decoding, evaluation and model-output requirements |
+| [Fowler](.github/agents/fowler.agent.md) | Architecture, contracts, versioning, validation, process safety, test tiers, safe refactoring, module structure and deletion |
+| [Carmack](.github/agents/carmack.agent.md) | On-demand advice on runtime, quantisation, resource use, throughput, cache and shard costs, and timeouts |
 
-Adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
+### Shared boundaries
 
-**A veto must name what the reader loses.** A ruling that removes states what is removed *and* what the reader gives up by not having it; a ruling that states only the first is not a ruling and does not bind. This is not a courtesy - it is the price of the authority the table above hands out.
+- **Content:** Reader reports the experience, not proposals. Editor decides coverage and length, not what the reader experienced.
+- **Design:** Jony decides what stays; Susan decides whether it is good enough to ship. Neither judgment replaces the other. Susan cannot overrule Reader on language or Editor on content.
+- **Models:** A model must meet quality and execution requirements, not collect two advisor approvals. Andre owns quality; Carmack advises on runtime when invoked.
+- **Injection:** Andre defines prompt and model-output requirements. Fowler owns contracts, validation and the process boundary. Model output must not become shell arguments, file paths or fetch URLs.
+- **Evaluation:** Editor names the content failure; Andre chooses how to measure it.
 
-Five pairs share an edge, and each one has a written split.
+**Invocation:** Fowler or another agent may invoke Carmack for a specific runtime question whose answer changes the current implementation decision. A direct user request also qualifies. Carmack has no automatic review or approval step. Ownership does not require consultation on every increment.
 
-- Where Reader and Editor both touch content: **Reader reports what reading it was like, Editor rules what should have run and how long.** Reader does not propose; Editor does not speak for the reader's experience of the page.
-- Where Jony and Susan both touch the page: **Jony rules what survives on the page, Susan rules whether what survived is good enough to ship.** They are the two halves of one review and neither is sufficient alone. Susan never overrules Carmack on bytes, Reader on plain language, or Editor on what runs.
-- Where Carmack and Andre both touch the model: **Andre owns whether a model is good enough, Carmack owns whether it fits.** A model that fails either test is not the pick.
-- Where Andre and Carmack both touch injection: **Andre owns the prompt and schema shape, Carmack owns the process boundary** - no model output becomes a shell argument, a file path, or a URL to fetch.
-- Where Editor and Andre both touch quality: **Editor names the content failure, Andre chooses the instrument that measures it.**
+**Implementation:** Build the requested capability incrementally in its intended code path. Each increment implements real behavior, has appropriate tests and becomes the basis for the next increment. Do not substitute mocks, placeholders or a separate proof of concept for the capability.
 
-A persona's own worldview shapes what it says, never how plainly it says it (section 0b).
+**Measurement:** Measure to decide the next implementation step, not to obtain permission to build. If measurement needs working code, build that part of the real feature first. Further measurement must name what decision it could change; otherwise continue implementation.
+
+No advisor may reduce scope or require a separate experimental implementation without user approval. Platform limits, safety controls and required correctness tests still apply.
+
+**A removal veto is valid only if it names what is removed and what the reader loses.**
 
 
 ## See also
