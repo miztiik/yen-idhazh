@@ -42,7 +42,7 @@ Three things changed, and each one addresses a different link in that chain:
 **The budget stop is not a rare event, and that is now measured.** Over the eleven committed runs
 that decided anything, the stage spends its **whole** budget on ten of them and leaves items
 undecided on nine, at a median of 48.9 seconds an asked item and a median of 18 items left
-([`../../archive/measurements-2026-08.md`](../../archive/measurements-2026-08.md#the-route-stages-per-item-cost-over-every-run)).
+([Current job-cost guidance](../../reference/pipeline-cost.md#what-a-work-shard-costs)).
 So a run that hits the bound is the normal case rather than a symptom, and **a single run's figure
 must not be quoted as what the stage costs** - the fastest run on record is 1.7 times faster per
 item than the next, which is enough to make an ordinary run look like a regression. What would

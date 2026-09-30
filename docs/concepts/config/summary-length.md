@@ -106,7 +106,7 @@ the rungs above 700 were set by asking what an abstract is worth at each source
 length, not by dividing the cut point, and the top of the ladder came down from
 230 words to 200. Above 4000 words every article gets the same evidence anyway,
 because the cut point hands the model 7,692 words whatever the source holds
-([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md#design-rationale---the-ladder-is-editorial-and-200-words-governs-it)).
+([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md#one-ask-per-article-length)).
 
 **The same change deleted `evaluation.summary_words_min` and
 `evaluation.summary_words_max`.** They were a single global range every band's

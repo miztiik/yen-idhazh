@@ -161,7 +161,7 @@ not be compared with any other model's separate download observation.
 
 What the cache actually held on the day this model replaced the last one, entry
 by entry, is a dated record of that transition rather than a property of these
-weights: [The cache transition](../pipeline-cost.md#the-cache-transition-measured-2026-08-27).
+weights: [Cache-aware throughput measurement](../pipeline-cost.md#inference-throughput).
 
 ## What the tokenizer costs
 
@@ -244,13 +244,13 @@ a token to read as a short one.
 
 **The live digest path corroborates the 4,850-token row** over 4,117 real items
 across nine days, which is the strongest corroboration on this page
-([How often the truncation cap actually bites](../pipeline-cost.md#how-often-the-truncation-cap-actually-bites-2026-09-09)).
+([How often the truncation cap bites](../benchmarks/how-often-the-truncation-cap-bites.md)).
 
 **This is not a comparison with the retired model.** The retired incumbent's rows
 were taken in a different job, on a different CPU model and on llama.cpp
 `b10580`. They establish that model's throughput and this one's; they do not
 establish a delta between them, and **no such delta was ever measured**
-([Still unmeasured](../pipeline-cost.md#still-unmeasured)).
+([Choosing the next measurement](../pipeline-cost.md#what-to-measure-next)).
 
 ## Memory
 
@@ -277,12 +277,12 @@ came.** Most of it is mapped weight pages the kernel can drop under pressure, so
 subtracting it from the machine's total does not yield headroom. That subtraction
 was published once and is retracted; the retraction, and what would settle the
 question, are on the instrument log
-([Summed RSS reaches 14.31 GiB](../pipeline-cost.md#summed-rss-reaches-1431-gib-and-that-does-not-say-how-near-the-edge-the-job-came)).
+([Interpreting resident memory](../pipeline-cost.md#how-much-of-the-runners-memory-a-run-needs)).
 
 **The committed ledger's own peak column is not a reading of this model.**
 The item-health ledger carries no column naming the weights and its rows
 span both this model and the retired one, so its range is a reading of the job
-([The ledger's own worst row](../pipeline-cost.md#the-ledgers-own-worst-row-moved-to-1382-gib)).
+([Interpreting memory peaks](../pipeline-cost.md#how-much-of-the-runners-memory-a-run-needs)).
 
 ### What the machine had free while these weights worked, and the day it changed
 
@@ -401,14 +401,14 @@ incumbent Qwen3-8B-Q4_K_M: no paired corpus, no side-by-side scores, no human
 review. The faithfulness mean in that table is one model on one corpus and is not
 a delta, and nothing on this page may be cited as if it were (Guardrail #10).
 What would settle it is written down
-([Still unmeasured](../pipeline-cost.md#still-unmeasured)).
+([Choosing the next measurement](../pipeline-cost.md#what-to-measure-next)).
 
 **The `injection_canaries` failure is not a security finding about this model.**
 The fifth canary was never exercised: the sanitizer stripped every marker before
 the prompt was built, and the gate failed on the model returning no summary. The
 correction, and why it is a lesson about the instrument rather than about the
 weights, is on the instrument log
-([The fifth canary was never exercised](../pipeline-cost.md#the-fifth-canary-was-never-exercised)).
+([Current injection controls and checks](../../architecture/sources/trust-boundary.md)).
 
 ## The records behind this page
 
