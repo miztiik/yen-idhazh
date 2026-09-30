@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-30
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -53,6 +53,13 @@ Three things the diagram is deliberate about. **The veto is first and nothing be
 - **The anchor's card names the other newsrooms, and every name is a link.** `covered_by` carries the outlet and that outlet's own item id, so a reader who has no link still has a way in. It links to OUR page for that piece - our summary of it, with its own `Read the original` under it - rather than straight out to the publisher: a reader who wanted the publisher's version is one more click away, and a reader who wanted ours has not lost it.
 - **A story the reader's own address names is never folded.** `foldedMembers` takes the fragment as an argument and excludes it, so `/<date>/#<item id>` draws that story, pages the stream down to it and focuses it. A publisher name is one of those addresses, which is why pressing one works at all.
 - **A story whose anchor is not on this page is never folded either.** A group can straddle two desks, so on a topic route one half of it can be on another page; folding behind a card this page does not draw would take the story off the page with nothing to find it by.
+
+Same-day publisher links include the site prefix and digest date:
+`<base>/<YYYY-MM-DD>/#<item-id>`. The home page can omit a folded or paged card
+from its initial HTML. A bare fragment would name an absent element and fail
+the build. The dated page loads the day and reveals the named story. From the
+home page this opens the dated page; from that day's page it changes only the
+fragment. The payload and the grouping are unchanged.
 
 **What the reader loses, stated.** On a false merge a story is one click away instead of on the page. That is a real loss and it is the trade the owner took on 2026-09-14, on the reasoning under `Editor's asymmetry` below. `ui.draw_same_story` is the revert: default true, and false restores one card per story with no other change. It is removed when the grouping's false-merge rate has been measured on a published day and the Editor has accepted it.
 

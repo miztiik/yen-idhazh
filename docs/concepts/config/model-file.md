@@ -156,7 +156,7 @@ oversubscribe the 4 vCPU, so no level on this runner clears the gate. The knob
 stays, because `null` and `1` still differ and both are in use - but no value
 above 1 is a candidate here, and sweeping it again needs new hardware or a new
 runtime, not a repeat
-([Parallel decode on 4 vCPU](../../archive/measurements-2026-08.md#parallel-decode-on-4-vcpu)).
+([Current throughput measurement rules](../../reference/pipeline-cost.md#inference-throughput)).
 
 A knob's presence is not evidence that it improves a run. Owner-selected
 settings remain labelled unmeasured until a runner measurement records their
