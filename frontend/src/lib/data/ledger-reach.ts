@@ -1,18 +1,19 @@
 /**
- * How far does a ledger reach, read from its two indexes and nothing else?
+ * How far does a ledger reach, read from its indexes and nothing else?
  *
  * A console route anchors its span on the data rather than on the clock, so it
  * needs the oldest and the newest day a ledger holds before it asks for a slice.
- * `ledgerReach()` in `ledger.ts` answers with this module. It reads `daily.json`
- * and `monthly.json` at the same time, through the page keeper, so a slice asked
- * afterwards fetches neither again; and it starts no engine, because an index is
- * JSON.
+ * `ledgerReach()` in `ledger.ts` answers with this module. It reads `daily.json`,
+ * `monthly.json` and `yearly.json` at the same time, through the page keeper, so
+ * a slice asked afterwards fetches none of them again; and it starts no engine,
+ * because an index is JSON.
  *
  * - `ok`: `through` is the newest day `daily.json` names - the day a slice
- *   returns as its own `through`. `first` is the oldest day either index names,
- *   a month counting from its first day. `fault` is `index-missing` when there is
- *   no `monthly.json`: `first` is then the oldest day `daily.json` names, so a
- *   route anchored on it still draws every day the door can read.
+ *   returns as its own `through`. `first` is the oldest day any index names, a
+ *   month counting from its first day and a year from its 1 January. `fault` is
+ *   `index-missing` when there is no `monthly.json` or no `yearly.json`: `first`
+ *   is then the oldest day the indexes that are there name, so a route anchored
+ *   on it still draws every day the door can read.
  * - `quiet`: `daily.json` names no day yet.
  * - `missing`: there is no `daily.json`, so the ledger is not published. Its
  *   fault is `not-packed`.
@@ -20,9 +21,9 @@
  *   be read, and the console says why. It carries no day, because the reach asks
  *   for none, and no fault, because it reads no file an index names.
  *
- * `monthly.json` only moves `first` back. An empty one says no month is packed
- * yet. When this build will not act on it, the reach is the days `daily.json`
- * names, and the console says why.
+ * `monthly.json` and `yearly.json` only move `first` back. An empty one says no
+ * month, or no year, is packed yet. When this build will not act on one, the
+ * reach is what the other indexes name, and the console says why.
  *
  * Each index is read the way a slice reads it, by `readIndexFrom()` in
  * `slice-reader.ts`, a fault's console line is the slice's own `faultLine()`,
@@ -31,6 +32,7 @@
  * tied to one environment, so a Node test loads it as it is.
  */
 
+import type { CompactEntry, IndexReading, Period } from './compact-index';
 import type { PageKeeper } from './page-keeper';
 import { firstNamed } from './slice';
 import { explainRefusal, faultLine, LOG_PREFIX, readIndexFrom } from './slice-reader';
@@ -43,14 +45,20 @@ export type LedgerReach =
 	| { state: 'missing'; fault: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreachable' };
 
-/** The oldest and the newest day `ledger` holds, from its two indexes as the page keeps them. */
+/** The entries of an index this build acts on, and none for one it will not or that is not there. */
+function entriesOf(reading: IndexReading | null): CompactEntry[] {
+	return reading === null || 'refused' in reading ? [] : reading.index.entries;
+}
+
+/** The oldest and the newest day `ledger` holds, from its three indexes as the page keeps them. */
 export async function readReach(keeper: PageKeeper, ledger: LedgerName): Promise<LedgerReach> {
 	if (!(LEDGER_NAMES as readonly string[]).includes(ledger)) {
 		throw new SliceRequestError(`${JSON.stringify(ledger)} is not a ledger the console may query`);
 	}
-	const [daily, monthly] = await Promise.all([
+	const [daily, monthly, yearly] = await Promise.all([
 		readIndexFrom(keeper, ledger, 'daily'),
-		readIndexFrom(keeper, ledger, 'monthly')
+		readIndexFrom(keeper, ledger, 'monthly'),
+		readIndexFrom(keeper, ledger, 'yearly')
 	]);
 	if (daily === null) {
 		keeper.warn(faultLine(ledger, { fault: 'not-packed' }));
@@ -60,17 +68,26 @@ export async function readReach(keeper: PageKeeper, ledger: LedgerName): Promise
 		keeper.warn(`${LOG_PREFIX} ${ledger}: ${explainRefusal('daily', daily.refused)}, so how far it reaches is not known`);
 		return { state: 'unreachable' };
 	}
-	if (monthly === null) keeper.warn(faultLine(ledger, { fault: 'index-missing' }));
+	const coarser: [Exclude<Period, 'daily'>, IndexReading | null][] = [
+		['monthly', monthly],
+		['yearly', yearly]
+	];
+	let fault: Extract<LedgerFault, 'index-missing'> | null = null;
+	for (const [period, reading] of coarser) {
+		if (reading !== null) continue;
+		keeper.warn(faultLine(ledger, { fault: 'index-missing', period }));
+		fault = 'index-missing';
+	}
 	const days = daily.index.entries;
 	if (days.length === 0) return { state: 'quiet' };
 	const through = days[days.length - 1].covers;
-	if (monthly === null) return { state: 'ok', first: days[0].covers, through, fault: 'index-missing' };
-	if ('refused' in monthly) {
+	const first = firstNamed(days, entriesOf(monthly), entriesOf(yearly));
+	for (const [period, reading] of coarser) {
+		if (reading === null || !('refused' in reading)) continue;
 		keeper.warn(
-			`${LOG_PREFIX} ${ledger}: ${explainRefusal('monthly', monthly.refused)}, ` +
-				`so it reaches back only to ${days[0].covers}, the oldest day daily.json names`
+			`${LOG_PREFIX} ${ledger}: ${explainRefusal(period, reading.refused)}, ` +
+				`so it reaches back only to ${first}, the oldest day the other indexes name`
 		);
-		return { state: 'ok', first: days[0].covers, through, fault: null };
 	}
-	return { state: 'ok', first: firstNamed(days, monthly.index.entries), through, fault: null };
+	return { state: 'ok', first, through, fault };
 }

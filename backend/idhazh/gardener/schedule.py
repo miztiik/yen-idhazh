@@ -1,11 +1,11 @@
-"""Is a UTC day or month old enough for the gardener to act on at a given instant?
+"""Is a UTC day, month or year old enough for the gardener to act on at a given instant?
 
 **A period's end is a fact and a wake is not.** A day ended at 00:00 UTC on the
-day after it and a month at 00:00 UTC on the first of the month after it,
-whenever the job that asks happened to wake, so whether a period is old enough
-is measured from that instant and never from the wake. Moving a schedule
-therefore cannot change which periods qualify - it only changes when the
-question is next asked (CLAUDE.md section 2).
+day after it, a month at 00:00 UTC on the first of the month after it and a year
+at 00:00 UTC on 1 January after it, whenever the job that asks happened to wake,
+so whether a period is old enough is measured from that instant and never from
+the wake. Moving a schedule therefore cannot change which periods qualify - it
+only changes when the question is next asked (CLAUDE.md section 2).
 
 **The wait is whole days, so every wake of one UTC day gets the same answer.**
 A period ends at 00:00 UTC and a whole number of days after it is 00:00 UTC
@@ -57,3 +57,16 @@ def month_ended_at(month: str) -> datetime:
 def is_month_eligible(month: str, *, now: datetime, after_days: int) -> bool:
     """Whether at least `after_days` whole days have passed since `month` ended."""
     return now - month_ended_at(month) >= timedelta(days=after_days)
+
+
+def year_ended_at(year: str) -> datetime:
+    """The instant a UTC year closed: 00:00 UTC on 1 January of the year after it.
+
+    `year` is `YYYY`, the stamp a yearly period carries.
+    """
+    return datetime(int(year) + 1, 1, 1, tzinfo=UTC)
+
+
+def is_year_eligible(year: str, *, now: datetime, after_days: int) -> bool:
+    """Whether at least `after_days` whole days have passed since `year` ended."""
+    return now - year_ended_at(year) >= timedelta(days=after_days)

@@ -1,9 +1,10 @@
 /**
  * How is one slice answered from what the page keeps?
  *
- * The door reads `daily.json`, and `monthly.json` only when the span starts
- * before the oldest day `daily.json` names. It takes the coarsest file for each
- * day (`slice.ts`), has the page keeper hold the files that hold rows
+ * The door reads `daily.json`; `monthly.json` only when the span starts before
+ * the oldest day `daily.json` names; and `yearly.json` only when it starts before
+ * the oldest day those two name. It takes the coarsest file for each day
+ * (`slice.ts`), has the page keeper hold the files that hold rows
  * (`page-keeper.ts`), asks the engine one query over them (`slice-query.ts`),
  * and returns one of four states:
  *
@@ -13,18 +14,25 @@
  *   wholly after the newest day compacted. A file whose entry says `rows: 0` is
  *   never fetched, so a span of quiet days loads no engine at all.
  * - `unreachable`: `at` is the first day that could not be answered, and the
- *   console says why. Its fault is `index-missing` for a span that starts before
- *   the oldest daily day when there is no `monthly.json`, `day-missing` for a day
- *   between the first and the newest packed day that neither index names, and
+ *   console says why. Its fault is `index-missing` for a span that reaches back
+ *   past the days `daily.json` names when there is no `monthly.json`, or past
+ *   the days those two name when there is no `yearly.json`; `day-missing` for a
+ *   day between the first and the newest packed day that no index names; and
  *   `file-missing` for a named file that is not there. It is `null` for a span
- *   that starts before the oldest day either index names, an index this build
- *   will not act on, a file that did not arrive whole, or an engine that could
- *   not answer.
+ *   that starts before the oldest day any index names, an index this build will
+ *   not act on, a file that did not arrive whole, or an engine that could not
+ *   answer.
  * - `ok`: the rows, exactly as the files hold them. The door never merges rows:
  *   the compaction already wrote one row per record.
  *
  * `through` is the newest day `daily.json` names. A day after it has not been
  * compacted yet, so it is clamped away rather than drawn as a zero.
+ *
+ * **A day in a packed year is read from its year file, fetched whole.** The page
+ * keeper checks every file against the length its entry gives before the engine
+ * sees it, so one month of a year costs the whole year's bytes; the gardener
+ * keeps a published ledger's month files long enough that the console's widest
+ * read never reaches one.
  *
  * **The address is composed here and nowhere else**, from the closed ledger
  * name, the period and a `covers` the index guard has already checked, so no
@@ -64,9 +72,12 @@ export function indexPath(ledger: LedgerName, period: Period): string {
 /** Where one compact file sits under the state root, named for what it covers. */
 export function dataPath(ledger: LedgerName, period: Period, covers: string): string {
 	const [year, month, day] = covers.split('-');
-	return period === 'daily'
-		? `compact/${ledger}/daily/${year}/${month}/${day}.parquet`
-		: `compact/${ledger}/monthly/${year}/${month}.parquet`;
+	const named: Record<Period, string> = {
+		daily: `daily/${year}/${month}/${day}`,
+		monthly: `monthly/${year}/${month}`,
+		yearly: `yearly/${year}/${year}`
+	};
+	return `compact/${ledger}/${named[period]}.parquet`;
 }
 
 /** The version a data file is asked for under. A file is written once, so its
@@ -78,10 +89,13 @@ export function dataVersion(entry: CompactEntry): string {
 /** What every line the door prints to the console starts with. */
 export const LOG_PREFIX = '[ledger]';
 
+/** What a line calls the stretch of time one period's file covers. */
+const UNIT: Record<Period, string> = { daily: 'day', monthly: 'month', yearly: 'year' };
+
 /** One fault as the door met it, with what its line names. */
 export type FaultMet =
 	| { fault: Extract<LedgerFault, 'not-packed'> }
-	| { fault: Extract<LedgerFault, 'index-missing'> }
+	| { fault: Extract<LedgerFault, 'index-missing'>; period: Exclude<Period, 'daily'> }
 	| { fault: Extract<LedgerFault, 'file-missing'>; period: Period; covers: string }
 	| { fault: Extract<LedgerFault, 'day-missing'>; day: DateStamp };
 
@@ -99,20 +113,19 @@ export function faultLine(ledger: LedgerName, met: FaultMet): string {
 	}
 	if (met.fault === 'index-missing') {
 		return line(
-			indexPath(ledger, 'monthly'),
-			'it is not there, though daily.json is. Run the upkeep again to write it; it lists nothing until a month is packed.'
+			indexPath(ledger, met.period),
+			`it is not there, though daily.json is. Run the upkeep again to write it; it lists nothing until a ${UNIT[met.period]} is packed.`
 		);
 	}
 	if (met.fault === 'file-missing') {
-		const unit = met.period === 'daily' ? 'day' : 'month';
 		return line(
 			dataPath(ledger, met.period, met.covers),
-			`${met.period}.json names it; it is not there. Reload; if it stays, re-pack that ${unit}.`
+			`${met.period}.json names it; it is not there. Reload; if it stays, re-pack that ${UNIT[met.period]}.`
 		);
 	}
 	return line(
 		indexPath(ledger, 'daily'),
-		`neither it nor monthly.json names ${met.day}, a day between packed days. ` +
+		`no index names ${met.day}, a day between packed days. ` +
 			'Re-pack that day from raw files; if they are gone, try git history.'
 	);
 }
@@ -189,20 +202,27 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	const until = request.to < through ? request.to : through;
 
 	let months: CompactEntry[] = [];
+	let years: CompactEntry[] = [];
 	if (request.from < days[0].covers) {
 		const monthly = await readIndexFrom(keeper, ledger, 'monthly');
-		if (monthly === null) return faulted(request.from, { fault: 'index-missing' });
+		if (monthly === null) return faulted(request.from, { fault: 'index-missing', period: 'monthly' });
 		if ('refused' in monthly) return unreachable(request.from, explainRefusal('monthly', monthly.refused));
 		months = monthly.index.entries;
+		if (request.from < firstNamed(days, months, [])) {
+			const yearly = await readIndexFrom(keeper, ledger, 'yearly');
+			if (yearly === null) return faulted(request.from, { fault: 'index-missing', period: 'yearly' });
+			if ('refused' in yearly) return unreachable(request.from, explainRefusal('yearly', yearly.refused));
+			years = yearly.index.entries;
+		}
 	}
 
-	const selection = filesFor(request.from, until, days, months);
+	const selection = filesFor(request.from, until, days, months, years);
 	if ('hole' in selection) {
-		const first = firstNamed(days, months);
+		const first = firstNamed(days, months, years);
 		if (selection.hole < first) {
 			return unreachable(
 				selection.hole,
-				`it starts before ${first}, the oldest day either index names`,
+				`it starts before ${first}, the oldest day any index names`,
 				"Clamp the span to the reach's first day"
 			);
 		}

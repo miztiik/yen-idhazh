@@ -25,7 +25,9 @@ Month M goes at the instant month M plus the window becomes absorbable, so the
 period holds exactly that many months at every wake and the ledger reaches back
 `daily_keep_days` further. `first_kept_month` is the one place that is worked
 out; the daily period's first run asks it too, so it never compacts a day the
-window would drop at once.
+window would drop at once. A declaration that packs years keeps the window
+forever, and its month files leave only by being packed into their year
+(`_yearly_period`).
 
 Every month here is a UTC month, and every rule is whole days after a month's
 own end, so every wake of one UTC day gets the same answer (CLAUDE.md section 2).

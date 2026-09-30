@@ -42,7 +42,7 @@ of four nothings without inspecting an error:
 | 1 | `ok`, with the rows | At least one row matched. The rows are what the files hold, sorted by the requested columns left to right; the door never merges two rows, because the compaction already wrote one row per record |
 | 2 | `quiet` | Every day asked for is covered and nothing matched, or the whole span lies after the newest day compacted. A filter that matches nothing is `quiet`, never an empty `ok` |
 | 3 | `missing` | The ledger has no `daily.json`, so it is not published. Its fault is `not-packed` |
-| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why. A file the ledger should hold and does not is named as one of four faults ([below](#when-a-file-is-missing)); the other causes are a span that starts before the oldest day either index names, a named file that arrived at the wrong length or could not be fetched, an index this build will not act on, and an engine that could not run the query |
+| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why. A file the ledger should hold and does not is named as one of four faults ([below](#when-a-file-is-missing)); the other causes are a span that starts before the oldest day any index names, a named file that arrived at the wrong length or could not be fetched, an index this build will not act on, and an engine that could not run the query |
 
 `ok` and `quiet` carry `through`, the newest day `daily.json` names - `null`
 before the first compaction - so a panel can say how far its data reaches. A day
@@ -53,17 +53,20 @@ missing file behind them, or `null` for an `unreachable` with another cause.
 ## Which files a span reads
 
 The ledger carries its own indexes, because a browser cannot list a directory:
-`state/compact/<ledger>/index/daily.json` and `index/monthly.json`, written by the
-gardener's compaction task and declared as `CompactIndex` in
+`state/compact/<ledger>/index/daily.json`, `index/monthly.json` and
+`index/yearly.json`, written together by the gardener's compaction task - an
+index for a period never packed names nothing - and declared as `CompactIndex` in
 `backend/idhazh/contracts/ledger_index.py`.
 
-1. **`daily.json` first, and `monthly.json` only when the span starts before the
-   oldest day `daily.json` names.** A span of 30 days or less reads one index.
-2. **For each day, the coarsest period that holds it**: the month file when
-   `monthly.json` names that month, otherwise the day file. A day is read through
-   exactly one file, so a day both indexes name is read from the month - reading
-   it twice would double every number drawn from it.
-3. **A day neither index names, between the oldest day either index names and
+1. **`daily.json` first; `monthly.json` only when the span starts before the
+   oldest day `daily.json` names; and `yearly.json` only when it starts before the
+   oldest day those two name.** A span of 30 days or less reads one index.
+2. **For each day, the coarsest period that holds it**: the year file when
+   `yearly.json` names that year, else the month file when `monthly.json` names
+   that month, otherwise the day file. A day is read through exactly one file, so
+   a day two indexes name is read from the coarser - reading it twice would double
+   every number drawn from it.
+3. **A day no index names, between the oldest day any index names and
    `through`, is a hole**, and the answer is `unreachable` at the first one,
    named `day-missing`. Drawing the days around it would be an undercount nobody
    could see. A span that starts before the oldest named day is `unreachable` at
@@ -75,6 +78,13 @@ gardener's compaction task and declared as `CompactIndex` in
    so is one that does not arrive; one the site answers is not there is
    `file-missing`. The decoded length, never `Content-Length`,
    because Pages compresses what it serves.
+6. **A day in a packed year costs the whole year file.** The door fetches every
+   file whole, so drawing one month from a year fetches all twelve. The year file
+   is written one row group a month, which would let a reader that fetches by
+   byte range take one month's part, and this door does not. So the gardener
+   keeps a published ledger's month files at least `console.max_window_days` plus
+   `compact_after_days` after their year ends, and no read the console can widen
+   to reaches a year file; a span panned further back than that does.
 
 An index is asked for with `cache: 'no-store'`, so a page's one read of it gets
 what the site holds now rather than a copy an HTTP cache kept, and the page then
@@ -88,9 +98,9 @@ A page keeps what the door read for it, so nothing crosses the network or enters
 the engine twice. The keeper is `frontend/src/lib/data/page-keeper.ts`.
 
 - **Each index is read once a page and kept.** Every slice and every reach on the
-  page acts on the same `daily.json` and `monthly.json`. Two asks at the same
-  moment share one fetch. A 404 is kept, because it is an answer; a fetch that
-  threw is not, so the next ask tries again.
+  page acts on the same `daily.json`, `monthly.json` and `yearly.json`. Two asks
+  at the same moment share one fetch. A 404 is kept, because it is an answer; a
+  fetch that threw is not, so the next ask tries again.
 - **Each data file enters the engine once, and the page keeps its name, never its
   bytes.** A file is known by its path and the version its entry names. A
   browser's engine takes the buffer it is handed and leaves the page's copy empty,
@@ -129,32 +139,34 @@ route can anchor its span on the data rather than on the clock:
 
 | # | Answer | When |
 | --- | --- | --- |
-| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day either index names, a month counting from its first day. Its `fault` is `index-missing` when there is no `monthly.json`, and `first` is then the oldest day `daily.json` names |
+| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day any index names, a month counting from its first day and a year from its 1 January. Its `fault` is `index-missing` when there is no `monthly.json` or no `yearly.json`, and `first` is then the oldest day the indexes that are there name |
 | 2 | `quiet` | `daily.json` names no day yet |
 | 3 | `missing` | There is no `daily.json`, so the ledger is not published. Its fault is `not-packed` |
 | 4 | `unreachable` | `daily.json` is one this build will not act on, or could not be read. It carries no day, because the reach asks for none; the console says why |
 
-It reads both indexes at the same time through the page's keeper, so a slice
-asked after it reads neither again, and it starts no engine. A `monthly.json` this
-build will not act on leaves the days `daily.json` names, and the console says
-why. The logic is `frontend/src/lib/data/ledger-reach.ts`, which reads each index
-with the slice's own reader, so the two never disagree about what an index says.
+It reads all three indexes at the same time through the page's keeper, so a slice
+asked after it reads none again, and it starts no engine. A `monthly.json` or
+`yearly.json` this build will not act on leaves the days the other indexes name,
+and the console says why. A packed year counts from its 1 January even when the
+ledger's first rows came later in it. The logic is
+`frontend/src/lib/data/ledger-reach.ts`, which reads each index with the slice's
+own reader, so the two never disagree about what an index says.
 
 ## When a file is missing
 
-A packed ledger lists its own files in its two indexes, so a file it should hold
-and does not is a named fault, never an empty answer. The rule, the four names
-and what the gardener does about each are on the compaction's page
-([idhazh-gardener.md](idhazh-gardener.md#both-indexes-and-a-file-that-is-missing)).
+A packed ledger lists its own files in its three indexes, so a file it should
+hold and does not is a named fault, never an empty answer. The rule, the four
+names and what the gardener does about each are on the compaction's page
+([idhazh-gardener.md](idhazh-gardener.md#the-three-indexes-and-a-file-that-is-missing)).
 `LEDGER_FAULTS` in `frontend/src/lib/data/slice-shapes.ts` declares the names,
 and this is what each one draws:
 
 | # | Fault | What is missing | A slice answers | A reach answers |
 | --- | --- | --- | --- | --- |
 | 1 | `not-packed` | `daily.json` | `missing`, and the route's note says the record is not packed yet | `missing` |
-| 2 | `index-missing` | `monthly.json`, while `daily.json` is there | A span inside the days `daily.json` names draws; one that starts earlier is `unreachable` at its first day | `ok` from the oldest day `daily.json` names |
+| 2 | `index-missing` | `monthly.json` or `yearly.json`, while `daily.json` is there | A span that needs only the indexes that are there draws; one that reaches back far enough to need the missing one is `unreachable` at its first day | `ok` from the oldest day the other indexes name |
 | 3 | `file-missing` | A file an index names | `unreachable` from the first day that file covers in the span | Unchanged: a reach reads no data file |
-| 4 | `day-missing` | A day between the oldest and the newest packed day that neither index names | `unreachable` at that day | Unchanged |
+| 4 | `day-missing` | A day between the oldest and the newest packed day that no index names | `unreachable` at that day | Unchanged |
 
 **Each fault prints one console line**, in one shape - the fault, the ledger,
 the committed path, what is wrong and what fixes it:
@@ -173,7 +185,8 @@ because each has its own fix (`recordNotes` in
 
 **Three gaps are expected, and none of them is a fault or a request**: a day
 after the newest packed day is clamped away, an entry with `rows: 0` is never
-fetched, and an empty `monthly.json` names no month. None of them makes the door
+fetched, and an empty `monthly.json` or `yearly.json` names nothing. None of
+them makes the door
 ask the site for a file that is not there, and `frontend/tests/ledger-door.spec.ts`
 counts what a byte source is asked to prove it.
 
@@ -186,6 +199,7 @@ already checked:
 - `<prefix>/state/compact/<ledger>/index/<period>.json`
 - `<prefix>/state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet`
 - `<prefix>/state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet`
+- `<prefix>/state/compact/<ledger>/yearly/<YYYY>/<YYYY>.parquet`
 
 `<prefix>` is `visuals.asset_base_url` in `config/idhazh.json`, or SvelteKit's own
 repository prefix when that knob is empty, which is the shipped default. It comes
@@ -326,7 +340,7 @@ empty, so the second slice would hand it an empty file, while the Node engine
 copies and every Node test would pass. Weighed and refused on 2026-09-29.
 
 **No retry after a deploy.** A kept index that names a file the deploy re-packed
-or removed answers `unreachable` rather than reading both indexes again and
+or removed answers `unreachable` rather than reading the indexes again and
 retrying once. The retry is about twenty lines, and it would move a page's first
 and newest day under panels already drawn. It is the move if an open tab is ever
 seen answering `unreachable` after a deploy; nothing has shown one yet. Ruled on

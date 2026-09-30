@@ -502,14 +502,17 @@ def test_raw_files_that_land_in_a_month_already_absorbed_are_refused_and_kept(
     assert watermark(root, Period.DAILY) == "2026-10-19", "the rest of the pass still ran"
 
 
-# --- the two indexes, and a file the index names that is gone ---------------------
+# --- the three indexes, and a file the index names that is gone -------------------
+
+#: The indexes a pass that writes `daily.json` writes beside it when they are not there.
+COARSER: Final = (Period.MONTHLY, Period.YEARLY)
 
 
-def monthly_index(root: Path) -> Path:
-    return ledger.compact_index_path(state(root), VISUALS, Period.MONTHLY)
+def index_of(root: Path, period: Period) -> Path:
+    return ledger.compact_index_path(state(root), VISUALS, period)
 
 
-def test_a_pass_that_writes_the_daily_index_writes_an_empty_monthly_one_when_none_exists(
+def test_a_pass_that_writes_the_daily_index_writes_the_other_two_empty_when_none_exists(
     tmp_path: Path,
 ) -> None:
     """The oracle: a ledger never holds daily.json alone, so a reader asks for no file that is not there."""
@@ -518,42 +521,60 @@ def test_a_pass_that_writes_the_daily_index_writes_an_empty_monthly_one_when_non
 
     outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
 
-    held = CompactIndex.read(monthly_index(root))
-    assert (held.ledger, held.period, held.entries) == (VISUALS, Period.MONTHLY, [])
-    assert monthly_index(root).relative_to(root).as_posix() in outcome.written
-    assert watermark(root, Period.MONTHLY) is None, "an empty list is not a packed month"
+    for period in COARSER:
+        held = CompactIndex.read(index_of(root, period))
+        assert (held.ledger, held.period, held.entries) == (VISUALS, period, [])
+        assert index_of(root, period).relative_to(root).as_posix() in outcome.written
+        assert watermark(root, period) is None, f"an empty list is not a packed {period.value}"
     assert disjoint(outcome)
 
 
-def test_a_ledger_packed_before_the_two_were_written_together_gains_its_monthly_index(
-    tmp_path: Path,
+@pytest.mark.parametrize("period", COARSER)
+def test_a_ledger_packed_before_the_indexes_were_written_together_gains_the_one_it_lacks(
+    tmp_path: Path, period: Period
 ) -> None:
-    """daily.json and its watermark, and no monthly.json: the next pass that writes a day adds it."""
+    """daily.json and its watermark, and no index for this period: the next pass that writes a day adds it."""
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-09-20"))
     compact(root, date(2026, 9, 23), max_periods_per_run=31)
-    monthly_index(root).unlink()
+    index_of(root, period).unlink()
 
     outcome = compact(root, date(2026, 9, 24), max_periods_per_run=31)
 
-    assert CompactIndex.read(monthly_index(root)).entries == []
-    assert monthly_index(root).relative_to(root).as_posix() in outcome.written
+    assert CompactIndex.read(index_of(root, period)).entries == []
+    assert index_of(root, period).relative_to(root).as_posix() in outcome.written
 
 
-def test_a_pass_never_deletes_a_monthly_index_and_leaves_an_empty_one_as_it_is(
-    tmp_path: Path,
+@pytest.mark.parametrize("period", COARSER)
+def test_a_pass_never_deletes_a_coarser_index_and_leaves_an_empty_one_as_it_is(
+    tmp_path: Path, period: Period
 ) -> None:
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-09-20"))
     compact(root, date(2026, 9, 23), max_periods_per_run=31)
-    before = monthly_index(root).read_bytes()
+    before = index_of(root, period).read_bytes()
 
     outcome = compact(root, date(2026, 9, 25), max_periods_per_run=31)
 
-    shown = monthly_index(root).relative_to(root).as_posix()
+    shown = index_of(root, period).relative_to(root).as_posix()
     assert shown not in outcome.written and shown not in outcome.taken
-    assert monthly_index(root).read_bytes() == before
+    assert index_of(root, period).read_bytes() == before
     assert daily_covers(root)[-1] == "2026-09-23"
+
+
+def a_year_mark(root: Path, year: str) -> None:
+    """The yearly watermark of a year already packed, and nothing else of it."""
+    mark = Watermark(
+        version=Watermark.schema_version(),
+        ledger=VISUALS,
+        period=Period.YEARLY,
+        through=year,
+        advanced_at="2026-03-20T00:41:00Z",
+        run_id="2026-03-20-1",
+    )
+    path = ledger.watermark_path(state(root), VISUALS, Period.YEARLY)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(mark.to_json().encode("ascii"))
 
 
 @pytest.mark.parametrize("period", list(Period))
@@ -565,10 +586,12 @@ def test_an_index_its_watermark_says_was_packed_that_is_not_there_stops_the_pass
     if period is Period.DAILY:
         filed(root, a_pass("2026-09-20"))
         compact(root, date(2026, 9, 23), max_periods_per_run=31)
-    else:
+    elif period is Period.MONTHLY:
         a_month_file(root, "2026-01")
+    else:
+        a_year_mark(root, "2025")
     assert watermark(root, period) is not None
-    ledger.compact_index_path(state(root), VISUALS, period).unlink()
+    index_of(root, period).unlink(missing_ok=True)
     before = files_under(root)
 
     with pytest.raises(ValueError, match=f"^{ledger.LedgerFault.INDEX_MISSING}: "):

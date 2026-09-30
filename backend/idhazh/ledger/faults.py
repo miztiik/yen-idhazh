@@ -18,7 +18,7 @@ class LedgerFault(StrEnum):
 
     #: There is no `index/daily.json`, so no day of the ledger is packed.
     NOT_PACKED = "not-packed"
-    #: `index/daily.json` is there and `index/monthly.json` is not.
+    #: `index/daily.json` is there and `index/monthly.json` or `index/yearly.json` is not.
     INDEX_MISSING = "index-missing"
     #: An index names a file that is not there.
     FILE_MISSING = "file-missing"

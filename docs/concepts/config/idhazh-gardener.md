@@ -52,7 +52,7 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 | --- | --- |
 | `retention` | `series`, one window per series, for one task alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`. `fold`, `{after_days, dry_run}`, on a task that owns a CSV day tree - a tree that files one small file per writer under each day's folder: once `after_days` whole days have passed since a day ended (default 1), its files become one `settled.csv`. The fold has a `dry_run` of its own because it changes no answer a reader gets ([how it runs](../../architecture/publishing/idhazh-gardener.md#the-closed-day-fold)) |
 | `collection` | `collection` (required): `workflow-artifacts` or `workflow-runs`, the GitHub collection it deletes from, and the file is named for it. Its `window` is whole days and nothing else, because a pass counts a member's age in days |
-| `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_days` (1). Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the two periods are how far back it keeps, and `max_periods_per_run` is its budget |
+| `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `monthly_keep_days` (`null`), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_days` (1). `monthly_keep_days` turns on year packing: how many whole days after a UTC year ends its month files are packed into one year file, kept for ever. `null` packs no year. Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the periods are how far back it keeps, and `max_periods_per_run` is its budget, spent on days, months and years separately |
 | `history` | `every_days`, how many whole days apart two rewrites may run; `push_attempts`, how many pushes one run makes in all, at least 1; `push_retry_delay_seconds`, how long a run waits after a refused push before it squashes again, at least 0. None of the three has a default. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
 
 ## The retention declarations that ship
@@ -86,7 +86,9 @@ Why each tree gets the age it has is
 ## The compaction declarations that ship
 
 Each moves one ledger's rows out of its raw files into one file a day and then
-one file a month, and deletes what it moved. How a pass runs is
+one file a month, and deletes what it moved. A declaration that sets
+`monthly_keep_days` also packs each finished year's month files into one file a
+year; none of the six sets it yet. How a pass runs is
 [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#the-compaction).
 Two pack live, `compact-item-health` and `compact-host-fingerprint`, and the
 other four ship `dry_run: true`. Each owns its ledger's two folders,
@@ -192,8 +194,11 @@ names the file an operator edits and the rule it broke.
 | `raw_index_keep_days` below `daily_keep_days` | The daily period may still need the index to rebuild a file |
 | A compaction whose `window` is not `{unit: forever}`, or whose `max_deletes_per_run` is not `null` | Its two periods are how far back it keeps and `max_periods_per_run` is its budget. A second window would be a number nothing reads, and a ceiling could stop a month half absorbed |
 | `daily_keep_days` below 31 | GitHub lets a failed run be re-run for 30 days, into the day it first wrote, so a month absorbed sooner could still be reached by one |
-| A ledger in `ledger.published` whose compaction keeps its months forever | A reader's first request would grow with the archive |
-| A published ledger whose two periods reach back less than the widest `console.window_presets` | The widest span the console offers would have days no file holds |
+| `monthly_keep_days` set beside a `monthly_window` that is not forever | The window would delete a month file before its year is packed, and the year file would miss that month's rows |
+| `monthly_keep_days` below `daily_keep_days` plus 32 | A year is packed only once its next January is absorbed, one wake after that January's `daily_keep_days` have passed, so a smaller value changes nothing |
+| A ledger in `ledger.published` whose compaction keeps its months forever and packs no year | A reader's first request would grow with the archive. Packing years bounds it: the month files last only until their year is packed, and the yearly index grows by one entry a year |
+| A published ledger that packs years with `monthly_keep_days` below `console.max_window_days` plus `compact_after_days` | The query door fetches a year file whole to read any day of it, about twelve times that month's own file, so no read the console can widen to may reach one. At 366 and 1 the floor is 367 days |
+| A published ledger whose periods reach back less than the widest `console.window_presets` | The widest span the console offers would have days no file holds |
 | A compaction reaching back less far than the task that limited its ledger before it moved | The two periods are the ledger's retention now, and a shorter pair silently cuts it |
 
 **The refusals that need the task modules are the runner's**: a declaration no

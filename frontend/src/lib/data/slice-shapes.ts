@@ -47,14 +47,16 @@ export type Row = Record<string, string | number | boolean | null>;
  *  `backend/idhazh/ledger/faults.py`, held to this list by a backend test).
  *
  *  - `not-packed`: there is no `daily.json`, so no day of the ledger is packed.
- *  - `index-missing`: `daily.json` is there and `monthly.json` is not. The packing
- *    writes the two together, so the months it may have packed are out of sight.
+ *  - `index-missing`: `daily.json` is there and `monthly.json` or `yearly.json`
+ *    is not. The packing writes the three together, so the months or years it
+ *    may have packed are out of sight.
  *  - `file-missing`: an index names a file that is not there.
  *  - `day-missing`: a day between the first and the newest packed day that no
  *    index names, so its rows are in no file a reader can find.
  *
  *  Three gaps are expected and are none of these: a day after the newest packed
- *  day, an entry with `rows: 0`, and a `monthly.json` with no entries. */
+ *  day, an entry with `rows: 0`, and a `monthly.json` or `yearly.json` with no
+ *  entries. */
 export const LEDGER_FAULTS = ['not-packed', 'index-missing', 'file-missing', 'day-missing'] as const;
 
 export type LedgerFault = (typeof LEDGER_FAULTS)[number];
@@ -65,7 +67,7 @@ export type LedgerFault = (typeof LEDGER_FAULTS)[number];
  *  missing file behind a `missing` or an `unreachable`, and is `null` for an
  *  `unreachable` with another cause: an index this build will not act on, a file
  *  that did not arrive whole, an engine that could not answer, or a span that
- *  starts before the oldest day either index names. */
+ *  starts before the oldest day any index names. */
 export type SliceResult =
 	| { state: 'ok'; rows: Row[]; through: DateStamp }
 	| { state: 'quiet'; rows: []; through: DateStamp | null }

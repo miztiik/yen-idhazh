@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry } from '../src/lib/data/compact-index';
+import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type Period } from '../src/lib/data/compact-index';
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
 import { readReach } from '../src/lib/data/ledger-reach';
@@ -38,14 +38,21 @@ import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledge
  * 09-01, 09-02 and 09-05, a zero-row day on 09-03, and a hole on 09-04.
  * 2026-08-31 is named by both indexes, and the two files hold different jobs for
  * it, so a reader that opens both, or the wrong one, returns a row it should not.
+ * A second root holds the same August and September packed into one year file,
+ * one row group a month, under a yearly index and one zero-row day in 2027. Each
+ * root carries all three indexes, as the compaction writes them: the first
+ * root's yearly index and the second root's monthly index name nothing.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const STATE = path.resolve(here, '..', '..', 'tests', 'fixtures', 'ledger-door', 'state');
+const FIXTURE = path.resolve(here, '..', '..', 'tests', 'fixtures', 'ledger-door');
+const STATE = path.join(FIXTURE, 'state');
+const YEAR_STATE = path.join(FIXTURE, 'year-state');
 const LEDGER = 'host-fingerprint' as const;
 const PREFIX = 'https://pages.test/yen-idhazh';
 const DAILY_INDEX = indexPath(LEDGER, 'daily');
 const MONTHLY_INDEX = indexPath(LEDGER, 'monthly');
+const YEARLY_INDEX = indexPath(LEDGER, 'yearly');
 const resolver = createRequire(import.meta.url);
 const locate = (specifier: string): string => resolver.resolve(specifier);
 
@@ -60,15 +67,15 @@ interface Asked {
 	answered: number | 'throw';
 }
 
-/** Answers from the fixture files, unless `rules` names the path. */
-function recorded(rules: Record<string, Rule> = {}): { fetcher: Fetcher; asked: Asked[] } {
+/** Answers from the files under `state`, the first fixture root unless named, unless `rules` names the path. */
+function recorded(rules: Record<string, Rule> = {}, state: string = STATE): { fetcher: Fetcher; asked: Asked[] } {
 	const asked: Asked[] = [];
 	const root = `${PREFIX}/state/`;
 	const fetcher: Fetcher = async (url, init) => {
 		expect(url.startsWith(root), `${url} is not under ${root}`).toBe(true);
 		const address = new URL(url);
 		const relative = decodeURIComponent(address.pathname.slice(new URL(root).pathname.length));
-		const file = path.join(STATE, ...relative.split('/'));
+		const file = path.join(state, ...relative.split('/'));
 		const onDisk = existsSync(file) ? new Uint8Array(readFileSync(file)) : null;
 		const rule = rules[relative];
 		const answer: Answer =
@@ -157,8 +164,8 @@ async function warnings<T>(work: () => Promise<T>): Promise<{ result: T; warned:
 	}
 }
 
-function fixtureEntries(period: 'daily' | 'monthly'): CompactEntry[] {
-	const text = readFileSync(path.join(STATE, ...indexPath(LEDGER, period).split('/')), 'utf8');
+function fixtureEntries(period: Period, state: string = STATE): CompactEntry[] {
+	const text = readFileSync(path.join(state, ...indexPath(LEDGER, period).split('/')), 'utf8');
 	const reading = readIndex(JSON.parse(text), LEDGER, period);
 	if (!('index' in reading)) throw new Error(`the fixture's ${period} index is refused: ${JSON.stringify(reading)}`);
 	return reading.index.entries;
@@ -186,7 +193,7 @@ const bytesOf = (relative: string): Uint8Array => new Uint8Array(readFileSync(pa
 
 test.describe('which files a range needs', () => {
 	test('each day is read through the coarsest period that holds it, one file a day', () => {
-		const selection = filesFor('2026-08-30', '2026-09-01', fixtureEntries('daily'), fixtureEntries('monthly'));
+		const selection = filesFor('2026-08-30', '2026-09-01', fixtureEntries('daily'), fixtureEntries('monthly'), []);
 		expect('files' in selection).toBe(true);
 		if (!('files' in selection)) return;
 		expect(selection.files.map((file) => [file.period, file.entry.covers, file.firstDay])).toEqual([
@@ -195,10 +202,27 @@ test.describe('which files a range needs', () => {
 		]);
 	});
 
-	test('the first day neither index names comes back instead of a file set', () => {
-		expect(filesFor('2026-09-02', '2026-09-05', fixtureEntries('daily'), fixtureEntries('monthly'))).toEqual({
+	test('a day in a packed year is read from the year file, even where its month and day are named too', () => {
+		const selection = filesFor(
+			'2026-08-30',
+			'2026-09-01',
+			fixtureEntries('daily'),
+			fixtureEntries('monthly'),
+			fixtureEntries('yearly', YEAR_STATE)
+		);
+		expect(selection).toEqual({
+			files: [{ period: 'yearly', entry: fixtureEntries('yearly', YEAR_STATE)[0], firstDay: '2026-08-30' }]
+		});
+	});
+
+	test('the first day no index names comes back instead of a file set', () => {
+		expect(filesFor('2026-09-02', '2026-09-05', fixtureEntries('daily'), fixtureEntries('monthly'), [])).toEqual({
 			hole: '2026-09-04'
 		});
+	});
+
+	test('a year file sits in a folder named for its year', () => {
+		expect(dataPath(LEDGER, 'yearly', '2026')).toBe('compact/host-fingerprint/yearly/2026/2026.parquet');
 	});
 
 	test('a range crosses a month end one UTC day at a time', () => {
@@ -253,7 +277,7 @@ test.describe('the four states, before the engine is needed', () => {
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-04', fault: 'day-missing' });
 		expect(dataAsked(asked)).toEqual([]);
 		expect(engine.opened()).toBe(0);
-		expect(warned.join('\n')).toContain('neither it nor monthly.json names 2026-09-04');
+		expect(warned.join('\n')).toContain('no index names 2026-09-04');
 	});
 
 	test('monthly.json is asked for only when the span starts before the oldest daily day', async () => {
@@ -263,6 +287,24 @@ test.describe('the four states, before the engine is needed', () => {
 		const earlier = recorded();
 		await readSlice(freshPage(earlier.fetcher), LEDGER, ask('2026-08-30', '2026-09-01'));
 		expect(earlier.asked.map((one) => one.path)).toContain(MONTHLY_INDEX);
+	});
+
+	test('yearly.json is asked for only when the span starts before the oldest day the other two name', async () => {
+		const inside = recorded();
+		await readSlice(freshPage(inside.fetcher), LEDGER, ask('2026-08-01', '2026-09-01'));
+		expect(inside.asked.map((one) => one.path)).not.toContain(YEARLY_INDEX);
+		const before = recorded();
+		const { result } = await warnings(() => readSlice(freshPage(before.fetcher), LEDGER, ask('2026-07-31', '2026-09-01')));
+		expect(before.asked.map((one) => one.path)).toContain(YEARLY_INDEX);
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-07-31', fault: null });
+	});
+
+	test('a yearly index stamped newer than this build is refused, and no data is fetched', async () => {
+		const { fetcher, asked } = recorded({ [YEARLY_INDEX]: reshaped({ version: '2099-01-01' }) }, YEAR_STATE);
+		const { result, warned } = await warnings(() => readSlice(freshPage(fetcher), LEDGER, ask('2026-08-30', '2026-09-02')));
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30', fault: null });
+		expect(dataAsked(asked)).toEqual([]);
+		expect(warned.join('\n')).toContain('yearly.json is stamped 2099-01-01');
 	});
 
 	test('a day both indexes name is fetched once, from the month', async () => {
@@ -292,15 +334,16 @@ test.describe('the four states, before the engine is needed', () => {
 		expect(warned).toEqual([]);
 	});
 
-	test('a span that starts before the oldest day either index names is unreachable, and no fault', async () => {
-		// monthly.json names 2026-08, so the ledger starts on 2026-08-01. A day before it
-		// was never packed, so "re-pack that day" would send an operator to fix nothing.
+	test('a span that starts before the oldest day any index names is unreachable, and no fault', async () => {
+		// monthly.json names 2026-08 and yearly.json names no year, so the ledger starts
+		// on 2026-08-01. A day before it was never packed, so "re-pack that day" would
+		// send an operator to fix nothing.
 		const { fetcher } = recorded();
 		const { result, warned } = await warnings(() =>
 			readSlice(freshPage(fetcher), LEDGER, ask('2026-07-30', '2026-08-02'))
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-07-30', fault: null });
-		expect(warned.join('\n')).toContain("it starts before 2026-08-01, the oldest day either index names");
+		expect(warned.join('\n')).toContain("it starts before 2026-08-01, the oldest day any index names");
 		expect(warned.join('\n')).toContain("Clamp the span to the reach's first day");
 	});
 
@@ -337,6 +380,7 @@ test.describe('the four states, before the engine is needed', () => {
 		['another ledger', reshaped({ ledger: 'scores' })],
 		['entries out of order', reshaped({ entries: [{ covers: '2026-09-02', rows: 1, bytes: 1 }, { covers: '2026-09-01', rows: 1, bytes: 1 }] })],
 		['a month in a daily index', reshaped({ entries: [{ covers: '2026-09', rows: 1, bytes: 1 }] })],
+		['a year in a daily index', reshaped({ entries: [{ covers: '2026', rows: 1, bytes: 1 }] })],
 		['a refused fetch', 'throw'],
 		['a server error', { status: 500 }]
 	];
@@ -497,6 +541,21 @@ test.describe('THE ORACLE through the engine, at both entry points', () => {
 			{ date: '2026-08-31', run_id: '2026-08-31-17810000001', shard: 0 }
 		]);
 		expect(disk.rows).toHaveLength(6);
+	});
+
+	test('a span reads the same rows from its year file as from its month and day files, both ways', async () => {
+		const span = ask('2026-08-30', '2026-09-02');
+		const { disk: unpacked, warned } = await bothWays(span);
+		expect(unpacked, warned.join('\n')).toMatchObject({ state: 'ok', through: '2026-09-05' });
+		const { fetcher, asked } = recorded({}, YEAR_STATE);
+		const { result: browser, warned: more } = await warnings(() => readSlice(freshPage(fetcher), LEDGER, span));
+		const { result: disk } = await warnings(() => sliceFromDisk(YEAR_STATE, LEDGER, span));
+		expect(disk, more.join('\n')).toMatchObject({ state: 'ok', through: '2027-01-01' });
+		expect(browser).toEqual(disk);
+		if (disk.state !== 'ok' || unpacked.state !== 'ok') return;
+		expect(disk.rows).toEqual(unpacked.rows);
+		expect(disk.rows).toHaveLength(8);
+		expect(dataAsked(asked)).toEqual([dataPath(LEDGER, 'yearly', '2026')]);
 	});
 
 	test('a filter narrows the rows, and a filter that matches nothing is quiet rather than an empty ok', async () => {
@@ -712,7 +771,7 @@ test.describe('what a page keeps', () => {
 });
 
 test.describe('how far a ledger reaches', () => {
-	test('from the first day of the oldest month to the newest day, both indexes asked at once, and no engine started', async () => {
+	test('from the first day of the oldest month to the newest day, every index asked at once, and no engine started', async () => {
 		const { fetcher, asked } = recorded();
 		let inFlight = 0;
 		let mostInFlight = 0;
@@ -732,9 +791,28 @@ test.describe('how far a ledger reaches', () => {
 			through: '2026-09-05',
 			fault: null
 		});
-		expect(asked.map((one) => one.path).sort()).toEqual([DAILY_INDEX, MONTHLY_INDEX].sort());
-		expect(mostInFlight, 'the two indexes were asked for one after the other').toBe(2);
+		expect(asked.map((one) => one.path).sort()).toEqual([DAILY_INDEX, MONTHLY_INDEX, YEARLY_INDEX].sort());
+		expect(mostInFlight, 'the indexes were asked for one after the other').toBe(3);
 		expect(engine.opened()).toBe(0);
+	});
+
+	test('from 1 January of the oldest packed year, when the ledger packs years', async () => {
+		const { fetcher } = recorded({}, YEAR_STATE);
+		const engine = counted();
+		expect(await readReach(freshPage(fetcher, engine), LEDGER)).toEqual({
+			state: 'ok',
+			first: '2026-01-01',
+			through: '2027-01-01',
+			fault: null
+		});
+		expect(engine.opened()).toBe(0);
+	});
+
+	test('a yearly.json this build will not act on leaves what the other two name, and the console says why', async () => {
+		const { fetcher } = recorded({ [YEARLY_INDEX]: reshaped({ version: '2099-01-01' }) }, YEAR_STATE);
+		const { result, warned } = await warnings(() => readReach(freshPage(fetcher), LEDGER));
+		expect(result).toEqual({ state: 'ok', first: '2027-01-01', through: '2027-01-01', fault: null });
+		expect(warned.join('\n')).toMatch(/^\[ledger\] host-fingerprint: yearly\.json .*reaches back only to 2027-01-01/);
 	});
 
 	test('with no monthly.json, it reaches back to the oldest day daily.json names, and names index-missing once', async () => {
@@ -787,7 +865,7 @@ test.describe('how far a ledger reaches', () => {
 		expect(asked).toEqual([]);
 	});
 
-	test('a slice on the same page agrees with it, and reads neither index again', async () => {
+	test('a slice on the same page agrees with it, and reads no index again', async () => {
 		const { fetcher, asked } = recorded();
 		const page = freshPage(fetcher);
 		const reach = await readReach(page, LEDGER);
@@ -799,7 +877,7 @@ test.describe('how far a ledger reaches', () => {
 			through: reach.through
 		});
 		expect(asked.filter((one) => one.path.endsWith('.json')).map((one) => one.path).sort()).toEqual(
-			[DAILY_INDEX, MONTHLY_INDEX].sort()
+			[DAILY_INDEX, MONTHLY_INDEX, YEARLY_INDEX].sort()
 		);
 	});
 
@@ -905,9 +983,37 @@ test.describe('THE ORACLE for a missing file: a name, the state it draws, and on
 		expect(warned).toHaveLength(1);
 		expect(warned[0]).toContain(`index-missing ${LEDGER} state/${MONTHLY_INDEX}`);
 	});
+
+	test('index-missing names yearly.json too, at both entry points, in one line', async () => {
+		// monthly.json names 2026-08, so a span from July reaches back past it and asks for yearly.json.
+		const span = ask('2026-07-30', '2026-08-02');
+		const page = freshPage(recorded({ [YEARLY_INDEX]: { status: 404 } }).fetcher);
+		const browser = await warnings(async () => ({
+			drawn: await readSlice(page, LEDGER, span),
+			reach: await readReach(page, LEDGER)
+		}));
+		expect(browser.result).toEqual({
+			drawn: { state: 'unreachable', rows: [], at: '2026-07-30', fault: 'index-missing' },
+			reach: { state: 'ok', first: '2026-08-01', through: '2026-09-05', fault: 'index-missing' }
+		});
+		expect(browser.warned).toEqual([
+			`[ledger] index-missing ${LEDGER} state/${YEARLY_INDEX}: it is not there, though daily.json is. ` +
+				'Run the upkeep again to write it; it lists nothing until a year is packed.'
+		]);
+		const root = fixtureTreeWithout(YEARLY_INDEX);
+		try {
+			const disk = await warnings(() => sliceFromDisk(root, LEDGER, span));
+			expect(disk.result).toEqual(browser.result.drawn);
+			expect(disk.warned).toEqual(browser.warned);
+			const { result: reach } = await warnings(() => reachFromDisk(root, LEDGER));
+			expect(reach).toEqual(browser.result.reach);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });
 
-test.describe('an empty monthly.json is a gap the design expects: nothing leads to a file that is not there', () => {
+test.describe('an empty monthly.json or yearly.json is a gap the design expects: nothing leads to a file that is not there', () => {
 	const EMPTY_MONTHS = { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'monthly', entries: [] };
 
 	test('a span that starts before the oldest daily day, and the reach, ask the site for no file it lacks', async () => {
@@ -917,7 +1023,7 @@ test.describe('an empty monthly.json is a gap the design expects: nothing leads 
 		const { result: reach } = await warnings(() => readReach(page, LEDGER));
 		expect(drawn).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30', fault: null });
 		expect(reach).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', fault: null });
-		expect(asked.map((one) => one.path).sort()).toEqual([DAILY_INDEX, MONTHLY_INDEX].sort());
+		expect(asked.map((one) => one.path).sort()).toEqual([DAILY_INDEX, MONTHLY_INDEX, YEARLY_INDEX].sort());
 		expect(asked.filter((one) => one.answered !== 200)).toEqual([]);
 		for (const fault of LEDGER_FAULTS) expect(warned.join('\n')).not.toContain(` ${fault} `);
 	});

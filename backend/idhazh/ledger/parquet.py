@@ -11,11 +11,19 @@ The envelope is written as the schema's metadata, which pyarrow writes into the
 file's key-value metadata. Row-group statistics are left on: a constant column
 carries a minimum equal to its maximum, and that is what lets a reader skip a
 whole file without decompressing it.
+
+**A file too big to build at once is written one row group at a time**
+(`render_groups`): each group is its own row group, and the envelope is added to
+the file's key-value metadata after the last one, because only then is its
+digest known. So `read` takes the envelope from the file's key-value metadata,
+which holds it whichever way the file was written. `render` also keeps it in the
+schema, which is where a build older than `render_groups` looks for it, so a
+daily or monthly file stays readable by every build.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
@@ -42,6 +50,21 @@ def engine_version() -> str:
     return str(pyarrow.__version__)
 
 
+def _schema(columns: Sequence[Column], metadata: Mapping[bytes, bytes] | None) -> Any:
+    """The arrow schema these columns make, carrying `metadata` when there is any."""
+    return pyarrow.schema(
+        [
+            pyarrow.field(column.name, _ARROW_TYPES[column.type], column.nullable)
+            for column in columns
+        ],
+        metadata=None if metadata is None else dict(metadata),
+    )
+
+
+def _codec(compression: Compression) -> str | None:
+    return None if compression is Compression.NONE else compression.value
+
+
 def render(
     columns: Sequence[Column],
     rows: Sequence[Mapping[str, Any]],
@@ -50,20 +73,36 @@ def render(
     compression: Compression,
 ) -> bytes:
     """One whole parquet file: these rows under these columns, the envelope in its footer."""
-    schema = pyarrow.schema(
-        [
-            pyarrow.field(column.name, _ARROW_TYPES[column.type], column.nullable)
-            for column in columns
-        ],
-        metadata=dict(envelope),
-    )
+    schema = _schema(columns, envelope)
     table = pyarrow.Table.from_pylist([dict(row) for row in rows], schema=schema)
     sink = pyarrow.BufferOutputStream()
-    pyarrow.parquet.write_table(
-        table,
-        sink,
-        compression=None if compression is Compression.NONE else compression.value,
-    )
+    pyarrow.parquet.write_table(table, sink, compression=_codec(compression))
+    return bytes(sink.getvalue().to_pybytes())
+
+
+def render_groups(
+    columns: Sequence[Column],
+    groups: Iterable[Sequence[Mapping[str, Any]]],
+    *,
+    envelope: Callable[[], Mapping[bytes, bytes]],
+    compression: Compression,
+) -> bytes:
+    """One whole parquet file written one row group per group, the envelope added last.
+
+    Each group that holds a row becomes exactly one row group, in order, so its
+    statistics bound that group alone; a group with no rows writes none.
+    `envelope` is called once, after the last group is written, so it may say
+    what only every row together can - their digest. One group is held in memory
+    at a time.
+    """
+    schema = _schema(columns, None)
+    sink = pyarrow.BufferOutputStream()
+    with pyarrow.parquet.ParquetWriter(sink, schema, compression=_codec(compression)) as writer:
+        for rows in groups:
+            if rows:
+                table = pyarrow.Table.from_pylist([dict(row) for row in rows], schema=schema)
+                writer.write_table(table, row_group_size=len(rows))
+        writer.add_key_value_metadata(dict(envelope()))
     return bytes(sink.getvalue().to_pybytes())
 
 
@@ -78,8 +117,8 @@ def _envelope_of(metadata: Mapping[bytes, bytes] | None) -> dict[bytes, bytes]:
 
 def read(data: bytes) -> tuple[dict[bytes, bytes], list[dict[str, Any]]]:
     """A whole parquet file back as its envelope and its rows, in file order."""
-    table = pyarrow.parquet.read_table(pyarrow.BufferReader(data))
-    return _envelope_of(table.schema.metadata), list(table.to_pylist())
+    opened = pyarrow.parquet.ParquetFile(pyarrow.BufferReader(data))
+    return _envelope_of(opened.metadata.metadata), list(opened.read().to_pylist())
 
 
 def read_envelope(path: Path) -> dict[bytes, bytes]:
