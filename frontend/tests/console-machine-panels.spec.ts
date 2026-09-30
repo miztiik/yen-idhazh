@@ -540,7 +540,7 @@ test.describe('which machines ran our jobs, day by day', () => {
 		await expect(panel.locator('[data-fleet-speed-key]')).toContainText('tokens a second');
 	});
 
-	test('a click or Enter lists the day, a second click or Escape closes it, and focus comes back', async ({
+	test('a click or Enter lists the day and the strip keeps it, Escape or Close shuts the list, and focus comes back', async ({
 		page
 	}) => {
 		await page.goto('/console/machine/');
@@ -553,10 +553,20 @@ test.describe('which machines ran our jobs, day by day', () => {
 
 		const box = await plot.boundingBox();
 		if (box === null) throw new Error('the plot has no box');
-		// The newest day is the last column; click near the right of the plot.
-		await page.mouse.click(box.x + box.width * 0.9, box.y + box.height * 0.5);
+		const strip = panel.locator('[data-readout] [data-readout-day]').first();
+		const resting = await strip.innerText();
+		// The oldest day is the first column; point near the left of the plot, then
+		// press there, which is what a click is.
+		await page.mouse.move(box.x + 4, box.y + box.height * 0.5);
+		await expect(strip).not.toHaveText(resting);
+		const pointed = await strip.innerText();
+		await page.mouse.down();
+		await page.mouse.up();
 		await expect(jobs).toHaveCount(1);
 		await expect(jobs).toBeFocused();
+		// Focus has left the plot for the list, and the strip still reads the day
+		// the list is of rather than falling back to the newest.
+		await expect(strip).toHaveText(pointed);
 		const listed = Number(await body(panel).getAttribute('data-fleet-placements'));
 		expect(await jobs.locator('tbody tr').count()).toBeGreaterThan(0);
 		expect(await jobs.locator('tbody tr').count()).toBeLessThanOrEqual(listed);

@@ -146,7 +146,7 @@
 			/>hown
 		{/if}
 	</svg>
-	<ChartReadout {readout} at={selected} {name} maxShare={readoutMaxShare} {restingNote} {hint} />
+	<ChartReadout {readout} at={shown} {name} maxShare={readoutMaxShare} {restingNote} {hint} />
 </div>
 
 <style>
