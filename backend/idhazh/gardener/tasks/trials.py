@@ -29,7 +29,7 @@ def run(context: TaskContext) -> Pass:
     from datetime import timedelta
 
     from idhazh import ledger, retention
-    from idhazh.gardener import retention_files
+    from idhazh.gardener import named_trees, retention_files
 
     first_kept = retention_files.first_kept_day(
         context.policy.window,
@@ -43,7 +43,7 @@ def run(context: TaskContext) -> Pass:
             return []
         found: list[retention_files.Aged] = []
         for root in roots:
-            for path in sorted(entry for entry in root.rglob("*") if entry.is_file()):
+            for path in named_trees.files_named(context.listing, root):
                 written = retention.trial_day(path.relative_to(root).as_posix())
                 if written is not None and written < first_kept:
                     found.append(retention_files.Aged(path=path, day=written.isoformat()))

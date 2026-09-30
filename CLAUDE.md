@@ -122,27 +122,25 @@ Logging is local by construction. There is no log sink, no log service, and no r
 
 ### Paths
 
-For anything leaving the process (JSON, logs, manifests, agent memory, error messages, doc cross-links):
+Paths leaving the process, including JSON, logs, manifests, agent memory, errors and doc links, must be:
 
-- Relative paths only. No absolute paths. No drive letters.
-- POSIX separators only (`/`). Never `\`.
-- Minimal reconstructable form.
+- Relative, with no drive letters.
+- POSIX-separated (`/`, never `\`).
+- In the minimal reconstructable form.
 
-In-memory `Path` objects for local I/O may stay platform-native. This applies at the moment a path leaves the process.
+In-memory `Path` objects for local I/O may remain platform-native.
 
 ### Time
 
-**Every instant this project reads, writes, compares, schedules or prints is UTC.** There is no second timezone anywhere in the system, and no local-time value is ever persisted, compared or shown. This covers every clock the project touches: the workflow schedules, the date a digest is filed under, the age a retention window measures, the instant a prune or a delete decides against, the commit timestamp, the age of a fetched feed entry, the stamp inside a published payload, and every date a reader or an operator sees on a page.
+**Use UTC for every instant and date the project reads, writes, compares, schedules or displays.** This includes retention, deletion, feed ages, commits and published data.
 
-Three rules make it checkable.
+- **Clock:** Python uses `datetime.now(timezone.utc)`; TypeScript uses `Date.now()` and `*UTC*` accessors. Do not use bare `datetime.now()`, `datetime.utcnow()`, `date.today()` or local-time `Date` getters.
+- **Encoding:** Persist instants as ISO-8601 with `Z` or epoch milliseconds. Persist dates as `YYYY-MM-DD`, meaning the UTC day.
+- **Labels:** State UTC in each instant field's description and beside displayed instants.
 
-- **Read the clock one way.** `datetime.now(timezone.utc)` in Python; `Date.now()` and the `*UTC*` accessors in TypeScript. A bare `datetime.now()`, a `datetime.utcnow()`, a `date.today()` or a local-time `Date` getter is a defect. The first and third are wrong on any machine that is not on UTC - which is every developer machine and no CI runner, so the bug ships green. `utcnow()` returns a naive value that compares wrongly against an aware one.
-- **Persist one way.** An instant is ISO-8601 carrying `Z`, or epoch milliseconds. A date is `YYYY-MM-DD` and means the UTC day. A persisted value with no offset in it cannot be read twice with the same answer.
-- **Say so once, where it is read.** A field holding an instant says UTC in its description, and a surface printing one says UTC beside it. A reader left to guess the timezone has been handed a number with no meaning (section 0b).
+**Day boundaries are 00:00 UTC.** Compute a period's age from its own end instant against the current UTC clock, never the job's start time. Changing a schedule must not change which periods qualify.
 
-**A day boundary is 00:00 UTC, and no boundary is ever derived from when a job happened to wake.** A schedule is a wake, never a measurement: whether a period is old enough to act on is computed from that period's own end instant against the clock, so moving a cron cannot change which periods qualify.
-
-These are conventions rather than guardrails because a serialization invariant has one correct answer, so there is nothing here to adapt.
+These are fixed conventions, not adaptable guardrails.
 
 ## 3. Repository Topology
 
@@ -196,32 +194,26 @@ When in doubt, choose the higher level. Counting files is not the test: four fil
 
 ## 8. Git Hygiene
 
-User saying finish / ship / merge authorizes the normal reversible git workflow: inspect, named branch, stage exact paths, commit, push, gates, merge.
+`finish`, `ship` or `merge` authorizes the normal Git workflow below, not destructive or history-rewriting operations.
 
-Avoid (broad / lossy / history-rewriting):
+- **Protect existing work.** Confirm the checkout and branch with `git status --porcelain`. Leave unrelated changes alone. Start code changes in a dedicated worktree and named branch.
+- **Commit only intended changes.** Stage explicit paths and verify them with `git diff --cached --name-only`. Keep commits small and reversible. Branch names and commit messages describe the change.
+- **Preserve published history.** Update pushed branches by merging, not rebasing or amending. Merge only after required checks pass.
+- **Verify before cleanup.** Confirm the PR is merged and no local work will be lost. Delete its remote branch, remove only your clean worktree, and prune its obsolete local branch. A `: gone` marker alone does not prove a merge.
+- **Use one commit identity:** `miztiik <miztiik@users.noreply.github.com>`. No attribution tags, including `Co-authored-by` trailers. [.mailmap](.mailmap) normalizes GitHub's squash-merge identity.
 
-- `git stash`
-- `git reset --hard`
-- `git clean -fd`
-- `git checkout .` / broad `git restore .`
-- `git add .` / `git add -A`
-- `git push --force` / `git push --force-with-lease`
-- Amending pushed commits
-- Leaving a merged PR's remote branch undeleted or its `: gone]` local tracking branches unpruned.
+Avoid `git stash`, `git reset --hard`, `git clean -fd`, broad checkout/restore, `git add .`, `git add -A`, force pushes and amendments to pushed commits.
 
-**The standing exception is the `history` job of `.github/workflows/idhazh-gardener.yml`.** It squashes commits older than the `window` of `config/gardener/corpus-squash.json` and force-pushes `main`, every `every_days` of that same declaration. The workflow's other jobs push without force, and the exception does not reach them. The standing exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
+### History Exception
 
-**The exception does not cover forcing over another run.** The job pushes with a lease on the tip it read before it rewrote anything (`--force-with-lease=refs/heads/main:<tip>`), because a force push replaces the whole ref and would delete a commit that landed while the squash ran: git refuses the push if `main` moved. After a refusal the job fetches the new tip, squashes again on it and pushes with a lease on that, up to `push_attempts` pushes in all (`config/gardener/corpus-squash.json`). After the last refusal it writes no stamp, so the squash is due again at the next daily wake - it costs one day, not one cadence. Owner decision, 2026-09-22; the lease and the retry are the person's ruling of 2026-09-29.
+Only the `history` job in [.github/workflows/idhazh-gardener.yml](.github/workflows/idhazh-gardener.yml) may perform scheduled history rewrites. Its retention and cadence come from [config/gardener/corpus-squash.json](config/gardener/corpus-squash.json). Deleting corpus files alone does not remove their historical bytes.
 
-What it costs, stated rather than implied: a squash boundary is per-commit, not per-path, so the range it collapses carries `backend/`, `docs/` and `state/` as well as `corpus/`. `git blame` and `git bisect` reach back `window` to `window + every_days` and no further, and a commit SHA older than that stops resolving. A clone taken before a prune has to be re-fetched.
+- Push with `--force-with-lease=refs/heads/main:<tip>`, using the tip read **before rewriting**.
+- If rejected, fetch the new tip and rebuild the squash. Allow at most `push_attempts` total pushes.
+- On exhaustion, write no success stamp; retry at the next daily wake.
+- This permission does not extend to other jobs or manual force pushes.
 
-Safe workflow: `git status --porcelain`, leave unrelated dirty files alone, stage only explicit paths, verify with `git diff --cached --name-only`, small reversible commits on a named branch, push, merge after gates pass.
-
-Commit messages describe the change. **No AI co-author / attribution tags** - a `Co-authored-by` trailer is one, whoever generated it.
-
-**One identity commits here: `miztiik <miztiik@users.noreply.github.com>`.** A machine account in the author field tells a reader nothing the commit message does not already say. Every place that commits sets it, and [`.mailmap`](.mailmap) folds the one identity a commit cannot choose - GitHub signs the squash commit it makes on a merge.
-
-**A branch name reaches the permanent record, so it is written like a commit message** (section 0b). Merge commits are off at the repository, leaving squash only, so a branch name no longer reaches a commit message at all.
+Rewriting affects whole commits, including code and docs. History available to blame and bisect spans `window` to `window + every_days`; older commit IDs stop resolving. Existing clones must re-fetch.
 
 ## 9. Definition of Done
 
@@ -244,28 +236,27 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 ## 10. Anti-Patterns (Do NOT)
 
-- Reinterpret, downgrade, substitute, or scope-narrow a source or instruction the user named explicitly, without surfacing it as a scope change for sign-off (STOP-AND-SURFACE). **Declining on a limitation without pricing it is the same thing** - it is scope-narrowing to zero, and section 0d names what is owed instead: do it, price it, or name the measurement that would settle it.
-- Assume a backend exists in production.
-- Hardcode tunables, source lists, model refs, thresholds, or magic strings. They live in `config/`.
-- Put a unit of work in the file that routes to it.
-- Ship a surface that is still under development without a config flag, default off, carrying its removal condition on the line that declares it (Guardrail #6).
-- Change a frontend contract copy without changing the Pydantic model, or the reverse. The two tests that bind them are not optional.
-- Store absolute / backslash paths in any persisted artifact.
-- Let fetched text reach a system prompt, a shell argument, a file path, or an outbound URL (Guardrail #11).
-- Build custom HTTP / retry / parsing / validation / extraction systems when a mature OSS library exists.
-- Swallow exceptions or silently coerce invalid input - fail fast at the boundary.
-- Mock in tests by default, or let any test touch the network.
-- Commit a model weight, a downloaded binary, or a reproducible run intermediate.
-- Add a runtime telemetry / analytics / error-tracking SDK.
-- Ship a feature that depends on a runtime backend, an account, or a push notification.
-- Add a framework / library / build tool without naming its cost and its beneficiary feature.
-- Mint a new persisted field without stamping the schema `version` date, appending a `changelog` entry, and writing the read-side migration in the same commit.
-- Raise the runner budget to fit a feature. The 6 h job and the 1 GB site are GitHub's rather than ours, so an agent cannot move them and is not asked to (Guardrail #2) - the required next move is to name the design that does fit and what it traded: fewer items, a smaller model, a shorter context, a shard that splits.
-- Quote a Guardrail #2 number as a refusal without saying what crossing it does. "It busts the 10 GB cache" stops nothing on its own: that one is GitHub's to evict and it costs a re-download. Only the job timeout and the 1 GB site end the argument.
-- Let `TODO/`, chat logs, `AGENTS.md`, or a private agent note store become the source of truth for anything. They are caches of `docs/`.
-- Make a domain-neutral process doc project-specific (section 5).
-- Pre-create empty modules "for later".
-- Skip the docs update.
+- Reinterpret, downgrade, substitute or narrow an explicitly named source or instruction without reporting the proposed scope change as STOP-AND-SURFACE and getting user approval. A limitation is not a refusal: do it, price a change or name what measurement would settle it (section 0d).
+- Assume a runtime backend, or ship features requiring one, an account or push notifications.
+- Hardcode tunables, source lists, model references, thresholds or magic strings; use `config/`.
+- Put a unit's execution in the file that routes to it.
+- Ship unfinished surfaces without a default-off config flag and a removal condition on its declaring line (Guardrail #6).
+- Let the Pydantic model and frontend copy drift; update both and run both binding tests.
+- Persist absolute paths or backslashes.
+- Let fetched text reach a system prompt, shell arguments, file paths or outbound URLs (Guardrail #11).
+- Build custom HTTP, retry, parsing, validation or extraction systems when a mature OSS library exists.
+- Swallow exceptions or silently coerce invalid input; fail fast at the boundary.
+- Use mocks in tests without an explicit request, or let tests access the network.
+- Commit model weights, downloaded binaries or reproducible run intermediates.
+- Add runtime telemetry, analytics or error-tracking SDKs.
+- Add frameworks, libraries or build tools without naming their cost and beneficiary feature.
+- Add persisted fields without a schema `version` date, `changelog` entry and read-side migration in the same commit.
+- Raise platform limits to fit a feature: GitHub kills a 6 h job, and Pages refuses a site over 1 GB. Name a viable design and its trade-offs; scope changes require user approval.
+- Use runner figures as a refusal without stating their consequences. Cache eviction costs a re-download, not a failed run (Guardrail #2).
+- Treat `TODO/`, chat logs, [AGENTS.md](AGENTS.md) or private memory as authority. They are caches of `docs/`.
+- Make a domain-neutral process document project-specific (section 5).
+- Create empty modules for later.
+- Skip the documentation update.
 
 ## 11. Schema Versioning
 
@@ -299,11 +290,11 @@ Does not apply to backend-only, tooling, docs, or schema-only changes.
 
 Four tiers - **Unit / Contract / Integration / End-to-end**. Change without an appropriate-tier test in the same commit is a Definition-of-Done failure. No test touches the network; fixtures live in `tests/fixtures/`. Mock carve-outs require an explicit user request.
 
-**A test's cost belongs to the code it checks, never to what the pipeline has piled up.** So a test does not walk a collection that a run appends to - the committed days, the telemetry and state shards, the search index, the corpus, or any collection added after this sentence was written (Guardrail #12). A per-item rule is driven from a bounded fixture, and the canary day under `backend/var/canary/` is the one to reach for: it is fixed in size and it can carry a case the archive has never produced. Where a question really is about the whole tree, it is asked once and asserted on the total rather than once per story - and the producer has already validated every payload at write time, so re-checking a frozen day on every later run buys nothing. Where a walk is genuinely the right answer, Guardrail #12's escape hatch applies: say next to the test what it reads and why a fixture cannot answer it. What a walk actually costs, measured: [`docs/concepts/growing-reads.md`](docs/concepts/growing-reads.md).
+1. **Keep test cost bounded.** Use bounded fixtures for per-item rules, preferably the canary day. Do not scan collections that pipeline runs grow or repeatedly validate frozen output. A necessary growing read requires approval under Guardrail #12; document its inputs, scaling cost and why a fixture cannot answer beside the test. Check whole-tree properties once on the total, not per item.
 
-**A test goes red because somebody edited the tree.** If a run can turn it red - the data is malformed, the last unmigrated row aged out, a store has not been created yet, a day is too short to sample - the assertion belongs to production rather than to the code, and no reviewer can see it coming. It has three fates and no fourth: delete it where a fixture already covers the rule; move it into the producer that writes the data; or make it an operator surface under `backend/utilities/`, which pytest does not collect. Before writing one, name the edit that would make it fail.
+2. **Test behavior, not current production data.** Before writing a test, name the repository edit that would make it fail. If a pipeline run alone could make it fail, move the check into the producer or an operator utility outside pytest. Delete it only when fixture tests already cover the rule.
 
-**A test reads its fixture inside the test, never at module scope.** A fixture opened while the module is loading is opened before any test exists to own the failure, so one unexpected shape raises inside a module constant and takes every test in the file with it - including the ones that had nothing to do with that fixture. The same read inside a test fails one test, with a message naming what it wanted and how to produce it. This costs nothing: a fixture is small by rule, and a helper called from three tests reads it three times. It is the difference between a suite that reports a defect and a suite that reports a stack trace.
+3. **Load fixtures inside tests.** Read fixture files inside the test or a helper it calls, never at module import. A bad fixture must fail the test using it, not prevent unrelated tests from running. Report what was expected and how to produce the fixture.
 
 Per tier:
 
@@ -314,31 +305,35 @@ Per tier:
 
 ## 14. Agent Roster
 
-Seven persona advisors live under `.github/agents/`, each at a distinct altitude. **This table is the authority assignment, and it is what resolves a stalled debate**: the decision class names who rules.
+Use these responsibilities to resolve disagreements, not as a checklist of approvals. Add an advisor only for a distinct responsibility not already covered. All follow section 0b.
 
-| Agent                               | File               | Altitude, and the decisions it rules                                          |
-| ----------------------------------- | ------------------ | ----------------------------------------------------------------------------- |
-| Reader                              | `reader.agent.md`  | the person the digest is for - is it worth their two minutes? is the language plain? does the page work on a slow connection and a small screen? |
-| Editor                              | `editor.agent.md`  | what the digest covers and at what length - story selection, where a cut may fall by kind of writing, which themes to trade when a budget binds, whether a source earns its slot |
-| Jony (UI and UX)                        | `jony.agent.md`    | the published surface - page and typography, chart vs diagram vs nothing, the eval dashboard, what a visual must earn |
-| Susan (Craft and Delight)             | `susan.agent.md`   | whether a surface is good enough to ship - the sufficiency checks, elevation and colour systems, icon and chart craft, both themes, empty and degraded states |
-| Andre (AI and LLM)                    | `andre.agent.md`   | model pick on quality grounds, prompt strategy, constrained decoding, eval design and metric choice, the prompt-injection surface |
-| Fowler (Architecture and Engineering) | `fowler.agent.md`  | architecture, persisted contracts (stage payloads, eval ledger, run manifest, config, published payloads), schema versioning, test tiers, refactor safety, module structure, when to delete |
-| Carmack (Engine and Runtime)          | `carmack.agent.md` | inference runtime, model quantisation and fit, the runner budget, throughput, cache and shard economics, job timeouts |
+| Advisor | Responsibility |
+| --- | --- |
+| [Reader](.github/agents/reader.agent.md) | Reading experience, plain language, small screens and slow connections |
+| [Editor](.github/agents/editor.agent.md) | Coverage, story selection, length, cuts, topic balance and source value |
+| [Jony](.github/agents/jony.agent.md) | Published layout, typography and the choice of chart, diagram or no visual |
+| [Susan](.github/agents/susan.agent.md) | Readiness to ship: sufficiency, elevation, colour, icons, charts, both themes, empty and degraded states |
+| [Andre](.github/agents/andre.agent.md) | Model quality, prompts, constrained decoding, evaluation and model-output requirements |
+| [Fowler](.github/agents/fowler.agent.md) | Architecture, contracts, versioning, validation, process safety, test tiers, safe refactoring, module structure and deletion |
+| [Carmack](.github/agents/carmack.agent.md) | On-demand advice on runtime, quantisation, resource use, throughput, cache and shard costs, and timeouts |
 
-Adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
+### Shared boundaries
 
-**A veto must name what the reader loses.** A ruling that removes states what is removed *and* what the reader gives up by not having it; a ruling that states only the first is not a ruling and does not bind. This is not a courtesy - it is the price of the authority the table above hands out.
+- **Content:** Reader reports the experience, not proposals. Editor decides coverage and length, not what the reader experienced.
+- **Design:** Jony decides what stays; Susan decides whether it is good enough to ship. Neither judgment replaces the other. Susan cannot overrule Reader on language or Editor on content.
+- **Models:** A model must meet quality and execution requirements, not collect two advisor approvals. Andre owns quality; Carmack advises on runtime when invoked.
+- **Injection:** Andre defines prompt and model-output requirements. Fowler owns contracts, validation and the process boundary. Model output must not become shell arguments, file paths or fetch URLs.
+- **Evaluation:** Editor names the content failure; Andre chooses how to measure it.
 
-Five pairs share an edge, and each one has a written split.
+**Invocation:** Fowler or another agent may invoke Carmack for a specific runtime question whose answer changes the current implementation decision. A direct user request also qualifies. Carmack has no automatic review or approval step. Ownership does not require consultation on every increment.
 
-- Where Reader and Editor both touch content: **Reader reports what reading it was like, Editor rules what should have run and how long.** Reader does not propose; Editor does not speak for the reader's experience of the page.
-- Where Jony and Susan both touch the page: **Jony rules what survives on the page, Susan rules whether what survived is good enough to ship.** They are the two halves of one review and neither is sufficient alone. Susan never overrules Carmack on bytes, Reader on plain language, or Editor on what runs.
-- Where Carmack and Andre both touch the model: **Andre owns whether a model is good enough, Carmack owns whether it fits.** A model that fails either test is not the pick.
-- Where Andre and Carmack both touch injection: **Andre owns the prompt and schema shape, Carmack owns the process boundary** - no model output becomes a shell argument, a file path, or a URL to fetch.
-- Where Editor and Andre both touch quality: **Editor names the content failure, Andre chooses the instrument that measures it.**
+**Implementation:** Build the requested capability incrementally in its intended code path. Each increment implements real behavior, has appropriate tests and becomes the basis for the next increment. Do not substitute mocks, placeholders or a separate proof of concept for the capability.
 
-A persona's own worldview shapes what it says, never how plainly it says it (section 0b).
+**Measurement:** Measure to decide the next implementation step, not to obtain permission to build. If measurement needs working code, build that part of the real feature first. Further measurement must name what decision it could change; otherwise continue implementation.
+
+No advisor may reduce scope or require a separate experimental implementation without user approval. Platform limits, safety controls and required correctness tests still apply.
+
+**A removal veto is valid only if it names what is removed and what the reader loses.**
 
 
 ## See also

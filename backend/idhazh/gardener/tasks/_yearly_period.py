@@ -46,7 +46,7 @@ from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import GITHUB_LARGE_FILE_BYTES, CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry
-from idhazh.gardener import schedule
+from idhazh.gardener import named_trees, schedule
 from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
 
 logger = logging.getLogger(__name__)
@@ -87,7 +87,8 @@ def _pack(
         where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.MONTHLY)
         return _refused(tree, year, f"{where.name} does not name {', '.join(missing)}")
     files = [
-        ledger.compact_file(tree.state_dir, tree.ledger, Period.MONTHLY, month) for month in months
+        named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month)
+        for month in months
     ]
     absent = [month for month, found in zip(months, files, strict=True) if found is None]
     if absent:
@@ -127,12 +128,15 @@ def _pack(
 
 def _finish(tree: CompactTree, year: str) -> tuple[Stop, ...]:
     """A year the yearly index already names: delete the month files of it still there."""
-    if ledger.compact_file(tree.state_dir, tree.ledger, Period.YEARLY, year) is None:
+    held = named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.YEARLY, year)
+    if held is None:
         where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.YEARLY)
         return _refused(tree, year, f"{where.name} names it and no yearly file holds it")
     left = [month for month in sorted(tree.monthly) if month[:4] == year]
     for month in left:
-        found = ledger.compact_file(tree.state_dir, tree.ledger, Period.MONTHLY, month)
+        found = named_trees.compact_file(
+            tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
+        )
         if found is not None:
             tree.delete(found)
         del tree.monthly[month]
@@ -167,6 +171,14 @@ def absorb(
         year = first[:4]
     else:
         return ()
+    ready: list[str] = []
+    ahead = year
+    while len(ready) < policy.max_periods_per_run and _ready(
+        tree, ahead, now=now, after_days=policy.monthly_keep_days
+    ):
+        ready.append(ahead)
+        ahead = _after(ahead)
+    tree.listing.fetch([tree.monthly_year_folder(held) for held in ready if held not in tree.yearly])
     taken = 0
     while _ready(tree, year, now=now, after_days=policy.monthly_keep_days):
         if taken == policy.max_periods_per_run:

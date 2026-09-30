@@ -13,10 +13,10 @@ what a knob is at all is [../config.md](../config.md).
 
 | Knob | Committed | What it decides |
 | --- | --- | --- |
-| `version` | `2026-09-28` | The UTC day this file's shape last changed |
+| `version` | `2026-09-30` | The UTC day this file's shape last changed |
 | `attempts` | `6` | How many times one shard may try to push before it gives up with exit 3 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
-| `max_cone_mb` | `768` | The most the folders one shard owns may weigh, in megabytes of 1024 x 1024 bytes, before the shard exits 1. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate ([why 768](../../architecture/publishing/idhazh-gardener.md#what-a-shards-folders-weigh)) |
+| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate. Its first reset is to about twice the largest `downloaded_bytes` the first thirty scheduled wakes record ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
 
 **`attempts` must be above `shards`.** Every shard of a wake pushes to one
 branch at once, so the last one to land has lost a race to every other shard
@@ -43,6 +43,7 @@ Every declaration carries these keys, whatever its kind:
 | `dry_run` | `bool`, no default | True reports what a live pass would take and takes nothing |
 | `max_deletes_per_run` | a count, or `null` | The most one pass deletes. `null` is no ceiling and `0` is a survey. A collection pruned through GitHub's API spends a request a delete, so `null` there can use up the token's hourly allowance on one backlog |
 | `owns` or `owns_everything_else_under` | a list of folders | Exactly one of the two. `owns` names repository-relative folders; the second is the complement: every folder under its roots that no other task owns and no ledger family claims |
+| `reads` | a list of folders, default `[]` | Folders the task reads and does not own. Their file names are listed for it from the commit, whichever shard it lands in, and it may fetch and open their files; it never writes or deletes there. A task that asks about a folder it neither owns nor reads is refused rather than answered empty. A folder it owns, or one inside or around one, is refused here, and the complement task declares none |
 | `appends_to` | a list of ledger names, default `[]` | The ledgers a task files a report of its own into, through the ledger door: one new raw file under the wake's day, on a dry run too, because a report is what a dry run is for. Appending is not owning: the door mints each file's name, so it can overwrite nothing, and the runner refuses a report anywhere else before anything is staged |
 
 Each kind adds its own keys, and a key on the wrong kind is refused by name:
@@ -70,7 +71,7 @@ Why each tree gets the age it has is
 
 | Task | Owns | Window | Why that window |
 | --- | --- | --- | --- |
-| `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source |
+| `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health` and `state/compact/item-health`, which `compact-item-health` owns, so it finds its due months whichever shard it lands in |
 | `scores` | `state/score-index`, `state/score-archive` | 14 months: `full-grain` 14 months, `archive` forever | an index day goes once an archive covers its month. It builds no archive now: the archive was built from the CSV day files, which moved to the ledger door, so `compact-scores` stays report-only until an archive is built from the door's rows |
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
 | `host-fingerprint` | `state/host-fingerprint` | 14 months | retired: its module is deleted and nothing runs it. The declaration stays because its window is the floor `compact-host-fingerprint` must reach, and the published machine shard is folded from that ledger, so it keeps at least `public_machine_keep_months` |
@@ -172,7 +173,7 @@ names the file an operator edits and the rule it broke.
 | A file whose name is not lower-case words joined by hyphens | The name is the task |
 | Two tasks that own one folder, or a folder inside the other's, whatever their status | Both would delete in it. A retired task keeps its claim |
 | More than one task using the complement form | Each would claim what the other claims |
-| An owned entry that is a file | A shard checks out folders, so a file would match nothing |
+| An owned entry that is a file | A shard lists the files under each folder a task owns, so a file would list nothing |
 | `seen` keeping less than `collect.seen_window_days` | The planner still reads those days |
 | `counterfactual-scores` keeping less than `lens_weights.window_days` | A reader still opens those days |
 | `telemetry-aggregate` or `scores` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |

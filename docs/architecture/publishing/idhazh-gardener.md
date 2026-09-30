@@ -38,11 +38,11 @@ land together, and the pre-flight below refuses either one arriving alone.
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
 | 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Reads the commit the checkout is at, weighs the folders the shard owns at that commit, loads the declarations through the typed loader, finds the modules, and runs the pre-flight |
-| 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Reads the commit the checkout is at and lists the name and size of every file under the folders the shard's tasks own or read, downloading none of them, then loads the declarations through the typed loader, finds the modules, and runs the pre-flight |
+| 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
-| 6 | `run-tasks` | `gardener_publish.publish` | Stages exactly what the shard wrote and deleted, commits, pushes, and tries again on a newer tip if it lost |
+| 6 | `run-tasks` | `gardener_publish.publish` | Builds one commit of exactly what the shard wrote and deleted, pushes it, and tries again on a newer tip if it lost |
 | 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has ended, unless the run was cancelled: reads whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` with a lease on the tip it read, squashing again on a new tip when the push is refused |
 
 **The split is round-robin over sorted names.** Every task the matrix runs - an
@@ -53,26 +53,42 @@ the same shards, no shard is empty, and every task is in exactly one. How much
 work a task holds is not read: one owned folder can hold one file or ten
 thousand, so counting folders would balance nothing.
 
-**A shard checks out the folders its tasks own**, joined into one
-newline-separated string (`cone`) because that is what a sparse checkout reads.
-A task that owns everything else under a root adds no folder to the plan's cone,
-because only the commit can say what that is: `gardener_publish.py` reads those
-folders off the commit and adds them to a sparse checkout, in one download,
-before any task runs. A folder a declaration names is never added that way: one
-the checkout lacks means the plan was wrong, and its task fails.
+**A shard checks out only its code and config, and lists the rest from the
+commit.** `gardener_publish.py` reads, in one `git ls-tree -r -l` over the commit
+with lazy fetching off, the name and size of every file under the folders the
+shard's tasks own or read - and under the folders the complement task sweeps,
+which only the commit can name - and downloads none of them. A file's size is
+git's where the clone holds the file. For one it never downloaded git prints no
+size, so GitHub's trees API is asked once for each listed folder, and its sizes
+are matched to git's names by blob id; a name left with no size is refused, and
+no task runs. So what a shard's listing costs grows with the number of names,
+not with what the files weigh.
+
+**A task decides from those names and fetches only what it reads.** A task that
+decides from the date in a path downloads nothing, and its deletions land from
+the names alone. A task that reads a file's content - a compaction packing a
+day, the census summary reading a month - first widens the checkout by exactly
+the day or month folders that step reads, in one `git sparse-checkout add
+--stdin`, which a partial clone serves with one download. A file the commit
+holds is on disk after that or the task fails: it is never taken for a member
+that is not there. After each task the listing takes in what that task deleted
+and wrote, so a later task of the shard that reads the same folder sees the
+tree the shard will commit, and never fetches a file an earlier task deleted.
 
 **A task is handed the folders it walks, and never lists `state/` itself.**
 `gardener_publish.py` reads, in one `git ls-tree` with no recursion, which of
-the shard's owned folders the commit holds and every folder directly under
-`state/`, and the runner turns that into `TaskContext.owned_folders` before any
-task runs. A folder the commit holds and the checkout lacks fails its task,
-because a wrong checkout would otherwise report a silent zero. A declared folder
-the commit does not hold yet - a ledger's `state/compact/` folder before its first
-day is packed - is left out and logged, and the task's first write makes it. A
-complement task's folders come from the commit alone, so a folder somebody left
-in the checkout and never committed is not the sweep's to take, and
-`idhazh gardener run-task`, which starts no process and so reads no commit,
-refuses one by name.
+the folders the shard's tasks own or read the commit holds, and every folder
+directly under `state/`, and the runner turns that into
+`TaskContext.owned_folders` before any task runs. A folder the commit holds is
+walked whether the checkout holds it or not, because its names come from the
+commit. A declared folder the commit does not hold yet - a ledger's
+`state/compact/` folder before its first day is packed - is left out and
+logged, and the task's first write makes it. A complement task's folders come
+from the commit alone, so a folder somebody left in the checkout and never
+committed is not the sweep's to take, and `idhazh gardener run-task`, which
+starts no process and so reads no commit, refuses one by name. A folder a task
+reads and does not own is declared under `reads`; asking about a folder it
+neither owns nor reads is refused rather than answered empty.
 
 **The plan is written twice.** The plan job runs before anything of ours is
 installed, so `gardener_shards.py` cannot import the typed planner in
@@ -100,16 +116,16 @@ flowchart TB
     PLAN["plan job: gardener_shards.py<br/>standard library only,<br/>before any install;<br/>reads the config alone"]
     ANY{"any active task<br/>for the matrix?"}
     IDLE["no shard runs"]
-    TEND["run-tasks job, one a shard:<br/>gardener_publish.py --shard N<br/>weighs the folders it owns"]
-    RUN["for each task in the shard:<br/>select, report, delete"]
+    TEND["run-tasks job, one a shard:<br/>gardener_publish.py --shard N<br/>lists its folders' files<br/>from the commit"]
+    RUN["for each task in the shard:<br/>select from names, fetch<br/>what it reads, report, delete"]
     OWNED{"every path a task<br/>wrote or deleted inside<br/>that task's owns?"}
     OUTSIDE["exit 2<br/>the ownership<br/>claim is wrong"]
     LANDED{"this shard's record<br/>already on origin/main?"}
-    REAPPLY["reset --mixed origin/main<br/>re-stage the same files<br/>it wrote and deleted"]
+    REAPPLY["an index of its own from<br/>origin/main: the same writes<br/>set, the same deletions out"]
     PUSHED{"push accepted?"}
-    CLEAN{"every task passed,<br/>and the folders within<br/>max_cone_mb?"}
+    CLEAN{"every task passed,<br/>and what it downloaded<br/>within max_downloaded_mb?"}
     OK["exit 0"]
-    ALARM["exit 1<br/>the record landed,<br/>naming the failed task<br/>or the weight"]
+    ALARM["exit 1<br/>the record landed,<br/>naming the failed task<br/>or what it downloaded"]
     LOST["exit 3<br/>attempts exhausted,<br/>nothing landed"]
     HIST["history job, once every shard<br/>has ended, unless the run was cancelled:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main<br/>with a lease on the tip it read"]
   end
@@ -175,7 +191,7 @@ failed `plan` job, which skips every shard, does not hold it off either, and a
 person's cancel still stops it. The person's ruling, 2026-09-29. It replaced
 `always() && (needs.run-tasks.result == 'success' || needs.run-tasks.result == 'skipped')`,
 under which a task that failed at every wake - a compaction that meets a hole, a
-shard over `max_cone_mb` - held off every squash until a person acted.
+shard over its ceiling - held off every squash until a person acted.
 
 **The push carries a lease, and a refused push squashes again.**
 `corpus_history.py` pushes with `--force-with-lease=refs/heads/main:<tip>`,
@@ -186,6 +202,22 @@ the new tip, which replays the other run's commits with the rest. It never
 pushes the refused rewrite again. After `push_attempts` pushes in all it stops,
 unstamped, and the squash is due again at the next wake. The person's ruling,
 2026-09-29.
+
+**The first squash that rewrites history is due about 2026-10-29, and a person
+reads two things in its log.** No squash has collapsed a commit yet, so neither
+has been seen on a runner. The replay is a rebase, and a rebase flattens merge
+commits; the history it replays holds merge commits, six from September 2026.
+If one carried a change of its own, the replayed tree differs from the tip and
+the program stops with exit 2 before any push, for a person to decide; a replay
+that stops on a conflict ends the same way. And nobody has timed one replay on
+`ubuntu-latest`: on the Windows development machine 1,001 commits took 824 s,
+and the first squash replays about 4,800, so at that rate one replay alone would
+outlast the job (an estimate). Read the replay's time in the history job's log -
+a job stopped at its limit means one replay did not fit - and if one replay takes
+more than about a third of the job's 30 minutes, about 8 minutes once the clone,
+the install and the waits are paid
+([the budget](../../concepts/config/idhazh-gardener.md#the-history-declaration-corpus-squash)),
+lower `push_attempts` or raise the job's `timeout-minutes`.
 
 **`digest.yml` is not on this picture, and that is the point.** It writes
 today's rows, and every day the gardener acts on ended at least a whole day
@@ -198,8 +230,8 @@ one writer into an older day, and a compaction takes its file at the next wake
 | Exit | What it means | Retried |
 | --- | --- | --- |
 | 0 | every task ran and the record landed, or had already landed | - |
-| 1 | a task failed - its row says `failed` and its siblings still ran - or the folders the shard owns weigh more than `max_cone_mb`. Either way the record still landed | at the next wake; the weight goes on failing until a person acts |
-| 2 | ownership or integrity: a module that cannot serve, a history task handed to the runner, a path outside what a task owns, a record outside the gardener's ledger, or one record path with two sets of bytes | never; a person fixes it |
+| 1 | a task failed - its row says `failed` and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, and either way the record still landed; or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; a download over the ceiling goes on failing until a person acts |
+| 2 | ownership or integrity: a module that cannot serve, a history task handed to the runner, a path outside what a task owns, a record outside the gardener's ledger, one record path with two sets of bytes, or a deletion of a file the commit did not list | never; a person fixes it |
 | 3 | the push kept losing for every attempt | at the next wake |
 
 A shard reports the worst code it earned, in the order 2, 3, 1, 0.
@@ -238,36 +270,34 @@ anything is staged, the way it stops for a path outside what a task owns. A
 report lands on a dry run too, because what a dry run found is the thing it
 exists to report; every deletion it named is still held back.
 
-## What a shard's folders weigh
+## What a shard downloads
 
-**Every shard weighs the folders it owns, at the commit it checked out, before
-any task runs.** `gardener_publish.py` adds up the sizes `git ls-tree -r -l`
-lists under each owned folder. It reads them off the commit, with
-`GIT_NO_LAZY_FETCH=1`, so a checkout that holds only its own folders downloads
-nothing to answer, and a folder outside the checkout fails rather than
-downloads. Every row the shard writes carries the total as `cone_bytes`. The
-code folders every shard also checks out - `config/`, `backend/` and
-`.github/` - are not counted: they are the same in every shard, and they grow
-with code rather than with what the pipeline keeps.
+**Every row carries two weights.** `cone_bytes` is what the folders the shard's
+tasks own weighed at the commit it checked out - the listing's sizes added up -
+whether or not a task downloaded any of it. `downloaded_bytes` is what the
+shard's tasks downloaded to read: the content of every file a widening brought.
+The code folders every shard checks out - `config/`, `backend/` and `.github/` -
+are in neither: they are the same in every shard, and they grow with code rather
+than with what the pipeline keeps.
 
-**Over `max_cone_mb` the shard still runs its tasks and lands its record, then
-exits 1.** The number is an alarm, not a stop. Stopping before the tasks would
-stop the one thing that makes the folders lighter - a live task's deletes - and
-the dry-run rows a person reads before turning a task live; the checkout has
-already paid for the bytes by then, so stopping saves nothing. The message names
-the three heaviest owned folders. `idhazh gardener run-task` starts no git
-process, so a hand run records `cone_bytes` as empty and is never over.
+**Over `max_downloaded_mb` the shard still runs its tasks and lands its record,
+then exits 1.** The number is an alarm, not a stop: the downloads are paid for
+by the time the number is known, and stopping would only stop the passes that
+make the tree lighter - a live task's deletes - and the dry-run rows a person
+reads before turning a task live. The message names the three folders the
+shard downloaded most under. `idhazh gardener run-task` starts no git process,
+so a hand run records both weights as empty and is never over.
 
-**768 MB is the committed ceiling, and it is an estimate.** A megabyte here is
-1024 x 1024 bytes. Read on 2026-09-28, the heaviest shard - the digest pages,
-the score files, the score index and archive, and the visual-prunes ledger -
-owned 46.3 MB and grew about 1.4 MB a day. Its windows are 390 days and 14
-months, so it keeps growing for about a year whether its tasks are live or not;
-at the rates of 2026-09-20 to 27 those windows fill at about 550 to 600 MB, and
-768 leaves about 30 percent for the rate to rise. A ceiling near today's weight
-would go red within two weeks on growth the windows allow, and stay red. The
-first wake's checkout time says whether that weight still fits the 20-minute
-job, and any wake's record gives the reading again.
+**128 MB is the committed ceiling, and it is an estimate.** A megabyte here is
+1024 x 1024 bytes. A shard downloads only what its tasks read: the days and
+months a compaction packs, the months the census summary summarises. Measured
+on the development machine on 2026-09-30, a month of the scores ledger is 31
+files and 3.5 MB, so 128 leaves room for a compaction that catches up on
+several months at once. Move it to about twice the largest `downloaded_bytes`
+of the first thirty scheduled wakes. A month file sits in its year folder, so a
+step that reads one month file fetches every month file of that year beside it,
+up to twelve: a later row can move the month files into folders of their own if
+the readings show that cost.
 
 ## The record
 
@@ -281,8 +311,8 @@ it with exit 2 if it went anywhere else.
 Each row names the run that wrote it: `run_id`, `attempt`, `job` and `shard`, the
 task's own `duration_ms`, and `work_ended_at`, the instant the shard finished
 working and began to publish. A slow push is therefore never read as a slow task.
-Each row also carries `cone_bytes`, what the shard's owned folders weighed
-([above](#what-a-shards-folders-weigh)).
+Each row also carries `cone_bytes`, what the shard's owned folders weighed, and
+`downloaded_bytes`, what its tasks downloaded ([above](#what-a-shard-downloads)).
 
 ## Landing the commit
 
@@ -290,12 +320,20 @@ Each row also carries `cone_bytes`, what the shard's owned folders weighed
 entry point a shard runs: it reads the commit the checkout is at, calls the
 runner, and lands the `Shard` the runner hands back - the record, every path the
 shard's live tasks and live folds wrote and deleted, every report any of its
-tasks filed, and the commit message. Each attempt
-fetches `main`, resets the index to it with `--mixed`, stages exactly those
-writes and deletions, checks what it staged, commits as
-`miztiik <miztiik@users.noreply.github.com>` and pushes. A lost push waits a
-random time - up to 1, 2, 4, 8 and then 8 seconds - and tries again on the new
-tip. No wait follows the last attempt.
+tasks filed, and the commit message. Each attempt fetches `main` and builds the
+commit in an index file of its own: `main`'s tree read in, each write's new
+content set, each deletion taken out by its name. So a file the checkout never
+downloaded is deleted as easily as one it holds, and the checkout's own index is
+never expanded. It checks what it staged, writes the tree and a commit on top of
+`main` as `miztiik <miztiik@users.noreply.github.com>`, and pushes that commit as
+whole objects: a delta against a file the clone lacks could only be computed by
+downloading the file, and with lazy fetching off the push would fail instead.
+Every git call but the one that widens the checkout runs with lazy fetching
+off, so a call that would download a file fails rather than pays for it
+quietly. A lost push waits a random time - up to 1, 2, 4, 8 and then 8 seconds -
+and tries again on the new tip. No wait follows the last attempt. A deletion of
+a file the commit did not list lands nothing, and the shard exits 2: a task
+decided it from something other than the commit.
 
 **The record decides whether the shard already landed.** Its bytes are unique to
 the shard, so `main` holding that path with those bytes means an earlier attempt
@@ -305,8 +343,10 @@ landed and this one stops with 0; the same path with other bytes is exit 2.
 the shard's writes and deletions is staged. Every write is staged, unless its
 bytes already equal `main`'s, which is a write that already landed. And a
 deletion that staged nothing is an error only while `main` still holds the
-path, because a path already gone is a deletion somebody finished. A deletion
-that names a folder is refused before anything stages.
+path, because a path already gone is a deletion somebody finished. A write or a
+deletion that names a folder is refused before anything stages. A write a
+`.gitignore` pattern matches is not staged unless `main` already holds it - the
+rule `git add` keeps - so the second check names it.
 
 **`idhazh gardener run-task` never pushes.** It runs the same tasks and writes
 the same record into the checkout, and stops there, so running a task on a
@@ -477,6 +517,11 @@ of each key. It writes the day's listing,
 last. A pass that stops part way leaves the watermark behind the truth, so the
 next wake takes that one day again and loses nothing.
 
+**A watermark records what the data covers, never when a job ran.** It names
+the newest day taken, so a lost watermark write costs one repeat and never a
+skipped day: the next wake finds the mark behind and takes that day again, from
+its day file and any raw files still there.
+
 **A quiet day still gets a file.** A day with no raw files gets a day file with
 no rows and an index entry. So the newest day `index/daily.json` names is always
 the watermark's day, and a reader can tell a quiet day from a missing one
@@ -515,6 +560,8 @@ would put the missing day in no file.
 
 Absorbing is five steps in this order: the month file, `index/monthly.json`, the
 deletion of its day files, `index/daily.json`, and `monthly/watermark.json` last.
+A live pass lands all five in the shard's one commit, so no commit on `main`
+holds one of the month's dates in both periods, or in neither.
 The day files are joined as they are and never settled across days: a key with
 no date in it may repeat on two days, and both rows are facts.
 
@@ -717,22 +764,26 @@ which keeps it from deleting a file it wrote. A year waits for its next January,
 and a smaller wait is refused rather than silently lengthened. The year is built
 one month at a time: for the eval ledger at September 2026's rate, that holds
 about a quarter of the memory a whole-year build holds, 0.33 GB against 1.41 GB,
-measured once on a laptop. The first live pass times it on a runner.
+measured once on a laptop. The first live pass times it on a runner. A year file
+sits in a folder of its own, `yearly/<YYYY>/<YYYY>.parquet`, because a shard
+fetches a watermark together with every file beside it: a year file beside the
+year watermark would be downloaded on every wake, one more file every year.
 
-**2026-09-28: the weight ceiling is an alarm, and it is 768 MB.** Over it, a
-shard still runs its tasks and lands its record, then exits 1. Stopping first
-would stop the deletes that make the folders lighter, and the checkout has
-already paid for the bytes. The first figure proposed was 64 MB, a point for a
-person to decide at. The heaviest shard passes it within two weeks on growth
-its own windows allow, and while a red shard skipped the squash, as it did until
-2026-09-29, a ceiling that stayed red stopped the squash with it. 768 goes red
-only on growth past what the windows can hold (Carmack on the figure; Fowler
-agreed while the history job's condition stood).
+**2026-09-30: the alarm is on what a shard downloads, and it is 128 MB.** Over
+it, a shard still runs its tasks and lands its record, then exits 1: stopping
+first would stop the deletes that make the tree lighter, and the downloads are
+paid for by then. Until 2026-09-30 the alarm was on what a shard's owned folders
+weighed, `max_cone_mb` at 768, because a shard checked those folders out whole.
+A shard now checks out only its code, so that weight costs no download and
+cannot be the alarm; it stays on every row as `cone_bytes`, and what the shard
+paid is `downloaded_bytes`. 128 is an estimate, to move to about twice the
+largest reading of the first thirty wakes (Carmack on the figure; Fowler on the
+record's shape).
 
 **2026-09-28: the weight is `cone_bytes`, in whole bytes, and empty when nobody
 weighed it.** `bytes_freed` in the same row is bytes, a byte count is exact, and
 0 is a real reading, so "not measured" is empty rather than 0 (Fowler and
-Carmack).
+Carmack). `downloaded_bytes` follows the same rule.
 
 **2026-09-28: a collection declaration names its collection.** A typed
 `collection` key, checked against the file name at load, is the shape a
@@ -758,15 +809,44 @@ after that. `corpus_history.py` pushes with a lease on the tip its checkout
 holds, so without `ref: main` the first push of every due wake would be
 refused and the squash done a second time (Carmack).
 
-**2026-09-28: the shard adds the complement's folders to its own checkout.** The
-plan job reads config alone and cannot name the folders the complement sweeps:
-they are what the commit holds under `state/` that no declaration and no ledger
-claims, and that rule lives in the installed package. The runner fails a task
-whose folder the commit holds and the checkout lacks, so with an empty cone the
-complement failed at every wake, and a red shard then skipped the squash. The shard
-adds those folders - 952 bytes on 2026-09-28 - then weighs them with the rest.
-Copying the ledger rule into the plan job would give one rule two writers
-(Fowler and Carmack).
+**2026-09-30: a shard checks out only its code, and lists the rest from the
+commit.** A shard used to check out every folder its tasks owned, and most of it
+was never read: 33 MB of the heaviest shard's 48 MB was `frontend/public/digest`,
+which its task decides on from the dates in the paths. Names now come from one
+`git ls-tree -r -l` over the commit; sizes from git where the clone holds the
+file, and from GitHub's trees API, matched by blob id, where it does not; and a
+task fetches the day or month folders it reads before it reads them. Content
+arrives by whole folder, one widening a step, because every reader opens a
+path: reading blobs one at a time through `git cat-file` was rejected. The
+folders the complement task sweeps come from the commit the same way, so no
+folder is added to the checkout for it (the person's answer; Fowler and
+Carmack).
+
+**2026-09-30: the commit is built in an index of its own, and pushed whole.**
+`git reset --mixed origin/main` reads the files whose entries it changes: with
+lazy fetching off it fails once `main` has moved, and with it on it downloads
+them. So each try reads `origin/main`'s tree into a separate index, sets the
+writes and takes the deletions out in one `git update-index --index-info` call,
+writes the tree with `--missing-ok`, and pushes the commit with `--no-thin`: a
+thin push under the flag was refused by the remote, because its deltas point at
+files the clone lacks. Every command on that index runs with the checkout's
+sparse patterns off, because git applies them to any index it reads, and that
+reads files the clone never downloaded (Carmack).
+
+**2026-09-30: a task names the folders it only reads.** The census summary finds
+its due months in the item-health census, which the census compaction owns, and
+from another shard it saw no census, found no month due and reported success.
+`reads` lists those folders for it in any shard; a folder a task neither owns
+nor reads is refused when it asks; and the runner still refuses any write or
+deletion outside what a task owns. The summary reads both item-health folders,
+the raw days and the compact files, because a month may sit in either (Fowler).
+
+**2026-09-30: a later task of a shard sees what an earlier one changed.** Two
+tasks of one shard can share a folder now, one owning it and one reading it. A
+listing read once would hand the reader files the owner had already deleted, and
+the reader would fetch them and fail. So the listing takes in each task's writes
+and deletions, and a fetch widens the checkout only by the folders that bring a
+file it lacks.
 
 **2026-09-28: the task that owns each CSV day tree folds it, on a switch of its
 own.** A fifth task kind was considered and dropped: it would put five of six

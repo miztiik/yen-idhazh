@@ -153,7 +153,7 @@ already checked:
 - `<prefix>/state/compact/<ledger>/index/<period>.json`
 - `<prefix>/state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet`
 - `<prefix>/state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet`
-- `<prefix>/state/compact/<ledger>/yearly/<YYYY>.parquet`
+- `<prefix>/state/compact/<ledger>/yearly/<YYYY>/<YYYY>.parquet`
 
 `<prefix>` is `visuals.asset_base_url` in `config/idhazh.json`, or SvelteKit's own
 repository prefix when that knob is empty, which is the shipped default. It comes

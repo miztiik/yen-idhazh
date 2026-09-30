@@ -60,6 +60,7 @@ def test_each_builder_answers_its_one_shape(tmp_path: Path) -> None:
         "raw index": ledger.raw_index_path(state, WHICH, A_DAY),
         "daily": ledger.compact_path(state, WHICH, Period.DAILY, A_DAY),
         "monthly": ledger.compact_path(state, WHICH, Period.MONTHLY, A_MONTH),
+        "yearly": ledger.compact_path(state, WHICH, Period.YEARLY, A_DAY[:4]),
         "daily index": ledger.compact_index_path(state, WHICH, Period.DAILY),
         "monthly watermark": ledger.watermark_path(state, WHICH, Period.MONTHLY),
     }
@@ -70,9 +71,27 @@ def test_each_builder_answers_its_one_shape(tmp_path: Path) -> None:
         "raw index": "raw/visual-prunes/index/2026-09-24.json",
         "daily": "compact/visual-prunes/daily/2026/09/24.parquet",
         "monthly": "compact/visual-prunes/monthly/2026/08.parquet",
+        "yearly": "compact/visual-prunes/yearly/2026/2026.parquet",
         "daily index": "compact/visual-prunes/index/daily.json",
         "monthly watermark": "compact/visual-prunes/monthly/watermark.json",
     }
+
+
+@pytest.mark.parametrize(
+    ("period", "covers"),
+    [(Period.DAILY, A_DAY), (Period.MONTHLY, A_MONTH), (Period.YEARLY, A_DAY[:4])],
+)
+def test_no_compact_file_sits_beside_its_periods_watermark(
+    period: Period, covers: str, tmp_path: Path
+) -> None:
+    """The upkeep checkout fetches a watermark with every file beside it, so one there
+    would be downloaded on every wake."""
+    state = tmp_path / "state"
+
+    assert (
+        ledger.compact_path(state, WHICH, period, covers).parent
+        != ledger.watermark_path(state, WHICH, period).parent
+    )
 
 
 @pytest.mark.parametrize(

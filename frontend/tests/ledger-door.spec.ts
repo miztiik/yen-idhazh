@@ -211,8 +211,8 @@ test.describe('which files a range needs', () => {
 		});
 	});
 
-	test('a year file is addressed by its year alone', () => {
-		expect(dataPath(LEDGER, 'yearly', '2026')).toBe('compact/host-fingerprint/yearly/2026.parquet');
+	test('a year file sits in a folder named for its year', () => {
+		expect(dataPath(LEDGER, 'yearly', '2026')).toBe('compact/host-fingerprint/yearly/2026/2026.parquet');
 	});
 
 	test('a range crosses a month end one UTC day at a time', () => {

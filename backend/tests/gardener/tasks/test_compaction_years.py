@@ -310,7 +310,7 @@ def test_a_pass_that_stopped_part_way_is_finished_by_the_next_with_no_row_lost_o
     context = context_for(TASK, root, today=TODAY, dry_run=False, **PACKS)
     policy = context.policy
     assert isinstance(policy, CompactionPolicy)
-    tree = CompactTree.read(context.state_dir, VISUALS)
+    tree = CompactTree.read(context.state_dir, VISUALS, context.listing)
     now = datetime.combine(TODAY, time.min, tzinfo=UTC)
 
     stops = _yearly_period.absorb(
@@ -321,7 +321,7 @@ def test_a_pass_that_stopped_part_way_is_finished_by_the_next_with_no_row_lost_o
     compact_root = f"{ledger.STATE_DIRNAME}/compact/{VISUALS.value}"
     decided = [change.path.relative_to(root).as_posix() for change in tree.changes]
     assert decided == [
-        f"{compact_root}/yearly/2026.parquet",
+        f"{compact_root}/yearly/2026/2026.parquet",
         f"{compact_root}/index/yearly.json",
         *[f"{compact_root}/monthly/{month.replace('-', '/')}.parquet" for month in MONTHS_OF_2026],
         f"{compact_root}/index/monthly.json",

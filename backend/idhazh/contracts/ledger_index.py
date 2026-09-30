@@ -70,7 +70,8 @@ def _first_descent(values: list[str]) -> tuple[str, str] | None:
 class RawDayIndex(Contract):
     """Which raw files exist for one day of one ledger.
 
-    Rewritten at every wake until that day is compacted, and never again after.
+    Written when the compaction takes that day, and again only if a re-run's
+    raw files make it take the day again.
     """
 
     __schema_stem__: ClassVar[str] = "raw-day-index"

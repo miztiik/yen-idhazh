@@ -37,7 +37,7 @@ What the days exercise:
 
 What the packed year holds:
 
-- `yearly/2026.parquet` was built by the compaction's own year writer,
+- `yearly/2026/2026.parquet` was built by the compaction's own year writer,
   `render_grouped_period()`, from `state/`'s August month file and its September
   day files, one row group each, so a month read from it is the month `state/`
   serves. Its first rows are in August, and its entry still covers all of 2026.

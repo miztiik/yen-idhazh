@@ -65,7 +65,7 @@ export function dataPath(ledger: LedgerName, period: Period, covers: string): st
 	const named: Record<Period, string> = {
 		daily: `daily/${year}/${month}/${day}`,
 		monthly: `monthly/${year}/${month}`,
-		yearly: `yearly/${year}`
+		yearly: `yearly/${year}/${year}`
 	};
 	return `compact/${ledger}/${named[period]}.parquet`;
 }
