@@ -1,4 +1,4 @@
-"""Write `state/score-index/` again from the rows it indexes, and say what drifted.
+"""Write the eval ledger's ID folder again from the rows it indexes, and say what drifted.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
 body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
@@ -16,10 +16,10 @@ from idhazh.stages import common
 from idhazh.stages.common import LOG
 
 
-def stage_rebuild_score_index(
+def stage_rebuild_summary_quality_evals_index(
     *, months: Sequence[str] | None, state_dir: Path | None = None
 ) -> int:
-    """Write `state/score-index/` again from the rows it indexes, and say what drifted.
+    """Write `state/summary-quality-evals-index/` again from its rows, and say what drifted.
 
     The operator's repair for an index that stopped describing the rows beside
     it. A write a crash cut short, or a day whose rows grew behind the index's
@@ -52,15 +52,21 @@ def stage_rebuild_score_index(
     # operator names a month and the answer has to be whether that month holds
     # rows; a cover would make a real month read as a typo (Guardrail #12).
     by_month: dict[str, list[str]] = {}
-    for day in ledger.held_days(state, LedgerName.SCORES):
+    for day in ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS):
         by_month.setdefault(day[:7], []).append(day)
     named = sorted(by_month) if months is None else sorted({month[:7] for month in months})
     if not named:
-        LOG.error("rebuild-score-index found no rows in the scores ledger, so no index is wrong")
+        LOG.error(
+            "rebuild-summary-quality-evals-index found no rows in the summary-quality-evals "
+            "ledger, so no index is wrong"
+        )
         return 1
     absent = [month for month in named if month not in by_month]
     if absent:
-        LOG.error("rebuild-score-index was asked for months that are not committed: %s", absent)
+        LOG.error(
+            "rebuild-summary-quality-evals-index was asked for months that are not committed: %s",
+            absent,
+        )
         return 1
 
     days = sorted({day for month in named for day in by_month[month]})
@@ -68,7 +74,7 @@ def stage_rebuild_score_index(
     for date, drift in sorted(found.items()):
         LOG.info(
             "index repaired day=%s held_the_rows_cannot_produce=%s rows_it_did_not_hold=%s",
-            ledger.relpath(LedgerName.SCORE_INDEX, date),
+            ledger.relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date),
             len(drift.extra),
             len(drift.missing),
         )

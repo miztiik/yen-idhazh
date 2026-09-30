@@ -45,10 +45,12 @@ STATE: Final = Path("state")
 #: Computed from `5a9c6f32f:backend/idhazh/ledger/__init__.py` by calling those
 #: functions, so a row here is the old answer rather than a reading of it.
 #:
-#: Two rows are not the old answer, and the difference is only their first
+#: Three rows are not the old answer, and the difference is only their first
 #: segment. `candidate-models` was `validation` and `item-health-summary` was
 #: `telemetry-aggregate`, renamed to say what they hold while neither had a
 #: single committed file - so the old addresses held nothing to move.
+#: `summary-quality-evals-index` was `score-index`, renamed with the eval ledger,
+#: and a migration moved every committed file it held.
 #:
 #: Two folders are not the old module's answer either, because it built no
 #: folder for a ledger filed by month or by stamp. Each is the folder its callers
@@ -72,11 +74,15 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/host-fingerprint/2026/09/18",
         "state/host-fingerprint",
     ),
-    "SCORES": ("state/scores/2026/09/18", "state/scores/2026/09/18", "state/scores"),
-    "SCORE_INDEX": (
-        "state/score-index/2026/09/18",
-        "state/score-index/2026/09/18",
-        "state/score-index",
+    "SUMMARY_QUALITY_EVALS": (
+        "state/scores/2026/09/18",
+        "state/scores/2026/09/18",
+        "state/scores",
+    ),
+    "SUMMARY_QUALITY_EVALS_INDEX": (
+        "state/summary-quality-evals-index/2026/09/18",
+        "state/summary-quality-evals-index/2026/09/18",
+        "state/summary-quality-evals-index",
     ),
     "CANDIDATE_MODELS": (
         "state/candidate-models/2026/09/18",
@@ -468,17 +474,21 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     A claim is a family name now, so every folder claimed before is still
     claimed under the name it has today. One addition is a file's stem, which
     the sweep never meets because it only looks at directories. Two are the
-    renamed empty ledgers, which leave their old names behind. Three are the
-    folders other modules used to own, protected before by a list typed into the
-    sweep itself and now by the registry. One is the gardener's own ledger, which
-    files under the two roots and is claimed like every family. The last two are
-    not families at all: they are the roots the ledger door files under, claimed
-    so the sweep never reads them as a trial run's trees.
+    renamed empty ledgers, which leave their old names behind, and two more are
+    the eval ledger and its ID folder, renamed after their files were moved.
+    Three are the folders other modules used to own, protected before by a list
+    typed into the sweep itself and now by the registry. One is the gardener's
+    own ledger, which files under the two roots and is claimed like every
+    family. The last two are not families at all: they are the roots the ledger
+    door files under, claimed so the sweep never reads them as a trial run's
+    trees.
     """
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-retirements",
         "candidate-models",
         "item-health-summary",
+        "summary-quality-evals",
+        "summary-quality-evals-index",
         "traces",
         "day-metrics",
         "digest-fragments",
@@ -486,7 +496,12 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
         "raw",
         "compact",
     }
-    assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {"validation", "telemetry-aggregate"}
+    assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {
+        "validation",
+        "telemetry-aggregate",
+        "scores",
+        "score-index",
+    }
 
 
 def test_the_three_owners_build_the_paths_they_built_before() -> None:

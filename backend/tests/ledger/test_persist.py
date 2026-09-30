@@ -56,7 +56,7 @@ LEDGER_OF: Final[dict[type[Contract], LedgerName]] = {
     VisualPruneRow: LedgerName.VISUAL_PRUNES,
     FeedRetirementRow: LedgerName.FEED_RETIREMENTS,
     HostFingerprintRow: LedgerName.HOST_FINGERPRINT,
-    EvalRow: LedgerName.SCORES,
+    EvalRow: LedgerName.SUMMARY_QUALITY_EVALS,
 }
 
 

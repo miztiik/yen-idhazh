@@ -1,15 +1,15 @@
 {
   "dry_run": true,
   "kind": "compaction",
-  "ledger": "scores",
+  "ledger": "summary-quality-evals",
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
   "monthly_window": {
     "unit": "forever"
   },
   "owns": [
-    "state/raw/scores",
-    "state/compact/scores"
+    "state/raw/summary-quality-evals",
+    "state/compact/summary-quality-evals"
   ],
   "window": {
     "unit": "forever"

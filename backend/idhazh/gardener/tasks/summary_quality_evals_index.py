@@ -1,11 +1,11 @@
-"""Which score-index days may go, and whose closed days does the scores task fold?
+"""Which days of the eval ledger's ID folder may go, and whose closed days does its task fold?
 
 None may go. The index is what a run dedupes against, and an observation key
 carries no date, so a dropped day would make every measurement in it new again.
 The window is `forever`, and a window that keeps every month takes nothing. The
 task's one live action is the fold of the index's closed days into one
 `settled.csv` each (`closed_day_fold`). The eval rows themselves are the
-`scores` compaction's, and it keeps every month too.
+`summary-quality-evals` compaction's, and it keeps every month too.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def run(context: TaskContext) -> Pass:
     from idhazh.contracts.ledger_name import LedgerName
     from idhazh.gardener import retention_files
 
-    which = LedgerName.SCORE_INDEX
+    which = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
     first_month = retention_files.first_kept_month(context.policy.window, context.today)
     tree = retention_files.owned_tree(context, ledger.tree_root(context.state_dir, which))
     return retention_files.take_files(

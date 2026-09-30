@@ -60,7 +60,7 @@ DAY_PATHS: Final[dict[str, LedgerName]] = {
         LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-        LedgerName.SCORE_INDEX,
+        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
     )
 }

@@ -12,7 +12,7 @@ wide on average because it carries eleven metrics, two model scores, a band and
 a timestamp - none of which the question needs. The question needs one digest.
 
 So the identity is written down a second time, on its own, at a fixed width.
-`state/score-index/<YYYY>/<MM>/<DD>/` holds one row per observation the day
+`state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/` holds one row per observation the day
 beside it holds, and the writer reads that instead of the rows. It files by
 the same day as the ledger because an index row is the record of the row beside
 it, and two grains in one relationship is a mapping somebody maintains
@@ -46,7 +46,7 @@ from idhazh.contracts.base import ChangelogEntry, Contract, Sha256
 
 
 class ObservationIndexRow(Contract):
-    """One row of `state/score-index/<YYYY>/<MM>/<DD>.csv`: one measurement already held."""
+    """One row of a day file under `state/summary-quality-evals-index/`: one measurement held."""
 
     __schema_stem__: ClassVar[str] = "observation-index-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (

@@ -285,7 +285,7 @@ class _TreeShape(NamedTuple):
 #: the ledger and a second copy of it is how two readers start disagreeing.
 _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
     LedgerName.SPAN_ROLLUP: _TreeShape(SPAN_ROLLUP_KEY, SpanRollupRow),
-    LedgerName.SCORE_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
+    LedgerName.SUMMARY_QUALITY_EVALS_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
     LedgerName.CANDIDATE_MODELS: _TreeShape(VALIDATION_KEY, ValidationRow),
     LedgerName.FEED_HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.COUNTERFACTUAL_SCORES: _TreeShape(
@@ -347,7 +347,7 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
     LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),
     LedgerName.ITEM_HEALTH: _DoorShape(ITEM_HEALTH_KEY, ItemHealthRow),
-    LedgerName.SCORES: _DoorShape(OBSERVATION_KEY, EvalRow),
+    LedgerName.SUMMARY_QUALITY_EVALS: _DoorShape(OBSERVATION_KEY, EvalRow),
     LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
 }
 

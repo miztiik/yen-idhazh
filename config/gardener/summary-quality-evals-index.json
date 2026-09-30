@@ -1,10 +1,14 @@
 {
   "dry_run": true,
+  "fold": {
+    "after_days": 1,
+    "dry_run": false
+  },
   "kind": "retention",
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
   "owns": [
-    "state/score-index"
+    "state/summary-quality-evals-index"
   ],
   "window": {
     "unit": "forever"

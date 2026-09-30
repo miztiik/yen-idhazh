@@ -49,8 +49,8 @@ def test_an_age_whose_store_is_gone_says_so_instead_of_naming_a_successor() -> N
     """The ledgers these three governed were deleted, so there is nowhere to send the value.
 
     `refuse_a_removed_knob` reads an empty replacement as "gone and nothing
-    replaces it". Pointing the two ages at the scores task's window would be
-    worse than silence: that window governs `state/scores/`, which is still there,
+    replaces it". Pointing the two ages at the eval ledger's own windows would be
+    worse than silence: they govern the `summary-quality-evals` ledger, which is still there,
     so an operator would move their number onto a live ledger's age. And
     `runtime_counters_scrape` switched off a row in a ledger that no longer
     exists, so honouring it today would switch off nothing at all.

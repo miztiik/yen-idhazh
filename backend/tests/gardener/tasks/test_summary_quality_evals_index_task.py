@@ -1,4 +1,4 @@
-"""Which score-index days does the scores task take, and what does it never touch?
+"""Which days of the eval ledger's ID folder does its task take, and what does it never touch?
 
 None, however old. The index is what a run dedupes against, and an observation
 key carries no date, so an index day taken would make every measurement in it
@@ -30,7 +30,7 @@ from ._task import declared, run_task
 
 pytestmark = pytest.mark.contract
 
-NAME: Final = "scores"
+NAME: Final = "summary-quality-evals-index"
 
 #: A day older than any window a gardener task has declared.
 LONG_AGO: Final = "2020-03-04"
@@ -71,10 +71,10 @@ def test_the_committed_declaration_keeps_every_index_day() -> None:
     policy = declared()[NAME]
     assert isinstance(policy, RetentionPolicy)
     assert isinstance(policy.window, ForeverWindow), (
-        "the scores task keeps every index day; a bounded window makes old measurements new"
+        "the ID task keeps every index day; a bounded window makes old measurements new"
     )
     assert not policy.series, "nothing summarises a month, so the task keeps no series"
-    assert policy.owns == [ledger.tree_relpath(LedgerName.SCORE_INDEX)]
+    assert policy.owns == [ledger.tree_relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX)]
 
 
 @pytest.mark.parametrize("dry_run", [True, False])

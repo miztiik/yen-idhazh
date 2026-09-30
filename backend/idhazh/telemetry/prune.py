@@ -101,11 +101,11 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: its machine rows with it: until their compactions bound the raw tree, that is
 #: a person's job, and `docs/architecture/publishing/retention.md` says so.
 #:
-#: **`score-index` is half of a pair whose other half is no longer here.**
+#: **`summary-quality-evals-index` is half of a pair whose other half is no longer here.**
 #: `evals.writer` refuses a repeat measurement by reading the index rather than
 #: the rows, so a range taken out of the index makes every measurement in it
 #: re-measurable as if new, while the rows it indexed stay on the door. Repair
-#: with `idhazh rebuild-score-index --month <YYYY-MM>` afterwards. The dry run is
+#: with `idhazh rebuild-summary-quality-evals-index --month <YYYY-MM>` afterwards. The dry run is
 #: where that is read, which is why it is the default.
 #:
 #: **`content-similarity-judge-scored-pairs` and
@@ -129,7 +129,7 @@ _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-    LedgerName.SCORE_INDEX,
+    LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
     LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
 )
 
