@@ -289,6 +289,11 @@
       "bytes": 155322,
       "covers": "2026-09-27",
       "rows": 396
+    },
+    {
+      "bytes": 155328,
+      "covers": "2026-09-28",
+      "rows": 400
     }
   ],
   "ledger": "item-health",
