@@ -441,13 +441,12 @@ counterweight's own precision and recall out of the same sixty labels.
 **Those three counterweights are copied onto the label row from 2026-09-03, and
 that is a change of policy rather than of shape.** The read side used to re-join
 `unsupported_numbers`, `hedge_dropped` and `extraction_suspect` from
-the scores ledger on `output_digest`, and that ledger keeps item-level rows only
-until the `monthly_window` of `config/gardener/compact-scores.json` passes, once
-that compaction is live. A label outlives its source row, so a re-join is a promise the
-ledger stops being able to keep - and what would be lost is exactly the precision
-and recall the sixty labels are drawn to buy. `LabelRow` carries the three as
+the scores ledger on `output_digest`. The ledger keeps every row for ever, so the
+join still works, but a label that carries its own three values is read with no
+second file beside it - and those three are exactly the precision and recall the
+sixty labels are drawn to buy. `LabelRow` carries the three as
 nullable columns filled by the queue; null means a row written before this stamp,
-which is re-joined from the ledger while its month is still there, and never
+which is re-joined from the ledger, and never
 means "the counterweight was read and did not fire". Nothing else moved: there is
 still nowhere on this row to put a machine verdict, and `model_id` is still
 absent by name. Authority: Andre.
@@ -858,6 +857,8 @@ Coherence runs in the `work` shard, inside `to_eval_row`, because that is where 
 
 **Where a later plan would start.** [../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md) sketches a judge and names none of these four, which is the useful part - it hands over pieces rather than a design. The venue is [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md), which owns the workflow, the verbs and the tenancy protocol. The night's shape is: draw a sample, ask a model for a verdict on each item, turn the verdicts into one reading. **The label ledger and the review tree are the two that shape fits with nothing added**, because both already draw a sample and seat a person in the verdict chair; swapping the chair is the whole change. The validator and the faithfulness scorer fit it less well - both run on every item rather than on a draw, so a plan for either starts by measuring a model judge against the instrument already there. And where a reading has to move a number, [`../../backend/idhazh/contracts/fitted_similarity_threshold.py`](../../backend/idhazh/contracts/fitted_similarity_threshold.py) is the template that damps it, step-caps it and clamps it. Authority: nobody. This records what section 1a opened; each of the four is an owner decision that has not been asked for.
 
+**Every eval row is kept for ever, and nothing summarises a month (2026-09-30).** The rows are the evidence behind every quality claim this project publishes. The month summary they replaced kept totals and distributions, and gave up item-level lookup, a late draw into the label queue, re-banding under new thresholds, an exact percentile and any slice its key did not name - and it existed only so that rows older than fourteen months could be deleted. Keeping the rows keeps all of that, and a chart that wants a monthly figure computes it from the rows when it draws. The cost is bytes, and parquet keeps them small: the eval ledger held 4,893,746 bytes, about 4.9 MB, on 2026-09-30, over 40 days of rows. The owner's estimate is about 29 MB a year; those first 40 days grew at about 45 MB a year, and the committed size of `state/raw/scores/` and `state/compact/scores/` a year from now settles which is nearer. The `monthly_window` of `config/gardener/compact-scores.json` is `forever`, so the compaction may pack a month and never drops one, and the `scores` task keeps every day of the index the dedupe reads ([The ledger](#every-row-is-kept-and-nothing-summarises-a-month)). Authority: owner, 2026-09-30.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -1062,81 +1063,39 @@ A month with no committed shard exits non-zero rather than reporting a clean
 pass over nothing, and the refusal comes before any file is touched, so the
 months named beside a typo keep the index they had.
 
-**`state/score-archive/` is not a source for a rebuild.** A month whose rows are
-gone has nothing left to derive an index from, which is precisely why the archive
-keeps those digests itself.
+**Every day's index can be rebuilt, because every row it describes is kept.**
 
-### A month past fourteen becomes a summary, and the dedupe survives it
+### Every row is kept, and nothing summarises a month
 
-**Nothing turns a month into a summary today.** The `scores` task built the
-archive below from a month's CSV day files and hashed their bytes. The eval
-ledger has since moved to the ledger door, so those files are gone and the task
-archives no month. The rows are deleted by the `scores` compaction now, past its
-`monthly_window`, and it stays report-only until an archive is built from the
-door's rows
+**Every row of the eval ledger is kept for ever, and nothing summarises a month
+of it.** The rows are the evidence behind every quality claim this project
+publishes, and a chart that wants a monthly figure computes it from the rows
+when it draws. The `monthly_window` of `config/gardener/compact-scores.json` is
+`forever`, so the `scores` compaction may pack a month's rows into fewer files
+and never drops one
 ([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md#design-rationale)).
-What follows is the archive's shape and the reasons it is needed, which that
-change has to keep.
+Why the rows are kept rather than summarised, and what that costs in bytes, is
+the [design rationale](#design-rationale) above.
 
-`state/scores/` is the largest ledger under `state/` - measured 2026-09-03, 5,335
-rows in 4,266,655 bytes over two monthly shards - and nothing bounded it. Sharding
-by month bounds one file, not the tree.
+**The index the dedupe reads keeps every day for the same reason.** An
+observation key carries no date, so an index day dropped would make every
+measurement in it new again, and a count over the ledger would stop being a
+count of items. The `scores` task that owns `state/score-index/` has the window
+`forever` and takes nothing; its one live action is folding each closed day
+into one file. The read grows by one file a recorded day, and it is declared
+in [growing-reads.md](growing-reads.md).
 
-Deleting an old shard outright would answer the bytes and break two things. Every
-published quality claim about that month would lose the rows behind it, and Guardrail
-#10 then forbids citing the number at all. And the dedupe above works by reading
-the rows, so the day a shard is deleted every measurement in it becomes new
-again - which turns a count over the ledger from a count of items into a count of
-times the pipeline looked, and that is the one thing this ledger promises it is
-not.
-
-So a month past the `full-grain` series of `config/gardener/scores.json` was turned into
-`state/score-archive/<YYYY-MM>.json` first, and the shard was unlinked only after
-that file had been written temp-then-rename, read back through its contract, and
-reconciled field by field against a second reading of the shard. The archive
-carries:
-
-- the shard's SHA-256 and its row count, which is what says WHICH file it
- summarises rather than what was in it;
-- one digest per distinct measurement it held, sorted -
- `evals.writer.recorded_observations` unions these with the live rows, which is
- how the promise above keeps holding for a month whose rows are gone;
-- one cohort per (date, run, row version, model, scorer
- version), each carrying its row count, ten faithfulness deciles, three bands,
- the boolean signal counts, the known and actual cut counts, the premise-digest
- counts, and `{n, sum, sum_squares, min, max}` for every numeric column.
-
-Five numbers a column and not a mean and a standard deviation, because a stored
-mean cannot be re-added into a total and a stored spread cannot be pooled across
-cohorts. These can do both. `n` counts the rows that carried a value rather than
-the rows in the cohort, so a column added mid-month reads as never measured on
-the rows before it rather than as zero.
-
-**What is deliberately lost:** item-level lookup, a late draw into the label
-queue, re-banding those rows under new thresholds, an exact percentile,
-correlating two columns against each other, and any slice the cohort key does not
-name. **What survives:** totals, rates, distributions, ranges, spread, signal
-counts, cut counts and exact dedupe. Every utility that needs an item-level row -
+**Every utility that needs an item-level row reaches every month.**
 `label_queue.py`, `reband_scores.py`, `data_wrangler.py refill` and
-`grader_length_bias.py` - names the fourteen-month limit and says which months it
-can no longer reach, rather than reporting a smaller number as though the ledger
-had always been that size. Authority: Andre, under Guardrail #10.
-
-**Measured 2026-09-03** on a developer machine,
- (build 26200), CPython 3.14.2, over both committed shards with three
-reads each: 4,266,655 bytes of shard become 557,290 bytes of archive, **13.1
-percent**. Three reads gave byte-identical archives, so the spread is zero -
-reading a committed file is deterministic. Two thirds of the archive is the digest
-index, which is the price of keeping the dedupe exact. What the ratio buys in
-years is in
-[../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree).
+`grader_length_bias.py` read the rows through the ledger door, so none of them
+has a month it cannot see.
 
 **It ships in dry run.** The `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a
 schedule, so a file deleted here stops being recoverable once that prune passes
-over it (`CLAUDE.md` section 8). The `scores` compaction prints what a live run
-would remove and removes nothing; turning it on is a one-line commit somebody
-takes after reading that list, and after an archive is built from the door's
-rows.
+over it (`CLAUDE.md` section 8). A live compaction deletes a raw file once its
+rows are packed, so the `scores` compaction prints what a live run would pack
+and packs nothing; turning it on is a one-line commit somebody takes after
+reading that list.
 
 ## See also
 

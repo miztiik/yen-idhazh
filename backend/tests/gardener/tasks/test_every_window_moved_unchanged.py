@@ -4,7 +4,8 @@
 cleanup read, key by key, before the ones that moved left for the declarations of
 the tasks that read them. Each is read back here out of the declaration that took
 it, and the three that stayed in `config/idhazh.json` are read back from there as
-well, so a window that changed while it moved fails by name.
+well, so a window that changed while it moved fails by name. A window changed on
+purpose after it moved is named below with its reason.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.gardener import (
+    CompactionPolicy,
     DaysWindow,
     ForeverWindow,
     MonthsWindow,
@@ -32,6 +34,13 @@ pytestmark = pytest.mark.contract
 
 #: What each window was in `config/idhazh.json` the day before it moved.
 WINDOWS: Final = FIXTURES_DIR / "gardener" / "prune-oracle" / "windows.json"
+
+#: Each window that changed on purpose after it moved, as its value then and now.
+#: Every eval row is kept for ever and nothing summarises a month (owner,
+#: 2026-09-30), so the rows' fourteen months became forever.
+CHANGED_ON_PURPOSE: Final[dict[str, tuple[Any, Any]]] = {
+    "observability.scores_full_grain_months": (14, None),
+}
 
 #: The days one month of `retention.image_months` counts as.
 DAYS_A_PICTURE_MONTH: Final = 30
@@ -58,7 +67,12 @@ def _series(policy: TaskPolicy, name: str) -> Window:
 def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
     frozen: dict[str, Any] = json.loads(WINDOWS.read_text(encoding="utf-8"))
     tasks = declared()
-    folded, scores, pictures = tasks["telemetry-aggregate"], tasks["scores"], tasks["visual-prune"]
+    folded, scores, pictures = (
+        tasks["telemetry-aggregate"],
+        tasks["compact-scores"],
+        tasks["visual-prune"],
+    )
+    assert isinstance(scores, CompactionPolicy)
     now: dict[str, Any] = {
         "collect.seen_window_days": _days(tasks["seen"].window),
         "lens_weights.window_days": _days(tasks["counterfactual-scores"].window),
@@ -67,8 +81,8 @@ def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
         "observability.item_health_aggregate_keep_months": _months(_series(folded, "aggregate")),
         "observability.item_health_full_grain_months": _months(_series(folded, "full-grain")),
         "observability.public_telemetry_keep_months": _months(_series(folded, "public-copy")),
-        "observability.score_archive_keep_months": _months(_series(scores, "archive")),
-        "observability.scores_full_grain_months": _months(_series(scores, "full-grain")),
+        "observability.score_archive_keep_months": _months(scores.monthly_window),
+        "observability.scores_full_grain_months": _months(scores.monthly_window),
         "observability.trace_window_days": _days(tasks["traces"].window),
         "retention.dry_run": all(
             policy.dry_run for policy in tasks.values() if policy.kind is TaskKind.RETENTION
@@ -80,8 +94,10 @@ def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
 
     assert sorted(now) == sorted(frozen), "a frozen window has no reader here, or the reverse"
     changed = {key: (frozen[key], now[key]) for key in frozen if now[key] != frozen[key]}
-    assert changed == {}, "; ".join(
-        f"{key} was {was} and is {moved} now" for key, (was, moved) in changed.items()
+    assert changed == CHANGED_ON_PURPOSE, "; ".join(
+        f"{key} was {was} and is {moved} now"
+        for key, (was, moved) in changed.items()
+        if CHANGED_ON_PURPOSE.get(key) != (was, moved)
     )
     assert _days(pictures.window) % DAYS_A_PICTURE_MONTH == 0
     assert tasks["digest-fragments"].window == pictures.window, (

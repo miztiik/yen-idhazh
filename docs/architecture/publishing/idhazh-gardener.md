@@ -252,11 +252,14 @@ process, so a hand run records `cone_bytes` as empty and is never over.
 
 **768 MB is the committed ceiling, and it is an estimate.** A megabyte here is
 1024 x 1024 bytes. Read on 2026-09-28, the heaviest shard - the digest pages,
-the score files, the score index and archive, and the visual-prunes ledger -
-owned 46.3 MB and grew about 1.4 MB a day. Its windows are 390 days and 14
+the score files, the score index, and the visual-prunes ledger -
+owned 46.3 MB and grew about 1.4 MB a day. Its windows were then 390 days and 14
 months, so it keeps growing for about a year whether its tasks are live or not;
 at the rates of 2026-09-20 to 27 those windows fill at about 550 to 600 MB, and
-768 leaves about 30 percent for the rate to rise. A ceiling near today's weight
+768 leaves about 30 percent for the rate to rise. Since 2026-09-30 the score
+files and the score index are kept for ever, so their share - about 0.14 MB a
+day over their first 40 days, an estimate - keeps growing after that year, and a
+wake's record says when it matters. A ceiling near today's weight
 would go red within two weeks on growth the windows allow, and stay red. The
 first wake's checkout time says whether that weight still fits the 20-minute
 job, and any wake's record gives the reading again.
@@ -342,8 +345,8 @@ ledger is one declaration and no Python. Six ship - for `gardener`,
 console reads, and the console reads their packed files, so until a person turns
 those three on it shows data up to the day their migration ran
 ([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
-**`scores` stays report-only until the score archive is built from the door's
-rows** ([below](#design-rationale)). The files it
+**`scores` keeps every month: its `monthly_window` is `forever`, so it may pack
+the eval rows and never drops a month** ([below](#design-rationale)). The files it
 writes are laid out in
 [../contracts/persistence.md](../contracts/persistence.md#the-two-roots), and
 its knobs are in
@@ -702,15 +705,16 @@ Carmack). A day is closed one whole day after it ends, the compaction's rule: of
 755 writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after
 its day ended (Carmack's reading).
 
-**The `scores` compaction stays report-only until the score archive is built
-from the door's rows.** The `scores` task used to summarise a month past its
-`full-grain` series into `state/score-archive/<YYYY-MM>.json`, and it built that
-summary from the month's CSV day files and hashed their bytes. Those files are
-gone, so the task builds no archive now; it keeps only the score index and the
-summaries already written. Turned live, the compaction's monthly window would
-delete a month's rows with no summary written for them, and the summary is the
-evidence behind every quality claim once the rows are gone. Building it from the
-door's rows changes the archive's own shape, so it is a change of its own.
+**The `scores` compaction packs the eval rows and never drops a month.** Every
+eval row is kept for ever and nothing summarises a month (owner, 2026-09-30): the
+rows are the evidence behind every quality claim, and a chart that wants a
+monthly figure computes it from them when it draws. So the `monthly_window` of
+`config/gardener/compact-scores.json` is `forever`, and a live pass may make one
+file a day and one a month without taking a row. The `scores` retention task
+keeps every day of the score index for the same end - a dropped index day would
+make every measurement in it new again - so its window is `forever` too, and its
+one live action is the closed-day fold
+([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).
 
 ## See also
 
