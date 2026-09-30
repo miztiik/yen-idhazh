@@ -414,14 +414,14 @@ def _refuse_a_second_complement(tasks: Mapping[str, TaskPolicy]) -> None:
 
 
 def _refuse_a_file_where_a_folder_belongs(tasks: Mapping[str, TaskPolicy], repo_root: Path) -> None:
-    """A shard checks out folders, so a file named as owned would match nothing."""
+    """A shard lists the files under each folder a task owns, so an owned file would list none."""
     for name, policy in tasks.items():
         for claimed in policy.claims():
             if (repo_root / claimed).is_file():
                 raise ValueError(
                     f"config/{GARDENER_TASKS_DIR}/{name}.json owns {claimed}, which is a "
-                    "file. A task owns folders: the shard that runs it checks out "
-                    "folders, and a file there would match nothing"
+                    "file. A task owns folders: the shard that runs it lists the files "
+                    "under each one, and a file there would list nothing"
                 )
 
 

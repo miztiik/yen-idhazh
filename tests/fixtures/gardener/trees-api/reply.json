@@ -1,0 +1,30 @@
+{
+  "sha": "dee932ce355579b894fa068555f64f92fbe4a58d",
+  "url": "https://api.github.com/repos/miztiik/yen-idhazh/git/trees/dee932ce355579b894fa068555f64f92fbe4a58d",
+  "tree": [
+    {
+      "path": "2026-09-01.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0a8b8df00a8df60692ab7d0a87aa28728686bd34",
+      "size": 64,
+      "url": "https://api.github.com/repos/miztiik/yen-idhazh/git/blobs/0a8b8df00a8df60692ab7d0a87aa28728686bd34"
+    },
+    {
+      "path": "nested",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "2f839ca009c49a09ba20fe6e5d1f5ea7a40b8e7c",
+      "url": "https://api.github.com/repos/miztiik/yen-idhazh/git/trees/2f839ca009c49a09ba20fe6e5d1f5ea7a40b8e7c"
+    },
+    {
+      "path": "nested/2026-09-02.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "226e967e1f26a352a86f5c778efeefccd92a140f",
+      "size": 82,
+      "url": "https://api.github.com/repos/miztiik/yen-idhazh/git/blobs/226e967e1f26a352a86f5c778efeefccd92a140f"
+    }
+  ],
+  "truncated": false
+}

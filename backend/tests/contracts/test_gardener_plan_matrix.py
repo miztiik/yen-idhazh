@@ -4,9 +4,9 @@ The plan job's script cannot import `GardenerPlan` - it runs before anything of
 ours is installed - so the payload crosses the boundary as a hand-written copy
 on both sides of it: `backend/utilities/gardener_shards.py` writes it and the
 workflow's expressions read it. An expression naming a key the payload does not
-carry evaluates to the empty string with no error, so a misspelt `cone` checks
-out nothing and every deletion under it finds nothing. So both sides are held to
-the model here, field for field.
+carry evaluates to the empty string with no error, so a misspelt `shard` hands
+the landing step no shard to run and nothing says why. So both sides are held
+to the model here, field for field.
 """
 
 from __future__ import annotations

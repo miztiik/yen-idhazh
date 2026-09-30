@@ -16,9 +16,9 @@ from typing import Any, Final
 
 import pytest
 
-from idhazh import site_weight
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.gardener import named_trees
 from idhazh.retention import oldest_visual, visuals_older_than
 from idhazh.site_weight import SiteSize, measure
 
@@ -389,23 +389,24 @@ def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
 
     The second walk answered a question the pass already knew the answer to: it
     had just removed the files, so it had their sizes. Counted rather than timed,
-    because the cost this row is about is what gets read.
+    because the cost this row is about is what gets read. The pass reads the
+    tree's names and sizes from its listing, so that is the reading counted.
     """
     root = published(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
     walked = 0
-    unpatched = measure
+    unpatched = named_trees.measure
 
     def counted(*args: Any, **kwargs: Any) -> SiteSize:
         nonlocal walked
         walked += 1
         return unpatched(*args, **kwargs)
 
-    monkeypatch.setattr(site_weight, "measure", counted)
+    monkeypatch.setattr(named_trees, "measure", counted)
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
     assert row.deleted == 2
     assert walked == 1, "the tree is read once and the after-total retracts what left it"
-    assert row.payload_bytes_after == unpatched(root).bytes_used
+    assert row.payload_bytes_after == measure(root).bytes_used
 
 
 def test_the_after_total_counts_only_the_files_that_actually_left(

@@ -65,6 +65,19 @@ def test_a_shards_weight_is_whole_bytes_and_a_row_from_before_it_reads_as_not_we
     assert older.cone_bytes is None
 
 
+def test_what_a_shard_downloaded_is_whole_bytes_and_an_older_row_reads_as_not_counted() -> None:
+    """`downloaded_bytes` is additive: a row written before it existed reads, and says so."""
+    assert a_row().downloaded_bytes == 0
+    with pytest.raises(ValidationError, match="downloaded_bytes"):
+        a_row(downloaded_bytes=-1)
+    sample = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "collection-prune-row" / "ceiling-reached.json")
+    )
+    sample.pop("downloaded_bytes")
+    older = CollectionPruneRow.model_validate(sample | {"version": "2026-09-28T22:07"})
+    assert older.downloaded_bytes is None
+
+
 def a_folding_row(**changes: Any) -> CollectionPruneRow:
     sample = json.loads(
         read_text(

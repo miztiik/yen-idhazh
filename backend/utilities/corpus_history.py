@@ -450,6 +450,7 @@ def _squash_as_declared(
     from idhazh.contracts.knobs.gardener import HistoryPolicy, TaskKind
     from idhazh.gardener import registry, runner
     from idhazh.gardener.context import TaskContext
+    from idhazh.gardener.file_listing import FileListing
 
     try:
         if not re.fullmatch(RUN_ID_PATTERN, run_id):
@@ -480,6 +481,7 @@ def _squash_as_declared(
         shard=0,
         git_sha=_git(repo, "rev-parse", "HEAD").strip(),
         owned_folders=tuple(policy.owns or ()),
+        listing=FileListing.from_disk(repo, policy.owns or ()),
     )
 
     def record() -> tuple[str, ...]:

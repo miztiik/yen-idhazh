@@ -13,15 +13,14 @@ task sits in exactly one. How much work a task holds is not read here: one
 owned folder can hold one file or ten thousand, so counting folders would
 balance nothing.
 
-**A shard checks out the folders its tasks own and nothing else.** A task that
-owns everything else under a root adds no folder: it reads the tree it needs
-from git rather than from the checkout.
+**The plan names tasks and no folders.** A shard checks out only its code and
+config, and lists the files under the folders its tasks own or read from the
+commit, so the plan job has nothing to say about folders.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 
 from idhazh.config import GardenerSettings
 from idhazh.contracts.gardener_plan import GardenerPlan, Matrix, MatrixLeg, ShardPlan
@@ -33,10 +32,6 @@ def runs_in_the_matrix(policy: TaskPolicy) -> bool:
     return policy.lifecycle_status is TaskLifecycleStatus.ACTIVE and policy.kind != TaskKind.HISTORY
 
 
-def _cone(names: list[str], tasks: Mapping[str, TaskPolicy]) -> tuple[str, ...]:
-    return tuple(sorted({folder for name in names for folder in tasks[name].owns or ()}))
-
-
 def plan(settings: GardenerSettings) -> GardenerPlan:
     """One wake's shards, and the matrix that runs them."""
     names = sorted(name for name, policy in settings.tasks.items() if runs_in_the_matrix(policy))
@@ -45,14 +40,13 @@ def plan(settings: GardenerSettings) -> GardenerPlan:
     for position, name in enumerate(names):
         dealt[position % count].append(name)
     shards = tuple(
-        ShardPlan(index=index, task_names=tuple(held), cone=_cone(held, settings.tasks))
-        for index, held in enumerate(dealt)
+        ShardPlan(index=index, task_names=tuple(held)) for index, held in enumerate(dealt)
     )
     return GardenerPlan(
         any_active_task=bool(shards),
         shard_count=count,
         shards=shards,
-        matrix=Matrix(include=tuple(MatrixLeg(shard=s.index, cone=s.cone) for s in shards)),
+        matrix=Matrix(include=tuple(MatrixLeg(shard=s.index) for s in shards)),
     )
 
 

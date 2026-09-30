@@ -2,8 +2,9 @@
 
 Everything a task may know about the run it is part of, and nothing it could
 use to reach outside what it owns. The policy is its own validated declaration;
-the rest is the run's identity, the two roots it works under, and the folders
-the runner has already decided it may walk.
+the rest is the run's identity, the two roots it works under, the folders the
+runner has already decided it may walk, and the listing of the files under the
+folders it owns or reads, which is where a task learns what is there.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.gardener import TaskPolicy
+from idhazh.gardener.file_listing import FileListing
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,3 +43,7 @@ class TaskContext:
     #: and a complement task gets the folders nothing else claims - so a task
     #: never lists `state/` to decide for itself what is its own.
     owned_folders: tuple[str, ...]
+    #: Every file under the folders this task owns or reads, and what each
+    #: weighs. A task lists its members from here and never from the disk, and
+    #: fetches a folder through it before it opens a file inside.
+    listing: FileListing

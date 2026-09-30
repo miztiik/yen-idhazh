@@ -25,9 +25,8 @@ def run(context: TaskContext) -> Pass:
     from datetime import date
 
     from idhazh import day_partition, day_shards, ledger
-    from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
     from idhazh.contracts.ledger_name import LedgerName
-    from idhazh.gardener import retention_files
+    from idhazh.gardener import named_trees, retention_files
 
     today = context.today.isoformat()
     first_kept = retention_files.first_kept_day(
@@ -39,7 +38,7 @@ def run(context: TaskContext) -> Pass:
     tree = retention_files.owned_tree(context, ledger.tree_root(context.state_dir, which))
     boundary = first_kept.isoformat() if first_kept is not None else ""
     files = (
-        day_shards.shard_files(tree, days=UNBOUNDED_WINDOW) if tree is not None and boundary else ()
+        named_trees.shard_files(context.listing, tree) if tree is not None and boundary else ()
     )
     aged = (
         retention_files.Aged(path=path, day=day_shards.date_of(path))

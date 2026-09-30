@@ -414,8 +414,11 @@ def drop_empty_directories(root: Path) -> None:
 
     Without this the child count under `state/` only ever rises: a trial that
     ran once leaves a directory for ever, and a reader opening `state/` cannot
-    tell an empty husk from a tree still being written (Guardrail #12).
+    tell an empty husk from a tree still being written (Guardrail #12). A tree
+    the checkout never downloaded has no folder here to take away.
     """
+    if not root.is_dir():
+        return
     for directory in sorted((entry for entry in root.rglob("*") if entry.is_dir()), reverse=True):
         if not any(directory.iterdir()):
             directory.rmdir()

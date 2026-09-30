@@ -1,0 +1,1 @@
+a file one folder down, which a recursive listing of the folder above still sizes

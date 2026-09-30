@@ -89,6 +89,7 @@ from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualS
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
 from idhazh.gardener.context import TaskContext
+from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
@@ -1618,6 +1619,10 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
                 shard=SCORE_SHARD,
                 git_sha=FIXTURE_SHA,
                 owned_folders=(),
+                # The declaration names `state/...` folders, and the canary's
+                # `state/` sits in its own tree rather than at the repository
+                # root, so the listing is read from the folder that holds it.
+                listing=FileListing.from_disk(state.parent, policy.owns or ()),
             )
         )
         if outcome.resume_from is not None:

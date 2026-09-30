@@ -35,6 +35,7 @@ from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.context import TaskContext
+from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
 from idhazh.ledger import json_lines, parquet, render_file
 from utilities import migrate_to_parquet as migration
@@ -340,6 +341,7 @@ def _live(root: Path, which: LedgerName, today: date) -> TaskContext:
         shard=0,
         git_sha=SEED_COMMIT,
         owned_folders=tuple(declared.owns or ()),
+        listing=FileListing.from_disk(root, declared.owns or ()),
     )
 
 

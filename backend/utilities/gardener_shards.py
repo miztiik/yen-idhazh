@@ -7,11 +7,11 @@ declaration under `config/gardener/`, and prints the plan the matrix reads:
     python backend/utilities/gardener_shards.py           three lines for $GITHUB_OUTPUT
     python backend/utilities/gardener_shards.py --json    the whole plan on one line
 
-**It opens nothing outside `config/`, and reads three keys of a declaration.**
+**It opens nothing outside `config/`, and reads two keys of a declaration.**
 `lifecycle_status` and `kind` say whether the matrix runs a task - an active one
-whose kind is not `history`, which has a job of its own - and `owns` is what its
-shard checks out. A task that owns everything else under a root has no `owns`
-and adds no folder. Every other key is the typed loader's to validate:
+whose kind is not `history`, which has a job of its own. No folder is read: a
+shard checks out only its code and config, and lists what its tasks own or read
+from the commit. Every other key is the typed loader's to validate:
 `idhazh gardener plan-shards` reads the same files through it, and a test holds
 the two to one payload for one config.
 
@@ -41,14 +41,6 @@ DECLARATION_SUFFIX = ".json"
 ACTIVE = "active"
 HISTORY = "history"
 
-#: What separates two folders of a cone as it crosses into the workflow.
-CONE_SEPARATOR = "\n"
-
-
-def join_cone(folders: list[str]) -> str:
-    """A shard's folders as the one string a checkout step reads."""
-    return CONE_SEPARATOR.join(folders)
-
 
 def _key(declaration: dict[str, Any], key: str, name: str) -> Any:
     if key not in declaration:
@@ -70,7 +62,7 @@ def declarations(config_root: Path) -> dict[str, dict[str, Any]]:
 
 
 def plan(config_root: Path) -> dict[str, Any]:
-    """The plan payload: every shard, its tasks and cone, and the matrix that runs them."""
+    """The plan payload: every shard and its tasks, and the matrix that runs them."""
     knobs = json.loads((config_root / GARDENER_FILE).read_text(encoding="utf-8"))
     tasks = declarations(config_root)
     names = sorted(
@@ -83,17 +75,8 @@ def plan(config_root: Path) -> dict[str, Any]:
     dealt: list[list[str]] = [[] for _ in range(count)]
     for position, name in enumerate(names):
         dealt[position % count].append(name)
-    shards = [
-        {
-            "index": index,
-            "task_names": held,
-            "cone": join_cone(
-                sorted({folder for name in held for folder in tasks[name].get("owns") or []})
-            ),
-        }
-        for index, held in enumerate(dealt)
-    ]
-    legs = [{"shard": shard["index"], "cone": shard["cone"]} for shard in shards]
+    shards = [{"index": index, "task_names": held} for index, held in enumerate(dealt)]
+    legs = [{"shard": shard["index"]} for shard in shards]
     return {
         "any_active_task": bool(shards),
         "shard_count": count,

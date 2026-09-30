@@ -1,4 +1,4 @@
-"""Which shard runs which gardener tasks at a wake, and which folders does each check out?
+"""Which shard runs which gardener tasks at a wake?
 
 The gardener's plan job writes this and the matrix reads it. It crosses a
 process boundary - one job's output, the next job's input - so its shape is
@@ -7,10 +7,9 @@ in `idhazh.gardener.shards` and the standard-library script
 `backend/utilities/gardener_shards.py`, which the plan job runs before anything
 of ours is installed.
 
-**A cone is one string where it crosses the boundary.** `actions/checkout`
-takes its sparse folders as a newline-separated input, so a shard's cone
-travels as one string, joined and split by the two functions below and by no
-other code. In Python it is a tuple of folders.
+**It names tasks and no folders.** A shard checks out only its code and
+config, and lists the files under the folders its tasks own or read from the
+commit it checked out, so nothing about folders crosses the boundary.
 
 **An empty wake is a shape, not an absence.** With no task for the matrix,
 `shards` is empty, `shard_count` is 0 and the matrix includes nothing, so a
@@ -19,65 +18,26 @@ workflow reads the same keys on every wake.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any, Final, Self
+from typing import Self
 
-from pydantic import Field, field_serializer, field_validator, model_validator
+from pydantic import Field, model_validator
 
-from idhazh.contracts.base import Model, RelPath, Slug
-
-#: What separates two folders in a cone as it crosses the process boundary.
-CONE_SEPARATOR: Final = "\n"
-
-
-def join_cone(folders: Iterable[str]) -> str:
-    """A shard's folders as the one string a checkout step reads."""
-    return CONE_SEPARATOR.join(folders)
-
-
-def split_cone(text: str) -> tuple[str, ...]:
-    """The string a checkout step reads, back into its folders. Empty is no folders."""
-    return tuple(folder for folder in text.split(CONE_SEPARATOR) if folder)
+from idhazh.contracts.base import Model, Slug
 
 
 class ShardPlan(Model):
-    """One shard: its place in the matrix, the tasks it runs, and the folders it needs."""
+    """One shard: its place in the matrix and the tasks it runs."""
 
     index: int = Field(ge=0, description="Which shard, counted from 0.")
     task_names: tuple[Slug, ...] = Field(
         min_length=1, description="The tasks this shard runs, in sorted order. Never none."
     )
-    cone: tuple[RelPath, ...] = Field(
-        description=(
-            "The folders this shard checks out beside the code, sorted. A task that owns "
-            "everything else under a root adds none: it reads what it needs from git."
-        )
-    )
-
-    @field_validator("cone", mode="before")
-    @classmethod
-    def _split(cls, value: Any) -> Any:
-        return split_cone(value) if isinstance(value, str) else value
-
-    @field_serializer("cone")
-    def _joined(self, cone: tuple[str, ...]) -> str:
-        return join_cone(cone)
 
 
 class MatrixLeg(Model):
-    """One entry of the matrix: the shard a job runs and the cone it checks out."""
+    """One entry of the matrix: the shard a job runs."""
 
     shard: int = Field(ge=0, description="Which shard this job runs.")
-    cone: tuple[RelPath, ...] = Field(description="The same folders as that shard's plan.")
-
-    @field_validator("cone", mode="before")
-    @classmethod
-    def _split(cls, value: Any) -> Any:
-        return split_cone(value) if isinstance(value, str) else value
-
-    @field_serializer("cone")
-    def _joined(self, cone: tuple[str, ...]) -> str:
-        return join_cone(cone)
 
 
 class Matrix(Model):
@@ -114,9 +74,8 @@ class GardenerPlan(Model):
             )
         if [shard.index for shard in self.shards] != list(range(len(self.shards))):
             raise ValueError("shards are numbered from 0 in order, with no gap")
-        legs = [(leg.shard, leg.cone) for leg in self.matrix.include]
-        if legs != [(shard.index, shard.cone) for shard in self.shards]:
-            raise ValueError("the matrix has one leg per shard, carrying that shard's cone")
+        if [leg.shard for leg in self.matrix.include] != [shard.index for shard in self.shards]:
+            raise ValueError("the matrix has one leg per shard, in shard order")
         named = [name for shard in self.shards for name in shard.task_names]
         if len(named) != len(set(named)):
             raise ValueError("a task runs in one shard of a wake, never two")

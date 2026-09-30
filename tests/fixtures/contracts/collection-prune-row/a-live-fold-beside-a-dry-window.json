@@ -5,6 +5,7 @@
   "cone_bytes": 11534336,
   "date": "2026-09-29",
   "deleted": 0,
+  "downloaded_bytes": 4718592,
   "dry_run": true,
   "duration_ms": 9420,
   "fold_dry_run": false,
@@ -20,6 +21,6 @@
   "stopped_because": "exhausted",
   "task": "feed-health",
   "until": "2025-07-31",
-  "version": "2026-09-28T22:07",
+  "version": "2026-09-30",
   "work_ended_at": "2026-09-29T00:44:05Z"
 }

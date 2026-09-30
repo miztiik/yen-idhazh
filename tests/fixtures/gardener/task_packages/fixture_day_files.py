@@ -5,8 +5,11 @@ two names a real task module holds and nothing else. It is a real task body:
 it lists real files, and a live pass really deletes them, through the same
 core every gardener task uses.
 
-A day file is `<YYYY-MM-DD>.txt`, and its member id is its path relative to the
-checkout, which is what the runner holds to what the task owns.
+A day file is `<YYYY-MM-DD>.txt` directly inside a folder, and its member id is
+its path relative to the checkout, which is what the runner holds to what the
+task owns. Its names and sizes come from the task's listing, the way every
+shipped task learns them, so a checkout that never downloaded the file still
+takes it by name.
 """
 
 from __future__ import annotations
@@ -24,25 +27,33 @@ def day_files(context: TaskContext, folders: Sequence[str]) -> Pass:
     window = context.policy.window
     assert isinstance(window, DaysWindow), "a fixture task keeps a window in days"
     root = context.repo_root
+    listing = context.listing
 
-    def listing() -> Iterator[Path]:
+    def members() -> Iterator[Path]:
         for folder in folders:
-            yield from sorted((root / folder).glob("*.txt"))
+            yield from (
+                path
+                for path in listing.paths_under(folder)
+                if path.parent == root / folder and path.suffix == ".txt"
+            )
 
     def describe(path: Path) -> Member:
         return Member(
             id=path.relative_to(root).as_posix(),
             day=path.stem,
-            size_bytes=path.stat().st_size,
+            size_bytes=listing.size_of(path),
             label=path.name,
         )
+
+    def delete(path: Path) -> None:
+        path.unlink(missing_ok=True)
 
     return take(
         Collection(
             name=folders[0] if folders else "no folder",
-            listing=listing,
+            listing=members,
             describe=describe,
-            delete=Path.unlink,
+            delete=delete,
         ),
         window=Window.older_than(today=context.today.isoformat(), days=window.value),
         ceiling=context.policy.max_deletes_per_run,

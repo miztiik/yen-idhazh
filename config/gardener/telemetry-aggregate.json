@@ -7,6 +7,10 @@
     "state/item-health-summary",
     "frontend/public/telemetry"
   ],
+  "reads": [
+    "state/compact/item-health",
+    "state/raw/item-health"
+  ],
   "series": {
     "aggregate": {
       "unit": "forever"

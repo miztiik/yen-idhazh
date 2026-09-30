@@ -6,6 +6,9 @@
   "owns": [
     "state/mine"
   ],
+  "reads": [
+    "state/neighbour"
+  ],
   "window": {
     "unit": "days",
     "value": 3

@@ -5,6 +5,7 @@
   "cone_bytes": 15672361,
   "date": "2026-09-27",
   "deleted": 50,
+  "downloaded_bytes": 0,
   "dry_run": false,
   "duration_ms": 41250,
   "fold_dry_run": null,
@@ -20,6 +21,6 @@
   "stopped_because": "ceiling",
   "task": "workflow-artifacts",
   "until": "2026-08-28",
-  "version": "2026-09-28T22:07",
+  "version": "2026-09-30",
   "work_ended_at": "2026-09-27T00:47:12Z"
 }

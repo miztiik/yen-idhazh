@@ -7,10 +7,10 @@ it is answered in the task. What they share is here: each file is one member of
 and deleted with any empty folder it leaves behind.
 
 **A task hands on only the files past its boundary.** `take` reads each member
-before it holds it to the window, and reading a file here is a `stat`, so a
-listing of the whole tree would weigh the whole tree on every wake. Each task
-walks what the pass it replaced walked and yields only what is old enough, so
-the cost follows the backlog rather than the archive (Guardrail #12).
+before it holds it to the window, and each task walks its listing the way the
+pass it replaced walked the disk and yields only what is old enough, so the
+records stay what they were. A member's size is the listing's, so nothing is
+opened to weigh it.
 
 **A window becomes one day: the oldest one kept.** A month window keeps whole
 calendar months back to `month_partition.oldest_month_kept`; a day window is
@@ -28,7 +28,9 @@ from pathlib import Path
 from idhazh import month_partition
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
+from idhazh.gardener import named_trees
 from idhazh.gardener.context import TaskContext
+from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.one_at_a_time import Collection, Member, Pass, take
 from idhazh.gardener.one_at_a_time import Window as Span
 
@@ -85,19 +87,20 @@ def owned_tree(context: TaskContext, tree: Path) -> Path | None:
     return tree if relative in context.owned_folders else None
 
 
-def whole_months_before(tree: Path | None, first_month: str | None) -> list[Aged]:
+def whole_months_before(
+    listing: FileListing, tree: Path | None, first_month: str | None
+) -> list[Aged]:
     """Every file of every month older than `first_month`, month by month, oldest first.
 
     For a ledger that files by day under a window counted in months: a month
-    goes whole or not at all, because `day_shards.shards_by_month` groups the
+    goes whole or not at all, because `named_trees.shards_by_month` groups the
     files each month holds.
     """
     from idhazh import day_shards
-    from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 
     if tree is None or first_month is None:
         return []
-    by_month = day_shards.shards_by_month(tree, days=UNBOUNDED_WINDOW)
+    by_month = named_trees.shards_by_month(listing, tree)
     return [
         Aged(path=path, day=day_shards.date_of(path))
         for month in sorted(by_month)
@@ -153,14 +156,16 @@ def take_files(
         return Member(
             id=item.path.relative_to(root).as_posix(),
             day=item.day,
-            size_bytes=item.path.stat().st_size,
+            size_bytes=context.listing.size_of(item.path),
             label=item.path.name,
         )
 
     def delete(item: Aged) -> None:
         if before_delete is not None:
             before_delete(item)
-        item.path.unlink()
+        # A file decided on by its name alone may never have been downloaded. The
+        # deletion lands from its name, so there may be nothing on disk to remove.
+        item.path.unlink(missing_ok=True)
         after_delete(item.path)
 
     return take(

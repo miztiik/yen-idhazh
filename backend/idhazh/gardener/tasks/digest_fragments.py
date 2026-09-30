@@ -27,9 +27,9 @@ def run(context: TaskContext) -> Pass:
     """Take every block of every day before the first day the window keeps, oldest day first."""
     from datetime import timedelta
 
-    from idhazh import day_partition, ledger, retention
+    from idhazh import day_partition, ledger
     from idhazh.contracts.ledger_name import LedgerName
-    from idhazh.gardener import retention_files
+    from idhazh.gardener import named_trees, retention_files
 
     first_kept = retention_files.first_kept_day(
         context.policy.window,
@@ -39,14 +39,13 @@ def run(context: TaskContext) -> Pass:
     which = LedgerName.DIGEST_FRAGMENTS
     tree = retention_files.owned_tree(context, ledger.tree_root(context.state_dir, which))
     aged = [
-        retention_files.Aged(path=path, day=published.isoformat())
-        for published, folder in (
-            retention.dated_days(tree, before=first_kept)
+        retention_files.Aged(path=path, day=day.published.isoformat())
+        for day in (
+            named_trees.dated_days(context.listing, tree, before=first_kept)
             if tree is not None and first_kept is not None
             else ()
         )
-        for path in sorted(folder.iterdir())
-        if path.is_file()
+        for path in day.files
     ]
     return retention_files.take_files(
         context,

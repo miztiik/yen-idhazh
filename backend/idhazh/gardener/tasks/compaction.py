@@ -71,7 +71,7 @@ def run(context: TaskContext) -> Pass:
         producer=__name__.partition(".")[2],
         git_sha=context.git_sha,
     )
-    tree = CompactTree.read(context.state_dir, policy.ledger)
+    tree = CompactTree.read(context.state_dir, policy.ledger, context.listing)
     first_kept = _monthly_period.first_kept_month(
         now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
     )

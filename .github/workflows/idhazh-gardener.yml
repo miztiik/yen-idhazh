@@ -144,15 +144,14 @@ jobs:
       fail-fast: false
       max-parallel: ${{ fromJSON(needs.plan.outputs.shard_count) }}
     steps:
-      # The cone is this shard's tasks' `owns` folders, emitted by the `plan`
-      # job from the same config that declares them, plus the three folders the
-      # code lives in. A task whose folder sits outside the cone would list an
-      # empty directory and report success - the one failure no gate catches -
-      # so the runner fails a task whose folder the commit holds and this
-      # checkout lacks. `blob:none` downloads no file outside the cone. The one
-      # task that owns everything else under `state` adds no folder here, because
-      # only the commit can say what that is: gardener_publish.py reads it off
-      # the commit and adds those folders to this checkout before any task runs.
+      # The checkout holds only the three folders the code and config live in.
+      # Every name a task decides from comes from the commit: gardener_publish.py
+      # lists the files under the folders the shard's tasks own or read with
+      # `git ls-tree`, and downloads none of them. A task that reads a file's
+      # content first widens this checkout by the day or month folders that step
+      # reads, in one download. `blob:none` downloads no file outside the
+      # checkout, and a task never takes a file it lacks for a member that is not
+      # there: it fetches the file or it fails.
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
@@ -161,12 +160,10 @@ jobs:
             config
             backend
             .github
-            ${{ matrix.cone }}
 
-      # The commit loop's `git reset --mixed` expands the index to the whole
-      # repository unless the index is sparse, and actions/checkout leaves it not.
-      # A shard whose cone lacks the gardener's own ledger still expands it once,
-      # when it stages its record there; that costs time, never a wrong commit.
+      # Each widening rewrites the checkout's index, which expands it to the
+      # whole repository unless the index is sparse, and actions/checkout leaves
+      # it not. The commit a shard lands is built in an index of its own.
       - name: Keep the index sparse
         run: git config index.sparse true
 
@@ -182,7 +179,9 @@ jobs:
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
       # code it earned: 2 ownership or integrity, 3 the push kept losing, 1 a
-      # task failed or the shard's owned folders are over max_cone_mb.
+      # task failed, the shard downloaded more than max_downloaded_mb, or the
+      # files under its folders could not be listed. The token also reads the
+      # size of each file the clone never downloaded, from GitHub's trees API.
       - name: Run the shard's tasks and land its record
         env:
           SHARD: ${{ matrix.shard }}

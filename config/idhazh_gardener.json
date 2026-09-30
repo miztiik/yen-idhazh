@@ -1,6 +1,6 @@
 {
   "attempts": 6,
-  "max_cone_mb": 768,
+  "max_downloaded_mb": 128,
   "shards": 5,
-  "version": "2026-09-28"
+  "version": "2026-09-30"
 }

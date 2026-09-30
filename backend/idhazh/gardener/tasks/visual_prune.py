@@ -33,13 +33,12 @@ def run(context: TaskContext) -> Pass:
     from datetime import timedelta
     from pathlib import Path
 
-    from idhazh import ledger, retention
+    from idhazh import ledger
     from idhazh.contracts.file_envelope import WriterIdentity
     from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow
     from idhazh.contracts.ledger_name import LedgerName
     from idhazh.contracts.visual_prune import VisualPruneRow
-    from idhazh.gardener import retention_files
-    from idhazh.site_weight import measure
+    from idhazh.gardener import named_trees, retention_files
 
     policy = context.policy
     owns = policy.owns or []
@@ -60,13 +59,14 @@ def run(context: TaskContext) -> Pass:
         return retention_files.take_files(
             context, (), collection=collection, first_kept=first_kept
         )
-    before = measure(root)
-    candidates = retention.visuals_older_than(root, first_kept) if first_kept else []
+    listing = context.listing
+    before = named_trees.measure(listing, root)
+    candidates = named_trees.visuals_older_than(listing, root, first_kept) if first_kept else []
     sizes: dict[Path, int] = {}
     gone: dict[Path, int] = {}
 
     def weigh(item: retention_files.Aged) -> None:
-        sizes[item.path] = item.path.stat().st_size
+        sizes[item.path] = listing.size_of(item.path)
 
     def count_gone(path: Path) -> None:
         if not path.exists():
@@ -105,7 +105,11 @@ def run(context: TaskContext) -> Pass:
         skipped_by_fuse=skipped,
         fuse_tripped=skipped > 0,
         bytes_reclaimed=before.bytes_used - after.bytes_used,
-        oldest_kept=(oldest.isoformat() if (oldest := retention.oldest_visual(root)) else None),
+        oldest_kept=(
+            oldest.isoformat()
+            if (oldest := named_trees.oldest_visual(listing, root, without=gone))
+            else None
+        ),
         payload_bytes_before=before.bytes_used,
         payload_bytes_after=after.bytes_used,
     )
