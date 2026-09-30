@@ -30,25 +30,25 @@ Everywhere else restates this section rather than inventing its own style rule (
 
 ## 0c. Decision Requests and Tables
 
-**Write every answer in plain, simple English.** A person outside this project understands it on one read. No subsystem terms, no invented jargon, no vendor name used as vocabulary. Where a term is unavoidable, define it in the same sentence. This is section 0b applied, and it is the clause agents break most.
+**Follow section 0b.** Write plain English that a person outside this project understands on one read. Define unavoidable terms in the same sentence.
 
-When you need the user to choose, ask in one message, in this order, and put nothing before it:
+Whenever you need human help, clarification, a decision or approval, use one message in this order, with no preamble:
 
 1. **Situation.** What is true now.
 2. **Problem.** What is wrong or undecided, in one or two sentences.
-3. **Impact.** What it touches and what it costs to leave alone - the files, the subsystems, the published surfaces, the runs.
-4. **Options.** Every option worth taking, each with its cost and what it gives up. An option with no cost named is not an option.
-5. **Recommendation.** One option per table, marked `**Recommended**` in the row itself and named again at the end with the reason in one sentence.
+3. **Impact.** What it affects and the cost of leaving it unchanged.
+4. **Options.** Present every worthwhile option or solution, its benefit, cost and what it gives up.
+5. **Recommendation.** Recommend one option per table. Mark its row `**Recommended**`. Close by naming each recommended row's id and giving its reason in one sentence.
 
-**Every table in every answer is lettered, and every row carries an id.** Tables are `Table A`, `Table B` and so on, in the order they appear. A row's id is that letter plus its number - `A1`, `A2`, `B1` - and it is the first column. No id repeats in one message, so the user answers `A3`, or `A2 and B1`, and quotes nothing back.
+If a missing fact prevents a sound recommendation, identify it and recommend how to obtain it. Do not invent facts or add filler options.
 
-**A message may carry more than one table when one decision genuinely depends on another**, and then each table gets its own recommended row. What it may not do is bundle unrelated decisions to save a round trip: a table the user did not need to see is a table they have to read. When several tables appear, the five-part shape is written once for the whole message, not repeated per table.
+**Every table in every answer needs a letter and row ids.** Label tables `Table A`, `Table B`, etc., in appearance order. Put each row's id in the first column: table letter plus row number (`A1`, `A2`, `B1`). No id may repeat within a message.
 
-**The recommendation is marked where the choice is made.** A recommendation stated only in a closing paragraph makes the reader hold a row id in their head while they scan back up the table, so it is marked in the row AND restated at the end. The restatement carries the reason; the marker carries the position.
+Use multiple decision tables only when the decisions depend on each other. Do not bundle unrelated decisions. Apply the five-part structure once per message, not once per table.
 
-A message with no options is a status update, not a decision request, and does not use the five-part shape.
+Routine progress updates do not need this structure.
 
-[`AGENTS.md`](AGENTS.md) restates this section; it does not extend it (Guardrail #4).
+[AGENTS.md](AGENTS.md) restates this section; it must not extend it (Guardrail #4).
 
 ## 0d. Intent, Contract, Code
 
