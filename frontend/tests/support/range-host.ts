@@ -6,9 +6,11 @@
  * range gets 206 and that range, a `HEAD` gets 200 and the full length whatever
  * `Range` it carries, every file carries an ETag of its modification time and
  * size in hex and `Cache-Control: max-age`, a `.parquet` goes out as
- * `application/vnd.apache.parquet`, nothing is compressed, and a query string is
- * ignored. An `If-Range` naming another ETag gets the whole file, with 200, as
- * Pages was measured to answer it.
+ * `application/octet-stream`, and a query string is ignored. An `If-Range`
+ * naming another ETag gets the whole file, with 200, as Pages was measured to
+ * answer it. Nothing is compressed: a browser asks for every byte range
+ * uncompressed, and undoes the compression of a whole file before the page
+ * reads it, so the compression Pages applies reaches no byte the door reads.
  *
  * Every request under a data root is logged: method, path, query string,
  * `Range`, `Accept-Encoding`, `If-Range`, status, the ETag it answered with and
@@ -49,7 +51,6 @@ export interface HostRequest {
 	ifRange: string | null;
 	ifNoneMatch: string | null;
 	status: number;
-	contentEncoding: string | null;
 	/** The ETag the answer carried; null for a file that is not there. */
 	etag: string | null;
 	/** Body bytes written before the response ended or the browser went away. */
@@ -79,7 +80,7 @@ const TYPES: Record<string, string> = {
 	'.html': 'text/html; charset=utf-8',
 	'.js': 'text/javascript; charset=utf-8',
 	'.json': 'application/json; charset=utf-8',
-	'.parquet': 'application/vnd.apache.parquet',
+	'.parquet': 'application/octet-stream',
 	'.wasm': 'application/wasm'
 };
 
@@ -188,7 +189,6 @@ async function serveData(
 			ifRange: header('if-range'),
 			ifNoneMatch: header('if-none-match'),
 			status: response.statusCode,
-			contentEncoding: (response.getHeader('content-encoding') as string | undefined) ?? null,
 			etag: served.etag,
 			bodyBytes: counted.bytes
 		});
