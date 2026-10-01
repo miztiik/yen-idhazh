@@ -36,12 +36,13 @@ find; a named file that is not there is never read as an empty one without a
 word.
 
 **What it reads, and how that grows (Guardrail #12).** Three small indexes,
-every compact file they name - at most `monthly_window` month files and 45 to 76
-day files a ledger at the defaults, or for a ledger that packs years, one file
-a year kept for ever and at most about two years of month files - and the raw
-files of the days no index names. While a ledger's compaction has not run live,
-that last part is every raw file the ledger has, which is what a reader read
-before compaction existed. `docs/concepts/growing-reads.md` lists the read.
+every compact file they name - at most `monthly_window` month files and from
+`daily_keep_days` to `daily_keep_days` plus 31 day files a ledger, or for a
+ledger that packs years, one file a year kept for ever and at most about two
+years of month files - and the raw files of the days no index names. While a
+ledger's compaction has not run live, that last part is every raw file the
+ledger has, which is what a reader read before compaction existed.
+`docs/concepts/growing-reads.md` lists the read.
 
 **A file this build cannot read is skipped with a warning naming its path**,
 for the reason `ledger/raw_files.py` gives. An index this build cannot read is

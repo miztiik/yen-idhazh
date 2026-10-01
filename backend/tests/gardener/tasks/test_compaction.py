@@ -7,8 +7,10 @@ a test turns that off for itself only. Each oracle is named where it is
 checked: a compact file holds exactly what settling its raw files gives; after
 every pass the newest day the daily index names is the daily watermark; every
 date is read from exactly one file and a missing day is named; a re-run that
-lands after its day was compacted replaces its first attempt; and no pass
-writes a path it deletes.
+lands after its day was compacted replaces its first attempt; no pass
+writes a path it deletes; and a monthly window that only reports keeps every
+file it would drop, packs the rest exactly as a live one would, and counts what
+it kept in `selected`.
 
 Nothing here reads the committed `state/` or a clock the test did not set
 (CLAUDE.md sections 2 and 13).
@@ -711,3 +713,145 @@ def test_the_monthly_period_holds_exactly_its_window_of_months_on_every_day_of_t
             month = _monthly_period.shift(month, 1)
         assert held == 13, day
         day += timedelta(days=1)
+
+
+# --- a window that only reports ----------------------------------------------------
+
+#: A window of one month, so a ledger a few months old holds months past it.
+ONE_MONTH: Final = {"unit": "months", "value": 1}
+
+#: The wake the switch is read at. A one-month window then keeps September on,
+#: and September is due: 47 whole days have passed since it ended, and 45 must.
+NOVEMBER_WAKE: Final = date(2026, 11, 16)
+
+#: The month files a one-month window drops at that wake.
+PAST_THE_WINDOW: Final = ("2026-06", "2026-07", "2026-08")
+
+
+def month_file(root: Path, month: str) -> Path:
+    found = ledger.compact_file(state(root), VISUALS, Period.MONTHLY, month)
+    assert found is not None, f"no month file holds {month}"
+    return found
+
+
+def window_pass(root: Path, today: date, *, reports: bool) -> Pass:
+    """One live pass under a one-month window that deletes, or only reports."""
+    return compact(
+        root,
+        today,
+        max_periods_per_run=200,
+        monthly_window=ONE_MONTH,
+        monthly_window_dry_run=reports,
+    )
+
+
+def months_past_the_window(root: Path) -> None:
+    """June to August in month files, September in day files, and two raw days due in November.
+
+    Built by the shipped pass with its window only reporting, so every month the
+    window drops at the November wake is still there.
+    """
+    for number, on in enumerate(("2026-06-05", "2026-07-05", "2026-08-05", "2026-09-05")):
+        filed(root, a_pass(on, run=str(number + 1)))
+    for _ in range(2):
+        window_pass(root, date(2026, 10, 20), reports=True)
+    assert watermark(root, Period.MONTHLY) == "2026-08", "June to August are month files"
+    filed(root, a_pass("2026-10-25", run="5"))
+    filed(root, a_pass("2026-11-10", run="6"))
+
+
+def test_a_window_that_only_reports_packs_every_due_period_and_keeps_every_month_file(
+    tmp_path: Path,
+) -> None:
+    """THE ORACLE for the window's switch, over two copies of one tree.
+
+    With the window live a pass deletes the three month files past it. With the
+    window only reporting the same pass keeps them, packs the same days and the
+    same month, deletes only files whose rows sit in a coarser file, and counts
+    the three in `selected` and not in `deleted`.
+    """
+    trees = [tmp_path / "live", tmp_path / "reports"]
+    months_past_the_window(trees[0])
+    shutil.copytree(trees[0], trees[1])
+    every_day = days("2026-06-01", "2026-11-14")
+    filed_rows = ledger.load_days(state(trees[1]), VISUALS, every_day, model=VisualPruneRow)
+    dropped = {
+        month_file(trees[1], month).relative_to(trees[1]).as_posix() for month in PAST_THE_WINDOW
+    }
+
+    live = window_pass(trees[0], NOVEMBER_WAKE, reports=False)
+    reports = window_pass(trees[1], NOVEMBER_WAKE, reports=True)
+
+    assert set(live.taken) - set(reports.taken) == dropped
+    assert set(reports.taken) < set(live.taken)
+    assert reports.selected - len(reports.taken) == len(dropped) == 3
+    assert live.selected == len(live.taken)
+    assert set(reports.written) == set(live.written)
+    for root in trees:
+        assert watermark(root, Period.MONTHLY) == "2026-09", "September is absorbed either way"
+        assert watermark(root, Period.DAILY) == "2026-11-14", "every due day is taken either way"
+    assert all(month_file(trees[1], month).is_file() for month in PAST_THE_WINDOW)
+    assert all(
+        ledger.compact_file(state(trees[0]), VISUALS, Period.MONTHLY, month) is None
+        for month in PAST_THE_WINDOW
+    )
+    assert ledger.load_days(state(trees[1]), VISUALS, every_day, model=VisualPruneRow) == filed_rows
+    left = ledger.load_days(state(trees[0]), VISUALS, every_day, model=VisualPruneRow)
+    assert [row.date for row in left] == ["2026-09-05", "2026-10-25", "2026-11-10"]
+    row = report.row(
+        reports,
+        task="compact-visual-prunes",
+        context=context_for("compact-visual-prunes", trees[1], today=NOVEMBER_WAKE),
+        duration_ms=0,
+        work_ended_at="2026-11-16T00:41:00Z",
+        cone_bytes=None,
+        downloaded_bytes=None,
+    )
+    assert (row.dry_run, row.deleted) == (False, len(reports.taken))
+    assert row.deleted < row.selected <= row.candidates_seen
+    assert disjoint(live) and disjoint(reports)
+
+
+def test_a_raw_day_past_a_window_that_only_reports_is_packed_and_not_dropped(
+    tmp_path: Path,
+) -> None:
+    """A first pass takes it as if the window kept every month; a live window deletes it unread."""
+    trees = [tmp_path / "live", tmp_path / "reports"]
+    filed(trees[0], a_pass("2026-06-05"))
+    filed(trees[0], a_pass("2026-09-05", run="2"))
+    shutil.copytree(trees[0], trees[1])
+    june = ["2026-06-05"]
+
+    live = window_pass(trees[0], date(2026, 10, 20), reports=False)
+    reports = window_pass(trees[1], date(2026, 10, 20), reports=True)
+
+    kept = ledger.load_days(state(trees[1]), VISUALS, june, model=VisualPruneRow)
+    assert kept == [a_pass("2026-06-05")]
+    assert ledger.load_days(state(trees[0]), VISUALS, june, model=VisualPruneRow) == []
+    assert (daily_covers(trees[1])[0], daily_covers(trees[0])[0]) == ("2026-06-01", "2026-09-01")
+    assert ledger.list_raw_files(state(trees[1]), VISUALS) == []
+    assert set(reports.taken) == set(live.taken), "its raw files go either way, packed or dropped"
+    assert reports.selected == len(reports.taken), "a file this pass packed is not held back"
+
+
+def test_a_dry_run_whose_window_only_reports_names_what_that_live_pass_does(
+    tmp_path: Path,
+) -> None:
+    """The window's switch decides what a pass does, and `dry_run` whether any of it lands."""
+    trees = [tmp_path / "dry", tmp_path / "live"]
+    months_past_the_window(trees[0])
+    shutil.copytree(trees[0], trees[1])
+    before = files_under(trees[0])
+
+    dry = run_task(
+        "compact-visual-prunes",
+        trees[0],
+        today=NOVEMBER_WAKE,
+        max_periods_per_run=200,
+        monthly_window=ONE_MONTH,
+        monthly_window_dry_run=True,
+    )
+    live = window_pass(trees[1], NOVEMBER_WAKE, reports=True)
+
+    assert dry.dry_run and files_under(trees[0]) == before
+    assert (dry.taken, dry.written, dry.selected) == (live.taken, live.written, live.selected)
