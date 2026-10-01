@@ -428,6 +428,6 @@ def test_every_store_in_the_vocabulary_resolves_except_the_four_named_here(
             refused.add(name)
 
     assert refused == UNREGISTERED
-    assert len(widen_ledger_header.LEDGERS) - len(refused) == 6, (
-        "six of ten; the other four are named in UNREGISTERED with the reason"
+    assert len(widen_ledger_header.LEDGERS) - len(refused) == 5, (
+        "five of nine; the other four are named in UNREGISTERED with the reason"
     )
