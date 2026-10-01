@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -110,7 +110,7 @@ The shapes, and where each one lives once written:
 | `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one row of `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/summary-quality-evals/` |
-| `ObservationIndexRow` | `observation-index-row` | one row of `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/`, the identity of one measurement the day beside it holds |
+| `ObservationIndexRow` | `observation-index-row` | one row of `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/` or of a closed month's `<YYYY>/<MM>/settled.csv`, the identity of one measurement the eval ledger holds |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY>/<MM>/<DD>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one row of `state/feed-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
@@ -210,7 +210,7 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| `state/summary-quality-evals-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains |
+| `state/summary-quality-evals-index/` | a file per writer by day, and one file a closed month | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains. Once a month is closed the gardener settles its days into one `settled.csv` in the month's folder, which the dedupe reads as it reads a day |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |

@@ -15,6 +15,7 @@ import hashlib
 import json
 import shutil
 from collections.abc import Callable, Iterator, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -37,6 +38,7 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.extract import ExtractConfig
+from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
@@ -64,6 +66,7 @@ from idhazh.evals.metrics import (
 from idhazh.evals.score import band, to_eval_row
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
+from idhazh.gardener import closed_day_fold
 from idhazh.stages.rebuild_summary_quality_evals_index import (
     stage_rebuild_summary_quality_evals_index,
 )
@@ -1397,6 +1400,90 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
     )
     assert _index_bytes(state, "2026-01-09") == untouched
     assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
+
+
+#: A wake at which both fixture months have closed, so the ID folder's fold
+#: settles each of them whole.
+BOTH_MONTHS_CLOSED: Final = datetime(2026, 3, 5, tzinfo=UTC)
+
+
+def _settle_months(state: Path) -> None:
+    """Fold the index the way its gardener task does: every closed month into one file."""
+    closed_day_fold.fold(
+        state,
+        [LedgerName.SUMMARY_QUALITY_EVALS_INDEX],
+        now=BOTH_MONTHS_CLOSED,
+        after_days=DEFAULT_CLOSED_AFTER_DAYS,
+        dry_run=False,
+        settles_months=True,
+    )
+
+
+def _month_files(state: Path, month: str) -> list[Path]:
+    root = ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
+    return day_shards.one_month(root, month)
+
+
+def test_a_settled_month_is_compared_whole_and_one_that_holds_the_truth_gains_no_file(
+    tmp_path: Path,
+) -> None:
+    """An index row names no day, so a month settled into one file is answered for the month.
+
+    Compared day by day, a settled month's days would hold no digest at all,
+    every row would read as missing, and the repair would write the month's whole
+    index again into its days. Compared whole, each month is keyed by itself:
+    the one that holds an extra digest names it, and neither gains a file.
+    """
+    state = _drifted_tree(tmp_path)
+    writer.rebuild_index(state, ["2026-02-11"])
+    _settle_months(state)
+    for month in ("2026-01", "2026-02"):
+        assert [path.name for path in _month_files(state, month)] == [day_shards.SETTLED_NAME], (
+            f"{month} was not settled whole, so this compares nothing"
+        )
+    before = {month: _month_files(state, month)[0].read_bytes() for month in ("2026-01", "2026-02")}
+
+    found = writer.rebuild_index(state, REBUILD_DAYS)
+
+    assert sorted(found) == ["2026-01", "2026-02"]
+    assert found["2026-01"].extra == {ROLLED_BACK} and not found["2026-01"].missing
+    assert not found["2026-02"].extra and not found["2026-02"].missing
+    after = {month: [path.read_bytes() for path in _month_files(state, month)] for month in before}
+    assert after == {month: [held] for month, held in before.items()}, "the repair wrote a file"
+
+
+def test_a_digest_a_settled_month_lacks_is_added_to_the_day_whose_rows_produce_it(
+    tmp_path: Path,
+) -> None:
+    """The repair cannot split a month's file, so it adds to the day the row sits in.
+
+    The dedupe sees the digest the moment the repair lands, and the next fold
+    settles that day back into the month's one file.
+    """
+    state = _drifted_tree(tmp_path)
+    writer.rebuild_index(state, ["2026-02-11"])
+    _settle_months(state)
+    month_file = _month_files(state, "2026-02")[0]
+    with month_file.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    lost = rows[0]["observation_digest"]
+    with month_file.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=writer.index_columns(), lineterminator="\n")
+        out.writeheader()
+        out.writerows(rows[1:])
+    assert lost not in writer.recorded_observations(state)
+
+    found = writer.rebuild_index(state, ["2026-02-11"])
+
+    assert found["2026-02"].missing == {lost} and not found["2026-02"].extra
+    root = ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
+    assert [ledger.is_repair(path.name) for path in day_shards.one_day(root, "2026-02-11")] == [
+        True
+    ]
+    assert lost in writer.recorded_observations(state)
+    _settle_months(state)
+    assert [path.name for path in _month_files(state, "2026-02")] == [day_shards.SETTLED_NAME]
+    assert lost in writer.recorded_observations(state)
 
 
 def test_a_day_with_no_committed_rows_is_refused_by_name(tmp_path: Path) -> None:

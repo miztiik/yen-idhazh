@@ -37,11 +37,13 @@ off the record rather than measured again.
 
 **A task that folds says so on the same row.** `dry_run`, `deleted` and
 `bytes_freed` describe the task's window. A retention task that owns a CSV day
-tree also folds its closed days into one file each, on a switch of its own, and
-`fold_dry_run`, `folded_days` and `folded_files` say what that fold did. They
+tree also folds its closed days into one file each, and its closed months too
+where its declaration asks, on a switch of its own, and `fold_dry_run`,
+`folded_days`, `folded_months` and `folded_files` say what that fold did. They
 are empty when the task has no fold, and when its fold did not run because the
 window failed first: empty says "did not run", where 0 says "ran and found
-nothing".
+nothing". `folded_months` is empty on a row written before a fold could settle
+a month, too.
 """
 
 from __future__ import annotations
@@ -95,6 +97,11 @@ class CollectionPruneRow(Contract):
     __schema_stem__: ClassVar[str] = "collection-prune-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-01",
+            change="folded_months, additive: closed months a fold settled into one file each.",
+            why="A task may settle a closed month into one file, and says how many it settled.",
+        ),
+        ChangelogEntry(
             version="2026-09-30",
             change="downloaded_bytes, additive: file content the shard downloaded for its tasks.",
             why="A shard checks out only code, so what it paid is what its tasks downloaded.",
@@ -108,11 +115,6 @@ class CollectionPruneRow(Contract):
             version="2026-09-28",
             change="cone_bytes, additive: what the shard's owned folders weighed; None if unread.",
             why="A shard's checkout is bounded, and the record says what each one weighed.",
-        ),
-        ChangelogEntry(
-            version="2026-09-27",
-            change="collection is task; run identity, timing and a null ceiling added.",
-            why="The gardener lands one row per task per wake in the record of its shard.",
         ),
         ChangelogEntry(
             version="2026-09-17",
@@ -266,7 +268,16 @@ class CollectionPruneRow(Contract):
         ge=0,
         description=(
             "How many files those folds replaced, or would replace: every file of a "
-            "folded day but its settled.csv. Empty when the fold did not run."
+            "folded day or month but its settled.csv. Empty when the fold did not run."
+        ),
+    )
+    folded_months: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "How many closed months the fold settled into one settled.csv each, in the "
+            "month's own folder, or would have on a dry run; 0 when its task settles no "
+            "month. Empty when the fold did not run, or the row is older than this cell."
         ),
     )
 
@@ -291,14 +302,17 @@ class CollectionPruneRow(Contract):
         if self.since is not None and self.until is not None and self.since > self.until:
             raise ValueError("since is after until, so the window names no day")
         fold = (self.fold_dry_run, self.folded_days, self.folded_files)
-        if None in fold and any(value is not None for value in fold):
+        if None in fold and any(value is not None for value in (*fold, self.folded_months)):
             raise ValueError(
-                "a fold fills fold_dry_run, folded_days and folded_files, or none of them"
+                "a fold fills fold_dry_run, folded_days and folded_files, or none of them, "
+                "and folded_months only beside them"
             )
         if (
             self.folded_days is not None
             and self.folded_files is not None
-            and self.folded_files < self.folded_days
+            and self.folded_files < self.folded_days + (self.folded_months or 0)
         ):
-            raise ValueError("every day a fold settles held at least one file it replaced")
+            raise ValueError(
+                "every day and month a fold settles held at least one file it replaced"
+            )
         return self

@@ -659,13 +659,24 @@ one job writes each tree a wake and no tree is checked out twice. No
 item-health, summary-quality-evals and host-fingerprint ledgers are not CSV day trees any more,
 so no fold reads them: their compaction packs them.
 
+**A task may settle a closed month whole.** With `fold.settles_months`, once a
+month's last day is closed - `fold.after_days` whole days after the month ends -
+the fold settles every file of that month, each day's writer files and settled
+files alike, into one `settled.csv` in the month's own folder,
+`state/<tree>/<YYYY>/<MM>/settled.csv`, and deletes what it read. A day of a
+closed month is the month's from then on, and a file a re-run adds to it later
+is settled in at the next wake. Only the ID folder's task asks for it: that
+folder keeps every file for ever, and the dedupe reads all of it on every run.
+A month's rows name no day, so the loader refuses the switch beside a window of
+days, which would take the month's file whole once its first day aged out.
+
 | Step | What happens |
 | --- | --- |
 | 1 | The task's window runs first, dry or live, and returns what it took |
 | 2 | The runner calls the fold, unless the window failed - then the fold waits a wake, and the row's fold cells stay empty |
-| 3 | The fold lists every day of each tree the task walks and takes each day that is closed - `fold.after_days` whole days after it ended, default 1, the rule `compact_after_days` reads - and still holds a writer file |
-| 4 | It skips a day folder the window took, or would take on a dry run: a shard refuses a path it both writes and deletes |
-| 5 | It settles the day, writes `settled.csv` and deletes the rest - or, on a dry run, reads and settles the day and changes nothing |
+| 3 | The fold lists every day of each tree the task walks and takes each day that is closed - `fold.after_days` whole days after it ended, default 1, the rule `compact_after_days` reads - and still holds a writer file. With `fold.settles_months` it first takes each closed month that still holds a day's file, and leaves that month's days to it |
+| 4 | It skips a day folder the window took, or would take on a dry run, and a month holding one: a shard refuses a path it both writes and deletes |
+| 5 | It settles each month, then each day, writes `settled.csv` in its folder and deletes the rest - or, on a dry run, reads and settles each one and changes nothing |
 
 **The fold lands on its own switch.** `fold.dry_run` is the fold's, apart from
 the window's `dry_run`, and the runner lands the fold's writes and deletions
@@ -675,14 +686,17 @@ owns, like every other. All four folds ship live, because they copy the fold
 `digest.yml` ran after each day's commit until the gardener took it over; every
 window beside them still only reports.
 
-**The row says what the fold did.** `fold_dry_run`, `folded_days` and
-`folded_files` sit on the task's own row beside the window's `dry_run`, `deleted`
-and `bytes_freed`, and are empty when the fold did not run. A fold that stops
-part way - a row that will not read, a stray file - keeps the days it settled,
-turns the row's `stopped_because` to `failed`, and the task exits 1.
+**The row says what the fold did.** `fold_dry_run`, `folded_days`,
+`folded_months` and `folded_files` sit on the task's own row beside the window's
+`dry_run`, `deleted` and `bytes_freed`, and are empty when the fold did not run.
+`folded_months` counts the closed months settled whole, 0 where none was, and
+`folded_files` counts every file a month or a day replaced. A fold that stops
+part way - a row that will not read, a stray file - keeps the months and days it
+settled, turns the row's `stopped_because` to `failed`, and the task exits 1.
 
 **A re-run that lands after a fold is folded in at the next wake.** Its writer
-file sits beside the day's `settled.csv`, and the next fold reads both. One that
+file sits beside the day's `settled.csv`, or in a day of a settled month, and the
+next fold reads it with the settled file it joins. One that
 lands while the fold's push is still trying survives too: each try stages the
 fold's own paths on the new tip, and the re-run's file is not one of them.
 Staging names a deleted file as deleted even where git would call the pair a
@@ -874,8 +888,22 @@ finished year's month files into one year file, kept for ever, so the month file
 stop adding up and no row goes. The `summary-quality-evals-index` retention task
 keeps every day of the ID folder for the same end - a dropped index day would
 make every measurement in it new again - so its window is `forever` too, and its
-one live action is the closed-day fold
+one live action is its fold, which settles each closed month into one file
 ([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).
+
+**The ID folder is settled a month at a time by the fold.** It keeps every file
+for ever and the dedupe reads all of it on every run, so one file a closed day
+was a read that grew by 365 files a year: about 6 seconds a run at one year and
+about a minute at ten, at a measured 16 ms a file. A packed ledger and reading
+the IDs from the eval rows' key columns were the other two ways to stop it.
+Reading the key columns keeps no second copy, but the rows sit in one raw file a
+write until the eval ledger's packing runs live, so it would stop the growth
+only then. A month step on the fold that already runs live writes the CSV shape
+every reader already settles, moves no `dry_run`, needs no migration - the next
+wake settles the days already there - and deletes no ID, so the dedupe reads
+about 43 files at one year and 151 at ten (an estimate counted from the
+calendar). The operator prune refuses the folder by name: a month's file cannot
+serve a delete of a range of days, and no ID is ever deleted.
 
 ## See also
 

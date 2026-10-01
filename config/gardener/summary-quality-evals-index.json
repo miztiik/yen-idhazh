@@ -2,7 +2,8 @@
   "dry_run": true,
   "fold": {
     "after_days": 1,
-    "dry_run": false
+    "dry_run": false,
+    "settles_months": true
   },
   "kind": "retention",
   "lifecycle_status": "active",

@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what a day is once five runs have added to it. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -38,6 +38,7 @@ frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
 state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice, kept for ever
 state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/ the identity of every measurement that day holds, 76 bytes each
+state/summary-quality-evals-index/<YYYY>/<MM>/settled.csv the same, for every day of a closed month, in one file
 ```
 
 ```

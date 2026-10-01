@@ -92,7 +92,11 @@ LIVE_BY_DECISION: Final = {
     ),
     ("counterfactual-scores", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
     ("feed-health", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
-    ("summary-quality-evals-index", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
+    ("summary-quality-evals-index", "fold.dry_run"): (
+        f"{FOLD_ALREADY_RAN_LIVE}; and a person ruled that the eval ledger's ID files stop "
+        "growing by a file a day with no summary, so the same switch settles each closed "
+        "month of them into one file"
+    ),
     ("span-rollup", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
 }
 
@@ -214,6 +218,33 @@ def test_a_fold_closes_a_day_by_the_same_default_a_compaction_does() -> None:
     """One rule decides when a day is closed, for a CSV day tree and a raw ledger alike."""
     assert FoldPolicy(dry_run=True).after_days == DEFAULT_CLOSED_AFTER_DAYS
     assert DEFAULT_COMPACT_AFTER_DAYS == DEFAULT_CLOSED_AFTER_DAYS
+
+
+def test_a_fold_settles_a_month_only_where_its_own_declaration_asks() -> None:
+    """Off by default, so a tree keeps one file a closed day unless its task says otherwise."""
+    assert FoldPolicy(dry_run=True).settles_months is False
+
+
+@pytest.mark.parametrize(
+    ("window", "loads"),
+    [({"unit": "days", "value": 7}, False), (MONTHS, True), ({"unit": "forever"}, True)],
+)
+def test_a_month_settles_only_beside_a_window_that_keeps_whole_months(
+    tmp_path: Path, window: dict[str, Any], loads: bool
+) -> None:
+    """A settled month's file names no day, so a window of days would take it whole.
+
+    It would take the month once the month's first day aged out, and with it the
+    rows of every later day the window still keeps.
+    """
+    declared = fixture("traces", window=window, fold={"dry_run": False, "settles_months": True})
+    config_dir = a_garden(tmp_path, traces=declared)
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "config/gardener/traces.json is refused" in message
+        assert "settles_months" in message
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:

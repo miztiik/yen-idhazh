@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -192,6 +192,9 @@ place no writer can take. It is also the right place: its rows have already won
 a settlement, and a straggler beside it is later. The fold is what stops one
 file per writer per day becoming unbounded growth, and what it costs is
 [in growing-reads.md](growing-reads.md#the-closed-day-fold-is-guardrail-12-applied-to-a-write-2026-09-22).
+A tree whose task settles months holds one more: a closed month's `settled.csv`
+in the month's own folder, the one file a month folder may hold. It reads at
+attempt 0 too, so a file a re-run adds to that month later is settled after it.
 
 **`before-partition.csv` is the other.** It is what the 2026-09-22 migration
 wrote, one per day, because a committed head is many runs already merged and so
@@ -293,7 +296,7 @@ Authority: owner, 2026-09-06.
 | Collection | Path pattern | Writer | What makes a partition closed |
 | --- | --- | --- | --- |
 | Eval ledger | `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, packed under `state/compact/summary-quality-evals/` | `evals.writer.file_measurements`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. Every write is a file of its own, so two runs never collide on one, and a packing task makes each finished day one file. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
-| Eval ledger ID folder | `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/` | `evals.writer.file_measurements` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22, and it files by the ledger's day rather than a grain of its own: two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-summary-quality-evals-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. |
+| Eval ledger ID folder | `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/`, and `<YYYY>/<MM>/settled.csv` once a month closes | `evals.writer.file_measurements` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22, and it files by the ledger's day rather than a grain of its own: two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-summary-quality-evals-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. Once a month is closed, the gardener settles every file of it into one `settled.csv` in the month's folder, so the folder gains a file a month rather than a file a day. |
 | Item health | `state/raw/item-health/<YYYY>/<MM>/<DD>/`, packed under `state/compact/item-health/` | `ledger.persist`, from `stages.record` and `stages.assemble` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. Each write files its own rows under the day those rows name, as a file of its own, so two runs never collide on one. Closed once the run's date leaves the day. |
 | Feed health | `state/feed-health/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. The same one-date write, settled against `FEED_HEALTH_KEY` at read time. Closed once the run's date leaves the day. The day grain buys what it buys for `state/published/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Seen addresses | `state/seen/<YYYY>/<MM>/<DD>.csv` | `ledger.append_seen` | Partitioned by **day** since 2026-09-13. The same one-date append, and the date is the run's own digest date - which is why `first_seen_run[:10]` names the file every row inside it sits in. Closed once the run's date leaves the day. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
