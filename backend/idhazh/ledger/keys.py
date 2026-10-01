@@ -7,7 +7,8 @@ readers start disagreeing about what one file holds.
 
 Two tables pair a key with the contract that reads a row: one for the CSV day
 trees, and one for the ledgers the door in `ledger/persist.py` files under
-`state/raw/` and `state/compact/`.
+`state/raw/` and `state/compact/`. The second also holds each ledger still on
+CSV that is ready to move, so moving one is a switch of its registry grain.
 
 Where a ledger's file lives is a different question with its own home, which is
 why `paths` imports nothing from here and this module imports nothing from it.
@@ -31,6 +32,7 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
+from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS as DROPPED_PAIR_CELLS,
@@ -190,6 +192,21 @@ OBSERVATION_INDEX_KEY: Final = ("observation_digest",)
 VALIDATION_KEY: Final = ("date", "run_id", "model_id")
 
 
+#: What makes two first-sight rows the same record. One address, first seen by
+#: one run. The plan stage files an address once, in the run that first sees it,
+#: so a second row holding both cells is that sighting written twice, cell for
+#: cell. The first row wins, and there is nothing for a preference to choose
+#: between.
+SEEN_KEY: Final = ("url_key", "first_seen_run")
+
+
+#: What makes two published rows the same record. One address, run on one digest
+#: day as one item. A second row holding all three cells is that item filed
+#: again, cell for cell, so the first row wins and there is nothing for a
+#: preference to choose between.
+PUBLISHED_KEY: Final = ("url_key", "published_on", "item_id")
+
+
 #: Which of two rows holding one key survives the settlement. `True` means the
 #: later row replaces the one already kept. A key with no rule keeps the first
 #: row it saw, which is what every ledger but one wants: there a repeat is the
@@ -342,6 +359,11 @@ class _DoorShape(NamedTuple):
 #: the contract that reads one. The compaction settles a period by it and the
 #: reader in `ledger/ledger_files.py` settles a whole ledger by it, so the two
 #: cannot disagree about which row of a key survives.
+#:
+#: A ledger still on CSV has its row here before it moves. Nothing asks the door
+#: about a ledger before the registry files it under the two roots, so a row here
+#: changes nothing until then, and the change that moves the ledger switches its
+#: registry grain rather than writing its key a second time.
 _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
@@ -349,6 +371,11 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.ITEM_HEALTH: _DoorShape(ITEM_HEALTH_KEY, ItemHealthRow),
     LedgerName.SUMMARY_QUALITY_EVALS: _DoorShape(OBSERVATION_KEY, EvalRow),
     LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
+    LedgerName.COUNTERFACTUAL_SCORES: _DoorShape(COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow),
+    LedgerName.CANDIDATE_MODELS: _DoorShape(VALIDATION_KEY, ValidationRow),
+    LedgerName.FEED_HEALTH: _DoorShape(FEED_HEALTH_KEY, FeedHealthRow),
+    LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
+    LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),
 }
 
 

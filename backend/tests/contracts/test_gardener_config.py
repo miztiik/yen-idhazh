@@ -18,7 +18,7 @@ from typing import Any, Final
 import pytest
 from conftest import CONFIG_DIR
 from gardener._garden import GARDENER_FIXTURES, a_config
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import (
@@ -32,6 +32,7 @@ from idhazh.contracts.knobs.gardener import (
     GardenerConfig,
     HistoryPolicy,
     RetentionPolicy,
+    Window,
 )
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 
@@ -427,6 +428,36 @@ def test_a_window_a_reader_still_opens_is_not_deleted_under_it(
 
 
 @pytest.mark.parametrize(
+    ("name", "monthly", "loads"),
+    [
+        ("seen", {"unit": "months", "value": 1}, False),
+        ("seen", {"unit": "months", "value": 2}, True),
+        ("published", {"unit": "months", "value": 13}, False),
+        ("published", {"unit": "forever"}, True),
+    ],
+)
+def test_a_compaction_keeps_every_day_a_reader_still_opens(
+    tmp_path: Path, name: str, monthly: dict[str, Any], loads: bool
+) -> None:
+    """Once a ledger moves, its compaction governs it in place of its retention task.
+
+    The garden's `seen` task keeps 90 days, and it no longer counts. The pair
+    reaches back 45 days and the fewest days its months hold: one month is 73
+    days, under the 90 `collect.seen_window_days` reads, and two are 104.
+    `collect.published_window_days` is -1, which reads every day, so only a
+    compaction that keeps every month reaches it.
+    """
+    compaction = a_compaction(name, monthly_window=monthly)
+    config_dir = a_garden(tmp_path, **{f"compact_{name}": compaction})
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert f"compact-{name}.json reaches back" in message
+        assert "a reader still opens" in message
+
+
+@pytest.mark.parametrize(
     ("change", "refusal"),
     [
         ("unknown", "keeps a series called hourly, which is not one of its trees"),
@@ -520,13 +551,48 @@ def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: st
     assert "366-day console read can select 14 month shards" in message
 
 
-def test_the_machine_ledger_lasts_as_long_as_the_published_shard_folded_from_it(
-    tmp_path: Path,
+@pytest.mark.parametrize(("months", "loads"), [(12, False), (13, True)])
+def test_a_compaction_keeps_every_month_file_a_console_read_still_selects(
+    tmp_path: Path, months: int, loads: bool
 ) -> None:
-    """A published month whose source months are gone is a shard nothing can rebuild."""
-    short = fixture("host-fingerprint", window={"unit": "months", "value": 13})
-    message = refused(a_garden(tmp_path, host_fingerprint=short))
-    assert "host-fingerprint.json keeps 13 months" in message
+    """Once feed-health moves, its compaction governs it, and the widest read still floors it.
+
+    Fourteen month shards can hold 428 days. Forty-five days and twelve months
+    reach back 410; with thirteen months, 438.
+    """
+    compaction = a_compaction("feed-health", monthly_window={"unit": "months", "value": months})
+    config_dir = a_garden(tmp_path, compact_feed_health=compaction)
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "compact-feed-health.json reaches back 410 days" in message
+        assert "366-day console read can select 14 month shards" in message
+
+
+@pytest.mark.parametrize(
+    ("name", "refusal"),
+    [
+        ("host-fingerprint", "host-fingerprint.json keeps 13 months"),
+        ("compact-host-fingerprint", "compact-host-fingerprint.json reaches back 410 days"),
+    ],
+    ids=["its-retention-task", "its-compaction"],
+)
+def test_the_machine_ledger_lasts_as_long_as_the_published_shard_folded_from_it(
+    tmp_path: Path, name: str, refusal: str
+) -> None:
+    """A published month whose source months are gone is a shard nothing can rebuild.
+
+    Whichever declaration governs the ledger is held: its retention task while it
+    has one, and its compaction once the ledger files under the two roots.
+    """
+    short = (
+        fixture(name, window={"unit": "months", "value": 13})
+        if name == "host-fingerprint"
+        else a_compaction("host-fingerprint", monthly_window={"unit": "months", "value": 12})
+    )
+    message = refused(a_garden(tmp_path, **{name.replace("-", "_"): short}))
+    assert refusal in message
     assert "observability.public_machine_keep_months is 14" in message
 
 
@@ -714,30 +780,52 @@ def test_a_published_ledger_that_packs_years_waits_what_its_declaration_says(
         assert f"{refusal} {earliest}" in message
 
 
+#: Reads a window off the dict a declaration spells it as.
+WINDOW: Final[TypeAdapter[Window]] = TypeAdapter(Window)
+
+
 @pytest.mark.parametrize(
-    ("floor", "monthly", "refusal"),
+    ("floor", "monthly", "reaches"),
     [
-        (MONTHS, {"unit": "months", "value": 12}, "silently cut how far back"),
-        (MONTHS, {"unit": "months", "value": 13}, None),
-        (MONTHS, {"unit": "forever"}, None),
-        ({"unit": "forever"}, {"unit": "months", "value": 13}, "kept it forever"),
-        ({"unit": "forever"}, {"unit": "forever"}, None),
+        (MONTHS, {"unit": "months", "value": 12}, False),
+        (MONTHS, {"unit": "months", "value": 13}, True),
+        (MONTHS, {"unit": "forever"}, True),
+        ({"unit": "forever"}, {"unit": "months", "value": 13}, False),
+        ({"unit": "forever"}, {"unit": "forever"}, True),
     ],
     ids=["bounded-short", "bounded-long", "bounded-forever", "forever-bounded", "forever-forever"],
 )
-def test_a_compaction_reaches_as_far_back_as_the_task_that_limited_its_ledger(
-    tmp_path: Path, floor: dict[str, Any], monthly: dict[str, Any], refusal: str | None
+def test_a_compaction_reaches_a_floor_by_its_two_periods(
+    floor: dict[str, Any], monthly: dict[str, Any], reaches: bool
 ) -> None:
-    """The five cases. The old task is retired: its declaration is the record of how far back."""
+    """The five cases, read off `daily_keep_days` and `monthly_window` alone.
+
+    Forty-five days and twelve months reach back 410 days where fourteen months
+    can ask for 428, and thirteen months reach back 438. A window of forever
+    reaches anything, and nothing shorter reaches a floor of forever, because a
+    person chose never to delete that ledger.
+    """
+    policy = CompactionPolicy.model_validate(a_compaction("gardener", monthly_window=monthly))
+    assert config.compaction_reaches(policy, WINDOW.validate_python(floor)) is reaches
+
+
+def test_a_retention_task_that_kept_an_old_tree_sets_no_floor_on_its_compaction(
+    tmp_path: Path,
+) -> None:
+    """A task that owned a moved ledger's CSV tree runs nothing, so it bounds nothing.
+
+    How long the CSV was kept is `CSV_LEDGERS` in
+    `backend/utilities/migrate_to_parquet.py`, whose own test holds every moved
+    ledger's committed compaction to it.
+    """
     config_dir = a_garden(
         tmp_path,
-        visual_prunes=a_retention(["state/visual-prunes"], floor, "retired"),
-        compact_visual_prunes=a_compaction("visual-prunes", monthly_window=monthly),
+        visual_prunes=a_retention(["state/visual-prunes"], MONTHS, "retired"),
+        compact_visual_prunes=a_compaction(
+            "visual-prunes", monthly_window={"unit": "months", "value": 3}
+        ),
     )
-    if refusal is None:
-        config.load_gardener(config_dir)
-    else:
-        assert refusal in refused(config_dir)
+    config.load_gardener(config_dir)
 
 
 def test_a_ledger_no_task_ever_limited_has_no_floor(tmp_path: Path) -> None:
@@ -749,7 +837,11 @@ def test_a_series_is_the_floor_of_the_ledger_it_covers(tmp_path: Path) -> None:
     """`item-health` reaches back as far as the full-grain series, not the aggregate one."""
     short = a_compaction("item-health", monthly_window={"unit": "months", "value": 12})
     message = refused(a_garden(tmp_path, compact_item_health=short))
-    assert "compact-item-health.json" in message and "kept 14 months" in message
+    assert "compact-item-health.json reaches back 410 days" in message
+    assert (
+        "the full-grain series of config/gardener/telemetry-aggregate.json keeps item-health "
+        "14 months" in message
+    )
 
 
 def test_the_month_rule_counts_the_fewest_and_the_most_days() -> None:

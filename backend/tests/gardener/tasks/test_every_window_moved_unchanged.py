@@ -67,17 +67,19 @@ def _series(policy: TaskPolicy, name: str) -> Window:
 def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
     frozen: dict[str, Any] = json.loads(WINDOWS.read_text(encoding="utf-8"))
     tasks = declared()
-    folded, scores, pictures = (
+    folded, scores, machine, pictures = (
         tasks["telemetry-aggregate"],
         tasks["compact-summary-quality-evals"],
+        tasks["compact-host-fingerprint"],
         tasks["visual-prune"],
     )
     assert isinstance(scores, CompactionPolicy)
+    assert isinstance(machine, CompactionPolicy)
     now: dict[str, Any] = {
         "collect.seen_window_days": _days(tasks["seen"].window),
         "lens_weights.window_days": _days(tasks["counterfactual-scores"].window),
         "observability.feed_health_keep_months": _months(tasks["feed-health"].window),
-        "observability.host_fingerprint_keep_months": _months(tasks["host-fingerprint"].window),
+        "observability.host_fingerprint_keep_months": _months(machine.monthly_window),
         "observability.item_health_aggregate_keep_months": _months(_series(folded, "aggregate")),
         "observability.item_health_full_grain_months": _months(_series(folded, "full-grain")),
         "observability.public_telemetry_keep_months": _months(_series(folded, "public-copy")),
