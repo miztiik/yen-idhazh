@@ -2,8 +2,8 @@
 
 **A day is taken once `compact_after_days` whole days have passed since it
 ended**, measured from 00:00 UTC on the day after it, so every wake of one UTC
-day finds the same newest day. At the default of one, a wake on the 25th takes
-days up to the 23rd.
+day finds the same newest day. At one, a wake on the 25th takes days up to the
+23rd.
 
 **Days are taken in order, each on its own, at most `max_periods_per_run` a
 pass.** For each day: list its raw folder and read every file in it, settle the
@@ -39,16 +39,21 @@ oldest raw day and the newest eligible day, or the oldest month the monthly
 window keeps if that is later. Every month the daily index holds is then whole,
 which keeps the monthly period's check for a missing day exact. Raw days in a
 month the window no longer keeps are past the ledger's reach, and are dropped.
+**A window that only reports keeps them instead**: it names their files for the
+record, and the pass takes those days like any other, a first run starting as if
+the window kept every month.
 
 **A listing outlives its day by `raw_index_keep_days`**, counted from the day's
 end. It goes only once its day is compacted and its raw folder is empty, so a
-day that is waiting to be taken again keeps the listing it will replace.
+day that is waiting to be taken again keeps the listing it will replace. It goes
+whether the window reports or not, because its day's rows are in a daily file.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract
@@ -63,10 +68,10 @@ from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
 logger = logging.getLogger(__name__)
 
 
-def drop(
-    tree: CompactTree, policy: CompactionPolicy, *, now: datetime, first_kept: str | None
+def drop_listings(
+    tree: CompactTree, policy: CompactionPolicy, *, now: datetime
 ) -> tuple[Stop, ...]:
-    """Listings past `raw_index_keep_days`, and raw days the monthly window no longer keeps."""
+    """Listings past `raw_index_keep_days` whose day is compacted and holds no raw file."""
     waiting = set(tree.raw_days)
     for day in named_trees.listed_days(tree.listing, tree.state_dir, tree.ledger):
         if tree.daily_through is None or day > tree.daily_through or day in waiting:
@@ -75,32 +80,64 @@ def drop(
             date.fromisoformat(day), now=now, after_days=policy.raw_index_keep_days
         ):
             tree.delete(ledger.raw_index_path(tree.state_dir, tree.ledger, day))
+    return ()
+
+
+def _past_the_window(
+    tree: CompactTree, *, first_kept: str | None
+) -> list[tuple[str, list[Path] | ValueError]]:
+    """Every raw day past the window, with its files or why they cannot be read.
+
+    It reads those days and decides nothing, so a window that only reports names
+    exactly the files a live one deletes.
+    """
     if first_kept is None:
-        return ()
+        return []
     past = [day for day in tree.raw_days if day[:7] < first_kept]
     tree.listing.fetch([tree.raw_day_folder(day) for day in past])
-    stops: list[Stop] = []
-    kept: list[str] = []
-    for day in tree.raw_days:
-        if day[:7] >= first_kept:
-            kept.append(day)
-            continue
+    found: list[tuple[str, list[Path] | ValueError]] = []
+    for day in past:
         try:
             files = ledger.read_day_files(tree.state_dir, tree.ledger, day)
         except ValueError as refusal:
+            found.append((day, refusal))
+            continue
+        found.append((day, [held.path for held in files]))
+    return found
+
+
+def drop(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
+    """Raw days the monthly window no longer keeps go, each with every file it holds."""
+    stops: list[Stop] = []
+    gone: set[str] = set()
+    for day, held in _past_the_window(tree, first_kept=first_kept):
+        if isinstance(held, ValueError):
             logger.error(
                 "a raw day past the window is kept ledger=%s day=%s reason=%s",
                 tree.ledger.value,
                 day,
-                refusal,
+                held,
             )
             stops.append(Stop(StopReason.FAILED, day))
-            kept.append(day)
             continue
-        for held in files:
-            tree.delete(held.path)
-    tree.raw_days = kept
+        for path in held:
+            tree.delete(path)
+        gone.add(day)
+    tree.raw_days = [day for day in tree.raw_days if day not in gone]
     return tuple(stops)
+
+
+def spare(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
+    """Every raw file the monthly window would drop is named and kept, for `compact` to take.
+
+    A day that cannot be read is one a live window keeps too, so it is not named
+    here; `compact` refuses it by name when it comes to take it.
+    """
+    for _day, held in _past_the_window(tree, first_kept=first_kept):
+        if not isinstance(held, ValueError):
+            for path in held:
+                tree.spare(path)
+    return ()
 
 
 def _new_days(tree: CompactTree, *, newest: date, first_kept: str | None) -> list[str]:

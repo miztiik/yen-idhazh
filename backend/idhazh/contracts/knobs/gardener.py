@@ -11,6 +11,10 @@ what it only reads, how far back it keeps, and whether it may delete at all.
 promise `RetentionConfig` makes and for the same reason: a fresh clone that
 starts deleting on its first run is a clone nobody can try out.
 
+**A compaction names every setting it runs with.** No setting of a pass has a
+default in code, so the declaration a person reads holds every number the pass
+uses, and the loader refuses one that leaves a setting out, naming it.
+
 **A declaration names its module by what it is, and never by a path.** Which
 Python runs a task is decided by `idhazh.gardener.registry` from the task's
 name and its `kind`, both closed words. A config value that named a module to
@@ -270,8 +274,9 @@ class _Declared(Model):
         return tuple(self.owns if self.owns is not None else self.owns_everything_else_under or ())
 
 
-#: How many whole days after a UTC day ends before the gardener acts on it. One
-#: rule decides when a day is closed, so a fold and a compaction agree about it.
+#: How many whole days after a UTC day ends before a fold acts on it, where the
+#: fold names no number of its own. A compaction writes its own number, as
+#: `compact_after_days`, and both are counted by the one rule in `schedule`.
 DEFAULT_CLOSED_AFTER_DAYS: Final = 1
 
 
@@ -373,15 +378,6 @@ class CollectionTaskPolicy(_Declared):
     )
 
 
-#: The compaction defaults, one line each so a declaration that omits a key and
-#: a reader of this file see the same number.
-DEFAULT_RAW_INDEX_KEEP_DAYS: Final = 90
-DEFAULT_DAILY_KEEP_DAYS: Final = 45
-DEFAULT_MONTHLY_WINDOW_MONTHS: Final = 13
-DEFAULT_MAX_PERIODS_PER_RUN: Final = 8
-DEFAULT_MAX_RAW_FILES_PER_PERIOD: Final = 2000
-DEFAULT_COMPACT_AFTER_DAYS: Final = DEFAULT_CLOSED_AFTER_DAYS
-
 #: How many days after a workflow run GitHub still lets it be re-run. A re-run
 #: writes into the day its run first wrote, so a month must stay open to it for
 #: at least this long. GitHub's number, not a knob: nothing here can move it.
@@ -400,10 +396,6 @@ GITHUB_LARGE_FILE_BYTES: Final = 50 * 1024 * 1024
 JANUARY_DAYS: Final = 31
 
 
-def _default_monthly_window() -> Window:
-    return MonthsWindow(unit="months", value=DEFAULT_MONTHLY_WINDOW_MONTHS)
-
-
 class CompactionPolicy(_Declared):
     """A task that rolls one ledger's raw files into its daily and monthly periods.
 
@@ -411,7 +403,10 @@ class CompactionPolicy(_Declared):
     bound what it deletes are fixed here: `window` is `forever` and
     `max_deletes_per_run` is null. A declaration that sets `monthly_keep_days`
     also packs each finished year's month files into one yearly file, kept for
-    ever.
+    ever. It has two switches, because packing loses no row and its monthly
+    window does: `dry_run` for the whole pass, and `monthly_window_dry_run` for
+    what the window deletes, so a ledger can pack live while its window only
+    reports.
     """
 
     kind: Literal[TaskKind.COMPACTION]
@@ -434,7 +429,6 @@ class CompactionPolicy(_Declared):
         )
     )
     raw_index_keep_days: int = Field(
-        default=DEFAULT_RAW_INDEX_KEEP_DAYS,
         ge=1,
         description=(
             "How many days after a UTC day ends its raw listing survives. Never shorter "
@@ -442,7 +436,6 @@ class CompactionPolicy(_Declared):
         ),
     )
     daily_keep_days: int = Field(
-        default=DEFAULT_DAILY_KEEP_DAYS,
         ge=GITHUB_RERUN_DAYS + 1,
         description=(
             "How many days after a UTC month ends it is absorbed into its monthly file. "
@@ -451,7 +444,6 @@ class CompactionPolicy(_Declared):
         ),
     )
     monthly_window: Window = Field(
-        default_factory=_default_monthly_window,
         description=(
             "How long a monthly file survives once its month is absorbed. Month M goes "
             "at the instant month M plus this window is absorbed, so the period holds "
@@ -460,8 +452,17 @@ class CompactionPolicy(_Declared):
             "packed into its year."
         ),
     )
+    monthly_window_dry_run: bool = Field(
+        description=(
+            "True keeps every file monthly_window would delete - each month file past "
+            "it and each raw day in a month past it - and packs those days and months "
+            "like the rest. The record counts the files kept in selected and not in "
+            "deleted, so selected minus deleted is what turning the window live would "
+            "take. False lets the window delete them. With dry_run true a pass changes "
+            "nothing either way."
+        )
+    )
     monthly_keep_days: int | None = Field(
-        default=None,
         ge=1,
         description=(
             "How many whole days after a UTC year ends, at 00:00 UTC on 1 January, its "
@@ -472,7 +473,6 @@ class CompactionPolicy(_Declared):
         ),
     )
     max_periods_per_run: int = Field(
-        default=DEFAULT_MAX_PERIODS_PER_RUN,
         ge=1,
         description=(
             "The most days, and separately the most months and the most years, one pass "
@@ -480,12 +480,10 @@ class CompactionPolicy(_Declared):
         ),
     )
     max_raw_files_per_period: int = Field(
-        default=DEFAULT_MAX_RAW_FILES_PER_PERIOD,
         ge=1,
         description="The most raw files one period may be built from in one pass.",
     )
     compact_after_days: int = Field(
-        default=DEFAULT_COMPACT_AFTER_DAYS,
         ge=1,
         description=(
             "How many whole days after a UTC day ends before that day may be compacted, "
