@@ -1,9 +1,9 @@
 /**
  * What does a page keep of what the query door fetched, and of what it told the console?
  *
- * Each index it read, the name the engine holds each data file under, and each
- * line it printed, so nothing crosses the network or enters the engine twice,
- * and no line reaches the console twice.
+ * Each index it read, the name the engine holds each file it fetched whole under,
+ * and each line it printed, so no index or whole file crosses the network or
+ * enters the engine twice, and no line reaches the console twice.
  *
  * A keeper lives as long as whoever made it. In a browser, `ledger.ts` makes one
  * on first use and keeps it until the page is reloaded, so every panel the page
