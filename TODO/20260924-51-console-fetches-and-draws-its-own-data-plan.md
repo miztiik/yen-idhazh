@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-01
 
-**Status**: Rows 3 and 10 are merged, as is plan 56's fresh-address prerequisite. Row 8's second pass is in flight on its existing branch. Row 11 is in flight in p51r11. They run in separate worktrees; row 8 merges first, and row 11 then takes main in before its final checks.
+**Status**: Rows 3 and 10 are merged, as is plan 56's fresh-address prerequisite. Row 8's second pass is complete in PR #1171 and awaits the owner's merge. Row 11 is in flight in p51r11. They run in separate worktrees; row 8 merges first, and row 11 then takes main in before its final checks.
 
 **Level**: 5 (CLAUDE.md section 6). Row 3 decides whether `state/` reaches a browser, which is a publishing contract, and sections 2.6 to 2.9 are the design contract the panels are built to. The other rows are Level 2 to Level 3 and carry no contract change beyond one copied settlement key.
 
@@ -213,7 +213,7 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | DONE | p51r5 | #1143 | p51-r5-worker |
 | 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | DONE | p51r6 | #1144 | p51-r6-worker |
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | DONE | p51r7 | #1154 | p51-r7-worker |
-| 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9, 10 | D | IN-FLIGHT | p51r8 | #1171 | p51-r8-pass-b |
+| 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9, 10 | D | DONE | p51r8 | #1171 | p51-r8-pass-b |
 | 9 | The door keeps what it fetched for the page's life, and says how far a ledger reaches | 7 | C | DONE | p51r9 | #1157 | p51-r9-worker |
 | 10 | Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily | 7, 9 | C | DONE | p51r10 | #1177 | p51-r10-worker-2 |
 | 11 | The span-rollup ledger is deleted, and one item's trace is a command | 3 | E | IN-FLIGHT | p51r11 | - | p51-r11-worker |
@@ -1169,6 +1169,30 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   - **Files added to pass A**: `frontend/src/lib/console/machine/FleetDots.svelte` (new), `MachineCard.svelte`, `MachineSplitGroup.svelte`, `machine-cards.ts` and `machine-split.ts` (the three panels move together), `MemoryBoardPanel.svelte` and the route's `+page.svelte` (the hatch angle), `readout.ts` (`columnPick`), `d3/dateSeries.ts`, `d3/ordered-colour.ts`, `frontend/tests/platform-mix.spec.ts` (new, logic group) and `tests/fixtures/platform-mix/` in place of `console-fleet.spec.ts`, `chart-vocabulary.spec.ts`, `panel-sufficiency.spec.ts`, `console-machine-cards.spec.ts`, `frontend/tests/fixtures/one-pass-golden.json`, `frontend/scripts/test-groups.ts`, `docs/concepts/config/appearance.md`, `docs/architecture/publishing/console-machine.md`, both config contracts' changelogs, and `backend/tests/contracts/test_app_config.py`.
 
 ---
+
+### Row 8 pass B completion
+
+The panel reads the published machine ledger after mount, keeps the shared
+colour ramp, and no longer serializes fleet rows. Its window is bounded by the
+packed record. The real reader supplies all four states and the drill-through
+reuses fetched rows. The add-on is prepared outside tests; the real worker's
+request reaches the production service worker; content-named engine files
+survive an unchanged deploy. Fresh year addresses and named missing-file faults
+are unchanged.
+
+The cold-load check keeps the four-hop limit. Separate real-response gates
+prove data and engine downloads are independent; a planted serial wait makes
+the normal budget assertion fail. The two shared layout fixes are separate
+commits: wrapped readouts and date-axis endpoint labels. Their current rules
+live on the [shared chart page](../docs/concepts/console-design/the-rules-every-console-chart-obeys.md).
+
+Code candidate `eaec3fa33` passed CI run `36914917243`: 5,944 backend tests,
+465 frontend logic tests, 1,480 browser tests and 53 tooling tests. All seven
+jobs passed, including whole-day. Local real and canary smoke, six native
+width/theme captures, four-state gates, worker CSP, file reuse and cache
+retirement passed. Susan's final ruling is SHIP. Sparse views keep their
+reserved plot space and small job squares. No further implementation remains
+in this row; the owner merges PR #1171 before row 11.
 
 ### Row #9 - The door keeps what it fetched for the page's life, and says how far a ledger reaches
 

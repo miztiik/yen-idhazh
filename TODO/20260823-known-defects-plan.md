@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 **Twenty-seven defects are open.** Three of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
@@ -381,6 +381,10 @@ drawn with instead. Level 2 - two panels, each checked by name in both themes.
 reading in the reserved grey's stripes from `absentHatch`, at
 `console.absent_hatch_degrees`, the same hatch the machine-kinds panel draws a
 machine with no speed reading in. What is left is the run timeline's overrun.
+
+Plan 51 row 8's final real and canary captures verify the no-reading texture in
+both themes. PR #1171 closes that half; the timeline half remains with its
+existing plan 52 row and is not part of the row 8 completion.
 
 Found on 2026-09-27 by plan 51's row 4, which built the hatch builder.
 

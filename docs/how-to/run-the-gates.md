@@ -763,7 +763,7 @@ the same derivation the config runs:
 node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd).digest.readUInt32BE(0)%10000)"
 ```
 
-Three traps make this suite lie to you.
+Check these conditions before trusting browser evidence.
 
 - **`frontend/build` is one shared directory.** `npm run build` and
  `npm run build:canary` both write it. If anything rebuilds the real site
@@ -780,6 +780,12 @@ Three traps make this suite lie to you.
  up with several topics cannot be tested here. Put that rule in a pure module
  and unit-test it there - `frontend/src/lib/day-shape.ts` exists for exactly
  this reason.
+
+- **Verify the captured viewport, not only the requested size.** An embedded
+ browser can retain its own viewport. Read `innerWidth` before a width-specific
+ screenshot. If it does not match, use the native Playwright capture runner;
+ do not label that image with the requested width. A hidden embedded page can
+ also suspend animation-frame waits, so make it visible before relying on them.
 
 ## A chart has no plot until somebody scrolls to it
 
