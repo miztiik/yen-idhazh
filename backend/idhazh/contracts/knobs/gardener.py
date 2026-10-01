@@ -59,7 +59,7 @@ class PrunableCollection(StrEnum):
 #: The most file content one shard may download for its tasks, in megabytes of
 #: 1024 * 1024 bytes. An estimate, not a measurement of a limit (Guardrail #10):
 #: a shard checks out only code and config, and a task downloads the day or
-#: month folders it reads - a month of the scores ledger measured 3.5 MB on
+#: month folders it reads - a month of the eval ledger measured 3.5 MB on
 #: 2026-09-30 - so this leaves room for a compaction that catches up on several
 #: months at once. Move it to about twice the largest `downloaded_bytes` of the
 #: first thirty scheduled wakes.

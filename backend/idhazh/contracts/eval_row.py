@@ -1,4 +1,4 @@
-"""One row of the committed eval ledger (`state/raw/scores/`).
+"""One row of the committed eval ledger (`state/raw/summary-quality-evals/`).
 
 Every field is a scalar, because each is one column of a ledger file: CI writes
 the row once and the dashboard reads it, never recomputed at read time.
@@ -269,7 +269,7 @@ class EvalRow(Contract):
             "ledger column survive here alone, because the console reads this column to "
             "draw the model-change boundaries on every day whose identity is a digest "
             "rather than a named input manifest, and it is the only source of them. "
-            "Remove it, and its column from the scores ledger, once no score row the widest "
+            "Remove it, and its column from the eval ledger, once no score row the widest "
             "console window can reach carries one."
         ),
     )

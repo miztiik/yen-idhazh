@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -441,7 +441,7 @@ counterweight's own precision and recall out of the same sixty labels.
 **Those three counterweights are copied onto the label row from 2026-09-03, and
 that is a change of policy rather than of shape.** The read side used to re-join
 `unsupported_numbers`, `hedge_dropped` and `extraction_suspect` from
-the scores ledger on `output_digest`. The ledger keeps every row for ever, so the
+the eval ledger on `output_digest`. The ledger keeps every row for ever, so the
 join still works, but a label that carries its own three values is read with no
 second file beside it - and those three are exactly the precision and recall the
 sixty labels are drawn to buy. `LabelRow` carries the three as
@@ -655,11 +655,11 @@ lead is named. Dropped facts are the larger loss: a flattened hedge changes how 
 sentence reads, and a missing lead means the story's who, what and how-much never
 arrived.
 
-### The reason lives on the published item, not in the score ledger
+### The reason lives on the published item, not in the eval ledger
 
 The console plots these five since 2026-09-05, and the panel had to read them
 from the committed day payloads under `frontend/public/digest/`. **`band_reason`
-is not a column of the scores ledger.** The ledger's 35 columns carry the inputs
+is not a column of the eval ledger.** The ledger's 35 columns carry the inputs
 the reason is decided from - `hhem`, `coverage`, `unsupported_numbers`,
 `hedge_dropped` - and the band, and no reason. `verdict` decides it,
 `assemble.build_day` writes it onto the item, and that is the only place on disk
@@ -857,7 +857,7 @@ Coherence runs in the `work` shard, inside `to_eval_row`, because that is where 
 
 **Where a later plan would start.** [../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md) sketches a judge and names none of these four, which is the useful part - it hands over pieces rather than a design. The venue is [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md), which owns the workflow, the verbs and the tenancy protocol. The night's shape is: draw a sample, ask a model for a verdict on each item, turn the verdicts into one reading. **The label ledger and the review tree are the two that shape fits with nothing added**, because both already draw a sample and seat a person in the verdict chair; swapping the chair is the whole change. The validator and the faithfulness scorer fit it less well - both run on every item rather than on a draw, so a plan for either starts by measuring a model judge against the instrument already there. And where a reading has to move a number, [`../../backend/idhazh/contracts/fitted_similarity_threshold.py`](../../backend/idhazh/contracts/fitted_similarity_threshold.py) is the template that damps it, step-caps it and clamps it. Authority: nobody. This records what section 1a opened; each of the four is an owner decision that has not been asked for.
 
-**Every eval row is kept for ever, and nothing summarises a month.** The rows are the evidence behind every quality claim this project publishes. The month summary they replaced kept totals and distributions, and gave up item-level lookup, a late draw into the label queue, re-banding under new thresholds, an exact percentile and any slice its key did not name - and it existed only so that rows older than fourteen months could be deleted. Keeping the rows keeps all of that, and a chart that wants a monthly figure computes it from the rows when it draws. The cost is bytes, and parquet keeps them small: the eval ledger held 4,893,746 bytes, about 4.9 MB, on 2026-09-30, over 40 days of rows. One estimate put the growth at about 29 MB a year; those first 40 days grew at about 45 MB a year, and the committed size of `state/raw/scores/` and `state/compact/scores/` a year from now settles which is nearer. The `monthly_window` of `config/gardener/compact-scores.json` is `forever`, so the compaction may pack a month and never drops one, and the `scores` task keeps every day of the index the dedupe reads ([The ledger](#every-row-is-kept-and-nothing-summarises-a-month)).
+**Every eval row is kept for ever, and nothing summarises a month.** The rows are the evidence behind every quality claim this project publishes. The month summary they replaced kept totals and distributions, and gave up item-level lookup, a late draw into the label queue, re-banding under new thresholds, an exact percentile and any slice its key did not name - and it existed only so that rows older than fourteen months could be deleted. Keeping the rows keeps all of that, and a chart that wants a monthly figure computes it from the rows when it draws. The cost is bytes, and parquet keeps them small: the eval ledger held 4,893,746 bytes, about 4.9 MB, on 2026-09-30, over 40 days of rows. One estimate put the growth at about 29 MB a year; those first 40 days grew at about 45 MB a year, and the committed size of `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` a year from now settles which is nearer. The `monthly_window` of `config/gardener/compact-summary-quality-evals.json` is `forever`, so the compaction may pack a month and never drops one, and the `summary-quality-evals-index` task keeps every day of the index the dedupe reads ([The ledger](#every-row-is-kept-and-nothing-summarises-a-month)).
 
 ## Rejected alternatives
 
@@ -1010,14 +1010,14 @@ nothing skips
 ### The dedupe is answered by an index, and an index can be wrong
 
 The writer does not read the score rows to answer *do we already hold this
-measurement*. It reads `state/score-index/<YYYY>/<MM>/<DD>/`, which keeps one
+measurement*. It reads `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/`, which keeps one
 fixed-width digest a measurement beside the day file it describes - a read an order
 of magnitude smaller than the rows, exact, with nothing forgotten
 ([growing-reads.md](growing-reads.md)). **It files by the ledger's own day since
 2026-09-13**, because the fill below takes a partition with no index and the rows
 beside it, so two grains in one relationship would be a mapping somebody
 maintains. Its rows carry no date, so the committed history was regenerated by
-`idhazh rebuild-score-index` rather than split.
+`idhazh rebuild-summary-quality-evals-index` rather than split.
 
 **Nothing compares an index that exists against the rows beside it.** Comparing
 means reading those rows, which is the bill the index removes, so the writer
@@ -1035,7 +1035,7 @@ grain the ledger no longer uses is not read at all, because a partition name the
 rule does not recognise is ignored rather than refused
 ([partitions.md](partitions.md)).
 
-**The repair is `idhazh rebuild-score-index`, and it checks its own result.** It
+**The repair is `idhazh rebuild-summary-quality-evals-index`, and it checks its own result.** It
 drops the index for each month it is named, writes it again from the rows beside
 it, then reads the new file back and compares it against the rows in **both
 directions**. A rebuilt index holding a digest the rows cannot produce fails as
@@ -1070,9 +1070,10 @@ months named beside a typo keep the index they had.
 **Every row of the eval ledger is kept for ever, and nothing summarises a month
 of it.** The rows are the evidence behind every quality claim this project
 publishes, and a chart that wants a monthly figure computes it from the rows
-when it draws. The `monthly_window` of `config/gardener/compact-scores.json` is
-`forever`, so the `scores` compaction may pack a month's rows into fewer files
-and never drops one
+when it draws. The `monthly_window` of `config/gardener/compact-summary-quality-evals.json` is
+`forever`, so the `compact-summary-quality-evals` compaction may pack a month's rows into fewer files
+and never drops one, and its `monthly_keep_days` packs a finished year's month
+files into one year file
 ([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md#design-rationale)).
 Why the rows are kept rather than summarised, and what that costs in bytes, is
 the [design rationale](#design-rationale) above.
@@ -1080,7 +1081,7 @@ the [design rationale](#design-rationale) above.
 **The index the dedupe reads keeps every day for the same reason.** An
 observation key carries no date, so an index day dropped would make every
 measurement in it new again, and a count over the ledger would stop being a
-count of items. The `scores` task that owns `state/score-index/` has the window
+count of items. The `summary-quality-evals-index` task that owns `state/summary-quality-evals-index/` has the window
 `forever` and takes nothing; its one live action is folding each closed day
 into one file. The read grows by one file a recorded day, and it is declared
 in [growing-reads.md](growing-reads.md).
@@ -1093,7 +1094,7 @@ has a month it cannot see.
 **It ships in dry run.** The `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a
 schedule, so a file deleted here stops being recoverable once that prune passes
 over it (`CLAUDE.md` section 8). A live compaction deletes a raw file once its
-rows are packed, so the `scores` compaction prints what a live run would pack
+rows are packed, so the `compact-summary-quality-evals` compaction prints what a live run would pack
 and packs nothing; turning it on is a one-line commit somebody takes after
 reading that list.
 

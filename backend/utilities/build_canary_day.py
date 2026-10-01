@@ -129,7 +129,11 @@ FIXTURE_ROW_LEDGERS: Final[dict[LedgerName, tuple[type[FixtureRow], tuple[str, .
 }
 
 #: The ledgers the console reads from packed files, so the fixture packs them.
-PACKED_LEDGERS: Final = (LedgerName.ITEM_HEALTH, LedgerName.HOST_FINGERPRINT, LedgerName.SCORES)
+PACKED_LEDGERS: Final = (
+    LedgerName.ITEM_HEALTH,
+    LedgerName.HOST_FINGERPRINT,
+    LedgerName.SUMMARY_QUALITY_EVALS,
+)
 
 #: The UTC day the fixture's packing pass runs on: two days after the attack
 #: day, the first day the declared rule admits it. A fixed day rather than the
@@ -1552,10 +1556,10 @@ def scored_keys(state: Path) -> dict[str, str]:
     two derivations of one key is how a fixture comes to disagree with the
     contract it stands in for.
     """
-    days = ledger.held_days(state, LedgerName.SCORES)
+    days = ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS)
     return {
         row.item_id: row.url_key
-        for row in ledger.load_days(state, LedgerName.SCORES, days, model=EvalRow)
+        for row in ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, days, model=EvalRow)
     }
 
 
@@ -1742,7 +1746,10 @@ def main() -> int:
         f"wrote {(args.out.parent / source_health.PUBLIC_FILENAME).as_posix()}: "
         f"{census} sources"
     )
-    print(f"filed {scored} scored items into {LedgerName.SCORES.value} through the ledger door")
+    print(
+        f"filed {scored} scored items into {LedgerName.SUMMARY_QUALITY_EVALS.value} "
+        "through the ledger door"
+    )
     print(f"wrote {metrics_path.as_posix()}: 1 day-metrics record")
     print(
         f"wrote {index_root.as_posix()}: {len(indexed)} month(s), "

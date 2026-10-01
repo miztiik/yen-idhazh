@@ -83,10 +83,10 @@ def read_ledger(state_dir: Path) -> list[dict[str, str]]:
     carries every column the contract names and none arrives as a missing key
     inside the arithmetic.
     """
-    if not ledger.held_days(state_dir, LedgerName.SCORES):
+    if not ledger.held_days(state_dir, LedgerName.SUMMARY_QUALITY_EVALS):
         raise ValueError(
-            f"{state_dir.as_posix()} holds no day of the scores ledger, raw or compacted, "
-            "so there is no row to re-band"
+            f"{state_dir.as_posix()} holds no day of the summary-quality-evals ledger, raw "
+            "or compacted, so there is no row to re-band"
         )
     return list(writer.records(state_dir))
 
@@ -173,7 +173,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--state",
         type=Path,
         default=Path("state"),
-        help="The state directory. Every day the scores ledger holds is read.",
+        help="The state directory. Every day the summary-quality-evals ledger holds is read.",
     )
     parser.add_argument("--config", type=Path, default=Path("config"))
     args = parser.parse_args(argv)

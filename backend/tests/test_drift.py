@@ -581,7 +581,9 @@ def test_the_review_reads_its_floor_from_config() -> None:
     assert enough() >= 1
 
 #: What the review prints when neither window holds a row, so there is no day to read.
-NO_DAY: Final = "The scores ledger holds no day in the requested window - nothing was compared"
+NO_DAY: Final = (
+    "The summary-quality-evals ledger holds no day in the requested window - nothing was compared"
+)
 
 
 @pytest.mark.parametrize(

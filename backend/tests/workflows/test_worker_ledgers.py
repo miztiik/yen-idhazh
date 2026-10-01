@@ -352,8 +352,8 @@ def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     promise the eval ledger makes about itself.
 
     **The two now travel as one commit rather than as two staged heads.** A work
-    shard files its rows through the ledger door under `state/raw/scores/` and
-    writes its digests into `state/score-index/<day>/`, and both are inside the
+    shard files its rows through the ledger door under `state/raw/summary-quality-evals/` and
+    writes its digests into `state/summary-quality-evals-index/<day>/`, and both are inside the
     one path the shard stages - so there is no order in which one is committed
     and the other is not.
 
@@ -372,8 +372,8 @@ def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     staged = COMMIT_STAGED_PATHS["work"]
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
     for tree in (
-        ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.SCORES).as_posix(),
-        ledger.tree_relpath(LedgerName.SCORE_INDEX),
+        ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.SUMMARY_QUALITY_EVALS).as_posix(),
+        ledger.tree_relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX),
     ):
         carriers = [path for path in staged if _under(tree, path)]
         assert carriers, f"{tree} is written by this shard and no path in {staged} carries it"

@@ -39,7 +39,7 @@ def test_one_writers_rows_for_a_day_share_one_file(tmp_path: Path) -> None:
     state = tmp_path / "state"
     rows = [row(), row(item_id="ai-02", output_digest="b" * 64)]
     assert put(state, rows) == 2
-    files = ledger.list_raw_files(state, LedgerName.SCORES)
+    files = ledger.list_raw_files(state, LedgerName.SUMMARY_QUALITY_EVALS)
     assert len(files) == 1, "one writer, one day, one file"
     assert files[0].envelope.row_schema_version == EvalRow.schema_version()
     assert ledger.load([files[0].path], model=EvalRow) == rows
@@ -57,7 +57,7 @@ def test_two_days_of_rows_land_in_two_files(tmp_path: Path) -> None:
 
     assert put(state, [september, august]) == 2
 
-    assert [held.envelope.covers for held in ledger.list_raw_files(state, LedgerName.SCORES)] == [
+    assert [held.envelope.covers for held in ledger.list_raw_files(state, LedgerName.SUMMARY_QUALITY_EVALS)] == [
         august.date,
         september.date,
     ]
@@ -76,7 +76,7 @@ def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) 
     again = row(date="2026-08-22", run_id="2026-08-22-1", item_id="ai-07")
     assert put(state, [again], run_id="2026-08-22-1") == 0
     assert len(list(writer.records(state))) == 1
-    assert ledger.held_days(state, LedgerName.SCORES) == ["2026-08-21"]
+    assert ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS) == ["2026-08-21"]
 
 
 def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -> None:
@@ -93,7 +93,7 @@ def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -
     later = row(date="2026-09-14", run_id="2026-09-14-1", item_id="ai-07")
 
     assert put(state, [later], run_id="2026-09-14-1") == 0
-    assert ledger.held_days(state, LedgerName.SCORES) == [held.date]
+    assert ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS) == [held.date]
 
 
 def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> None:

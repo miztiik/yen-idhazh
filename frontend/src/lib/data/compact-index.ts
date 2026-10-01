@@ -28,7 +28,7 @@
 import type { LedgerName } from './slice-shapes';
 
 /** The `CompactIndex` stamp this build reads: `CompactIndex.schema_version()`. */
-export const COMPACT_INDEX_STAMP = '2026-09-30';
+export const COMPACT_INDEX_STAMP = '2026-10-01';
 
 /** How much time one compact file covers. Also the directory name. */
 export const COMPACT_PERIODS = ['daily', 'monthly', 'yearly'] as const;

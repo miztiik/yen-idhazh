@@ -269,7 +269,7 @@ payloads, `day-metrics` and `span-rollup` have no age on the state side, and
 **`public_scores_keep_months` and `public_feed_health_keep_months` were two more
 until 2026-09-16.** They are refused by name now rather than ignored, because a
 config file still spelling one is an operator believing a number nothing reads.
-There is no successor to send them to: the `scores` and `feed-health`
+There is no successor to send them to: the `compact-summary-quality-evals` and `feed-health`
 declarations under `config/gardener/` govern the `state/` ledgers, which are
 still there and keep their own ages.
 

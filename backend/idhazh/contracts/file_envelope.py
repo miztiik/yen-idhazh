@@ -222,6 +222,11 @@ class FileEnvelope(Contract):
     __schema_stem__: ClassVar[str] = "file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-01",
+            change="ledger may name summary-quality-evals, and scores is refused.",
+            why="The eval ledger is named for what it holds; its files were rewritten.",
+        ),
+        ChangelogEntry(
             version="2026-09-30",
             change="period may be yearly, and covers then holds a UTC year, YYYY.",
             why="A finished year's month files may be packed into one year file.",

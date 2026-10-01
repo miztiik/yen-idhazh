@@ -53,8 +53,8 @@ recorded a premise at all.
 Both the summary and the article body are untrusted (Guardrail #11). They print as
 inert terminal text and are sanitized on the way to the note field.
 
-**A draw reaches every row the ledger holds.** The scores ledger
-(`state/raw/scores/`) keeps every row for ever, so no month is out of reach,
+**A draw reaches every row the ledger holds.** The eval ledger
+(`state/raw/summary-quality-evals/`) keeps every row for ever, so no month is out of reach,
 and a run against a ledger with no row refuses instead of reporting a draw of
 zero.
 """
@@ -103,7 +103,7 @@ def _ledger(state_dir: Path) -> list[dict[str, str]]:
     """
     rows = list(_score_records(state_dir))
     if not rows:
-        raise SystemExit("the scores ledger holds no row")
+        raise SystemExit("the summary-quality-evals ledger holds no row")
     return rows
 
 
@@ -130,7 +130,7 @@ def refuse(records: Sequence[dict[str, str]], *, scorer: str, reason: str) -> in
     print(f"reason           {reason}")
     print(RULE)
     print()
-    print("The scores ledger holds these scorers. Only the scorer above can be drawn:")
+    print("The eval ledger holds these scorers. Only the scorer above can be drawn:")
     for pair in labels.pairs(records):
         here = "   <- this scorer" if pair.scorer_version == scorer else ""
         print()

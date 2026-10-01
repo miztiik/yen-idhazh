@@ -58,11 +58,11 @@ _REPLACED_NO_PASS: Final = {
 #: Each recorded task that no longer does what its pass did to a tree it still
 #: owns, why, and the test file that holds what it does now.
 _NO_LONGER_ITS_PASS: Final = {
-    "scores": (
+    "summary-quality-evals-index": (
         "the pass built a summary of each month from the CSV day files, then took the "
-        "score-index days that summary covered. Every eval row is kept for ever now and "
+        "index days that summary covered. Every eval row is kept for ever now and "
         "nothing summarises a month, so the task writes nothing and takes no index day; "
-        "test_scores_task.py holds what it does now"
+        "test_summary_quality_evals_index_task.py holds what it does now"
     ),
 }
 
@@ -73,7 +73,7 @@ _NO_LONGER_ITS_PASS: Final = {
 _MOVED_TO_THE_DOOR: Final = (
     LedgerName.HOST_FINGERPRINT,
     LedgerName.ITEM_HEALTH,
-    LedgerName.SCORES,
+    LedgerName.SUMMARY_QUALITY_EVALS,
 )
 
 

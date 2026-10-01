@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -43,7 +43,7 @@ Because the extension is data on the entry, a builder cannot emit the wrong one.
 
 ## A ledger under the two roots
 
-A ledger that goes through the ledger door files under two roots rather than one: what a writer wrote under `state/raw/`, and what compaction left under `state/compact/` ([persistence.md](persistence.md)). Its grain is `raw-and-compact`, the sixth. `gardener` is the first ledger born at it, `feed-retirements` and `visual-prunes` moved to it on 2026-09-28, and `item-health`, `scores` and `host-fingerprint` followed through a one-time migration ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)).
+A ledger that goes through the ledger door files under two roots rather than one: what a writer wrote under `state/raw/`, and what compaction left under `state/compact/` ([persistence.md](persistence.md)). Its grain is `raw-and-compact`, the sixth. `gardener` is the first ledger born at it, `feed-retirements` and `visual-prunes` moved to it on 2026-09-28, and `item-health`, `summary-quality-evals` and `host-fingerprint` followed through a one-time migration ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)).
 
 **For this grain the `prefix` is the path inside each of the two roots.** Everywhere else it is the path from `state/`, but `["gardener"]` means `state/raw/gardener/` and `state/compact/gardener/`. The family check still passes, because the prefix still opens on the family's name, and the registry refuses any other prefix, because the root builders file the ledger under its own name.
 
@@ -58,7 +58,7 @@ A ledger that goes through the ledger door files under two roots rather than one
 | `seen` | `stages/plan.py` | `stages/plan.py` | the union driver keeps both |
 | `published` | `stages/assemble.py` | `stages/plan.py` | the union driver keeps both |
 | `feed-health` | `stages/plan.py` | `stages/plan.py`, `telemetry/source_health.py`, `telemetry/publish/source_health.py`, `telemetry/publish/console_band.py`, `payload.ts` | cannot happen: one file per writer |
-| `score-index` | `evals/writer.py` | `evals/writer.py` | cannot happen: one file per writer |
+| `summary-quality-evals-index` | `evals/writer.py` | `evals/writer.py` | cannot happen: one file per writer |
 | `span-rollup` | `stages/work.py` | `telemetry/publish/span_rollup.py`, `telemetry/inventory.py`, `span-rollup.ts` | cannot happen: one file per writer |
 | `counterfactual-scores` | `stages/plan.py` | nothing yet | cannot happen: one file per writer |
 | `candidate-models` | `stages/decide.py`, `stages/qualify_decide.py` | nothing yet | cannot happen: one file per writer |
@@ -227,6 +227,8 @@ The config carries where each ledger lives and each family's lifecycle status. I
 **Retention stays with the pass that deletes.** A family's status says whether new rows are written. How long old rows are kept is answered by the retention passes, each from its own knob, and a window written here would be a second place to set it. So pausing a family does not freeze its old rows; pausing the pass that deletes them does.
 
 **The field is `lifecycle_status`, not `state`.** `state` is already the name of the folder every ledger sits in, so `state: paused` in a file that describes `state/` reads as a claim about the folder. `lifecycle_status` says what it is - where in its life the family is - and no key in the file is named `state`. The Python enum is `LedgerLifecycleStatus`, so it cannot be mistaken for the `LifecycleStatus` that `contracts/taxonomy.py` uses for desks, lenses and feeds.
+
+**The eval ledger is `summary-quality-evals`, and its ID folder `summary-quality-evals-index`.** The ledger was `scores`, one of seven ledger names with "score" in them, and the name said neither what was scored nor that each row is a measurement. Each row is an evaluation of how good one summary is, so the name says that. `summary-quality` alone stays free for the fitted quality thresholds, which are a different ledger. The ID folder holds the identity of every measurement the ledger holds, so it takes the ledger's name and `-index`; a task's declaration is paired with its module by name, so its retention task, the rebuild stage and the rebuild command take the folder's name too. **The old name has no alias.** A ledger file names its ledger in its envelope and in every row, and a day listing, a compact index and a watermark name it too, so an alias would be a second registry entry that nothing ever rewrites. Every committed file was rewritten under the new name instead, each keeping its `unit_id`, `file_id`, `written_at_ms` and every row's identity cells, because a reader settles by them. `backend/utilities/eval_ledger_rename.py` did it, and it proves every row reads back before it deletes an old file.
 
 **A family carries no owner field.** Owner decision, 2026-09-27. An owner would say who answers for a family. One identity commits to this repository (CLAUDE.md section 8), so the field would hold the same value on every family and tell a reader nothing. The code that answers for a family is found by a search for its `LedgerName` members, because a module that reads or writes a ledger names it by its member and by nothing else.
 

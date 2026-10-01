@@ -250,7 +250,7 @@ _SUMMARY_SERIES: Final[Mapping[str, str]] = MappingProxyType({"telemetry-aggrega
 #: keeps its window equal to its full-grain one, so that series stands for it.
 _CONSOLE_READS: Final[tuple[tuple[str, str | None], ...]] = (
     ("feed-health", None),
-    ("scores", None),
+    ("summary-quality-evals-index", None),
     ("telemetry-aggregate", FULL_GRAIN),
     ("telemetry-aggregate", PUBLIC_COPY),
 )

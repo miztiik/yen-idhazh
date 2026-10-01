@@ -579,7 +579,7 @@ class TestTheRow:
     def test_the_row_carries_the_counterweights_its_tags_are_measured_against(self) -> None:
         """A label copies the three counterweights its tags are measured against.
 
-        The scores ledger keeps every row, so a re-join on `output_digest` still
+        The eval ledger keeps every row, so a re-join on `output_digest` still
         works, but a label that carries its own three is read with no second
         file beside it - and they are exactly the precision and recall the sixty
         labels are drawn to buy.

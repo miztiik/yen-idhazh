@@ -61,30 +61,30 @@
       ]
     },
     {
-      "name": "scores",
+      "name": "summary-quality-evals",
       "lifecycle_status": "active",
       "description": "How every published summary scored, one row per measurement.",
       "onboarded": "2026-08-31",
       "ledgers": [
         {
-          "name": "scores",
+          "name": "summary-quality-evals",
           "grain": "raw-and-compact",
-          "prefix": ["scores"],
+          "prefix": ["summary-quality-evals"],
           "stem": null,
           "suffix": null
         }
       ]
     },
     {
-      "name": "score-index",
+      "name": "summary-quality-evals-index",
       "lifecycle_status": "active",
-      "description": "Which measurements the scores already hold, so one summary is not counted twice.",
+      "description": "Which measurements the summary-quality evals already hold, so one summary is not counted twice.",
       "onboarded": "2026-09-08",
       "ledgers": [
         {
-          "name": "score-index",
+          "name": "summary-quality-evals-index",
           "grain": "tree",
-          "prefix": ["score-index"],
+          "prefix": ["summary-quality-evals-index"],
           "stem": null,
           "suffix": null
         }

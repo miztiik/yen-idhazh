@@ -373,7 +373,8 @@ keeps reading a projection it cannot see all of.
 The console's `What the model did` section is not drawn from the published
 shards. It is computed while the site is built, out of two private ledgers:
 
-- the scores ledger, under `state/raw/scores/` and `state/compact/scores/` - one
+- the eval ledger, `summary-quality-evals`, under `state/raw/summary-quality-evals/`
+  and `state/compact/summary-quality-evals/` - one
   row per scored item.
 - the item-health ledger, under `state/raw/item-health/` and
   `state/compact/item-health/` - one row per planned item per run.
@@ -388,7 +389,7 @@ says only where each figure comes from.
 
 | On screen | Counts | Read from |
 | --- | --- | --- |
-| Summaries today | rows the score ledger holds for the day | the scores ledger |
+| Summaries today | rows the eval ledger holds for the day | the eval ledger |
 | Marked "not sure" | rows in the lowest confidence band | `band` |
 | Numbers not in the article | rows asserting a figure the article never gave | `unsupported_numbers` |
 | "Maybe" told as fact | rows that turned the article's hedge into an assertion | `hedge_dropped` |

@@ -44,13 +44,14 @@ def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     assert isinstance(folded.series["aggregate"], ForeverWindow), (
         "config/gardener/telemetry-aggregate.json deletes its aggregate series"
     )
-    packed = tasks["compact-scores"]
+    packed = tasks["compact-summary-quality-evals"]
     assert isinstance(packed, CompactionPolicy)
     assert isinstance(packed.monthly_window, ForeverWindow), (
-        "config/gardener/compact-scores.json drops a month of eval rows"
+        "config/gardener/compact-summary-quality-evals.json drops a month of eval rows"
     )
-    assert isinstance(tasks["scores"].window, ForeverWindow), (
-        "config/gardener/scores.json takes a day of the index the dedupe reads"
+    assert isinstance(tasks["summary-quality-evals-index"].window, ForeverWindow), (
+        "config/gardener/summary-quality-evals-index.json takes a day of the index the "
+        "dedupe reads"
     )
 
 
@@ -77,8 +78,16 @@ MOVED_TO_A_DECLARATION = [
     ("observability", "trace_window_days", "config/gardener/traces.json"),
     ("observability", "feed_health_keep_months", "config/gardener/feed-health.json"),
     ("observability", "host_fingerprint_keep_months", "config/gardener/host-fingerprint.json"),
-    ("observability", "scores_full_grain_months", "config/gardener/compact-scores.json"),
-    ("observability", "score_archive_keep_months", "config/gardener/compact-scores.json"),
+    (
+        "observability",
+        "scores_full_grain_months",
+        "config/gardener/compact-summary-quality-evals.json",
+    ),
+    (
+        "observability",
+        "score_archive_keep_months",
+        "config/gardener/compact-summary-quality-evals.json",
+    ),
     (
         "observability",
         "item_health_full_grain_months",

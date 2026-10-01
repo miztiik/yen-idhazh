@@ -46,8 +46,8 @@ class LedgerName(StrEnum):
     FEED_HEALTH = "feed-health"
     ITEM_HEALTH = "item-health"
     HOST_FINGERPRINT = "host-fingerprint"
-    SCORES = "scores"
-    SCORE_INDEX = "score-index"
+    SUMMARY_QUALITY_EVALS = "summary-quality-evals"
+    SUMMARY_QUALITY_EVALS_INDEX = "summary-quality-evals-index"
     CANDIDATE_MODELS = "candidate-models"
     ITEM_HEALTH_SUMMARY = "item-health-summary"
     SPAN_ROLLUP = "span-rollup"
@@ -76,7 +76,7 @@ class LedgerName(StrEnum):
 DAY_TREES: Final[frozenset[LedgerName]] = frozenset(
     {
         LedgerName.SPAN_ROLLUP,
-        LedgerName.SCORE_INDEX,
+        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         LedgerName.CANDIDATE_MODELS,
         LedgerName.FEED_HEALTH,
         LedgerName.COUNTERFACTUAL_SCORES,

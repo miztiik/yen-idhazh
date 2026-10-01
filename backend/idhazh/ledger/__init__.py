@@ -103,6 +103,7 @@ from idhazh.ledger.persist import (
     read_envelope,
     render_grouped_period,
     render_period,
+    render_renamed,
 )
 from idhazh.ledger.raw_files import (
     RawFile,
@@ -174,6 +175,7 @@ __all__ = [  # noqa: RUF022
     "read_envelope",
     "render_grouped_period",
     "render_period",
+    "render_renamed",
     # raw_files.py: which raw files hold a ledger's current rows, and what they are.
     "RawFile",
     "list_raw_files",

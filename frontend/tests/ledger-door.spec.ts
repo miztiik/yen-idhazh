@@ -346,7 +346,7 @@ test.describe('the four states, before the engine is needed', () => {
 
 	const unreadable: [string, Rule][] = [
 		['not JSON', { status: 200, body: new TextEncoder().encode('{"entries": [') }],
-		['another ledger', reshaped({ ledger: 'scores' })],
+		['another ledger', reshaped({ ledger: 'summary-quality-evals' })],
 		['entries out of order', reshaped({ entries: [{ covers: '2026-09-02', rows: 1, bytes: 1 }, { covers: '2026-09-01', rows: 1, bytes: 1 }] })],
 		['a month in a daily index', reshaped({ entries: [{ covers: '2026-09', rows: 1, bytes: 1 }] })],
 		['a year in a daily index', reshaped({ entries: [{ covers: '2026', rows: 1, bytes: 1 }] })],

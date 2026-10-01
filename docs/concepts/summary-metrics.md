@@ -5,7 +5,7 @@
 What one number about one summary means, and what it cannot see.
 
 Somebody arrives here holding a column name - `self_repetition`, `verbatim_run`,
-`extractiveness`, `truncation_flagged` - off the scores ledger, off `EvalRow`,
+`extractiveness`, `truncation_flagged` - off the eval ledger, off `EvalRow`,
 or off a console panel, and wants the sentence that defines it. That is the whole
 question this page answers.
 

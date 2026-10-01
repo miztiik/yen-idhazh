@@ -96,9 +96,14 @@ type Row = ItemHealthRow | EvalRow | HostFingerprintRow
 #: Each ledger this moves, and the contract and key its rows were settled by.
 LEDGERS: Final[dict[LedgerName, tuple[type[Row], tuple[str, ...]]]] = {
     LedgerName.ITEM_HEALTH: (ItemHealthRow, ledger.ITEM_HEALTH_KEY),
-    LedgerName.SCORES: (EvalRow, ledger.OBSERVATION_KEY),
+    LedgerName.SUMMARY_QUALITY_EVALS: (EvalRow, ledger.OBSERVATION_KEY),
     LedgerName.HOST_FINGERPRINT: (HostFingerprintRow, ledger.HOST_FINGERPRINT_KEY),
 }
+
+#: A ledger whose CSV tree sat under a name it no longer has. The eval ledger's
+#: sat at `scores/`. Removal condition: delete this pin on 2026-10-30, when
+#: GitHub's 30-day re-run window closes on the last run that wrote that tree.
+_CSV_FOLDERS: Final[dict[LedgerName, str]] = {LedgerName.SUMMARY_QUALITY_EVALS: "scores"}
 
 
 class NotProvenError(Exception):
@@ -107,7 +112,7 @@ class NotProvenError(Exception):
 
 def csv_root(state_dir: Path, which: LedgerName) -> Path:
     """Where this ledger's CSV day tree sat: `<ledger>/` at the top of the state tree."""
-    return state_dir / which.value
+    return state_dir / _CSV_FOLDERS.get(which, which.value)
 
 
 def csv_days(state_dir: Path, which: LedgerName) -> dict[str, list[Path]]:

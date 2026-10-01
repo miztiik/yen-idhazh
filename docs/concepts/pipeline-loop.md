@@ -179,7 +179,7 @@ bytes for. Now the day directory is the ledger. The gardener's closed-day fold
 still runs, but only over a day no run will write again: it folds that day's
 writer files into one `settled.csv` to save files, and it changes no answer.
 
-The item-health, scores and host-fingerprint ledgers have since moved to the
+The item-health, summary-quality-evals and host-fingerprint ledgers have since moved to the
 ledger door: each writer's file is a raw file under `state/raw/<ledger>/`, and a
 compaction rather than a fold packs a finished day
 ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).

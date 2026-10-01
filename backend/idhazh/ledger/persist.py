@@ -17,6 +17,8 @@ its first after the day was compacted. `render_period` builds that same file and
 writes nothing, for a pass that only reports. `render_grouped_period` builds one
 from groups of rows held one group at a time, each group its own row group, for
 a period too big to hold whole - a year, built one month at a time.
+`render_renamed` builds a file that already exists again under another ledger's
+name and changes nothing else, for a ledger whose name moves.
 
 Two formats behind one door: parquet, and JSON lines a person can read in a
 pull request. `ledger/parquet.py` is the only module that imports the engine, and
@@ -95,7 +97,7 @@ class StoredRow[C: Contract]:
 
 @dataclass(frozen=True, slots=True)
 class PeriodFile:
-    """One compact period's file, built: where it goes, every byte of it, and its rows."""
+    """One ledger file, built: where it goes, every byte of it, and its rows."""
 
     path: Path
     data: bytes
@@ -548,6 +550,84 @@ def persist_period[C: Contract](
     )
     atomic_write.write_atomic_bytes(built.path, built.data)
     return built.path
+
+
+def render_renamed[C: Contract](
+    state_dir: Path,
+    metadata: Mapping[bytes, bytes],
+    stored: Sequence[Mapping[str, Any]],
+    *,
+    model: type[C],
+    ledger: LedgerName,
+) -> PeriodFile:
+    """One ledger file built again under another ledger's name, and written nowhere.
+
+    `metadata` and `stored` are the file's envelope and rows as its container
+    holds them, taken before any check, because a build refuses a name it no
+    longer declares. Only the name changes, in the envelope and in every row.
+    Every other envelope key keeps its bytes - `unit_id`, `file_id`,
+    `written_at_ms`, the writer's identity, both version stamps, the
+    compression - and every row keeps its identity cells and its columns,
+    because a reader settles by those cells and a compact row carries no
+    producer to mint them from again. `content_sha256` is taken over the renamed
+    rows, and `writer_version` names the engine that rendered them.
+
+    Everything is checked before a byte is built - the envelope, every row's
+    identity cells, every row as `model` - so a file this build could not read
+    back is refused rather than rewritten. So is a column `model` does not
+    declare, because the container would drop it in silence.
+    """
+    renamed = {**metadata, b"ledger": ledger.value.encode("utf-8")}
+    envelope = FileEnvelope.from_metadata(renamed)
+    where = f"{ledger.value} {envelope.covers}"
+    if envelope.row_schema_version > model.schema_version():
+        raise ValueError(
+            f"{where}: rows written under {model.__name__} {envelope.row_schema_version}, and "
+            f"this build reads {model.schema_version()}. Rename it with a build at least as new"
+        )
+    known = {column.name: column for column in _columns(model)}
+    cells = [{**row, "ledger": ledger.value} for row in stored]
+    held = list(cells[0]) if cells else list(known)
+    strangers = sorted(set(held) - set(known))
+    if strangers or any(set(row) != set(held) for row in cells):
+        raise ValueError(
+            f"{where}: the rows hold columns {model.__name__} does not declare ({strangers}), "
+            "or two rows hold different columns, so a rewrite would not keep every cell"
+        )
+    _refuse_an_identity_no_reader_could_read(cells, where=where)
+    added = set(known) - set(model.model_fields)
+    for row in cells:
+        try:
+            model.model_validate({key: value for key, value in row.items() if key not in added})
+        except ValidationError as refusal:
+            raise ValueError(f"{where}: a row this build refuses: {refusal}") from refusal
+    digest = hashlib.sha256(json_lines.rows_bytes(cells)).hexdigest()
+
+    def restamp(engine: str) -> dict[bytes, bytes]:
+        update = {b"content_sha256": digest.encode("ascii"), b"writer_version": engine.encode()}
+        FileEnvelope.from_metadata(renamed | update)
+        return renamed | update
+
+    if envelope.writer == json_lines.__name__:
+        fmt = Format.JSON
+        data = json_lines.render(cells, envelope=restamp(json_lines.engine_version()))
+    else:
+        from idhazh.ledger import parquet
+
+        if envelope.writer != parquet.__name__:
+            raise ValueError(f"{where}: {envelope.writer} wrote it, and no container here reads it")
+        fmt = Format.PARQUET
+        data = parquet.render(
+            [known[name] for name in held],
+            cells,
+            envelope=restamp(parquet.engine_version()),
+            compression=envelope.compression,
+        )
+    if envelope.period is None:
+        path = raw_path(state_dir, ledger, envelope.covers, envelope.file_id, fmt=fmt)
+    else:
+        path = compact_path(state_dir, ledger, envelope.period, envelope.covers, fmt=fmt)
+    return PeriodFile(path, data, len(cells))
 
 
 def _opened(path: Path) -> tuple[FileEnvelope, list[dict[str, Any]]]:

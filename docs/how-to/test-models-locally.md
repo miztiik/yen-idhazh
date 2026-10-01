@@ -198,7 +198,7 @@ backend/var/run/2026-08-22/items/*.summary.json what the model wrote
 backend/var/run/2026-08-22/items/*.eval.json what it scored
 frontend/public/digest/2026/08/22/digest.json the published day
 frontend/public/digest/2026/08/22/*.json any published visual
-state/raw/scores/2026/08/22/*.parquet one row per scored item
+state/raw/summary-quality-evals/2026/08/22/*.parquet one row per scored item
 ```
 
 ## Read the timings

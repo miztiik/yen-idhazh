@@ -207,9 +207,9 @@ days, and drives the one picked day from both figures.
 
 ## Time per item, by stage
 
-Stage timing medians read from the item-health ledger, not from the scores
+Stage timing medians read from the item-health ledger, not from the eval
 ledger. The item-health ledger has one row per planned item, so it
-can answer "is it getting slower" even when the scorer did not run; the score
+can answer "is it getting slower" even when the scorer did not run; the eval
 ledger owns faithfulness and scorer time for the scored subset, and never carried
 these columns.
 

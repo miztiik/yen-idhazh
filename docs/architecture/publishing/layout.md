@@ -36,8 +36,8 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/run.json append-only runs[] for that dat
 frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json  optional visual, drawn in the browser
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
-state/raw/scores/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice, kept for ever
-state/score-index/<YYYY>/<MM>/<DD>/ the identity of every measurement that day holds, 76 bytes each
+state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice, kept for ever
+state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/ the identity of every measurement that day holds, 76 bytes each
 ```
 
 ```

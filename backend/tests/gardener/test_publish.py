@@ -285,7 +285,7 @@ def test_the_commit_listing_names_the_owned_folders_it_holds_and_every_child_of_
     shutil.rmtree(checkout / "state" / "seen")
 
     listed = gardener_publish.Checkout(checkout).committed_folders(
-        ["state/seen/", "state/score-index", "state/raw/visual-prunes", "frontend/public/digest"]
+        ["state/seen/", "state/summary-quality-evals-index", "state/raw/visual-prunes", "frontend/public/digest"]
     )
 
     assert listed == {

@@ -206,7 +206,7 @@ def test_one_published_item_is_both_an_abstract_and_cut() -> None:
 
 def filed_rows(state: Path) -> list[EvalRow]:
     """The day's score rows as the ledger door reads them back."""
-    return ledger.load_days(state, LedgerName.SCORES, [build_canary_day.DATE], model=EvalRow)
+    return ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, [build_canary_day.DATE], model=EvalRow)
 
 
 def test_the_scores_are_filed_by_the_pipelines_writer(tmp_path: Path) -> None:
@@ -250,10 +250,10 @@ def test_filing_the_same_day_twice_adds_nothing(tmp_path: Path) -> None:
     items, settings = published(), evaluation()
     assert build_canary_day.file_scores(tmp_path, items, settings) == len(items)
     once = filed_rows(tmp_path)
-    files = ledger.list_raw_files(tmp_path, LedgerName.SCORES)
+    files = ledger.list_raw_files(tmp_path, LedgerName.SUMMARY_QUALITY_EVALS)
 
     assert build_canary_day.file_scores(tmp_path, items, settings) == 0
     assert filed_rows(tmp_path) == once
-    assert ledger.list_raw_files(tmp_path, LedgerName.SCORES) == files, (
+    assert ledger.list_raw_files(tmp_path, LedgerName.SUMMARY_QUALITY_EVALS) == files, (
         "a second write that filed nothing still left a file"
     )

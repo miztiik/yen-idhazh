@@ -135,7 +135,7 @@ def read_windows(state_dir: Path, *, today: date, recent_days: int, baseline_day
     dates = days_in_window(
         (today - timedelta(days=1)).isoformat(), recent_days + baseline_days - 1
     )
-    rows = ledger.load_days(state_dir, LedgerName.SCORES, dates, model=EvalRow)
+    rows = ledger.load_days(state_dir, LedgerName.SUMMARY_QUALITY_EVALS, dates, model=EvalRow)
     for row in rows:
         when = date.fromisoformat(row.date)
         if not baseline_start <= when < today:
@@ -393,8 +393,8 @@ def report(
         )
     if not windows.days_read:
         lines.append(
-            f"The {LedgerName.SCORES.value} ledger holds no day in the requested window "
-            "- nothing was compared"
+            f"The {LedgerName.SUMMARY_QUALITY_EVALS.value} ledger holds no day in the "
+            "requested window - nothing was compared"
         )
         return "\n".join(lines), 1
     thin = shortfall(windows.recent, windows.baseline, config.min_window_rows)

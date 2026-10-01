@@ -17,8 +17,8 @@ about it, and each one is on the surface that already owns its grain.
 
 | Figure | Where | Grain | Read from |
 | --- | --- | --- | --- |
-| `Article read only in part` | the model table | one day | the scores ledger |
-| `Read only in part, as a percent` | the model table | one day | the scores ledger |
+| `Article read only in part` | the model table | one day | the eval ledger |
+| `Read only in part, as a percent` | the model table | one day | the eval ledger |
 | `Time to write one`, second figure | the model table | one day | the item-health ledger |
 | `Too long to send` | the model table | one day | the item-health ledger |
 | `n read only in part` | the run square's own label | one run | the item-health ledger |

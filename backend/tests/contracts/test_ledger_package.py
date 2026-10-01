@@ -550,10 +550,13 @@ def test_the_folder_checks_can_see_what_they_refuse() -> None:
     """
     joined = ast.parse(
         "from idhazh.contracts.ledger_name import LedgerName\n"
-        "root = state_dir / LedgerName.SCORES\n"
+        "root = state_dir / LedgerName.SUMMARY_QUALITY_EVALS\n"
         "other = state_dir.joinpath(LedgerName.SEEN.value, '2026')\n"
     )
-    typed = ast.parse('"""A docstring naming state/scores is prose."""\nROOT = "state/scores"\n')
+    typed = ast.parse(
+        '"""A docstring naming state/summary-quality-evals is prose."""\n'
+        'ROOT = "state/summary-quality-evals"\n'
+    )
 
     assert _hand_joins(joined) == [2, 3]
     assert _typed_folders(typed, ledger.claimed_roots()) == [2]

@@ -69,7 +69,7 @@ def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
     tasks = declared()
     folded, scores, pictures = (
         tasks["telemetry-aggregate"],
-        tasks["compact-scores"],
+        tasks["compact-summary-quality-evals"],
         tasks["visual-prune"],
     )
     assert isinstance(scores, CompactionPolicy)

@@ -63,7 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     # A row is filed under the day its own `date` names, so grouping on that
     # cell gives back each day the door settled.
     settled: dict[str, list[dict[str, str]]] = {}
-    for row in ledger.load_days(args.state_root, LedgerName.SCORES, days, model=EvalRow):
+    evals = LedgerName.SUMMARY_QUALITY_EVALS
+    for row in ledger.load_days(args.state_root, evals, days, model=EvalRow):
         cells = row.csv_row()
         settled.setdefault(cells["date"], []).append(cells)
 

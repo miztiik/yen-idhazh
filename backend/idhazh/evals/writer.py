@@ -1,6 +1,6 @@
 """How the eval ledger's measurements are filed, once each, and indexed.
 
-Filed through the ledger door under `state/raw/scores/`, in the column order the
+Filed through the ledger door under `state/raw/summary-quality-evals/`, in the column order the
 contract defines, and never recomputed at read time. Committing the scores rather
 than deriving them is what makes a
 claim about last quarter a lookup instead of a re-run against a model that has
@@ -24,7 +24,7 @@ repository on 2026-09-07: 7,636 rows over two shards, 6,111.8 KB, 819.6 bytes a
 row, and about 173 MB once the ledger reaches steady state - a bill that rises
 on a day nobody wrote any code, which is what Guardrail #12 refuses. The identity is
 64 hex characters wide, so the ledger keeps a second record of exactly that:
-`state/score-index/<YYYY>/<MM>/<DD>.csv`, 76 bytes an observation, beside the day
+`state/summary-quality-evals-index/<YYYY>/<MM>/<DD>.csv`, 76 bytes an observation, beside the day
 file it describes. Over the same 7,636 measurements that is 566.8 KB against
 6,111.8 KB, so the read is 10.8 times smaller and 90.7 percent of it is gone.
 
@@ -74,7 +74,7 @@ def records(state_dir: Path) -> Iterator[dict[str, str]]:
     is an operator's pass that has to see every measurement
     (`docs/concepts/growing-reads.md`).
     """
-    for row in ledger.load_ledger_rows(state_dir, LedgerName.SCORES, model=EvalRow):
+    for row in ledger.load_ledger_rows(state_dir, LedgerName.SUMMARY_QUALITY_EVALS, model=EvalRow):
         yield row.csv_row()
 
 
@@ -134,7 +134,8 @@ def index_days(state_dir: Path) -> list[Path]:
     """
     return list(
         day_shards.shard_files(
-            ledger.tree_root(state_dir, LedgerName.SCORE_INDEX), days=UNBOUNDED_WINDOW
+            ledger.tree_root(state_dir, LedgerName.SUMMARY_QUALITY_EVALS_INDEX),
+            days=UNBOUNDED_WINDOW,
         )
     )
 
@@ -210,7 +211,7 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
     **An operator command, and no stage calls it.** It opens every row of every
     day it is given - the read the index exists to avoid - so the cover is the
     days the caller names and there is no default (Guardrail #12,
-    `stages.rebuild_score_index.stage_rebuild_score_index`). A day with no committed rows is refused
+    `stages.rebuild_summary_quality_evals_index`). A day with no committed rows is refused
     by name rather than skipped: a typo must not read as a clean pass over
     nothing.
     """
@@ -220,7 +221,7 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
         raise ValueError("rebuild_index was given no day, and a pass over none repairs none")
     absent = [date for date in named if date not in live]
     if absent:
-        raise FileNotFoundError(f"the scores ledger holds no rows for {absent}")
+        raise FileNotFoundError(f"the summary-quality-evals ledger holds no rows for {absent}")
 
     # One stamp for the whole pass, so every day this command repaired carries
     # the same name and an operator can see one repair rather than twenty.
@@ -230,12 +231,13 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
         produced = live[date]
         found[date] = _drift(_indexed_on(state_dir, date), produced)
         if found[date].missing:
-            index = ledger.path(state_dir, LedgerName.SCORE_INDEX, date)
+            index = ledger.path(state_dir, LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date)
             _append_index(index / name, sorted(found[date].missing))
         after = _drift(_indexed_on(state_dir, date), produced)
         if after.missing:
+            where = ledger.relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date)
             raise RuntimeError(
-                f"{ledger.relpath(LedgerName.SCORE_INDEX, date)} still does not hold "
+                f"{where} still does not hold "
                 f"{len(after.missing)} digests the rows beside it produce, after a repair "
                 "that was meant to add them"
             )
@@ -250,7 +252,8 @@ def _indexed_on(state_dir: Path, date: str) -> frozenset[str]:
     a measurement new because another writer's file already held it.
     """
     held: set[str] = set()
-    for path in day_shards.one_day(ledger.tree_root(state_dir, LedgerName.SCORE_INDEX), date):
+    root = ledger.tree_root(state_dir, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
+    for path in day_shards.one_day(root, date):
         held.update(_digests_of_index(path))
     return frozenset(held)
 
@@ -269,7 +272,7 @@ def _digests_by_day(state_dir: Path, days: Iterable[str]) -> dict[str, frozenset
     """
     by_day: dict[str, set[str]] = {}
     named = {day[:10] for day in days}
-    for row in ledger.load_days(state_dir, LedgerName.SCORES, named, model=EvalRow):
+    for row in ledger.load_days(state_dir, LedgerName.SUMMARY_QUALITY_EVALS, named, model=EvalRow):
         by_day.setdefault(row.date, set()).add(observation_digest(row.model_dump(mode="json")))
     return {day: frozenset(held) for day, held in by_day.items()}
 
@@ -336,7 +339,7 @@ def file_measurements(
 
     Two jobs of one run measure items - a work shard as each item settles, and
     assemble over the whole day afterwards - and each files its own raw file
-    under `state/raw/scores/`, named for the writer by the door. Two writers
+    under `state/raw/summary-quality-evals/`, named for the writer by the door. Two writers
     never share a path, so a lost push race costs a merge rather than the rows,
     and a re-run's second attempt replaces its first try instead of colliding
     with it.
@@ -360,7 +363,7 @@ def file_measurements(
     if not ledger.persist(
         state_dir,
         [row for row, _ in fresh],
-        ledger=LedgerName.SCORES,
+        ledger=LedgerName.SUMMARY_QUALITY_EVALS,
         covers=identity.run_id[:10],
         identity=identity,
     ):
@@ -376,7 +379,7 @@ def file_measurements(
     # rows beside it carry.
     ledger.write_segment(
         state_dir,
-        LedgerName.SCORE_INDEX,
+        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         [
             ObservationIndexRow.model_validate({"version": stamp, "observation_digest": digest})
             for _, digest in fresh
