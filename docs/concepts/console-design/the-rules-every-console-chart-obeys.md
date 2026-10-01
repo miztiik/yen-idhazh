@@ -203,11 +203,13 @@ estimate over it only drops one label the axis could have carried.
 even where the date is gone, so the marks come from the ceiling and only the
 dates thin.
 
-**The end labels anchor inwards.** The first and last tick sit ON the plot edges,
-so a centred label there hangs half its width outside the frame and an `svg` cuts
-what hangs. Measured 2026-08-31 at 1440, one axis drew `10,000` 3.2px past its
-own `svg` and read `10,00`. `tickAnchor` is the rule and it binds a value axis as
-well as a date one.
+**An endpoint label uses the room around its actual column.** At a plot edge it
+faces inward, because a centred label there would be clipped. Inset date columns
+pass the plot bounds to `dayTicks`: the first label can face left and the last
+right when that room exists, or remain centred when only half a label fits
+outside. Two dates near the middle must not lose one label merely because both
+were pointed into the gap between them. A lone date stays centred. `tickAnchor`
+still supplies the inward rule for value axes whose endpoints are the edges.
 
 Two console axes are drawn by the engine, and the engine owns where its labels go
 - `hideOverlap` is its own measured rule. What they take from here is the date
