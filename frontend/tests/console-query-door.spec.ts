@@ -3,7 +3,6 @@ import { expect, test } from './support/browser';
 import { machineRecordState, type MachineRecordState } from './support/machine-record-state';
 
 const PANEL = '[data-windowed="machine-fleet"]';
-const INDEX = '/state/compact/host-fingerprint/index/';
 
 for (const state of ['loading', 'missing', 'quiet', 'unreachable'] as const satisfies readonly MachineRecordState[]) {
 	test(`the machine panel draws ${state} from the real index boundary`, async ({ page }) => {
@@ -70,7 +69,7 @@ test('the real query worker loads its cached add-on and obeys the page connectio
 
 test.describe('the production service worker', () => {
 	test.use({ serviceWorkers: 'allow' });
-	test('sees the real query worker requests', async ({ page, context }) => {
+	test('sees the real query worker requests', async ({ page, context, parquet }) => {
 		await page.goto('/console/machine/');
 		await expect(page.locator(PANEL)).toHaveAttribute('data-fleet-state', 'ready');
 		await page.evaluate(async () => { await navigator.serviceWorker.ready; });
@@ -87,12 +86,14 @@ test.describe('the production service worker', () => {
 		});
 		await page.reload();
 		await expect(page.locator(PANEL)).toHaveAttribute('data-fleet-state', 'ready');
+		const controlled = await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? null);
 		const observed = await serviceWorker.evaluate(() =>
 			(globalThis as typeof globalThis & { observedWorkerRequests: string[] }).observedWorkerRequests
 		);
-		expect(observed.some((url) => url.includes(INDEX))).toBe(true);
-		expect(observed.some((url) => /duckdb.*\.wasm(?:\?|$)/.test(url)),
-			'the production service worker must see the dedicated query worker wasm request; do not substitute a proxy').toBe(true);
+		expect(controlled).toBe(serviceWorker.url());
+		expect(page.workers().some((worker) => worker.url().startsWith('blob:'))).toBe(true);
+		expect(observed.filter((url) => url === parquet.addon.url),
+			'the production service worker must see the real query worker add-on request; do not substitute a proxy').toHaveLength(1);
 		console.log(JSON.stringify({ productionServiceWorker: serviceWorker.url(), engineRequests: observed.filter((url) => /duckdb/.test(url)) }));
 	});
 });
