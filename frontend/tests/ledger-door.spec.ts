@@ -784,11 +784,19 @@ test.describe('what a page keeps', () => {
 		expect(engine.registered).toHaveLength(1);
 	});
 
-	test('a data file is read by range at the address its whole fetch would ask for, version and all', () => {
-		const source = fetchedBytes(PREFIX, recorded().fetcher);
-		expect(source.address?.(dataPath(LEDGER, 'yearly', '2026'), '10-20449')).toBe(
-			`${PREFIX}/state/compact/host-fingerprint/yearly/2026/2026.parquet?v=10-20449`
-		);
+	test('each read of a file by range gets an address no earlier read used, under the version its entry names', () => {
+		// The browser keeps the parts it fetched by address, and every deploy gives every
+		// file a new ETag, so a read at an earlier read's address can be sent the whole file.
+		const file = dataPath(LEDGER, 'yearly', '2026');
+		const page = fetchedBytes(PREFIX, recorded().fetcher);
+		const reloaded = fetchedBytes(PREFIX, recorded().fetcher);
+		const addresses = [page.address?.(file, '10-20449'), page.address?.(file, '10-20449'), reloaded.address?.(file, '10-20449')];
+		expect(new Set(addresses).size, addresses.join('\n')).toBe(addresses.length);
+		for (const address of addresses) {
+			const url = new URL(address ?? '');
+			expect(`${url.origin}${url.pathname}`).toBe(`${PREFIX}/state/${file}`);
+			expect(url.searchParams.get('v')).toBe('10-20449');
+		}
 	});
 
 	test('a page keeps its files registered, and a build-time call drops every file it registered when it ends', async () => {
