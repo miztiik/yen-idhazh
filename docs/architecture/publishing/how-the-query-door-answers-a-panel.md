@@ -294,8 +294,7 @@ on 127.0.0.1 that answers the way Pages does. Five facts shape the design.
   `forceFullHTTPReads` on, and then reads a registered address in one GET with no
   `Range`. `engine.ts` opens the database with it off. A read answered 200 rather
   than 206 also makes the engine take the whole body without a word, so the spec
-  requires every GET for a year file to name a range and be answered 206,
-  uncompressed.
+  requires every GET for a year file to name a range and be answered 206.
 - **Pages answers a `HEAD` that carries a `Range` with 200 and the full length.**
   The engine takes a file's length from that `HEAD`, and accepts a 200 only while
   `allowFullHTTPReads` is on, so that setting stays on. The length it opened must
@@ -332,6 +331,26 @@ address no earlier read used is what keeps a deploy from costing a whole file, s
 a published ledger packs a year as soon as its own declaration says
 ([../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship)),
 and a console read may reach a year file.
+
+**Pages compresses a range only when the request accepts compression, measured
+on the live site.** It sends a `.parquet` as `application/octet-stream` and
+compresses it on request like any other file. The eval ledger's day file for
+2026-09-01 is 180,579 bytes, and 166,859 compressed:
+
+| Request | Accepting gzip | Accepting `identity` only |
+| --- | --- | --- |
+| `HEAD`, `Range: bytes=0-` | 200, compressed, length 166,859 | 200, length 180,579 |
+| GET, `Range: bytes=0-0` | 206, compressed, `bytes 0-0/166859` | 206, `bytes 0-0/180579` |
+| GET, `Range: bytes=90000-90999` | 206, compressed, `bytes 90000-90999/166859` | 206, `bytes 90000-90999/180579` |
+
+A browser always asks the second way. The Fetch standard adds
+`Accept-Encoding: identity` to every request that carries a `Range`, and page
+code cannot change that header, because only the browser may set it. Chromium
+sent `identity` with all three against the live site and got the right-hand
+column, so the engine reads a year file's own bytes and opens it at its true
+length, and the spec's host compresses nothing. A request with no `Range`, such
+as a day file fetched whole, does come back compressed, and the browser unpacks
+it before the engine sees it.
 
 **One case is not covered: a deploy inside one read.** A deploy that lands between
 a read's first request and its last gives the file a new ETag mid-read, and the
