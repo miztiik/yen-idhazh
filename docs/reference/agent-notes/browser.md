@@ -14,6 +14,8 @@ Checks before trusting a browser result. Follow the [browser smoke procedure](..
 - Wait for page readiness and enabled controls with retrying assertions. Assert the intended state positively; an absent element must not pass a state check.
 - Use fresh browser contexts for cold-load cases. Distinguish full navigation, client-side routing and fragment-only changes.
 - Prove that a failure test reached its target request. Account for service workers, caches and data already in the document; zero interceptions do not exercise a network failure.
+- Register a browser-context route before navigation to serve a dedicated worker's add-on from a local file. In Playwright 1.62.1 with Chromium 151, this also intercepted requests forwarded by a pass-through service worker; such a request has no page frame. Verify the production service worker separately.
+- Routing disables HTTP caching. A context that intercepts an add-on can prove offline test delivery, but cannot certify browser-cache behavior. Keep cache-sensitive checks separate and count actual requests.
 
 ## Driving components
 
