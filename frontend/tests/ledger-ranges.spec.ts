@@ -28,8 +28,10 @@ import { startRangeHost, type HostRequest, type RangeHost, type Throttle } from 
  * with 200 - so every GET for a year file has to name a range and be answered
  * 206, uncompressed. The rows must be the ones the whole file gives, in the
  * browser and on disk; a year file whose length is not its entry's is refused
- * before any of it is read; and a year file whose ETag changed after the browser
- * kept some of it is still read by range. Day files stay fetched whole.
+ * before any of it is read; and a year file whose ETag changed while the browser
+ * kept some of it is still read by range, because each read asks at an address no
+ * earlier read used, so no request names the ETag the browser kept. Day files
+ * stay fetched whole.
  *
  * The host serves the page, the fixture and the engine's parquet add-on from
  * 127.0.0.1, so the browser reaches no other host. The add-on is the one the
@@ -39,9 +41,9 @@ import { startRangeHost, type HostRequest, type RangeHost, type Throttle } from 
  * 2026-09-28).
  *
  * The last case is the measurement behind reading a year file by range: one
- * month out of a year file of real size, against that month's own file, on a
- * slowed link. It needs the two files, so it runs only where
- * `IDHAZH_RANGE_BENCH_DIR` names a directory holding them.
+ * month out of a year file of real size, against that month's own file, and the
+ * same month read twice on one page, on a slowed link. It needs the two files, so
+ * it runs only where `IDHAZH_RANGE_BENCH_DIR` names a directory holding them.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -121,6 +123,45 @@ async function sliceOn(
 const requestsFor = (asked: HostRequest[], file: string, method: string): HostRequest[] =>
 	asked.filter((one) => one.path === file && one.method === method);
 
+/** A deploy as Pages makes one: the year file under `root` gets a new modification
+ *  time, so a new ETag, over the same bytes. */
+function redeploy(root: string): void {
+	const file = path.join(root, ...YEAR_FILE.split('/'));
+	const moved = new Date(statSync(file).mtimeMs + 3_600_000);
+	utimesSync(file, moved, moved);
+}
+
+/** The version the year file's entry names under `root`: its rows and its bytes. */
+function versionOf(root: string): string {
+	const index = JSON.parse(readFileSync(path.join(root, ...indexPath(LEDGER, 'yearly').split('/')), 'utf8')) as {
+		entries: { rows: number; bytes: number }[];
+	};
+	return `${index.entries[0].rows}-${index.entries[0].bytes}`;
+}
+
+/** One read asked for the year file by range: every GET is answered 206, uncompressed,
+ *  and no request names an ETag other than the one it was answered with. */
+function expectReadByRange(asked: HostRequest[], read: string): void {
+	const year = asked.filter((one) => one.path === YEAR_FILE);
+	const gets = year.filter((one) => one.method === 'GET');
+	expect(gets.length, `${read} asked for no part of the year file`).toBeGreaterThan(0);
+	for (const one of gets) expect(one, `${read}: ${JSON.stringify(one)}`).toMatchObject({ status: 206, contentEncoding: null });
+	for (const one of year) expect([null, one.etag], `${read} named another ETag: ${JSON.stringify(one)}`).toContain(one.ifRange);
+}
+
+/** Each read asked for the year file at one address of its own, under the version its entry names. */
+function expectAddressesOfTheirOwn(reads: HostRequest[][], version: string): void {
+	const used = new Set<string>();
+	for (const [at, asked] of reads.entries()) {
+		const addresses = new Set(asked.filter((one) => one.path === YEAR_FILE).map((one) => one.query));
+		expect([...addresses], `read ${at + 1} asked for the year file at one address`).toHaveLength(1);
+		const [address] = addresses;
+		expect(new URLSearchParams(address).get('v'), `read ${at + 1} at ${address}`).toBe(version);
+		expect(used.has(address), `read ${at + 1} asked at ${address}, where an earlier read asked`).toBe(false);
+		used.add(address);
+	}
+}
+
 test.describe('a year file read by byte range, in a browser', () => {
 	test.describe.configure({ mode: 'serial' });
 
@@ -128,6 +169,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 	let disk: SliceResult;
 	let servedYear: string;
 	let servedFresh: string;
+	let servedReopened: string;
 
 	test.beforeAll(async ({}, testInfo) => {
 		testInfo.setTimeout(180_000);
@@ -137,6 +179,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 		await buildDoorPage();
 		servedYear = copied(YEAR_STATE, 'year-state');
 		servedFresh = copied(YEAR_STATE, 'fresh-state');
+		servedReopened = copied(YEAR_STATE, 'reopened-state');
 		const longer = copied(YEAR_STATE, 'longer-entry');
 		const yearly = path.join(longer, ...indexPath(LEDGER, 'yearly').split('/'));
 		const index = JSON.parse(readFileSync(yearly, 'utf8')) as { entries: { bytes: number }[] };
@@ -145,7 +188,13 @@ test.describe('a year file read by byte range, in a browser', () => {
 		host = await startRangeHost({
 			site: PAGE_BUILD,
 			plain: { ext: addonCache(engineExtensionRepository()) },
-			data: { year: { dir: servedYear }, fresh: { dir: servedFresh }, days: { dir: STATE }, longer: { dir: longer } },
+			data: {
+				year: { dir: servedYear },
+				fresh: { dir: servedFresh },
+				reopened: { dir: servedReopened },
+				days: { dir: STATE },
+				longer: { dir: longer }
+			},
 			maxAge: PAGES_MAX_AGE
 		});
 	});
@@ -217,8 +266,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 			expect(timed.warned.join('\n')).toContain(
 				`${YEAR_FILE} opened at ${size} bytes to be read by range, and its entry says ${size + 1}`
 			);
-			// An opening is one 1-byte GET, which the browser may answer from what it kept,
-			// and one HEAD, which it never does.
+			// An opening is one 1-byte GET and one HEAD, at an address no earlier read used.
 			expect(requestsFor(asked, YEAR_FILE, 'HEAD'), `turn ${turn}`).toHaveLength(1);
 			for (const one of requestsFor(asked, YEAR_FILE, 'GET')) expect(one.range, `turn ${turn}`).toBe('bytes=0-0');
 		}
@@ -233,10 +281,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 			await openDoor(first, host);
 			const before = await sliceOn(first, host, 'year', SPAN);
 			expect(before.timed.result, before.timed.warned.join('\n')).toEqual(disk);
-			// Every Pages deploy gives every file a new modification time, so a new ETag, over the same bytes.
-			const file = path.join(servedYear, ...YEAR_FILE.split('/'));
-			const moved = new Date(statSync(file).mtimeMs + 3_600_000);
-			utimesSync(file, moved, moved);
+			redeploy(servedYear);
 			await first.waitForTimeout(2_000);
 			const second = await context.newPage();
 			await openDoor(second, host);
@@ -251,37 +296,47 @@ test.describe('a year file read by byte range, in a browser', () => {
 	});
 
 	test('a year file whose ETag changed while the browser still holds part of it is still read by byte range', async ({ browser }) => {
-		// Expected to fail. The browser asks for a part it does not hold with `If-Range`
-		// naming the ETag it kept, Pages answers an ETag it no longer serves with the whole
-		// file (measured), and the engine reads that whole file once. The annotation comes
-		// off when the door stops paying it.
-		test.fail();
-		const [year] = (JSON.parse(readFileSync(path.join(servedFresh, ...indexPath(LEDGER, 'yearly').split('/')), 'utf8')) as {
-			entries: { rows: number; bytes: number }[];
-		}).entries;
-		const address = `/fresh/state/${YEAR_FILE}?v=${year.rows}-${year.bytes}`;
+		// A page reads the year file; a deploy then gives it a new ETag over the same bytes
+		// while what the browser kept is still fresh; and the same page reads it again. At
+		// the first read's address the browser would ask for a part it does not hold naming
+		// the ETag it kept, and Pages answers that with the whole file (measured). Each read
+		// asks at an address of its own, and the engine drops the file when the read ends.
 		const context = await browser.newContext();
 		try {
-			// The browser keeps the file's first byte, as the engine's opening GET leaves it; the
-			// fixture is small enough that a whole slice would leave the browser holding all of it.
+			const page = await context.newPage();
+			await openDoor(page, host);
+			const before = await sliceOn(page, host, 'fresh', SPAN);
+			expect(before.timed.result, before.timed.warned.join('\n')).toEqual(disk);
+			expect(await page.evaluate(() => window.door.held()), 'the engine still holds what the read opened').toEqual([]);
+			redeploy(servedFresh);
+			const after = await sliceOn(page, host, 'fresh', SPAN);
+			expect(after.timed.result, after.timed.warned.join('\n')).toEqual(disk);
+			expect(await page.evaluate(() => window.door.held()), 'the engine still holds what the read opened').toEqual([]);
+			expectReadByRange(before.asked, 'the read before the deploy');
+			expectReadByRange(after.asked, 'the read after the deploy');
+			expectAddressesOfTheirOwn([before.asked, after.asked], versionOf(servedFresh));
+		} finally {
+			await context.close();
+		}
+	});
+
+	test('a new page, opened while the browser still holds fresh parts of a year file and after its ETag changed, reads it by byte range', async ({ browser }) => {
+		// Pages sends `max-age=600`, so what one page fetched is still fresh for a page
+		// opened soon after it, and a deploy in between changes the ETag the browser kept.
+		const context = await browser.newContext();
+		try {
 			const first = await context.newPage();
 			await openDoor(first, host);
-			const opened = await first.evaluate(
-				async (url) => (await fetch(url, { headers: { Range: 'bytes=0-0' } })).status,
-				address
-			);
-			expect(opened).toBe(206);
-			// A deploy: the file has a new ETag over the same bytes, and the browser's copy is still fresh.
-			const file = path.join(servedFresh, ...YEAR_FILE.split('/'));
-			const moved = new Date(statSync(file).mtimeMs + 3_600_000);
-			utimesSync(file, moved, moved);
+			const before = await sliceOn(first, host, 'reopened', SPAN);
+			expect(before.timed.result, before.timed.warned.join('\n')).toEqual(disk);
+			redeploy(servedReopened);
 			const second = await context.newPage();
 			await openDoor(second, host);
-			const after = await sliceOn(second, host, 'fresh', SPAN);
-			const gets = requestsFor(after.asked, YEAR_FILE, 'GET');
-			expect(gets.length, 'the second page asked for no part of the year file').toBeGreaterThan(0);
-			for (const one of gets) expect(one, JSON.stringify(one)).toMatchObject({ status: 206, contentEncoding: null });
+			const after = await sliceOn(second, host, 'reopened', SPAN);
 			expect(after.timed.result, after.timed.warned.join('\n')).toEqual(disk);
+			expectReadByRange(before.asked, 'the earlier page');
+			expectReadByRange(after.asked, 'the new page');
+			expectAddressesOfTheirOwn([before.asked, after.asked], versionOf(servedReopened));
 		} finally {
 			await context.close();
 		}
@@ -395,10 +450,13 @@ test('measure: one month out of a year file by byte range, against its month fil
 		from: `${month.covers}-01`,
 		to: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
 	};
-	const cases: { name: string; root: string; choice: RangeChoice; file: string }[] = [
-		{ name: 'month file, whole', root: 'month', choice: 'door', file: dataPath(LEDGER, 'monthly', month.covers) },
-		{ name: 'year file, by range', root: 'year', choice: 'door', file: dataPath(LEDGER, 'yearly', year.covers) },
-		{ name: 'month file, by range', root: 'month', choice: 'every-file', file: dataPath(LEDGER, 'monthly', month.covers) }
+	const monthFile = dataPath(LEDGER, 'monthly', month.covers);
+	const yearFile = dataPath(LEDGER, 'yearly', year.covers);
+	const cases: BenchCase[] = [
+		{ name: 'month file, whole', root: 'month', choice: 'door', file: monthFile, reads: 1 },
+		{ name: 'year file, by range', root: 'year', choice: 'door', file: yearFile, reads: 1 },
+		{ name: 'month file, by range', root: 'month', choice: 'every-file', file: monthFile, reads: 1 },
+		{ name: 'year file, by range, read again on one page', root: 'year', choice: 'door', file: yearFile, reads: 2 }
 	];
 	const runs: Record<string, number | string | boolean>[] = [];
 	let deploy: Record<string, number | string | boolean>;
@@ -409,7 +467,7 @@ test('measure: one month out of a year file by byte range, against its month fil
 				runs.push({ round, ...(await measureOnce(browser, host, one, span)) });
 			}
 		}
-		deploy = await deployOnce(browser, host, dataPath(LEDGER, 'yearly', year.covers), span);
+		deploy = await deployOnce(browser, host, yearFile, span);
 	} finally {
 		await host.close();
 	}
@@ -428,18 +486,33 @@ test('measure: one month out of a year file by byte range, against its month fil
 	const report = { year: { ...year, path: path.basename(year.path) }, month: { ...month, path: path.basename(month.path) }, span, throttle: SLOW_4G, runs, summary, deploy };
 	writeFileSync(path.join(WORK, 'measure.json'), JSON.stringify(report, null, 1));
 	console.log(JSON.stringify({ summary, deploy }, null, 1));
-	const [whole, byRange] = summary;
+	const [whole, byRange, , again] = summary;
 	expect(new Set(runs.map((run) => `${run.state} ${run.rows} ${run.digest}`)).size, 'every run drew the same rows').toBe(1);
-	expect(byRange.fileBytes, 'the year file by range costs more than twice the month file').toBeLessThanOrEqual(2 * month.bytes);
-	expect(byRange.allTwoHundredSix, 'a GET for the year file was not a range answered 206').toBe(true);
-	expect(byRange.medianMs, 'the year file by range drew later than the month file whole').toBeLessThanOrEqual(whole.medianMs);
+	for (const read of [byRange, again]) {
+		expect(read.fileBytes, `${read.case} costs more than twice the month file`).toBeLessThanOrEqual(2 * month.bytes);
+		expect(read.allTwoHundredSix, `${read.case}: a GET for the year file was not a range answered 206`).toBe(true);
+		expect(read.medianMs, `${read.case} drew later than the month file whole`).toBeLessThanOrEqual(whole.medianMs);
+	}
+	expect(deploy.wholeAnswers, 'a read after a deploy was answered with the whole year file').toBe(0);
 });
 
-/** One timed read in a fresh browser context, after the engine and its add-on have loaded over an unslowed root. */
+/** One measured case: the root it reads, which files by range, the file it counts,
+ *  and how many reads of the span one page makes, the last of them measured. */
+interface BenchCase {
+	name: string;
+	root: string;
+	choice: RangeChoice;
+	file: string;
+	reads: number;
+}
+
+/** One timed case in a fresh browser context, after the engine and its add-on have
+ *  loaded over an unslowed root: its reads one after another on one page, and what
+ *  the host was asked for the last of them. */
 async function measureOnce(
 	browser: Browser,
 	host: RangeHost,
-	one: { name: string; root: string; choice: RangeChoice; file: string },
+	one: BenchCase,
 	span: SliceOptions
 ): Promise<Record<string, number | string | boolean>> {
 	const context = await browser.newContext();
@@ -451,11 +524,15 @@ async function measureOnce(
 			[LEDGER, COLUMNS] as const
 		);
 		expect(warmed.state, warmed.warned.join('\n')).toBe('ok');
+		const read = (): Promise<MeasuredSlice> =>
+			page.evaluate(([root, ledger, span, choice]) => window.door.measure(root, ledger, span, choice), [one.root, LEDGER, span, one.choice] as const);
+		const earlierMs: number[] = [];
+		for (let turn = 1; turn < one.reads; turn += 1) {
+			earlierMs.push(Math.round((await read()).ms));
+			await settle();
+		}
 		const from = host.log.length;
-		const timed: MeasuredSlice = await page.evaluate(
-			([root, ledger, span, choice]) => window.door.measure(root, ledger, span, choice),
-			[one.root, LEDGER, span, one.choice] as const
-		);
+		const timed = await read();
 		await settle();
 		const asked = host.log.slice(from).filter((request) => request.root === one.root);
 		const gets = requestsFor(asked, one.file, 'GET');
@@ -463,6 +540,7 @@ async function measureOnce(
 		return {
 			case: one.name,
 			ms: timed.ms,
+			earlierMs: earlierMs.join(' '),
 			state: timed.state,
 			rows: timed.rows,
 			digest: timed.digest,

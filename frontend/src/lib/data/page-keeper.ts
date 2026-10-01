@@ -15,22 +15,25 @@
  * acts on the same index, and a page shows the data it opened with until it is
  * reloaded. A fetch that threw is not kept, so the next ask tries again.
  *
- * **A data file enters the engine once, and the keeper holds its name, never its
- * bytes.** A file is known by its path and the version its index entry names. It
- * is fetched once, checked against the length its entry gives, and handed to the
- * engine, which mints the name every later ask gets. A browser's engine takes
- * the buffer it is handed and leaves the page's copy empty, so bytes kept here
- * would read as an empty file the second time. A file that is not there is kept
- * as absent. A fetch that threw, or bytes of the wrong length, is neither
- * registered nor kept, so the next ask tries again.
+ * **A data file fetched whole enters the engine once, and the keeper holds its
+ * name, never its bytes.** A file is known by its path and the version its index
+ * entry names. It is fetched once, checked against the length its entry gives,
+ * and handed to the engine, which mints the name every later ask gets. A
+ * browser's engine takes the buffer it is handed and leaves the page's copy
+ * empty, so bytes kept here would read as an empty file the second time. A file
+ * that is not there is kept as absent. A fetch that threw, or bytes of the wrong
+ * length, is neither registered nor kept, so the next ask tries again.
  *
- * **A file the door reads by byte range is never fetched here.** When a wanted
- * file asks for that, the source has an address for it and the engine reads a
- * host, the engine opens the file at that address and later asks the host only
- * for the parts a query needs. The length it opened is checked against the entry,
- * as a fetched file's is, and a file of another length is dropped and not kept, so
- * the next ask opens it again. A source with no address, or an engine that reads
- * no host, gets the file fetched whole instead.
+ * **A file the door reads by byte range is never fetched here, and never kept.**
+ * When a wanted file asks for that, the source has an address for it and the
+ * engine reads a host, the engine opens the file at an address the source made
+ * for this one call, and asks the host only for the parts the call's query
+ * needs. The length it opened is checked against the entry, as a fetched file's
+ * is, and a file of another length is dropped. The caller drops the rest when its
+ * query ends (`done`), so the next call opens the file again at a new address,
+ * where the browser holds no part fetched before a deploy changed the file's
+ * ETag. A source with no address, or an engine that reads no host, gets the file
+ * fetched whole instead, and kept like any other.
  *
  * **The engine starts only when every file a call fetches has arrived whole**, so
  * a call that cannot be answered never loads it. A call that may read a file by
@@ -50,7 +53,8 @@ export interface ByteSource {
 	/** A data file, and the version its index entry names, which a cache may key on. */
 	data(path: string, version: string): Promise<Uint8Array | null>;
 	/** Where an engine that reads a host itself finds a data file, by the path and
-	 *  version `data` takes. Absent from a source with no host, such as a disk. */
+	 *  version `data` takes, for one read: each call answers an address no earlier
+	 *  call answered. Absent from a source with no host, such as a disk. */
 	address?(path: string, version: string): string;
 }
 
@@ -75,19 +79,24 @@ export type FileShortfall =
 	| { reason: 'opened'; length: number }
 	| { reason: 'fetch'; error: unknown };
 
-/** Every wanted file as the engine holds it, by name in the order asked; or the
- *  first one that could not be had, and why. */
-export type Holding = { engine: QueryEngine; names: string[] } | { failed: number; shortfall: FileShortfall };
+/** Every wanted file as the engine holds it, by name in the order asked, and
+ *  `done`, which drops the files opened at an address for this call alone and is
+ *  called once the call's query has ended, answered or not; or the first file
+ *  that could not be had, and why, with nothing of this call's left open. */
+export type Holding =
+	| { engine: QueryEngine; names: string[]; done(): Promise<void> }
+	| { failed: number; shortfall: FileShortfall };
 
 /** What one page keeps, and the three things a caller asks of it. */
 export interface PageKeeper {
 	/** An index: its bytes, or `null` when there is no such file. Rejects when the fetch threw. */
 	index(path: string): Promise<Uint8Array | null>;
 	/** Has the engine hold every file in `files`, fetching and registering only
-	 *  what this keeper does not hold yet. Rejects when the engine cannot start or
-	 *  cannot take a file. */
+	 *  what this keeper does not hold yet, and opening a file it reads by byte
+	 *  range for this call alone. Rejects when the engine cannot start or cannot
+	 *  take a file. */
 	hold(files: readonly WantedFile[]): Promise<Holding>;
-	/** Drops every file this keeper registered. A build-time call does this when it ends; a page never does. */
+	/** Drops every file this keeper keeps registered. A build-time call does this when it ends; a page never does. */
 	release(): Promise<void>;
 }
 
@@ -177,7 +186,7 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 		return handOver(engine, key, late.bytes);
 	}
 
-	/** The engine's name for one file, registering it unless this keeper already holds it. */
+	/** The engine's name for one file this keeper keeps, registering it unless it already holds it. */
 	function registration(
 		engine: QueryEngine,
 		file: WantedFile,
@@ -187,7 +196,6 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 	): Promise<Registration> {
 		const named = names.get(key);
 		if (named !== undefined) return named;
-		if (address !== null && engine.registerAddress !== undefined) return keep(key, openAt(engine, file, address));
 		if (address !== null) return fetchedLate(engine, file, key);
 		if (arrival === null || !('bytes' in arrival)) {
 			return Promise.reject(new Error(`${key} was being registered by another call, and that registration failed`));
@@ -213,15 +221,36 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 			if (failed !== -1) return { failed, shortfall: arrived[failed] as FileShortfall };
 			const engine = await (starting ?? openEngine());
 			registeredWith = engine;
-			const held = await Promise.all(
-				files.map((file, at) => registration(engine, file, keys[at], addresses[at], arrived[at]))
-			);
+			// A file the engine opens at an address is this call's alone: never kept, and dropped by `done`.
+			const opening = files.map((file, at) => {
+				const address = addresses[at];
+				return address !== null && engine.registerAddress !== undefined && !names.has(keys[at])
+					? openAt(engine, file, address)
+					: null;
+			});
+			const done = async (): Promise<void> => {
+				const settled = await Promise.allSettled(opening.filter((one): one is Promise<Registration> => one !== null));
+				const opened = settled.flatMap((one) => (one.status === 'fulfilled' && 'name' in one.value ? [one.value.name] : []));
+				if (opened.length > 0) await engine.drop(opened);
+			};
+			let held: Registration[];
+			try {
+				held = await Promise.all(
+					files.map((file, at) => opening[at] ?? registration(engine, file, keys[at], addresses[at], arrived[at]))
+				);
+			} catch (error) {
+				await done();
+				throw error;
+			}
 			const named: string[] = [];
 			for (const [at, one] of held.entries()) {
-				if ('reason' in one) return { failed: at, shortfall: one };
+				if ('reason' in one) {
+					await done();
+					return { failed: at, shortfall: one };
+				}
 				named.push(one.name);
 			}
-			return { engine, names: named };
+			return { engine, names: named, done };
 		} finally {
 			// Bytes wait here only until the engine has them, and never past the call that fetched them.
 			arriving.forEach((one, at) => {

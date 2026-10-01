@@ -80,38 +80,37 @@ gardener's compaction task and declared as `CompactIndex` in
    one row group a month. One month of 10 columns out of a 29.8 MB year cost
    243,046 bytes, a tenth of that month's own file
    ([the measurement](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md)).
-   A day file and a month file are fetched whole, and at build time every file is.
-   The gardener still keeps a published ledger's month files at least
-   `console.max_window_days` plus `compact_after_days` after their year ends, so
-   no read the console can widen to reaches a year file, because a page can still
-   be sent a whole year file after a deploy
-   ([below](#how-a-year-file-is-read-by-byte-range)). A span panned further back
-   than that reads one.
+   Each read asks at an address no earlier read used, so a deploy between two
+   reads cannot make the host send the whole file
+   ([below](#how-a-year-file-is-read-by-byte-range)). A day file and a month file
+   are fetched whole, and at build time every file is.
 
 An index is asked for with `cache: 'no-store'`, so a page's one read of it gets
 what the site holds now rather than a copy an HTTP cache kept, and the page then
 keeps it (next section). A data file is asked for with `?v=<rows>-<bytes>` from
 its entry: a compact file is written once, so the browser may keep it for as long
-as that version names it. A year file read by byte range is asked for at the same
-address.
+as that version names it. A year file read by byte range is asked for at that
+address with one more part, `read`, which no earlier read used.
 
 ## What a page keeps
 
-A page keeps what the door read for it, so nothing crosses the network or enters
-the engine twice. The keeper is `frontend/src/lib/data/page-keeper.ts`.
+A page keeps what the door read for it, so nothing it fetches whole crosses the
+network or enters the engine twice. A year file read by byte range is the
+exception: each read asks the host for the parts it needs again. The keeper is
+`frontend/src/lib/data/page-keeper.ts`.
 
 - **Each index is read once a page and kept.** Every slice and every reach on the
   page acts on the same `daily.json`, `monthly.json` and `yearly.json`. Two asks
   at the same moment share one fetch. A 404 is kept, because it is an answer; a
   fetch that threw is not, so the next ask tries again.
-- **Each data file enters the engine once, and the page keeps its name, never its
-  bytes.** A file is known by its path and the version its entry names. A
-  browser's engine takes the buffer it is handed and leaves the page's copy empty,
-  so bytes kept on the page would read as an empty file the second time. A year
-  file read by byte range never crosses as bytes: the engine opens it at its
-  address, and the page keeps the name the engine opened it under. A file of the
-  wrong length is neither registered nor kept, and a file that is not there is
-  kept as absent.
+- **Each data file fetched whole enters the engine once, and the page keeps its
+  name, never its bytes.** A file is known by its path and the version its entry
+  names. A browser's engine takes the buffer it is handed and leaves the page's
+  copy empty, so bytes kept on the page would read as an empty file the second
+  time. A year file read by byte range never crosses as bytes and is never kept:
+  each read has the engine open it at an address of its own, and the engine drops
+  it when the read ends, answered or not. A file of the wrong length is neither
+  registered nor kept, and a file that is not there is kept as absent.
 - **The engine starts only when every file a slice fetches whole has arrived
   whole**, so a slice that cannot be answered never loads it. A slice that reads a
   year file by byte range starts the engine while its other files arrive, because
@@ -175,10 +174,11 @@ asks. On disk the same paths sit under the state root handed to `sliceFromDisk()
 ## How a year file is read by byte range
 
 In a browser the page keeper hands the engine a year file's address rather than
-its bytes, through `registerAddress` in `frontend/src/lib/data/engine.ts`. The
-engine opens the file with a 1-byte GET and a `HEAD`, then asks only for its
-footer and for the parts of the row groups the query touches. Which periods are
-read this way is `RANGED_PERIODS` in `frontend/src/lib/data/slice-reader.ts`.
+its bytes, a new address for each read, through `registerAddress` in
+`frontend/src/lib/data/engine.ts`, and the engine drops the file when the read
+ends. The engine opens the file with a 1-byte GET and a `HEAD`, then asks only for
+its footer and for the parts of the row groups the query touches. Which periods
+are read this way is `RANGED_PERIODS` in `frontend/src/lib/data/slice-reader.ts`.
 `sliceFromDisk()` reads every file whole, because the engine's Node half reads no
 host. `frontend/tests/ledger-ranges.spec.ts` drives a real browser against a host
 on 127.0.0.1 that answers the way Pages does. Five facts shape the design.
@@ -195,32 +195,50 @@ on 127.0.0.1 that answers the way Pages does. Five facts shape the design.
   equal the entry's `bytes`, or the slice is `unreachable` and the console says
   `<path> opened at <n> bytes to be read by range, and its entry says <m>`.
 - **Pages ignores the query string.** `?v=a` and `?v=b` get the same bytes and the
-  same ETag, so the version in the address never reaches the host. The engine
-  reads the file under a name the keeper mints for each path and version, so two
-  versions never share a name on one page.
+  same ETag, so nothing in the query reaches the host. The browser keeps what it
+  fetched under the whole address, query and all, so the door gives each read of a
+  year file an address of its own: the version its entry names, and a `read` part
+  of 64 random bits made when the read starts, in
+  `frontend/src/lib/data/fetched-bytes.ts`. A counter would not do: it restarts
+  with each page, and the browser keeps what one page fetched for the next. The
+  engine reads the file under a name it mints for that one read.
 - **A year file is written once and never rewritten in place.** The gardener
   writes it when the year is packed and never again, so ranges read at different
   times all come from the same bytes.
 - **Every Pages deploy gives every file a new ETag**, over the same bytes. Chromium
-  keeps the ranges a page fetched, and asks for a range it does not hold with
-  `If-Range` naming the ETag it kept. A host that honours `If-Range` answers a
-  changed ETag with 200 and the whole file: in the measurement, a page that read
-  June out of a year file, and read July after the ETag changed, was sent all
-  29,816,165 bytes. A new page is not caught: it opens the file again, the browser
-  checks the first byte it kept with `If-None-Match`, and drops the rest. A new
-  page that finds that byte still fresh, within Pages' `max-age=600`, is caught,
-  and the spec holds that case as a test expected to fail.
+  asks for a range it does not hold, at an address where it holds others, with
+  `If-Range` naming the ETag it kept, and a host that honours `If-Range` answers a
+  changed ETag with 200 and the whole file. At an address no earlier read used the
+  browser holds nothing, so the only ETag a read names is the one the host gave
+  that same read. The spec drives both ways a deploy can fall between two reads -
+  the same page reading again, and a new page opened while what the first page
+  fetched is still fresh, within Pages' `max-age=600` - and requires every GET for
+  the year file to be answered 206.
 
 **Pages honours `If-Range`, measured on the live site.** A ranged GET whose
 `If-Range` names the ETag Pages serves now is answered 206 with the range; one
 naming an older ETag, or a date before the file's, is answered 200 with the whole
 file. Every file in one deploy carries that deploy's time as its `Last-Modified`
 and in its ETag, eleven seconds after the build job ended, so the build cannot pin
-it, and an unchanged file still gets a new ETag. So the gardener's loader refuses
-a published ledger whose month files would be packed sooner than
-`console.max_window_days` plus `compact_after_days` after their year ends (rule 6
-above), and only a span panned further back than any console window reads a year
-file at all.
+it, and an unchanged file still gets a new ETag. Reading each year file at an
+address no earlier read used is what keeps a deploy from costing a whole file, so
+a published ledger packs a year as soon as its own declaration says
+([../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship)),
+and a console read may reach a year file.
+
+**One case is not covered: a deploy inside one read.** A deploy that lands between
+a read's first request and its last gives the file a new ETag mid-read, and the
+read's next range names the ETag it began with, so Pages sends the whole file. A
+read takes about 11 seconds on a slow mobile link, and a deploy came about every
+85 minutes (17 deploys in the 24 hours to 2026-10-01 02:00 UTC), so about 1 read
+in 500 on such a link is caught (ESTIMATE), and fewer on a fast one.
+
+**What it costs: a page that reads one year file twice fetches it twice.** The
+engine keeps nothing of a file it dropped, and the browser holds nothing at the
+new address, so a second read of the same month asks for the same ranges again:
+243,046 bytes in 9.0 seconds on the slow link measured, against 15.1 seconds for
+that month's own file fetched whole
+([the measurement](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md)).
 
 ## The index copy, and the stamp it reads
 
@@ -365,10 +383,16 @@ seen answering `unreachable` after a deploy; nothing has shown one yet. Ruled on
 **A year file is read by byte range, and a day or month file is fetched whole.**
 A year file holds twelve months, so fetching it whole to draw one month pays for
 eleven nobody asked for: about twelve times the month's own file. A day file is
-small. A month file read by byte range drew sooner on the slow link measured, 9.5
-seconds against 15.2, but it asks for 13 round trips where its whole fetch asks
+small. A month file read by byte range drew sooner on the slow link measured, 9.4
+seconds against 15.1, but it asks for 12 round trips where its whole fetch asks
 for one, and no faster link has been measured. Reading by range needs nothing the
 engine does not already ship, so it adds no dependency.
+
+**Each read of a year file has an address of its own, and pays for it.** A deploy
+gives every file a new ETag, and at an address where the browser holds part of a
+year file a read can be sent the whole file, about twelve times what the month's
+own file costs. Keeping the year file registered for the page, to spare a second
+read its bytes, would bring that back.
 
 **The add-on comes from DuckDB's host, not ours.** It is what every site running
 this engine does, and it keeps 3.2 MB off the site and a download step out of the
@@ -395,6 +419,6 @@ wrong count nobody can see.
 
 - [../../concepts/console-design/how-a-console-chart-gets-its-data.md](../../concepts/console-design/how-a-console-chart-gets-its-data.md) - the seven rules a panel's data obeys.
 - [../contracts/schemas.md](../contracts/schemas.md) - the hand copy of the index shapes and the test that binds it.
-- [../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md) - what one month read by byte range out of a year file costs, and what a deploy costs.
+- [../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md) - what one month read by byte range out of a year file costs, read once, read again on one page, and across a deploy.
 - [../../reference/site-weight.md](../../reference/site-weight.md#optional-assets) - deployed size, lazy downloads and cache assumptions.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the bundle gate that keeps the engine off the first load.

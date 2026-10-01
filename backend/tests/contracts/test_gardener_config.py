@@ -23,6 +23,7 @@ from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import (
     DEFAULT_CLOSED_AFTER_DAYS,
     DEFAULT_COMPACT_AFTER_DAYS,
+    JANUARY_DAYS,
     CollectionTaskPolicy,
     CompactionPolicy,
     FoldPolicy,
@@ -622,11 +623,6 @@ def published(config_dir: Path, *ledgers: str) -> Path:
     return config_dir
 
 
-#: What a published ledger that packs years keeps its months for, at least: the
-#: console's widest read, 366 days, and the one day a compacted day lags a wake.
-PAST_THE_WIDEST_READ: Final = 367
-
-
 @pytest.mark.parametrize(
     ("changes", "refusal"),
     [
@@ -639,36 +635,45 @@ PAST_THE_WIDEST_READ: Final = 367
             "would have days no file holds",
         ),
         ({"monthly_window": {"unit": "months", "value": 13}}, None),
-        (
-            {
-                "monthly_window": {"unit": "forever"},
-                "monthly_keep_days": PAST_THE_WIDEST_READ - 1,
-            },
-            f"monthly_keep_days must be at least {PAST_THE_WIDEST_READ}",
-        ),
-        (
-            {"monthly_window": {"unit": "forever"}, "monthly_keep_days": PAST_THE_WIDEST_READ},
-            None,
-        ),
     ],
-    ids=[
-        "forever",
-        "short-of-the-widest-window",
-        "long-enough",
-        "packs-years-inside-the-widest-read",
-        "packs-years-past-the-widest-read",
-    ],
+    ids=["forever", "short-of-the-widest-window", "long-enough"],
 )
 def test_a_published_ledger_reaches_the_widest_window_and_keeps_months_forever_only_packed(
     tmp_path: Path, changes: dict[str, Any], refusal: str | None
 ) -> None:
-    """What a reader fetches first stays bounded, and no console read fetches a year file."""
+    """What a reader fetches first stays bounded, and the console's widest span has its days."""
     compaction = a_compaction("gardener", **changes)
     config_dir = published(a_garden(tmp_path, compact_gardener=compaction), "gardener")
     if refusal is None:
         config.load_gardener(config_dir)
     else:
         assert refusal in refused(config_dir)
+
+
+@pytest.mark.parametrize(
+    ("days_past_the_earliest", "refusal"),
+    [(-1, "set at least"), (0, None)],
+    ids=["a-day-under-the-earliest-wait", "the-earliest-wait"],
+)
+def test_a_published_ledger_that_packs_years_waits_what_its_declaration_says(
+    tmp_path: Path, days_past_the_earliest: int, refusal: str | None
+) -> None:
+    """Publishing a ledger adds no wait: the knob's own floor is the only one it meets."""
+    declared = CompactionPolicy.model_validate(fixture("compact-gardener"))
+    earliest = declared.daily_keep_days + JANUARY_DAYS + 1
+    packs = {
+        "monthly_window": {"unit": "forever"},
+        "monthly_keep_days": earliest + days_past_the_earliest,
+    }
+    config_dir = published(
+        a_garden(tmp_path, compact_gardener=a_compaction("gardener", **packs)), "gardener"
+    )
+    if refusal is None:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "config/gardener/compact-gardener.json is refused" in message
+        assert f"{refusal} {earliest}" in message
 
 
 @pytest.mark.parametrize(

@@ -583,10 +583,14 @@ The rest of the pass still runs.
 **A year is packed only where its declaration sets `monthly_keep_days`.** One
 declaration sets it: `compact-summary-quality-evals`, whose `monthly_keep_days` in
 `config/gardener/compact-summary-quality-evals.json` (93) is how many whole days
-after a year ends the eval ledger waits to pack it. Every
-other ledger keeps its month files exactly as `monthly_window` says. A ledger
-that packs years keeps `monthly_window` forever, because a window would delete a
-month file before its year took it, and its year files are kept for ever.
+after a year ends the eval ledger waits to pack it. Every other ledger keeps its
+month files exactly as `monthly_window` says. A ledger that packs years keeps
+`monthly_window` forever, because a window would delete a month file before its
+year took it, and its year files are kept for ever. **Each ledger's own
+declaration sets its wait, a ledger the site publishes included**: the browser
+reads a year file by byte range, at an address no earlier read used
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-a-year-file-is-read-by-byte-range)),
+so no wait has to keep the console's reads away from year files.
 
 **A year is packed whole or not at all, and only when three things are true**:
 `monthly_keep_days` whole days have passed since it ended, at 00:00 UTC on 1

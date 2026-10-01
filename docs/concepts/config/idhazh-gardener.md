@@ -93,7 +93,9 @@ one file a month, and deletes what it moved. A declaration that sets
 `monthly_keep_days` also packs each finished year's month files into one file a
 year. One of the six sets it: `compact-summary-quality-evals`, whose
 `monthly_keep_days` (93) is how many whole days after a UTC year ends it waits to
-pack that year. How a pass runs is
+pack that year. Each ledger's own `monthly_keep_days` sets its wait, a ledger the
+site publishes included, and the loader checks only that the value can take
+effect: at least `daily_keep_days` plus 32 days. How a pass runs is
 [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#the-compaction).
 Each ships `dry_run: true`, and each owns its ledger's two folders,
 `state/raw/<ledger>` and `state/compact/<ledger>`.
@@ -198,7 +200,6 @@ names the file an operator edits and the rule it broke.
 | `monthly_keep_days` set beside a `monthly_window` that is not forever | The window would delete a month file before its year is packed, and the year file would miss that month's rows |
 | `monthly_keep_days` below `daily_keep_days` plus 32 | A year is packed only once its next January is absorbed, one wake after that January's `daily_keep_days` have passed, so a smaller value changes nothing |
 | A ledger in `ledger.published` whose compaction keeps its months forever and packs no year | A reader's first request would grow with the archive. Packing years bounds it: the month files last only until their year is packed, and the yearly index grows by one entry a year |
-| A published ledger that packs years with `monthly_keep_days` below `console.max_window_days` plus `compact_after_days` | The query door reads a year file by byte range, but a page that holds part of one asks for the next part naming the ETag it kept, every deploy changes that ETag, and a host that honours the check sends the whole year file: 29.8 MB for one month in [the measurement](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md). So no read the console can widen to may reach one. At 366 and 1 the floor is 367 days |
 | A published ledger whose periods reach back less than the widest `console.window_presets` | The widest span the console offers would have days no file holds |
 | A compaction reaching back less far than the task that limited its ledger before it moved | The two periods are the ledger's retention now, and a shorter pair silently cuts it |
 
