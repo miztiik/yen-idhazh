@@ -1,7 +1,13 @@
 import { expect, test, type Locator, type Page } from './support/browser';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { render } from 'svelte/server';
+import type { Manifest } from 'vite';
 import { readoutOf } from '../src/lib/charts/readout';
 import { clocksChart } from '../src/lib/charts/machine';
 import { stacked } from '../src/lib/charts/stacked';
+import { serverCompiler } from './support/server-render';
 
 /**
  * Every console chart says whether it has a column to hover, and says it in
@@ -33,6 +39,63 @@ const ROUTES = [
 const ALL_ROUTES = [...ROUTES, '/console/voices/'] as const;
 const DESKTOP = { width: 1440, height: 1000 };
 const PHONE = { width: 390, height: 844 };
+
+test('a wrapped readout keeps its swatch on the first line and its value after the last word', async ({ page }, testInfo) => {
+	const compiled = serverCompiler(testInfo.outputPath('readout-component'));
+	const module = await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
+	const component = (await import(pathToFileURL(module).href)).default;
+	const label = 'A recorded machine with a processor name that needs several words on a narrow phone';
+	const readout = readoutOf({
+		type: 'dateSeries',
+		columns: ['20 Aug 2026'],
+		series: [{ label, swatch: 'var(--chart-1)', values: [42], format: String }],
+		notMeasured: 'Not recorded',
+		resting: 'last'
+	});
+	const manifest = JSON.parse(readFileSync(resolve('.svelte-kit/output/client/.vite/manifest.json'), 'utf8')) as Manifest;
+	const styles = [...new Set(Object.values(manifest).flatMap((entry) => entry.css ?? []))]
+		.map((file) => readFileSync(join('.svelte-kit/output/client', file), 'utf8'));
+	styles.push(...compiled.css.values());
+	const markup = render(component, { props: { readout, name: 'wrap-witness', maxShare: 1, hint: '' } }).body;
+	await page.setViewportSize(PHONE);
+	await page.setContent(`<style>${styles.join('\n')}</style><main style="width: 240px; margin: 16px">${markup}</main>`);
+	const boxes = await page.locator('[data-readout-row]').evaluate((row) => {
+		const label = row.querySelector('dd');
+		const value = row.querySelectorAll('dd')[1];
+		const swatch = row.querySelector('span');
+		if (!label || !value || !swatch) throw new Error('The real readout did not render its three parts');
+		const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+		const fragments: DOMRect[] = [];
+		while (walker.nextNode()) {
+			const text = walker.currentNode.textContent ?? '';
+			for (const match of text.matchAll(/\S+/g)) {
+				const range = document.createRange();
+				range.setStart(walker.currentNode, match.index);
+				range.setEnd(walker.currentNode, match.index + match[0].length);
+				fragments.push(range.getBoundingClientRect());
+			}
+		}
+		const first = fragments[0];
+		const last = fragments.at(-1);
+		if (!first || !last) throw new Error('The readout label has no words');
+		const colour = swatch.getBoundingClientRect();
+		const number = value.getBoundingClientRect();
+		return {
+			wrapped: last.top > first.top,
+			swatchSharesFirstLine: colour.top < first.bottom && colour.bottom > first.top,
+			valueSharesLastLine: number.top < last.bottom && number.bottom > last.top,
+			valueFollowsLastWord: number.left >= last.right,
+			overflow: row.scrollWidth > row.clientWidth
+		};
+	});
+	expect(boxes).toEqual({
+		wrapped: true,
+		swatchSharesFirstLine: true,
+		valueSharesLastLine: true,
+		valueFollowsLastWord: true,
+		overflow: false
+	});
+});
 
 /** Where every console chart's declaration lives. */
 const OWNER = '[data-readout-columns], [data-readout-records], [data-readout-none]';

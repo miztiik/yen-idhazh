@@ -253,6 +253,10 @@ column - four series or one - and the rules are not negotiable per chart:
  room at every width. Measured 2026-09-28: an uncapped reserve pushed `/evals/`
  and the console 31 px sideways at 360 px. A share of the plot and not a pixel
  count, so the rule holds at every window width. Susan, 2026-09-28.
+- **A long entry wraps as text, not as three separate boxes.** Its swatch stays
+ on the name's first line and its value follows the name's last word. The
+ value still keeps its reserved width. A phone must not strand the swatch or
+ put a short count on a line of its own while the name has room beside it.
 - **A vertical guide down the hovered column**, across every series.
 - **Reachable by keyboard.** Left and Right step, Home and End jump, Escape
  returns to rest. **A tooltip is never the only place a value appears**: a
