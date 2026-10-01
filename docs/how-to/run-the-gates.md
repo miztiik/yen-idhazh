@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -519,7 +519,9 @@ day payload at all`.
 all survive, and not by luck. Each is derived from a bounded knob rather than
 chosen, so publishing more cannot move one: the band by
 `observability.public_*_keep_months`, `telemetry/` by the longest month at the
-heaviest day ever run, and the cold load by `console.default_window_days`.
+heaviest day ever run, each published ledger's index directory by the keep
+windows of its compaction task, and the cold load by
+`console.default_window_days`.
 
 When a route that still has a number goes over, or a payload does, two failures
 are worth telling apart:
