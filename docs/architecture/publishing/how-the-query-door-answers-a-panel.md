@@ -144,6 +144,14 @@ index again before every slice would also put one more round trip in front of
 each one, where a cold load allows four serial round trips in all
 (`frontend/tests/console-cold-load.spec.ts`).
 
+The Hardware cold-load check measures the larger of two paths: document,
+indexes, whole-file data and add-on; or document, indexes, core wasm and add-on.
+Data and core wasm are independent after file selection. A fast local data
+response ending before the wasm request starts does not prove an extra wait.
+Separate real-response gates hold each branch in turn and require the other to
+progress. The timing run holds nothing, counts planted pre-index waits on both
+paths, and keeps the four-hop ceiling and every engine download in scope.
+
 ## How far a ledger reaches
 
 `ledgerReach(ledger)` answers the oldest and the newest day a ledger holds, so a
