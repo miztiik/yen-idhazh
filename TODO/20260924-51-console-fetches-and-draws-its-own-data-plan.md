@@ -2,6 +2,8 @@
 
 **Last Updated**: 2026-10-01
 
+**Status**: Row 10 is merged. Row 3 is built and pushed, but its final config check waits for plan 56's fresh-address fix. Row 8 has its first pass and a passing add-on interception probe; its second pass remains. Row 11 has not started.
+
 **Level**: 5 (CLAUDE.md section 6). Row 3 decides whether `state/` reaches a browser, which is a publishing contract, and sections 2.6 to 2.9 are the design contract the panels are built to. The other rows are Level 2 to Level 3 and carry no contract change beyond one copied settlement key.
 
 **Chain** (CLAUDE.md section 0d). **Intent**: [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md) N2, N3 and N5 - the browser queries the ledger for the slice it draws, fetches at view time, and d3 draws it. **Contract**: section 2 declares every shape, key, signature and config literal these rows need, so a worker builds each row with no further decision. **Code**: the eight rows.
@@ -10,7 +12,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-28, about 13:50 UTC, when the first owner handed over after row 5 merged, and brought up to date 2026-09-30, about 10:30 UTC, when the second owner settled rows 3 and 8 and the person added rows 10 and 11, and again 2026-10-01, about 06:10 UTC, when the third owner's session stopped with rows 10, 3 and 8 built and not merged.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract. This snapshot was updated on 2026-10-01 after row 10 merged and row 3's real publication checks passed. Re-check remote state before acting.
 
 ```text
 You are the OWNER of TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md.
@@ -28,22 +30,34 @@ section 1 (the Status Reckoner, the only tracker), section 2.2, and each row jus
 you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -vv. At the
-last update, 2026-10-01 at about 06:10 UTC (main a4c00432e), rows 1, 2, 4, 5, 6, 7 and
-9 had merged (#1138, #1140, #1137, #1143, #1144, #1154, #1157). Nothing of this plan
-was running. Three rows were built and not merged, and one was not started:
-  row 10  PR #1177, worktree p51r10, branch
-          p51r10-missing-files-have-names-and-two-ledgers-pack-daily. Built, and the
-          branch stamps its Reckoner line DONE. CI passed all seven checks at
-          cf5a4cb03, then main moved: the PR conflicts, 20 commits behind.
-          Report: %TEMP%\p51r10\report.md.
+last update, rows 1, 2, 4, 5, 6, 7, 9 and 10 had merged. The remaining work is:
+  row 10  DONE. PR #1177 merged as b9c09ee66 at 2026-10-01T07:28:41Z after all
+    seven CI checks passed and both writer workflows were quiet. Its clean
+    worktree and local branch are removed. Do not repeat its checks.
   row 3   PR #1169, worktree p51r3, branch p51r3-the-console-ledgers-are-published.
-          Built. The PR conflicts and has no CI run. The local branch (f517a2e85, a
-          merge of main and one doc fix) is ahead of the PR head (1c9d4af0d): push
-          it first. Reports: %TEMP%\p51r3\report.md and report-b.md.
+    Built and pushed at b0a0ddb3a. The inherited commits were preserved.
+    Main through row 10 is merged; the copy now includes all three indexes
+    and year files, and uses summary-quality-evals. Nine copy tests, five
+    panel-binding tests, eight independent ceiling checks, ruff, mypy,
+    svelte-check and changed-doc checks passed. The real build, bundle gate,
+    site-size check and both publication-oracle cases passed. Browser smoke
+    rendered three routes and fetched all nine indexes with zero errors or
+    failed requests. No stand-in indexes were used.
+    BLOCKER: load_gardener refuses publishing summary-quality-evals with
+    its declared monthly_keep_days 93 while the published-year minimum is
+    367. Plan 56 row 7 removes that minimum after fixing stale cached ranges.
+    Its owner has tested and locally committed the fix in p56r7; at this
+    snapshot it has no PR. Do not change the guard or the packing knob to
+    force a pass. Reports: %TEMP%/p51c-report.md and %TEMP%/p51r3/.
   row 8   PR #1171, worktree p51r8, branch
           p51r8-one-panel-fetches-its-ledger-and-draws-in-d3. Pass A is done,
-          smoke-tested, and passed all seven checks at 28242e632, 35 commits behind
-          main. Pass B is not started. Report: %TEMP%\p51r8\report-a.md.
+    smoke-tested, and passed all seven checks at 28242e632. Pass B is not
+    started. Its required add-on interception probe PASSED: a context route
+    fulfilled the real DuckDB worker request from the existing shared-home
+    cache; two queries returned eight fixture rows with zero external
+    downloads, including a pass-through service worker. Routing disables
+    HTTP caching, so do not use that setup to certify cache behavior.
+    Report: %TEMP%/p51r8/report-a.md. Probe: %TEMP%/p51c-addon-probe/.
   row 11  Not started, and no worktree yet.
 Worktree p51own (branch p51-owner-settles-rows-3-and-8) holds no unmerged work;
 remove it with the others at closure. A row's worker works in worktree p51r<row> and
@@ -53,16 +67,18 @@ cleared at any time; the branches and pull requests are the durable record.
 STEP 2 - DISPATCH. On 2026-09-30 the owner settled rows 3 and 8 with Reader, Fowler,
 Susan, Jony and Carmack, and the person answered five questions: deviations 22 to 33,
 and each row's "Settled at dispatch" block, which is part of that row's brief. Main has
-moved under the three built branches. Plan 56 renamed the `scores` ledger to
+moved under the built branches. Plan 56 renamed the `scores` ledger to
 `summary-quality-evals` (#1179: its folder under state/compact/ and its packing task
 under config/gardener/) and added a year file to the shared packing code (#1172).
 Expect conflicts in _compact_tree.py, slice-shapes.ts and the gardener pages, and carry
 the new name through every file a branch adds. The order from here:
-  1. row 10   merge origin/main into its branch, resolve, rerun its gates, push,
-              merge on green CI. Plan 57 waits on it.
-  2. row 3    push the local commits, merge origin/main (row 10 now in it), push,
-              merge on green CI. Its copy step refuses a ledger that lacks either
-              index, so its CI goes green only once row 10 is on main.
+  1. prerequisite  plan 56's owner publishes its row 7 fresh-address fix and
+              removes the published-year minimum. Taking over that other owner's
+              delivery needs explicit coordination; it is not a packing-knob edit.
+  2. row 3    merge origin/main once that fix lands, run the previously blocked
+              ceiling/config checks and selected canary checks, push and merge
+              on green CI. The copy requires all three indexes, which row 10
+              committed. Its real publication checks are already recorded above.
   3. row 8    pass B on pass A's branch (deviations 28, 29 and 31, and the row's
               settled block), then merge origin/main, push, merge on green CI.
   4. row 11   a new worktree p51r11 from main once row 3 has merged. It edits
@@ -98,7 +114,9 @@ for it (docs/reference/agent-notes/git-and-github.md), and a plan-doc stamp push
 straight to the trunk is such a commit. GitHub's own squash merges carry the same
 offset; that is defect 48, and it is not this plan's to fix.
 
-OPEN FOR THE PERSON. Nothing. The person answered on 2026-09-28: plan 55 is the query
+OPEN FOR COORDINATION. Row 3 now needs plan 56 row 7 to land first. Its separate
+owner still owns p56r7; do not change that checkout or claim its work is on main.
+The prior decisions stand. The person answered on 2026-09-28: plan 55 is the query
 page's own plan; d3-sankey lays the flow out (deviation 13); and this plan leaves plan
 50's plan alone (deviation 18). On 2026-09-30 the person answered five more: this plan
 makes a missing file a named fault and writes the empty month indexes (deviation 25),
@@ -191,7 +209,7 @@ Only what no row records. Each row's own departures are in its decisions and its
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The Hardware route stops counting every job twice | - | A | DONE | p51r1 | #1138 | p51-r1-worker |
 | 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | DONE | p51r2 | #1140 | p51-r2-worker |
-| 3 | The three ledgers the console reads are published | plan 50's rows titled "One compaction task a ledger, two compact periods, and the diagrams move into the page" and "The three ledgers the console's routes read become parquet"; 10 | B | PENDING | - | - | - |
+| 3 | The three ledgers the console reads are published | plan 50's rows titled "One compaction task a ledger, two compact periods, and the diagrams move into the page" and "The three ledgers the console's routes read become parquet"; 10 | B | IN-FLIGHT | p51r3 | #1169 | p51-owner |
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | DONE | p51r4 | #1137 | p51-r4-worker |
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | DONE | p51r5 | #1143 | p51-r5-worker |
 | 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | DONE | p51r6 | #1144 | p51-r6-worker |
