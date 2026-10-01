@@ -29,6 +29,10 @@ window would drop at once. A declaration that packs years keeps the window
 forever, and its month files leave only by being packed into their year
 (`_yearly_period`).
 
+**A window that only reports names the month files it would drop and keeps
+them**, with their index entries, so the record counts what turning it live
+would take while packing goes on. `drop` and `spare` read the same list.
+
 Every month here is a UTC month, and every rule is whole days after a month's
 own end, so every wake of one UTC day gets the same answer (CLAUDE.md section 2).
 """
@@ -37,6 +41,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from idhazh import ledger
 from idhazh.contracts.collection_prune import StopReason
@@ -79,15 +84,32 @@ def first_kept_month(*, now: datetime, daily_keep_days: int, window: Window) -> 
     return shift(newest_absorbable, 1 - window.value)
 
 
+def _past_the_window(
+    tree: CompactTree, *, first_kept: str | None
+) -> list[tuple[str, Path | None]]:
+    """Every month the window no longer keeps, oldest first, beside its file or None.
+
+    It reads the listing and decides nothing, so a window that only reports names
+    exactly the files a live one deletes.
+    """
+    if first_kept is None:
+        return []
+    return [
+        (
+            month,
+            named_trees.compact_file(
+                tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
+            ),
+        )
+        for month in sorted(tree.monthly)
+        if month < first_kept
+    ]
+
+
 def drop(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
     """Every month file the window no longer keeps goes, with its index entry."""
-    if first_kept is None:
-        return ()
-    gone = [month for month in sorted(tree.monthly) if month < first_kept]
-    for month in gone:
-        found = named_trees.compact_file(
-            tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
-        )
+    gone = _past_the_window(tree, first_kept=first_kept)
+    for month, found in gone:
         if found is not None:
             tree.delete(found)
         else:
@@ -100,6 +122,14 @@ def drop(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
         del tree.monthly[month]
     if gone:
         tree.write_index(Period.MONTHLY)
+    return ()
+
+
+def spare(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
+    """Every month file the window would drop is named and kept, with its index entry."""
+    for _month, found in _past_the_window(tree, first_kept=first_kept):
+        if found is not None:
+            tree.spare(found)
     return ()
 
 

@@ -6,7 +6,9 @@ delete. Each decision is a `Change`, kept here in the order it must happen -
 data first, index next, watermark last - and nothing touches the disk until
 `apply`, which a dry run never calls. So a dry run and a live run make the same
 decisions from the same reads, and the list a dry run reports is the list a
-live run carries out, file for file.
+live run carries out, file for file. A file a monthly window would delete while
+that window only reports is no change at all: the pass names it with `spare`,
+so the record can count it, and keeps it.
 
 **Names come from the task's listing, and content is fetched before it is
 read.** The raw day folders, the listings, which compact files exist and what
@@ -111,6 +113,9 @@ class CompactTree:
     changes: list[Change] = field(default_factory=list)
     #: Every file the pass read or weighed.
     looked: set[Path] = field(default_factory=set)
+    #: Every file a live monthly window would delete that the pass keeps, because
+    #: the window only reports. It is not a change, so `apply` never sees it.
+    spares: list[Path] = field(default_factory=list)
 
     @classmethod
     def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
@@ -199,6 +204,11 @@ class CompactTree:
         self.looked.add(path)
         self.changes.append(Change(path=path, data=None, size=self.listing.size_of(path)))
 
+    def spare(self, path: Path) -> None:
+        """Keep one file a live monthly window would delete, and name it for the record."""
+        self.looked.add(path)
+        self.spares.append(path)
+
     def entries(self, period: Period) -> dict[str, CompactEntry]:
         """One period's index as the pass holds it now, by what each entry covers."""
         match period:
@@ -281,6 +291,21 @@ class CompactTree:
 
     def taken(self, shown: Callable[[Path], str]) -> tuple[str, ...]:
         return self._paths(deleted=True, shown=shown)
+
+    def spared(self, shown: Callable[[Path], str]) -> tuple[str, ...]:
+        """Every file the pass kept that a live monthly window would delete, each once.
+
+        A file the pass deleted anyway is not one of them: a raw day past the
+        window is packed like any other, and its raw files go once their rows are
+        in its day file.
+        """
+        deleted = set(self.taken(shown))
+        seen: dict[str, None] = {}
+        for path in self.spares:
+            named = shown(path)
+            if named not in deleted:
+                seen.setdefault(named, None)
+        return tuple(seen)
 
     def freed(self) -> int:
         """Every byte the deletes free, never netted against what the pass writes."""

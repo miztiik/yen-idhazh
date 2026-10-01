@@ -412,7 +412,7 @@ flowchart TB
   RAWF[("state/raw/ledger/YYYY/MM/DD/file_id.parquet<br/>written once, many writers")]
 
   subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
-    DROP["1 and 2. drop the month files, listings<br/>and raw days the windows no longer keep"]
+    DROP["1 and 2. drop the listings, and the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while monthly_window_dry_run is true"]
     YDONE{"a year done?<br/>monthly_keep_days since it ended,<br/>its next January absorbed, every month named"}
     YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
     YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
@@ -490,8 +490,8 @@ tree, in [the closed-day fold](#the-closed-day-fold) below.
 
 | Step | What it does |
 | --- | --- |
-| 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json` |
-| 2 | Drops each raw listing older than `raw_index_keep_days` whose day is compacted and whose raw folder is empty, and every raw day in a month the window no longer keeps |
+| 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
+| 2 | Drops each raw listing older than `raw_index_keep_days` whose day is compacted and whose raw folder is empty, and every raw day in a month the window no longer keeps. While the window only reports, the listings still go, and those raw days are named and kept |
 | 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
 | 4 | Absorbs every month that is done into its month file |
 | 5 | Takes every raw day that is due into its day file |
@@ -510,7 +510,7 @@ section 2).
 ### A day
 
 **A day is due once `compact_after_days` whole days have passed since it
-ended.** At the default of one, a wake on the 25th takes the days up to the 23rd.
+ended.** At one, a wake on the 25th takes the days up to the 23rd.
 Days go in order, each on its own, at most `max_periods_per_run` a pass. For each
 one the pass reads every raw file of the day and settles the rows: one file's
 rows per work unit - the last file of its highest attempt - then the first row
@@ -571,9 +571,8 @@ no date in it may repeat on two days, and both rows are facts.
 **A month file lives exactly `monthly_window` after its month is absorbed.**
 Month M goes on the day month M plus the window becomes absorbable, so the
 monthly period holds exactly `monthly_window` month files on every day, and the
-ledger reaches back `daily_keep_days` further than that. At the defaults - 13
-months and 45 days - January 2026 goes on 15 April 2027, the day February 2027 is
-absorbed.
+ledger reaches back `daily_keep_days` further than that. At 13 months and 45
+days, January 2026 goes on 15 April 2027, the day February 2027 is absorbed.
 
 **Raw files that land in a month already absorbed are refused and kept.**
 `daily_keep_days` is at least 31, one day more than GitHub's 30-day re-run
@@ -609,8 +608,8 @@ yearly index starts on its 1 January even when its first rows came later.
 Its next January is absorbed `daily_keep_days` after that January ends, 31 days
 into the new year, and the pass packs years before it absorbs months, so the
 year goes one wake later. A smaller `monthly_keep_days` would change nothing, so
-the loader refuses one. At the default of 45, 2026 is packed on 19 March 2027 at
-the earliest.
+the loader refuses one. At a `daily_keep_days` of 45, 2026 is packed on 19 March
+2027 at the earliest.
 
 Packing is five steps in this order: the year file, `index/yearly.json`, the
 deletion of its month files, `index/monthly.json`, and `yearly/watermark.json`
@@ -674,14 +673,28 @@ settles the rows, builds every file in memory, and reports every path a live
 pass would write and delete. So the list a person reads before turning a
 compaction live is the list the live pass carries out.
 
+**The monthly window has a switch of its own, `monthly_window_dry_run`.** With
+it `true`, steps 1 and 2 name every month file past the window and every raw
+file of a day in a month past it, and keep them; steps 3 to 5 then pack those
+days and months like any other, as if the window kept every month, so a first
+pass does not start at the oldest month the window keeps. The raw listings of
+step 2 still go, because their days' rows are in day files. `dry_run` still
+decides whether anything lands, so a dry run with the window reporting names
+what that live pass would do. With it `false`, a pass drops what the window no
+longer keeps, as above.
+
 **The record row says what the pass did, or would have.** `deleted` and
-`bytes_freed` count the files it deleted. `bytes_freed` is never netted against
-the files it wrote: the net is `bytes_freed` minus the `bytes` of the index
-entries it wrote. `candidates_seen` counts every raw day folder it listed and
-every file it read or weighed, so a listing that grows while a compaction only
-reports shows in every row. `until` is the newest day that was due. A pass that
-used its budget stops `ceiling`, with `resume_from` naming the day, month or
-year the next pass starts at; one that refused a period stops `failed`, naming it.
+`bytes_freed` count the files it deleted. `selected` counts the same files and
+every file the monthly window would have deleted that the pass kept because the
+window only reports, so `selected` minus `deleted` is what turning the window
+live would take at that wake. A raw file the pass packed is deleted either way,
+and is counted once. `bytes_freed` is never netted against the files it wrote:
+the net is `bytes_freed` minus the `bytes` of the index entries it wrote.
+`candidates_seen` counts every raw day folder it listed and every file it read,
+weighed or named, so a listing that grows while a compaction only reports shows
+in every row. `until` is the newest day that was due. A pass that used its
+budget stops `ceiling`, with `resume_from` naming the day, month or year the
+next pass starts at; one that refused a period stops `failed`, naming it.
 
 ## The closed-day fold
 
@@ -810,11 +823,23 @@ sooner could still be reached by one. The 30 is declared once, as
 floor is derived from it. A raw file that lands in an absorbed month anyway is
 refused and kept for a person (Carmack and Fowler).
 
-**The two ledgers packed live wait 31 days, not the default 45.** 31 is the
+**The two ledgers packed live wait 31 days, not 45.** 31 is the
 shortest wait that still catches every re-run GitHub allows, and nothing needs
 the 14 days more that 45 waits. A shorter wait, such as 15 days, would need a
 month file rebuilt when a late re-run lands, which the packing refuses. The two
-declarations set 31, and the default stays 45 for the four that only report.
+declarations set 31, and the four that only report set 45.
+
+**A compaction's monthly window has a switch of its own.** Packing deletes only
+files whose rows it has just written into a coarser file; the monthly window
+deletes rows. With one `dry_run` for both, a ledger could not pack live while its
+window only reported, so `monthly_window_dry_run` reports the window's drops
+while the rest of the pass runs live. A window of forever where the window
+should only report would have taken the retention number out of the file a
+person reads. A second task for the window's drops would have had two tasks
+writing one ledger's periods in one wake, and the shard refuses a path one task
+writes and another deletes. The record keeps its fields and their meaning:
+`selected` counts what the window would also take, so a person reads it before
+turning the window live, and no reader of the record changes.
 
 **A missing file has a name, and a ledger's three indexes always exist.** Large
 table formats handle a missing file the same way, and this design copies them:
@@ -840,7 +865,9 @@ to say what an empty file already says.
 oldest raw day would leave the daily index holding part of a month, and that
 month's check would call the days before it holes. The start asks the same
 function the window drops months by, `first_kept_month`, so a first pass never
-takes a day the same pass would drop (Carmack and Fowler).
+takes a day the same pass would drop; while the window only reports, nothing is
+dropped, and the first pass starts without regard to the window (Carmack and
+Fowler).
 
 **A finished year's month files may be packed into one year file.** A ledger
 may pack each finished year into one file, kept for ever, rather than delete its
