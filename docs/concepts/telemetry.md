@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -88,6 +88,18 @@ The fold reads one shard, never the accumulated archive. An unopened span produc
 Raw traces retain nesting for recent-run inspection. Their layout is `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl`; each line is one span. The `traces` gardener task removes expired files according to `config/gardener/traces.json`.
 
 Delete expired traces rather than summarising them again: the rollup already contains the durable totals. No publication gate or reader page may depend on a raw trace being present. A gap before tracing was enabled is missing instrumentation, not zero work.
+
+`idhazh telemetry item <item_id> --date YYYY-MM-DD` prints the item's settled
+health rows and each matching trace tree. The date is required and means UTC.
+Health uses the shared ledger reader, including packed days, months and years.
+The command reads trace files from that day alone and applies the current
+retention in `config/gardener/traces.json`, even when expired files remain.
+Missing or expired traces leave health visible with a reason.
+
+Trace groups name the run, attempt, job and shard in deterministic order.
+Older filenames that did not record an attempt or job label those as unknown.
+Settled health is not attributed to an attempt. Parent links preserve nesting;
+two item passes remain separate lines and their elapsed times are never added.
 
 ## The item-level census
 

@@ -165,7 +165,8 @@ def test_every_telemetry_subcommand_runs_against_a_day(
     """
     state_root, digest_root, date = _a_published_day(tmp_path)
     extra = {
-        "prune": ["--target", LedgerName.FEED_HEALTH, "--since", date, "--until", date]
+        "prune": ["--target", LedgerName.FEED_HEALTH, "--since", date, "--until", date],
+        "item": ["ai-01"],
     }
 
     exit_code = cli.main(

@@ -10,10 +10,12 @@ counts a row.
     idhazh telemetry census  --date <d>   how that day's items ended
     idhazh telemetry rollup  --date <d>   how long that day's spans took
     idhazh telemetry publish --date <d>   write that day's projections again
+    idhazh telemetry item <item_id> --date <d>
+                                          health and separate item trace trees
     idhazh telemetry prune   --target <s> --since <d> --until <d>
                                           delete one ledger's days in a range
 
-Every subcommand is bounded by what it is handed - four of them by one date and
+Every subcommand is bounded by what it is handed - five of them by one date and
 `prune` by the range it names - so none of them costs more as the archive grows
 (Guardrail #12).
 
@@ -42,7 +44,7 @@ from typing import Final
 
 from idhazh import config
 from idhazh.assemble import day_dir, utc_now
-from idhazh.telemetry import inventory, prune, republish
+from idhazh.telemetry import inventory, item, prune, republish
 
 #: The word that reaches this router. `idhazh/cli.py` holds it in one place -
 #: the verb it lists and the verb it hands over on are the same string.
@@ -80,6 +82,7 @@ SUBCOMMANDS: Final[tuple[Subcommand, ...]] = (
     Subcommand("rollup", "Total one day's spans, by span name."),
     Subcommand("census", "Count how one day's items ended."),
     Subcommand("show", "List the instrument files one day has."),
+    Subcommand("item", "Inspect one item's health and separate trace trees.", item.add_arguments),
 )
 
 
@@ -94,7 +97,10 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
     for subcommand in SUBCOMMANDS:
         child = subparsers.add_parser(subcommand.name, help=subcommand.summary)
-        child.add_argument("--date", default=None, help="Defaults to today, UTC.")
+        child.add_argument(
+            "--date", default=None, required=subcommand.name == "item",
+            help="UTC day; required for item, otherwise defaults to today.",
+        )
         child.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
         child.add_argument(
             "--state-root",
@@ -140,6 +146,16 @@ def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> 
         parser.error(f"--date takes a YYYY-MM-DD day, not {date!r}")
     state = args.state_root or state_root
     digest = args.digest_root or digest_root
+
+    if args.subcommand == "item":
+        try:
+            for line in item.report(
+                state, item_id=args.item_id, date=date, config_dir=args.config
+            ):
+                print(line)
+        except ValueError as refusal:
+            parser.error(str(refusal))
+        return 0
 
     if args.subcommand == "prune":
         # Neither `--date` nor `--digest-root` reaches this one: it is told its
