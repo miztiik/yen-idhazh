@@ -526,6 +526,17 @@ test('unchanged engine files survive a deploy without a download and remain read
 			});
 			await registration.update();
 			await changed;
+			const controller = navigator.serviceWorker.controller;
+			if (!controller) throw new Error('The updated worker did not take control');
+			if (controller.state !== 'activated') {
+				await new Promise<void>((resolveActivated) => {
+					controller.addEventListener('statechange', function activated() {
+						if (controller.state !== 'activated') return;
+						controller.removeEventListener('statechange', activated);
+						resolveActivated();
+					});
+				});
+			}
 		});
 		const kept = await ourCaches(page);
 		expect(kept).toContain(engineCache);
