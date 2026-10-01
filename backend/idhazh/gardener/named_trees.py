@@ -1,7 +1,8 @@
 """Which members does a dated tree hold, read from a listing's names and never from the disk?
 
 Each tree a gardener task keeps has a grammar: `YYYY/MM/DD.csv` day files, a
-`YYYY/MM/DD/` folder of writer files, a published day's folder of pictures,
+`YYYY/MM/DD/` folder of writer files beside a closed month's own `settled.csv`,
+a published day's folder of pictures,
 `YYYY-MM` month files, a trace under its day's folders, a ledger's raw day
 folders. The walk that reads each grammar off the disk lives beside the
 pipeline code that writes it. A gardener task reads the same grammar off the
@@ -60,22 +61,29 @@ def _real_day(year: str, month: str, day: str) -> bool:
 def _refuse_a_shard(root: Path, parts: tuple[str, ...]) -> NoReturn:
     raise ValueError(
         f"{root.parent.name}/{root.name} holds {'/'.join(parts)}, which is not a file inside "
-        "a YYYY/MM/DD day directory. A file the reader cannot place is how it starts missing "
-        "rows, so it refuses the read rather than skipping the file."
+        "a YYYY/MM/DD day directory, nor a closed month's settled.csv. A file the reader "
+        "cannot place is how it starts missing rows, so it refuses the read rather than "
+        "skipping the file."
     )
 
 
 def shard_files(listing: FileListing, root: Path) -> Iterator[Path]:
-    """Every writer file of a `YYYY/MM/DD/` day tree, oldest day first.
+    """Every writer file of a `YYYY/MM/DD/` day tree, and each settled month's file, oldest first.
 
     The twin of `day_shards.shard_files(root, days=UNBOUNDED_WINDOW)`: a file
-    that is not a `.csv` inside a real day's folder is refused. Like the twin,
-    the whole tree is placed before its first file is handed on, so a stray
-    anywhere stops the walk before it yields anything.
+    that is neither a `.csv` inside a real day's folder nor a `settled.csv`
+    directly inside a real month's folder is refused. Like the twin, the whole
+    tree is placed before its first file is handed on, so a stray anywhere stops
+    the walk before it yields anything.
     """
     found: list[Path] = []
     for parts in _below(listing, root):
-        if (
+        settled_month = (
+            len(parts) == 3
+            and parts[2] == day_shards.SETTLED_NAME
+            and _real_day(parts[0], parts[1], "01")
+        )
+        if not settled_month and (
             len(parts) != 4
             or not _real_day(*parts[:3])
             or Path(parts[3]).suffix != day_shards.SUFFIX

@@ -11,6 +11,7 @@
   "fold_dry_run": false,
   "folded_days": 6,
   "folded_files": 770,
+  "folded_months": 0,
   "job": "run-tasks",
   "max_deletes_per_run": null,
   "resume_from": null,
@@ -21,6 +22,6 @@
   "stopped_because": "exhausted",
   "task": "feed-health",
   "until": "2025-07-31",
-  "version": "2026-09-30",
+  "version": "2026-10-01",
   "work_ended_at": "2026-09-29T00:44:05Z"
 }

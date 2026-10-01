@@ -7,9 +7,14 @@ writers never share a filename there - `ledger.segment_name` spells the identity
 settlement is something a reader does rather than something a writer leaves
 behind.
 
-**A day is a directory and nothing else.** Every committed ledger here files
-that way, so a `<DD>.csv` beside a month's day directories is a name no writer
-spells and the walk refuses it with every other stray.
+**A day is a directory, and a closed month may be one file.** Every committed
+ledger here files a day that way, so a `<DD>.csv` beside a month's day
+directories is a name no writer spells and the walk refuses it with every other
+stray. The one file a month folder may hold is its own `settled.csv`: a closed
+month the gardener's fold settled whole, for a tree whose task asks for that
+(`closed_day_fold`). Its rows name no day, so a walk reads it beside the month's
+days, and a reader that asks for one day at a time is refused it
+(`dates_by_month`).
 
 **This reader is CSV-only.** A parquet or JSON-lines file under `state/raw/` or
 `state/compact/` is read through `ledger.load`, never here: one reader taught two
@@ -22,9 +27,10 @@ Six ledgers with six read-side folds would be six answers to one question, and
 a reader that forgot to call one would read double-counted rows.
 
 **Three names here are reserved rather than a writer's.** `settled.csv` is what
-a closed-day fold leaves behind, `before-partition.csv` is what a committed head
-already held before writes carried identity, and `repair-<stamp>.csv` is an
-operator's one add. All three sort below every writer file: a writer's attempt
+a fold leaves behind in a closed day or a closed month, `before-partition.csv`
+is what a committed head already held before writes carried identity, and
+`repair-<stamp>.csv` is an operator's one add. All three sort below every
+writer file: a writer's attempt
 is the run's own `GITHUB_RUN_ATTEMPT` and that starts at 1, so attempt 0 is a
 place no writer can take. It is also the right place - a straggler beside any of
 them is later, and its rows are the ones the settlement must let win.
@@ -108,9 +114,9 @@ def _refuse_stray(entry: Path, root: Path) -> NoReturn:
     raise ValueError(
         f"{root.parent.name}/{root.name} holds "
         f"{entry.relative_to(root).as_posix()}, which is not a file inside a "
-        "YYYY/MM/DD day directory. A file the reader cannot place is how it "
-        "starts missing rows, so it refuses the read rather than skipping the "
-        "file."
+        "YYYY/MM/DD day directory, nor a closed month's settled.csv. A file the "
+        "reader cannot place is how it starts missing rows, so it refuses the "
+        "read rather than skipping the file."
     )
 
 
@@ -127,6 +133,18 @@ def _is_day(year: str, month: str, day: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def is_month_file(shard: Path) -> bool:
+    """Whether a file a walk here handed on is a closed month's `settled.csv`, not a day's.
+
+    Read off the path: a month's file sits directly in its `<MM>/` folder, so
+    the folder above it is a four-digit year, where above a day's file sits a
+    two-digit month.
+    """
+    return shard.name == SETTLED_NAME and day_partition.is_segment(
+        shard.parent.parent.name, day_partition.YEAR_WIDTH
+    )
 
 
 def _one_day(entry: Path, root: Path, year: str, month: str) -> list[Path]:
@@ -147,6 +165,13 @@ def _one_day(entry: Path, root: Path, year: str, month: str) -> list[Path]:
     return shards
 
 
+def _one_entry(entry: Path, root: Path, year: str, month: str) -> list[Path]:
+    """Every shard one entry of a month folder holds: a closed month's settled file, or a day's."""
+    if entry.name == SETTLED_NAME and entry.is_file() and _is_day(year, month, "01"):
+        return [entry]
+    return _one_day(entry, root, year, month)
+
+
 def shard_files(root: Path, *, days: int) -> Iterator[Path]:
     """Every shard of the newest `days` recorded days of one ledger, oldest first.
 
@@ -157,7 +182,10 @@ def shard_files(root: Path, *, days: int) -> Iterator[Path]:
 
     The newest `days` RECORDED days, not the newest `days` calendar days. A day
     nothing ran on has no entry, so counting entries never starves a caller of a
-    day it should have read.
+    day it should have read. A closed month settled whole is one entry, its
+    `settled.csv`, after any day a re-run added to it since. It holds every day
+    it settled, so a cover that reaches it reads more days than it counted,
+    never fewer.
 
     Walked rather than globbed, so every entry is accounted for and the ones this
     cannot place are refused rather than passed over. A missing directory yields
@@ -177,7 +205,7 @@ def shard_files(root: Path, *, days: int) -> Iterator[Path]:
             ):
                 _refuse_stray(month, root)
             for entry in sorted(month.iterdir()):
-                recorded.append(_one_day(entry, root, year.name, month.name))
+                recorded.append(_one_entry(entry, root, year.name, month.name))
     kept = recorded if days == UNBOUNDED_WINDOW else recorded[max(0, len(recorded) - days) :]
     for shards in kept:
         yield from shards
@@ -191,8 +219,9 @@ def shards_by_month(root: Path, *, days: int) -> dict[str, list[Path]]:
     a ledger filed by day is a bridge four prunes and one repair all need, and a
     bridge written once cannot be written two ways.
 
-    A month here holds every writer's file for every day in it, so a caller that
-    deletes a month deletes all of them - which is what makes a month go whole.
+    A month here holds every writer's file for every day in it, and its own
+    settled file once it is closed and settled whole, so a caller that deletes a
+    month deletes all of them - which is what makes a month go whole.
 
     `days` has no default for the reason `shard_files` gives.
     """
@@ -210,10 +239,20 @@ def dates_by_month(root: Path, *, days: int) -> dict[str, list[str]]:
     the first, so a reader asks for dates and settles each one; only a caller
     that deletes needs the files themselves.
 
+    A closed month settled whole is refused by name. Its rows name no day, so a
+    reader that settles one date at a time would read none of them and report
+    the month as the days a re-run added to it since.
+
     `days` has no default for the reason `shard_files` gives.
     """
     months: dict[str, list[str]] = {}
     for shard in shard_files(root, days=days):
+        if is_month_file(shard):
+            raise ValueError(
+                f"{root.parent.name}/{root.name} holds {shard.relative_to(root).as_posix()}, "
+                "a closed month settled whole, and its rows name no day. Read a tree that "
+                "holds one through settled_rows, which reads a month and a day alike"
+            )
         recorded = date_of(shard)
         held = months.setdefault(recorded[:7], [])
         if not held or held[-1] != recorded:
@@ -222,11 +261,16 @@ def dates_by_month(root: Path, *, days: int) -> dict[str, list[str]]:
 
 
 def date_of(shard: Path) -> str:
-    """The `<YYYY-MM-DD>` a shard is filed under, read off its own path.
+    """The `<YYYY-MM-DD>` a shard is filed under, or the `<YYYY-MM>` a month's settled file is.
 
     The peer of `day_partition.date_of` for a ledger filed by day directory: the
-    three names above the file spell the date. Nothing here opens the file.
+    three names above a day's file spell the date. A closed month's settled file
+    holds every day it settled and names none, so its stamp is the month, which
+    sorts after every day before that month and before every day in it. Nothing
+    here opens the file.
     """
+    if is_month_file(shard):
+        return f"{shard.parent.parent.name}-{shard.parent.name}"
     day = shard.parent
     return f"{day.parent.parent.name}-{day.parent.name}-{day.name}"
 
@@ -235,9 +279,10 @@ def _carries_no_identity(shard: Path) -> bool:
     """Whether this shard's name is a reserved one rather than a writer's identity.
 
     Three names are reserved, and each is declared where it is minted with its
-    own removal condition beside it: `settled.csv` here for a closed day's fold,
-    `ledger.BEFORE_PARTITION_NAME` for the bytes a committed head already held,
-    and `ledger.repair_name` for an operator's one add.
+    own removal condition beside it: `settled.csv` here for the fold of a closed
+    day or a closed month, `ledger.BEFORE_PARTITION_NAME` for the bytes a
+    committed head already held, and `ledger.repair_name` for an operator's one
+    add.
     """
     return shard.name in (SETTLED_NAME, ledger.BEFORE_PARTITION_NAME) or ledger.is_repair(
         shard.name
@@ -399,6 +444,38 @@ def settled_day(
     settlement, same order, one directory listing.
     """
     return _settled(root, one_day(root, date), key, model)
+
+
+def one_month(root: Path, month: str) -> list[Path]:
+    """Every shard of one named `YYYY-MM` month: its settled file and every day's, in walk order.
+
+    The peer of `one_day` for a fold that settles a closed month whole. It lists
+    the month folder and each day folder in it, whatever the ledger has
+    accumulated, so it needs no cover to declare (Guardrail #12). A month
+    nothing recorded yields nothing.
+    """
+    folder = root / month[:4] / month[5:7]
+    if not folder.is_dir():
+        return []
+    return [
+        shard
+        for entry in sorted(folder.iterdir())
+        for shard in _one_entry(entry, root, month[:4], month[5:7])
+    ]
+
+
+def settled_month(
+    root: Path,
+    month: str,
+    key: tuple[str, ...],
+    model: type[CsvContract],
+) -> list[dict[str, str]]:
+    """One row per record one named month holds, settled, first seen first.
+
+    `settled_day` for a whole month: what a fold writes into the month's own
+    `settled.csv`, read from every file the month holds.
+    """
+    return _settled(root, one_month(root, month), key, model)
 
 
 def _settled(

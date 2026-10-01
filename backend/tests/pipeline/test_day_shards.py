@@ -14,8 +14,10 @@ names each one and checks it by name. The list is fixed and written out here, so
 this test costs the same however much the repository grows (`CLAUDE.md` section
 13).
 
-A day is a directory and nothing else, so a `<DD>.csv` beside one is a name no
-writer spells and the walk refuses it with every other stray.
+A day is a directory, so a `<DD>.csv` beside one is a name no writer spells
+and the walk refuses it with every other stray. The one file a month folder may
+hold is a closed month's own `settled.csv`, which reads back as the days it
+replaced.
 """
 
 from __future__ import annotations
@@ -145,6 +147,61 @@ def test_a_day_file_beside_the_day_directories_stops_the_read(tmp_path: Path) ->
     with pytest.raises(ValueError, match=r"17\.csv"):
         list(day_shards.shard_files(tmp_path, days=UNBOUNDED_WINDOW))
     assert day_shards.one_day(tmp_path, "2026-09-17") == []
+
+
+#: The tree whose closed months are settled whole: the eval ledger's ID folder.
+ID_TREE: Final = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
+
+
+def _a_month_settled_whole(tmp_path: Path) -> Path:
+    """The id-months fixture with August settled into one file, and the folder that holds it."""
+    source = FIXTURE / "id-months" / ID_TREE.value
+    assert source.is_dir(), f"the id-months fixture is missing at {source}"
+    state = tmp_path / ledger.STATE_DIRNAME
+    root = ledger.tree_root(state, ID_TREE)
+    shutil.copytree(source, root)
+    folded = closed_day_fold.fold(
+        state,
+        [ID_TREE],
+        now=datetime(2026, 10, 1, tzinfo=UTC),
+        after_days=DEFAULT_CLOSED_AFTER_DAYS,
+        dry_run=False,
+        settles_months=True,
+    )
+    assert [each.month for each in folded.months] == ["2026-08"]
+    return root
+
+
+def test_a_month_settled_whole_reads_back_as_the_days_it_replaced(tmp_path: Path) -> None:
+    """Every reader that walks the tree gets the same rows, in the same order, after the fold.
+
+    The month's file is a member of the walk, stamped with its month, after every
+    earlier month and before every later one. It reads at attempt 0 and holds
+    the settled answer of every file it replaced, which is the answer those
+    files gave.
+    """
+    source = FIXTURE / "id-months" / ID_TREE.value
+    key, model = ledger.segment_key(ID_TREE), ledger.segment_contract(ID_TREE)
+    before = day_shards.settled_rows(source, key, model, days=UNBOUNDED_WINDOW)
+
+    root = _a_month_settled_whole(tmp_path)
+
+    month_file = root / "2026" / "08" / day_shards.SETTLED_NAME
+    assert month_file in list(day_shards.shard_files(root, days=UNBOUNDED_WINDOW))
+    assert day_shards.is_month_file(month_file)
+    assert day_shards.date_of(month_file) == "2026-08"
+    assert not day_shards.is_month_file(root / "2026" / "09" / "29" / day_shards.SETTLED_NAME)
+    assert day_shards.settled_rows(root, key, model, days=UNBOUNDED_WINDOW) == before
+
+
+def test_a_reader_that_settles_day_by_day_is_refused_a_month_settled_whole(
+    tmp_path: Path,
+) -> None:
+    """Its rows name no day, so a reader asking for dates would read none of them."""
+    root = _a_month_settled_whole(tmp_path)
+
+    with pytest.raises(ValueError, match=r"2026/08/settled\.csv"):
+        day_shards.dates_by_month(root, days=UNBOUNDED_WINDOW)
 
 
 def test_settled_sorts_below_every_writer_file(tmp_path: Path) -> None:

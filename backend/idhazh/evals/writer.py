@@ -13,10 +13,12 @@ nothing new to say, so it writes nothing. That is the promise in
 count of items rather than a count of times the pipeline looked at them.
 
 `recorded_observations` reads the index described below and nothing else. Every
-index day is kept, because every eval row is kept and nothing summarises a
-month, so the dedupe read opens one more index day for every day recorded. That
-read grows with what the ledger has piled up (Guardrail #12), and it is declared
-in `docs/concepts/growing-reads.md`.
+measurement's digest is kept, because every eval row is kept and nothing
+summarises a month. The gardener's fold settles each closed month of the index
+into one file, so the dedupe read opens one file a closed month plus the open
+month's days, and it grows by one file a month. That read grows with what the
+ledger has piled up (Guardrail #12), and it is declared in
+`docs/concepts/growing-reads.md`.
 
 **The dedupe does not read the rows.** Answering "do we already hold this one?"
 meant every run paid for every row it had ever written. Measured on this
@@ -34,7 +36,9 @@ one `rm` rather than an edit inside a shared shard - which an append-only ledger
 cannot express. The index follows the ledger rather than keeping a grain of its
 own, because an index row is the record of the row beside it and two grains in
 one relationship is a mapping somebody has to maintain
-(`docs/concepts/partitions.md`).
+(`docs/concepts/partitions.md`). Once a month is closed the gardener settles its
+index days into one file in the month's folder: an index row carries no date, so
+no reader of the index ever needed the day.
 
 Nothing is forgotten and there is no clock. `OBSERVATION_KEY` carries no date on
 purpose - re-measuring an article a year later is the same measurement - so a
@@ -127,9 +131,9 @@ def recorded_observations(state_dir: Path) -> set[str]:
 
 
 def index_days(state_dir: Path) -> list[Path]:
-    """Every committed shard of the index, oldest day first.
+    """Every committed shard of the index, oldest first: each settled month's file and each day's.
 
-    `day_shards.shard_files` decides what counts as a day. Unbounded because
+    `day_shards.shard_files` decides what counts as a shard. Unbounded because
     every caller here needs the whole index.
     """
     return list(
@@ -148,12 +152,13 @@ def index_columns() -> tuple[str, ...]:
 def indexed_observations(state_dir: Path) -> set[str]:
     """The digests the index holds. A raw read of the cell, not a row build.
 
-    **This opens one file a recorded day and it is declared rather than hidden**
-    (Guardrail #12, `docs/concepts/growing-reads.md`). It was one file a month
-    until 2026-09-13, when the grain change turned 2 opens into 23, and it gains
-    about 365 a year. **Every index day is kept**, because every eval row is
-    kept and nothing summarises a month, so the count of files grows with every
-    recorded day.
+    **This opens one file a closed month, plus one a recorded day of the open
+    month, and it is declared rather than hidden** (Guardrail #12,
+    `docs/concepts/growing-reads.md`). The gardener's fold settles each closed
+    month's index days into one file, so the read gains about one file a month
+    rather than one a day, and it still reads the digest of every measurement
+    ever taken: nothing summarises a month and no digest is dropped. A month's
+    file and a day's are read alike, so a fold changes no answer here.
 
     A cover was rejected rather than overlooked: a measurement re-taken outside
     a window would read as new, and a count over the ledger would become a count
@@ -170,7 +175,7 @@ def indexed_observations(state_dir: Path) -> set[str]:
 
 
 class IndexDrift(NamedTuple):
-    """What one day's index and the rows beside it disagree about, both ways.
+    """What one day's index, or one settled month's, and the rows beside it disagree about.
 
     `extra` is what the index holds that the rows cannot produce. `missing` is
     what the rows produce that the index does not hold. Two fields rather than
@@ -214,11 +219,33 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
     `stages.rebuild_summary_quality_evals_index`). A day with no committed rows is refused
     by name rather than skipped: a typo must not read as a clean pass over
     nothing.
+
+    **A day of a month the gardener has settled whole is answered for its whole
+    month**, keyed `YYYY-MM`. The month's index is one file and an index row
+    carries no date, so nothing says which day a digest came from: every row of
+    every day the eval ledger holds in that month is read and compared with the
+    month's index. A digest it lacks is added to the day whose rows produce it,
+    and the next fold settles it in.
     """
-    live = _digests_by_day(state_dir, days)
     named = sorted({day[:10] for day in days})
     if not named:
         raise ValueError("rebuild_index was given no day, and a pass over none repairs none")
+    root = ledger.tree_root(state_dir, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
+    whole = sorted(
+        {
+            day[:7]
+            for day in named
+            if (root / day[:4] / day[5:7] / day_shards.SETTLED_NAME).is_file()
+        }
+    )
+    read = set(named)
+    if whole:
+        read |= {
+            day
+            for day in ledger.held_days(state_dir, LedgerName.SUMMARY_QUALITY_EVALS)
+            if day[:7] in whole
+        }
+    live = _digests_by_day(state_dir, read)
     absent = [date for date in named if date not in live]
     if absent:
         raise FileNotFoundError(f"the summary-quality-evals ledger holds no rows for {absent}")
@@ -227,15 +254,24 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
     # the same name and an operator can see one repair rather than twenty.
     name = ledger.repair_name(datetime.now(UTC))
     found: dict[str, IndexDrift] = {}
-    for date in named:
-        produced = live[date]
-        found[date] = _drift(_indexed_on(state_dir, date), produced)
-        if found[date].missing:
-            index = ledger.path(state_dir, LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date)
-            _append_index(index / name, sorted(found[date].missing))
-        after = _drift(_indexed_on(state_dir, date), produced)
+    for cover in sorted({*whole, *(date for date in named if date[:7] not in whole)}):
+        month = cover in whole
+        by_day = {date: held for date, held in live.items() if date.startswith(cover)}
+        produced = frozenset(digest for held in by_day.values() for digest in held)
+        found[cover] = _drift(_indexed_in(state_dir, cover, month=month), produced)
+        for date, held in sorted(by_day.items()):
+            gap = held & found[cover].missing
+            if gap:
+                index = ledger.path(state_dir, LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date)
+                _append_index(index / name, sorted(gap))
+        after = _drift(_indexed_in(state_dir, cover, month=month), produced)
         if after.missing:
-            where = ledger.relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date)
+            tree = ledger.tree_relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
+            where = (
+                f"{tree}/{cover[:4]}/{cover[5:7]}"
+                if month
+                else ledger.relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX, cover)
+            )
             raise RuntimeError(
                 f"{where} still does not hold "
                 f"{len(after.missing)} digests the rows beside it produce, after a repair "
@@ -244,16 +280,18 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
     return found
 
 
-def _indexed_on(state_dir: Path, date: str) -> frozenset[str]:
-    """Every digest one day's index holds, across every file in that day.
+def _indexed_in(state_dir: Path, cover: str, *, month: bool) -> frozenset[str]:
+    """Every digest the index holds for one day, or for one whole `YYYY-MM` month.
 
-    A day is a directory of writer-owned files, so the answer is the union of
-    them - and a caller that read whichever file the walk named last would call
-    a measurement new because another writer's file already held it.
+    A day is a directory of writer-owned files, and a settled month is its own
+    file beside any day added to it since, so the answer is the union of them -
+    and a caller that read whichever file the walk named last would call a
+    measurement new because another file already held it.
     """
     held: set[str] = set()
     root = ledger.tree_root(state_dir, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
-    for path in day_shards.one_day(root, date):
+    files = day_shards.one_month(root, cover) if month else day_shards.one_day(root, cover)
+    for path in files:
         held.update(_digests_of_index(path))
     return frozenset(held)
 

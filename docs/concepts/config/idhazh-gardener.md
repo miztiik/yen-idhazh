@@ -50,7 +50,7 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 
 | Kind | Its own keys |
 | --- | --- |
-| `retention` | `series`, one window per series, for one task alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`. `fold`, `{after_days, dry_run}`, on a task that owns a CSV day tree - a tree that files one small file per writer under each day's folder: once `after_days` whole days have passed since a day ended (default 1), its files become one `settled.csv`. The fold has a `dry_run` of its own because it changes no answer a reader gets ([how it runs](../../architecture/publishing/idhazh-gardener.md#the-closed-day-fold)) |
+| `retention` | `series`, one window per series, for one task alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`. `fold`, `{after_days, dry_run, settles_months}`, on a task that owns a CSV day tree - a tree that files one small file per writer under each day's folder: once `after_days` whole days have passed since a day ended (default 1), its files become one `settled.csv`. With `settles_months` (default `false`), once `after_days` whole days have passed since a month ended, every file of that month becomes one `settled.csv` in the month's folder. The fold has a `dry_run` of its own because it changes no answer a reader gets ([how it runs](../../architecture/publishing/idhazh-gardener.md#the-closed-day-fold)) |
 | `collection` | `collection` (required): `workflow-artifacts` or `workflow-runs`, the GitHub collection it deletes from, and the file is named for it. Its `window` is whole days and nothing else, because a pass counts a member's age in days |
 | `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `monthly_keep_days` (`null`), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_days` (1). `monthly_keep_days` turns on year packing: how many whole days after a UTC year ends its month files are packed into one year file, kept for ever. `null` packs no year. Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the periods are how far back it keeps, and `max_periods_per_run` is its budget, spent on days, months and years separately |
 | `history` | `every_days`, how many whole days apart two rewrites may run; `push_attempts`, how many pushes one run makes in all, at least 1; `push_retry_delay_seconds`, how long a run waits after a refused push before it squashes again, at least 0. None of the three has a default. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
@@ -66,14 +66,16 @@ ledger's ID folder,
 `feed-health`, `counterfactual-scores` and `span-rollup`. The item-health, eval
 and host-fingerprint rows moved to the ledger door, so no fold reads them.
 The digest workflow ran that same fold live on every run until the gardener
-took it over, and a fold changes no answer a reader gets.
+took it over, and a fold changes no answer a reader gets. The ID folder's fold
+also settles each closed month whole, `fold.settles_months: true`, under the
+same live switch.
 Why each tree gets the age it has is
 [retention-ages.md](retention-ages.md#every-tree-names-its-own-cleanup-age).
 
 | Task | Owns | Window | Why that window |
 | --- | --- | --- | --- |
 | `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health` and `state/compact/item-health`, which `compact-item-health` owns, so it finds its due months whichever shard it lands in |
-| `summary-quality-evals-index` | `state/summary-quality-evals-index` | forever | the index a run dedupes against, and an observation key carries no date, so a dropped day would make every measurement in it new again. Every eval row is kept for ever and nothing summarises a month, so the task takes nothing; it exists so the index's closed days are folded |
+| `summary-quality-evals-index` | `state/summary-quality-evals-index` | forever | the index a run dedupes against, and an observation key carries no date, so a dropped day would make every measurement in it new again. Every eval row is kept for ever and nothing summarises a month, so the task takes nothing; it exists so the index's closed months become one file each, and the open month's closed days one file each |
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
 | `host-fingerprint` | `state/host-fingerprint` | 14 months | retired: its module is deleted and nothing runs it. The declaration stays because its window is the floor `compact-host-fingerprint` must reach, and the published machine shard is folded from that ledger, so it keeps at least `public_machine_keep_months` |
 | `seen` | `state/seen` | 90 days | at least `collect.seen_window_days`, the days the collector reads |
@@ -161,7 +163,7 @@ refused push. The person's ruling of 2026-09-29 added the two keys.
 **Every other switch ships `dry_run: true`**, and a contract test holds the
 committed tree to that. It finds every `dry_run` a declaration carries, a
 fold's as well as the task's own, and names the live ones as its exceptions,
-each with the decision beside it: `corpus-squash`'s `dry_run` and the six
+each with the decision beside it: `corpus-squash`'s `dry_run` and the four
 `fold.dry_run` switches above. A task earns its first deletion from a person
 reading its records, so turning one live is an edit to that list, never a side
 effect of the change that added the task.
@@ -187,6 +189,7 @@ names the file an operator edits and the rule it broke.
 | The retired `host-fingerprint` declaration keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from the host-fingerprint ledger, and that window is the floor its compaction must reach |
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
+| `fold.settles_months` beside a `window` of days | A settled month's file names no day, so a window of days would take it whole once the month's first day aged out, and with it the rows of every later day the window still keeps |
 | A compaction not called `compact-<ledger>` | One compaction a ledger, found by name |
 | A collection task not called `<collection>.json`, or whose `window` is not whole days | One task a collection, found by name; a pass counts a member's age in days |
 | `raw_index_keep_days` below `daily_keep_days` | The daily period may still need the index to rebuild a file |

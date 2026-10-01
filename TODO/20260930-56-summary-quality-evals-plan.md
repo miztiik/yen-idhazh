@@ -69,7 +69,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | 2 | The shared packing gains a year period | - | A | DONE | p56r2 | #1172 | p56-r2-worker |
 | 3 | The eval ledger becomes `summary-quality-evals` | 1 | B | DONE | p56r3 | #1179 | p56-r3-worker |
 | 4 | The browser reads a year file by byte ranges | 2 | B | DONE | p56r4 | #1178 | p56-r4-worker |
-| 5 | The eval ledger's ID files are packed a month at a time | 3 | C | NOT STARTED | - | - | - |
+| 5 | The eval ledger's ID files are packed a month at a time | 3 | C | DONE | p56r5 | #1180 | p56-r5-worker |
 | 6 | The live site is checked to serve a `.parquet` byte range uncompressed | 4, plan 51 row 3 | C | NOT STARTED | - | - | - |
 | 7 | A published ledger's declaration sets its own wait | 4 | C | BLOCKED - the person's ruling on a page that reads a year file across a deploy (deviation 9) | - | - | - |
 

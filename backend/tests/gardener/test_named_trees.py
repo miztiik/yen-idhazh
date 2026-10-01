@@ -57,18 +57,28 @@ def listing_of(repo: Path, folder: str) -> FileListing:
 
 
 SHARD_TREES: Final = {
-    "clean": ["2025/12/31/x.csv", "2026/09/01/b.csv", "2026/09/01/a.csv", "2026/09/02/settled.csv"],
+    "clean": [
+        "2025/12/31/x.csv",
+        "2026/08/settled.csv",
+        "2026/08/31/late.csv",
+        "2026/09/01/b.csv",
+        "2026/09/01/a.csv",
+        "2026/09/02/settled.csv",
+    ],
     "a text file in a day": ["2026/09/01/a.csv", "2026/09/02/a.csv", "2026/09/02/notes.txt"],
     "a day that is no day": ["2026/09/01/a.csv", "2026/09/31/a.csv"],
     "a month that is no month": ["2026/09/01/a.csv", "2026/13/01/a.csv"],
     "a file where a day belongs": ["2026/09/01/a.csv", "2026/09/02.csv"],
     "a file at the root": ["2026/09/01/a.csv", "README"],
     "a folder in a day": ["2026/09/01/a.csv", "2026/09/02/deep/a.csv"],
+    "a settled month that is no month": ["2026/09/01/a.csv", "2026/13/settled.csv"],
+    "a settled file where a month belongs": ["2026/09/01/a.csv", "2026/settled.csv"],
 }
 
 
 @pytest.mark.parametrize("shape", sorted(SHARD_TREES))
 def test_the_writer_files_of_a_day_tree_are_the_disk_walks(tmp_path: Path, shape: str) -> None:
+    """A closed month's own settled file is a member of both walks, beside its days."""
     root = plant(tmp_path / "state" / "feed-health", SHARD_TREES[shape])
     listing = listing_of(tmp_path, "state/feed-health")
 

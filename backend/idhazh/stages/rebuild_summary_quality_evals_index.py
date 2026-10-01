@@ -33,7 +33,9 @@ def stage_rebuild_summary_quality_evals_index(
     knows is that a month looks wrong, and naming thirty-one days to say so is a
     worse command than naming one month. So `--month` is expanded to that month's
     committed days here and `writer.rebuild_index` is given days - the same split
-    the prunes already use, where a `keep_months` knob deletes day files.
+    the prunes already use, where a `keep_months` knob deletes day files. A month
+    the gardener has settled into one index file is compared whole, because that
+    file says nothing about which day a digest came from.
 
     **Never a step of a run, and that is the design rather than an oversight.**
     Rebuilding reads every score row of every day it is given, which is the
@@ -71,10 +73,10 @@ def stage_rebuild_summary_quality_evals_index(
 
     days = sorted({day for month in named for day in by_month[month]})
     found = writer.rebuild_index(state, days)
-    for date, drift in sorted(found.items()):
+    for cover, drift in sorted(found.items()):
         LOG.info(
-            "index repaired day=%s held_the_rows_cannot_produce=%s rows_it_did_not_hold=%s",
-            ledger.relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date),
+            "index repaired cover=%s held_the_rows_cannot_produce=%s rows_it_did_not_hold=%s",
+            cover,
             len(drift.extra),
             len(drift.missing),
         )

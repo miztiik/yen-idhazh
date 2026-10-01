@@ -11,6 +11,7 @@
   "fold_dry_run": null,
   "folded_days": null,
   "folded_files": null,
+  "folded_months": null,
   "job": "run-tasks",
   "max_deletes_per_run": null,
   "resume_from": null,
@@ -21,6 +22,6 @@
   "stopped_because": "exhausted",
   "task": "traces",
   "until": "2026-09-20",
-  "version": "2026-09-30",
+  "version": "2026-10-01",
   "work_ended_at": "2026-09-27T00:46:58Z"
 }

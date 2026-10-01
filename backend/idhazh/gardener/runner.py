@@ -343,11 +343,13 @@ def _fold_changes(ran: _Ran) -> tuple[tuple[str, ...], tuple[str, ...]]:
     if ran.folded is None:
         return (), ()
     root = ran.context.repo_root
+    folders: tuple[closed_day_fold.SettledMonth | closed_day_fold.SettledDay, ...] = (
+        *ran.folded.months,
+        *ran.folded.days,
+    )
     return (
-        tuple(day.settled.relative_to(root).as_posix() for day in ran.folded.days),
-        tuple(
-            path.relative_to(root).as_posix() for day in ran.folded.days for path in day.replaced
-        ),
+        tuple(each.settled.relative_to(root).as_posix() for each in folders),
+        tuple(path.relative_to(root).as_posix() for each in folders for path in each.replaced),
     )
 
 
