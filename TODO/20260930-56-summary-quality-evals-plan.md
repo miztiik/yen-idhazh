@@ -4,7 +4,7 @@
 
 **Level**: 5 (CLAUDE.md section 6). It deletes a persisted contract, adds a period to the saved file format, and renames a committed ledger. The person's rulings below are the design consultation; the ESCALATE triggers name what still stops a worker.
 
-**Status**: rows 1 and 2 are done (#1170, #1172). Row 2 merged as built, by the person's ruling R5 on trigger 4. Rows 3 and 4 are next and run side by side; their design questions were settled at dispatch (section 2, deviations 5 to 8). Row 3 renames the ledger and sets its 93-day wait in its own declaration (R6). Row 4 makes the browser read only the byte ranges it needs, then removes the 367-day floor on a published ledger's wait. Row 5 follows row 3 and packs the ID files a month at a time. Row 6 checks the live site once plan 51 publishes its first `.parquet`.
+**Status**: rows 1 to 4 are done (#1170, #1172, #1179, #1178). The ledger is `summary-quality-evals` and its declaration waits 93 days before it packs a year (R6). The browser reads a year file by byte ranges. Row 4's measurement fired trigger 5 on a page that reads a year file across a deploy, so the 367-day floor on a published ledger stays until the person rules: that is row 7 (deviation 9). Row 5 packs the ID files a month at a time and is next. Row 6 checks the live site once plan 51 publishes its first `.parquet`.
 
 **Chain** (CLAUDE.md section 0d). **Intent**: the person's rulings of 2026-09-30, section 0. **Contract**: `backend/idhazh/contracts/` and the pages each row names. **Code**: the six rows.
 
@@ -18,14 +18,12 @@ AUTHORIZED (the person, 2026-09-30). Read CLAUDE.md, docs/how-to/execute-a-plan.
 docs/how-to/ship-a-pr.md and docs/how-to/run-the-gates.md, then this plan's section 0
 and section 1, and each row just before you dispatch it.
 
-Rows 1 and 2 are done. Rows 3 and 4 run side by side. They share only
-backend/idhazh/config.py, backend/tests/contracts/test_gardener_config.py and the two
-idhazh-gardener docs, so whichever merges second takes main in first. Row 5 waits
-for row 3, and row 6 for row 4 and for plan 51's row 3. Plan 51's
+Rows 1 to 4 are done. Row 5 is next. Row 6 waits for plan 51's row 3 to publish
+the site's first .parquet, and row 7 for the person's ruling on deviation 9. Plan 51's
 open pull requests publish this ledger under its old name (#1169) and write its month
-index (#1177): whichever of the two plans merges second takes main in first and uses
-the name main has. Plan 50's row 15 (build the score month summary) is withdrawn by
-the ruling below.
+index (#1177); row 3 has landed, so they take main in and use the new name. Merging
+main into a branch older than row 3 takes `git -c merge.directoryRenames=false merge`.
+Plan 50's row 15 (build the score month summary) is withdrawn by the ruling below.
 
 Push with: git -c credential.helper= -c 'credential.helper=!gh auth git-credential'
 push origin <branch>. Merge from outside the repository with gh pr merge <N> --repo
@@ -70,9 +68,10 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | 1 | The score month summary is retired, and no eval row is ever deleted | - | A | DONE | p56r1 | #1170 | p56-r1-worker |
 | 2 | The shared packing gains a year period | - | A | DONE | p56r2 | #1172 | p56-r2-worker |
 | 3 | The eval ledger becomes `summary-quality-evals` | 1 | B | DONE | p56r3 | #1179 | p56-r3-worker |
-| 4 | The browser reads a year file by byte ranges, and a published ledger's declaration sets its own wait | 2 | B | NOT STARTED | - | - | - |
+| 4 | The browser reads a year file by byte ranges | 2 | B | DONE | p56r4 | #1178 | p56-r4-worker |
 | 5 | The eval ledger's ID files are packed a month at a time | 3 | C | NOT STARTED | - | - | - |
 | 6 | The live site is checked to serve a `.parquet` byte range uncompressed | 4, plan 51 row 3 | C | NOT STARTED | - | - | - |
+| 7 | A published ledger's declaration sets its own wait | 4 | C | BLOCKED - the person's ruling on a page that reads a year file across a deploy (deviation 9) | - | - | - |
 
 ## 2. Deviations and rulings to date
 
@@ -85,7 +84,10 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | 5 | 3, 5 | One row renames the ledger and stops the ID files growing | Two rows. Row 3 renames and moves data, needs the stricter merge window, and is the part plan 51's open pull requests collide with. Row 5 then writes the ID files' packing once, under the final names | Plan owner, on Fowler's ruling at dispatch |
 | 6 | 5 | The ID files are packed by month, made a packed ledger, or read from the eval rows | Packed a month at a time by the closed-day fold, which is already live by decision, so no `dry_run` moves (trigger 3). Carmack preferred reading the IDs from the eval rows' key columns: no second copy, but it stops the growth only once plan 57's row 1 switches this ledger's packing live | Plan owner, on Fowler's ruling at dispatch |
 | 7 | 4 | The engine's seal must admit the registered address | `main` has no seal. Plan 55 ruled the browser's content policy is the boundary, so there is nothing to keep | Plan owner, from the dispatch check |
-| 8 | 4, 6 | Measure with `vite preview`, and check the live site in row 4 | `vite preview` gzips a `.parquet` it has no type for and cannot slow only the data files, so the spec runs its own small server. The live site serves no `.parquet` until plan 51's row 3 publishes one, so that check is row 6. Waiting costs nothing: no year file can exist before 2027-04-03, 93 days after 2026 ends, and only once packing is live | Plan owner, on Carmack's ruling at dispatch |
+| 8 | 4, 6 | Measure with `vite preview`, and check the live site in row 4 | `vite preview` gzips a `.parquet` it has no type for and cannot slow only the data files, so the spec runs its own small server. The live site serves no `.parquet` until plan 51's row 3 publishes one, so that check is row 6. Waiting costs nothing: no year file can exist before 2027-04-04, 93 whole days after 2026 ends, and only once packing is live | Plan owner, on Carmack's ruling at dispatch |
+| 9 | 4, 7 | When the measurement holds, row 4 removes the published floor | Trigger 5 fired on a page that holds part of a year file across a deploy: the browser asks for the next part naming the ETag it kept, and Pages answers an ETag it no longer serves with 200 and the whole file (measured on the live site; every file in a deploy carries that deploy's time, so an unchanged file gets a new ETag). Row 4 merged the range reads and kept the floor. Removing it is row 7, after the person rules | Plan owner, on trigger 5 |
+| 10 | 4 | Month files move to ranges if the measurement shows a panel draws sooner | One panel drew sooner, 9.5 s against 15.2 s on slow 4G, but a page draws several panels from one month file and no page on `main` calls the door yet. Month files stay whole until a page with its real panels is measured | Plan owner, on the row 4 worker's finding |
+| 11 | 3 | 19 raw, 59 compact and 78 ID files move, and a run started before the merge lands its rows in the old folder | 24 raw data files, 59 compact files and 83 ID files moved first, and 8 more after `main` moved. A run started before the merge lands nothing: its push stops at git's folder-rename conflict. Merging `main` into a branch older than the rename takes `git -c merge.directoryRenames=false merge` (`docs/architecture/contracts/persistence.md`) | Row 3 worker |
 
 ---
 
@@ -134,11 +136,12 @@ A worker commits and pushes the moment its gates pass, and measures after.
 - **Build order (Fowler, at dispatch).** One mechanical commit renames the code, one moves the data, and the last adds the 93 days below, so a conflict is settled by running the rename and the migration again on the merged tree. `config/idhazh.json` is not touched: `main` does not name the ledger there, and both of #1169's entries fail loudly under the old name.
 - **Year packing (R3, R6):** the renamed `config/gardener/compact-summary-quality-evals.json` sets `"monthly_keep_days": 93`, the switch row 2 left for this row (deviation 3). The number lives there and nowhere in code. `ledger.published` does not name the ledger on `main`, so the 367-day floor for a published ledger does not apply. If plan 51's #1169 publishes it first, that floor refuses 93 until row 4 removes it, and this commit then waits for row 4.
 - **Merge window:** the news run writes these rows every run, so this row merges as plan 50's row 9 did: no `digest.yml` or `idhazh-gardener.yml` run queued or running, and the migration run again just before the merge.
-- **Acceptance gates:** as row 1, plus `backend/tests/ledger backend/tests/pipeline backend/tests/evals`, `svelte-check`, and the frontend specs the shared selector names for every file the rename touches.
+- **Acceptance gates:** as row 1, plus `backend/tests/ledger backend/tests/pipeline backend/tests/test_evals.py`, `svelte-check`, and the frontend specs the shared selector names for every file the rename touches.
 - **Oracle:** every row the old folders held reads back from the new ones; no committed path under `state/` contains `/scores/` or `score-index`; the dedupe finds every measurement it found before the move.
 
-### Row #4 - The browser reads a year file by byte ranges, and a published ledger's declaration sets its own wait
+### Row #4 - The browser reads a year file by byte ranges
 
+- **Split (deviation 9).** Trigger 5 fired on a page that reads a year file across a deploy, so this row merged the range reads and kept the published floor. Removing the floor is row 7.
 - **Scope (R5).** The query door fetches every compact file whole and hands the bytes to the engine (`registerFileBuffer` in `browserEngine`, `frontend/src/lib/data/engine.ts`). A year file is instead registered by its address, so the engine asks the host only for the byte ranges a panel's query needs: the footer, then the row groups of the months asked for. A year file holds one row group per month, so one month's rows are one contiguous range. Day files stay fetched whole. Month files are measured as a third case, and move to ranges only if that measurement shows a panel draws sooner.
 - **The call (Carmack, at dispatch; MEASURED in Node on the browser's own engine file).** `db.open({ filesystem: { forceFullHTTPReads: false } })` before `connect()`, then `db.registerFileURL(name, url, DuckDBDataProtocol.HTTP, false)`. The default `forceFullHTTPReads` downloads the whole file in one plain GET and never sends a `Range`. `allowFullHTTPReads` stays on, because Pages answers a `HEAD` carrying a `Range` with 200 and the full length. directIO stays off, so the engine keeps its own block cache: a repeat query made 0 requests. `url` is absolute (`new URL(..., location.href)`), because a `blob:` worker cannot resolve a relative address, and the door builds it from the index path, never from fetched text.
 - **What has to keep working:**
@@ -150,11 +153,11 @@ A worker commits and pushes the moment its gates pass, and measures after.
   - Runs: the month file fetched whole, the same month out of the year file by ranges, and the month file by ranges. A fresh browser context each run, alternated, three rounds, medians. The time runs from the door call to its rows, after the engine and its add-on have loaded once, because no panel on `main` calls `slice()` yet. The columns are a real panel's list: all 42 columns by ranges read 2.31 times the month file (ESTIMATE, emulated) and would fire trigger 5.
   - Pass: the year file's body bytes at most twice the month file's; every GET for the year file carried a `Range` and got 206 with no `Content-Encoding`; the median by ranges no later than the median for the whole month file.
   - One more case: the year file's ETag changes but not its bytes between two queries, after the browser's cached copy has gone stale. It passes if every GET is still 206. Every Pages deploy gives every file a new ETag, and an `If-Range` against a changed ETag may be answered with the whole file (ESTIMATE).
-- **No flag (Fowler, at dispatch).** Range reads and the floor's removal land together, after the measurement. The floor exists only because the browser downloads a year file whole, and a flag would keep two ways to fetch a file and make the loader read a browser setting. Nothing on `main` can reach a year file yet: no ledger is published and every compaction is dry.
-- **When the measurement holds:** the published floor in `backend/idhazh/config.py` goes (`_refuse_a_published_reach_that_grows_or_falls_short` requires `monthly_keep_days` of at least `console.max_window_days` plus `compact_after_days`, 367 days today). A published ledger then waits what its own declaration says, as every ledger does (R6), and the loader's one remaining check is the knob's own: at least `daily_keep_days` plus 32 days. Its rule that a published ledger keeping its months forever must pack years stays. Its tests in `backend/tests/contracts/test_gardener_config.py` change with it, and no test pins 93: a fixture declaration below 367 is enough to prove the floor gone.
-- **Files touched (expected):** `frontend/src/lib/data/engine.ts`, `slice-query.ts` and `slice-reader.ts`; `frontend/tests/ledger-door.spec.ts`, one browser spec that counts requests and bytes, and its server; `backend/idhazh/config.py`; `backend/tests/contracts/test_gardener_config.py`; `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`, which gains three facts: the default that turns ranges off, Pages' 200 to a `HEAD` carrying a `Range`, and a new ETag on every deploy; `docs/architecture/publishing/idhazh-gardener.md`; `docs/concepts/config/idhazh-gardener.md`; this plan's Reckoner line.
+- **No flag (Fowler, at dispatch).** Range reads land with no flag: while the floor stands, no console read of a published ledger reaches a year file, and a flag would keep two ways to fetch a file.
+- **Measured (#1178, `docs/reference/benchmarks/what-a-month-out-of-a-year-file-costs.md`):** June out of the 29.8 MB year file by ranges, with the model-change panel's 10 columns on slow 4G, took 243,046 bytes in 13 requests and drew in 11.0 s, against 2,490,452 bytes and 15.2 s for the month file whole. Every GET was answered 206. The stale-ETag case fired trigger 5 (deviation 9).
+- **Files touched:** `frontend/src/lib/data/engine.ts`, `slice-query.ts`, `slice-reader.ts`, `page-keeper.ts` and `fetched-bytes.ts`; `frontend/scripts/test-groups.ts`; `frontend/tests/ledger-door.spec.ts`, `frontend/tests/ledger-ranges.spec.ts` and its host and page under `frontend/tests/support/`; `backend/idhazh/config.py` (the floor's reason only); the query door's page, the benchmark page and `docs/concepts/config/idhazh-gardener.md`.
 - **Acceptance gates:** `ruff check .`, `mypy backend`, `pytest backend/tests/contracts`, `svelte-check`, the logic and browser specs the shared selector names, and the browser smoke of the console (CLAUDE.md section 12).
-- **Oracle:** a panel over a month held in the year fixture draws the same rows by ranges as it drew from the whole file, and every request it made for the year file names a byte range; a published fixture ledger whose declaration sets `monthly_keep_days` below 367 loads, and one below `daily_keep_days` plus 32 is still refused.
+- **Oracle:** a panel over a month held in the year fixture draws the same rows by ranges as it drew from the whole file, and every request it made for the year file names a byte range.
 
 ### Row #5 - The eval ledger's ID files are packed a month at a time
 
@@ -162,24 +165,31 @@ A worker commits and pushes the moment its gates pass, and measures after.
 - **What each part changes to:** the digest writer (`evals.writer.file_measurements`) is unchanged, one file a job an open day. The dedupe reader (`evals.writer.indexed_observations`) reads month files and day files alike. The repair command (`evals.writer.rebuild_index`, `_indexed_on`) compares a folded month by month, because an ID row carries no date. The operator prune (`telemetry/prune.py` `_TARGET_LEDGERS`) drops the ID tree: a month file cannot serve a delete of a range of days, and R4 deletes no ID. Its entry in `docs/concepts/growing-reads.md` becomes one file per closed month plus the open month's days.
 - **Trap named at dispatch:** both tree walkers refuse a file outside a `YYYY/MM/DD/` folder, the fold's own `_closed_days` included (`backend/idhazh/day_shards.py` `shard_files`, `_one_day`, `date_of`; `backend/idhazh/gardener/named_trees.py` `shard_files`, `_refuse_a_shard`). `backend/tests/gardener/test_named_trees.py` requires the two to agree, so they change together.
 - **What it costs (Carmack):** every digest run reads one ID file a day today, 365 / 1,095 / 3,650 files at 1 / 3 / 10 years at about 16 ms a file (MEASURED rate). After this row it reads one a month plus the open month's days, about 43 / 67 / 151 (ESTIMATE). The bytes stay every measurement ever taken, about 76 bytes each, as R4 requires. A year step can follow later with no migration.
-- **Files touched (expected):** the modules above, the ID task's module and declaration as row 3 names them, their tests, `docs/concepts/growing-reads.md`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/concepts/config/idhazh-gardener.md`; this plan's Reckoner line.
+- **Files touched (expected):** the modules above; the ID task `backend/idhazh/gardener/tasks/summary_quality_evals_index.py` and its declaration `config/gardener/summary-quality-evals-index.json`; their tests; `docs/concepts/growing-reads.md`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/concepts/config/idhazh-gardener.md`; this plan's Reckoner line.
 - **Merge window:** no `idhazh-gardener.yml` run queued or running.
-- **Acceptance gates:** `ruff check .`, `mypy backend`, `pytest backend/tests/gardener backend/tests/retention backend/tests/contracts backend/tests/evals backend/tests/pipeline`. CI runs the full suite.
+- **Acceptance gates:** `ruff check .`, `mypy backend`, `pytest backend/tests/gardener backend/tests/retention backend/tests/contracts backend/tests/pipeline backend/tests/test_evals.py`, plus every test module the row touches. CI runs the full suite.
 - **Oracle:** over a fixture ID tree with a closed month and an open month, one fold writes `<YYYY>/<MM>/settled.csv` holding every ID the closed month's day files held and deletes those files; a second fold changes nothing; `indexed_observations` returns the same set before and after; a late day of a folded month is folded in at the next pass with nothing lost.
 
 ### Row #6 - The live site is checked to serve a `.parquet` byte range uncompressed
 
 - **Waits for** row 4, and for plan 51's row 3 (#1169) to publish the site's first `.parquet`. This plan publishes no file only for this check.
 - **Scope (trigger 5's last clause).** Six requests against one published `.parquet`: a `HEAD` with `Range: bytes=0-`, a GET with `Range: bytes=0-0`, and a GET for a range in the middle of the file, each once with `Accept-Encoding: gzip` and once with `identity`. It passes if every GET answers 206 with no `Content-Encoding` and the `HEAD` answers the file's true length. The answers go into `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` as a measured fact.
-- **Why it can wait (Carmack, ESTIMATE):** mime-db marks `.parquet` not compressible, and a browser sends `Accept-Encoding: identity` with any `Range`. The dangerous case, measured on the live CSV: a `HEAD` carrying a `Range` that accepts gzip answers the compressed length. No year file can exist before 2027-04-03, and only once packing is live.
+- **Why it can wait (Carmack, ESTIMATE):** mime-db marks `.parquet` not compressible, and a browser sends `Accept-Encoding: identity` with any `Range`. The dangerous case, measured on the live CSV: a `HEAD` carrying a `Range` that accepts gzip answers the compressed length. No year file can exist before 2027-04-04, and only once packing is live.
 - **If it fails:** ESCALATE (trigger 5).
 - **Files touched:** the page above; this plan's Reckoner line.
 - **Oracle:** the six answers, recorded on that page.
 
+### Row #7 - A published ledger's declaration sets its own wait
+
+- **Waits for** the person's ruling on deviation 9: a page that holds part of a year file across a deploy is sent the whole year file, because Pages answers an older ETag in `If-Range` with 200, and every deploy changes every file's ETag.
+- **Scope (R6).** The published floor in `backend/idhazh/config.py` goes (`_refuse_a_published_reach_that_grows_or_falls_short` requires `monthly_keep_days` of at least `console.max_window_days` plus `compact_after_days`, 367 days today). A published ledger then waits what its own declaration says, as every ledger does, and the loader's one remaining check is the knob's own: at least `daily_keep_days` plus 32 days. Its rule that a published ledger keeping its months forever must pack years stays. Its tests in `backend/tests/contracts/test_gardener_config.py` change with it, and no test pins 93: a published fixture ledger at the knob's minimum loads, and one day under it is refused. With it goes whatever the ruling adds to the door.
+- **Files touched (expected):** `backend/idhazh/config.py`; `backend/tests/contracts/test_gardener_config.py`; `docs/concepts/config/idhazh-gardener.md`; `docs/architecture/publishing/idhazh-gardener.md`; the query door's page; this plan's Reckoner line.
+- **Oracle:** a published fixture ledger whose declaration sets `monthly_keep_days` below 367 loads, and one below `daily_keep_days` plus 32 is still refused.
+
 ## Dependent plans
 
 - [20260924-50-idhazh-gardener-plan.md](20260924-50-idhazh-gardener-plan.md): its row 15 is withdrawn by R1, and its open question on renaming `scores` is answered by R2. Its row 14 edits the gardener's file walkers beside rows 1 and 3 here.
-- [20260924-51-console-fetches-and-draws-its-own-data-plan.md](20260924-51-console-fetches-and-draws-its-own-data-plan.md): its open #1169 publishes this ledger as `scores`, and its open #1177 writes `state/compact/scores/index/monthly.json`. Row 3 renames both. On `main` the loader refuses a published ledger that keeps its months forever and packs no year, and it refuses a wait under 367 days until row 4 lands. So publishing this ledger needs row 3's 93 days and row 4's removed floor, or a wait of at least 367 days. #1169's test helper `months_kept` also refuses a forever month window, which year packing makes bounded. Plan 51's owner decides how its rows take this in; this plan edits none of them.
+- [20260924-51-console-fetches-and-draws-its-own-data-plan.md](20260924-51-console-fetches-and-draws-its-own-data-plan.md): its open #1169 publishes this ledger as `scores`, and its open #1177 writes `state/compact/scores/index/monthly.json`. Row 3 has landed, so both must name `summary-quality-evals`. On `main` the loader refuses a published ledger that keeps its months forever and packs no year, and it refuses a wait under 367 days until row 7 lands. So publishing this ledger needs row 7, or a declaration of at least 367 days. #1169's test helper `months_kept` also refuses a forever month window, which year packing makes bounded. Plan 51's owner decides how its rows take this in; this plan edits none of them.
 - [20260930-57-upkeep-tasks-switch-on-plan.md](20260930-57-upkeep-tasks-switch-on-plan.md): its row 1 switches this ledger's packing live. Its deviation 2 already follows the rename if row 3 lands first.
 - [20260926-52-fifty-panels-move-and-six-projections-go-plan.md](20260926-52-fifty-panels-move-and-six-projections-go-plan.md): its row 7 note on the `scores` rename is answered by R2.
 - [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md): keeps `state/summary-quality/` for its fitted thresholds.
