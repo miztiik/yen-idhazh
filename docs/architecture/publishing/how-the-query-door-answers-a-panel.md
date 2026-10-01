@@ -116,10 +116,11 @@ exception: each read asks the host for the parts it needs again. The keeper is
   each read has the engine open it at an address of its own, and the engine drops
   it when the read ends, answered or not. A file of the wrong length is neither
   registered nor kept, and a file that is not there is kept as absent.
-- **The engine starts only when every file a slice fetches whole has arrived
-  whole**, so a slice that cannot be answered never loads it. A slice that reads a
-  year file by byte range starts the engine while its other files arrive, because
-  only the engine can open the year file.
+- **The engine starts beside the selected data fetches**, after the indexes have
+  passed validation and selected non-empty files. Quiet spans, missing indexes
+  and holes start no engine. A failed data fetch can overlap startup, but its
+  bytes never enter the engine and its named fault is preserved. Whole-file
+  downloads and year-range reads use the same startup order.
 - **Each console line is printed once for the page's life.** Every panel that
   meets one missing file prints the same line, so fifteen panels on a page
   print it once.
