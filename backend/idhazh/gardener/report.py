@@ -70,24 +70,29 @@ def row(
         fold_dry_run=None if folded is None else folded.dry_run,
         folded_days=None if folded is None else len(folded.days),
         folded_files=None if folded is None else folded.files,
+        folded_months=None if folded is None else len(folded.months),
     )
 
 
 def fold_lines(task: str, folded: Folded) -> list[str]:
-    """What a task's fold did, one settled day folder per line, and whether it was live."""
+    """What a task's fold did, one settled month or day folder per line, and whether it was live."""
     verb = "would settle" if folded.dry_run else "settled"
     head = (
-        f"{task} fold: {verb} {len(folded.days)} closed days, replacing "
-        f"{folded.files} files with one settled.csv each"
+        f"{task} fold: {verb} {len(folded.months)} closed months and {len(folded.days)} closed "
+        f"days, replacing {folded.files} files with one settled.csv each"
     )
+    months = [
+        f"  {month.tree.value} {month.month}: {len(month.replaced)} files"
+        for month in folded.months
+    ]
     days = [f"  {day.tree.value} {day.day}: {len(day.replaced)} files" for day in folded.days]
-    said = [head, *days]
+    said = [head, *months, *days]
     if folded.failed:
         said.append(
-            "  the fold stopped part way - the days above are settled, and the next wake "
-            "starts again from the oldest day still waiting"
+            "  the fold stopped part way - the months and days above are settled, and the "
+            "next wake starts again from the oldest still waiting"
         )
-    elif folded.dry_run and folded.days:
+    elif folded.dry_run and (folded.months or folded.days):
         said.append("  nothing was written - set the fold's dry_run to false to settle these")
     return said
 

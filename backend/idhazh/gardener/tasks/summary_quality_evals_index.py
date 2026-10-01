@@ -3,9 +3,12 @@
 None may go. The index is what a run dedupes against, and an observation key
 carries no date, so a dropped day would make every measurement in it new again.
 The window is `forever`, and a window that keeps every month takes nothing. The
-task's one live action is the fold of the index's closed days into one
-`settled.csv` each (`closed_day_fold`). The eval rows themselves are the
-`summary-quality-evals` compaction's, and it keeps every month too.
+task's one live action is the fold (`closed_day_fold`): each closed day of the
+open month into one `settled.csv`, and each closed month whole into one
+`settled.csv` in its own folder, so the folder gains a file a month rather than
+a file a day and the dedupe still reads every measurement. The eval rows
+themselves are the `summary-quality-evals` compaction's, and it keeps every
+month too.
 """
 
 from __future__ import annotations

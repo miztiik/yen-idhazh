@@ -281,8 +281,9 @@ class FoldPolicy(Model):
     A CSV day tree files one file per writer under `YYYY/MM/DD/`, so a busy day
     holds a hundred small files. Once the day is closed, the fold settles them the
     way every reader does and writes that answer as `settled.csv` in their place.
-    It changes no answer a reader gets, which is why it has a switch of its own:
-    it may run live while the window beside it only reports.
+    A task may ask for a closed month to become one file the same way. It changes
+    no answer a reader gets, which is why it has a switch of its own: it may run
+    live while the window beside it only reports.
     """
 
     after_days: int = Field(
@@ -301,6 +302,16 @@ class FoldPolicy(Model):
             "The fold's own switch, apart from the window's. No default."
         )
     )
+    settles_months: bool = Field(
+        default=False,
+        description=(
+            "True also settles each closed month - after_days whole days after its last "
+            "day ended - into one settled.csv in the month's own folder, and deletes its "
+            "days' files; a day a re-run adds to it later is settled in at the next wake. "
+            "False keeps one settled.csv a closed day. A month's file names no day, so a "
+            "task whose window counts days may not turn it on."
+        ),
+    )
 
 
 class RetentionPolicy(_Declared):
@@ -318,10 +329,23 @@ class RetentionPolicy(_Declared):
         default=None,
         description=(
             "Folds each closed day of the CSV day trees this task owns into one "
-            "settled.csv, after the window has run. Absent on a task that owns no such "
-            "tree."
+            "settled.csv, or each closed month where settles_months asks, after the "
+            "window has run. Absent on a task that owns no such tree."
         ),
     )
+
+    @model_validator(mode="after")
+    def _a_month_settles_only_where_the_window_keeps_whole_months(self) -> Self:
+        """A settled month's file names no day, so a window of days cannot take part of it."""
+        settles_months = self.fold is not None and self.fold.settles_months
+        if settles_months and isinstance(self.window, DaysWindow):
+            raise ValueError(
+                f"fold.settles_months is true and the window is {self.window.value} days. A "
+                "closed month settled into one file names no day, so a window of days would "
+                "take the whole month once its first day aged out, rows it keeps included. "
+                "Fold by day here, or keep whole months"
+            )
+        return self
 
 
 class CollectionTaskPolicy(_Declared):

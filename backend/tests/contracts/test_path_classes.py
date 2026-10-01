@@ -166,6 +166,18 @@ def test_the_fold_is_derived_in_every_day_tree_and_is_never_handed_back() -> Non
     assert day_shards.SETTLED_NAME not in handed_back
 
 
+def test_a_month_settled_whole_is_derived_exactly_as_a_closed_day_is() -> None:
+    """A closed month's one file is the fold's too, so it takes the same class.
+
+    It is classed by its name, not by how deep it sits, so a month folder's
+    `settled.csv` is never read as a writer's file and never handed back.
+    """
+    month = f"state/{LedgerName.SUMMARY_QUALITY_EVALS_INDEX}/2026/08/{day_shards.SETTLED_NAME}"
+
+    assert _classes(month) == {"derived"}
+    assert not path_classes.is_written_once(month)
+
+
 def test_an_operators_repair_is_written_once_so_it_never_collides_with_a_writer() -> None:
     """A repair adds rows into a committed day, and no run can take its name.
 

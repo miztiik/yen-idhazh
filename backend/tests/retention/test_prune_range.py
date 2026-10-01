@@ -60,7 +60,6 @@ DAY_PATHS: Final[dict[str, LedgerName]] = {
         LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
     )
 }
@@ -334,14 +333,25 @@ def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
         assert not path.exists(), f"{target} reported a removal that did not happen"
 
 
-@pytest.mark.parametrize("target", sorted(prune.REFUSED))
-def test_the_two_stores_that_must_not_forget_are_refused(tmp_path: Path, target: str) -> None:
-    """`published` and `seen` are refused by name, with the reason attached.
+#: The ledgers whose rows must never be forgotten, so a range of them is refused
+#: by name: two that stop a repeat publication or discovery, and the eval
+#: ledger's ID folder, whose IDs stop a measurement counting as new.
+MUST_NOT_FORGET: Final = (
+    LedgerName.PUBLISHED,
+    LedgerName.SEEN,
+    LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
+)
+
+
+@pytest.mark.parametrize("target", MUST_NOT_FORGET)
+def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: str) -> None:
+    """`published`, `seen` and the eval ledger's ID folder are refused by name, with the reason.
 
     Refused rather than left out of the vocabulary: a ledger missing from a list
     reads as an oversight, and somebody who typed one of these is holding a real
     question whose answer is why the answer is no.
     """
+    assert set(prune.REFUSED) == set(MUST_NOT_FORGET)
     state = a_feed_record(tmp_path / "state")
     before = fingerprints(state)
 
