@@ -50,6 +50,7 @@ from ledger._every_tier import (
 
 from idhazh import atomic_write, config, day_shards, ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
@@ -58,7 +59,7 @@ from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
-from idhazh.telemetry import prune
+from idhazh.telemetry import door_prune, prune
 
 from ._trees import health_row
 
@@ -1089,6 +1090,64 @@ def test_a_pass_that_stopped_part_way_is_finished_by_the_same_command(
             commit=PRUNE_COMMIT,
         )
 
+    assert census_by_day(stopped) == census_by_day(whole)
+    assert indexes(stopped) == indexes(whole)
+    assert set(fingerprints(stopped)) == set(fingerprints(whole)), "the trees hold other files"
+
+
+def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_again(
+    every_tier: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The third change raises: the two before it happened, the record names them, a re-run finishes.
+
+    The failure is injected the way the CSV test above injects it: the real
+    change runs for every file but the third, so the tree is the one a file
+    system that refused one delete leaves. The record names the first two
+    paths of the dry run's list, and the first day of the range as the place
+    the next pass starts, because no day was finished.
+    """
+    stopped = a_copy(every_tier, tmp_path / "stopped")
+    whole = a_copy(every_tier, tmp_path / "whole")
+    planned = prune_range(
+        stopped, target=CENSUS, since=SINCE, until=UNTIL, run_id=PRUNE_RUN, commit=PRUNE_COMMIT
+    )
+    changes = 0
+    real_apply = door_prune._apply
+
+    def fail_on_the_third(change: door_prune._Change) -> None:
+        nonlocal changes
+        changes += 1
+        if changes == 3:
+            raise OSError("the file system said no")
+        real_apply(change)
+
+    monkeypatch.setattr(door_prune, "_apply", fail_on_the_third)
+    with pytest.raises(prune.PruneInterruptedError) as stop:
+        prune_range(
+            stopped,
+            target=CENSUS,
+            since=SINCE,
+            until=UNTIL,
+            dry_run=False,
+            run_id=PRUNE_RUN,
+            commit=PRUNE_COMMIT,
+        )
+    monkeypatch.undo()
+
+    so_far = stop.value.so_far
+    assert changes == 3, "the pass kept changing files after a failure"
+    assert (so_far.taken, so_far.written) == (planned.removed[:2], ())
+    assert (so_far.stopped_because, so_far.resume_from) == (StopReason.FAILED, SINCE)
+    for state in (stopped, whole):
+        prune_range(
+            state,
+            target=CENSUS,
+            since=SINCE,
+            until=UNTIL,
+            dry_run=False,
+            run_id=PRUNE_RUN,
+            commit=PRUNE_COMMIT,
+        )
     assert census_by_day(stopped) == census_by_day(whole)
     assert indexes(stopped) == indexes(whole)
     assert set(fingerprints(stopped)) == set(fingerprints(whole)), "the trees hold other files"
