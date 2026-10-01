@@ -386,6 +386,22 @@ send. A browser without the feature gets `unreachable`. Count the emitted engine
 assets in deployed size even though they load lazily
 ([../../reference/site-weight.md](../../reference/site-weight.md#optional-assets)).
 
+**The device keeps one content-named engine cache.** The client build reads
+Vite's manifest from the engine entry through its imports, dynamic imports and
+assets. It writes a private generated module for the service-worker build,
+including the anonymous JavaScript chunks; a filename search for `duckdb`
+would miss them. The sorted content-named paths determine the cache identity,
+not the site's build date. A deploy with those same paths keeps the engine.
+
+The service worker answers those same-origin assets from this cache first and
+keeps successful complete responses after their first real request. It does not
+prefetch the engine. Activation drops older engine caches, while the retirement
+switch clears this cache with the other project-owned caches. Cache-storage
+failure leaves the network response usable. Ledger files and the off-origin
+Parquet add-on do not enter this cache. The browser test updates the real worker
+while leaving engine files unchanged, with HTTP caching disabled, and requires
+no repeated engine download and successful offline reads.
+
 **None of it is first-load.** `ledger.ts` reaches the engine only through a
 dynamic `import()`, and the engine reaches its package, its wasm and its worker
 the same way. `frontend/scripts/bundle-gate.mjs` holds that: it follows every
