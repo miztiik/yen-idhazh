@@ -4,7 +4,7 @@
 
 **Level**: 4 (CLAUDE.md section 6). Each ledger row deletes committed CSV once its rows are proven in parquet, and a deletion the history squash has passed cannot be undone (CLAUDE.md section 8). So reverting a row costs more than writing it. No row changes a persisted contract; a row that needs to stops at ESCALATE trigger 4.
 
-**Status**: written 2026-09-30, refined 2026-10-01 after Fowler's review, and corrected the same day after a second review. Later on 2026-10-01 the person asked for packing by month and by year on every door ledger, the three moved before this plan included, with every packing, prune and retention setting in JSON: row 8 is new, rows 2 to 6 pack live with their windows reporting, and section 4's decisions 2 and 3 are answered. Row 3 is done (#1181). Row 1 is in flight, and row 8 follows it because the two share three files. Plan 56's rename row (#1179) and plan 51's packing row (#1177) are done; row 2 also waits for that packing row's first upkeep wake, the first after 07:28 UTC on 2026-10-01. Row 5 also waits on the person's answers to section 4 decisions 1 and 4.
+**Status**: written 2026-09-30, refined 2026-10-01 after Fowler's review, and corrected the same day after a second review. Later on 2026-10-01 the person asked for packing by month and by year on every door ledger, the three moved before this plan included, with every packing, prune and retention setting in JSON: row 8 is new, rows 2 to 6 pack live with their windows reporting, and section 4's decisions 2 and 3 are answered. Rows 1 and 3 are done (#1184, #1181), and row 8 is in flight. Plan 56's rename row (#1179) and plan 51's packing row (#1177) are done; row 2 also waits for that packing row's first upkeep wake, the first after 07:28 UTC on 2026-10-01. Row 5 also waits on the person's answers to section 4 decisions 1 and 4.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. The person authorized execution on 2026-10-01.
 
@@ -45,7 +45,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 5 | The seen and published ledgers move to the door, and their union drivers retire | 2, 4 | D | PENDING | - | - | - |
 | 6 | Feed health moves to the door, and the Voices page reads it packed | 5 | E | PENDING | - | - | - |
 | 7 | The map of the ledgers left on CSV is written, and the plan closes | 6 | F | PENDING | - | - | - |
-| 8 | Every compaction declaration names every setting it runs with, and a window can report while packing runs live | 1, 3 | B | PENDING | - | - | - |
+| 8 | Every compaction declaration names every setting it runs with, and a window can report while packing runs live | 1, 3 | B | IN-FLIGHT | p58r8 | - | p58-r8-worker |
 
 Row 8 also waits on a row of plan 51, and row 2 on that row's first live upkeep wake (section 5); row 5 waits on the person's answers to section 4 decisions 1 and 4. The plan-queue reader, `backend/utilities/plan_status.py`, cannot follow a pointer by title, so the owner checks those at dispatch.
 
@@ -210,7 +210,7 @@ def csv_root(state_dir: Path, ledger: LedgerName) -> Path: ...
 | `seen` | `day` | `seen` | `.csv` | 90 days | `config/gardener/seen.json` |
 | `published` | `day` | `published` | `.csv` | forever | nothing deletes it |
 
-The three moved entries are read from `config/ledgers.json` as it stood before plan 50 moved them, and a value that differs from this table is ESCALATE trigger 5. The eval ledger's CSV sat at `scores/`, its name before plan 56 renamed it, so its `old_entry` keeps that name and prefix, and `CSV_LEDGERS` replaces main's `_CSV_FOLDERS` pin as well as `LEDGERS`.
+The three moved entries are read from `config/ledgers.json` as it stood before plan 50 moved them, and a value that differs from this table is ESCALATE trigger 5. The eval ledger's CSV sat at `scores/`, its folder before plan 56 renamed it, so its `old_entry` has the prefix `scores` under the name `summary-quality-evals`: a `scores` name would need a `LedgerName` member, which is ESCALATE trigger 4. `CSV_LEDGERS` replaces main's `_CSV_FOLDERS` pin as well as `LEDGERS`.
 
 Layouts, under `csv_root(root, ledger)`:
 
