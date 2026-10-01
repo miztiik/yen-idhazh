@@ -69,7 +69,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The score month summary is retired, and no eval row is ever deleted | - | A | DONE | p56r1 | #1170 | p56-r1-worker |
 | 2 | The shared packing gains a year period | - | A | DONE | p56r2 | #1172 | p56-r2-worker |
-| 3 | The eval ledger becomes `summary-quality-evals` | 1 | B | NOT STARTED | - | - | - |
+| 3 | The eval ledger becomes `summary-quality-evals` | 1 | B | DONE | p56r3 | #1179 | p56-r3-worker |
 | 4 | The browser reads a year file by byte ranges, and a published ledger's declaration sets its own wait | 2 | B | NOT STARTED | - | - | - |
 | 5 | The eval ledger's ID files are packed a month at a time | 3 | C | NOT STARTED | - | - | - |
 | 6 | The live site is checked to serve a `.parquet` byte range uncompressed | 4, plan 51 row 3 | C | NOT STARTED | - | - | - |
