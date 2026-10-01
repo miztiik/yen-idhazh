@@ -45,7 +45,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 5 | The seen and published ledgers move to the door, and their union drivers retire | 2, 4 | D | PENDING | - | - | - |
 | 6 | Feed health moves to the door, and the Voices page reads it packed | 5 | E | PENDING | - | - | - |
 | 7 | The map of the ledgers left on CSV is written, and the plan closes | 6 | F | PENDING | - | - | - |
-| 8 | Every compaction declaration names every setting it runs with, and a window can report while packing runs live | 1, 3 | B | DONE | p58r8 | - | p58-r8-worker |
+| 8 | Every compaction declaration names every setting it runs with, and a window can report while packing runs live | 1, 3 | B | DONE | p58r8 | #1185 | p58-r8-worker |
 
 Row 8 also waits on a row of plan 51, and row 2 on that row's first live upkeep wake (section 5); row 5 waits on the person's answers to section 4 decisions 1 and 4. The plan-queue reader, `backend/utilities/plan_status.py`, cannot follow a pointer by title, so the owner checks those at dispatch.
 
