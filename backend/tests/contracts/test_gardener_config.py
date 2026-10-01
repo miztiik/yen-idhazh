@@ -23,7 +23,6 @@ from pydantic import TypeAdapter, ValidationError
 from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import (
     DEFAULT_CLOSED_AFTER_DAYS,
-    DEFAULT_COMPACT_AFTER_DAYS,
     GITHUB_RERUN_DAYS,
     JANUARY_DAYS,
     CollectionTaskPolicy,
@@ -92,6 +91,13 @@ PACKED_FOR_THE_CONSOLE: Final = (
     "days after it ends"
 )
 
+#: Why the monthly window of those two ledgers deletes month files live.
+WINDOW_LIVE_WITH_ITS_PACKING: Final = (
+    "the person turned this ledger's packing live while one switch still ran the "
+    "packing and the monthly window together, so the window went live with it; the "
+    "loader holds that window to every month a reader of the ledger still opens"
+)
+
 #: The two packing tasks a person turned live.
 PACKED_LIVE: Final = ("compact-host-fingerprint", "compact-item-health")
 
@@ -101,7 +107,9 @@ PACKED_LIVE: Final = ("compact-host-fingerprint", "compact-item-health")
 #: its records, never from the change that added it.
 LIVE_BY_DECISION: Final = {
     ("compact-host-fingerprint", "dry_run"): PACKED_FOR_THE_CONSOLE,
+    ("compact-host-fingerprint", "monthly_window_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
     ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
+    ("compact-item-health", "monthly_window_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
     ("corpus-squash", "dry_run"): (
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
@@ -126,13 +134,24 @@ UNFOLDED_BY_DECISION: Final = {
 }
 
 
+#: The switch a compaction's monthly window has of its own. It acts only through
+#: the declaration's own `dry_run`, so it is live only while both are false.
+WINDOW_SWITCHES: Final = frozenset({"monthly_window_dry_run"})
+
+
 def _switches(declared: Mapping[str, Any], prefix: str = "") -> dict[str, bool]:
-    """Every `dry_run` a declaration carries, at any depth, by the dotted key a person edits."""
+    """Every switch a declaration carries, at any depth, by the dotted key a person edits.
+
+    True where the switch only reports. A window switch reports while its own
+    `dry_run` or the declaration's does.
+    """
     found: dict[str, bool] = {}
     for key, value in declared.items():
         path = f"{prefix}{key}"
         if key == "dry_run" and isinstance(value, bool):
             found[path] = value
+        elif key in WINDOW_SWITCHES and isinstance(value, bool):
+            found[path] = value or declared.get("dry_run") is not False
         elif isinstance(value, Mapping):
             found |= _switches(value, f"{path}.")
     return found
@@ -185,9 +204,11 @@ def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None
     Held over the committed tree rather than over one change, because a test
     cannot see which change added a file. Every `dry_run` a declaration carries
     is found by walking the declaration, a fold's as well as the task's own, and
-    the switches that are live must be exactly the ones named above. So turning
-    one live is an edit to that list - a line a reviewer reads, with its reason
-    beside it - and a decision left behind after its switch went is caught too.
+    so is a compaction's `monthly_window_dry_run`, live only while the task's
+    own `dry_run` is false too. The switches that are live must be exactly the
+    ones named above. So turning one live is an edit to that list - a line a
+    reviewer reads, with its reason beside it - and a decision left behind after
+    its switch went is caught too.
     """
     tasks = config.load_gardener().tasks
     assert tasks, "nothing is declared, so this checks nothing"
@@ -254,10 +275,43 @@ def test_every_csv_day_tree_is_folded_by_the_task_that_owns_it() -> None:
         )
 
 
-def test_a_fold_closes_a_day_by_the_same_default_a_compaction_does() -> None:
-    """One rule decides when a day is closed, for a CSV day tree and a raw ledger alike."""
+def test_a_fold_that_names_no_wait_closes_a_day_after_the_shared_one() -> None:
+    """A compaction writes its own wait as `compact_after_days`; both count whole days alike."""
     assert FoldPolicy(dry_run=True).after_days == DEFAULT_CLOSED_AFTER_DAYS
-    assert DEFAULT_COMPACT_AFTER_DAYS == DEFAULT_CLOSED_AFTER_DAYS
+
+
+#: The keys every kind shares that a declaration may leave out: the two ways of
+#: owning, and the folders read and ledgers appended to, empty unless named.
+SHARED_OPTIONAL_KEYS: Final = frozenset(
+    {"owns", "owns_everything_else_under", "reads", "appends_to"}
+)
+
+#: Every key a compaction declaration has to write.
+COMPACTION_KEYS: Final = tuple(
+    sorted(name for name, field in CompactionPolicy.model_fields.items() if field.is_required())
+)
+
+
+def test_no_setting_a_compaction_runs_with_has_a_default() -> None:
+    """The file a person reads holds every number a pass uses.
+
+    The keys that may be left out are the ones every kind shares to say what a
+    task owns and reads, and none of them is a number a pass runs with.
+    """
+    optional = {
+        name for name, field in CompactionPolicy.model_fields.items() if not field.is_required()
+    }
+    assert optional == SHARED_OPTIONAL_KEYS
+
+
+@pytest.mark.parametrize("key", COMPACTION_KEYS)
+def test_a_compaction_that_leaves_out_any_one_key_is_refused_naming_it(
+    tmp_path: Path, key: str
+) -> None:
+    """Nothing fills a missing setting in from code, so the loader names the one left out."""
+    declared = {name: value for name, value in fixture("compact-gardener").items() if name != key}
+    message = refused(a_garden(tmp_path, compact_gardener=declared))
+    assert "config/gardener/compact-gardener.json is refused" in message and key in message
 
 
 def test_a_fold_settles_a_month_only_where_its_own_declaration_asks() -> None:
