@@ -1,6 +1,6 @@
 # Plan 51 - The console fetches and draws its own data
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 **Level**: 5 (CLAUDE.md section 6). Row 3 decides whether `state/` reaches a browser, which is a publishing contract, and sections 2.6 to 2.9 are the design contract the panels are built to. The other rows are Level 2 to Level 3 and carry no contract change beyond one copied settlement key.
 
@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-28, about 13:50 UTC, when the first owner handed over after row 5 merged, and brought up to date 2026-09-30, about 10:30 UTC, when the second owner settled rows 3 and 8 and the person added rows 10 and 11.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-28, about 13:50 UTC, when the first owner handed over after row 5 merged, and brought up to date 2026-09-30, about 10:30 UTC, when the second owner settled rows 3 and 8 and the person added rows 10 and 11, and again 2026-10-01, about 06:10 UTC, when the third owner's session stopped with rows 10, 3 and 8 built and not merged.
 
 ```text
 You are the OWNER of TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md.
@@ -28,25 +28,47 @@ section 1 (the Status Reckoner, the only tracker), section 2.2, and each row jus
 you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -vv. At the
-last update, 2026-09-30 at about 10:30 UTC, rows 1, 2, 4, 5, 6, 7 and 9 had merged
-(#1138, #1140, #1137, #1143, #1144, #1154, #1157), and rows 3, 8, 10 and 11 were being
-dispatched. The owner's plan-doc worktree is p51own, branch
-p51-owner-settles-rows-3-and-8; remove it once its commit is on main. A row's worker
-works in worktree p51r<row> and keeps its running report in %TEMP%\p51r<row>\report.md;
-row 8's two passes share p51r8.
+last update, 2026-10-01 at about 06:10 UTC (main a4c00432e), rows 1, 2, 4, 5, 6, 7 and
+9 had merged (#1138, #1140, #1137, #1143, #1144, #1154, #1157). Nothing of this plan
+was running. Three rows were built and not merged, and one was not started:
+  row 10  PR #1177, worktree p51r10, branch
+          p51r10-missing-files-have-names-and-two-ledgers-pack-daily. Built, and the
+          branch stamps its Reckoner line DONE. CI passed all seven checks at
+          cf5a4cb03, then main moved: the PR conflicts, 20 commits behind.
+          Report: %TEMP%\p51r10\report.md.
+  row 3   PR #1169, worktree p51r3, branch p51r3-the-console-ledgers-are-published.
+          Built. The PR conflicts and has no CI run. The local branch (f517a2e85, a
+          merge of main and one doc fix) is ahead of the PR head (1c9d4af0d): push
+          it first. Reports: %TEMP%\p51r3\report.md and report-b.md.
+  row 8   PR #1171, worktree p51r8, branch
+          p51r8-one-panel-fetches-its-ledger-and-draws-in-d3. Pass A is done,
+          smoke-tested, and passed all seven checks at 28242e632, 35 commits behind
+          main. Pass B is not started. Report: %TEMP%\p51r8\report-a.md.
+  row 11  Not started, and no worktree yet.
+Worktree p51own (branch p51-owner-settles-rows-3-and-8) holds no unmerged work;
+remove it with the others at closure. A row's worker works in worktree p51r<row> and
+keeps its running report in %TEMP%\p51r<row>\report.md. A report under %TEMP% can be
+cleared at any time; the branches and pull requests are the durable record.
 
-STEP 2 - DISPATCH. Plan 50's row 9 merged on 2026-09-30 (#1166), so packed files and
-a day index of all three ledgers are on main; packing itself stays off until row 10.
-On 2026-09-30 the owner settled rows 3 and 8 with Reader, Fowler, Susan, Jony and
-Carmack, and the person answered five questions: deviations 22 to 33, and each row's
-"Settled at dispatch" block, which is part of that row's brief. The order:
-  now, side by side        row 10, row 3 and row 8's pass A. They share no file.
-                           Row 3 merges after row 10: its copy step refuses a ledger
-                           that lacks either index, so its CI goes green only once
-                           row 10's three empty month indexes are on main.
-  after rows 3 and 10      row 8's pass B, on pass A's branch (deviation 31).
-  after row 3              row 11. It edits copy-visuals.mjs and build-canary.mjs
-                           after row 3 does, and may run beside row 8's pass B.
+STEP 2 - DISPATCH. On 2026-09-30 the owner settled rows 3 and 8 with Reader, Fowler,
+Susan, Jony and Carmack, and the person answered five questions: deviations 22 to 33,
+and each row's "Settled at dispatch" block, which is part of that row's brief. Main has
+moved under the three built branches. Plan 56 renamed the `scores` ledger to
+`summary-quality-evals` (#1179: its folder under state/compact/ and its packing task
+under config/gardener/) and added a year file to the shared packing code (#1172).
+Expect conflicts in _compact_tree.py, slice-shapes.ts and the gardener pages, and carry
+the new name through every file a branch adds. The order from here:
+  1. row 10   merge origin/main into its branch, resolve, rerun its gates, push,
+              merge on green CI. Plan 57 waits on it.
+  2. row 3    push the local commits, merge origin/main (row 10 now in it), push,
+              merge on green CI. Its copy step refuses a ledger that lacks either
+              index, so its CI goes green only once row 10 is on main.
+  3. row 8    pass B on pass A's branch (deviations 28, 29 and 31, and the row's
+              settled block), then merge origin/main, push, merge on green CI.
+  4. row 11   a new worktree p51r11 from main once row 3 has merged. It edits
+              copy-visuals.mjs and build-canary.mjs after row 3 does, and may run
+              beside row 8's pass B. Plan 50's plan is deleted (#1174), so row 11's
+              edit to it is moot.
 Rows 10 and 11 merge only while no digest.yml or idhazh-gardener.yml run is queued or
 running: row 10 switches two packing tasks on, and row 11 edits digest.yml.
 
@@ -67,6 +89,8 @@ branch. A worker call blocks you until that worker returns, so merge every green
 request before you start the next worker; row 2's waited an hour. If two open pull
 requests each stamp their own Reckoner line, the second conflicts on this file: merge
 origin/main into its branch, keep both lines and push. Never rebase and force-push.
+GitHub runs no CI on a conflicting pull request ("no checks reported"): merge
+origin/main into it first.
 
 STEP 5 - CLOSE. When every row is DONE, follow the closing section of
 execute-a-plan.md. A commit made on this machine is stamped +02:00 unless TZ=UTC is set
