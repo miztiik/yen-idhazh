@@ -4,7 +4,7 @@
 
 **Level**: 5 (CLAUDE.md section 6). It deletes a persisted contract, adds a period to the saved file format, and renames a committed ledger. The person's rulings below are the design consultation; the ESCALATE triggers name what still stops a worker.
 
-**Status**: rows 1 to 4 are done (#1170, #1172, #1179, #1178). The ledger is `summary-quality-evals` and its declaration waits 93 days before it packs a year (R6). The browser reads a year file by byte ranges. Row 4's measurement fired trigger 5 on a page that reads a year file across a deploy, so the 367-day floor on a published ledger stays until the person rules: that is row 7 (deviation 9). Row 5 packs the ID files a month at a time and is next. Row 6 checks the live site once plan 51 publishes its first `.parquet`.
+**Status**: rows 1 to 5 are done (#1170, #1172, #1179, #1178, #1180). The ledger is `summary-quality-evals` and its declaration waits 93 days before it packs a year (R6). The browser reads a year file by byte ranges. The ID files are settled a month at a time from the first upkeep wake after 2026-10-02. Row 4's measurement fired trigger 5 on a page that reads a year file across a deploy, so the 367-day floor on a published ledger stays until the person rules: that is row 7 (deviation 9). Row 6 checks the live site once plan 51 publishes its first `.parquet`.
 
 **Chain** (CLAUDE.md section 0d). **Intent**: the person's rulings of 2026-09-30, section 0. **Contract**: `backend/idhazh/contracts/` and the pages each row names. **Code**: the six rows.
 
@@ -18,7 +18,7 @@ AUTHORIZED (the person, 2026-09-30). Read CLAUDE.md, docs/how-to/execute-a-plan.
 docs/how-to/ship-a-pr.md and docs/how-to/run-the-gates.md, then this plan's section 0
 and section 1, and each row just before you dispatch it.
 
-Rows 1 to 4 are done. Row 5 is next. Row 6 waits for plan 51's row 3 to publish
+Rows 1 to 5 are done. Row 6 waits for plan 51's row 3 to publish
 the site's first .parquet, and row 7 for the person's ruling on deviation 9. Plan 51's
 open pull requests publish this ledger under its old name (#1169) and write its month
 index (#1177); row 3 has landed, so they take main in and use the new name. Merging
