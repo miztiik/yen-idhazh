@@ -252,9 +252,9 @@ test.describe('a year file read by byte range, in a browser', () => {
 
 	test('a year file whose ETag changed while the browser still holds part of it is still read by byte range', async ({ browser }) => {
 		// Expected to fail. The browser asks for a part it does not hold with `If-Range`
-		// naming the ETag it kept, a host that honours `If-Range` answers with the whole
-		// file, and the engine reads that whole file once. What Pages answers to such an
-		// `If-Range` is not measured; the annotation comes off when the door stops paying it.
+		// naming the ETag it kept, Pages answers an ETag it no longer serves with the whole
+		// file (measured), and the engine reads that whole file once. The annotation comes
+		// off when the door stops paying it.
 		test.fail();
 		const [year] = (JSON.parse(readFileSync(path.join(servedFresh, ...indexPath(LEDGER, 'yearly').split('/')), 'utf8')) as {
 			entries: { rows: number; bytes: number }[];

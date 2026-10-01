@@ -7,9 +7,8 @@
  * `Range` it carries, every file carries an ETag of its modification time and
  * size in hex and `Cache-Control: max-age`, a `.parquet` goes out as
  * `application/vnd.apache.parquet`, nothing is compressed, and a query string is
- * ignored. What Pages does with an `If-Range` naming another ETag has not been
- * measured, so the standard's answer is given - the whole file, with 200 -
- * because it is the answer that costs a reader most.
+ * ignored. An `If-Range` naming another ETag gets the whole file, with 200, as
+ * Pages was measured to answer it.
  *
  * Every request under a data root is logged: method, path, `Range`,
  * `Accept-Encoding`, `If-Range`, status and body bytes. A data root may be

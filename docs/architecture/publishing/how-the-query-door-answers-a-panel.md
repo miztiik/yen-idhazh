@@ -211,11 +211,16 @@ on 127.0.0.1 that answers the way Pages does. Five facts shape the design.
   page that finds that byte still fresh, within Pages' `max-age=600`, is caught,
   and the spec holds that case as a test expected to fail.
 
-**What Pages answers to an `If-Range` naming an ETag it no longer serves is not
-measured.** Until it is, the gardener's loader refuses a published ledger whose
-month files would be packed sooner than `console.max_window_days` plus
-`compact_after_days` after their year ends (rule 6 above), so only a span panned
-further back than any console window reads a year file at all.
+**Pages honours `If-Range`, measured on the live site.** A ranged GET whose
+`If-Range` names the ETag Pages serves now is answered 206 with the range; one
+naming an older ETag, or a date before the file's, is answered 200 with the whole
+file. Every file in one deploy carries that deploy's time as its `Last-Modified`
+and in its ETag, eleven seconds after the build job ended, so the build cannot pin
+it, and an unchanged file still gets a new ETag. So the gardener's loader refuses
+a published ledger whose month files would be packed sooner than
+`console.max_window_days` plus `compact_after_days` after their year ends (rule 6
+above), and only a span panned further back than any console window reads a year
+file at all.
 
 ## The index copy, and the stamp it reads
 

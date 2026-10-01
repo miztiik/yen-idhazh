@@ -88,13 +88,13 @@ expected to fail until the door reads past it.
   link. Every GET for the year file was a range answered 206.
 - A host that honours `If-Range` sends a page the whole year file once after a
   deploy, when the page already holds part of it.
+- Pages is such a host, measured on the live site: a ranged GET whose `If-Range`
+  names an ETag it no longer serves, or a date before the file's, gets 200 and the
+  whole file, and one naming the current ETag gets 206. Every file in a deploy
+  carries that deploy's time, so an unchanged file gets a new ETag every deploy.
 
 ## What it does not settle
 
-- What Pages answers to an `If-Range` naming an ETag it no longer serves. That one
-  answer decides whether the deploy case reaches a reader. One GET against any
-  published file, carrying a `Range` and an `If-Range` with a made-up ETag,
-  measures it.
 - How often a page holds part of a year file across a deploy.
 - A month file by range on a fast link, where each of its 13 requests is a round
   trip the whole file does not make. Take the three reads again unslowed before
