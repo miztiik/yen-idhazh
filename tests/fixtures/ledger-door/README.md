@@ -1,9 +1,12 @@
 """One compacted ledger, laid out as the committed tree is, for the query door.
 
 `state/` is a state root: `compact/host-fingerprint/index/daily.json` and
-`index/monthly.json`, and the compact files they name. `year-state/` is a second
-state root holding the same August and September after their year was packed:
-`index/yearly.json` and `index/daily.json`, and the files they name. The
+`index/monthly.json`, the compact files they name, and an `index/yearly.json`
+that names nothing. `year-state/` is a second state root holding the same August
+and September after their year was packed: `index/yearly.json` and
+`index/daily.json`, the files they name, and an `index/monthly.json` that names
+nothing. The compaction writes a ledger's three indexes together, so each root
+carries all three. The
 frontend's `ledger-door.spec.ts` reads both through both of the door's entry
 points, and `backend/tests/contracts/test_ledger_door_fixture.py` checks that
 every entry's `rows` and `bytes` match the file the backend reader opens.
@@ -43,7 +46,7 @@ What the packed year holds:
   serves. Its first rows are in August, and its entry still covers all of 2026.
 - `daily/2027/01/01.parquet` is a zero-row day, so the daily index names a day
   and the span before it reaches back into the year.
-- There is no `monthly.json`: every month the ledger held went into its year.
+- Its `monthly.json` names nothing: every month the ledger held went into its year.
 
 Regenerating the files changes their bytes, because each envelope records when
 it was written; the indexes have to be rebuilt from the new files with them.

@@ -8,14 +8,20 @@
  * (`page-keeper.ts`), asks the engine one query over them (`slice-query.ts`),
  * and returns one of four states:
  *
- * - `missing`: there is no `daily.json`, so the ledger is not published.
+ * - `missing`: there is no `daily.json`, so the ledger is not published. Its
+ *   fault is `not-packed`.
  * - `quiet`: every day asked for is covered and no row matched, or the span lies
  *   wholly after the newest day compacted. A file whose entry says `rows: 0` is
  *   never fetched, so a span of quiet days loads no engine at all.
- * - `unreachable`: a day at or before the newest compacted day that no index
- *   names, a named file that did not arrive whole, an index this build will not
- *   act on, or an engine that could not answer. `at` is the first day that could
- *   not be answered, and the console says why.
+ * - `unreachable`: `at` is the first day that could not be answered, and the
+ *   console says why. Its fault is `index-missing` for a span that reaches back
+ *   past the days `daily.json` names when there is no `monthly.json`, or past
+ *   the days those two name when there is no `yearly.json`; `day-missing` for a
+ *   day between the first and the newest packed day that no index names; and
+ *   `file-missing` for a named file that is not there. It is `null` for a span
+ *   that starts before the oldest day any index names, an index this build will
+ *   not act on, a file that did not arrive whole, or an engine that could not
+ *   answer.
  * - `ok`: the rows, exactly as the files hold them. The door never merges rows:
  *   the compaction already wrote one row per record.
  *
@@ -33,7 +39,10 @@
  * name, the period and a `covers` the index guard has already checked, so no
  * caller and no fetched text can name a path. **So is the reading of an index**,
  * `readIndexFrom()`, which `ledger-reach.ts` calls too, so a slice and a reach
- * never disagree about what an index says.
+ * never disagree about what an index says. **And so is the one line a fault
+ * prints**, `faultLine()`: the slice and the reach both meet `not-packed` and
+ * `index-missing`, and the page keeper prints a line once only if both spell it
+ * the same way.
  *
  * Imports nothing tied to one environment. `ledger.ts` binds it to the published
  * site for a browser; `frontend/src/lib/server/ledger-disk.ts` binds it to the
@@ -42,13 +51,14 @@
 
 import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type IndexReading, type IndexRefusal, type Period } from './compact-index';
 import type { FileShortfall, PageKeeper, WantedFile } from './page-keeper';
-import { filesFor, type ChosenFile } from './slice';
+import { filesFor, firstNamed, type ChosenFile } from './slice';
 import { rowsFor } from './slice-query';
 import {
 	checkedRequest,
 	LEDGER_NAMES,
 	SliceRequestError,
 	type DateStamp,
+	type LedgerFault,
 	type LedgerName,
 	type Row,
 	type SliceOptions,
@@ -85,6 +95,47 @@ export const RANGED_PERIODS: ReadonlySet<Period> = new Set<Period>(['yearly']);
 /** What every line the door prints to the console starts with. */
 export const LOG_PREFIX = '[ledger]';
 
+/** What a line calls the stretch of time one period's file covers. */
+const UNIT: Record<Period, string> = { daily: 'day', monthly: 'month', yearly: 'year' };
+
+/** One fault as the door met it, with what its line names. */
+export type FaultMet =
+	| { fault: Extract<LedgerFault, 'not-packed'> }
+	| { fault: Extract<LedgerFault, 'index-missing'>; period: Exclude<Period, 'daily'> }
+	| { fault: Extract<LedgerFault, 'file-missing'>; period: Period; covers: string }
+	| { fault: Extract<LedgerFault, 'day-missing'>; day: DateStamp };
+
+/** The one console line a fault gets: `[ledger] <fault> <ledger> <path>: <what is
+ *  wrong>. <what fixes it>.` The path is the committed one, so an operator can
+ *  open it, and the line names no span, so every panel that meets one fault on
+ *  a page prints the same line. */
+export function faultLine(ledger: LedgerName, met: FaultMet): string {
+	const line = (path: string, words: string): string => `${LOG_PREFIX} ${met.fault} ${ledger} state/${path}: ${words}`;
+	if (met.fault === 'not-packed') {
+		return line(
+			indexPath(ledger, 'daily'),
+			'it is not there: this record is not packed, or not published. Turn on whichever is off, or wait for the next upkeep run.'
+		);
+	}
+	if (met.fault === 'index-missing') {
+		return line(
+			indexPath(ledger, met.period),
+			`it is not there, though daily.json is. Run the upkeep again to write it; it lists nothing until a ${UNIT[met.period]} is packed.`
+		);
+	}
+	if (met.fault === 'file-missing') {
+		return line(
+			dataPath(ledger, met.period, met.covers),
+			`${met.period}.json names it; it is not there. Reload; if it stays, re-pack that ${UNIT[met.period]}.`
+		);
+	}
+	return line(
+		indexPath(ledger, 'daily'),
+		`no index names ${met.day}, a day between packed days. ` +
+			'Re-pack that day from raw files; if they are gone, try git history.'
+	);
+}
+
 function reason(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
@@ -115,9 +166,11 @@ export function explainRefusal(period: Period, refused: IndexRefusal): string {
 		: `${period}.json cannot be read: ${refused.detail}`;
 }
 
-/** Why a file a slice needs could not be had, as the console says it. */
-function explainShortfall(wanted: WantedFile, file: ChosenFile, shortfall: FileShortfall): string {
-	if (shortfall.reason === 'absent') return `${wanted.path} is named in ${file.period}.json and is not there`;
+/** Why a file a slice needs arrived but could not be used, as the console says it. */
+function explainShortfall(
+	wanted: WantedFile,
+	shortfall: Exclude<FileShortfall, { reason: 'absent' }>
+): string {
 	if (shortfall.reason === 'length') {
 		return `${wanted.path} arrived as ${shortfall.arrived} bytes and its entry says ${wanted.bytes}`;
 	}
@@ -134,13 +187,23 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 		throw new SliceRequestError(`${JSON.stringify(ledger)} is not a ledger the console may query`);
 	}
 	const request = checkedRequest(options);
-	const unreachable = (at: DateStamp, why: string): SliceResult => {
-		console.warn(`${LOG_PREFIX} ${ledger} ${request.from} to ${request.to}: ${why}, so nothing is drawn from ${at}`);
-		return { state: 'unreachable', rows: [], at };
+	const unreachable = (at: DateStamp, why: string, fix = ''): SliceResult => {
+		keeper.warn(
+			`${LOG_PREFIX} ${ledger} ${request.from} to ${request.to}: ${why}, so nothing is drawn from ${at}` +
+				(fix === '' ? '' : `. ${fix}`)
+		);
+		return { state: 'unreachable', rows: [], at, fault: null };
+	};
+	const faulted = (at: DateStamp, met: Exclude<FaultMet, { fault: 'not-packed' }>): SliceResult => {
+		keeper.warn(faultLine(ledger, met));
+		return { state: 'unreachable', rows: [], at, fault: met.fault };
 	};
 
 	const daily = await readIndexFrom(keeper, ledger, 'daily');
-	if (daily === null) return { state: 'missing', rows: [] };
+	if (daily === null) {
+		keeper.warn(faultLine(ledger, { fault: 'not-packed' }));
+		return { state: 'missing', rows: [], fault: 'not-packed' };
+	}
 	if ('refused' in daily) return unreachable(request.from, explainRefusal('daily', daily.refused));
 	const days = daily.index.entries;
 	const through = days.at(-1)?.covers ?? null;
@@ -151,23 +214,29 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	let years: CompactEntry[] = [];
 	if (request.from < days[0].covers) {
 		const monthly = await readIndexFrom(keeper, ledger, 'monthly');
-		if (monthly !== null && 'refused' in monthly) {
-			return unreachable(request.from, explainRefusal('monthly', monthly.refused));
-		}
-		if (monthly !== null) months = monthly.index.entries;
-		const firstOfMonths = months.length > 0 ? `${months[0].covers}-01` : null;
-		const oldest = firstOfMonths !== null && firstOfMonths < days[0].covers ? firstOfMonths : days[0].covers;
-		if (request.from < oldest) {
+		if (monthly === null) return faulted(request.from, { fault: 'index-missing', period: 'monthly' });
+		if ('refused' in monthly) return unreachable(request.from, explainRefusal('monthly', monthly.refused));
+		months = monthly.index.entries;
+		if (request.from < firstNamed(days, months, [])) {
 			const yearly = await readIndexFrom(keeper, ledger, 'yearly');
-			if (yearly !== null && 'refused' in yearly) {
-				return unreachable(request.from, explainRefusal('yearly', yearly.refused));
-			}
-			if (yearly !== null) years = yearly.index.entries;
+			if (yearly === null) return faulted(request.from, { fault: 'index-missing', period: 'yearly' });
+			if ('refused' in yearly) return unreachable(request.from, explainRefusal('yearly', yearly.refused));
+			years = yearly.index.entries;
 		}
 	}
 
 	const selection = filesFor(request.from, until, days, months, years);
-	if ('hole' in selection) return unreachable(selection.hole, `${selection.hole} is named by no index`);
+	if ('hole' in selection) {
+		const first = firstNamed(days, months, years);
+		if (selection.hole < first) {
+			return unreachable(
+				selection.hole,
+				`it starts before ${first}, the oldest day any index names`,
+				"Clamp the span to the reach's first day"
+			);
+		}
+		return faulted(selection.hole, { fault: 'day-missing', day: selection.hole });
+	}
 	const holding = selection.files.filter((file) => file.entry.rows > 0);
 	if (holding.length === 0) return { state: 'quiet', rows: [], through };
 
@@ -181,11 +250,14 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	try {
 		const held = await keeper.hold(wanted);
 		if ('failed' in held) {
-			const at = held.failed;
-			return unreachable(holding[at].firstDay, explainShortfall(wanted[at], holding[at], held.shortfall));
+			const file: ChosenFile = holding[held.failed];
+			if (held.shortfall.reason === 'absent') {
+				return faulted(file.firstDay, { fault: 'file-missing', period: file.period, covers: file.entry.covers });
+			}
+			return unreachable(file.firstDay, explainShortfall(wanted[held.failed], held.shortfall));
 		}
 		rows = await rowsFor(held.engine, held.names, request, until, (message) =>
-			console.warn(`${LOG_PREFIX} ${ledger}: ${message}`)
+			keeper.warn(`${LOG_PREFIX} ${ledger}: ${message}`)
 		);
 	} catch (error) {
 		return unreachable(request.from, `the query engine could not answer (${reason(error)})`);
