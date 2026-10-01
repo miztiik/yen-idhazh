@@ -1,8 +1,9 @@
 /**
- * What does a page keep of what the query door fetched?
+ * What does a page keep of what the query door fetched, and of what it told the console?
  *
- * Each index it read, and the name the engine holds each data file under, so
- * nothing crosses the network or enters the engine twice.
+ * Each index it read, the name the engine holds each data file under, and each
+ * line it printed, so nothing crosses the network or enters the engine twice,
+ * and no line reaches the console twice.
  *
  * A keeper lives as long as whoever made it. In a browser, `ledger.ts` makes one
  * on first use and keeps it until the page is reloaded, so every panel the page
@@ -36,6 +37,11 @@
  * a call that cannot be answered never loads it. A call that may read a file by
  * byte range starts the engine while it fetches the rest, because only the engine
  * can open that file.
+ *
+ * **A console line is printed once for the keeper's life.** A missing file is
+ * met by every panel that reads it, and fifteen panels on one page would print
+ * fifteen copies of one fault; the line names the fault and the path, so its
+ * first copy says everything the others would.
  *
  * Imports nothing tied to one environment, so a Node test loads it as it is.
  */
@@ -89,6 +95,8 @@ export interface PageKeeper {
 	hold(files: readonly WantedFile[]): Promise<Holding>;
 	/** Drops every file this keeper registered. A build-time call does this when it ends; a page never does. */
 	release(): Promise<void>;
+	/** Prints `line` as a console warning the first time this keeper meets it, and never again. */
+	warn(line: string): void;
 }
 
 type Arrival = { bytes: Uint8Array } | FileShortfall;
@@ -108,6 +116,8 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 	const arrivals = new Map<string, Promise<Arrival>>();
 	/** The name the engine holds each registered file under, and each registration in flight. */
 	const names = new Map<string, Promise<Registration>>();
+	/** Every line this keeper has printed. */
+	const told = new Set<string>();
 	let registeredWith: QueryEngine | null = null;
 
 	function index(path: string): Promise<Uint8Array | null> {
@@ -240,5 +250,11 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 		if (registeredWith !== null && held.length > 0) await registeredWith.drop(held);
 	}
 
-	return { index, hold, release };
+	function warn(line: string): void {
+		if (told.has(line)) return;
+		told.add(line);
+		console.warn(line);
+	}
+
+	return { index, hold, release, warn };
 }

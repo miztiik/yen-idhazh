@@ -149,7 +149,8 @@ def a_finished_year(tmp_path: Path, *, today: date = TODAY, january: bool = True
     """A checkout whose ledger holds 2026 as twelve month files, and 2027's January if asked.
 
     The daily watermark stands on the newest day a pass on `today` would take,
-    so the only work a pass finds is the year's and the months'.
+    beside a daily index that names no day, so the only work a pass finds is the
+    year's and the months'. A pass refuses a watermark whose index is not there.
     """
     root, scratch = tmp_path / "checkout", tmp_path / "scratch"
     months = MONTHS_OF_2026 + (["2027-01"] if january else [])
@@ -165,6 +166,7 @@ def a_finished_year(tmp_path: Path, *, today: date = TODAY, january: bool = True
     )
     a_mark(root, Period.MONTHLY, months[-1])
     wake = datetime.combine(today, time.min, tzinfo=UTC)
+    index_entries(root, Period.DAILY, [])
     a_mark(root, Period.DAILY, schedule.newest_eligible(now=wake, after_days=1).isoformat())
     return root
 
@@ -403,6 +405,7 @@ def test_a_year_missing_a_month_is_refused_by_name_and_nothing_moves(
 
     assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026")
     assert "monthly.json does not name 2026-06" in caplog.text
+    assert f"fault={ledger.LedgerFault.DAY_MISSING}" in caplog.text
     assert files_under(root) == before
 
 

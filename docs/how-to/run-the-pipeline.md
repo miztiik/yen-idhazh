@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -98,7 +98,7 @@ not a recovery path here. Until the gardener's own workflow runs the tasks on a
 schedule, `python -m idhazh gardener run-task NAME --run-id RUN_ID --attempt N
 --git-sha SHA` runs one in a checkout and prints what it would take.
 
-Turning one task's deletion on is a separate one-line commit to its own
+Turning one task's deletion on is a change of its own to that task's
 declaration, and this is the order:
 
 1. Wait for a scheduled pass whose output would name at least one file. **For the
@@ -118,13 +118,16 @@ declaration, and this is the order:
 4. `compact-summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so a
  live pass packs the eval rows into fewer files and drops none of them
  ([../concepts/evaluation.md](../concepts/evaluation.md#design-rationale)).
-5. Only then set that task's `dry_run` to `false` in its own declaration, in a
- commit that changes nothing else.
+5. Only then set that task's `dry_run` to `false` in its own declaration. In the
+ same change, name the task in `LIVE_BY_DECISION` in
+ `backend/tests/contracts/test_gardener_config.py`, with the reason in plain
+ words, and correct every doc sentence the switch makes false: that test fails
+ on a live switch the list does not name.
 
 **The console ledgers' packing tasks are the ones to turn on first.**
-`compact-item-health`, `compact-summary-quality-evals` and `compact-host-fingerprint` ship
-report-only, and the console reads their packed files, so until they run live it
-shows data up to the day the migration ran.
+`compact-item-health` and `compact-host-fingerprint` pack live.
+`compact-summary-quality-evals` ships report-only, and the console reads its packed files, so
+until it runs live the console shows its days up to the day the migration ran.
 
 **Each task is switched on by itself, and the picture cleanup is a task of its
 own.** `visual-prune` files a row under `state/raw/visual-prunes/` saying what it
@@ -212,9 +215,12 @@ two may not do. Which ledgers it accepts, why those two are refused, and what
 makes it safe to stop half way is
 [../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days).
 
-`item-health`, `summary-quality-evals` and `host-fingerprint` are not targets: they file through
-the ledger door, and until each ledger's compaction runs live nothing offers a
-range delete for them, the same as `visual-prunes`.
+A ledger the door files, such as `item-health`, is a target too. The command
+takes those days' rows out of every raw, daily, monthly and yearly file that
+holds them, and a live pass also needs `--run-id` and `--commit`, which each
+rebuilt file names as its writer. `summary-quality-evals` is refused by its own
+declaration, because every eval row is kept for ever. The steps are in
+[prune-a-collection.md](prune-a-collection.md#a-ledger-the-door-files).
 
 ## Three things that will bite
 

@@ -155,6 +155,11 @@ def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> 
         # The files it had already deleted are gone, so reporting it as a clean
         # failure would leave an operator unable to say what happened - the
         # record it carries is exactly that answer.
+        #
+        # The gardener's declarations come from the same `--config` as every
+        # other setting: a ledger on the door says in its compaction declaration
+        # whether its days may go, and the prune reads that rather than a list.
+        tasks = config.load_gardener(args.config).tasks
         failed = False
         try:
             outcome = prune.prune_range(
@@ -162,8 +167,11 @@ def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> 
                 target=args.target,
                 since=args.since,
                 until=args.until,
+                tasks=tasks,
                 dry_run=args.dry_run,
                 max_deletes=args.max_deletes,
+                run_id=args.run_id,
+                commit=args.commit,
             )
         except ValueError as refusal:
             parser.error(str(refusal))
