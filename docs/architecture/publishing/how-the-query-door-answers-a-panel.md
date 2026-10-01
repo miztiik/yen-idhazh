@@ -169,7 +169,11 @@ already checked:
 `<prefix>` is `visuals.asset_base_url` in `config/idhazh.json`, or SvelteKit's own
 repository prefix when that knob is empty, which is the shipped default. It comes
 from the build, never from a payload, so no fetched text can move where the door
-asks. On disk the same paths sit under the state root handed to `sliceFromDisk()`.
+asks. The query a data file is asked with, `?v=<rows>-<bytes>`, and the `read`
+part a year file read by byte range adds, are made in
+`frontend/src/lib/data/fetched-bytes.ts` from the index entry and from random
+bits, never from fetched text. On disk the same paths sit under the state root
+handed to `sliceFromDisk()`.
 
 ## How a year file is read by byte range
 
