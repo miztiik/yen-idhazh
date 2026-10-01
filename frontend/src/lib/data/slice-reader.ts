@@ -29,11 +29,13 @@
  * compacted yet, so it is clamped away rather than drawn as a zero.
  *
  * **A day in a packed year is read from its year file, by byte range.** In a
- * browser the engine opens the year file at its address and asks the host for its
- * footer and the row groups of the months a query touches - one row group a month
- * - so a month out of a year costs about what the month's own file would. The
- * page keeper checks the length the engine opened against the entry. A day or
- * month file is fetched whole, and at build time every file is.
+ * browser the engine opens the year file at an address no earlier read used and
+ * asks the host for its footer and the row groups of the months a query touches
+ * - one row group a month - so a month out of a year costs about what the
+ * month's own file would. The page keeper checks the length the engine opened
+ * against the entry, and the engine drops the file when the read ends, so the
+ * next read opens it again where the browser holds no part fetched before a
+ * deploy. A day or month file is fetched whole, and at build time every file is.
  *
  * **The address is composed here and nowhere else**, from the closed ledger
  * name, the period and a `covers` the index guard has already checked, so no
@@ -256,9 +258,13 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 			}
 			return unreachable(file.firstDay, explainShortfall(wanted[held.failed], held.shortfall));
 		}
-		rows = await rowsFor(held.engine, held.names, request, until, (message) =>
-			keeper.warn(`${LOG_PREFIX} ${ledger}: ${message}`)
-		);
+		try {
+			rows = await rowsFor(held.engine, held.names, request, until, (message) =>
+				keeper.warn(`${LOG_PREFIX} ${ledger}: ${message}`)
+			);
+		} finally {
+			await held.done();
+		}
 	} catch (error) {
 		return unreachable(request.from, `the query engine could not answer (${reason(error)})`);
 	}

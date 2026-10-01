@@ -1,10 +1,10 @@
 # Plan 56 - Every summary-quality row is kept, packed by year, and named for what it holds
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 **Level**: 5 (CLAUDE.md section 6). It deletes a persisted contract, adds a period to the saved file format, and renames a committed ledger. The person's rulings below are the design consultation; the ESCALATE triggers name what still stops a worker.
 
-**Status**: rows 1 to 5 are done (#1170, #1172, #1179, #1178, #1180). The ledger is `summary-quality-evals` and its declaration waits 93 days before it packs a year (R6). The browser reads a year file by byte ranges. The ID files are settled a month at a time from the first upkeep wake after 2026-10-02. Row 4's measurement fired trigger 5 on a page that reads a year file across a deploy (deviation 9), and the person ruled A3 (R7): row 7 reads each year file under an address no earlier read used, then removes the 367-day floor on a published ledger, and is next. Row 6 checks the live site once plan 51 publishes its first `.parquet`.
+**Status**: rows 1 to 5 and 7 are done. The ledger is `summary-quality-evals` and its declaration sets its year-packing wait (R6). Each browser query reads a year file under a fresh address and releases its engine registration afterward. The published-year floor is removed; the declaration's own minimum still applies. The ID files are settled a month at a time from the first upkeep wake after 2026-10-02. Row 6 checks the live site once plan 51 publishes its first `.parquet`.
 
 **Chain** (CLAUDE.md section 0d). **Intent**: the person's rulings of 2026-09-30, section 0. **Contract**: `backend/idhazh/contracts/` and the pages each row names. **Code**: the six rows.
 
@@ -18,10 +18,12 @@ AUTHORIZED (the person, 2026-09-30). Read CLAUDE.md, docs/how-to/execute-a-plan.
 docs/how-to/ship-a-pr.md and docs/how-to/run-the-gates.md, then this plan's section 0
 and section 1, and each row just before you dispatch it.
 
-Rows 1 to 5 are done. Row 7 is next, ruled by R7. Row 6 waits for plan 51's row 3 to publish
-the site's first .parquet. Plan 51's
-open pull requests publish this ledger under its old name (#1169) and write its month
-index (#1177); row 3 has landed, so they take main in and use the new name. Merging
+Rows 1 to 5 and 7 are done. The person authorized plan 51's owner on 2026-10-01 to
+deliver row 7 from a separate branch, p51-prerequisite-fresh-year-reads, without
+changing the original p56r7 checkout. Do not deliver the original branch again.
+Row 6 waits for plan 51's row 3 to publish the site's first .parquet. Plan 51's
+PR #1169 now uses summary-quality-evals and copies all three indexes; #1177 has
+merged. Merging
 main into a branch older than row 3 takes `git -c merge.directoryRenames=false merge`.
 Plan 50's row 15 (build the score month summary) is withdrawn by the ruling below.
 
@@ -72,7 +74,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | 4 | The browser reads a year file by byte ranges | 2 | B | DONE | p56r4 | #1178 | p56-r4-worker |
 | 5 | The eval ledger's ID files are packed a month at a time | 3 | C | DONE | p56r5 | #1180 | p56-r5-worker |
 | 6 | The live site is checked to serve a `.parquet` byte range uncompressed | 4, plan 51 row 3 | C | NOT STARTED | - | - | - |
-| 7 | A year file is read under an address no earlier read used, and a published ledger's declaration sets its own wait | 4 | C | NOT STARTED | - | - | - |
+| 7 | A year file is read under an address no earlier read used, and a published ledger's declaration sets its own wait | 4 | C | DONE | p51prereq | - | p51-owner |
 
 ## 2. Deviations and rulings to date
 

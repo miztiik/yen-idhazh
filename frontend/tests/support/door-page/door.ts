@@ -83,10 +83,16 @@ async function measure(root: string, ledger: LedgerName, options: SliceOptions, 
 	return { state: result.state, rows: result.rows.length, digest: hash.toString(16), ms, warned };
 }
 
+/** The name of every file this page's engine holds now, in order. */
+async function held(): Promise<string[]> {
+	const engine = await browserEngine(REPOSITORY);
+	return (await engine.rows(`SELECT file FROM glob('door/*') ORDER BY file`, [])).map((row) => String(row.file));
+}
+
 declare global {
 	interface Window {
-		door: { slice: typeof slice; measure: typeof measure };
+		door: { slice: typeof slice; measure: typeof measure; held: typeof held };
 	}
 }
 
-window.door = { slice, measure };
+window.door = { slice, measure, held };

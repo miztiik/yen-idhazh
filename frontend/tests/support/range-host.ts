@@ -10,11 +10,12 @@
  * ignored. An `If-Range` naming another ETag gets the whole file, with 200, as
  * Pages was measured to answer it.
  *
- * Every request under a data root is logged: method, path, `Range`,
- * `Accept-Encoding`, `If-Range`, status and body bytes. A data root may be
- * slowed: each response waits a fixed time before its first byte, then sends its
- * body no faster than a fixed rate. Everything else - the page a spec drives and
- * the engine's add-on - is served plainly, unslowed and unlogged.
+ * Every request under a data root is logged: method, path, query string,
+ * `Range`, `Accept-Encoding`, `If-Range`, status, the ETag it answered with and
+ * body bytes. A data root may be slowed: each response waits a fixed time before
+ * its first byte, then sends its body no faster than a fixed rate. Everything
+ * else - the page a spec drives and the engine's add-on - is served plainly,
+ * unslowed and unlogged.
  */
 
 import { createReadStream } from 'node:fs';
@@ -41,12 +42,16 @@ export interface HostRequest {
 	method: string;
 	/** The path under the root's `state/`, without its query string. */
 	path: string;
+	/** The query string as asked, `?` included, or empty. The host ignores it, as Pages does. */
+	query: string;
 	range: string | null;
 	acceptEncoding: string | null;
 	ifRange: string | null;
 	ifNoneMatch: string | null;
 	status: number;
 	contentEncoding: string | null;
+	/** The ETag the answer carried; null for a file that is not there. */
+	etag: string | null;
 	/** Body bytes written before the response ended or the browser went away. */
 	bodyBytes: number;
 }
@@ -159,6 +164,7 @@ async function serveData(
 	root: string,
 	data: DataRoot,
 	relative: string,
+	query: string,
 	maxAge: number,
 	request: IncomingMessage,
 	response: ServerResponse,
@@ -169,17 +175,21 @@ async function serveData(
 		return typeof value === 'string' ? value : null;
 	};
 	const counted = { bytes: 0 };
+	// Set when the file is found. A header handed to `writeHead` alone is not one `getHeader` reads back.
+	const served: { etag: string | null } = { etag: null };
 	response.on('close', () => {
 		log.push({
 			root,
 			method: request.method ?? '',
 			path: relative,
+			query,
 			range: header('range'),
 			acceptEncoding: header('accept-encoding'),
 			ifRange: header('if-range'),
 			ifNoneMatch: header('if-none-match'),
 			status: response.statusCode,
 			contentEncoding: (response.getHeader('content-encoding') as string | undefined) ?? null,
+			etag: served.etag,
 			bodyBytes: counted.bytes
 		});
 	});
@@ -192,6 +202,7 @@ async function serveData(
 	}
 	const seconds = Math.floor(found.mtimeMs / 1000);
 	const etag = `"${seconds.toString(16)}-${found.size.toString(16)}"`;
+	served.etag = etag;
 	const lastModified = new Date(seconds * 1000).toUTCString();
 	const common = {
 		'Content-Type': typeOf(file),
@@ -240,11 +251,11 @@ export async function startRangeHost(options: HostOptions): Promise<RangeHost> {
 	const log: HostRequest[] = [];
 	const host = { maxAge: options.maxAge };
 	const server = createServer((request, response) => {
-		const { pathname } = new URL(request.url ?? '/', 'http://host.invalid');
+		const { pathname, search } = new URL(request.url ?? '/', 'http://host.invalid');
 		const [first = '', ...rest] = decodeURIComponent(pathname).split('/').filter((part) => part !== '');
 		const answering =
 			first in options.data && rest[0] === 'state'
-				? serveData(first, options.data[first], rest.slice(1).join('/'), host.maxAge, request, response, log)
+				? serveData(first, options.data[first], rest.slice(1).join('/'), search, host.maxAge, request, response, log)
 				: first in options.plain
 					? servePlain(options.plain[first], rest.join('/'), request, response)
 					: servePlain(options.site, [first, ...rest].filter((part) => part !== '').join('/'), request, response);

@@ -46,9 +46,10 @@ last update, rows 1, 2, 4, 5, 6, 7, 9 and 10 had merged. The remaining work is:
     BLOCKER: load_gardener refuses publishing summary-quality-evals with
     its declared monthly_keep_days 93 while the published-year minimum is
     367. Plan 56 row 7 removes that minimum after fixing stale cached ranges.
-    Its owner has tested and locally committed the fix in p56r7; at this
-    snapshot it has no PR. Do not change the guard or the packing knob to
-    force a pass. Reports: %TEMP%/p51c-report.md and %TEMP%/p51r3/.
+          The person authorized this owner to deliver that tested fix in a
+          separate worktree, p51prereq, without changing p56r7. After its PR
+          merges, take main into row 3 and rerun the final config check. No packing
+          knob changes. Reports: %TEMP%/p51c-report.md and %TEMP%/p51r3/.
   row 8   PR #1171, worktree p51r8, branch
           p51r8-one-panel-fetches-its-ledger-and-draws-in-d3. Pass A is done,
     smoke-tested, and passed all seven checks at 28242e632. Pass B is not
@@ -72,9 +73,9 @@ moved under the built branches. Plan 56 renamed the `scores` ledger to
 under config/gardener/) and added a year file to the shared packing code (#1172).
 Expect conflicts in _compact_tree.py, slice-shapes.ts and the gardener pages, and carry
 the new name through every file a branch adds. The order from here:
-  1. prerequisite  plan 56's owner publishes its row 7 fresh-address fix and
-              removes the published-year minimum. Taking over that other owner's
-              delivery needs explicit coordination; it is not a packing-knob edit.
+  1. prerequisite  this owner delivers plan 56 row 7's tested fresh-address fix
+              and removes the published-year minimum in a separate PR. This was
+              authorized on 2026-10-01; the original p56r7 checkout stays intact.
   2. row 3    merge origin/main once that fix lands, run the previously blocked
               ceiling/config checks and selected canary checks, push and merge
               on green CI. The copy requires all three indexes, which row 10
@@ -114,8 +115,8 @@ for it (docs/reference/agent-notes/git-and-github.md), and a plan-doc stamp push
 straight to the trunk is such a commit. GitHub's own squash merges carry the same
 offset; that is defect 48, and it is not this plan's to fix.
 
-OPEN FOR COORDINATION. Row 3 now needs plan 56 row 7 to land first. Its separate
-owner still owns p56r7; do not change that checkout or claim its work is on main.
+OPEN FOR COORDINATION. None. The person authorized this owner on 2026-10-01 to
+deliver plan 56 row 7 as the prerequisite PR, leaving its owner's checkout intact.
 The prior decisions stand. The person answered on 2026-09-28: plan 55 is the query
 page's own plan; d3-sankey lays the flow out (deviation 13); and this plan leaves plan
 50's plan alone (deviation 18). On 2026-09-30 the person answered five more: this plan
