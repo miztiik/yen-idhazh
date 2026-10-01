@@ -8,7 +8,7 @@ that says what the `high`, `medium` and `low` bands mean to a person. Until it
 has rows, the band cuts at 0.80 and 0.50 are a promise nobody has checked
 (`CLAUDE.md` Guardrail #10).
 
-You need the article text. The committed ledger does not have it: the scores ledger
+You need the article text. The committed ledger does not have it: the eval ledger
 records a digest of the article and a digest of the summary and neither text.
 The text comes from an **evidence package**, which one run writes and which is
 never committed.

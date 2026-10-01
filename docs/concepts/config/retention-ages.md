@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 Which instruments run at all, and how long what they write is kept. The switches
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
@@ -17,7 +17,7 @@ why these are knobs rather than constants, is [../config.md](../config.md).
 
 | Knob | Default | What it switches off |
 | --- | --- | --- |
-| `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in the scores ledger. |
+| `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in the eval ledger. |
 | `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
 | `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
@@ -28,7 +28,7 @@ why these are knobs rather than constants, is [../config.md](../config.md).
 | `cost_output_per_million` | `0.60` | Nothing. The same, for a million written tokens. |
 
 **Four switches and not one master switch.** Collection, scoring, publishing and
-tracing fail in different ways: the score ledger empties when the scorer will
+tracing fail in different ways: the eval ledger empties when the scorer will
 not load, the published telemetry file stops when a run does not publish, and
 the counters file is silent when llama-server was gone before it was read. Under
 one switch a reader sees three absences and cannot say which instrument went
@@ -113,7 +113,7 @@ that mapping yet, because no console read opens one of its shards today
 | Ledger | Full grain | Summary after it | Declared in |
 | --- | --- | --- | --- |
 | the item-health ledger, `state/raw/item-health/` and `state/compact/item-health/` | 14 months before a month is summarised; its rows go when the 15-month `monthly_window` of its compaction passes | forever, in `state/item-health-summary/` | `config/gardener/telemetry-aggregate.json`, series `full-grain` and `aggregate`, and `config/gardener/compact-item-health.json` |
-| the scores ledger, `state/raw/scores/` and `state/compact/scores/` | forever - the `monthly_window` of its compaction is `forever`, so no row is ever deleted | none - a chart that wants a monthly figure computes it from the rows | `config/gardener/compact-scores.json` |
+| the eval ledger, `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | forever - the `monthly_window` of its compaction is `forever`, so no row is ever deleted | none - a chart that wants a monthly figure computes it from the rows | `config/gardener/compact-summary-quality-evals.json` |
 | `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
 | `state/feed-health/` | 14 months | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/feed-health.json` |
 | the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`, with the floor it must reach in the retired `config/gardener/host-fingerprint.json` |
@@ -199,7 +199,7 @@ month is not thirty days. The check now compares against the shards, and
 `backend/tests/contracts/` sweeps every end date in one 400-year
 Gregorian cycle to prove it. The gardener loader makes the same comparison for
 every declaration whose files a console read opens - the `feed-health` and
-`scores` windows, the `full-grain` series of `telemetry-aggregate`, and the
+`summary-quality-evals-index` windows, the `full-grain` series of `telemetry-aggregate`, and the
 `public-copy` series - and refuses a window under fourteen months by naming the
 file. Measured 2026-09-02 over all **146,097** anchor
 dates - arithmetic over the calendar, so the spread is zero by construction:
@@ -238,8 +238,8 @@ still spelling a moved name is refused the same way, naming the new place:
 | `observability.item_health_full_grain_months` | 14 | `series.full-grain` in `config/gardener/telemetry-aggregate.json` |
 | `observability.item_health_aggregate_keep_months` | null | `series.aggregate` in `config/gardener/telemetry-aggregate.json`, as `forever` |
 | `observability.public_telemetry_keep_months` | 14 | `series.public-copy` in `config/gardener/telemetry-aggregate.json` |
-| `observability.scores_full_grain_months` | 14 | `monthly_window` in `config/gardener/compact-scores.json`, as `forever` since 2026-09-30 |
-| `observability.score_archive_keep_months` | null | `monthly_window` in `config/gardener/compact-scores.json`, as `forever`: no month is summarised |
+| `observability.scores_full_grain_months` | 14 | `monthly_window` in `config/gardener/compact-summary-quality-evals.json`, as `forever` since 2026-09-30 |
+| `observability.score_archive_keep_months` | null | `monthly_window` in `config/gardener/compact-summary-quality-evals.json`, as `forever`: no month is summarised |
 | `observability.feed_health_keep_months` | 14 | `window` in `config/gardener/feed-health.json` |
 | `observability.host_fingerprint_keep_months` | 14 | `window` in `config/gardener/host-fingerprint.json` |
 | `observability.trace_window_days` | 7 | `window` in `config/gardener/traces.json`, in days |
@@ -293,7 +293,7 @@ stands, and the measurement only strengthens it.
 `telemetry-aggregate` task summarises an item-health month past its `full-grain`
 series and unlinks the browser's copy of that month past its `public-copy`
 series; the `feed-health` task deletes `state/feed-health/` past its window; and
-the `scores` task keeps every `state/score-index/` day, because its window is
+the `summary-quality-evals-index` task keeps every `state/summary-quality-evals-index/` day, because its window is
 `forever`. The item-health and host-fingerprint rows are deleted by each ledger's
 compaction past its `monthly_window`, the eval rows' compaction keeps every
 month, and the retired `host-fingerprint` task runs no more.
@@ -302,8 +302,9 @@ month, and the retired `host-fingerprint` task runs no more.
 evidence behind every published quality claim, so its rows are kept for ever,
 and a chart that wants a monthly figure computes it from the rows when it draws
 ([../evaluation.md](../evaluation.md#design-rationale)). The `monthly_window` of
-`config/gardener/compact-scores.json` is `forever`, so its compaction may pack a
-month and never drops one. The index a run dedupes against keeps every day for
+`config/gardener/compact-summary-quality-evals.json` is `forever`, so its compaction may pack a
+month and never drops one, and its `monthly_keep_days` packs a finished year's
+months into one year file. The index a run dedupes against keeps every day for
 its own reason: an observation key carries no date, so a dropped day would make
 every measurement in it new again.
 
@@ -335,10 +336,10 @@ together, on **2027-10-01**. The sight date was 2026-11-30 while that ledger
 filed by month, because a whole month shard survived if any of its days was in
 range; at day grain the file the window stops naming is the file that goes.
 Reading committed files against a fixed calendar is deterministic, so the spread
-is zero. The item-health and scores rows have since moved to the ledger door, so
+is zero. The item-health and eval rows have since moved to the ledger door, so
 they no longer go on that date. The item-health rows go when the 15-month
 `monthly_window` of their compaction passes, and that compaction packs live; no
-scores row is ever deleted.
+eval row is ever deleted.
 
 ## See also
 

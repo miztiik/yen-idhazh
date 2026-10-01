@@ -9,7 +9,7 @@ import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type Period } from '
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
 import { readReach } from '../src/lib/data/ledger-reach';
-import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper } from '../src/lib/data/page-keeper';
+import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper, type WantedFile } from '../src/lib/data/page-keeper';
 import { daysBetween, filesFor } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
 import { dataPath, indexPath, readSlice } from '../src/lib/data/slice-reader';
@@ -377,7 +377,7 @@ test.describe('the four states, before the engine is needed', () => {
 
 	const unreadable: [string, Rule][] = [
 		['not JSON', { status: 200, body: new TextEncoder().encode('{"entries": [') }],
-		['another ledger', reshaped({ ledger: 'scores' })],
+		['another ledger', reshaped({ ledger: 'summary-quality-evals' })],
 		['entries out of order', reshaped({ entries: [{ covers: '2026-09-02', rows: 1, bytes: 1 }, { covers: '2026-09-01', rows: 1, bytes: 1 }] })],
 		['a month in a daily index', reshaped({ entries: [{ covers: '2026-09', rows: 1, bytes: 1 }] })],
 		['a year in a daily index', reshaped({ entries: [{ covers: '2026', rows: 1, bytes: 1 }] })],
@@ -753,6 +753,42 @@ test.describe('what a page keeps', () => {
 		await readSlice(freshPage(recorded().fetcher, engine), LEDGER, ask('2026-08-30', '2026-09-02'));
 		expect(engine.registered).toHaveLength(3);
 		for (const name of engine.registered) expect(name).toMatch(/^door\/\d+\.parquet$/);
+	});
+
+	test('only a year file is offered to the engine by byte range, and an engine that reads no host is handed it whole', async () => {
+		// The Node engine has no reader for a host, so the browser's byte source hands
+		// it the year file whole; `ledger-ranges.spec.ts` drives the ranges in a browser.
+		const offered: WantedFile[] = [];
+		const watched = (page: PageKeeper): PageKeeper => ({
+			...page,
+			hold: (files) => {
+				offered.push(...files);
+				return page.hold(files);
+			}
+		});
+		const unpacked = recorded();
+		const span = ask('2026-08-30', '2026-09-02');
+		expect(await readSlice(watched(freshPage(unpacked.fetcher)), LEDGER, span)).toMatchObject({ state: 'ok' });
+		const packed = recorded({}, YEAR_STATE);
+		const engine = counted();
+		expect(await readSlice(watched(freshPage(packed.fetcher, engine)), LEDGER, span)).toMatchObject({ state: 'ok' });
+		const yearFile = dataPath(LEDGER, 'yearly', '2026');
+		expect(offered.map((file) => [file.path, file.byRange])).toEqual([
+			[MONTH_FILE, false],
+			[dayFile('2026-09-01'), false],
+			[dayFile('2026-09-02'), false],
+			[yearFile, true]
+		]);
+		const [year] = fixtureEntries('yearly', YEAR_STATE);
+		expect(packed.asked.filter((one) => one.path === yearFile).map((one) => one.version)).toEqual([`${year.rows}-${year.bytes}`]);
+		expect(engine.registered).toHaveLength(1);
+	});
+
+	test('a data file is read by range at the address its whole fetch would ask for, version and all', () => {
+		const source = fetchedBytes(PREFIX, recorded().fetcher);
+		expect(source.address?.(dataPath(LEDGER, 'yearly', '2026'), '10-20449')).toBe(
+			`${PREFIX}/state/compact/host-fingerprint/yearly/2026/2026.parquet?v=10-20449`
+		);
 	});
 
 	test('a page keeps its files registered, and a build-time call drops every file it registered when it ends', async () => {

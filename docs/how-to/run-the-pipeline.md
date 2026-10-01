@@ -55,7 +55,7 @@ starts its own server and probes it on loopback.
 | --- | --- |
 | `--date YYYY-MM-DD` | Re-run a specific day. Defaults to today, UTC. |
 | `--shard N --shards M` | Take one worker's share. Round-robin, so lengths spread evenly. |
-| `--no-faithfulness` | Skip the scorer. The digest still publishes; **the score ledger stays empty.** |
+| `--no-faithfulness` | Skip the scorer. The digest still publishes; **the eval ledger stays empty.** |
 | `--config PATH` | Point at a different `config/` directory. |
 
 ## Where things land
@@ -65,7 +65,7 @@ starts its own server and probes it on loopback.
 | `backend/var/run/<date>/plan.json` | The day's work list | no - gitignored |
 | `backend/var/run/<date>/items/*.json` | Per-item article, summary and eval | no - gitignored |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
-| `state/raw/scores/<YYYY>/<MM>/<DD>/` | One row per scored item, packed later under `state/compact/scores/` | **yes** |
+| `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/` | One row per scored item, packed later under `state/compact/summary-quality-evals/` | **yes** |
 | `state/seen/<YYYY>/<MM>/<DD>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
 | `state/feed-health/<YYYY>/<MM>/<DD>/` | What every feed did on every run | **yes** |
@@ -115,7 +115,7 @@ declaration, and this is the order:
  that list: their compaction deletes them, and a compaction's own list is read as
  [the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-dry-run-does-and-what-the-record-says)
  says. The eval rows are on no list at all, because nothing deletes one.
-4. `compact-scores` keeps every month: its `monthly_window` is `forever`, so a
+4. `compact-summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so a
  live pass packs the eval rows into fewer files and drops none of them
  ([../concepts/evaluation.md](../concepts/evaluation.md#design-rationale)).
 5. Only then set that task's `dry_run` to `false` in its own declaration. In the
@@ -126,7 +126,7 @@ declaration, and this is the order:
 
 **The console ledgers' packing tasks are the ones to turn on first.**
 `compact-item-health` and `compact-host-fingerprint` pack live.
-`compact-scores` ships report-only, and the console reads its packed files, so
+`compact-summary-quality-evals` ships report-only, and the console reads its packed files, so
 until it runs live the console shows its days up to the day the migration ran.
 
 **Each task is switched on by itself, and the picture cleanup is a task of its
@@ -215,7 +215,7 @@ two may not do. Which ledgers it accepts, why those two are refused, and what
 makes it safe to stop half way is
 [../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days).
 
-`item-health`, `scores` and `host-fingerprint` are not targets: they file through
+`item-health`, `summary-quality-evals` and `host-fingerprint` are not targets: they file through
 the ledger door, and until each ledger's compaction runs live nothing offers a
 range delete for them, the same as `visual-prunes`.
 

@@ -74,7 +74,7 @@ export type { EvalDay } from '$lib/console/eval-instruments';
  *
  * The reason is a field on the published item, decided by
  * `backend/idhazh/evals/score.py` and written by `assemble.build_day`. It is not
- * a column of `state/scores/`, which carries the inputs it was decided from, so
+ * a column of the `summary-quality-evals` ledger, which carries the inputs it was decided from, so
  * this is the only ledger on disk that can answer the question.
  *
  * `windowDays` is the cover. The caller filters what comes back to the widest

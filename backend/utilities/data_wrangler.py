@@ -340,8 +340,8 @@ class _Rebuildable(NamedTuple):
 
 
 def _ledger_rows(state_dir: Path) -> list[EvalRow]:
-    """Every scored row the scores ledger holds, read through the ledger door and settled once."""
-    return ledger.load_ledger_rows(state_dir, LedgerName.SCORES, model=EvalRow)
+    """Every scored row the eval ledger holds, read through the ledger door and settled once."""
+    return ledger.load_ledger_rows(state_dir, LedgerName.SUMMARY_QUALITY_EVALS, model=EvalRow)
 
 
 def _digest_items(digest_root: Path) -> dict[str, _Entry]:
@@ -455,11 +455,11 @@ def refill(
     teaching.
 
     **It reaches every row the ledger holds.** Every candidate comes from a
-    ledger row, and the scores ledger keeps every row for ever, so no month is
+    ledger row, and the eval ledger keeps every row for ever, so no month is
     out of reach.
     """
-    if not ledger.held_days(state_dir, LedgerName.SCORES):
-        print("the scores ledger holds no day")
+    if not ledger.held_days(state_dir, LedgerName.SUMMARY_QUALITY_EVALS):
+        print(f"the {LedgerName.SUMMARY_QUALITY_EVALS.value} ledger holds no day")
         return 1
     if not digest_root.is_dir():
         print(f"{digest_root.as_posix()} is not a directory")

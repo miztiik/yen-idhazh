@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 What the app may delete, what must survive, and the safeguards before deletion.
 [layout.md](layout.md) owns publication. The [gardener](idhazh-gardener.md)
@@ -68,7 +68,7 @@ that constrain them belong to
 | Published identities | Preserve the information that prevents duplicate publication. The manual prune refuses this ledger. |
 | Item health | Write and validate the required day-and-stage summary before deleting an aged source month and its published copy. |
 | Feed health | Delete expired records when no reader needs them; do not invent an unused aggregate. Feed retirements have a separate policy so cleanup does not revive retired sources. |
-| Scores and score index | Keep every row and every index day. Nothing summarises a month and nothing deletes an eval row: the `scores` compaction may pack a month and never drops one, and an index day dropped would make every measurement in it new again. |
+| Summary-quality evals and their ID folder | Keep every row and every ID. Nothing summarises a month and nothing deletes an eval row: the `compact-summary-quality-evals` compaction may pack a month or a finished year and never drops one, the ID folder's fold settles each closed month into one file and drops no ID, and an ID dropped would make its measurement new again. |
 | Raw and compact ledgers | Follow the ledger's compaction declaration. A legacy task's retirement must not silently shorten the period retained. |
 | Trial records and other task-owned data | Follow the owning declaration, not a blanket cleanup of `state/`. |
 
@@ -78,11 +78,12 @@ Claims about aggregated data must stay within what the aggregate preserves.
 
 ### Eval rows and identity
 
-Every eval row is kept for ever, and so is every day of the score index, so an
+Every eval row is kept for ever, and so is every ID in the ID folder, so an
 old measurement is never counted as new because its rows aged out, and a monthly
 figure is computed from the rows when a chart draws it
 ([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).
-A stale index can be rebuilt with `idhazh rebuild-score-index --month <YYYY-MM>`.
+A stale index can be rebuilt with `idhazh rebuild-summary-quality-evals-index --month <YYYY-MM>`;
+a closed month the gardener settled into one file is compared as one month.
 
 ## A named prune: one ledger, one range of days
 
@@ -99,8 +100,8 @@ idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-D
 - Dry run is the default and reports the selected paths. `--no-dry-run` permits deletion.
 - `--max-deletes` bounds a pass and reports where to resume. Without it, the supplied range sets the default bound.
 - `published` and `seen` are refused because forgetting their records permits repeat publication or discovery.
-- `item-health`, `scores` and `host-fingerprint` are not targets: they file through the ledger door rather than as CSV day files, so this command cannot take a day of them out. Until each ledger's compaction runs live and bounds its raw tree, nothing offers a range delete for them, the same as `visual-prunes`.
-- `score-index` is still a target. Pruning a range of it makes those measurements look new to the next run, so rebuild the affected index from the scores rows that remain with `idhazh rebuild-score-index --month <YYYY-MM>`.
+- `item-health`, `summary-quality-evals` and `host-fingerprint` are not targets: they file through the ledger door rather than as CSV day files, so this command cannot take a day of them out. Until each ledger's compaction runs live and bounds its raw tree, nothing offers a range delete for them, the same as `visual-prunes`.
+- `summary-quality-evals-index` is refused too. An ID taken out of it makes its measurement count as new at the next run, and no ID is ever deleted. A closed month of it is one file besides, which no range of days can take part of.
 - Do not point the command at unsupported raw trees or file layouts. Their owning tasks decide retention.
 
 The procedure and failure handling are in

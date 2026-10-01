@@ -15,6 +15,7 @@ import hashlib
 import json
 import shutil
 from collections.abc import Callable, Iterator, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -37,6 +38,7 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.extract import ExtractConfig
+from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
@@ -64,7 +66,10 @@ from idhazh.evals.metrics import (
 from idhazh.evals.score import band, to_eval_row
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
-from idhazh.stages.rebuild_score_index import stage_rebuild_score_index
+from idhazh.gardener import closed_day_fold
+from idhazh.stages.rebuild_summary_quality_evals_index import (
+    stage_rebuild_summary_quality_evals_index,
+)
 
 
 #: The writer every case below files as. `assemble` is the job that scores a
@@ -886,7 +891,7 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
     assert not indexed - produced, (
         f"the index holds {len(indexed - produced)} the rows cannot produce"
     )
-    assert len(ledger.held_days(day_grain, LedgerName.SCORES)) == 2, (
+    assert len(ledger.held_days(day_grain, LedgerName.SUMMARY_QUALITY_EVALS)) == 2, (
         "the two days were not written separately"
     )
 
@@ -964,7 +969,7 @@ def _an_index_file(state: Path, date: str) -> Path:
     """
     return ledger.day_shard_path(
         state,
-        LedgerName.SCORE_INDEX,
+        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         date=date,
         run_id=a_scoring_run(date),
         attempt=1,
@@ -998,7 +1003,7 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
     ledger.persist(
         state,
         [row for row in rows for _ in range(copies)],
-        ledger=LedgerName.SCORES,
+        ledger=LedgerName.SUMMARY_QUALITY_EVALS,
         covers=rows[0].date,
         identity=writer_identity(a_scoring_run(rows[0].date), producer=ROWS_ONLY_PRODUCER),
     )
@@ -1006,7 +1011,7 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
 
 def _indexed(state: Path, date: str) -> set[str]:
     """The digests one day's index holds, read from that day rather than the union."""
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
     return {record["observation_digest"] for record in _cells_in(day)}
 
 
@@ -1018,19 +1023,19 @@ def _day_digests(state: Path, date: str) -> set[str]:
     """
     return {
         writer.observation_digest(row.model_dump(mode="json"))
-        for row in ledger.load_days(state, LedgerName.SCORES, [date], model=EvalRow)
+        for row in ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, [date], model=EvalRow)
     }
 
 
 def _index_bytes(state: Path, date: str) -> bytes:
     """Every byte one day's index holds, oldest file first."""
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
     return b"".join(path.read_bytes() for path in day)
 
 
 def _index_size(state: Path, date: str) -> int:
     """What one day's index costs on disk, across every file in it."""
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
     return sum(path.stat().st_size for path in day)
 
 
@@ -1071,7 +1076,7 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
     thick = _opened_bytes(monkeypatch, fat, lambda: writer.recorded_observations(fat))
 
     rows_live_under = [
-        f"{tier}/{LedgerName.SCORES.value}/"
+        f"{tier}/{LedgerName.SUMMARY_QUALITY_EVALS.value}/"
         for tier in (ledger.paths.RAW_DIRNAME, ledger.paths.COMPACT_DIRNAME)
     ]
     opened_there = [name for name in thick if name.startswith(tuple(rows_live_under))]
@@ -1117,7 +1122,7 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
 
     Nothing on the read path compares an index against the rows beside it, so
     keeping the two in step is the writer's job: it files the rows and the
-    digests it minted in one call, and every writer of the scores ledger in this
+    digests it minted in one call, and every writer of the eval ledger in this
     repository goes through it.
 
     Held over the files after several calls and two days in different months,
@@ -1137,11 +1142,11 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
     assert put(state, january) == 0, "a held measurement came back as new"
     assert put(state, february) == 2
 
-    days = ledger.held_days(state, LedgerName.SCORES)
+    days = ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS)
     assert days == ["2026-01-09", "2026-02-03"], f"both days were not written: {days}"
     for date in days:
         assert _indexed(state, date) == _day_digests(state, date), (
-            f"{ledger.relpath(LedgerName.SCORE_INDEX, date)} does not hold what the rows "
+            f"{ledger.relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date)} does not hold what the rows "
             "beside it hold"
         )
 
@@ -1181,9 +1186,9 @@ def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Pat
         "so this tree was not the stale one"
     )
     on_disk = ledger.load(
-        [filed.path for filed in ledger.list_raw_files(stale, LedgerName.SCORES)], model=EvalRow
+        [filed.path for filed in ledger.list_raw_files(stale, LedgerName.SUMMARY_QUALITY_EVALS)], model=EvalRow
     )
-    settled = ledger.load_days(stale, LedgerName.SCORES, [date], model=EvalRow)
+    settled = ledger.load_days(stale, LedgerName.SUMMARY_QUALITY_EVALS, [date], model=EvalRow)
     assert len(on_disk) == 8, f"the repeat did not land: {len(on_disk)} rows on disk"
     assert len(settled) == len(_day_digests(stale, date)) == 6, (
         f"the settled day holds {len(settled)} rows for "
@@ -1248,7 +1253,7 @@ ROLLED_BACK: Final = "f" * 64
 
 
 def _index_rows(state: Path, date: str) -> list[dict[str, str]]:
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
     return sorted(_cells_in(day), key=lambda row: row["observation_digest"])
 
 
@@ -1259,7 +1264,7 @@ def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None
     cannot produce is half of what this section is about. Whatever the day held
     goes first, because these rows are the day's index and not an addition to it.
     """
-    for path in day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date):
+    for path in day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date):
         path.unlink()
     target = _an_index_file(state, date)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1271,7 +1276,7 @@ def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None
 
 def _committed_rows(date: str) -> list[EvalRow]:
     """One fixture day's rows, read off the CSV day file they were committed as."""
-    folder = INDEX_REBUILD / "scores" / date[:4] / date[5:7] / date[8:10]
+    folder = INDEX_REBUILD / "summary-quality-evals" / date[:4] / date[5:7] / date[8:10]
     return [EvalRow.from_csv_row(cells) for cells in _cells_in(sorted(folder.glob("*.csv")))]
 
 
@@ -1289,7 +1294,7 @@ def _drifted_tree(tmp_path: Path) -> Path:
     """
     state = tmp_path / "state"
     shutil.copytree(
-        INDEX_REBUILD / "score-index", ledger.tree_root(state, LedgerName.SCORE_INDEX)
+        INDEX_REBUILD / "summary-quality-evals-index", ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
     )
     for date in REBUILD_DAYS:
         _seeded(state, _committed_rows(date))
@@ -1310,7 +1315,7 @@ def _rows_produce(state: Path, days: Sequence[str]) -> set[str]:
     """
     return {
         writer.observation_digest(row.model_dump(mode="json"))
-        for row in ledger.load_days(state, LedgerName.SCORES, days, model=EvalRow)
+        for row in ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, days, model=EvalRow)
     }
 
 
@@ -1383,7 +1388,7 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
     """
     state = _drifted_tree(tmp_path)
     untouched = _index_bytes(state, "2026-01-09")
-    rows_of = f"{ledger.paths.RAW_DIRNAME}/{LedgerName.SCORES.value}"
+    rows_of = f"{ledger.paths.RAW_DIRNAME}/{LedgerName.SUMMARY_QUALITY_EVALS.value}"
 
     opened = _opened_bytes(monkeypatch, state, lambda: writer.rebuild_index(state, ["2026-02-11"]))
 
@@ -1395,6 +1400,90 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
     )
     assert _index_bytes(state, "2026-01-09") == untouched
     assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
+
+
+#: A wake at which both fixture months have closed, so the ID folder's fold
+#: settles each of them whole.
+BOTH_MONTHS_CLOSED: Final = datetime(2026, 3, 5, tzinfo=UTC)
+
+
+def _settle_months(state: Path) -> None:
+    """Fold the index the way its gardener task does: every closed month into one file."""
+    closed_day_fold.fold(
+        state,
+        [LedgerName.SUMMARY_QUALITY_EVALS_INDEX],
+        now=BOTH_MONTHS_CLOSED,
+        after_days=DEFAULT_CLOSED_AFTER_DAYS,
+        dry_run=False,
+        settles_months=True,
+    )
+
+
+def _month_files(state: Path, month: str) -> list[Path]:
+    root = ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
+    return day_shards.one_month(root, month)
+
+
+def test_a_settled_month_is_compared_whole_and_one_that_holds_the_truth_gains_no_file(
+    tmp_path: Path,
+) -> None:
+    """An index row names no day, so a month settled into one file is answered for the month.
+
+    Compared day by day, a settled month's days would hold no digest at all,
+    every row would read as missing, and the repair would write the month's whole
+    index again into its days. Compared whole, each month is keyed by itself:
+    the one that holds an extra digest names it, and neither gains a file.
+    """
+    state = _drifted_tree(tmp_path)
+    writer.rebuild_index(state, ["2026-02-11"])
+    _settle_months(state)
+    for month in ("2026-01", "2026-02"):
+        assert [path.name for path in _month_files(state, month)] == [day_shards.SETTLED_NAME], (
+            f"{month} was not settled whole, so this compares nothing"
+        )
+    before = {month: _month_files(state, month)[0].read_bytes() for month in ("2026-01", "2026-02")}
+
+    found = writer.rebuild_index(state, REBUILD_DAYS)
+
+    assert sorted(found) == ["2026-01", "2026-02"]
+    assert found["2026-01"].extra == {ROLLED_BACK} and not found["2026-01"].missing
+    assert not found["2026-02"].extra and not found["2026-02"].missing
+    after = {month: [path.read_bytes() for path in _month_files(state, month)] for month in before}
+    assert after == {month: [held] for month, held in before.items()}, "the repair wrote a file"
+
+
+def test_a_digest_a_settled_month_lacks_is_added_to_the_day_whose_rows_produce_it(
+    tmp_path: Path,
+) -> None:
+    """The repair cannot split a month's file, so it adds to the day the row sits in.
+
+    The dedupe sees the digest the moment the repair lands, and the next fold
+    settles that day back into the month's one file.
+    """
+    state = _drifted_tree(tmp_path)
+    writer.rebuild_index(state, ["2026-02-11"])
+    _settle_months(state)
+    month_file = _month_files(state, "2026-02")[0]
+    with month_file.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    lost = rows[0]["observation_digest"]
+    with month_file.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=writer.index_columns(), lineterminator="\n")
+        out.writeheader()
+        out.writerows(rows[1:])
+    assert lost not in writer.recorded_observations(state)
+
+    found = writer.rebuild_index(state, ["2026-02-11"])
+
+    assert found["2026-02"].missing == {lost} and not found["2026-02"].extra
+    root = ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
+    assert [ledger.is_repair(path.name) for path in day_shards.one_day(root, "2026-02-11")] == [
+        True
+    ]
+    assert lost in writer.recorded_observations(state)
+    _settle_months(state)
+    assert [path.name for path in _month_files(state, "2026-02")] == [day_shards.SETTLED_NAME]
+    assert lost in writer.recorded_observations(state)
 
 
 def test_a_day_with_no_committed_rows_is_refused_by_name(tmp_path: Path) -> None:
@@ -1430,16 +1519,16 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
     workflow and no shell script, and the mechanism is called from one module.
     """
     state = _drifted_tree(tmp_path)
-    assert stage_rebuild_score_index(months=["2026-02"], state_dir=state) == 0
+    assert stage_rebuild_summary_quality_evals_index(months=["2026-02"], state_dir=state) == 0
     assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
-    assert stage_rebuild_score_index(months=None, state_dir=state) == 0
-    assert stage_rebuild_score_index(months=["2026-03"], state_dir=state) == 1
+    assert stage_rebuild_summary_quality_evals_index(months=None, state_dir=state) == 0
+    assert stage_rebuild_summary_quality_evals_index(months=["2026-03"], state_dir=state) == 1
 
     with pytest.raises(SystemExit) as unsaid:
-        cli.main(["rebuild-score-index"])
+        cli.main(["rebuild-summary-quality-evals-index"])
     assert unsaid.value.code == 2
     with pytest.raises(SystemExit) as both:
-        cli.main(["rebuild-score-index", "--month", "2026-02", "--every-shard"])
+        cli.main(["rebuild-summary-quality-evals-index", "--month", "2026-02", "--every-shard"])
     assert both.value.code == 2
 
     automated = sorted(
@@ -1448,7 +1537,7 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
             *(REPO_ROOT / ".github" / "workflows").glob("*.y*ml"),
             *(REPO_ROOT / ".github" / "scripts").glob("*.sh"),
         )
-        if "rebuild-score-index" in read_text(path)
+        if "rebuild-summary-quality-evals-index" in read_text(path)
     )
     assert not automated, f"the rebuild is a step of {automated}"
 
@@ -1459,7 +1548,7 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
     )
     assert callers == [
         "backend/idhazh/evals/writer.py",
-        "backend/idhazh/stages/rebuild_score_index.py",
+        "backend/idhazh/stages/rebuild_summary_quality_evals_index.py",
     ], f"the rebuild is reached from {callers}"
 
 

@@ -18,9 +18,13 @@ This binds every answer, doc, commit message and reader-facing string. [`CLAUDE.
 
 Write every answer in plain, simple English - a person outside this project understands it on one read. Define any unavoidable term in the same sentence.
 
-When you need the user to choose, ask in one message, in this order: situation, problem, impact, options with what each costs and gives up, recommendation naming one option. An option with no cost named is not an option.
+Whenever you need human help, clarification, a decision or approval, use one message with no preamble: situation, problem, impact, every worthwhile option or solution with its benefit, cost and what it gives up, then a recommendation.
 
-Every table in every answer is lettered in the order it appears - `Table A`, `Table B` - and each row's id is that letter plus its number (`A1`, `A2`, `B1`) in the first column. No id repeats in one message. Recommend by id. A message with no options is a status update and does not use the five-part shape.
+Every table in every answer is lettered in the order it appears - `Table A`, `Table B` - and each row's id is that letter plus its number (`A1`, `A2`, `B1`) in the first column. No id repeats in one message. Mark one row per decision table `**Recommended**`; close by naming each recommended row's id and giving its reason in one sentence.
+
+If a missing fact prevents a sound recommendation, identify it and recommend how to obtain it. Do not invent facts or add filler options.
+
+Use multiple decision tables only for dependent decisions. Do not bundle unrelated decisions. Use the five-part structure once per message. Routine progress updates do not need it.
 
 [`CLAUDE.md`](CLAUDE.md) section 0c is canonical.
 

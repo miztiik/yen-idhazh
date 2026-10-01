@@ -113,7 +113,45 @@ def test_a_row_from_before_the_fold_reads_as_a_task_that_did_not_fold() -> None:
     sample = json.loads(
         read_text(CONTRACT_FIXTURES_DIR / "collection-prune-row" / "ceiling-reached.json")
     )
-    for key in ("fold_dry_run", "folded_days", "folded_files"):
+    for key in ("fold_dry_run", "folded_days", "folded_files", "folded_months"):
         sample.pop(key)
     older = CollectionPruneRow.model_validate(sample | {"version": "2026-09-28"})
     assert (older.fold_dry_run, older.folded_days, older.folded_files) == (None, None, None)
+    assert older.folded_months is None
+
+
+def test_a_fold_that_settled_a_month_says_how_many_beside_its_days() -> None:
+    """A month is counted with its own cell, and the files it replaced join the fold's count."""
+    assert a_folding_row().folded_months == 0
+    row = a_folding_row(folded_months=1)
+    assert (row.folded_days, row.folded_months, row.folded_files) == (6, 1, 770)
+
+
+def test_a_row_from_before_a_fold_could_settle_a_month_reads_as_none_counted() -> None:
+    """`folded_months` is additive: a folding row written before it existed still reads."""
+    sample = json.loads(
+        read_text(
+            CONTRACT_FIXTURES_DIR / "collection-prune-row" / "a-live-fold-beside-a-dry-window.json"
+        )
+    )
+    sample.pop("folded_months")
+    older = CollectionPruneRow.model_validate(sample | {"version": "2026-09-30"})
+    assert (older.folded_days, older.folded_files, older.folded_months) == (6, 770, None)
+
+
+@pytest.mark.parametrize(
+    ("changes", "refusal"),
+    [
+        ({"folded_months": -1}, "folded_months"),
+        ({"folded_months": 2, "folded_files": 7}, "at least one file"),
+    ],
+)
+def test_a_month_count_that_lies_is_refused(changes: dict[str, Any], refusal: str) -> None:
+    with pytest.raises(ValidationError, match=refusal):
+        a_folding_row(**changes)
+
+
+def test_a_month_count_on_a_row_whose_task_did_not_fold_is_refused() -> None:
+    """A month settled by no fold is a cell nobody could have filled honestly."""
+    with pytest.raises(ValidationError, match="folded_months only beside them"):
+        a_row(folded_months=0)

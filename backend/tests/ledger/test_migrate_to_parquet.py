@@ -51,7 +51,7 @@ FIRST: Final = "2026-09-01"
 TODAY: Final = date(2026, 9, 4)
 RUN: Final = "2026-09-29-9001"
 ITEM: Final = LedgerName.ITEM_HEALTH
-SCORES: Final = LedgerName.SCORES
+EVALS: Final = LedgerName.SUMMARY_QUALITY_EVALS
 HOST: Final = LedgerName.HOST_FINGERPRINT
 
 type Cells = dict[str, str]
@@ -148,7 +148,7 @@ def _csv(
     columns: tuple[str, ...] | None = None,
 ) -> Path:
     """One CSV file of one day, in the layout the retired writers used."""
-    folder = state / which.value / day[:4] / day[5:7] / day[8:10]
+    folder = migration.csv_root(state, which) / day[:4] / day[5:7] / day[8:10]
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / name
     path.write_text(render_file(columns or tuple(rows[0]), rows), encoding="utf-8", newline="")
@@ -214,10 +214,10 @@ def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path:
     _csv(state, ITEM, NEW, ledger.BEFORE_PARTITION_NAME, [_item(NEW, "ai-03", machine=True).csv_row()])
     assembled = [_item(NEW, "ai-03", machine=False), _item(NEW, "ai-04", machine=False)]
     _csv(state, ITEM, NEW, _writer(NEW, 1, ServerJob.ASSEMBLE), [row.csv_row() for row in assembled])
-    _csv(state, SCORES, OLD, day_shards.SETTLED_NAME, [_score(OLD, 1).csv_row()])
-    _csv(state, SCORES, OLD, _writer(OLD, 1, ServerJob.WORK), [_score(OLD, 2, score_ms=100).csv_row()])
-    _csv(state, SCORES, OLD, _writer(OLD, 2, ServerJob.WORK), [_score(OLD, 2, score_ms=200).csv_row()])
-    _csv(state, SCORES, NEW, _writer(NEW, 1, ServerJob.WORK), [_under_old_headings(_score(NEW, 3))])
+    _csv(state, EVALS, OLD, day_shards.SETTLED_NAME, [_score(OLD, 1).csv_row()])
+    _csv(state, EVALS, OLD, _writer(OLD, 1, ServerJob.WORK), [_score(OLD, 2, score_ms=100).csv_row()])
+    _csv(state, EVALS, OLD, _writer(OLD, 2, ServerJob.WORK), [_score(OLD, 2, score_ms=200).csv_row()])
+    _csv(state, EVALS, NEW, _writer(NEW, 1, ServerJob.WORK), [_under_old_headings(_score(NEW, 3))])
     _csv(state, HOST, FIRST, day_shards.SETTLED_NAME, [], columns=HostFingerprintRow.csv_columns())
     halves = [_probe(OLD).csv_row(), _clock(OLD).csv_row()]
     _csv(state, HOST, OLD, _writer(OLD, 1, ServerJob.WORK), halves)
@@ -237,13 +237,15 @@ def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path:
             assert _read_back(state, which, day) == rows, f"{which.value} {day}"
         assert moved[which].packed == [FIRST, OLD]
         assert ledger.raw_days(state, which) == [NEW]
-        assert not (state / which.value).exists(), "every CSV file and emptied folder goes"
+        assert not migration.csv_root(state, which).exists(), (
+            "every CSV file and emptied folder goes"
+        )
     assert not migration.left(state, list(migration.LEDGERS))
     item_key = (OLD, f"{OLD}-100", "ai-01")
     assert _read_back(state, ITEM, OLD)[item_key]["machine_job"] == ServerJob.WORK.value
-    assert {cells["score_ms"] for cells in _read_back(state, SCORES, OLD).values()} == {"0", "200"}
-    assert (lines[SCORES], moved[SCORES].rows) == (4, 3), "a re-run's first attempt is no row"
-    assert list(_read_back(state, SCORES, NEW).values()) == [_score(NEW, 3).csv_row()]
+    assert {cells["score_ms"] for cells in _read_back(state, EVALS, OLD).values()} == {"0", "200"}
+    assert (lines[EVALS], moved[EVALS].rows) == (4, 3), "a re-run's first attempt is no row"
+    assert list(_read_back(state, EVALS, NEW).values()) == [_score(NEW, 3).csv_row()]
     assert [len(wanted[HOST][day]) for day in (FIRST, OLD, NEW)] == [0, 1, 1]
 
 
@@ -256,7 +258,7 @@ def test_a_second_run_changes_no_byte(tmp_path: Path) -> None:
     """
     state = tmp_path / "state"
     _csv(state, ITEM, NEW, _writer(NEW, 1, ServerJob.ASSEMBLE), [_item(NEW, "ai-03", machine=False).csv_row()])
-    _csv(state, SCORES, NEW, _writer(NEW, 1, ServerJob.WORK), [_score(NEW, 1).csv_row()])
+    _csv(state, EVALS, NEW, _writer(NEW, 1, ServerJob.WORK), [_score(NEW, 1).csv_row()])
     _csv(state, HOST, NEW, _writer(NEW, 1, ServerJob.WORK), [_probe(NEW).csv_row(), _clock(NEW).csv_row()])
     _run(state, *migration.LEDGERS)
     before = _hashes(tmp_path)
@@ -278,10 +280,27 @@ def test_check_says_whether_a_csv_is_left_and_writes_nothing(tmp_path: Path) -> 
     before = _hashes(tmp_path)
 
     assert migration.main(argv) == migration.EXIT_NOT_PROVEN
-    assert migration.main([*argv, "--ledger", SCORES.value]) == migration.EXIT_MIGRATED
+    assert migration.main([*argv, "--ledger", EVALS.value]) == migration.EXIT_MIGRATED
     assert _hashes(tmp_path) == before, "a check writes nothing"
     _run(state, ITEM)
     assert migration.main(argv) == migration.EXIT_MIGRATED
+
+
+def test_the_eval_ledgers_csv_tree_is_read_where_its_old_name_filed_it(tmp_path: Path) -> None:
+    """A re-run of a commit from before the rename writes its CSV day under `scores/`.
+
+    That tree is the one this moves for the eval ledger, whatever the ledger is
+    called now, so a late CSV file still reaches the door under the new name.
+    """
+    state = tmp_path / "state"
+    assert migration.csv_root(state, EVALS) == state / "scores"
+    _csv(state, EVALS, NEW, _writer(NEW, 1, ServerJob.WORK), [_score(NEW, 1).csv_row()])
+
+    (moved,) = _run(state, EVALS)
+
+    assert (moved.days, moved.rows) == (1, 1)
+    assert list(_read_back(state, EVALS, NEW).values()) == [_score(NEW, 1).csv_row()]
+    assert not (state / "scores").exists()
 
 
 @dataclass(frozen=True, slots=True)

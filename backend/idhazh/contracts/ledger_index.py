@@ -77,6 +77,11 @@ class RawDayIndex(Contract):
     __schema_stem__: ClassVar[str] = "raw-day-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-01",
+            change="ledger may name summary-quality-evals, and scores is refused.",
+            why="The eval ledger is named for what it holds; its files were rewritten.",
+        ),
+        ChangelogEntry(
             version="2026-09-27",
             change="Initial shape: the raw files one day of one ledger holds, and their digest.",
             why="A compaction has to know which raw files a day holds before it takes them.",
@@ -159,6 +164,11 @@ class CompactIndex(Contract):
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-01",
+            change="ledger may name summary-quality-evals, and scores is refused.",
+            why="The eval ledger is named for what it holds; its files were rewritten.",
+        ),
+        ChangelogEntry(
             version="2026-09-30",
             change="period may be yearly, and each of its entries covers a UTC year.",
             why="A finished year's month files may be packed into one year file.",
@@ -215,6 +225,11 @@ class Watermark(Contract):
 
     __schema_stem__: ClassVar[str] = "watermark"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-01",
+            change="ledger may name summary-quality-evals, and scores is refused.",
+            why="The eval ledger is named for what it holds; its files were rewritten.",
+        ),
         ChangelogEntry(
             version="2026-09-30",
             change="period may be yearly, and through then stands on a UTC year.",

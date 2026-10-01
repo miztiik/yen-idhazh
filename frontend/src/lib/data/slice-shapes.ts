@@ -17,7 +17,7 @@
 export type DateStamp = string;
 
 /** The ledgers the console may query. A closed set: a panel names a ledger, never a path. */
-export const LEDGER_NAMES = ['host-fingerprint', 'item-health', 'scores'] as const;
+export const LEDGER_NAMES = ['host-fingerprint', 'item-health', 'summary-quality-evals'] as const;
 
 export type LedgerName = (typeof LEDGER_NAMES)[number];
 

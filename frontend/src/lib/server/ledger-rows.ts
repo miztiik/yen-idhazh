@@ -170,16 +170,20 @@ export async function newestRows(
 
 /** One row per scored measurement, over the newest `days` days the score record holds.
  *
- * Read from `state/scores/`, packed, and never recomputed. There is no published
- * mirror of this ledger: `frontend/public/scores/` was one until 2026-09-16 and
- * no route ever fetched it, so it went with its producer.
+ * Read from the `summary-quality-evals` ledger, packed, and never recomputed.
+ * There is no published mirror of this ledger: `frontend/public/scores/` was one
+ * until 2026-09-16 and no route ever fetched it, so it went with its producer.
  */
 export async function evalRows(
 	days: number = LEDGER_WINDOW_DAYS,
 	root: string = STATE_ROOT
 ): Promise<LedgerTable> {
-	return newestRows(root, 'scores', days, SCORE_COLUMNS, (start, end) =>
-		sliceFromDisk(root, 'scores', { columns: [...datedFirst(SCORE_COLUMNS)], from: start, to: end })
+	return newestRows(root, 'summary-quality-evals', days, SCORE_COLUMNS, (start, end) =>
+		sliceFromDisk(root, 'summary-quality-evals', {
+			columns: [...datedFirst(SCORE_COLUMNS)],
+			from: start,
+			to: end
+		})
 	);
 }
 

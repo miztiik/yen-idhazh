@@ -166,6 +166,18 @@ def test_the_fold_is_derived_in_every_day_tree_and_is_never_handed_back() -> Non
     assert day_shards.SETTLED_NAME not in handed_back
 
 
+def test_a_month_settled_whole_is_derived_exactly_as_a_closed_day_is() -> None:
+    """A closed month's one file is the fold's too, so it takes the same class.
+
+    It is classed by its name, not by how deep it sits, so a month folder's
+    `settled.csv` is never read as a writer's file and never handed back.
+    """
+    month = f"state/{LedgerName.SUMMARY_QUALITY_EVALS_INDEX}/2026/08/{day_shards.SETTLED_NAME}"
+
+    assert _classes(month) == {"derived"}
+    assert not path_classes.is_written_once(month)
+
+
 def test_an_operators_repair_is_written_once_so_it_never_collides_with_a_writer() -> None:
     """A repair adds rows into a committed day, and no run can take its name.
 
@@ -173,7 +185,7 @@ def test_an_operators_repair_is_written_once_so_it_never_collides_with_a_writer(
     instant it was minted rather than a run identity, which is what keeps two
     repairs apart and what keeps a repair out of every writer's way.
     """
-    repair = f"state/{LedgerName.SCORE_INDEX}/2026/08/20/repair-20260820T091500Z.csv"
+    repair = f"state/{LedgerName.SUMMARY_QUALITY_EVALS_INDEX}/2026/08/20/repair-20260820T091500Z.csv"
 
     assert _classes(repair) == {"written once"}
 
@@ -185,5 +197,5 @@ def test_a_name_outside_the_grammar_is_in_no_class_at_all() -> None:
     what a lost push race turns into a conflict. It has to read as unclassified
     here, or the rule above proves nothing.
     """
-    assert _classes(f"state/{LedgerName.SCORES}/2026/08/20/notes.csv") == set()
+    assert _classes(f"state/{LedgerName.SUMMARY_QUALITY_EVALS}/2026/08/20/notes.csv") == set()
     assert _classes("state/some-tree-nobody-declared/2026/08/20.csv") == set()

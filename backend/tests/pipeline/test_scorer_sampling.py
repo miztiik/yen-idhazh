@@ -166,7 +166,7 @@ def test_a_run_with_the_scorer_off_writes_no_row_and_names_no_instrument(
 
     assert record.evaluation_enabled is False
     assert record.scorer_version is None
-    assert not ledger.held_days(tmp_path / "state", LedgerName.SCORES)
+    assert not ledger.held_days(tmp_path / "state", LedgerName.SUMMARY_QUALITY_EVALS)
 
 
 def test_a_scored_run_names_the_instrument_that_wrote_its_rows(
