@@ -212,7 +212,7 @@
 	}
 </script>
 
-<div data-windowed="machine-fleet" data-window-days={windowDays} data-fleet-state={panelState} data-ledger-fault={fault} data-fleet-from={span?.start} data-fleet-through={span?.end}>
+<div data-windowed="machine-fleet" data-readout-fetched="host-fingerprint" data-window-days={windowDays} data-fleet-state={panelState} data-ledger-fault={fault} data-fleet-from={span?.start} data-fleet-through={span?.end}>
 	<Panel heading="h3" id="platform-mix" title="Which machines ran our jobs, day by day" {note}>
 		{#if panelState !== 'ready'}
 			<EmptyState drawing={empty} width={box.width} height={box.height} name="machine-fleet" label="Jobs a day by kind of machine" />

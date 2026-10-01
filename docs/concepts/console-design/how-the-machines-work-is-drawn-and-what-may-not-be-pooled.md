@@ -154,7 +154,8 @@ The chart rules these panels obey are
  whole files already read, and a late answer cannot replace a newer selection.
  The route still computes the common colour ramp for its other machine panels,
  but carries no fleet rows in its document. The drill-through uses the rows
- already fetched for the window.
+ already fetched for the window. `data-readout-fetched` declares that this
+ panel's strip arrives with those rows and is absent from the initial document.
 - **The machine mix draws four distinct empty states.** Loading keeps the
  chart's reserved height and shimmer. A covered window without jobs is quiet;
  an unpublished ledger is missing; a hole, failed fetch or engine failure is

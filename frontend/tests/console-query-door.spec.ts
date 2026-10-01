@@ -12,6 +12,7 @@ for (const state of ['loading', 'missing', 'quiet', 'unreachable'] as const sati
 		await expect(panel).toHaveAttribute('data-fleet-state', state);
 		if (state === 'loading') {
 			await expect(panel.locator('[data-panel-state="loading"]')).toBeVisible();
+			await expect(panel.locator('[data-readout]')).toHaveCount(0);
 		} else {
 			await expect(panel.locator(`[data-empty-state="${state}"]`)).toBeVisible();
 			await expect(panel.locator('.empty-sentence')).not.toBeEmpty();
@@ -20,6 +21,9 @@ for (const state of ['loading', 'missing', 'quiet', 'unreachable'] as const sati
 }
 
 test('thirty days then seven query the real worker and fetch each whole file once', async ({ page, context, parquet }) => {
+	const document = await page.request.get('/console/machine/').then((response) => response.text());
+	expect(document).toContain('data-readout-fetched="host-fingerprint"');
+	expect(document).not.toContain('data-readout="machine-fleet"');
 	const fetched: string[] = [];
 	const addons: string[] = [];
 	context.on('request', (request) => {
@@ -30,6 +34,7 @@ test('thirty days then seven query the real worker and fetch each whole file onc
 	await page.goto('/console/machine/');
 	const panel = page.locator(PANEL);
 	await expect(panel).toHaveAttribute('data-fleet-state', 'ready');
+	await expect(panel.locator('[data-readout="machine-fleet"]')).toHaveCount(1);
 	await expect(panel.locator('[data-fleet-placements]')).toHaveAttribute('data-fleet-placements', /^[1-9]\d*$/);
 	const firstCount = fetched.length;
 	expect(firstCount).toBeGreaterThan(0);

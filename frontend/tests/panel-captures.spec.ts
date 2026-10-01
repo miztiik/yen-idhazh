@@ -63,7 +63,8 @@ const DRAWS_NO_PANEL_ID: ReadonlySet<string> = new Set(['pipelines']);
 
 /** What a page asks for its rows with. A script, a font or a stylesheet is
  * the page itself, and refusing one would picture a broken page rather than a
- * broken fetch. The worker's kill switch is fetched too, and it is the site
+ * broken fetch. Executable wasm is code even when requested through fetch.
+ * The worker's kill switch is fetched too, and it is the site
  * deciding whether to keep its worker rather than a panel reading its rows. */
 const DATA_REQUESTS = new Set(['fetch', 'xhr']);
 
@@ -82,7 +83,8 @@ const selectorOf = (id: string): string => `[data-console-panel-id="${id}"]`;
 const withoutQuery = (url: string): string => url.split(/[?#]/)[0];
 
 const readsRows = (request: Request): boolean =>
-	DATA_REQUESTS.has(request.resourceType()) && !withoutQuery(request.url()).endsWith(`/${KILL_FILE}`);
+	DATA_REQUESTS.has(request.resourceType()) && !withoutQuery(request.url()).endsWith(`/${KILL_FILE}`)
+		&& !withoutQuery(request.url()).endsWith('.wasm');
 
 async function opened(page: Page, address: string, width: number, theme: Theme): Promise<void> {
 	await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
@@ -115,10 +117,14 @@ async function refusing(page: Page, asked: ReadonlySet<string>): Promise<Set<str
 	return refused;
 }
 
-/** Wait until every address the first load read was asked for again and refused. */
+/** Check refused prerequisites; a refused ledger index prevents its data-file requests. */
 async function allRefused(asked: ReadonlySet<string>, refused: ReadonlySet<string>): Promise<void> {
+	const prerequisites = [...asked].filter((address) => {
+		const pathname = new URL(address).pathname;
+		return !pathname.includes('/state/compact/') || pathname.includes('/index/');
+	});
 	await expect
-		.poll(() => [...asked].filter((url) => !refused.has(url)), {
+		.poll(() => prerequisites.filter((url) => !refused.has(url)), {
 			timeout: 20_000,
 			message: 'the broken load never asked again for data the first load read'
 		})
