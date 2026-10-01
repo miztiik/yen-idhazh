@@ -4,7 +4,7 @@
 
 **Level**: 5 (CLAUDE.md section 6). It deletes a persisted contract, adds a period to the saved file format, and renames a committed ledger. The person's rulings below are the design consultation; the ESCALATE triggers name what still stops a worker.
 
-**Status**: rows 1 to 5 are done (#1170, #1172, #1179, #1178, #1180). The ledger is `summary-quality-evals` and its declaration waits 93 days before it packs a year (R6). The browser reads a year file by byte ranges. The ID files are settled a month at a time from the first upkeep wake after 2026-10-02. Row 4's measurement fired trigger 5 on a page that reads a year file across a deploy, so the 367-day floor on a published ledger stays until the person rules: that is row 7 (deviation 9). Row 6 checks the live site once plan 51 publishes its first `.parquet`.
+**Status**: rows 1 to 5 are done (#1170, #1172, #1179, #1178, #1180). The ledger is `summary-quality-evals` and its declaration waits 93 days before it packs a year (R6). The browser reads a year file by byte ranges. The ID files are settled a month at a time from the first upkeep wake after 2026-10-02. Row 4's measurement fired trigger 5 on a page that reads a year file across a deploy (deviation 9), and the person ruled A3 (R7): row 7 reads each year file under an address no earlier read used, then removes the 367-day floor on a published ledger, and is next. Row 6 checks the live site once plan 51 publishes its first `.parquet`.
 
 **Chain** (CLAUDE.md section 0d). **Intent**: the person's rulings of 2026-09-30, section 0. **Contract**: `backend/idhazh/contracts/` and the pages each row names. **Code**: the six rows.
 
@@ -18,8 +18,8 @@ AUTHORIZED (the person, 2026-09-30). Read CLAUDE.md, docs/how-to/execute-a-plan.
 docs/how-to/ship-a-pr.md and docs/how-to/run-the-gates.md, then this plan's section 0
 and section 1, and each row just before you dispatch it.
 
-Rows 1 to 5 are done. Row 6 waits for plan 51's row 3 to publish
-the site's first .parquet, and row 7 for the person's ruling on deviation 9. Plan 51's
+Rows 1 to 5 are done. Row 7 is next, ruled by R7. Row 6 waits for plan 51's row 3 to publish
+the site's first .parquet. Plan 51's
 open pull requests publish this ledger under its old name (#1169) and write its month
 index (#1177); row 3 has landed, so they take main in and use the new name. Merging
 main into a branch older than row 3 takes `git -c merge.directoryRenames=false merge`.
@@ -43,6 +43,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | R4 | **The daily ID files stop growing by one file a day**, with no summary. The dedupe still sees every measurement ever taken | `evals.writer.indexed_observations`, declared unbounded in `docs/concepts/growing-reads.md` until a month summary landed |
 | R5 | **Row 2 merges as built, and row 4 follows.** Trigger 4 fired: the browser downloads a whole file, so one month read out of a year file costs 11.97 times that month's own file. Until row 4 lands, a ledger the site reads packs a year only 367 days after it ends, so no console read reaches a year file. Row 4 makes the browser fetch only the byte ranges it needs - measured at 1.03 times the month file outside a browser - and then removes that floor | Holding row 2 until the browser reads byte ranges |
 | R6 | **How long a ledger waits before it packs a finished year is a value in that ledger's own declaration, `monthly_keep_days` in `config/gardener/compact-<ledger>.json`, never a number in code. The eval ledger waits 93 days.** Code keeps only the loader's check that the value can take effect: at least `daily_keep_days` plus 32 days, 77 with today's `daily_keep_days` of 45, because no year packs before its next January is absorbed | The 77 days R5 named as the wait, which is only the smallest value the loader accepts |
+| R7 | **The door reads each year file under an address the browser has not cached, so no request names an ETag from before a deploy, and then the 367-day floor on a published ledger goes (option A3, 2026-10-01).** The 367 is not a setting: it is the console's widest span, `console.max_window_days` 366, plus `compact_after_days` 1, and lowering the first would cut the console and the telemetry it publishes to the same span. The accepted cost: a page that reads the same year file twice fetches it twice | Keeping the floor, or removing it and letting a page open across a deploy download a whole year file |
 
 ### Hard scope
 
@@ -71,7 +72,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | 4 | The browser reads a year file by byte ranges | 2 | B | DONE | p56r4 | #1178 | p56-r4-worker |
 | 5 | The eval ledger's ID files are packed a month at a time | 3 | C | DONE | p56r5 | #1180 | p56-r5-worker |
 | 6 | The live site is checked to serve a `.parquet` byte range uncompressed | 4, plan 51 row 3 | C | NOT STARTED | - | - | - |
-| 7 | A published ledger's declaration sets its own wait | 4 | C | BLOCKED - the person's ruling on a page that reads a year file across a deploy (deviation 9) | - | - | - |
+| 7 | A year file is read under an address no earlier read used, and a published ledger's declaration sets its own wait | 4 | C | NOT STARTED | - | - | - |
 
 ## 2. Deviations and rulings to date
 
@@ -179,12 +180,18 @@ A worker commits and pushes the moment its gates pass, and measures after.
 - **Files touched:** the page above; this plan's Reckoner line.
 - **Oracle:** the six answers, recorded on that page.
 
-### Row #7 - A published ledger's declaration sets its own wait
+### Row #7 - A year file is read under an address no earlier read used, and a published ledger's declaration sets its own wait
 
-- **Waits for** the person's ruling on deviation 9: a page that holds part of a year file across a deploy is sent the whole year file, because Pages answers an older ETag in `If-Range` with 200, and every deploy changes every file's ETag.
-- **Scope (R6).** The published floor in `backend/idhazh/config.py` goes (`_refuse_a_published_reach_that_grows_or_falls_short` requires `monthly_keep_days` of at least `console.max_window_days` plus `compact_after_days`, 367 days today). A published ledger then waits what its own declaration says, as every ledger does, and the loader's one remaining check is the knob's own: at least `daily_keep_days` plus 32 days. Its rule that a published ledger keeping its months forever must pack years stays. Its tests in `backend/tests/contracts/test_gardener_config.py` change with it, and no test pins 93: a published fixture ledger at the knob's minimum loads, and one day under it is refused. With it goes whatever the ruling adds to the door.
-- **Files touched (expected):** `backend/idhazh/config.py`; `backend/tests/contracts/test_gardener_config.py`; `docs/concepts/config/idhazh-gardener.md`; `docs/architecture/publishing/idhazh-gardener.md`; the query door's page; this plan's Reckoner line.
-- **Oracle:** a published fixture ledger whose declaration sets `monthly_keep_days` below 367 loads, and one below `daily_keep_days` plus 32 is still refused.
+- **Scope (R7, R6).** Two parts in one pull request, because the floor exists only for the case the first part closes.
+  1. **The door (R7).** Each query over a year file registers it under a name and an address no earlier read used. The address the door builds today, `?v=<rows>-<bytes>`, gains a part unique to that one read, made when the read starts. Pages ignores the query string, so the bytes are the same, while the browser keeps its pieces per address, so a new address holds no piece and the browser sends no `If-Range`. The part is unique across page loads too, never a counter that restarts with each page, or a page opened within Pages' `max-age=600` of an earlier one would share its pieces. The engine drops the name (`dropFile`) when the read ends. Day and month files are unchanged, and the size guard (the engine's `fileSize` equals the entry's `bytes`) stays.
+  2. **The floor (R6).** The published floor in `backend/idhazh/config.py` goes (`_refuse_a_published_reach_that_grows_or_falls_short` requires `monthly_keep_days` of at least `console.max_window_days` plus `compact_after_days`, 367 days today). A published ledger then waits what its own declaration says, as every ledger does, and the loader's one remaining check is the knob's own: at least `daily_keep_days` plus 32 days. Its rule that a published ledger keeping its months forever must pack years stays. Its tests in `backend/tests/contracts/test_gardener_config.py` change with it, and no test pins 93: a published fixture ledger at the knob's minimum loads, and one day under it is refused.
+- **Still not covered, and the docs say so:** a deploy that lands inside one read, between its first and last request, still sends that read the whole file. A read takes about 11 seconds on a slow mobile link and a deploy came about every 85 minutes (17 in the 24 hours to 2026-10-01 02:00 UTC), so about 1 read in 500 there (ESTIMATE), and fewer on a fast link.
+- **The accepted cost (R7), measured:** a page that reads the same year file twice fetches its footer and row groups twice. Two reads of the same month on one page, bytes and time, go into `docs/reference/benchmarks/what-a-month-out-of-a-year-file-costs.md` beside the cases already there.
+- **Tests:** in `frontend/tests/ledger-ranges.spec.ts`, the case "a year file whose ETag changed while the browser still holds part of it is still read by byte range" loses its expected-to-fail mark and passes. A second case: a new page, opened while the browser still holds fresh pieces from an earlier page and after the ETag changed, also gets only 206.
+- **Files touched (expected):** `frontend/src/lib/data/engine.ts`, `page-keeper.ts` and `slice-reader.ts`, wherever the address and name are made; `frontend/tests/ledger-ranges.spec.ts`; `backend/idhazh/config.py`; `backend/tests/contracts/test_gardener_config.py`; `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`; the benchmark page above; `docs/concepts/config/idhazh-gardener.md`; `docs/architecture/publishing/idhazh-gardener.md`; this plan's Reckoner line.
+- **Merge window:** no `idhazh-gardener.yml` run queued or running, because the upkeep run reads `config.py`.
+- **Acceptance gates:** `ruff check .`, `mypy`, `pytest backend/tests/contracts`, `svelte-check`, the logic specs and `ledger-ranges.spec.ts`, and the browser smoke of the console (CLAUDE.md section 12).
+- **Oracle:** in the browser spec, after the ETag changes, every GET for the year file is answered 206 and none carries an `If-Range` naming an older ETag; a published fixture ledger whose declaration sets `monthly_keep_days` below 367 loads, and one below `daily_keep_days` plus 32 is still refused.
 
 ## Dependent plans
 
