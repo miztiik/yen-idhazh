@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 What the app may delete, what must survive, and the safeguards before deletion.
 [layout.md](layout.md) owns publication. The [gardener](idhazh-gardener.md)
@@ -68,39 +68,30 @@ that constrain them belong to
 | Published identities | Preserve the information that prevents duplicate publication. The manual prune refuses this ledger. |
 | Item health | Write and validate the required day-and-stage summary before deleting an aged source month and its published copy. |
 | Feed health | Delete expired records when no reader needs them; do not invent an unused aggregate. Feed retirements have a separate policy so cleanup does not revive retired sources. |
-| Scores and score index | Archive a complete eligible month, verify it, then remove its source rows and live index together. Nothing archives a month today: the archive was built from the CSV day files, which moved to the ledger door, so the `scores` compaction - which deletes the rows now - stays report-only until an archive is built from the door's rows. |
+| Summary-quality evals and their ID folder | Keep every row and every ID. Nothing summarises a month and nothing deletes an eval row: the `compact-summary-quality-evals` compaction may pack a month or a finished year and never drops one, the ID folder's fold settles each closed month into one file and drops no ID, and an ID dropped would make its measurement new again. |
 | Raw and compact ledgers | Follow the ledger's compaction declaration. A legacy task's retirement must not silently shorten the period retained. |
 | Trial records and other task-owned data | Follow the owning declaration, not a blanket cleanup of `state/`. |
 
-### Score archives and identity
+An aggregate must outlive the full-detail data it replaces. A summary can be
+larger than a very small source partition; that alone does not make it invalid.
+Claims about aggregated data must stay within what the aggregate preserves.
 
-A score archive preserves the source checksum and row count, exact observation
-identities, and cohort statistics: counts, faithfulness bands and deciles, signal
-counts, and numeric counts, sums, squared sums, minima and maxima. Write it with
-temp-file-plus-rename, read it through its contract, and reconcile it against the
-source before unlinking anything.
+### Eval rows and identity
 
-Keep observation identity across the live index and archives so an old measurement
-cannot be counted as new merely because its rows aged out. The archiving pass
-removes the superseded live index in the same pass as the source rows. A stale
-index can be rebuilt with `idhazh rebuild-score-index --month <YYYY-MM>`.
-
-| Archiving gives up | Archiving preserves |
-| --- | --- |
-| Per-item lookup and human label-queue input | Cohort totals, rates and distributions |
-| Re-banding under new thresholds and exact percentiles | Recorded bands, deciles and numeric summaries |
-| Cross-column correlations and slices outside the cohort key | Exact deduplication, source checksum and row count |
-
-An aggregate or archive must outlive the full-detail data it replaces. A summary
-can be larger than a very small source partition; that alone does not make it
-invalid. Claims about archived data must stay within what the archive preserves.
+Every eval row is kept for ever, and so is every ID in the ID folder, so an
+old measurement is never counted as new because its rows aged out, and a monthly
+figure is computed from the rows when a chart draws it
+([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).
+A stale index can be rebuilt with `idhazh rebuild-summary-quality-evals-index --month <YYYY-MM>`;
+a closed month the gardener settled into one file is compared as one month.
 
 ## A named prune: one ledger, one range of days
 
-`idhazh telemetry prune` removes explicitly selected ledger day files. The current
-supported targets are listed by `idhazh telemetry prune --help`; the target is a
-ledger name, never a path. This command does not unpublish a day or rebuild the
-site's derived payloads.
+`idhazh telemetry prune` removes an explicitly selected range of days from one
+ledger: the day files of a CSV ledger, or the rows of a ledger the door files.
+The current supported targets are listed by `idhazh telemetry prune --help`; the
+target is a ledger name, never a path. This command does not unpublish a day or
+rebuild the site's derived payloads.
 
 ```text
 idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-DD>
@@ -110,8 +101,9 @@ idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-D
 - Dry run is the default and reports the selected paths. `--no-dry-run` permits deletion.
 - `--max-deletes` bounds a pass and reports where to resume. Without it, the supplied range sets the default bound.
 - `published` and `seen` are refused because forgetting their records permits repeat publication or discovery.
-- `item-health`, `scores` and `host-fingerprint` are not targets: they file through the ledger door rather than as CSV day files, so this command cannot take a day of them out. Until each ledger's compaction runs live and bounds its raw tree, nothing offers a range delete for them, the same as `visual-prunes`.
-- `score-index` is still a target. Pruning a range of it makes those measurements look new to the next run, so rebuild the affected index from the scores rows that remain with `idhazh rebuild-score-index --month <YYYY-MM>`.
+- A ledger the door files (`raw-and-compact` in `config/ledgers.json`) is a target unless its compaction declaration's `prune_refusal` gives a reason, which the command prints as its refusal. A pass deletes the days' raw files and listings and rebuilds each daily, monthly or yearly file that holds them without their rows; a file left with no row stays as an empty file. A live pass also takes `--run-id` and `--commit`, which each rebuilt file names as its writer.
+- `summary-quality-evals` is refused by its declaration: every eval row is kept for ever.
+- `summary-quality-evals-index` is refused too. An ID taken out of it makes its measurement count as new at the next run, and no ID is ever deleted. A closed month of it is one file besides, which no range of days can take part of.
 - Do not point the command at unsupported raw trees or file layouts. Their owning tasks decide retention.
 
 The procedure and failure handling are in

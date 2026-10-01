@@ -30,25 +30,25 @@ Everywhere else restates this section rather than inventing its own style rule (
 
 ## 0c. Decision Requests and Tables
 
-**Write every answer in plain, simple English.** A person outside this project understands it on one read. No subsystem terms, no invented jargon, no vendor name used as vocabulary. Where a term is unavoidable, define it in the same sentence. This is section 0b applied, and it is the clause agents break most.
+**Follow section 0b.** Write plain English that a person outside this project understands on one read. Define unavoidable terms in the same sentence.
 
-When you need the user to choose, ask in one message, in this order, and put nothing before it:
+Whenever you need human help, clarification, a decision or approval, use one message in this order, with no preamble:
 
 1. **Situation.** What is true now.
 2. **Problem.** What is wrong or undecided, in one or two sentences.
-3. **Impact.** What it touches and what it costs to leave alone - the files, the subsystems, the published surfaces, the runs.
-4. **Options.** Every option worth taking, each with its cost and what it gives up. An option with no cost named is not an option.
-5. **Recommendation.** One option per table, marked `**Recommended**` in the row itself and named again at the end with the reason in one sentence.
+3. **Impact.** What it affects and the cost of leaving it unchanged.
+4. **Options.** Present every worthwhile option or solution, its benefit, cost and what it gives up.
+5. **Recommendation.** Recommend one option per table. Mark its row `**Recommended**`. Close by naming each recommended row's id and giving its reason in one sentence.
 
-**Every table in every answer is lettered, and every row carries an id.** Tables are `Table A`, `Table B` and so on, in the order they appear. A row's id is that letter plus its number - `A1`, `A2`, `B1` - and it is the first column. No id repeats in one message, so the user answers `A3`, or `A2 and B1`, and quotes nothing back.
+If a missing fact prevents a sound recommendation, identify it and recommend how to obtain it. Do not invent facts or add filler options.
 
-**A message may carry more than one table when one decision genuinely depends on another**, and then each table gets its own recommended row. What it may not do is bundle unrelated decisions to save a round trip: a table the user did not need to see is a table they have to read. When several tables appear, the five-part shape is written once for the whole message, not repeated per table.
+**Every table in every answer needs a letter and row ids.** Label tables `Table A`, `Table B`, etc., in appearance order. Put each row's id in the first column: table letter plus row number (`A1`, `A2`, `B1`). No id may repeat within a message.
 
-**The recommendation is marked where the choice is made.** A recommendation stated only in a closing paragraph makes the reader hold a row id in their head while they scan back up the table, so it is marked in the row AND restated at the end. The restatement carries the reason; the marker carries the position.
+Use multiple decision tables only when the decisions depend on each other. Do not bundle unrelated decisions. Apply the five-part structure once per message, not once per table.
 
-A message with no options is a status update, not a decision request, and does not use the five-part shape.
+Routine progress updates do not need this structure.
 
-[`AGENTS.md`](AGENTS.md) restates this section; it does not extend it (Guardrail #4).
+[AGENTS.md](AGENTS.md) restates this section; it must not extend it (Guardrail #4).
 
 ## 0d. Intent, Contract, Code
 
@@ -122,27 +122,25 @@ Logging is local by construction. There is no log sink, no log service, and no r
 
 ### Paths
 
-For anything leaving the process (JSON, logs, manifests, agent memory, error messages, doc cross-links):
+Paths leaving the process, including JSON, logs, manifests, agent memory, errors and doc links, must be:
 
-- Relative paths only. No absolute paths. No drive letters.
-- POSIX separators only (`/`). Never `\`.
-- Minimal reconstructable form.
+- Relative, with no drive letters.
+- POSIX-separated (`/`, never `\`).
+- In the minimal reconstructable form.
 
-In-memory `Path` objects for local I/O may stay platform-native. This applies at the moment a path leaves the process.
+In-memory `Path` objects for local I/O may remain platform-native.
 
 ### Time
 
-**Every instant this project reads, writes, compares, schedules or prints is UTC.** There is no second timezone anywhere in the system, and no local-time value is ever persisted, compared or shown. This covers every clock the project touches: the workflow schedules, the date a digest is filed under, the age a retention window measures, the instant a prune or a delete decides against, the commit timestamp, the age of a fetched feed entry, the stamp inside a published payload, and every date a reader or an operator sees on a page.
+**Use UTC for every instant and date the project reads, writes, compares, schedules or displays.** This includes retention, deletion, feed ages, commits and published data.
 
-Three rules make it checkable.
+- **Clock:** Python uses `datetime.now(timezone.utc)`; TypeScript uses `Date.now()` and `*UTC*` accessors. Do not use bare `datetime.now()`, `datetime.utcnow()`, `date.today()` or local-time `Date` getters.
+- **Encoding:** Persist instants as ISO-8601 with `Z` or epoch milliseconds. Persist dates as `YYYY-MM-DD`, meaning the UTC day.
+- **Labels:** State UTC in each instant field's description and beside displayed instants.
 
-- **Read the clock one way.** `datetime.now(timezone.utc)` in Python; `Date.now()` and the `*UTC*` accessors in TypeScript. A bare `datetime.now()`, a `datetime.utcnow()`, a `date.today()` or a local-time `Date` getter is a defect. The first and third are wrong on any machine that is not on UTC - which is every developer machine and no CI runner, so the bug ships green. `utcnow()` returns a naive value that compares wrongly against an aware one.
-- **Persist one way.** An instant is ISO-8601 carrying `Z`, or epoch milliseconds. A date is `YYYY-MM-DD` and means the UTC day. A persisted value with no offset in it cannot be read twice with the same answer.
-- **Say so once, where it is read.** A field holding an instant says UTC in its description, and a surface printing one says UTC beside it. A reader left to guess the timezone has been handed a number with no meaning (section 0b).
+**Day boundaries are 00:00 UTC.** Compute a period's age from its own end instant against the current UTC clock, never the job's start time. Changing a schedule must not change which periods qualify.
 
-**A day boundary is 00:00 UTC, and no boundary is ever derived from when a job happened to wake.** A schedule is a wake, never a measurement: whether a period is old enough to act on is computed from that period's own end instant against the clock, so moving a cron cannot change which periods qualify.
-
-These are conventions rather than guardrails because a serialization invariant has one correct answer, so there is nothing here to adapt.
+These are fixed conventions, not adaptable guardrails.
 
 ## 3. Repository Topology
 
@@ -238,28 +236,27 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 ## 10. Anti-Patterns (Do NOT)
 
-- Reinterpret, downgrade, substitute, or scope-narrow a source or instruction the user named explicitly, without surfacing it as a scope change for sign-off (STOP-AND-SURFACE). **Declining on a limitation without pricing it is the same thing** - it is scope-narrowing to zero, and section 0d names what is owed instead: do it, price it, or name the measurement that would settle it.
-- Assume a backend exists in production.
-- Hardcode tunables, source lists, model refs, thresholds, or magic strings. They live in `config/`.
-- Put a unit of work in the file that routes to it.
-- Ship a surface that is still under development without a config flag, default off, carrying its removal condition on the line that declares it (Guardrail #6).
-- Change a frontend contract copy without changing the Pydantic model, or the reverse. The two tests that bind them are not optional.
-- Store absolute / backslash paths in any persisted artifact.
-- Let fetched text reach a system prompt, a shell argument, a file path, or an outbound URL (Guardrail #11).
-- Build custom HTTP / retry / parsing / validation / extraction systems when a mature OSS library exists.
-- Swallow exceptions or silently coerce invalid input - fail fast at the boundary.
-- Mock in tests by default, or let any test touch the network.
-- Commit a model weight, a downloaded binary, or a reproducible run intermediate.
-- Add a runtime telemetry / analytics / error-tracking SDK.
-- Ship a feature that depends on a runtime backend, an account, or a push notification.
-- Add a framework / library / build tool without naming its cost and its beneficiary feature.
-- Mint a new persisted field without stamping the schema `version` date, appending a `changelog` entry, and writing the read-side migration in the same commit.
-- Raise the runner budget to fit a feature. The 6 h job and the 1 GB site are GitHub's rather than ours, so an agent cannot move them and is not asked to (Guardrail #2) - the required next move is to name the design that does fit and what it traded: fewer items, a smaller model, a shorter context, a shard that splits.
-- Quote a Guardrail #2 number as a refusal without saying what crossing it does. "It busts the 10 GB cache" stops nothing on its own: that one is GitHub's to evict and it costs a re-download. Only the job timeout and the 1 GB site end the argument.
-- Let `TODO/`, chat logs, `AGENTS.md`, or a private agent note store become the source of truth for anything. They are caches of `docs/`.
-- Make a domain-neutral process doc project-specific (section 5).
-- Pre-create empty modules "for later".
-- Skip the docs update.
+- Reinterpret, downgrade, substitute or narrow an explicitly named source or instruction without reporting the proposed scope change as STOP-AND-SURFACE and getting user approval. A limitation is not a refusal: do it, price a change or name what measurement would settle it (section 0d).
+- Assume a runtime backend, or ship features requiring one, an account or push notifications.
+- Hardcode tunables, source lists, model references, thresholds or magic strings; use `config/`.
+- Put a unit's execution in the file that routes to it.
+- Ship unfinished surfaces without a default-off config flag and a removal condition on its declaring line (Guardrail #6).
+- Let the Pydantic model and frontend copy drift; update both and run both binding tests.
+- Persist absolute paths or backslashes.
+- Let fetched text reach a system prompt, shell arguments, file paths or outbound URLs (Guardrail #11).
+- Build custom HTTP, retry, parsing, validation or extraction systems when a mature OSS library exists.
+- Swallow exceptions or silently coerce invalid input; fail fast at the boundary.
+- Use mocks in tests without an explicit request, or let tests access the network.
+- Commit model weights, downloaded binaries or reproducible run intermediates.
+- Add runtime telemetry, analytics or error-tracking SDKs.
+- Add frameworks, libraries or build tools without naming their cost and beneficiary feature.
+- Add persisted fields without a schema `version` date, `changelog` entry and read-side migration in the same commit.
+- Raise platform limits to fit a feature: GitHub kills a 6 h job, and Pages refuses a site over 1 GB. Name a viable design and its trade-offs; scope changes require user approval.
+- Use runner figures as a refusal without stating their consequences. Cache eviction costs a re-download, not a failed run (Guardrail #2).
+- Treat `TODO/`, chat logs, [AGENTS.md](AGENTS.md) or private memory as authority. They are caches of `docs/`.
+- Make a domain-neutral process document project-specific (section 5).
+- Create empty modules for later.
+- Skip the documentation update.
 
 ## 11. Schema Versioning
 
@@ -308,31 +305,35 @@ Per tier:
 
 ## 14. Agent Roster
 
-Seven persona advisors live under `.github/agents/`, each at a distinct altitude. **This table is the authority assignment, and it is what resolves a stalled debate**: the decision class names who rules.
+Use these responsibilities to resolve disagreements, not as a checklist of approvals. Add an advisor only for a distinct responsibility not already covered. All follow section 0b.
 
-| Agent                               | File               | Altitude, and the decisions it rules                                          |
-| ----------------------------------- | ------------------ | ----------------------------------------------------------------------------- |
-| Reader                              | `reader.agent.md`  | the person the digest is for - is it worth their two minutes? is the language plain? does the page work on a slow connection and a small screen? |
-| Editor                              | `editor.agent.md`  | what the digest covers and at what length - story selection, where a cut may fall by kind of writing, which themes to trade when a budget binds, whether a source earns its slot |
-| Jony (UI and UX)                        | `jony.agent.md`    | the published surface - page and typography, chart vs diagram vs nothing, the eval dashboard, what a visual must earn |
-| Susan (Craft and Delight)             | `susan.agent.md`   | whether a surface is good enough to ship - the sufficiency checks, elevation and colour systems, icon and chart craft, both themes, empty and degraded states |
-| Andre (AI and LLM)                    | `andre.agent.md`   | model pick on quality grounds, prompt strategy, constrained decoding, eval design and metric choice, the prompt-injection surface |
-| Fowler (Architecture and Engineering) | `fowler.agent.md`  | architecture, persisted contracts (stage payloads, eval ledger, run manifest, config, published payloads), schema versioning, test tiers, refactor safety, module structure, when to delete |
-| Carmack (Engine and Runtime)          | `carmack.agent.md` | inference runtime, model quantisation and fit, the runner budget, throughput, cache and shard economics, job timeouts |
+| Advisor | Responsibility |
+| --- | --- |
+| [Reader](.github/agents/reader.agent.md) | Reading experience, plain language, small screens and slow connections |
+| [Editor](.github/agents/editor.agent.md) | Coverage, story selection, length, cuts, topic balance and source value |
+| [Jony](.github/agents/jony.agent.md) | Published layout, typography and the choice of chart, diagram or no visual |
+| [Susan](.github/agents/susan.agent.md) | Readiness to ship: sufficiency, elevation, colour, icons, charts, both themes, empty and degraded states |
+| [Andre](.github/agents/andre.agent.md) | Model quality, prompts, constrained decoding, evaluation and model-output requirements |
+| [Fowler](.github/agents/fowler.agent.md) | Architecture, contracts, versioning, validation, process safety, test tiers, safe refactoring, module structure and deletion |
+| [Carmack](.github/agents/carmack.agent.md) | On-demand advice on runtime, quantisation, resource use, throughput, cache and shard costs, and timeouts |
 
-Adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
+### Shared boundaries
 
-**A veto must name what the reader loses.** A ruling that removes states what is removed *and* what the reader gives up by not having it; a ruling that states only the first is not a ruling and does not bind. This is not a courtesy - it is the price of the authority the table above hands out.
+- **Content:** Reader reports the experience, not proposals. Editor decides coverage and length, not what the reader experienced.
+- **Design:** Jony decides what stays; Susan decides whether it is good enough to ship. Neither judgment replaces the other. Susan cannot overrule Reader on language or Editor on content.
+- **Models:** A model must meet quality and execution requirements, not collect two advisor approvals. Andre owns quality; Carmack advises on runtime when invoked.
+- **Injection:** Andre defines prompt and model-output requirements. Fowler owns contracts, validation and the process boundary. Model output must not become shell arguments, file paths or fetch URLs.
+- **Evaluation:** Editor names the content failure; Andre chooses how to measure it.
 
-Five pairs share an edge, and each one has a written split.
+**Invocation:** Fowler or another agent may invoke Carmack for a specific runtime question whose answer changes the current implementation decision. A direct user request also qualifies. Carmack has no automatic review or approval step. Ownership does not require consultation on every increment.
 
-- Where Reader and Editor both touch content: **Reader reports what reading it was like, Editor rules what should have run and how long.** Reader does not propose; Editor does not speak for the reader's experience of the page.
-- Where Jony and Susan both touch the page: **Jony rules what survives on the page, Susan rules whether what survived is good enough to ship.** They are the two halves of one review and neither is sufficient alone. Susan never overrules Carmack on bytes, Reader on plain language, or Editor on what runs.
-- Where Carmack and Andre both touch the model: **Andre owns whether a model is good enough, Carmack owns whether it fits.** A model that fails either test is not the pick.
-- Where Andre and Carmack both touch injection: **Andre owns the prompt and schema shape, Carmack owns the process boundary** - no model output becomes a shell argument, a file path, or a URL to fetch.
-- Where Editor and Andre both touch quality: **Editor names the content failure, Andre chooses the instrument that measures it.**
+**Implementation:** Build the requested capability incrementally in its intended code path. Each increment implements real behavior, has appropriate tests and becomes the basis for the next increment. Do not substitute mocks, placeholders or a separate proof of concept for the capability.
 
-A persona's own worldview shapes what it says, never how plainly it says it (section 0b).
+**Measurement:** Measure to decide the next implementation step, not to obtain permission to build. If measurement needs working code, build that part of the real feature first. Further measurement must name what decision it could change; otherwise continue implementation.
+
+No advisor may reduce scope or require a separate experimental implementation without user approval. Platform limits, safety controls and required correctness tests still apply.
+
+**A removal veto is valid only if it names what is removed and what the reader loses.**
 
 
 ## See also

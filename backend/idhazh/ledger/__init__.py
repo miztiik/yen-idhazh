@@ -20,6 +20,8 @@ from idhazh.ledger.csv_file import (
     render_file,
     require_matching_header,
 )
+from idhazh.ledger.day_removal import HeldFile, find_holding_files, rebuild_without
+from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.filenames import (
     BEFORE_PARTITION_NAME,
     PRE_IDENTITY_TRACE,
@@ -101,7 +103,9 @@ from idhazh.ledger.persist import (
     persist,
     persist_period,
     read_envelope,
+    render_grouped_period,
     render_period,
+    render_renamed,
 )
 from idhazh.ledger.raw_files import (
     RawFile,
@@ -171,7 +175,9 @@ __all__ = [  # noqa: RUF022
     "persist",
     "persist_period",
     "read_envelope",
+    "render_grouped_period",
     "render_period",
+    "render_renamed",
     # raw_files.py: which raw files hold a ledger's current rows, and what they are.
     "RawFile",
     "list_raw_files",
@@ -180,7 +186,7 @@ __all__ = [  # noqa: RUF022
     "raw_days",
     "read_day_files",
     "settle_rows",
-    # ledger_files.py: which files - monthly, daily or raw - hold a ledger's current rows.
+    # ledger_files.py: which files - yearly, monthly, daily or raw - hold a ledger's current rows.
     "LedgerFiles",
     "Source",
     "compact_file",
@@ -190,6 +196,12 @@ __all__ = [  # noqa: RUF022
     "load_days",
     "load_ledger_rows",
     "month_days",
+    # day_removal.py: which door files hold a range of days, and each one rebuilt without them.
+    "HeldFile",
+    "find_holding_files",
+    "rebuild_without",
+    # faults.py: the four ways a packed ledger can be missing a file, by name.
+    "LedgerFault",
     # lifecycle.py: whether a ledger takes new rows now.
     "accepts_new_rows",
     # keys.py: what makes two rows one record, and which contract reads one.

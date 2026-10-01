@@ -17,12 +17,22 @@ a test that read it would cost more every month for the same answer
 (Guardrail #12) - and a built tree carries the cases the archive has never
 produced: a day either side of a boundary, a ledger whose month directory is
 emptied exactly, and a delete that fails on the third file of four.
+
+A ledger on the ledger door is a target too, of its own kind. Its days sit in
+raw files and in daily, monthly and yearly files that hold other days as well,
+so its property is about rows rather than files: no row of a day the range
+names is left, every other day reads back the same rows, and every index and
+watermark still loads. Those trees are built through the door and the shipped
+compaction (`ledger/_every_tier.py`), and whether a ledger on the door is a
+target at all is its compaction declaration's `prune_refusal`.
 """
 
 from __future__ import annotations
 
+import functools
 import hashlib
-from collections.abc import Iterable
+import shutil
+from collections.abc import Callable, Iterable, Mapping
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
@@ -30,18 +40,62 @@ from typing import Final
 
 import pytest
 from conftest import seed_feed_health, seed_item_health
+from ledger._every_tier import (
+    CENSUS,
+    FILED_DAYS,
+    QUIET_DAY,
+    RAW_DAYS,
+    a_census_in_every_tier,
+)
 
-from idhazh import day_shards, ledger
+from idhazh import atomic_write, config, day_shards, ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry import prune
+from idhazh.contracts.ledgers import Grain
+from idhazh.telemetry import door_prune, prune
 
 from ._trees import health_row
 
 pytestmark = pytest.mark.contract
+
+
+@functools.cache
+def committed_tasks() -> Mapping[str, TaskPolicy]:
+    """Every committed gardener declaration, loaded and checked as `idhazh telemetry prune` loads them."""
+    return config.load_gardener().tasks
+
+
+def prune_range(
+    state_root: Path,
+    *,
+    target: str,
+    since: str,
+    until: str,
+    dry_run: bool = True,
+    max_deletes: int | None = None,
+    run_id: str | None = None,
+    commit: str | None = None,
+    tasks: Mapping[str, TaskPolicy] | None = None,
+) -> prune.Outcome:
+    """The verb's body, handed the declarations the command line loads unless a test names its own."""
+    return prune.prune_range(
+        state_root,
+        target=target,
+        since=since,
+        until=until,
+        tasks=committed_tasks() if tasks is None else tasks,
+        dry_run=dry_run,
+        max_deletes=max_deletes,
+        run_id=run_id,
+        commit=commit,
+    )
 
 
 #: Where one day of each ledger this prunes lands. The test below holds this
@@ -60,7 +114,6 @@ DAY_PATHS: Final[dict[str, LedgerName]] = {
         LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-        LedgerName.SCORE_INDEX,
         LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
     )
 }
@@ -116,9 +169,9 @@ def the_feed_file(day: str) -> str:
 def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
     """One item-health day per day, filed through the ledger door.
 
-    A ledger the prune is never pointed at: its days are raw files under
-    `state/raw/`, which no target walks, so a prune that reached them would be
-    deleting rows nobody named.
+    A ledger beside the one a test prunes: its days are raw files under
+    `state/raw/`, which no CSV target walks, so a prune of another ledger that
+    reached them would be deleting rows nobody named.
     """
     for number, day in enumerate(days):
         seed_item_health(
@@ -188,7 +241,7 @@ def test_both_ends_of_the_range_are_named(tmp_path: Path) -> None:
     state = a_feed_record(tmp_path / "state")
     since, until = DAYS[2], DAYS[4]
 
-    outcome = prune.prune_range(
+    outcome = prune_range(
         state,
         target=LedgerName.FEED_HEALTH,
         since=since,
@@ -215,7 +268,7 @@ def test_one_day_is_a_range_of_itself(tmp_path: Path) -> None:
     """`--since X --until X` removes exactly X, which is what inclusive means."""
     state = a_feed_record(tmp_path / "state")
 
-    outcome = prune.prune_range(
+    outcome = prune_range(
         state,
         target=LedgerName.FEED_HEALTH,
         since=DAYS[3],
@@ -240,7 +293,7 @@ def test_every_sibling_outside_the_range_is_byte_identical(tmp_path: Path) -> No
     a_census(state)
 
     before = fingerprints(state)
-    outcome = prune.prune_range(
+    outcome = prune_range(
         state,
         target=LedgerName.FEED_HEALTH,
         since=DAYS[1],
@@ -260,7 +313,7 @@ def test_a_backwards_range_names_no_day(tmp_path: Path) -> None:
     state = a_feed_record(tmp_path / "state")
 
     with pytest.raises(ValueError, match="is after --until"):
-        prune.prune_range(
+        prune_range(
             state,
             target=LedgerName.FEED_HEALTH,
             since=DAYS[4],
@@ -282,7 +335,7 @@ def test_a_day_that_is_not_a_day_is_refused(tmp_path: Path, value: str) -> None:
     state = a_feed_record(tmp_path / "state")
 
     with pytest.raises(ValueError, match="YYYY-MM-DD"):
-        prune.prune_range(
+        prune_range(
             state, target=LedgerName.FEED_HEALTH, since=value, until=DAYS[4], dry_run=False
         )
 
@@ -297,7 +350,7 @@ def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
     """
     state = a_feed_record(tmp_path / "state")
 
-    prune.prune_range(
+    prune_range(
         state, target=LedgerName.FEED_HEALTH, since=DAYS[0], until=DAYS[2], dry_run=False
     )
 
@@ -324,7 +377,7 @@ def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
         state = tmp_path / target
         path = a_day_on_disk(name, state, DAYS[3])
 
-        outcome = prune.prune_range(
+        outcome = prune_range(
             state, target=target, since=DAYS[3], until=DAYS[3], dry_run=False
         )
 
@@ -334,19 +387,30 @@ def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
         assert not path.exists(), f"{target} reported a removal that did not happen"
 
 
-@pytest.mark.parametrize("target", sorted(prune.REFUSED))
-def test_the_two_stores_that_must_not_forget_are_refused(tmp_path: Path, target: str) -> None:
-    """`published` and `seen` are refused by name, with the reason attached.
+#: The ledgers whose rows must never be forgotten, so a range of them is refused
+#: by name: two that stop a repeat publication or discovery, and the eval
+#: ledger's ID folder, whose IDs stop a measurement counting as new.
+MUST_NOT_FORGET: Final = (
+    LedgerName.PUBLISHED,
+    LedgerName.SEEN,
+    LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
+)
+
+
+@pytest.mark.parametrize("target", MUST_NOT_FORGET)
+def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: str) -> None:
+    """`published`, `seen` and the eval ledger's ID folder are refused by name, with the reason.
 
     Refused rather than left out of the vocabulary: a ledger missing from a list
     reads as an oversight, and somebody who typed one of these is holding a real
     question whose answer is why the answer is no.
     """
+    assert set(prune.REFUSED) == set(MUST_NOT_FORGET)
     state = a_feed_record(tmp_path / "state")
     before = fingerprints(state)
 
     with pytest.raises(ValueError) as refusal:
-        prune.prune_range(state, target=target, since=DAYS[0], until=DAYS[6], dry_run=False)
+        prune_range(state, target=target, since=DAYS[0], until=DAYS[6], dry_run=False)
 
     message = str(refusal.value)
     assert target in message and "refused" in message
@@ -380,7 +444,7 @@ def test_a_target_outside_the_vocabulary_is_refused(tmp_path: Path, target: str)
     before = fingerprints(state)
 
     with pytest.raises(ValueError) as refusal:
-        prune.prune_range(state, target=target, since=DAYS[0], until=DAYS[6], dry_run=False)
+        prune_range(state, target=target, since=DAYS[0], until=DAYS[6], dry_run=False)
 
     assert "the name of a ledger" in str(refusal.value)
     assert fingerprints(state) == before
@@ -398,14 +462,14 @@ def test_a_dry_run_names_every_file_and_removes_none(tmp_path: Path) -> None:
     state = a_feed_record(tmp_path / "state")
     before = fingerprints(state)
 
-    reported = prune.prune_range(
+    reported = prune_range(
         state, target=LedgerName.FEED_HEALTH, since=DAYS[1], until=DAYS[3]
     )
 
     assert reported.dry_run is True
     assert fingerprints(state) == before, "a dry run moved a file"
 
-    removed = prune.prune_range(
+    removed = prune_range(
         state, target=LedgerName.FEED_HEALTH, since=DAYS[1], until=DAYS[3], dry_run=False
     )
     assert removed.removed == reported.removed
@@ -447,7 +511,7 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
     monkeypatch.setattr(prune, "_delete", fail_on_the_third)
 
     with pytest.raises(prune.PruneInterruptedError) as stop:
-        prune.prune_range(
+        prune_range(
             state,
             target=LedgerName.FEED_HEALTH,
             since=DAYS[1],
@@ -481,7 +545,7 @@ def test_a_ceiling_stops_a_pass_and_names_the_day_to_resume_at(tmp_path: Path) -
     """
     state = a_feed_record(tmp_path / "state")
 
-    outcome = prune.prune_range(
+    outcome = prune_range(
         state,
         target=LedgerName.FEED_HEALTH,
         since=DAYS[0],
@@ -508,7 +572,7 @@ def test_the_range_an_operator_typed_is_its_own_ceiling(tmp_path: Path) -> None:
     """
     state = a_feed_record(tmp_path / "state")
 
-    outcome = prune.prune_range(
+    outcome = prune_range(
         state, target=LedgerName.FEED_HEALTH, since=DAYS[0], until=DAYS[6], dry_run=False
     )
 
@@ -521,7 +585,7 @@ def test_nothing_is_left_under_state_for_a_commit_to_pick_up(tmp_path: Path) -> 
     """No scratch directory, because there is no longer a phase that needs one."""
     state = a_feed_record(tmp_path / "state")
 
-    prune.prune_range(
+    prune_range(
         state, target=LedgerName.FEED_HEALTH, since=DAYS[0], until=DAYS[1], dry_run=False
     )
 
@@ -533,7 +597,7 @@ def test_a_range_with_no_day_in_it_says_so(tmp_path: Path) -> None:
     """A range that names nothing is not a failure, and the report says which."""
     state = a_feed_record(tmp_path / "state")
 
-    outcome = prune.prune_range(
+    outcome = prune_range(
         state, target=LedgerName.FEED_HEALTH, since="2025-01-01", until="2025-01-31"
     )
 
@@ -544,7 +608,7 @@ def test_a_range_with_no_day_in_it_says_so(tmp_path: Path) -> None:
 
 def test_a_store_that_has_never_been_written_prunes_nothing(tmp_path: Path) -> None:
     """A fresh clone has no history, which is not a fault."""
-    outcome = prune.prune_range(
+    outcome = prune_range(
         tmp_path / "state",
         target=LedgerName.FEED_HEALTH,
         since=DAYS[0],
@@ -554,3 +618,536 @@ def test_a_store_that_has_never_been_written_prunes_nothing(tmp_path: Path) -> N
 
     assert outcome.removed == ()
     assert outcome.kept == 0
+
+
+# --- A ledger on the ledger door ---------------------------------------------------
+
+#: The writer every file a live pass on the door rebuilds names, as an operator types it.
+PRUNE_RUN: Final = "2026-03-21-1"
+PRUNE_COMMIT: Final = "c" * 40
+PRUNE_WRITER: Final = WriterIdentity(
+    run_id=PRUNE_RUN,
+    attempt=1,
+    job=ServerJob.MIGRATE,
+    shard=0,
+    producer="telemetry.prune",
+    git_sha=PRUNE_COMMIT,
+)
+
+#: A range that reaches every kind of file the built census sits in: the end of
+#: 2025's December in its year file, the whole of January's month file, both
+#: filed daily files and the first raw day. The census's first and last filed
+#: days stay, in the year file and in a raw file.
+SINCE: Final = "2025-12-20"
+UNTIL: Final = "2026-03-19"
+
+
+def the_range() -> list[str]:
+    """Every UTC day from `SINCE` to `UNTIL`, both named."""
+    first, last = date_type.fromisoformat(SINCE), date_type.fromisoformat(UNTIL)
+    return [(first + timedelta(days=step)).isoformat() for step in range((last - first).days + 1)]
+
+
+@pytest.fixture(scope="module")
+def every_tier(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """One census in every kind of file, built once for this module and copied by each test."""
+    root = tmp_path_factory.mktemp("every-tier")
+    a_census_in_every_tier(root)
+    return root
+
+
+def a_copy(every_tier: Path, under: Path) -> Path:
+    """The built census copied to a tree of its own, and that tree's state root."""
+    shutil.copytree(every_tier, under)
+    return under / ledger.STATE_DIRNAME
+
+
+def census_by_day(state: Path) -> dict[str, list[ItemHealthRow]]:
+    """Every census row the ledger serves, by the day it was filed under, read as readers read it."""
+    served: dict[str, list[ItemHealthRow]] = {}
+    for row in ledger.load_days(
+        state, CENSUS, ledger.held_days(state, CENSUS), model=ItemHealthRow
+    ):
+        served.setdefault(row.date, []).append(row)
+    return served
+
+
+def indexes(state: Path) -> dict[Period, list[CompactEntry]]:
+    """Every compact index of the census, each read whole, so one that cannot load fails here."""
+    return {
+        period: CompactIndex.read(ledger.compact_index_path(state, CENSUS, period)).entries
+        for period in Period
+    }
+
+
+def watermarks(state: Path) -> dict[Period, str]:
+    """Where each period of the census stands, each read whole, so one that cannot load fails here."""
+    return {
+        period: Watermark.read(ledger.watermark_path(state, CENSUS, period)).through
+        for period in Period
+    }
+
+
+def compaction_of(tasks: Mapping[str, TaskPolicy], which: LedgerName) -> CompactionPolicy:
+    """The one compaction declaration of a ledger."""
+    (found,) = [
+        policy
+        for policy in tasks.values()
+        if isinstance(policy, CompactionPolicy) and policy.ledger is which
+    ]
+    return found
+
+
+def with_refusal(
+    tasks: Mapping[str, TaskPolicy], which: LedgerName, sentence: str | None
+) -> dict[str, TaskPolicy]:
+    """These declarations with one ledger's `prune_refusal` changed, and nothing else."""
+    return {
+        name: (
+            policy.model_copy(update={"prune_refusal": sentence})
+            if isinstance(policy, CompactionPolicy) and policy.ledger is which
+            else policy
+        )
+        for name, policy in tasks.items()
+    }
+
+
+def test_a_range_taken_out_of_a_ledger_on_the_door_takes_its_rows_and_no_other(
+    every_tier: Path, tmp_path: Path
+) -> None:
+    """The oracle: no row of a day the range names is left, and every other day reads the same.
+
+    The range reaches into a year file, a month file, two daily files and a raw
+    day, so each kind of file is rebuilt or deleted, and the year file and the raw
+    days each keep a day outside it. Every index and watermark still loads, no
+    day reads as a hole, and no watermark moves, because nothing was compacted.
+    A taken day's listing goes with it; a day in the range that held no row
+    keeps its own.
+    """
+    state = a_copy(every_tier, tmp_path / "checkout")
+    before = census_by_day(state)
+    marks = watermarks(state)
+    taken_listing = ledger.raw_index_path(state, CENSUS, "2026-02-10")
+    quiet_listing = ledger.raw_index_path(state, CENSUS, QUIET_DAY)
+    assert set(before) == set(FILED_DAYS), "the built census is not the one this test reads"
+    assert taken_listing.is_file() and quiet_listing.is_file()
+
+    outcome = prune_range(
+        state,
+        target=CENSUS,
+        since=SINCE,
+        until=UNTIL,
+        dry_run=False,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+
+    assert census_by_day(state) == {
+        day: rows for day, rows in before.items() if not SINCE <= day <= UNTIL
+    }
+    assert set(indexes(state)) == set(Period)
+    assert watermarks(state) == marks, "a prune moved a watermark"
+    assert ledger.list_ledger_files(state, CENSUS).holes == ()
+    assert ledger.list_raw_files(state, CENSUS, days=[RAW_DAYS[0]]) == []
+    assert not taken_listing.exists(), "a taken day kept its listing"
+    assert quiet_listing.is_file(), "a day in the range that held no row lost its listing"
+    assert outcome.removed and outcome.rewritten and outcome.bytes_freed > 0
+
+
+def test_a_ledger_on_the_door_with_only_raw_files_gives_up_whole_days(tmp_path: Path) -> None:
+    """Until its compaction runs live, a ledger's days on the door are raw files, taken whole.
+
+    The days are the members, so `kept` counts the days outside the range and
+    nothing is rewritten, because no compact file holds a row yet.
+    """
+    state = a_census(tmp_path / "state")
+    before = {
+        day: ledger.load_days(state, CENSUS, [day], model=ItemHealthRow) for day in DAYS
+    }
+
+    outcome = prune_range(
+        state,
+        target=CENSUS,
+        since=DAYS[2],
+        until=DAYS[4],
+        dry_run=False,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+
+    for day in DAYS:
+        expected = [] if DAYS[2] <= day <= DAYS[4] else before[day]
+        assert ledger.load_days(state, CENSUS, [day], model=ItemHealthRow) == expected, day
+    assert (len(outcome.removed), outcome.rewritten, outcome.kept) == (3, (), 4)
+    assert ledger.list_raw_files(state, CENSUS, days=DAYS[2:5]) == []
+
+
+def test_a_ledger_on_the_door_is_a_target_unless_its_declaration_gives_a_reason() -> None:
+    """Which ledgers on the door this takes days from is worked out, never listed.
+
+    The registry says which ledgers are on the door, and each one's compaction
+    declaration says in `prune_refusal` whether their days may go: null makes it
+    a target, and a sentence refuses it with that sentence. So the answer moves
+    when the config does, with no list here to keep in step. A ledger on the
+    door that no compaction declares is refused, because nothing then says its
+    days may go. On main the census is a target.
+    """
+    tasks = committed_tasks()
+    assert set(prune.DOOR_LEDGERS.values()) == {
+        name for name in LedgerName if ledger.entry(name).grain is Grain.RAW_AND_COMPACT
+    }
+    for word, name in prune.DOOR_LEDGERS.items():
+        sentence = compaction_of(tasks, name).prune_refusal
+        if sentence is None:
+            assert prune.resolve(word, tasks) == word
+            continue
+        with pytest.raises(ValueError) as refusal:
+            prune.resolve(word, tasks)
+        assert f"{word} is refused" in str(refusal.value) and sentence in str(refusal.value)
+    assert prune.resolve(CENSUS, tasks) == CENSUS
+
+    with pytest.raises(ValueError, match="a person chose to keep every census row"):
+        prune.resolve(CENSUS, with_refusal(tasks, CENSUS, "a person chose to keep every census row"))
+    evals = LedgerName.SUMMARY_QUALITY_EVALS
+    assert prune.resolve(evals, with_refusal(tasks, evals, None)) == evals
+    undeclared = {
+        name: policy
+        for name, policy in tasks.items()
+        if not (isinstance(policy, CompactionPolicy) and policy.ledger is CENSUS)
+    }
+    with pytest.raises(ValueError, match="no compaction under config/gardener/ declares it"):
+        prune.resolve(CENSUS, undeclared)
+
+
+def test_the_eval_ledger_is_refused_with_the_sentence_its_declaration_gives(
+    tmp_path: Path,
+) -> None:
+    """Every eval row is kept for ever, so no range of its days may be taken, and the refusal says so.
+
+    The sentence is read off the committed declaration rather than copied here,
+    so the reason a person reads is the one that sits beside the eval ledger's
+    windows. Refused before anything is read, so the tree is as it was.
+    """
+    state = a_census(tmp_path / "state")
+    before = fingerprints(state)
+    sentence = compaction_of(committed_tasks(), LedgerName.SUMMARY_QUALITY_EVALS).prune_refusal
+    assert sentence, "the eval ledger's declaration gives no reason, so a prune would take its days"
+
+    with pytest.raises(ValueError) as refusal:
+        prune_range(
+            state,
+            target=LedgerName.SUMMARY_QUALITY_EVALS,
+            since=DAYS[0],
+            until=DAYS[6],
+            dry_run=False,
+            run_id=PRUNE_RUN,
+            commit=PRUNE_COMMIT,
+        )
+
+    message = str(refusal.value)
+    assert f"{LedgerName.SUMMARY_QUALITY_EVALS} is refused" in message
+    assert sentence in message
+    assert fingerprints(state) == before
+
+
+@pytest.mark.parametrize(
+    ("run_id", "commit", "says"),
+    [
+        (None, PRUNE_COMMIT, "--run-id"),
+        (PRUNE_RUN, None, "--commit"),
+        ("2026-03-21", PRUNE_COMMIT, "YYYY-MM-DD-N"),
+        (PRUNE_RUN, "c0ffee", "forty"),
+    ],
+)
+def test_a_live_pass_on_the_door_is_refused_without_a_writer_it_can_name(
+    tmp_path: Path, run_id: str | None, commit: str | None, says: str
+) -> None:
+    """A rebuilt file names the run and the commit that wrote it, so a live pass needs both.
+
+    Refused before a file is read, so the tree is as it was. A dry run needs
+    neither, and still lists what the live pass would take.
+    """
+    state = a_census(tmp_path / "state")
+    before = fingerprints(state)
+
+    with pytest.raises(ValueError, match=says):
+        prune_range(
+            state,
+            target=CENSUS,
+            since=DAYS[0],
+            until=DAYS[6],
+            dry_run=False,
+            run_id=run_id,
+            commit=commit,
+        )
+
+    assert fingerprints(state) == before
+    assert prune_range(state, target=CENSUS, since=DAYS[0], until=DAYS[6]).removed
+    assert fingerprints(state) == before, "a dry run changed a file"
+
+
+def test_a_dry_run_on_the_door_names_every_change_a_live_pass_makes_and_makes_none(
+    every_tier: Path, tmp_path: Path
+) -> None:
+    """The list a person reads before `--no-dry-run` is the list the live pass carries out.
+
+    Both passes name the same writer, so every file the dry run builds is the
+    file the live pass writes, byte count and all.
+    """
+    state = a_copy(every_tier, tmp_path / "checkout")
+    before = fingerprints(state)
+
+    dry = prune_range(
+        state, target=CENSUS, since=SINCE, until=UNTIL, run_id=PRUNE_RUN, commit=PRUNE_COMMIT
+    )
+
+    assert dry.dry_run and not dry.changed
+    assert fingerprints(state) == before, "a dry run changed a file"
+    live = prune_range(
+        state,
+        target=CENSUS,
+        since=SINCE,
+        until=UNTIL,
+        dry_run=False,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+    assert (dry.removed, dry.rewritten, dry.bytes_freed, dry.kept) == (
+        live.removed,
+        live.rewritten,
+        live.bytes_freed,
+        live.kept,
+    )
+    after = fingerprints(state)
+    changed = {path for path in before.keys() | after.keys() if before.get(path) != after.get(path)}
+    named = {
+        relpath.removeprefix(f"{ledger.STATE_DIRNAME}/")
+        for relpath in (*live.removed, *live.rewritten)
+    }
+    assert changed == named, "the files that changed are not the files the pass named"
+    lines = prune.report(dry)
+    assert all(any(relpath in line for line in lines) for relpath in (*dry.removed, *dry.rewritten))
+    assert "--no-dry-run" in lines[-1]
+
+
+def test_a_ceiling_takes_the_oldest_days_and_the_same_command_finishes_the_range(
+    every_tier: Path, tmp_path: Path
+) -> None:
+    """A range wider than the bite an operator wants is taken in bites, oldest day first.
+
+    The first held day of the range is the 20th of December, so five days stop
+    the pass at the 25th, and running the command again without a ceiling leaves
+    exactly what one pass over the whole range leaves.
+    """
+    bites = a_copy(every_tier, tmp_path / "bites")
+    whole = a_copy(every_tier, tmp_path / "whole")
+
+    first = prune_range(
+        bites,
+        target=CENSUS,
+        since=SINCE,
+        until=UNTIL,
+        dry_run=False,
+        max_deletes=5,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+    rest = prune_range(
+        bites,
+        target=CENSUS,
+        since=SINCE,
+        until=UNTIL,
+        dry_run=False,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+    prune_range(
+        whole,
+        target=CENSUS,
+        since=SINCE,
+        until=UNTIL,
+        dry_run=False,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+
+    assert (first.more_to_do, first.resume_from) == (True, "2025-12-25")
+    assert any("run it again" in line for line in prune.report(first))
+    assert rest.resume_from is None
+    assert census_by_day(bites) == census_by_day(whole)
+    assert indexes(bites) == indexes(whole)
+
+
+def test_a_file_whose_every_row_goes_stays_as_an_empty_file_its_index_names(
+    every_tier: Path, tmp_path: Path
+) -> None:
+    """A month and a day whose rows all go are kept as empty files, so no index has a hole.
+
+    Their index entries count no row and weigh what the empty files weigh, and
+    neither day nor month reads as missing.
+    """
+    state = a_copy(every_tier, tmp_path / "checkout")
+
+    prune_range(
+        state,
+        target=CENSUS,
+        since="2026-01-01",
+        until="2026-02-28",
+        dry_run=False,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+
+    month = ledger.compact_file(state, CENSUS, Period.MONTHLY, "2026-01")
+    day = ledger.compact_file(state, CENSUS, Period.DAILY, "2026-02-10")
+    assert month is not None and day is not None, "an emptied period lost its file"
+    assert ledger.load([month, day], model=ItemHealthRow) == []
+    entries = indexes(state)
+    assert CompactEntry(covers="2026-01", rows=0, bytes=month.stat().st_size) in entries[
+        Period.MONTHLY
+    ]
+    assert CompactEntry(covers="2026-02-10", rows=0, bytes=day.stat().st_size) in entries[
+        Period.DAILY
+    ]
+    assert ledger.list_ledger_files(state, CENSUS).holes == ()
+
+
+def test_a_rebuilt_file_names_the_prune_as_its_writer_and_each_kept_row_keeps_its_own(
+    every_tier: Path, tmp_path: Path
+) -> None:
+    """The envelope says who rebuilt the file; every row left still says who first filed it.
+
+    A reader settles rows by their own identity cells, so a rebuild that stamped
+    its own on them would make a later re-run of their writer lose to the prune.
+    """
+    state = a_copy(every_tier, tmp_path / "checkout")
+    year = ledger.compact_file(state, CENSUS, Period.YEARLY, "2025")
+    assert year is not None
+    kept = [
+        held
+        for held in ledger.load_stored([year], model=ItemHealthRow)
+        if held.identity.covers != "2025-12-20"
+    ]
+
+    prune_range(
+        state,
+        target=CENSUS,
+        since="2025-12-20",
+        until="2025-12-20",
+        dry_run=False,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+
+    envelope = ledger.read_envelope(year)
+    assert (envelope.identity, envelope.built_from) == (PRUNE_WRITER, 1)
+    assert ledger.load_stored([year], model=ItemHealthRow) == kept
+
+
+def stopped_after_its_deletes(state: Path) -> None:
+    """The tree a pass leaves when it stops after its deletes and before its first rewrite."""
+    planned = prune_range(
+        state, target=CENSUS, since=SINCE, until=UNTIL, run_id=PRUNE_RUN, commit=PRUNE_COMMIT
+    )
+    for relpath in planned.removed:
+        (state / relpath.removeprefix(f"{ledger.STATE_DIRNAME}/")).unlink()
+
+
+def stopped_after_its_first_rewrite(state: Path) -> None:
+    """The same, and the first file the pass rebuilds written as the pass writes it."""
+    stopped_after_its_deletes(state)
+    first = next(
+        held
+        for held in ledger.find_holding_files(state, CENSUS, the_range())
+        if held.period is not None
+    )
+    built = ledger.rebuild_without(state, first, first.days, identity=PRUNE_WRITER)
+    atomic_write.write_atomic_bytes(built.path, built.data)
+
+
+@pytest.mark.parametrize("stop", [stopped_after_its_deletes, stopped_after_its_first_rewrite])
+def test_a_pass_that_stopped_part_way_is_finished_by_the_same_command(
+    every_tier: Path, tmp_path: Path, stop: Callable[[Path], None]
+) -> None:
+    """Running the command again finishes a pass a failure stopped, and leaves what one pass leaves.
+
+    Each tree is the one a failure leaves at a point the pass can stop at, made
+    by doing that much of the pass for real and nothing more: after its deletes,
+    and after its first rewrite as well.
+    """
+    stopped = a_copy(every_tier, tmp_path / "stopped")
+    whole = a_copy(every_tier, tmp_path / "whole")
+    stop(stopped)
+
+    for state in (stopped, whole):
+        prune_range(
+            state,
+            target=CENSUS,
+            since=SINCE,
+            until=UNTIL,
+            dry_run=False,
+            run_id=PRUNE_RUN,
+            commit=PRUNE_COMMIT,
+        )
+
+    assert census_by_day(stopped) == census_by_day(whole)
+    assert indexes(stopped) == indexes(whole)
+    assert set(fingerprints(stopped)) == set(fingerprints(whole)), "the trees hold other files"
+
+
+def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_again(
+    every_tier: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The third change raises: the two before it happened, the record names them, a re-run finishes.
+
+    The failure is injected the way the CSV test above injects it: the real
+    change runs for every file but the third, so the tree is the one a file
+    system that refused one delete leaves. The record names the first two
+    paths of the dry run's list, and the first day of the range as the place
+    the next pass starts, because no day was finished.
+    """
+    stopped = a_copy(every_tier, tmp_path / "stopped")
+    whole = a_copy(every_tier, tmp_path / "whole")
+    planned = prune_range(
+        stopped, target=CENSUS, since=SINCE, until=UNTIL, run_id=PRUNE_RUN, commit=PRUNE_COMMIT
+    )
+    changes = 0
+    real_apply = door_prune._apply
+
+    def fail_on_the_third(change: door_prune._Change) -> None:
+        nonlocal changes
+        changes += 1
+        if changes == 3:
+            raise OSError("the file system said no")
+        real_apply(change)
+
+    monkeypatch.setattr(door_prune, "_apply", fail_on_the_third)
+    with pytest.raises(prune.PruneInterruptedError) as stop:
+        prune_range(
+            stopped,
+            target=CENSUS,
+            since=SINCE,
+            until=UNTIL,
+            dry_run=False,
+            run_id=PRUNE_RUN,
+            commit=PRUNE_COMMIT,
+        )
+    monkeypatch.undo()
+
+    so_far = stop.value.so_far
+    assert changes == 3, "the pass kept changing files after a failure"
+    assert (so_far.taken, so_far.written) == (planned.removed[:2], ())
+    assert (so_far.stopped_because, so_far.resume_from) == (StopReason.FAILED, SINCE)
+    for state in (stopped, whole):
+        prune_range(
+            state,
+            target=CENSUS,
+            since=SINCE,
+            until=UNTIL,
+            dry_run=False,
+            run_id=PRUNE_RUN,
+            commit=PRUNE_COMMIT,
+        )
+    assert census_by_day(stopped) == census_by_day(whole)
+    assert indexes(stopped) == indexes(whole)
+    assert set(fingerprints(stopped)) == set(fingerprints(whole)), "the trees hold other files"

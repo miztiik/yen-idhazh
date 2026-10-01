@@ -1,8 +1,8 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-29
-The operator console reads ten datasets. Nine of them come from `state/`,
-which is never served, so each one crosses a trust boundary and each crossing
+**Last Updated**: 2026-09-30
+The operator console reads ten datasets. Nine of them are projected out of
+`state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
 `backend/idhazh/contracts/console_payloads.py`, and it is the one a build reads.
 
@@ -109,9 +109,11 @@ whole, because every cell on each is a count or a duration of our own work.
 **One shape refuses anything, where three used to.** `public-eval` refused
 `url_key`, `source_url` and `title`, and `public-feed-health` refused
 `endpoint_key`; both went on 2026-09-16 with the trees they shaped. The cells
-they guarded are on `EvalRow` and `FeedHealthRow` under `state/`, which is
-committed and never served, so nothing they refused can now reach a browser by
-another road.
+they guarded are on `EvalRow` and `FeedHealthRow` under `state/`. The scores
+ledger now reaches the site whole, for the browser's query door, so `url_key`,
+`source_url` and `title` do reach a browser there - as cells a panel reads as
+data, out of a repository that was public all along
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
 
 ## Retention
 
@@ -269,7 +271,7 @@ payloads, `day-metrics` and `span-rollup` have no age on the state side, and
 **`public_scores_keep_months` and `public_feed_health_keep_months` were two more
 until 2026-09-16.** They are refused by name now rather than ignored, because a
 config file still spelling one is an operator believing a number nothing reads.
-There is no successor to send them to: the `scores` and `feed-health`
+There is no successor to send them to: the `compact-summary-quality-evals` and `feed-health`
 declarations under `config/gardener/` govern the `state/` ledgers, which are
 still there and keep their own ages.
 
@@ -507,7 +509,9 @@ folded census days held 0 repeated keys between them and the unfolded day held
 237 keys. **Each route says where its panels stop**, in one plain line under its
 introduction, when a record is not packed yet, did not load, or stops two or
 more days before the newest published day (`recordNotes` in
-`frontend/src/lib/console/recording.ts`).
+`frontend/src/lib/console/recording.ts`). A record that did not load because a
+packed file or a packed day is missing says which, because each has its own fix
+([the four faults](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)).
 
 **The settlement is per day, never over the whole cover, and that is the part
 that carries the weight.** `OBSERVATION_KEY` carries no date. It is the article,

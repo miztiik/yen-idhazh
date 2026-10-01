@@ -14,8 +14,8 @@ import csv
 import hashlib
 import json
 import shutil
-import statistics
 from collections.abc import Callable, Iterator, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -30,7 +30,7 @@ from conftest import (
 )
 from pydantic import ValidationError
 
-from idhazh import cli, day_partition, day_shards, ledger
+from idhazh import cli, day_shards, ledger
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
@@ -38,13 +38,12 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.extract import ExtractConfig
+from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
-from idhazh.contracts.score_archive import ScoreCohort
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
-from idhazh.evals import archive as score_archive
 from idhazh.evals import writer
 from idhazh.evals.hhem import HHEM_REVISION, HhemScorer, is_pinned, weights_digest
 from idhazh.evals.metrics import (
@@ -67,7 +66,10 @@ from idhazh.evals.metrics import (
 from idhazh.evals.score import band, to_eval_row
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
-from idhazh.stages.rebuild_score_index import stage_rebuild_score_index
+from idhazh.gardener import closed_day_fold
+from idhazh.stages.rebuild_summary_quality_evals_index import (
+    stage_rebuild_summary_quality_evals_index,
+)
 
 
 #: The writer every case below files as. `assemble` is the job that scores a
@@ -804,111 +806,7 @@ def test_a_scorer_that_never_loaded_cannot_name_its_weights() -> None:
         weights_digest(HhemScorer())
 
 
-# --- The archived month ------------------------------------------------------
-
-
-#: Columns of the eval row that identify a measurement rather than being one.
-#: Every other column has to be a signal or a moment, and the test below is what
-#: makes that a rule instead of a habit.
-ARCHIVE_KEY_COLUMNS: frozenset[str] = frozenset(
-    {
-        "version",
-        "date",
-        "run_id",
-        "item_id",
-        "url_key",
-        "source_url",
-        "title",
-        "vertical",
-        "model_id",
-        "band",
-        "pipeline_fingerprint",
-        "output_digest",
-        "scorer_version",
-        "scored_at",
-        "source_digest",
-    }
-)
-
-
-def test_a_prompt_change_inside_a_month_no_longer_withholds_the_month_figure(
-    tmp_path: Path,
-) -> None:
-    """A quality number exists where there used to be an absence.
-
-    `tests/fixtures/evals/prompt-changed-window.csv` is three rows of one day,
-    one run, one model and one scorer, whose middle row was written under a
-    different `pipeline_fingerprint` - the shape a reworded prompt produced every
-    time somebody shipped one. While the stamp was part of the cohort key that
-    day summarised as two cohorts of two rows and one row, so the month had no
-    faithfulness figure over its own window, only fragments of one.
-
-    Measured on the base commit 0e049ed8, 2026-09-12: two cohorts, means 0.85
-    over two rows and 0.70 over one. Here: one cohort, three rows, 0.80.
-
-    A fixture rather than the committed ledger, because asserting on a live run
-    would assert on whatever the pipeline published that morning
-    (`CLAUDE.md` section 13).
-    """
-    shard = tmp_path / "2026-09.csv"
-    shutil.copyfile(FIXTURES_DIR / "evals" / "prompt-changed-window.csv", shard)
-
-    summary = score_archive.summarise(
-        [shard], month="2026-09", observation_key=writer.OBSERVATION_KEY
-    )
-
-    assert len(summary.cohorts) == 1, (
-        "one day, one run, one model and one scorer is one cohort - "
-        "a reworded prompt inside the month is not a second population"
-    )
-    faithfulness = summary.cohorts[0].measurements["hhem"]
-    assert faithfulness.n == 3
-    assert faithfulness.sum / faithfulness.n == pytest.approx(0.80)
-
-
-def test_the_archived_cohort_no_longer_knows_what_produced_it() -> None:
-    """The stamp left the cohort key on 2026-09-12 and left the shape on 2026-09-13.
-
-    Nothing had to migrate: `state/score-archive/` does not exist in this
-    checkout and the first month `prune_scores` can fold is 2026-08, on
-    2027-10-01, so the shape moved before any payload of it was ever written.
-    """
-    assert "pipeline_fingerprint" not in score_archive.COHORT_KEY
-    assert "pipeline_fingerprint" not in ScoreCohort.model_fields
-
-
-def test_every_column_of_the_eval_row_is_filed_somewhere_in_the_archive() -> None:
-    """A column that falls out of the archive stops existing fourteen months later.
-
-    Held closed-world over `EvalRow` itself, so adding a column and forgetting
-    the archive fails here rather than silently in 2027. A new column is either
-    part of a measurement's identity, a boolean signal, or a number with a
-    moment - and the commit that adds it has to say which.
-    """
-    filed = (
-        ARCHIVE_KEY_COLUMNS
-        | set(score_archive.SIGNAL_COLUMNS)
-        | set(score_archive.MEASUREMENT_COLUMNS)
-    )
-
-    assert set(EvalRow.csv_columns()) == filed
-    assert set(score_archive.COHORT_KEY) <= ARCHIVE_KEY_COLUMNS
-    assert not set(score_archive.SIGNAL_COLUMNS) & set(score_archive.MEASUREMENT_COLUMNS)
-
-
-def test_the_signals_are_the_booleans_and_the_measurements_are_the_numbers() -> None:
-    """Asked of the model's own annotations, so a retyped column moves itself.
-
-    `bool` is a subclass of `int` in Python, which is exactly how a boolean ends
-    up averaged into a mean nobody meant to take.
-    """
-    for name, field in EvalRow.model_fields.items():
-        annotation = str(field.annotation)
-        if name in score_archive.SIGNAL_COLUMNS:
-            assert "bool" in annotation, f"{name} is filed as a signal and is not a boolean"
-        if name in score_archive.MEASUREMENT_COLUMNS:
-            assert "bool" not in annotation, f"{name} is filed as a moment and is a boolean"
-            assert "int" in annotation or "float" in annotation, f"{name} is not a number"
+# --- The observation digest --------------------------------------------------
 
 
 def test_an_observation_digest_cannot_be_forged_by_moving_a_separator() -> None:
@@ -918,43 +816,19 @@ def test_an_observation_digest_cannot_be_forged_by_moving_a_separator() -> None:
     falls must digest differently. A `"|".join` would give them one digest and
     silently drop the second measurement for ever.
     """
-    left = score_archive.digest_of(("a;b", "c"))
-    right = score_archive.digest_of(("a", "b;c"))
+
+    def observed(url_key: str, output_digest: str) -> dict[str, str]:
+        return {
+            "url_key": url_key,
+            "output_digest": output_digest,
+            "scorer_version": "hhem-2.2-open@cccccccc;metrics-4",
+        }
+
+    left = writer.observation_digest(observed("a;b", "c"))
+    right = writer.observation_digest(observed("a", "b;c"))
 
     assert left != right
-    assert score_archive.digest_of(("a;b", "c")) == left, "the digest is not stable"
-
-
-def test_a_month_is_summarised_from_its_day_files_and_names_them_all(tmp_path: Path) -> None:
-    """A month is a directory now, so the fold takes the days rather than one file.
-
-    Two days of one month, summarised together. The row count is the month's and
-    the source hash follows the bytes of both files in day order - so a fold that
-    quietly dropped a day would move `source_rows` and `source_sha256` together,
-    and `reconcile` refuses on either.
-    """
-    days = [tmp_path / "2026" / "01" / "09.csv", tmp_path / "2026" / "01" / "22.csv"]
-    for day in days:
-        day.parent.mkdir(parents=True, exist_ok=True)
-    _write_shard(days[0], [_archive_row(number) for number in range(3)])
-    _write_shard(
-        days[1],
-        [
-            _archive_row(number).model_copy(update={"date": "2026-01-22", "run_id": "2026-01-22-1"})
-            for number in range(3, 6)
-        ],
-    )
-
-    built = score_archive.summarise(days, month="2026-01", observation_key=writer.OBSERVATION_KEY)
-
-    assert built.month == "2026-01"
-    assert built.source_rows == 6
-    assert len(built.observation_digests) == 6
-    score_archive.reconcile(built, days, month="2026-01", observation_key=writer.OBSERVATION_KEY)
-    with pytest.raises(ValueError, match="source_rows"):
-        score_archive.reconcile(
-            built, days[:1], month="2026-01", observation_key=writer.OBSERVATION_KEY
-        )
+    assert writer.observation_digest(observed("a;b", "c")) == left, "the digest is not stable"
 
 
 def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Path) -> None:
@@ -1017,7 +891,7 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
     assert not indexed - produced, (
         f"the index holds {len(indexed - produced)} the rows cannot produce"
     )
-    assert len(ledger.held_days(day_grain, LedgerName.SCORES)) == 2, (
+    assert len(ledger.held_days(day_grain, LedgerName.SUMMARY_QUALITY_EVALS)) == 2, (
         "the two days were not written separately"
     )
 
@@ -1025,148 +899,6 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
 def _digests_of(path: Path) -> set[str]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         return {record["observation_digest"] for record in csv.DictReader(handle)}
-
-
-def test_the_summary_indexes_one_digest_per_distinct_measurement(tmp_path: Path) -> None:
-    """The index is over distinct observations, and the row count is over rows.
-
-    They differ whenever a day holds a repeat the settlement has not dropped,
-    and reporting one as the other is how a dedupe silently loses a row.
-    """
-    shard = tmp_path / "2026-01.csv"
-    rows = [_archive_row(number) for number in range(4)]
-    _write_shard(shard, [*rows, rows[0]])
-
-    built = score_archive.summarise(
-        [shard], month="2026-01", observation_key=writer.OBSERVATION_KEY
-    )
-
-    assert built.source_rows == 5
-    assert len(built.observation_digests) == 4
-    assert built.observation_digests == sorted(built.observation_digests)
-    assert sum(cohort.rows for cohort in built.cohorts) == 5
-
-
-def test_a_moment_gives_back_the_mean_and_the_spread(tmp_path: Path) -> None:
-    """Five numbers, because a stored mean cannot be re-added and a stored spread
-    cannot be pooled. These can do both."""
-    shard = tmp_path / "2026-01.csv"
-    rows = [_archive_row(number) for number in range(4)]
-    _write_shard(shard, rows)
-
-    built = score_archive.summarise(
-        [shard], month="2026-01", observation_key=writer.OBSERVATION_KEY
-    )
-    moment = built.cohorts[0].measurements["hhem"]
-    values = [float(row.hhem) for row in rows]
-
-    assert moment.n == len(values)
-    assert moment.mean == pytest.approx(sum(values) / len(values))
-    assert moment.stdev == pytest.approx(statistics.pstdev(values))
-    assert moment.min == pytest.approx(min(values))
-    assert moment.max == pytest.approx(max(values))
-
-
-def test_a_column_nothing_measured_reads_as_absent_and_never_as_zero(tmp_path: Path) -> None:
-    """A nullable column is empty on every row written before it existed.
-
-    Counting those as zero would say the scorer read the value and got nothing,
-    which is a measurement. Absent is not a measurement.
-    """
-    shard = tmp_path / "2026-01.csv"
-    _write_shard(shard, [_archive_row(number) for number in range(3)])
-
-    moment = (
-        score_archive.summarise([shard], month="2026-01", observation_key=writer.OBSERVATION_KEY)
-        .cohorts[0]
-        .measurements["evidential_density"]
-    )
-
-    assert moment.n == 0
-    assert moment.min is None and moment.max is None
-    assert moment.mean is None and moment.stdev is None
-
-
-def test_a_summary_that_does_not_describe_its_days_says_which_part(tmp_path: Path) -> None:
-    """A bare inequality says the archive is wrong and nothing about how.
-
-    The person reading this message is deciding whether a committed file may be
-    deleted, so it names the field, both readings, and the files that stay.
-    """
-    shard = tmp_path / "2026-01.csv"
-    _write_shard(shard, [_archive_row(number) for number in range(3)])
-    built = score_archive.summarise(
-        [shard], month="2026-01", observation_key=writer.OBSERVATION_KEY
-    )
-    tampered = built.model_copy(update={"source_rows": 2})
-
-    with pytest.raises(ValueError, match="the month's source_rows"):
-        score_archive.reconcile(
-            tampered, [shard], month="2026-01", observation_key=writer.OBSERVATION_KEY
-        )
-
-
-def _archive_month(state: Path, month: str, *, scratch: Path) -> None:
-    """Summarise one month of the rows the ledger holds into its committed archive file.
-
-    Nothing in the pipeline builds a month summary any more, so a case that needs
-    one builds it with the archive module's own summariser and writer. The
-    summariser reads CSV, so the month's rows are written out under `scratch`
-    first, outside the state tree.
-    """
-    shard = scratch / f"{month}.csv"
-    shard.parent.mkdir(parents=True, exist_ok=True)
-    _write_shard(
-        shard,
-        ledger.load_days(state, LedgerName.SCORES, ledger.month_days(month), model=EvalRow),
-    )
-    built = score_archive.summarise([shard], month=month, observation_key=writer.OBSERVATION_KEY)
-    score_archive.write(score_archive.archive_path(state, month), built)
-
-
-def _drop_index_days(state: Path, month: str) -> None:
-    """Take one month's index days away, as the scores task does once an archive covers it."""
-    for shard in writer.index_days(state):
-        if day_shards.date_of(shard)[:7] == month:
-            shard.unlink()
-            day_partition.drop_empty_day_dirs(shard)
-
-
-def test_the_dedupe_reads_the_live_index_and_the_archived_digests(tmp_path: Path) -> None:
-    """Decision 2's whole reason for storing the digests, asserted directly.
-
-    The index is the live half, and a month's index days go once an archive
-    covers that month, so after they go the archive alone gives the same answer.
-    """
-    state = tmp_path / "state"
-    rows = [_archive_row(number) for number in range(3)]
-    assert put(state, rows) == 3
-    live = writer.recorded_observations(state)
-
-    month = rows[0].date[:7]
-    _archive_month(state, month, scratch=tmp_path / "month")
-    _drop_index_days(state, month)
-
-    assert not writer.index_days(state), "the live half is still there, so this proves nothing"
-    assert writer.recorded_observations(state) == live
-    assert put(state, rows) == 0, "a dropped index day made its rows new again"
-
-
-def test_an_archive_is_written_whole_or_not_at_all(tmp_path: Path) -> None:
-    """Temp-then-rename, so an interrupted write cannot leave half a summary
-    standing where the next run reads a complete one."""
-    shard = tmp_path / "2026-01.csv"
-    _write_shard(shard, [_archive_row(number) for number in range(3)])
-    built = score_archive.summarise(
-        [shard], month="2026-01", observation_key=writer.OBSERVATION_KEY
-    )
-    target = tmp_path / "archive" / "2026-01.json"
-
-    score_archive.write(target, built)
-
-    assert score_archive.read(target) == built
-    assert target.read_bytes() == built.to_json().encode("utf-8")
-    assert list(target.parent.iterdir()) == [target], "a temp file survived the write"
 
 
 # --- The observation index -------------------------------------------------
@@ -1215,11 +947,11 @@ def _opened_bytes(
 def _measurement(number: int) -> EvalRow:
     """One eval row, unique in every identity field and legal at any count.
 
-    `_archive_row` walks its faithfulness score up the band and runs out of
+    `_scored_row` walks its faithfulness score up the band and runs out of
     range past ten rows. Nothing here is about the scores, so this one moves
     only the four fields `OBSERVATION_KEY` reads.
     """
-    return _archive_row(0).model_copy(
+    return _scored_row(0).model_copy(
         update={
             "item_id": f"ai-{number:05d}",
             "url_key": hashlib.sha256(f"index-url-{number}".encode("ascii")).hexdigest(),
@@ -1237,7 +969,7 @@ def _an_index_file(state: Path, date: str) -> Path:
     """
     return ledger.day_shard_path(
         state,
-        LedgerName.SCORE_INDEX,
+        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         date=date,
         run_id=a_scoring_run(date),
         attempt=1,
@@ -1271,7 +1003,7 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
     ledger.persist(
         state,
         [row for row in rows for _ in range(copies)],
-        ledger=LedgerName.SCORES,
+        ledger=LedgerName.SUMMARY_QUALITY_EVALS,
         covers=rows[0].date,
         identity=writer_identity(a_scoring_run(rows[0].date), producer=ROWS_ONLY_PRODUCER),
     )
@@ -1279,7 +1011,7 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
 
 def _indexed(state: Path, date: str) -> set[str]:
     """The digests one day's index holds, read from that day rather than the union."""
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
     return {record["observation_digest"] for record in _cells_in(day)}
 
 
@@ -1291,19 +1023,19 @@ def _day_digests(state: Path, date: str) -> set[str]:
     """
     return {
         writer.observation_digest(row.model_dump(mode="json"))
-        for row in ledger.load_days(state, LedgerName.SCORES, [date], model=EvalRow)
+        for row in ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, [date], model=EvalRow)
     }
 
 
 def _index_bytes(state: Path, date: str) -> bytes:
     """Every byte one day's index holds, oldest file first."""
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
     return b"".join(path.read_bytes() for path in day)
 
 
 def _index_size(state: Path, date: str) -> int:
     """What one day's index costs on disk, across every file in it."""
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
     return sum(path.stat().st_size for path in day)
 
 
@@ -1344,7 +1076,7 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
     thick = _opened_bytes(monkeypatch, fat, lambda: writer.recorded_observations(fat))
 
     rows_live_under = [
-        f"{tier}/{LedgerName.SCORES.value}/"
+        f"{tier}/{LedgerName.SUMMARY_QUALITY_EVALS.value}/"
         for tier in (ledger.paths.RAW_DIRNAME, ledger.paths.COMPACT_DIRNAME)
     ]
     opened_there = [name for name in thick if name.startswith(tuple(rows_live_under))]
@@ -1354,30 +1086,6 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
         f"{sum(thin.values())} B against {sum(thick.values())} B over the same 200 measurements"
     )
     assert sum(thick.values()) > 0, "the writer read nothing at all, so this proves nothing"
-
-
-def test_an_archived_month_whose_rows_are_gone_still_refuses_its_observations(
-    tmp_path: Path,
-) -> None:
-    """The half that cannot be bounded, and the reason the archive keeps digests.
-
-    A month past the scores task's full-grain window keeps no index once an
-    archive covers it, and here its rows are gone as well. Its digests are the
-    only record those measurements were ever made, so dropping them would make
-    every one of them new again on the day the rest went.
-    """
-    state = tmp_path / "state"
-    rows = [_measurement(number) for number in range(3)]
-    assert put(state, rows) == 3
-
-    month = rows[0].date[:7]
-    _archive_month(state, month, scratch=tmp_path / "month")
-    _drop_index_days(state, month)
-    for held in ledger.list_raw_files(state, LedgerName.SCORES):
-        held.path.unlink()
-
-    assert not ledger.held_days(state, LedgerName.SCORES), "the rows are still there"
-    assert put(state, rows) == 0, "a month whose rows went made its rows new again"
 
 
 def test_a_tree_with_rows_and_no_index_answers_the_same_as_one_with_an_index(
@@ -1414,7 +1122,7 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
 
     Nothing on the read path compares an index against the rows beside it, so
     keeping the two in step is the writer's job: it files the rows and the
-    digests it minted in one call, and every writer of the scores ledger in this
+    digests it minted in one call, and every writer of the eval ledger in this
     repository goes through it.
 
     Held over the files after several calls and two days in different months,
@@ -1434,11 +1142,11 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
     assert put(state, january) == 0, "a held measurement came back as new"
     assert put(state, february) == 2
 
-    days = ledger.held_days(state, LedgerName.SCORES)
+    days = ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS)
     assert days == ["2026-01-09", "2026-02-03"], f"both days were not written: {days}"
     for date in days:
         assert _indexed(state, date) == _day_digests(state, date), (
-            f"{ledger.relpath(LedgerName.SCORE_INDEX, date)} does not hold what the rows "
+            f"{ledger.relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date)} does not hold what the rows "
             "beside it hold"
         )
 
@@ -1478,9 +1186,9 @@ def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Pat
         "so this tree was not the stale one"
     )
     on_disk = ledger.load(
-        [filed.path for filed in ledger.list_raw_files(stale, LedgerName.SCORES)], model=EvalRow
+        [filed.path for filed in ledger.list_raw_files(stale, LedgerName.SUMMARY_QUALITY_EVALS)], model=EvalRow
     )
-    settled = ledger.load_days(stale, LedgerName.SCORES, [date], model=EvalRow)
+    settled = ledger.load_days(stale, LedgerName.SUMMARY_QUALITY_EVALS, [date], model=EvalRow)
     assert len(on_disk) == 8, f"the repeat did not land: {len(on_disk)} rows on disk"
     assert len(settled) == len(_day_digests(stale, date)) == 6, (
         f"the settled day holds {len(settled)} rows for "
@@ -1545,7 +1253,7 @@ ROLLED_BACK: Final = "f" * 64
 
 
 def _index_rows(state: Path, date: str) -> list[dict[str, str]]:
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
     return sorted(_cells_in(day), key=lambda row: row["observation_digest"])
 
 
@@ -1556,7 +1264,7 @@ def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None
     cannot produce is half of what this section is about. Whatever the day held
     goes first, because these rows are the day's index and not an addition to it.
     """
-    for path in day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date):
+    for path in day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date):
         path.unlink()
     target = _an_index_file(state, date)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1568,7 +1276,7 @@ def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None
 
 def _committed_rows(date: str) -> list[EvalRow]:
     """One fixture day's rows, read off the CSV day file they were committed as."""
-    folder = INDEX_REBUILD / "scores" / date[:4] / date[5:7] / date[8:10]
+    folder = INDEX_REBUILD / "summary-quality-evals" / date[:4] / date[5:7] / date[8:10]
     return [EvalRow.from_csv_row(cells) for cells in _cells_in(sorted(folder.glob("*.csv")))]
 
 
@@ -1586,7 +1294,7 @@ def _drifted_tree(tmp_path: Path) -> Path:
     """
     state = tmp_path / "state"
     shutil.copytree(
-        INDEX_REBUILD / "score-index", ledger.tree_root(state, LedgerName.SCORE_INDEX)
+        INDEX_REBUILD / "summary-quality-evals-index", ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
     )
     for date in REBUILD_DAYS:
         _seeded(state, _committed_rows(date))
@@ -1607,7 +1315,7 @@ def _rows_produce(state: Path, days: Sequence[str]) -> set[str]:
     """
     return {
         writer.observation_digest(row.model_dump(mode="json"))
-        for row in ledger.load_days(state, LedgerName.SCORES, days, model=EvalRow)
+        for row in ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, days, model=EvalRow)
     }
 
 
@@ -1680,7 +1388,7 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
     """
     state = _drifted_tree(tmp_path)
     untouched = _index_bytes(state, "2026-01-09")
-    rows_of = f"{ledger.paths.RAW_DIRNAME}/{LedgerName.SCORES.value}"
+    rows_of = f"{ledger.paths.RAW_DIRNAME}/{LedgerName.SUMMARY_QUALITY_EVALS.value}"
 
     opened = _opened_bytes(monkeypatch, state, lambda: writer.rebuild_index(state, ["2026-02-11"]))
 
@@ -1692,6 +1400,90 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
     )
     assert _index_bytes(state, "2026-01-09") == untouched
     assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
+
+
+#: A wake at which both fixture months have closed, so the ID folder's fold
+#: settles each of them whole.
+BOTH_MONTHS_CLOSED: Final = datetime(2026, 3, 5, tzinfo=UTC)
+
+
+def _settle_months(state: Path) -> None:
+    """Fold the index the way its gardener task does: every closed month into one file."""
+    closed_day_fold.fold(
+        state,
+        [LedgerName.SUMMARY_QUALITY_EVALS_INDEX],
+        now=BOTH_MONTHS_CLOSED,
+        after_days=DEFAULT_CLOSED_AFTER_DAYS,
+        dry_run=False,
+        settles_months=True,
+    )
+
+
+def _month_files(state: Path, month: str) -> list[Path]:
+    root = ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
+    return day_shards.one_month(root, month)
+
+
+def test_a_settled_month_is_compared_whole_and_one_that_holds_the_truth_gains_no_file(
+    tmp_path: Path,
+) -> None:
+    """An index row names no day, so a month settled into one file is answered for the month.
+
+    Compared day by day, a settled month's days would hold no digest at all,
+    every row would read as missing, and the repair would write the month's whole
+    index again into its days. Compared whole, each month is keyed by itself:
+    the one that holds an extra digest names it, and neither gains a file.
+    """
+    state = _drifted_tree(tmp_path)
+    writer.rebuild_index(state, ["2026-02-11"])
+    _settle_months(state)
+    for month in ("2026-01", "2026-02"):
+        assert [path.name for path in _month_files(state, month)] == [day_shards.SETTLED_NAME], (
+            f"{month} was not settled whole, so this compares nothing"
+        )
+    before = {month: _month_files(state, month)[0].read_bytes() for month in ("2026-01", "2026-02")}
+
+    found = writer.rebuild_index(state, REBUILD_DAYS)
+
+    assert sorted(found) == ["2026-01", "2026-02"]
+    assert found["2026-01"].extra == {ROLLED_BACK} and not found["2026-01"].missing
+    assert not found["2026-02"].extra and not found["2026-02"].missing
+    after = {month: [path.read_bytes() for path in _month_files(state, month)] for month in before}
+    assert after == {month: [held] for month, held in before.items()}, "the repair wrote a file"
+
+
+def test_a_digest_a_settled_month_lacks_is_added_to_the_day_whose_rows_produce_it(
+    tmp_path: Path,
+) -> None:
+    """The repair cannot split a month's file, so it adds to the day the row sits in.
+
+    The dedupe sees the digest the moment the repair lands, and the next fold
+    settles that day back into the month's one file.
+    """
+    state = _drifted_tree(tmp_path)
+    writer.rebuild_index(state, ["2026-02-11"])
+    _settle_months(state)
+    month_file = _month_files(state, "2026-02")[0]
+    with month_file.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    lost = rows[0]["observation_digest"]
+    with month_file.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=writer.index_columns(), lineterminator="\n")
+        out.writeheader()
+        out.writerows(rows[1:])
+    assert lost not in writer.recorded_observations(state)
+
+    found = writer.rebuild_index(state, ["2026-02-11"])
+
+    assert found["2026-02"].missing == {lost} and not found["2026-02"].extra
+    root = ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
+    assert [ledger.is_repair(path.name) for path in day_shards.one_day(root, "2026-02-11")] == [
+        True
+    ]
+    assert lost in writer.recorded_observations(state)
+    _settle_months(state)
+    assert [path.name for path in _month_files(state, "2026-02")] == [day_shards.SETTLED_NAME]
+    assert lost in writer.recorded_observations(state)
 
 
 def test_a_day_with_no_committed_rows_is_refused_by_name(tmp_path: Path) -> None:
@@ -1727,16 +1519,16 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
     workflow and no shell script, and the mechanism is called from one module.
     """
     state = _drifted_tree(tmp_path)
-    assert stage_rebuild_score_index(months=["2026-02"], state_dir=state) == 0
+    assert stage_rebuild_summary_quality_evals_index(months=["2026-02"], state_dir=state) == 0
     assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
-    assert stage_rebuild_score_index(months=None, state_dir=state) == 0
-    assert stage_rebuild_score_index(months=["2026-03"], state_dir=state) == 1
+    assert stage_rebuild_summary_quality_evals_index(months=None, state_dir=state) == 0
+    assert stage_rebuild_summary_quality_evals_index(months=["2026-03"], state_dir=state) == 1
 
     with pytest.raises(SystemExit) as unsaid:
-        cli.main(["rebuild-score-index"])
+        cli.main(["rebuild-summary-quality-evals-index"])
     assert unsaid.value.code == 2
     with pytest.raises(SystemExit) as both:
-        cli.main(["rebuild-score-index", "--month", "2026-02", "--every-shard"])
+        cli.main(["rebuild-summary-quality-evals-index", "--month", "2026-02", "--every-shard"])
     assert both.value.code == 2
 
     automated = sorted(
@@ -1745,7 +1537,7 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
             *(REPO_ROOT / ".github" / "workflows").glob("*.y*ml"),
             *(REPO_ROOT / ".github" / "scripts").glob("*.sh"),
         )
-        if "rebuild-score-index" in read_text(path)
+        if "rebuild-summary-quality-evals-index" in read_text(path)
     )
     assert not automated, f"the rebuild is a step of {automated}"
 
@@ -1756,11 +1548,11 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
     )
     assert callers == [
         "backend/idhazh/evals/writer.py",
-        "backend/idhazh/stages/rebuild_score_index.py",
+        "backend/idhazh/stages/rebuild_summary_quality_evals_index.py",
     ], f"the rebuild is reached from {callers}"
 
 
-def _archive_row(number: int) -> EvalRow:
+def _scored_row(number: int) -> EvalRow:
     """One eval row off the committed fixture, unique in every key field."""
     base = json.loads(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
     faithfulness = round(0.55 + number / 20, 4)

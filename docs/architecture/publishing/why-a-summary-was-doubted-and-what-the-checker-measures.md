@@ -17,9 +17,9 @@ The route draws the five reasons a summary failed to reach the top band, one
 column a day, over the window the page shares. The measure cards above it say how
 often the checker stopped; this says which check failed.
 
-**It reads the committed day payloads, not the scores ledger.** `band_reason` is
+**It reads the committed day payloads, not the eval ledger.** `band_reason` is
 decided by `verdict` and written onto the published item by `assemble.build_day`.
-The score ledger's 35 columns carry the inputs a reason is decided from - `hhem`,
+The eval ledger's 35 columns carry the inputs a reason is decided from - `hhem`,
 `coverage`, `unsupported_numbers`, `hedge_dropped` - and the band, and no reason
 column at all. So the route walks `DIGEST_ROOT` the way `publishedItems` already
 does for the Pipelines route, and what ships is one count per reason per day
@@ -64,7 +64,7 @@ map they ship with.
 
 **The artefact is `DRAWN_BY`, not the charts.**
 [../../../frontend/src/lib/console/eval-instruments.ts](../../../frontend/src/lib/console/eval-instruments.ts)
-assigns every measured column of the scores ledger to exactly one panel, and
+assigns every measured column of the eval ledger to exactly one panel, and
 `NOT_A_MEASUREMENT` says of every remaining column why it is not one - fifteen
 identity and provenance columns, each with a sentence. Between them the two must
 name every property of

@@ -1,6 +1,6 @@
 """What one ledger's compact periods hold as a compaction pass finds them, and what it changes.
 
-A pass reads the two watermarks, the two period indexes and the names of the
+A pass reads the three watermarks, the three period indexes and the names of the
 raw day folders once, then decides period by period what to write and what to
 delete. Each decision is a `Change`, kept here in the order it must happen -
 data first, index next, watermark last - and nothing touches the disk until
@@ -21,7 +21,17 @@ would happen, naming the path, and the pass then fails before anything lands.
 
 A watermark or index this build cannot read stops the pass rather than being
 read as absent: a compaction that guessed where it had got to would rewrite, or
-delete, a period it had already finished.
+delete, a period it had already finished. So does an index that is not there
+while its period's watermark says the period was packed - the `index-missing`
+fault - because a pass that read it as empty would write a list that forgets
+every period packed before.
+
+**A ledger's three indexes exist together.** Whatever writes one writes each of
+the others the ledger has none of yet, and those are empty: a period with no
+watermark was never packed, so an empty list is the truth about it. A reader
+that finds `index/daily.json` can then tell a lost `index/monthly.json` or
+`index/yearly.json` from a period never packed, and asks for no file that is not
+there.
 """
 
 from __future__ import annotations
@@ -29,6 +39,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import assert_never
 
 from idhazh import atomic_write, day_partition, ledger
 from idhazh.contracts.base import Contract
@@ -60,7 +71,7 @@ class Stop:
     """
 
     because: StopReason
-    #: The day or month the next pass takes first.
+    #: The day, month or year the next pass takes first.
     resume_from: str
 
 
@@ -83,26 +94,30 @@ class CompactTree:
     #: The files under the folders the compaction owns, which is where every
     #: name the pass decides from comes from.
     listing: FileListing
-    #: The newest day and month compacted, or None when that period never has been.
+    #: The newest day, month and year compacted, or None when that period never has been.
     daily_through: str | None
     monthly_through: str | None
+    yearly_through: str | None
     #: Each period's index, by what each entry covers.
     daily: dict[str, CompactEntry]
     monthly: dict[str, CompactEntry]
+    yearly: dict[str, CompactEntry]
     #: Every UTC day with a raw folder that holds something, oldest first.
     raw_days: list[str]
     #: How many raw day folders the pass listed, before any step set a day aside.
     listed: int = 0
+    #: The periods whose index the pass found on disk.
+    indexed: frozenset[Period] = frozenset()
     changes: list[Change] = field(default_factory=list)
     #: Every file the pass read or weighed.
     looked: set[Path] = field(default_factory=set)
 
     @classmethod
     def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
-        """The two watermarks, the two indexes and the raw day folder names, read once.
+        """The three watermarks, the three indexes and the raw day folder names, read once.
 
         The indexes' folder and each watermark's own folder are fetched first,
-        and a watermark is fetched without the day or month folders beside it.
+        and a watermark is fetched without the day, month or year folders beside it.
         """
         marks = {period: ledger.watermark_path(state_dir, ledger_name, period) for period in Period}
         indexes = {
@@ -114,6 +129,7 @@ class CompactTree:
         )
         through: dict[Period, str | None] = {}
         entries: dict[Period, dict[str, CompactEntry]] = {}
+        indexed: set[Period] = set()
         for period in Period:
             mark = marks[period]
             through[period] = (
@@ -122,7 +138,18 @@ class CompactTree:
                 else None
             )
             index = indexes[period]
-            held = _read(CompactIndex, index, ledger_name, period) if listing.holds(index) else None
+            present = listing.holds(index)
+            if not present and through[period] is not None:
+                shown = f"{ledger.STATE_DIRNAME}/{index.relative_to(state_dir).as_posix()}"
+                raise ValueError(
+                    f"{ledger.LedgerFault.INDEX_MISSING}: {shown} is not there, and "
+                    f"{mark.name} says the {period.value} period is packed through "
+                    f"{through[period]}. Restore {index.name} from git history before the next "
+                    "wake; an empty one would forget every period packed before"
+                )
+            if present:
+                indexed.add(period)
+            held = _read(CompactIndex, index, ledger_name, period) if present else None
             entries[period] = {entry.covers: entry for entry in held.entries} if held else {}
         raw_days = named_trees.raw_days(listing, state_dir, ledger_name)
         return cls(
@@ -131,10 +158,13 @@ class CompactTree:
             listing=listing,
             daily_through=through[Period.DAILY],
             monthly_through=through[Period.MONTHLY],
+            yearly_through=through[Period.YEARLY],
             daily=entries[Period.DAILY],
             monthly=entries[Period.MONTHLY],
+            yearly=entries[Period.YEARLY],
             raw_days=raw_days,
             listed=len(raw_days),
+            indexed=frozenset(indexed),
         )
 
     def raw_day_folder(self, day: str) -> Path:
@@ -144,6 +174,11 @@ class CompactTree:
     def daily_month_folder(self, month: str) -> Path:
         """The folder a `YYYY-MM` month's daily compact files sit in."""
         first = ledger.compact_path(self.state_dir, self.ledger, Period.DAILY, f"{month}-01")
+        return first.parent
+
+    def monthly_year_folder(self, year: str) -> Path:
+        """The folder a `YYYY` year's monthly compact files sit in."""
+        first = ledger.compact_path(self.state_dir, self.ledger, Period.MONTHLY, f"{year}-01")
         return first.parent
 
     def load[C: Contract](self, path: Path, *, model: type[C]) -> list[StoredRow[C]]:
@@ -164,9 +199,36 @@ class CompactTree:
         self.looked.add(path)
         self.changes.append(Change(path=path, data=None, size=self.listing.size_of(path)))
 
+    def entries(self, period: Period) -> dict[str, CompactEntry]:
+        """One period's index as the pass holds it now, by what each entry covers."""
+        match period:
+            case Period.DAILY:
+                return self.daily
+            case Period.MONTHLY:
+                return self.monthly
+            case Period.YEARLY:
+                return self.yearly
+            case _:
+                assert_never(period)
+
     def write_index(self, period: Period) -> None:
-        """Decide to rewrite one period's index from what the pass holds now."""
-        held = self.daily if period is Period.DAILY else self.monthly
+        """Decide to rewrite one period's index from what the pass holds now.
+
+        Each other period's index is written with it when the ledger has none yet
+        and this pass has not written it, so a ledger never holds one index
+        without the others. A period with no index has no watermark either -
+        `read` refuses that pair - so what the pass holds for it is nothing, and
+        the index says so.
+        """
+        self._decide_index(period)
+        for other in Period:
+            path = ledger.compact_index_path(self.state_dir, self.ledger, other)
+            if other in self.indexed or any(change.path == path for change in self.changes):
+                continue
+            self._decide_index(other)
+
+    def _decide_index(self, period: Period) -> None:
+        held = self.entries(period)
         index = CompactIndex(
             version=CompactIndex.schema_version(),
             ledger=self.ledger,

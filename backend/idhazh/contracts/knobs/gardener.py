@@ -59,7 +59,7 @@ class PrunableCollection(StrEnum):
 #: The most file content one shard may download for its tasks, in megabytes of
 #: 1024 * 1024 bytes. An estimate, not a measurement of a limit (Guardrail #10):
 #: a shard checks out only code and config, and a task downloads the day or
-#: month folders it reads - a month of the scores ledger measured 3.5 MB on
+#: month folders it reads - a month of the eval ledger measured 3.5 MB on
 #: 2026-09-30 - so this leaves room for a compaction that catches up on several
 #: months at once. Move it to about twice the largest `downloaded_bytes` of the
 #: first thirty scheduled wakes.
@@ -140,7 +140,8 @@ class TaskKind(StrEnum):
     RETENTION = "retention"
     #: Deletes members of a collection GitHub holds, outside this repository.
     COLLECTION = "collection"
-    #: Rolls a ledger's raw day files into its daily and monthly periods.
+    #: Rolls a ledger's raw day files into its daily and monthly periods, and a
+    #: finished year's month files into one yearly file where its declaration asks.
     COMPACTION = "compaction"
     #: Rewrites git history. Run by its own job, never by the matrix.
     HISTORY = "history"
@@ -280,8 +281,9 @@ class FoldPolicy(Model):
     A CSV day tree files one file per writer under `YYYY/MM/DD/`, so a busy day
     holds a hundred small files. Once the day is closed, the fold settles them the
     way every reader does and writes that answer as `settled.csv` in their place.
-    It changes no answer a reader gets, which is why it has a switch of its own:
-    it may run live while the window beside it only reports.
+    A task may ask for a closed month to become one file the same way. It changes
+    no answer a reader gets, which is why it has a switch of its own: it may run
+    live while the window beside it only reports.
     """
 
     after_days: int = Field(
@@ -300,6 +302,16 @@ class FoldPolicy(Model):
             "The fold's own switch, apart from the window's. No default."
         )
     )
+    settles_months: bool = Field(
+        default=False,
+        description=(
+            "True also settles each closed month - after_days whole days after its last "
+            "day ended - into one settled.csv in the month's own folder, and deletes its "
+            "days' files; a day a re-run adds to it later is settled in at the next wake. "
+            "False keeps one settled.csv a closed day. A month's file names no day, so a "
+            "task whose window counts days may not turn it on."
+        ),
+    )
 
 
 class RetentionPolicy(_Declared):
@@ -317,10 +329,23 @@ class RetentionPolicy(_Declared):
         default=None,
         description=(
             "Folds each closed day of the CSV day trees this task owns into one "
-            "settled.csv, after the window has run. Absent on a task that owns no such "
-            "tree."
+            "settled.csv, or each closed month where settles_months asks, after the "
+            "window has run. Absent on a task that owns no such tree."
         ),
     )
+
+    @model_validator(mode="after")
+    def _a_month_settles_only_where_the_window_keeps_whole_months(self) -> Self:
+        """A settled month's file names no day, so a window of days cannot take part of it."""
+        settles_months = self.fold is not None and self.fold.settles_months
+        if settles_months and isinstance(self.window, DaysWindow):
+            raise ValueError(
+                f"fold.settles_months is true and the window is {self.window.value} days. A "
+                "closed month settled into one file names no day, so a window of days would "
+                "take the whole month once its first day aged out, rows it keeps included. "
+                "Fold by day here, or keep whole months"
+            )
+        return self
 
 
 class CollectionTaskPolicy(_Declared):
@@ -362,6 +387,18 @@ DEFAULT_COMPACT_AFTER_DAYS: Final = DEFAULT_CLOSED_AFTER_DAYS
 #: at least this long. GitHub's number, not a knob: nothing here can move it.
 GITHUB_RERUN_DAYS: Final = 30
 
+#: The size in bytes over which GitHub warns about a pushed file; it refuses a
+#: push holding a file over twice this. GitHub's number, not a knob. A year file
+#: over it is refused and its month files are kept, so a ledger that grows never
+#: makes every later push fail.
+GITHUB_LARGE_FILE_BYTES: Final = 50 * 1024 * 1024
+
+#: The days from the end of a UTC year to the end of its next January. A year is
+#: packed only once that January is absorbed, `daily_keep_days` after it ends,
+#: and one wake later, because a pass packs years before it absorbs months. So
+#: `monthly_keep_days` takes effect only from `daily_keep_days` plus this plus one.
+JANUARY_DAYS: Final = 31
+
 
 def _default_monthly_window() -> Window:
     return MonthsWindow(unit="months", value=DEFAULT_MONTHLY_WINDOW_MONTHS)
@@ -370,9 +407,11 @@ def _default_monthly_window() -> Window:
 class CompactionPolicy(_Declared):
     """A task that rolls one ledger's raw files into its daily and monthly periods.
 
-    Its two periods are its retention, so the two keys every other task uses to
+    Its periods are its retention, so the two keys every other task uses to
     bound what it deletes are fixed here: `window` is `forever` and
-    `max_deletes_per_run` is null.
+    `max_deletes_per_run` is null. A declaration that sets `monthly_keep_days`
+    also packs each finished year's month files into one yearly file, kept for
+    ever.
     """
 
     kind: Literal[TaskKind.COMPACTION]
@@ -416,15 +455,28 @@ class CompactionPolicy(_Declared):
         description=(
             "How long a monthly file survives once its month is absorbed. Month M goes "
             "at the instant month M plus this window is absorbed, so the period holds "
-            "exactly this many months, and the ledger reaches back daily_keep_days more."
+            "exactly this many months, and the ledger reaches back daily_keep_days more. "
+            "Forever when monthly_keep_days is set: each month file then leaves by being "
+            "packed into its year."
+        ),
+    )
+    monthly_keep_days: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "How many whole days after a UTC year ends, at 00:00 UTC on 1 January, its "
+            "month files are packed into one yearly file and deleted. Null packs no year. "
+            "Set, it needs monthly_window forever and at least daily_keep_days + 32: a "
+            "year is packed only once its next January is absorbed, so no smaller value "
+            "changes anything. Year files are kept for ever."
         ),
     )
     max_periods_per_run: int = Field(
         default=DEFAULT_MAX_PERIODS_PER_RUN,
         ge=1,
         description=(
-            "The most days, and separately the most months, one pass compacts before "
-            "it stops for the next wake."
+            "The most days, and separately the most months and the most years, one pass "
+            "compacts before it stops for the next wake."
         ),
     )
     max_raw_files_per_period: int = Field(
@@ -441,6 +493,43 @@ class CompactionPolicy(_Declared):
             "one UTC day finds the same days eligible."
         ),
     )
+    prune_refusal: str | None = Field(
+        min_length=1,
+        description=(
+            "Whether `idhazh telemetry prune` may take a range of days out of this "
+            "ledger. Null lets it. A sentence refuses the ledger, and the command prints "
+            "that sentence as the reason. No default, so a declaration says which in so "
+            "many words."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _a_year_packs_every_month_it_holds(self) -> Self:
+        """Year packing keeps every month file until its year takes it, and waits long enough.
+
+        A monthly window would delete a month file before its year is packed, so the
+        year file would miss that month's rows. And a wait shorter than the one the
+        next January already imposes would be a number that changes nothing.
+        """
+        if self.monthly_keep_days is None:
+            return self
+        if not isinstance(self.monthly_window, ForeverWindow):
+            raise ValueError(
+                f"monthly_keep_days is {self.monthly_keep_days}, so each finished year's "
+                "month files are packed into one year file, and monthly_window is "
+                f"{self.monthly_window.value} {self.monthly_window.unit}. It must be "
+                "forever: a window would delete a month file before its year is packed, "
+                "and the year file would miss that month's rows"
+            )
+        earliest = self.daily_keep_days + JANUARY_DAYS + 1
+        if self.monthly_keep_days < earliest:
+            raise ValueError(
+                f"monthly_keep_days is {self.monthly_keep_days}, and a year is packed only "
+                f"once its next January is absorbed: {self.daily_keep_days} days after that "
+                f"January ends, and one wake later, {earliest} days after the year ends. "
+                f"Any smaller value changes nothing, so set at least {earliest}"
+            )
+        return self
 
 
 class HistoryPolicy(_Declared):

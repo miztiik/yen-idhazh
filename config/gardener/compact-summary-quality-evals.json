@@ -1,0 +1,19 @@
+{
+  "dry_run": true,
+  "kind": "compaction",
+  "ledger": "summary-quality-evals",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "monthly_keep_days": 93,
+  "monthly_window": {
+    "unit": "forever"
+  },
+  "owns": [
+    "state/raw/summary-quality-evals",
+    "state/compact/summary-quality-evals"
+  ],
+  "prune_refusal": "every eval row is kept for ever - nothing summarises a month of it and nothing deletes one of its rows, so no range of its days may be taken out of it",
+  "window": {
+    "unit": "forever"
+  }
+}

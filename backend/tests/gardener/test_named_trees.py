@@ -57,18 +57,28 @@ def listing_of(repo: Path, folder: str) -> FileListing:
 
 
 SHARD_TREES: Final = {
-    "clean": ["2025/12/31/x.csv", "2026/09/01/b.csv", "2026/09/01/a.csv", "2026/09/02/settled.csv"],
+    "clean": [
+        "2025/12/31/x.csv",
+        "2026/08/settled.csv",
+        "2026/08/31/late.csv",
+        "2026/09/01/b.csv",
+        "2026/09/01/a.csv",
+        "2026/09/02/settled.csv",
+    ],
     "a text file in a day": ["2026/09/01/a.csv", "2026/09/02/a.csv", "2026/09/02/notes.txt"],
     "a day that is no day": ["2026/09/01/a.csv", "2026/09/31/a.csv"],
     "a month that is no month": ["2026/09/01/a.csv", "2026/13/01/a.csv"],
     "a file where a day belongs": ["2026/09/01/a.csv", "2026/09/02.csv"],
     "a file at the root": ["2026/09/01/a.csv", "README"],
     "a folder in a day": ["2026/09/01/a.csv", "2026/09/02/deep/a.csv"],
+    "a settled month that is no month": ["2026/09/01/a.csv", "2026/13/settled.csv"],
+    "a settled file where a month belongs": ["2026/09/01/a.csv", "2026/settled.csv"],
 }
 
 
 @pytest.mark.parametrize("shape", sorted(SHARD_TREES))
 def test_the_writer_files_of_a_day_tree_are_the_disk_walks(tmp_path: Path, shape: str) -> None:
+    """A closed month's own settled file is a member of both walks, beside its days."""
     root = plant(tmp_path / "state" / "feed-health", SHARD_TREES[shape])
     listing = listing_of(tmp_path, "state/feed-health")
 
@@ -262,13 +272,16 @@ def an_index(state: Path, period: Period, covers: Iterable[str]) -> None:
 def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name(
     tmp_path: Path,
 ) -> None:
-    """One month only in a month file, one only in day files, one only in raw days.
+    """A year only in a year file, one month only in a month file, one only in day
+    files, one only in raw days.
 
-    The door reads the two indexes; the names give the same months from the
+    The door reads the three indexes; the names give the same months from the
     files those indexes list, and a raw `index/` folder of listings names no month.
     """
     state = tmp_path / ledger.STATE_DIRNAME
     compact = {
+        ledger.compact_path(state, RAW, Period.YEARLY, "2025"),
+        ledger.watermark_path(state, RAW, Period.YEARLY),
         ledger.compact_path(state, RAW, Period.MONTHLY, "2026-07"),
         ledger.compact_path(state, RAW, Period.DAILY, "2026-08-01"),
         ledger.compact_path(state, RAW, Period.DAILY, "2026-08-02"),
@@ -283,6 +296,7 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
             (raw / "index/2025-12-31.json").relative_to(tmp_path).as_posix(),
         ],
     )
+    an_index(state, Period.YEARLY, ["2025"])
     an_index(state, Period.MONTHLY, ["2026-07"])
     an_index(state, Period.DAILY, ["2026-08-01", "2026-08-02"])
     compacted = ledger.watermark_path(state, RAW, Period.DAILY).parent.parent
@@ -290,5 +304,6 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
         tmp_path, [raw.relative_to(tmp_path).as_posix(), compacted.relative_to(tmp_path).as_posix()]
     )
 
-    assert ledger.held_months(state, RAW) == ["2026-07", "2026-08", "2026-09"]
+    year = [f"2025-{number:02d}" for number in range(1, 13)]
+    assert ledger.held_months(state, RAW) == [*year, "2026-07", "2026-08", "2026-09"]
     assert named_trees.held_months(listing, state, RAW) == ledger.held_months(state, RAW)

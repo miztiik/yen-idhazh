@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 The console's interactive charts read a published projection of item health. They
 never read the item-health ledger directly.
@@ -368,18 +368,22 @@ writer-only column, so it cannot catch that; whoever adds column fifty adds it
 to `TELEMETRY_COLUMNS` and to `TelemetryRow` in the same commit, or the client
 keeps reading a projection it cannot see all of.
 
-## What the model did - read at build time, never published
+## What the model did - read at build time
 
 The console's `What the model did` section is not drawn from the published
-shards. It is computed while the site is built, out of two private ledgers:
+shards. It is computed while the site is built, out of two ledgers:
 
-- the scores ledger, under `state/raw/scores/` and `state/compact/scores/` - one
+- the eval ledger, `summary-quality-evals`, under `state/raw/summary-quality-evals/`
+  and `state/compact/summary-quality-evals/` - one
   row per scored item.
 - the item-health ledger, under `state/raw/item-health/` and
   `state/compact/item-health/` - one row per planned item per run.
 
-Neither ledger is served and neither crosses to a browser. What reaches the page
-is a count of that day's items, never a row and never a score. The derivation is
+What reaches this section's page is a count of that day's items, never a row and
+never a score. Both ledgers' compact files are on the site as well, copied whole
+for the browser's query door
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)),
+and no panel in this section reads them there yet. The derivation is
 [frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts),
 which sits under `$lib/server/` so SvelteKit refuses to bundle it for a browser.
 The wording of the labels is settled in
@@ -388,7 +392,7 @@ says only where each figure comes from.
 
 | On screen | Counts | Read from |
 | --- | --- | --- |
-| Summaries today | rows the score ledger holds for the day | the scores ledger |
+| Summaries today | rows the eval ledger holds for the day | the eval ledger |
 | Marked "not sure" | rows in the lowest confidence band | `band` |
 | Numbers not in the article | rows asserting a figure the article never gave | `unsupported_numbers` |
 | "Maybe" told as fact | rows that turned the article's hedge into an assertion | `hedge_dropped` |
@@ -571,17 +575,17 @@ Both read the cut from the two length cells of one row rather than from
 `truncation_flagged`, which is the per-item form of the version-stamp rule
 above.
 
-## What the machine did - read at build time, never published
+## What the machine did - read at build time
 
-The same arrangement as the model section above, over two private ledgers read
+The same arrangement as the model section above, over two ledgers read
 together: the host-fingerprint ledger, one machine row per job per shard per run,
 and the item-health ledger, one row per item. The machine record holds what
 llama-server itself counted and what the job clock read; the item ledger holds
 what the summarize stage copied out of each reply. The reader is
 [frontend/src/lib/server/machine-counters.ts](../../../frontend/src/lib/server/machine-counters.ts),
-under `$lib/server/` for the same reason `model-work.ts` is. Nothing is served
-and no column is published: `state/` is not part of the site, and the figures
-below reach a page as numbers, never as rows.
+under `$lib/server/` for the same reason `model-work.ts` is. The figures below
+reach this section's page as numbers, never as rows; both ledgers are on the site
+whole for the browser's query door, which no panel here reads yet.
 
 **This page is the `work` series, and the ledger held two between 2026-09-12 and
 2026-09-13.** The `visuals` job filed a row of its own for the small model it

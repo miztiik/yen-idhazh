@@ -23,15 +23,7 @@
     ],
     "written": []
   },
-  "host-fingerprint": {
-    "dry_written": [],
-    "removed": [
-      "state/host-fingerprint/2026/08/11/2026-08-11-1-1-plan-00.csv",
-      "state/host-fingerprint/2026/09/11/2026-09-11-1-1-plan-00.csv"
-    ],
-    "written": []
-  },
-  "scores": {
+  "summary-quality-evals-index": {
     "dry_written": [],
     "removed": [
       "state/score-index/2026/08/04/2026-08-04-1-1-assemble-00.csv",

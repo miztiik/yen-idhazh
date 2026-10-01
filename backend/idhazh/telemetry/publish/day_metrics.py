@@ -120,10 +120,8 @@ def read_score_rows(state_root: Path, date: str) -> list[dict[str, str]]:
     Counting them all would report one measurement twice. Each row comes back as
     a CSV line spells it, which is what the reducers below read.
     """
-    return [
-        row.csv_row()
-        for row in ledger.load_days(state_root, LedgerName.SCORES, [date], model=EvalRow)
-    ]
+    evals = LedgerName.SUMMARY_QUALITY_EVALS
+    return [row.csv_row() for row in ledger.load_days(state_root, evals, [date], model=EvalRow)]
 
 
 def read_health_rows(state_root: Path, date: str) -> list[dict[str, str]]:
@@ -722,9 +720,9 @@ def backfill(state_root: Path, days: Iterable[tuple[str, DigestDay, RunManifest]
 
 # --- the browser's copy ------------------------------------------------------
 #
-# The record above is written under `state/`, which is never served. The console
-# reads one record a date, so the copy files by month: one fetch answers for
-# every day of the month an operator is panning over.
+# The record above is written under `state/`, and the site does not serve this
+# ledger. The console reads one record a date, so the copy files by month: one
+# fetch answers for every day of the month an operator is panning over.
 
 
 PUBLIC_DIRNAME: Final = series.DAY_METRICS_DIRNAME

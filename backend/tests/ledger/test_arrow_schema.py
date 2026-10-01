@@ -15,10 +15,14 @@ import pytest
 from pydantic import Field
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, Sha256
+from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger.arrow_schema import Column, ColumnType, columns_of
 
@@ -91,6 +95,8 @@ class EveryAnnotation(Contract):
     rank: Rank
     maybe_rank: Rank | None = None
     run_ids: tuple[RunId, ...] = Field(default=())
+    digest_or_text: Sha256 | str
+    maybe_digest_or_text: Sha256 | str | None = None
 
 
 def test_every_row_of_the_table_maps_to_its_column_and_its_nullability() -> None:
@@ -113,6 +119,8 @@ def test_every_row_of_the_table_maps_to_its_column_and_its_nullability() -> None
         "rank": Column("rank", ColumnType.INT64, nullable=False),
         "maybe_rank": Column("maybe_rank", ColumnType.INT64, nullable=True),
         "run_ids": Column("run_ids", ColumnType.STRING_LIST, nullable=False),
+        "digest_or_text": Column("digest_or_text", ColumnType.STRING, nullable=False),
+        "maybe_digest_or_text": Column("maybe_digest_or_text", ColumnType.STRING, nullable=True),
     }
 
 
@@ -124,8 +132,16 @@ def test_the_columns_come_in_the_contracts_own_field_order() -> None:
 
 @pytest.mark.parametrize(
     "annotation",
-    [list[str], dict[str, str], Literal["a", "b"], tuple[int, ...], tuple[str, str]],
-    ids=["list", "dict", "literal", "tuple-of-int", "fixed-tuple"],
+    [
+        list[str],
+        dict[str, str],
+        Literal["a", "b"],
+        tuple[int, ...],
+        tuple[str, str],
+        int | str,
+        Literal["a"] | str,
+    ],
+    ids=["list", "dict", "literal", "tuple-of-int", "fixed-tuple", "mixed-union", "literal-union"],
 )
 def test_an_annotation_the_table_does_not_name_is_refused_by_name(annotation: object) -> None:
     with pytest.raises(TypeError, match=r"field is declared .* no column type"):
@@ -133,7 +149,19 @@ def test_an_annotation_the_table_does_not_name_is_refused_by_name(annotation: ob
 
 
 @pytest.mark.parametrize(
-    "model", [VisualPruneRow, FeedRetirementRow, ItemHealthRow, EvalRow, HostFingerprintRow]
+    "model",
+    [
+        VisualPruneRow,
+        FeedRetirementRow,
+        ItemHealthRow,
+        EvalRow,
+        HostFingerprintRow,
+        CounterfactualScoreRow,
+        ValidationRow,
+        FeedHealthRow,
+        SeenRow,
+        PublishedRow,
+    ],
 )
 def test_every_field_of_a_contract_the_door_files_maps(model: type[Contract]) -> None:
     """A ledger moved onto the door must not stop at its first write."""

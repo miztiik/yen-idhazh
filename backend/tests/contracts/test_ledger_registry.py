@@ -25,7 +25,6 @@ from idhazh import assemble, ledger, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.ledgers import Grain, LedgersConfig
-from idhazh.evals import archive as score_archive
 from idhazh.ledger import paths
 from idhazh.telemetry.publish import day_metrics
 
@@ -46,16 +45,18 @@ STATE: Final = Path("state")
 #: Computed from `5a9c6f32f:backend/idhazh/ledger/__init__.py` by calling those
 #: functions, so a row here is the old answer rather than a reading of it.
 #:
-#: Two rows are not the old answer, and the difference is only their first
+#: Three rows are not the old answer, and the difference is only their first
 #: segment. `candidate-models` was `validation` and `item-health-summary` was
 #: `telemetry-aggregate`, renamed to say what they hold while neither had a
 #: single committed file - so the old addresses held nothing to move.
+#: `summary-quality-evals-index` was `score-index`, renamed with the eval ledger,
+#: and a migration moved every committed file it held.
 #:
-#: Three folders are not the old module's answer either, because it built no
+#: Two folders are not the old module's answer either, because it built no
 #: folder for a ledger filed by month or by stamp. Each is the folder its callers
 #: reached by joining the ledger's name onto the state root - `retention` for the
-#: item-health summary, `evals.archive` for the score archive - or, for the
-#: judge's archive, the folder `path` files every record into.
+#: item-health summary - or, for the judge's archive, the folder `path` files
+#: every record into.
 AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
     "SEEN": ("state/seen/2026/09/18.csv", "state/seen/2026/09/18.csv", "state/seen"),
     "FEED_HEALTH": (
@@ -73,11 +74,15 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/host-fingerprint/2026/09/18",
         "state/host-fingerprint",
     ),
-    "SCORES": ("state/scores/2026/09/18", "state/scores/2026/09/18", "state/scores"),
-    "SCORE_INDEX": (
-        "state/score-index/2026/09/18",
-        "state/score-index/2026/09/18",
-        "state/score-index",
+    "SUMMARY_QUALITY_EVALS": (
+        "state/scores/2026/09/18",
+        "state/scores/2026/09/18",
+        "state/scores",
+    ),
+    "SUMMARY_QUALITY_EVALS_INDEX": (
+        "state/summary-quality-evals-index/2026/09/18",
+        "state/summary-quality-evals-index/2026/09/18",
+        "state/summary-quality-evals-index",
     ),
     "CANDIDATE_MODELS": (
         "state/candidate-models/2026/09/18",
@@ -144,11 +149,11 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/llm-council/shard-outcomes/2026/09/18.csv",
         "state/llm-council/shard-outcomes",
     ),
-    # The four below were never in the old ledger module. Each row is what its
+    # The three below were never in the old ledger module. Each row is what its
     # owning module built before the registry took its address: the trace day
     # directory and the trace root from `telemetry.traces` and `retention`, the
-    # record and its root from `day_metrics`, the day's blocks and their root from
-    # `assemble` and `retention`, and the month summary from `evals.archive`.
+    # record and its root from `day_metrics`, and the day's blocks and their root
+    # from `assemble` and `retention`.
     "TRACES": (
         "state/traces/2026/09/18",
         "state/traces/2026/09/18",
@@ -164,14 +169,9 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/digest-fragments/2026/09/18",
         "state/digest-fragments",
     ),
-    "SCORE_ARCHIVE": (
-        "state/score-archive/2026-09.json",
-        "state/score-archive/2026-09.json",
-        "state/score-archive",
-    ),
 }
 
-#: What each of those four owners built for one fixed writer on `A_DAY`, file
+#: What each of those three owners built for one fixed writer on `A_DAY`, file
 #: name included, read by calling the owner's own function before it was pointed
 #: at the registry.
 A_RUN: Final = "2026-09-18-35786586868"
@@ -179,7 +179,6 @@ OWNER_BUILT_AT_THE_BASE: Final[dict[str, str]] = {
     "trace": "state/traces/2026/09/18/2026-09-18-1-1-work-00.jsonl",
     "day record": "state/day-metrics/2026/09/18.json",
     "run block": f"state/digest-fragments/2026/09/18/{A_RUN}.json",
-    "month summary": "state/score-archive/2026-09.json",
 }
 
 #: Which directories the old state cleanup protected before the registry claimed
@@ -475,33 +474,41 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     A claim is a family name now, so every folder claimed before is still
     claimed under the name it has today. One addition is a file's stem, which
     the sweep never meets because it only looks at directories. Two are the
-    renamed empty ledgers, which leave their old names behind. Four are the
-    folders other modules used to own, protected before by a list typed into the
-    sweep itself and now by the registry. One is the gardener's own ledger, which
-    files under the two roots and is claimed like every family. The last two are
-    not families at all: they are the roots the ledger door files under, claimed
-    so the sweep never reads them as a trial run's trees.
+    renamed empty ledgers, which leave their old names behind, and two more are
+    the eval ledger and its ID folder, renamed after their files were moved.
+    Three are the folders other modules used to own, protected before by a list
+    typed into the sweep itself and now by the registry. One is the gardener's
+    own ledger, which files under the two roots and is claimed like every
+    family. The last two are not families at all: they are the roots the ledger
+    door files under, claimed so the sweep never reads them as a trial run's
+    trees.
     """
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-retirements",
         "candidate-models",
         "item-health-summary",
+        "summary-quality-evals",
+        "summary-quality-evals-index",
         "traces",
         "day-metrics",
         "digest-fragments",
-        "score-archive",
         "gardener",
         "raw",
         "compact",
     }
-    assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {"validation", "telemetry-aggregate"}
+    assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {
+        "validation",
+        "telemetry-aggregate",
+        "scores",
+        "score-index",
+    }
 
 
-def test_the_four_owners_build_the_paths_they_built_before() -> None:
+def test_the_three_owners_build_the_paths_they_built_before() -> None:
     """Each owner now composes its address from the registry, and lands on the same bytes.
 
     The parity table above holds each ledger's directory. This holds the whole
-    file name as well, because two of the four mint a name inside that
+    file name as well, because two of the three mint a name inside that
     directory and the name is where a writer and a reader would part company.
     """
     built = {
@@ -510,14 +517,12 @@ def test_the_four_owners_build_the_paths_they_built_before() -> None:
         ),
         "day record": day_metrics.day_metrics_path(STATE, A_DAY),
         "run block": assemble.fragment_path(STATE, date=A_DAY, run_id=A_RUN),
-        "month summary": score_archive.archive_path(STATE, A_MONTH),
     }
     spelled = {
         "trace": telemetry.committed_trace_relpath(
             run_id="2026-09-18-1", attempt=1, job=ServerJob.WORK, shard=0
         ),
         "day record": day_metrics.day_metrics_relpath(A_DAY),
-        "month summary": score_archive.archive_relpath(A_MONTH),
     }
 
     assert {what: where.as_posix() for what, where in built.items()} == OWNER_BUILT_AT_THE_BASE
