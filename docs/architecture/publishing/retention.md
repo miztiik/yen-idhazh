@@ -87,10 +87,11 @@ a closed month the gardener settled into one file is compared as one month.
 
 ## A named prune: one ledger, one range of days
 
-`idhazh telemetry prune` removes explicitly selected ledger day files. The current
-supported targets are listed by `idhazh telemetry prune --help`; the target is a
-ledger name, never a path. This command does not unpublish a day or rebuild the
-site's derived payloads.
+`idhazh telemetry prune` removes an explicitly selected range of days from one
+ledger: the day files of a CSV ledger, or the rows of a ledger the door files.
+The current supported targets are listed by `idhazh telemetry prune --help`; the
+target is a ledger name, never a path. This command does not unpublish a day or
+rebuild the site's derived payloads.
 
 ```text
 idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-DD>
@@ -100,7 +101,8 @@ idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-D
 - Dry run is the default and reports the selected paths. `--no-dry-run` permits deletion.
 - `--max-deletes` bounds a pass and reports where to resume. Without it, the supplied range sets the default bound.
 - `published` and `seen` are refused because forgetting their records permits repeat publication or discovery.
-- `item-health`, `summary-quality-evals` and `host-fingerprint` are not targets: they file through the ledger door rather than as CSV day files, so this command cannot take a day of them out. Until each ledger's compaction runs live and bounds its raw tree, nothing offers a range delete for them, the same as `visual-prunes`.
+- A ledger the door files (`raw-and-compact` in `config/ledgers.json`) is a target unless its compaction declaration's `prune_refusal` gives a reason, which the command prints as its refusal. A pass deletes the days' raw files and listings and rebuilds each daily, monthly or yearly file that holds them without their rows; a file left with no row stays as an empty file. A live pass also takes `--run-id` and `--commit`, which each rebuilt file names as its writer.
+- `summary-quality-evals` is refused by its declaration: every eval row is kept for ever.
 - `summary-quality-evals-index` is refused too. An ID taken out of it makes its measurement count as new at the next run, and no ID is ever deleted. A closed month of it is one file besides, which no range of days can take part of.
 - Do not point the command at unsupported raw trees or file layouts. Their owning tasks decide retention.
 

@@ -12,6 +12,7 @@
     "state/raw/feed-retirements",
     "state/compact/feed-retirements"
   ],
+  "prune_refusal": null,
   "window": {
     "unit": "forever"
   }

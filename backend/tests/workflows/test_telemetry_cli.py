@@ -233,6 +233,102 @@ def test_a_prune_the_router_refuses_names_the_store_and_changes_nothing(
     )
 
 
+def _files_under(state_root: Path) -> set[str]:
+    """Every file in a state tree, by its path under that tree."""
+    return {
+        path.relative_to(state_root).as_posix() for path in state_root.rglob("*") if path.is_file()
+    }
+
+
+def _prune(state_root: Path, digest_root: Path, date: str, target: str, *extra: str) -> int:
+    """`idhazh telemetry prune` over one day of one ledger, as an operator types it."""
+    return cli.main(
+        [
+            telemetry_cli.VERB,
+            "prune",
+            "--date",
+            date,
+            "--state-root",
+            str(state_root),
+            "--digest-root",
+            str(digest_root),
+            "--target",
+            target,
+            "--since",
+            date,
+            "--until",
+            date,
+            *extra,
+        ]
+    )
+
+
+def test_a_live_prune_on_the_door_needs_the_run_and_the_commit_its_files_will_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Without `--run-id` and `--commit` it is a usage error, and the tree is as it was.
+
+    A file the prune rebuilds names its writer, and the router reports the
+    missing flags the way argparse reports any other: the reason and exit 2.
+    """
+    state_root, digest_root, date = _a_published_day(tmp_path)
+    before = _files_under(state_root)
+
+    with pytest.raises(SystemExit) as exit_code:
+        _prune(state_root, digest_root, date, LedgerName.ITEM_HEALTH, "--no-dry-run")
+
+    assert exit_code.value.code == 2
+    assert "--run-id" in capsys.readouterr().err
+    assert _files_under(state_root) == before
+
+
+def test_a_live_prune_on_the_door_takes_the_day_out_of_that_ledger_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The census day goes, each file is printed by name, and no other ledger loses a file."""
+    state_root, digest_root, date = _a_published_day(tmp_path)
+    before = _files_under(state_root)
+    assert ledger.load_days(state_root, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow)
+
+    exit_code = _prune(
+        state_root,
+        digest_root,
+        date,
+        LedgerName.ITEM_HEALTH,
+        "--no-dry-run",
+        "--run-id",
+        f"{date}-9",
+        "--commit",
+        "c" * 40,
+    )
+
+    assert exit_code == 0
+    assert ledger.load_days(state_root, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow) == []
+    after = _files_under(state_root)
+    gone = before - after
+    assert gone and after <= before
+    assert all(path.startswith(f"raw/{LedgerName.ITEM_HEALTH}/") for path in gone), gone
+    printed = capsys.readouterr().out
+    assert all(f"  remove {ledger.STATE_DIRNAME}/{path}" in printed for path in gone)
+
+
+def test_the_eval_ledger_is_refused_through_the_router_with_its_declaration_s_reason(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The reason a person reads is the sentence beside the eval ledger's windows."""
+    state_root, digest_root, date = _a_published_day(tmp_path)
+    before = _files_under(state_root)
+
+    with pytest.raises(SystemExit) as exit_code:
+        _prune(state_root, digest_root, date, LedgerName.SUMMARY_QUALITY_EVALS)
+
+    assert exit_code.value.code == 2
+    refusal = capsys.readouterr().err
+    assert f"{LedgerName.SUMMARY_QUALITY_EVALS} is refused" in refusal
+    assert "kept for ever" in refusal
+    assert _files_under(state_root) == before
+
+
 def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
     """The instrument files at two grains, and a listing that sees one is half blind.
 

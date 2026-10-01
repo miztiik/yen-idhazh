@@ -493,6 +493,15 @@ class CompactionPolicy(_Declared):
             "one UTC day finds the same days eligible."
         ),
     )
+    prune_refusal: str | None = Field(
+        min_length=1,
+        description=(
+            "Whether `idhazh telemetry prune` may take a range of days out of this "
+            "ledger. Null lets it. A sentence refuses the ledger, and the command prints "
+            "that sentence as the reason. No default, so a declaration says which in so "
+            "many words."
+        ),
+    )
 
     @model_validator(mode="after")
     def _a_year_packs_every_month_it_holds(self) -> Self:
