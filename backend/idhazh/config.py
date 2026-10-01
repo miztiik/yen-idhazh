@@ -700,9 +700,11 @@ def _refuse_a_published_reach_that_grows_or_falls_short(
     file: its month files then last until their year is packed, and the yearly
     index grows by one entry a year. A ledger that packs years keeps its month
     files long enough that the widest console read, which ends on the newest day
-    compacted, never reaches a year file, because the door fetches a year file
-    whole to read any day of it. A ledger that deletes its month files reaches
-    back at least the widest span the console offers.
+    compacted, never reaches a year file. The door reads a year file by byte
+    range, but a page that holds part of one asks for the next part naming the
+    ETag it kept, every deploy changes that ETag, and a host that honours the
+    check then sends the whole file. A ledger that deletes its month files
+    reaches back at least the widest span the console offers.
     """
     ledger = policy.ledger.value
     if policy.monthly_keep_days is not None:
@@ -714,8 +716,8 @@ def _refuse_a_published_reach_that_grows_or_falls_short(
                 f"{ledger} is in ledger.published. A console read reaches back "
                 f"console.max_window_days {widest_read} from the newest day compacted, which is "
                 f"compact_after_days {policy.compact_after_days} and more before the wake, so "
-                f"monthly_keep_days must be at least {floor}, or that read fetches a whole "
-                "year file to draw one month"
+                f"monthly_keep_days must be at least {floor}, or that read can be answered "
+                "with a whole year file after a deploy"
             )
         return
     if reach is None:

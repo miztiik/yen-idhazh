@@ -22,11 +22,12 @@
  * `through` is the newest day `daily.json` names. A day after it has not been
  * compacted yet, so it is clamped away rather than drawn as a zero.
  *
- * **A day in a packed year is read from its year file, fetched whole.** The page
- * keeper checks every file against the length its entry gives before the engine
- * sees it, so one month of a year costs the whole year's bytes; the gardener
- * keeps a published ledger's month files long enough that the console's widest
- * read never reaches one.
+ * **A day in a packed year is read from its year file, by byte range.** In a
+ * browser the engine opens the year file at its address and asks the host for its
+ * footer and the row groups of the months a query touches - one row group a month
+ * - so a month out of a year costs about what the month's own file would. The
+ * page keeper checks the length the engine opened against the entry. A day or
+ * month file is fetched whole, and at build time every file is.
  *
  * **The address is composed here and nowhere else**, from the closed ledger
  * name, the period and a `covers` the index guard has already checked, so no
@@ -76,6 +77,11 @@ export function dataVersion(entry: CompactEntry): string {
 	return `${entry.rows}-${entry.bytes}`;
 }
 
+/** The periods an engine that reads a host may read by byte range rather than
+ *  whole. A year file holds one row group a month, so one month of it is one run
+ *  of bytes; a day or month file is what the span asked for, whole. */
+export const RANGED_PERIODS: ReadonlySet<Period> = new Set<Period>(['yearly']);
+
 /** What every line the door prints to the console starts with. */
 export const LOG_PREFIX = '[ledger]';
 
@@ -114,6 +120,9 @@ function explainShortfall(wanted: WantedFile, file: ChosenFile, shortfall: FileS
 	if (shortfall.reason === 'absent') return `${wanted.path} is named in ${file.period}.json and is not there`;
 	if (shortfall.reason === 'length') {
 		return `${wanted.path} arrived as ${shortfall.arrived} bytes and its entry says ${wanted.bytes}`;
+	}
+	if (shortfall.reason === 'opened') {
+		return `${wanted.path} opened at ${shortfall.length} bytes to be read by range, and its entry says ${wanted.bytes}`;
 	}
 	return `${wanted.path} could not be fetched (${reason(shortfall.error)})`;
 }
@@ -165,7 +174,8 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	const wanted: WantedFile[] = holding.map((file) => ({
 		path: dataPath(ledger, file.period, file.entry.covers),
 		version: dataVersion(file.entry),
-		bytes: file.entry.bytes
+		bytes: file.entry.bytes,
+		byRange: RANGED_PERIODS.has(file.period)
 	}));
 	let rows: Row[];
 	try {

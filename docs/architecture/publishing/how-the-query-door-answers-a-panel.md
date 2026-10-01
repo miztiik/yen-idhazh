@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -72,20 +72,28 @@ gardener's compaction task and declared as `CompactIndex` in
    engine at all.
 5. **A file whose decoded length differs from its entry's `bytes` is refused**, and
    so is one that does not arrive. The decoded length, never `Content-Length`,
-   because Pages compresses what it serves.
-6. **A day in a packed year costs the whole year file.** The door fetches every
-   file whole, so drawing one month from a year fetches all twelve. The year file
-   is written one row group a month, which would let a reader that fetches by
-   byte range take one month's part, and this door does not. So the gardener
-   keeps a published ledger's month files at least `console.max_window_days` plus
-   `compact_after_days` after their year ends, and no read the console can widen
-   to reaches a year file; a span panned further back than that does.
+   because Pages compresses what it serves. A year file read by byte range is
+   held to the same rule by the length the engine opened it at.
+6. **A day in a packed year is read from its year file by byte range.** In a
+   browser the engine asks the host for the year file's footer and then for the
+   parts of the months the query touches, because the gardener writes a year file
+   one row group a month. One month of 10 columns out of a 29.8 MB year cost
+   243,046 bytes, a tenth of that month's own file
+   ([the measurement](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md)).
+   A day file and a month file are fetched whole, and at build time every file is.
+   The gardener still keeps a published ledger's month files at least
+   `console.max_window_days` plus `compact_after_days` after their year ends, so
+   no read the console can widen to reaches a year file, because a page can still
+   be sent a whole year file after a deploy
+   ([below](#how-a-year-file-is-read-by-byte-range)). A span panned further back
+   than that reads one.
 
 An index is asked for with `cache: 'no-store'`, so a page's one read of it gets
 what the site holds now rather than a copy an HTTP cache kept, and the page then
 keeps it (next section). A data file is asked for with `?v=<rows>-<bytes>` from
 its entry: a compact file is written once, so the browser may keep it for as long
-as that version names it.
+as that version names it. A year file read by byte range is asked for at the same
+address.
 
 ## What a page keeps
 
@@ -99,11 +107,15 @@ the engine twice. The keeper is `frontend/src/lib/data/page-keeper.ts`.
 - **Each data file enters the engine once, and the page keeps its name, never its
   bytes.** A file is known by its path and the version its entry names. A
   browser's engine takes the buffer it is handed and leaves the page's copy empty,
-  so bytes kept on the page would read as an empty file the second time. A file
-  of the wrong length is neither registered nor kept, and a file that is not there
-  is kept as absent.
-- **The engine starts only when every file a slice needs has arrived whole**, so
-  a slice that cannot be answered never loads it.
+  so bytes kept on the page would read as an empty file the second time. A year
+  file read by byte range never crosses as bytes: the engine opens it at its
+  address, and the page keeps the name the engine opened it under. A file of the
+  wrong length is neither registered nor kept, and a file that is not there is
+  kept as absent.
+- **The engine starts only when every file a slice fetches whole has arrived
+  whole**, so a slice that cannot be answered never loads it. A slice that reads a
+  year file by byte range starts the engine while its other files arrive, because
+  only the engine can open the year file.
 
 `ledger.ts` makes one keeper when a panel first asks and keeps it until the page
 is reloaded. `sliceFromDisk()` makes a fresh one for each call, so it reads the
@@ -159,6 +171,51 @@ already checked:
 repository prefix when that knob is empty, which is the shipped default. It comes
 from the build, never from a payload, so no fetched text can move where the door
 asks. On disk the same paths sit under the state root handed to `sliceFromDisk()`.
+
+## How a year file is read by byte range
+
+In a browser the page keeper hands the engine a year file's address rather than
+its bytes, through `registerAddress` in `frontend/src/lib/data/engine.ts`. The
+engine opens the file with a 1-byte GET and a `HEAD`, then asks only for its
+footer and for the parts of the row groups the query touches. Which periods are
+read this way is `RANGED_PERIODS` in `frontend/src/lib/data/slice-reader.ts`.
+`sliceFromDisk()` reads every file whole, because the engine's Node half reads no
+host. `frontend/tests/ledger-ranges.spec.ts` drives a real browser against a host
+on 127.0.0.1 that answers the way Pages does. Five facts shape the design.
+
+- **The engine's own default reads an address whole.** DuckDB-Wasm opens with
+  `forceFullHTTPReads` on, and then reads a registered address in one GET with no
+  `Range`. `engine.ts` opens the database with it off. A read answered 200 rather
+  than 206 also makes the engine take the whole body without a word, so the spec
+  requires every GET for a year file to name a range and be answered 206,
+  uncompressed.
+- **Pages answers a `HEAD` that carries a `Range` with 200 and the full length.**
+  The engine takes a file's length from that `HEAD`, and accepts a 200 only while
+  `allowFullHTTPReads` is on, so that setting stays on. The length it opened must
+  equal the entry's `bytes`, or the slice is `unreachable` and the console says
+  `<path> opened at <n> bytes to be read by range, and its entry says <m>`.
+- **Pages ignores the query string.** `?v=a` and `?v=b` get the same bytes and the
+  same ETag, so the version in the address never reaches the host. The engine
+  reads the file under a name the keeper mints for each path and version, so two
+  versions never share a name on one page.
+- **A year file is written once and never rewritten in place.** The gardener
+  writes it when the year is packed and never again, so ranges read at different
+  times all come from the same bytes.
+- **Every Pages deploy gives every file a new ETag**, over the same bytes. Chromium
+  keeps the ranges a page fetched, and asks for a range it does not hold with
+  `If-Range` naming the ETag it kept. A host that honours `If-Range` answers a
+  changed ETag with 200 and the whole file: in the measurement, a page that read
+  June out of a year file, and read July after the ETag changed, was sent all
+  29,816,165 bytes. A new page is not caught: it opens the file again, the browser
+  checks the first byte it kept with `If-None-Match`, and drops the rest. A new
+  page that finds that byte still fresh, within Pages' `max-age=600`, is caught,
+  and the spec holds that case as a test expected to fail.
+
+**What Pages answers to an `If-Range` naming an ETag it no longer serves is not
+measured.** Until it is, the gardener's loader refuses a published ledger whose
+month files would be packed sooner than `console.max_window_days` plus
+`compact_after_days` after their year ends (rule 6 above), so only a span panned
+further back than any console window reads a year file at all.
 
 ## The index copy, and the stamp it reads
 
@@ -300,6 +357,14 @@ and newest day under panels already drawn. It is the move if an open tab is ever
 seen answering `unreachable` after a deploy; nothing has shown one yet. Ruled on
 2026-09-29.
 
+**A year file is read by byte range, and a day or month file is fetched whole.**
+A year file holds twelve months, so fetching it whole to draw one month pays for
+eleven nobody asked for: about twelve times the month's own file. A day file is
+small. A month file read by byte range drew sooner on the slow link measured, 9.5
+seconds against 15.2, but it asks for 13 round trips where its whole fetch asks
+for one, and no faster link has been measured. Reading by range needs nothing the
+engine does not already ship, so it adds no dependency.
+
 **The add-on comes from DuckDB's host, not ours.** It is what every site running
 this engine does, and it keeps 3.2 MB off the site and a download step out of the
 build. What it costs is one more origin in `connect-src`, and the engine's
@@ -325,5 +390,6 @@ wrong count nobody can see.
 
 - [../../concepts/console-design/how-a-console-chart-gets-its-data.md](../../concepts/console-design/how-a-console-chart-gets-its-data.md) - the seven rules a panel's data obeys.
 - [../contracts/schemas.md](../contracts/schemas.md) - the hand copy of the index shapes and the test that binds it.
+- [../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md) - what one month read by byte range out of a year file costs, and what a deploy costs.
 - [../../reference/site-weight.md](../../reference/site-weight.md#optional-assets) - deployed size, lazy downloads and cache assumptions.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the bundle gate that keeps the engine off the first load.
