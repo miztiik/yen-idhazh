@@ -3,7 +3,9 @@
 `tests/fixtures/ledger-door/` holds two state roots of one compacted
 `host-fingerprint` ledger, laid out as the committed tree is. `state/` holds a
 daily and a monthly index and the compact files they name; `year-state/` holds
-the same rows after their year was packed, under a yearly and a daily index. The
+the same rows after their year was packed, under a yearly and a daily index.
+Each root also holds the third index, naming nothing, because the compaction
+writes a ledger's three indexes together. The
 frontend's `ledger-door.spec.ts` reads both through the door's entry points, so
 an index that disagreed with its files would test the door against a tree the
 compaction never writes. This checks each root with the backend's own readers:
@@ -36,7 +38,8 @@ pytestmark = pytest.mark.contract
 FIXTURE: Final[Path] = REPO_ROOT / "tests" / "fixtures" / "ledger-door"
 LEDGER: Final = LedgerName.HOST_FINGERPRINT
 
-#: Each state root, and the periods it holds an index for.
+#: Each state root, and the periods whose index names a file. The root's other
+#: index is there too, and names nothing.
 HELD: Final[dict[str, tuple[Period, ...]]] = {
     "state": (Period.DAILY, Period.MONTHLY),
     "year-state": (Period.DAILY, Period.YEARLY),
@@ -47,6 +50,18 @@ INDEXED: Final = [(root, period) for root, periods in HELD.items() for period in
 def index(root: str, period: Period) -> CompactIndex:
     """One of a root's indexes, read the way a later run reads a payload."""
     return CompactIndex.read(compact_index_path(FIXTURE / root, LEDGER, period))
+
+
+@pytest.mark.parametrize("root", list(HELD))
+def test_every_root_holds_all_three_indexes_as_the_compaction_writes_them(root: str) -> None:
+    """The compaction writes a ledger's three indexes together, so the door never
+    asks for one that is not there, and an index a root packs nothing into names nothing."""
+    for period in Period:
+        held = index(root, period)
+        assert (held.ledger, held.period) == (LEDGER, period)
+        assert held.version == CompactIndex.schema_version()
+        if period not in HELD[root]:
+            assert held.entries == [], f"the fixture's {root} {period.value} index names a file"
 
 
 @pytest.mark.parametrize(("root", "period"), INDEXED)

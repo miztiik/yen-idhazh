@@ -1,5 +1,6 @@
 {
-  "dry_run": true,
+  "daily_keep_days": 31,
+  "dry_run": false,
   "kind": "compaction",
   "ledger": "item-health",
   "lifecycle_status": "active",

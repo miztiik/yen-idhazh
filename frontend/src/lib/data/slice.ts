@@ -10,6 +10,9 @@
  * instead of a file set: drawing the days around a hole would be an undercount
  * nobody could see.
  *
+ * Where the ledger starts is worked out here too, `firstNamed()`, so the slice
+ * and the reach never disagree about which hole lies before it.
+ *
  * Pure: it takes the range and the three entry lists, and reads nothing else.
  */
 
@@ -35,6 +38,33 @@ export function daysBetween(from: DateStamp, to: DateStamp): DateStamp[] {
 		days.push(new Date(at).toISOString().slice(0, 10));
 	}
 	return days;
+}
+
+/** The first day of what one coarser entry covers: a month's 1st, a year's 1 January. */
+const FIRST_DAY: Record<Exclude<Period, 'daily'>, (covers: string) => DateStamp> = {
+	monthly: (covers) => `${covers}-01`,
+	yearly: (covers) => `${covers}-01-01`
+};
+
+/** The oldest day any index names, a month counting from its first day and a
+ *  year from its 1 January. `daily` names at least one day; a hole before this
+ *  day is before the ledger starts, and a hole from it on is a day the packing
+ *  lost. */
+export function firstNamed(
+	daily: readonly CompactEntry[],
+	monthly: readonly CompactEntry[],
+	yearly: readonly CompactEntry[]
+): DateStamp {
+	let first = daily[0].covers;
+	const coarser: [Exclude<Period, 'daily'>, readonly CompactEntry[]][] = [
+		['monthly', monthly],
+		['yearly', yearly]
+	];
+	for (const [period, entries] of coarser) {
+		const oldest = entries.length > 0 ? FIRST_DAY[period](entries[0].covers) : null;
+		if (oldest !== null && oldest < first) first = oldest;
+	}
+	return first;
 }
 
 /** The files that answer every day from `from` to `to`, one file a day. */
