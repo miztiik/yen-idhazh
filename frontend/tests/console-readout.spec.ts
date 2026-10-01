@@ -256,6 +256,9 @@ function significant(name: string): string[] {
 async function open(page: Page, route: string, size = DESKTOP): Promise<void> {
 	await page.setViewportSize(size);
 	await page.goto(route);
+	if (route === '/console/machine/') {
+		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
+	}
 	// The engine charts hydrate after mount and swap their prerendered SVG out.
 	await page.waitForTimeout(900);
 }

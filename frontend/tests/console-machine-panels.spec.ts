@@ -123,6 +123,7 @@ function newestDrawnRun(): CanaryShard[] {
 async function setWindow(page: Page, days: number) {
 	await page.locator(`[data-window-preset="${days}"]`).click();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', String(days));
+	await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
 }
 
 test.describe('reading against writing, machine by machine', () => {
@@ -493,8 +494,13 @@ test.describe('the machine record names which state it is in', () => {
 });
 
 test.describe('which machines ran our jobs, day by day', () => {
-	test('under the threshold it draws one square a job, over it one bar a day', async ({ page }) => {
+	async function openFleet(page: Page): Promise<void> {
 		await page.goto('/console/machine/');
+		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
+	}
+
+	test('under the threshold it draws one square a job, over it one bar a day', async ({ page }) => {
+		await openFleet(page);
 		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		await expect(panel).toBeVisible();
 		await expect(panel.locator('.panel-title')).toHaveText('Which machines ran our jobs, day by day');
@@ -525,7 +531,7 @@ test.describe('which machines ran our jobs, day by day', () => {
 	test('every row of the strip says the speed its colour stands for, and no machine is last', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openFleet(page);
 		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		const rows = await panel.locator('[data-readout-row]').evaluateAll((nodes) =>
 			nodes.map((node) => node.getAttribute('data-readout-row') ?? '')
@@ -545,7 +551,7 @@ test.describe('which machines ran our jobs, day by day', () => {
 	test('a click or Enter lists the day and the strip keeps it, Escape or Close shuts the list, and focus comes back', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openFleet(page);
 		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		await panel.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
 		const plot = panel.locator('svg[data-chart-name="machine-fleet"]');
@@ -583,7 +589,7 @@ test.describe('which machines ran our jobs, day by day', () => {
 	});
 
 	test('nothing in the panel is a share, a rate of a draw or a probability', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openFleet(page);
 		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		const text = await panel.innerText();
 		expect(text).not.toMatch(/\d\s*%|percent|probability|chance of/i);
@@ -593,7 +599,7 @@ test.describe('which machines ran our jobs, day by day', () => {
 		// Six columns do not fit 390px. A list that scrolled sideways hid the speed,
 		// which is what ties a job to its colour.
 		await page.setViewportSize({ width: 390, height: 844 });
-		await page.goto('/console/machine/');
+		await openFleet(page);
 		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		await panel.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
 		const plot = panel.locator('svg[data-chart-name="machine-fleet"]');

@@ -34,6 +34,11 @@ names a column that is not lower case, digits and `_`, gives a day that is not a
 real UTC day, puts `from` after `to`, or filters on an empty `in` list. Those are
 the caller's defects, found the first time the panel runs.
 
+The chart-contract check reads each call with TypeScript's parser. Columns may
+be an inline literal or a named static array, including an imported declaration.
+Unknown runtime expressions and `*` fail the check. Both date endpoints must be
+present; shorthand fields carry the same boundary as explicit assignments.
+
 Everything else comes back as one of four answers, so a panel draws the right one
 of four nothings without inspecting an error:
 

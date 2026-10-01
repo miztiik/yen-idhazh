@@ -156,6 +156,66 @@ function landsOn(entry: Source, specifier: string): string | null {
 	return target === null ? null : relative(target).replace(/\.(ts|js)$/, '');
 }
 
+function declaredColumns(expression: ts.Expression | undefined, tree: ts.SourceFile, seen = new Set<string>()): string[] | null {
+	if (expression === undefined) return null;
+	if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression) || ts.isParenthesizedExpression(expression)) {
+		return declaredColumns(expression.expression, tree, seen);
+	}
+	if (ts.isArrayLiteralExpression(expression)) {
+		const columns: string[] = [];
+		for (const element of expression.elements) {
+			if (ts.isStringLiteral(element)) columns.push(element.text);
+			else if (ts.isSpreadElement(element)) {
+				const spread = declaredColumns(element.expression, tree, new Set(seen));
+				if (spread === null) return null;
+				columns.push(...spread);
+			} else return null;
+		}
+		return columns;
+	}
+	if (!ts.isIdentifier(expression)) return null;
+	const key = `${tree.fileName}:${expression.text}`;
+	if (seen.has(key)) return null;
+	seen.add(key);
+	for (const statement of tree.statements) {
+		if (ts.isVariableStatement(statement)) {
+			const declaration = statement.declarationList.declarations.find((entry) => ts.isIdentifier(entry.name) && entry.name.text === expression.text);
+			if (declaration) return declaredColumns(declaration.initializer, tree, seen);
+		}
+		if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+		const bindings = statement.importClause?.namedBindings;
+		if (!bindings || !ts.isNamedImports(bindings)) continue;
+		const imported = bindings.elements.find((entry) => entry.name.text === expression.text);
+		if (!imported) continue;
+		const resolved = ts.resolveModuleName(statement.moduleSpecifier.text, tree.fileName, {
+			moduleResolution: ts.ModuleResolutionKind.Bundler,
+			baseUrl: frontend,
+			paths: { '$lib/*': ['src/lib/*'] }
+		}, ts.sys).resolvedModule;
+		if (!resolved) return null;
+		const module = ts.createSourceFile(resolved.resolvedFileName, readFileSync(resolved.resolvedFileName, 'utf8'), ts.ScriptTarget.Latest, true);
+		return declaredColumns(ts.factory.createIdentifier((imported.propertyName ?? imported.name).text), module, seen);
+	}
+	return null;
+}
+
+test('the query-column guard resolves static arrays and keeps wildcard and unknown expressions visible', () => {
+	const tree = ts.createSourceFile(path.join(frontend, 'guard.ts'), `
+		import { FLEET_COLUMNS as imported } from '$lib/charts/fleet';
+		const literal = ['date', 'job'] as const;
+		const wildcard = [...literal, '*'];
+		const dynamic = chooseColumns();
+		const cycle = cycle;
+	`, ts.ScriptTarget.Latest, true);
+	const columns = (name: string) => declaredColumns(ts.factory.createIdentifier(name), tree);
+	expect(columns('literal')).toEqual(['date', 'job']);
+	expect(columns('wildcard')).toEqual(['date', 'job', '*']);
+	expect(columns('dynamic')).toBeNull();
+	expect(columns('cycle')).toBeNull();
+	expect(columns('imported')).toContain('date');
+	expect(columns('imported')).not.toContain('*');
+});
+
 test.describe('THE ORACLE: every chart type is written down, and nothing has left the house style', () => {
 	test('every listed type has its module, and every module is listed', () => {
 		const types = typesOnThePage();
@@ -266,13 +326,15 @@ test.describe('THE ORACLE: every chart type is written down, and nothing has lef
 						} else {
 							const field = (key: string) =>
 								options.properties.find(
-									(property): property is ts.PropertyAssignment =>
-										ts.isPropertyAssignment(property) && property.name.getText() === key
+									(property): property is ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
+										(ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) && property.name.getText() === key
 								);
-							const columns = field('columns')?.initializer;
-							if (columns === undefined || !ts.isArrayLiteralExpression(columns) || columns.elements.length === 0) {
+							const columnField = field('columns');
+							const columns = declaredColumns(columnField === undefined ? undefined
+								: ts.isShorthandPropertyAssignment(columnField) ? columnField.name : columnField.initializer, tree);
+							if (columns === null || columns.length === 0) {
 								problems.push(`${where} - names no columns`);
-							} else if (columns.elements.some((element) => ts.isStringLiteral(element) && element.text === '*')) {
+							} else if (columns.includes('*')) {
 								problems.push(`${where} - asks for every column`);
 							}
 							for (const end of ['from', 'to']) {
