@@ -15,6 +15,7 @@ import {
 } from '../src/lib/charts/d3/empty';
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths';
+import { machineRecordState } from './support/machine-record-state';
 import {
 	judgeNothings,
 	judgeSettled,
@@ -245,7 +246,14 @@ type Driver = (page: Page) => Promise<void>;
  * `console.judged_panel_ids` with its entry here, in the same pull request -
  * the requests a panel makes are its own, so nothing here can guess them.
  */
-const DRIVERS: Record<string, Record<Nothing, Driver>> = {};
+const DRIVERS: Record<string, Record<Nothing, Driver>> = {
+	'platform-mix': {
+		loading: (page) => machineRecordState(page, 'loading'),
+		missing: (page) => machineRecordState(page, 'missing'),
+		quiet: (page) => machineRecordState(page, 'quiet'),
+		unreachable: (page) => machineRecordState(page, 'unreachable')
+	}
+};
 
 function driverFor(id: string): Record<Nothing, Driver> {
 	const driver = DRIVERS[id];
@@ -310,6 +318,9 @@ test.describe('the judged panels', () => {
 					const panel = page.locator(`[data-console-panel-id="${id}"]`);
 					await expect(panel, `the page draws no panel with the id ${id}`).toHaveCount(1);
 					await panel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+					await expect(panel.locator(state === 'loading'
+						? '[data-panel-state="loading"]'
+						: `[data-empty-state="${state}"]`)).toHaveCount(1);
 					readings[state] = await readPanel(panel);
 				}
 				const verdict = judgeNothings(id, readings);

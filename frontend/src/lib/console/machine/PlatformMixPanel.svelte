@@ -13,10 +13,12 @@
 	 */
 	import Panel from '$lib/components/Panel.svelte';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
+	import EmptyState from '$lib/charts/d3/EmptyState.svelte';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { absentHatch } from '$lib/charts/d3/ordered-colour';
 	import {
+		FLEET_COLUMNS,
 		fleetDots,
 		fleetJobs,
 		fleetReadout,
@@ -27,15 +29,16 @@
 	} from '$lib/charts/fleet';
 	import { chartWidth, frame, observeWidth } from '$lib/charts/frame';
 	import { rateWords, type MachineRamp } from '$lib/charts/machine-colour';
+	import { windowOfDays, type TimeWindow } from '$lib/charts/viewport';
 	import FleetDots from '$lib/console/machine/FleetDots.svelte';
 	import type { LostDay, RecordingNotes } from '$lib/console/recording';
-	import type { Row } from '$lib/data/ledger';
+	import type { PanelState } from '$lib/console/waiting';
+	import { ledgerReach, slice, type LedgerFault, type Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 
 	let {
-		rows,
 		ramp,
 		start,
 		end,
@@ -46,8 +49,6 @@
 		chart,
 		knobs
 	}: {
-		/** The machine record's rows for `FLEET_COLUMNS`, over every day the page holds. */
-		rows: Row[];
 		/** The page's one ramp, so this panel and the machine cards colour a machine alike. */
 		ramp: MachineRamp;
 		/** The open span, inclusive UTC days, and how many days it covers. */
@@ -75,12 +76,65 @@
 	const HATCH_GAP = 3;
 	const HATCH_LINE = 1;
 
+	let mounted = $state(false);
+	let rows = $state<Row[]>([]);
+	let span = $state<TimeWindow | null>(null);
+	let panelState = $state<PanelState>('loading');
+	let fault = $state<LedgerFault | null>(null);
+	onMount(() => { mounted = true; });
+	$effect(() => {
+		const days = windowDays;
+		const enabled = recording;
+		if (!mounted) return;
+		let current = true;
+		rows = [];
+		span = null;
+		fault = null;
+		openDay = null;
+		panelState = enabled ? 'loading' : 'ready';
+		if (enabled) {
+			void (async () => {
+				try {
+					const reach = await ledgerReach('host-fingerprint');
+					if (!current) return;
+					if (reach.state !== 'ok') {
+						panelState = reach.state;
+						fault = reach.state === 'missing' ? reach.fault : null;
+						return;
+					}
+					const window = windowOfDays([reach.through], reach.through, days, 'right');
+					const from = window.start < reach.first ? reach.first : window.start;
+					span = { start: from, end: reach.through };
+					const answer = await slice('host-fingerprint', {
+						columns: FLEET_COLUMNS,
+						from,
+						to: reach.through
+					});
+					if (!current) return;
+					rows = answer.rows;
+					panelState = answer.state === 'ok' ? 'ready' : answer.state;
+					fault = answer.state === 'missing' || answer.state === 'unreachable' ? answer.fault : reach.fault;
+				} catch (error) {
+					if (!current) return;
+					panelState = 'unreachable';
+					console.warn('[platform-mix] The machine record could not be read.', error);
+				}
+			})();
+		}
+		return () => { current = false; };
+	});
+	const empty = $derived(
+		panelState === 'loading' ? emptyState('loading')
+			: panelState === 'missing' ? emptyState('missing', 'The machine record has not been published yet.')
+				: panelState === 'unreachable' ? emptyState('unreachable', 'The machine record could not be read. Reload this page to try again.')
+					: emptyState('quiet', 'No jobs were recorded in this window.')
+	);
 	const jobs = $derived(fleetJobs(rows));
 	const view = $derived(
 		fleetView(jobs, {
 			ramp,
-			start,
-			end,
+			start: span?.start ?? start,
+			end: span?.end ?? end,
 			windowDays,
 			minRows: knobs.fleet_min_rows,
 			topKinds: knobs.fleet_top_kinds,
@@ -158,9 +212,11 @@
 	}
 </script>
 
-<div data-windowed="machine-fleet" data-window-days={windowDays}>
+<div data-windowed="machine-fleet" data-window-days={windowDays} data-fleet-state={panelState} data-ledger-fault={fault} data-fleet-from={span?.start} data-fleet-through={span?.end}>
 	<Panel heading="h3" id="platform-mix" title="Which machines ran our jobs, day by day" {note}>
-		{#if view.nothing === 'recording-off'}
+		{#if panelState !== 'ready'}
+			<EmptyState drawing={empty} width={box.width} height={box.height} name="machine-fleet" label="Jobs a day by kind of machine" />
+		{:else if view.nothing === 'recording-off'}
 			<p class="empty" data-machine-panel-empty="fleet-off">
 				Which machine a job draws is not being recorded, so there is nothing to count.
 			</p>

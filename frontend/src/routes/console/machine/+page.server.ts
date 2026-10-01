@@ -34,8 +34,7 @@ import { memoryHeld } from '$lib/console/machine/memory-held';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
 import { machineKeys, machineRamp, type Placement } from '$lib/charts/machine-colour';
-import { FLEET_COLUMNS, fleetJobs } from '$lib/charts/fleet';
-import type { Row } from '$lib/data/ledger';
+import { fleetJobs } from '$lib/charts/fleet';
 import {
 	fingerprintsOf,
 	machineRecord,
@@ -238,14 +237,7 @@ export async function load() {
 	// machine's colour. The record is bounded by the widest preset, so the steps
 	// are fixed for a build whatever the reader does.
 	//
-	// The machine-kinds panel reads the record's rows in the query door's own
-	// shape, the columns it draws and no others, and works everything else out
-	// itself. Every shard of the counters carries the fingerprint its packed row
-	// holds, so a shard and the job it ran are one machine rather than two.
-	const fleetRows: Row[] = machine.rows.map((row) =>
-		Object.fromEntries(FLEET_COLUMNS.map((column) => [column, row[column] ?? '']))
-	);
-	const jobs = fleetJobs(fleetRows);
+	const jobs = fleetJobs(machine.rows);
 	const shards = counters.runs.flatMap((run) => run.reported);
 	const seen = [
 		...jobs.map((job) => ({ fingerprint: job.fingerprint, cpuModel: job.cpuModel })),
@@ -530,10 +522,6 @@ export async function load() {
 		costSvg: await draw(costPlot, chart.height_px),
 		costGrid: costPlot.grid,
 		costShape: DEFAULT_COST_SHAPE,
-		// The machine-kinds panel's own rows and the page's ramp. The panel draws
-		// every span from these, so a span the reader picks costs a redraw and no
-		// second read.
-		fleetRows,
 		ramp,
 		lostDays,
 		recording: observability.host_fingerprint,

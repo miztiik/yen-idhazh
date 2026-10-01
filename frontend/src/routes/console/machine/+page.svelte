@@ -83,8 +83,7 @@
 		}
 	}
 
-	/** Nothing on this route is fetched. Every span it can draw is already
-	 * inlined, so no preset costs a month file and none of them is priced. */
+	/** Other panels keep their built spans; the machine mix reads packed files. */
 	function monthsFor(): number {
 		return 0;
 	}
@@ -124,8 +123,7 @@
 		{view.runsRead === 0
 			? `No run in these ${view.days} days committed a counters row.`
 			: `${view.runsRead} ${view.runsRead === 1 ? 'run' : 'runs'} in these ${view.days} days committed counters the model server wrote itself.`}
-		{view.start} to {view.end}. Every figure below is the model server's own count, read at build
-		time and published nowhere.
+		{view.start} to {view.end}.
 	</p>
 
 	<!-- First under the intro, before the recording notes: a record this build did
@@ -290,7 +288,6 @@
 			<MachineCardsPanel machines={data.machines} />
 		{:else if id === 'platform-mix'}
 			<PlatformMixPanel
-				rows={data.fleetRows}
 				ramp={data.ramp}
 				start={view.start}
 				end={view.end}

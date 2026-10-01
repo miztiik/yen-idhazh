@@ -148,10 +148,20 @@ The chart rules these panels obey are
  strip under the plot stays on it until the list closes, and on a phone a job
  takes two lines rather than scrolling sideways, because the speed at the end of
  the row is what ties a job to its colour.
-- **None of the empty states is tinted and none gets the reserved box.** The
- route is prerendered and reads `state/` at build time, so there is no fetch,
- no waiting state and no unreachable state. Every nothing here is settled at
- build time and gets words. The heading and the note always stay.
+- **The machine mix reads after mount through the shared query reader.** Its
+ window ends on the newest packed day and starts no earlier than the oldest
+ packed day. It asks only for the columns it draws. Changing the window keeps
+ whole files already read, and a late answer cannot replace a newer selection.
+ The route still computes the common colour ramp for its other machine panels,
+ but carries no fleet rows in its document. The drill-through uses the rows
+ already fetched for the window.
+- **The machine mix draws four distinct empty states.** Loading keeps the
+ chart's reserved height and shimmer. A covered window without jobs is quiet;
+ an unpublished ledger is missing; a hole, failed fetch or engine failure is
+ unreachable and uses the warning tint. Other machine panels still use their
+ build-time recording notes. The heading and note always stay. The shared
+ [query-reader contract](../../architecture/publishing/how-the-query-door-answers-a-panel.md)
+ owns the fault names and file rules.
 
 **A panel title may not name a machine as if a run had one.** "The host under
 the newest run" let the page carry one processor string for the whole of its
