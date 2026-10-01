@@ -98,7 +98,7 @@
       "ledgers": [
         {
           "name": "candidate-models",
-          "grain": "tree",
+          "grain": "raw-and-compact",
           "prefix": ["candidate-models"],
           "stem": null,
           "suffix": null
@@ -188,7 +188,7 @@
       "ledgers": [
         {
           "name": "counterfactual-scores",
-          "grain": "tree",
+          "grain": "raw-and-compact",
           "prefix": ["counterfactual-scores"],
           "stem": null,
           "suffix": null
