@@ -12,6 +12,7 @@
     "state/raw/item-health",
     "state/compact/item-health"
   ],
+  "prune_refusal": null,
   "window": {
     "unit": "forever"
   }

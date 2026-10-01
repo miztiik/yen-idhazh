@@ -12,6 +12,7 @@
     "state/raw/host-fingerprint",
     "state/compact/host-fingerprint"
   ],
+  "prune_refusal": null,
   "window": {
     "unit": "forever"
   }

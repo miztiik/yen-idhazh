@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -212,9 +212,12 @@ two may not do. Which ledgers it accepts, why those two are refused, and what
 makes it safe to stop half way is
 [../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days).
 
-`item-health`, `summary-quality-evals` and `host-fingerprint` are not targets: they file through
-the ledger door, and until each ledger's compaction runs live nothing offers a
-range delete for them, the same as `visual-prunes`.
+A ledger the door files, such as `item-health`, is a target too. The command
+takes those days' rows out of every raw, daily, monthly and yearly file that
+holds them, and a live pass also needs `--run-id` and `--commit`, which each
+rebuilt file names as its writer. `summary-quality-evals` is refused by its own
+declaration, because every eval row is kept for ever. The steps are in
+[prune-a-collection.md](prune-a-collection.md#a-ledger-the-door-files).
 
 ## Three things that will bite
 
