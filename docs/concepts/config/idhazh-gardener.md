@@ -27,8 +27,8 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/seen.json` declares the task
-`seen`. A missing `config/gardener/` means no tasks. Seventeen ship today: eleven
-`retention` tasks, two `collection` tasks, three `compaction` tasks (below) and
+`seen`. A missing `config/gardener/` means no tasks. Twenty ship today: eleven
+`retention` tasks, two `collection` tasks, six `compaction` tasks (below) and
 `corpus-squash`, the one `history` task (below).
 **There is no index file and no `name` key**, so a task can never be listed under
 one name and filed under another.
@@ -97,7 +97,8 @@ pack that year. Each ledger's own `monthly_keep_days` sets its wait, a ledger th
 site publishes included, and the loader checks only that the value can take
 effect: at least `daily_keep_days` plus 32 days. How a pass runs is
 [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#the-compaction).
-Each ships `dry_run: true`, and each owns its ledger's two folders,
+Two pack live, `compact-item-health` and `compact-host-fingerprint`, and the
+other four ship `dry_run: true`. Each owns its ledger's two folders,
 `state/raw/<ledger>` and `state/compact/<ledger>`.
 
 | Task | Ledger | Keeps | Why |
@@ -105,13 +106,16 @@ Each ships `dry_run: true`, and each owns its ledger's two folders,
 | `compact-gardener` | `gardener`, the gardener's own record | the defaults: day files for 45 to 76 days, then 13 month files | no task limited this ledger before it moved, so nothing sets a floor, and the owner kept the defaults (2026-09-27) |
 | `compact-visual-prunes` | `visual-prunes`, the picture cleanup's report of every pass | the defaults | the same |
 | `compact-feed-retirements` | `feed-retirements`, the addresses the pipeline stopped fetching | day files for 45 to 76 days, then 60 month files | a retirement the window deletes is a feed the pipeline asks for again, so it keeps five years (owner, 2026-09-27). The price: an address retired more than 60 months ago is asked for once more, and is retired again if it is still gone |
-| `compact-item-health` | `item-health`, the census | day files for 45 to 76 days, then 15 month files | its floor is the `full-grain` series of `telemetry-aggregate`, 14 months, and a month is summarised before this can delete it |
+| `compact-item-health` | `item-health`, the census | day files for 31 to 62 days, then 15 month files | its floor is the `full-grain` series of `telemetry-aggregate`, 14 months, and a month is summarised before this can delete it. It packs live, with `daily_keep_days` 31: the shortest wait no GitHub re-run can outlast ([why 31](../../architecture/publishing/idhazh-gardener.md#design-rationale)) |
 | `compact-summary-quality-evals` | `summary-quality-evals`, the eval ledger | day files for 45 to 76 days, then every month file until its year is packed `monthly_keep_days` after it ends, then one year file for ever | every eval row is kept for ever and nothing summarises a month, so it may pack a month or a year and never drops one |
-| `compact-host-fingerprint` | `host-fingerprint`, the machine record | day files for 45 to 76 days, then 14 month files | its floor is the retired `host-fingerprint` window, 14 months, which `public_machine_keep_months` holds |
+| `compact-host-fingerprint` | `host-fingerprint`, the machine record | day files for 31 to 62 days, then 14 month files | its floor is the retired `host-fingerprint` window, 14 months, which `public_machine_keep_months` holds. It packs live, with `daily_keep_days` 31, as `compact-item-health` does |
 
 **The last three are the ledgers the console reads**, and the console reads their
-packed files, so until a person turns them on it shows data up to the day their
-migration ran ([../../architecture/contracts/persistence.md](../../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).
+packed files and nothing newer. `compact-item-health` and
+`compact-host-fingerprint` pack live, so a finished day reaches the console
+within about 48 hours. `compact-summary-quality-evals` only reports, so the console shows its
+days up to the day its migration ran
+([../../architecture/contracts/persistence.md](../../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).
 
 ## The collection declarations that ship
 
@@ -165,7 +169,8 @@ refused push. The person's ruling of 2026-09-29 added the two keys.
 **Every other switch ships `dry_run: true`**, and a contract test holds the
 committed tree to that. It finds every `dry_run` a declaration carries, a
 fold's as well as the task's own, and names the live ones as its exceptions,
-each with the decision beside it: `corpus-squash`'s `dry_run` and the four
+each with the decision beside it: `corpus-squash`'s `dry_run`, the `dry_run` of
+`compact-item-health` and `compact-host-fingerprint`, and the four
 `fold.dry_run` switches above. A task earns its first deletion from a person
 reading its records, so turning one live is an edit to that list, never a side
 effect of the change that added the task.

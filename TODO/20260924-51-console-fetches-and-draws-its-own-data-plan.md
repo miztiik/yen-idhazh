@@ -1,6 +1,6 @@
 # Plan 51 - The console fetches and draws its own data
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 **Level**: 5 (CLAUDE.md section 6). Row 3 decides whether `state/` reaches a browser, which is a publishing contract, and sections 2.6 to 2.9 are the design contract the panels are built to. The other rows are Level 2 to Level 3 and carry no contract change beyond one copied settlement key.
 
@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-28, about 13:50 UTC, when the first owner handed over after row 5 merged, and brought up to date 2026-09-30, about 10:30 UTC, when the second owner settled rows 3 and 8 and the person added rows 10 and 11.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-28, about 13:50 UTC, when the first owner handed over after row 5 merged, and brought up to date 2026-09-30, about 10:30 UTC, when the second owner settled rows 3 and 8 and the person added rows 10 and 11, and again 2026-10-01, about 06:10 UTC, when the third owner's session stopped with rows 10, 3 and 8 built and not merged.
 
 ```text
 You are the OWNER of TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md.
@@ -28,25 +28,47 @@ section 1 (the Status Reckoner, the only tracker), section 2.2, and each row jus
 you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -vv. At the
-last update, 2026-09-30 at about 10:30 UTC, rows 1, 2, 4, 5, 6, 7 and 9 had merged
-(#1138, #1140, #1137, #1143, #1144, #1154, #1157), and rows 3, 8, 10 and 11 were being
-dispatched. The owner's plan-doc worktree is p51own, branch
-p51-owner-settles-rows-3-and-8; remove it once its commit is on main. A row's worker
-works in worktree p51r<row> and keeps its running report in %TEMP%\p51r<row>\report.md;
-row 8's two passes share p51r8.
+last update, 2026-10-01 at about 06:10 UTC (main a4c00432e), rows 1, 2, 4, 5, 6, 7 and
+9 had merged (#1138, #1140, #1137, #1143, #1144, #1154, #1157). Nothing of this plan
+was running. Three rows were built and not merged, and one was not started:
+  row 10  PR #1177, worktree p51r10, branch
+          p51r10-missing-files-have-names-and-two-ledgers-pack-daily. Built, and the
+          branch stamps its Reckoner line DONE. CI passed all seven checks at
+          cf5a4cb03, then main moved: the PR conflicts, 20 commits behind.
+          Report: %TEMP%\p51r10\report.md.
+  row 3   PR #1169, worktree p51r3, branch p51r3-the-console-ledgers-are-published.
+          Built. The PR conflicts and has no CI run. The local branch (f517a2e85, a
+          merge of main and one doc fix) is ahead of the PR head (1c9d4af0d): push
+          it first. Reports: %TEMP%\p51r3\report.md and report-b.md.
+  row 8   PR #1171, worktree p51r8, branch
+          p51r8-one-panel-fetches-its-ledger-and-draws-in-d3. Pass A is done,
+          smoke-tested, and passed all seven checks at 28242e632, 35 commits behind
+          main. Pass B is not started. Report: %TEMP%\p51r8\report-a.md.
+  row 11  Not started, and no worktree yet.
+Worktree p51own (branch p51-owner-settles-rows-3-and-8) holds no unmerged work;
+remove it with the others at closure. A row's worker works in worktree p51r<row> and
+keeps its running report in %TEMP%\p51r<row>\report.md. A report under %TEMP% can be
+cleared at any time; the branches and pull requests are the durable record.
 
-STEP 2 - DISPATCH. Plan 50's row 9 merged on 2026-09-30 (#1166), so packed files and
-a day index of all three ledgers are on main; packing itself stays off until row 10.
-On 2026-09-30 the owner settled rows 3 and 8 with Reader, Fowler, Susan, Jony and
-Carmack, and the person answered five questions: deviations 22 to 33, and each row's
-"Settled at dispatch" block, which is part of that row's brief. The order:
-  now, side by side        row 10, row 3 and row 8's pass A. They share no file.
-                           Row 3 merges after row 10: its copy step refuses a ledger
-                           that lacks either index, so its CI goes green only once
-                           row 10's three empty month indexes are on main.
-  after rows 3 and 10      row 8's pass B, on pass A's branch (deviation 31).
-  after row 3              row 11. It edits copy-visuals.mjs and build-canary.mjs
-                           after row 3 does, and may run beside row 8's pass B.
+STEP 2 - DISPATCH. On 2026-09-30 the owner settled rows 3 and 8 with Reader, Fowler,
+Susan, Jony and Carmack, and the person answered five questions: deviations 22 to 33,
+and each row's "Settled at dispatch" block, which is part of that row's brief. Main has
+moved under the three built branches. Plan 56 renamed the `scores` ledger to
+`summary-quality-evals` (#1179: its folder under state/compact/ and its packing task
+under config/gardener/) and added a year file to the shared packing code (#1172).
+Expect conflicts in _compact_tree.py, slice-shapes.ts and the gardener pages, and carry
+the new name through every file a branch adds. The order from here:
+  1. row 10   merge origin/main into its branch, resolve, rerun its gates, push,
+              merge on green CI. Plan 57 waits on it.
+  2. row 3    push the local commits, merge origin/main (row 10 now in it), push,
+              merge on green CI. Its copy step refuses a ledger that lacks either
+              index, so its CI goes green only once row 10 is on main.
+  3. row 8    pass B on pass A's branch (deviations 28, 29 and 31, and the row's
+              settled block), then merge origin/main, push, merge on green CI.
+  4. row 11   a new worktree p51r11 from main once row 3 has merged. It edits
+              copy-visuals.mjs and build-canary.mjs after row 3 does, and may run
+              beside row 8's pass B. Plan 50's plan is deleted (#1174), so row 11's
+              edit to it is moot.
 Rows 10 and 11 merge only while no digest.yml or idhazh-gardener.yml run is queued or
 running: row 10 switches two packing tasks on, and row 11 edits digest.yml.
 
@@ -67,6 +89,8 @@ branch. A worker call blocks you until that worker returns, so merge every green
 request before you start the next worker; row 2's waited an hour. If two open pull
 requests each stamp their own Reckoner line, the second conflicts on this file: merge
 origin/main into its branch, keep both lines and push. Never rebase and force-push.
+GitHub runs no CI on a conflicting pull request ("no checks reported"): merge
+origin/main into it first.
 
 STEP 5 - CLOSE. When every row is DONE, follow the closing section of
 execute-a-plan.md. A commit made on this machine is stamped +02:00 unless TZ=UTC is set
@@ -174,7 +198,7 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | DONE | p51r7 | #1154 | p51-r7-worker |
 | 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9, 10 | D | PENDING | - | - | - |
 | 9 | The door keeps what it fetched for the page's life, and says how far a ledger reaches | 7 | C | DONE | p51r9 | #1157 | p51-r9-worker |
-| 10 | Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily | 7, 9 | C | PENDING | - | - | - |
+| 10 | Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily | 7, 9 | C | DONE | p51r10 | #1177 | p51-r10-worker-2 |
 | 11 | The span-rollup ledger is deleted, and one item's trace is a command | 3 | E | PENDING | - | - | - |
 
 **Readiness is the file-disjointness test, not the group letter** (execute-a-plan.md). The letters record which rows the author believed independent; the `Files touched` lists are the fact, and the shared-file notes below are why three depends-on edges exist that the letters do not show.
@@ -1153,6 +1177,17 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 2 | **No list of allowed 404s anywhere.** It would be Spark's `ignoreMissingFiles` under another name: a lost index would look the same as one never written | Fowler, 2026-09-30 |
   | 3 | **No field in `daily.json` naming the other indexes.** A stored-format change to say what an empty file already says | Fowler, 2026-09-30 |
   | 4 | **31 days, not 15.** A 15-day lag needs a month file rebuilt when a late re-run lands, which the packing rules refuse today; 31 is the shortest wait that still catches every re-run GitHub allows | Carmack, 2026-09-30; the person chose 31 |
+
+- **Found in execution, 2026-09-30** (the row's second worker finished the first worker's uncommitted draft):
+  - **The packing now learns which files exist from the commit, not the disk** (plan 50's last change, #1173, landed while this row ran), so the check below reads that list.
+  - **An index its watermark says was packed, and that is not there, stops the pass by name** as `index-missing`. Read as empty, the pass would rewrite it naming only what it packs, and every period packed before would drop out of sight. That is what makes "write the other index when there is none" safe.
+  - **No one config file sets `daily_keep_days`.** It is a key of each packing declaration, 45 by default in code. The two live declarations set 31; the four that only report keep 45, so whoever turns one of them on chooses its wait.
+  - **A span that starts before the oldest day either index names is `unreachable` with no fault**, not `day-missing`: those days were never packed, so "re-pack that day" would send an operator to fix nothing. Its console line says to clamp the span to the reach's first day.
+  - **A reach with no `monthly.json` is `ok` from the oldest daily day and carries `index-missing`**, so a route anchored on it still draws every day the door can read. The build-time readers anchor on that reach, so `index-missing` shows in the build log, never in a route's note.
+  - **Four more doc pages said the switch had not happened**, found with plan 57's search: `docs/how-to/run-the-pipeline.md` (its step 5 now also names the `LIVE_BY_DECISION` entry), `docs/architecture/sources/item-health.md`, `docs/concepts/config/retention-ages.md` and `docs/architecture/publishing/console-payloads.md`. The config page's counts were stale too: twenty declarations, six packing tasks, four live folds.
+  - **For plan 57:** `compact-item-health` now deletes a month's rows once its 15-month window passes, the first about 1 January 2028 (an estimate). That month's summary is written by `telemetry-aggregate`, which still only reports, so it has to run live before then.
+  - **Overlap with plan 56's open pull request #1172** (a year period): it edits `_compact_tree.py`, `_monthly_period.py`, `ledger_files.py`, `slice-reader.ts`, `ledger-reach.ts`, `slice.ts`, `ledger-door.spec.ts` and both door and gardener pages, and adds `Period.YEARLY`. Whichever merges second decides whether a year index is written with the other two or only when a year is packed.
+  - **#1172 merged first, so this row decided: the year index is written with the other two.** As #1172 shipped, the reach asks for `yearly.json` on every page and no ledger has one, so every console page met a 404 again, the thing this row removes. So whatever writes one index writes each of the three the ledger lacks, empty; the three console ledgers and both fixture roots carry an empty third index; a missing `yearly.json` beside `daily.json` is `index-missing`, like a missing `monthly.json`; and the year step names its refusals `day-missing` and `file-missing`, as the month step does. #1172's year tests set a daily watermark with no daily index, which the pass now refuses by name, so their checkout gains an empty daily index.
 
 ---
 

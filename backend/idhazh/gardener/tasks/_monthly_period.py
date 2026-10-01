@@ -8,7 +8,10 @@ done; the third that nothing of it is missing; the fourth that no re-run is
 still waiting in it to be compacted. A month that fails the first, second or
 fourth waits for a later wake. A month whose days the daily index does not all
 name is a hole: it is refused by name, the watermark stays where it is and the
-task exits 1, because absorbing it would put the missing day in no period.
+task exits 1, because absorbing it would put the missing day in no period. The
+refusal names the fault the query door gives the same gap - `day-missing` for
+a day the index does not name, `file-missing` for a day file that is not there -
+so one search finds it in the gardener's log and in the browser's console.
 
 **Absorbing is five steps, in this order and no other**: the month file, the
 monthly index, the deletion of the daily files it absorbed, the daily index,
@@ -87,6 +90,13 @@ def drop(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
         )
         if found is not None:
             tree.delete(found)
+        else:
+            logger.warning(
+                "a month the window drops has no file left to delete ledger=%s month=%s fault=%s",
+                tree.ledger.value,
+                month,
+                ledger.LedgerFault.FILE_MISSING,
+            )
         del tree.monthly[month]
     if gone:
         tree.write_index(Period.MONTHLY)
@@ -103,10 +113,16 @@ def _ready(tree: CompactTree, month: str, *, now: datetime, after_days: int) -> 
     )
 
 
-def _refused(tree: CompactTree, month: str, why: str) -> tuple[Stop, ...]:
+def _refused(
+    tree: CompactTree, month: str, why: str, fault: ledger.LedgerFault | None = None
+) -> tuple[Stop, ...]:
     """A month that cannot be absorbed, said once by name. The watermark stays where it is."""
     logger.error(
-        "a month is not absorbed ledger=%s month=%s reason=%s", tree.ledger.value, month, why
+        "a month is not absorbed ledger=%s month=%s fault=%s reason=%s",
+        tree.ledger.value,
+        month,
+        fault or "none",
+        why,
     )
     return (Stop(StopReason.FAILED, month),)
 
@@ -145,14 +161,26 @@ def absorb(
         missing = [day for day in days if day not in tree.daily]
         if missing:
             where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.DAILY)
-            return _refused(tree, month, f"{where.name} does not name {', '.join(missing)}")
+            return _refused(
+                tree,
+                month,
+                f"{where.name} does not name {', '.join(missing)}. Re-pack each such day from "
+                "its raw files, or from git history if they are gone",
+                ledger.LedgerFault.DAY_MISSING,
+            )
         files = [
             named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day)
             for day in days
         ]
         absent = [day for day, found in zip(days, files, strict=True) if found is None]
         if absent:
-            return _refused(tree, month, f"no daily file holds {', '.join(absent)}")
+            return _refused(
+                tree,
+                month,
+                f"no daily file holds {', '.join(absent)}. Restore each from git history, "
+                "and the next wake absorbs the month",
+                ledger.LedgerFault.FILE_MISSING,
+            )
         held = [found for found in files if found is not None]
         try:
             rows = [row for path in held for row in tree.load(path, model=model)]

@@ -20,6 +20,7 @@ from idhazh.ledger.csv_file import (
     render_file,
     require_matching_header,
 )
+from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.filenames import (
     BEFORE_PARTITION_NAME,
     PRE_IDENTITY_TRACE,
@@ -194,6 +195,8 @@ __all__ = [  # noqa: RUF022
     "load_days",
     "load_ledger_rows",
     "month_days",
+    # faults.py: the four ways a packed ledger can be missing a file, by name.
+    "LedgerFault",
     # lifecycle.py: whether a ledger takes new rows now.
     "accepts_new_rows",
     # keys.py: what makes two rows one record, and which contract reads one.
