@@ -16,6 +16,7 @@ in UTC.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
@@ -245,12 +246,15 @@ def test_a_window_that_fails_leaves_the_fold_for_the_next_wake(
     _, checkout = an_origin(tmp_path, files)
     config_dir = a_config(checkout, GARDENER_FIXTURES / "breaks")
     broken = config_dir / "gardener" / "broken.json"
-    broken.write_text(
-        broken.read_text(encoding="utf-8").replace(
-            '"state/broken"', f'"state/{TREE.value}"'
-        ).replace('"dry_run": false,', '"dry_run": false,\n  "fold": {"dry_run": false},'),
-        encoding="utf-8",
-    )
+    declared = json.loads(broken.read_text(encoding="utf-8"))
+    # Whatever a task is called, owning this ledger's folder makes it the one the
+    # loader holds to the fourteen month files the widest console read opens.
+    declared |= {
+        "owns": [f"state/{TREE.value}"],
+        "fold": {"dry_run": False},
+        "window": {"unit": "months", "value": 14},
+    }
+    broken.write_text(json.dumps(declared), encoding="utf-8")
     settings = config.load_gardener(config_dir)
 
     outcome = runner.run(

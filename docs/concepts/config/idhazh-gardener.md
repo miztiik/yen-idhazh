@@ -77,7 +77,6 @@ Why each tree gets the age it has is
 | `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health` and `state/compact/item-health`, which `compact-item-health` owns, so it finds its due months whichever shard it lands in |
 | `summary-quality-evals-index` | `state/summary-quality-evals-index` | forever | the index a run dedupes against, and an observation key carries no date, so a dropped day would make every measurement in it new again. Every eval row is kept for ever and nothing summarises a month, so the task takes nothing; it exists so the index's closed months become one file each, and the open month's closed days one file each |
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
-| `host-fingerprint` | `state/host-fingerprint` | 14 months | retired: its module is deleted and nothing runs it. The declaration stays because its window is the floor `compact-host-fingerprint` must reach, and the published machine shard is folded from that ledger, so it keeps at least `public_machine_keep_months` |
 | `seen` | `state/seen` | 90 days | at least `collect.seen_window_days`, the days the collector reads |
 | `counterfactual-scores` | `state/counterfactual-scores` | 30 days | at least `lens_weights.window_days`, the days a reader opens |
 | `traces` | `state/traces` | 7 days | a trace is opened to see one recent run, and the span rollup is the record that stays |
@@ -108,7 +107,7 @@ other four ship `dry_run: true`. Each owns its ledger's two folders,
 | `compact-feed-retirements` | `feed-retirements`, the addresses the pipeline stopped fetching | day files for 45 to 76 days, then 60 month files | a retirement the window deletes is a feed the pipeline asks for again, so it keeps five years (owner, 2026-09-27). The price: an address retired more than 60 months ago is asked for once more, and is retired again if it is still gone |
 | `compact-item-health` | `item-health`, the census | day files for 31 to 62 days, then 15 month files | its floor is the `full-grain` series of `telemetry-aggregate`, 14 months, and a month is summarised before this can delete it. It packs live, with `daily_keep_days` 31: the shortest wait no GitHub re-run can outlast ([why 31](../../architecture/publishing/idhazh-gardener.md#design-rationale)) |
 | `compact-summary-quality-evals` | `summary-quality-evals`, the eval ledger | day files for 45 to 76 days, then every month file until its year is packed `monthly_keep_days` after it ends, then one year file for ever | every eval row is kept for ever and nothing summarises a month, so it may pack a month or a year and never drops one |
-| `compact-host-fingerprint` | `host-fingerprint`, the machine record | day files for 31 to 62 days, then 14 month files | its floor is the retired `host-fingerprint` window, 14 months, which `public_machine_keep_months` holds. It packs live, with `daily_keep_days` 31, as `compact-item-health` does |
+| `compact-host-fingerprint` | `host-fingerprint`, the machine record | day files for 31 to 62 days, then 14 month files | its floor is `public_machine_keep_months`, 14 months, because the published machine shard is folded from this ledger; its CSV was kept the same 14 months. It packs live, with `daily_keep_days` 31, as `compact-item-health` does |
 
 **The last three are the ledgers the console reads**, and the console reads their
 packed files and nothing newer. `compact-item-health` and
@@ -186,14 +185,13 @@ names the file an operator edits and the rule it broke.
 | Two tasks that own one folder, or a folder inside the other's, whatever their status | Both would delete in it. A retired task keeps its claim |
 | More than one task using the complement form | Each would claim what the other claims |
 | An owned entry that is a file | A shard lists the files under each folder a task owns, so a file would list nothing |
-| `seen` keeping less than `collect.seen_window_days` | The planner still reads those days |
-| `counterfactual-scores` keeping less than `lens_weights.window_days` | A reader still opens those days |
+| The declaration that governs `seen`, `counterfactual-scores` or `published` keeping less than the days `collect.seen_window_days`, `lens_weights.window_days` or `collect.published_window_days` reads back: its retention task while the ledger is on CSV, its compaction once it moves | A reader still opens those days. `collect.published_window_days` is `-1`, which reads every day, so nothing may delete `published`. A ledger no declaration governs is deleted by nothing, so it meets every floor |
 | `telemetry-aggregate` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |
 | A task's `window` that differs from its `full-grain` series, or a ceiling on a task that keeps series | One number is spelled once; a ceiling could stop a month's summary part way through |
 | An `aggregate` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |
 | A `public-copy` series that is not equal to the `full-grain` series | The copy is the browser's copy of that ledger |
-| A `feed-health` or `summary-quality-evals-index` window, a `full-grain` series or a `public-copy` series under the month files the widest console read selects | A panel blanks for a month that ran |
-| The retired `host-fingerprint` declaration keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from the host-fingerprint ledger, and that window is the floor its compaction must reach |
+| The declaration that governs `feed-health` or `summary-quality-evals-index`, a `full-grain` series or a `public-copy` series keeping fewer month files than the widest console read selects | A panel blanks for a month that ran |
+| The declaration that governs the host-fingerprint ledger - its compaction - keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from that ledger, so a source month deleted while its published month is kept is a shard nothing can rebuild |
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
 | `fold.settles_months` beside a `window` of days | A settled month's file names no day, so a window of days would take it whole once the month's first day aged out, and with it the rows of every later day the window still keeps |
@@ -206,7 +204,7 @@ names the file an operator edits and the rule it broke.
 | `monthly_keep_days` below `daily_keep_days` plus 32 | A year is packed only once its next January is absorbed, one wake after that January's `daily_keep_days` have passed, so a smaller value changes nothing |
 | A ledger in `ledger.published` whose compaction keeps its months forever and packs no year | A reader's first request would grow with the archive. Packing years bounds it: the month files last only until their year is packed, and the yearly index grows by one entry a year |
 | A published ledger whose periods reach back less than the widest `console.window_presets` | The widest span the console offers would have days no file holds |
-| A compaction reaching back less far than the task that limited its ledger before it moved | The two periods are the ledger's retention now, and a shorter pair silently cuts it |
+| A compaction reaching back less far than a series that still summarises its ledger's months | The two periods are the ledger's retention now, and a month they delete before the series is done with it is a month the summary never holds |
 
 **The refusals that need the task modules are the runner's**: a declaration no
 module serves, a module no declaration uses, and a history task handed to it
@@ -223,15 +221,26 @@ and the answer never depends on the day the build ran. The same unit against the
 same unit compares the numbers. The period pair reaches back `daily_keep_days`
 plus its `monthly_window` (Fowler and Carmack).
 
-**A compaction's floor is the task that limited the ledger.** Once a
-ledger moves under the two roots, the task that kept its old tree is retired and
-keeps its declaration, so its window is the one record of how far back the ledger
-reached. For `item-health` that is the `full-grain` series of
+**A floor belongs to a ledger, and is held against whichever declaration
+deletes it.** A reader's knob, the widest console read and the published machine
+shard each say how far back a ledger must reach. Each is checked against the
+declaration that governs the ledger: its compaction once it files under the two
+roots, else the retention task that owns its folder. A ledger neither governs is
+deleted by nothing, so it meets every floor; refusing it instead would make every
+fixture garden carry declarations that test nothing. So moving a ledger changes
+no rule here.
+
+**A compaction also reaches as far back as a series that summarises its
+ledger's months.** For `item-health` that is the `full-grain` series of
 `telemetry-aggregate`, not the `aggregate` series, which covers the summary.
 Five cases: a bounded floor against a bounded pair compares; a bounded floor
 against a pair kept forever passes; a floor kept forever against a bounded pair is
 refused, because a person chose never to delete that ledger; forever against
-forever passes; and a ledger no task ever limited has no floor.
+forever passes; and a ledger no task ever limited has no floor. How long a moved
+ledger's CSV was kept is not a declaration: `CSV_LEDGERS` in
+`backend/utilities/migrate_to_parquet.py` records it, and its test holds every
+moved ledger's committed compaction to it, so no retired retention task stays
+behind owning a folder nothing writes.
 
 **A cleanup age lives in the declaration of the task that deletes by
 it.** Eleven keys left `config/idhazh.json` - the ledger ages, the trial window,

@@ -77,7 +77,11 @@ def test_the_committed_config_no_longer_emits_a_removed_name() -> None:
 MOVED_TO_A_DECLARATION = [
     ("observability", "trace_window_days", "config/gardener/traces.json"),
     ("observability", "feed_health_keep_months", "config/gardener/feed-health.json"),
-    ("observability", "host_fingerprint_keep_months", "config/gardener/host-fingerprint.json"),
+    (
+        "observability",
+        "host_fingerprint_keep_months",
+        "config/gardener/compact-host-fingerprint.json",
+    ),
     (
         "observability",
         "scores_full_grain_months",

@@ -1066,9 +1066,9 @@ def an_archived_day(state: Path, day: str, name: str, text: str) -> None:
 
 def migrated_reading(state: Path, day: str) -> list[dict[str, str]]:
     """One archived census day, settled, the way the migration reads it before filing it."""
-    model, key = migrate_to_parquet.LEDGERS[LedgerName.ITEM_HEALTH]
+    key = ledger.door_key(LedgerName.ITEM_HEALTH)
     root = migrate_to_parquet.csv_root(state, LedgerName.ITEM_HEALTH)
-    return day_shards.settled_day(root, day, key, model)
+    return day_shards.settled_day(root, day, key, ItemHealthRow)
 
 
 @pytest.mark.parametrize("dropped", sorted(DROPPED_CELLS))

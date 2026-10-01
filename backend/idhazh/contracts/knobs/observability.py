@@ -41,7 +41,9 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
             "series.public-copy.value in config/gardener/telemetry-aggregate.json"
         ),
         "feed_health_keep_months": "window.value in config/gardener/feed-health.json",
-        "host_fingerprint_keep_months": "window.value in config/gardener/host-fingerprint.json",
+        "host_fingerprint_keep_months": (
+            "monthly_window.value in config/gardener/compact-host-fingerprint.json"
+        ),
         "scores_full_grain_months": (
             "monthly_window in config/gardener/compact-summary-quality-evals.json, which "
             "keeps every eval row for ever and summarises no month"
@@ -336,8 +338,9 @@ class ObservabilityConfig(Model):
             "Fourteen on the same argument. The shard is folded from the "
             "item-health and host-fingerprint ledgers, so it may not outlive "
             "either source: a published month whose source months are gone cannot be "
-            "rebuilt. config.load_gardener refuses a host-fingerprint task that keeps "
-            "less than this, on the argument the telemetry copy makes for its own pair."
+            "rebuilt. config.load_gardener refuses a declaration governing the "
+            "host-fingerprint ledger - its compaction - that keeps less than this, on "
+            "the argument the telemetry copy makes for its own pair."
         ),
     )
     public_span_rollup_keep_months: int = Field(

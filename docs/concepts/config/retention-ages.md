@@ -116,7 +116,7 @@ that mapping yet, because no console read opens one of its shards today
 | the eval ledger, `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | forever - the `monthly_window` of its compaction is `forever`, so no row is ever deleted | none - a chart that wants a monthly figure computes it from the rows | `config/gardener/compact-summary-quality-evals.json` |
 | `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
 | `state/feed-health/` | 14 months | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/feed-health.json` |
-| the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`, with the floor it must reach in the retired `config/gardener/host-fingerprint.json` |
+| the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`, which may not keep less than `public_machine_keep_months` |
 | `state/span-rollup/` | forever - nobody has said how long a span total is wanted | none | `config/gardener/span-rollup.json` |
 
 And one for each published copy, because a reader fetches those and our own disk
@@ -127,7 +127,7 @@ is not what bounds them:
 | `frontend/public/telemetry/` | 14 months, the `public-copy` series of `config/gardener/telemetry-aggregate.json` | the `full-grain` series of the same file, which it must equal |
 | `frontend/public/run-days/` | `public_run_days_keep_months` (14) | nothing - the source is the day payloads, whose retention is the archive's |
 | `frontend/public/day-metrics/` | `public_day_metrics_keep_months` (14) | nothing - `state/day-metrics/` has no age of its own |
-| `frontend/public/machine/` | `public_machine_keep_months` (14) | the window of the retired `config/gardener/host-fingerprint.json`, which may not sit below it - the shard is folded from the host-fingerprint and item-health ledgers |
+| `frontend/public/machine/` | `public_machine_keep_months` (14) | the `monthly_window` of `config/gardener/compact-host-fingerprint.json`, which may not keep less than it - the shard is folded from the host-fingerprint and item-health ledgers |
 | `frontend/public/span-rollup/` | `public_span_rollup_keep_months` (14) | nothing |
 
 **Two ages left this table on 2026-09-16.** `public_scores_keep_months` and
@@ -137,12 +137,17 @@ the two knobs with them. A config file still spelling either is refused by name
 rather than ignored, and it is sent nowhere: the two ledgers above keep their
 own ages, which is a different number for a different ledger.
 
-**Two more trees are bounded by a read, and a window that deletes what the read
-opens is refused.** `state/seen/` keeps 90 days, the window of
+**Three more ledgers are bounded by a read, and a declaration that deletes what
+the read opens is refused.** `state/seen/` keeps 90 days, the window of
 `config/gardener/seen.json`, and the gardener loader refuses that window below
 `collect.seen_window_days`, the day files the collector reads. The
 `counterfactual-scores` window is held the same way above
-`lens_weights.window_days`.
+`lens_weights.window_days`, and `published` above
+`collect.published_window_days`, which is `-1` and so reads every day: nothing
+may delete that ledger. Each floor belongs to the ledger and is held against
+whichever declaration governs it - its retention task while it is on CSV, its
+compaction once it moves - and a ledger no declaration governs is deleted by
+nothing, so it meets every floor.
 
 **Two are kept a short, fixed time because nothing sums them.** `state/traces/`
 keeps 7 days, the window of `config/gardener/traces.json`. A trace is the
@@ -169,10 +174,9 @@ refuses a `public-copy` series that differs from the `full-grain` series of
 `telemetry-aggregate`, in both directions: a published month whose source has
 been folded away is a rate nobody can check, and a source month with no
 published copy is a window the console cannot draw. The machine shard is folded
-from the host-fingerprint ledger, so the retired `host-fingerprint` declaration's
-window is refused below `public_machine_keep_months`. That window is the floor
-the host-fingerprint compaction's `monthly_window` must reach, because the
-compaction is what deletes the ledger's rows now. The other three copies have no
+from the host-fingerprint ledger, so the declaration that governs that ledger -
+its compaction, which is what deletes its rows now - is refused when it keeps
+less than `public_machine_keep_months`. The other three copies have no
 state ledger behind them and are bounded by their own knob alone.
 
 **This block sets the ages. Which policy a tree is under - fold, delete or keep
@@ -241,7 +245,7 @@ still spelling a moved name is refused the same way, naming the new place:
 | `observability.scores_full_grain_months` | 14 | `monthly_window` in `config/gardener/compact-summary-quality-evals.json`, as `forever` since 2026-09-30 |
 | `observability.score_archive_keep_months` | null | `monthly_window` in `config/gardener/compact-summary-quality-evals.json`, as `forever`: no month is summarised |
 | `observability.feed_health_keep_months` | 14 | `window` in `config/gardener/feed-health.json` |
-| `observability.host_fingerprint_keep_months` | 14 | `window` in `config/gardener/host-fingerprint.json` |
+| `observability.host_fingerprint_keep_months` | 14 | `monthly_window` in `config/gardener/compact-host-fingerprint.json` |
 | `observability.trace_window_days` | 7 | `window` in `config/gardener/traces.json`, in days |
 | `retention.trial_state_days` | 90 | `window` in `config/gardener/trials.json`, in days |
 | `retention.max_deletes_per_run` | 200 | `max_deletes_per_run` in `config/gardener/visual-prune.json` |
@@ -295,8 +299,8 @@ series and unlinks the browser's copy of that month past its `public-copy`
 series; the `feed-health` task deletes `state/feed-health/` past its window; and
 the `summary-quality-evals-index` task keeps every `state/summary-quality-evals-index/` day, because its window is
 `forever`. The item-health and host-fingerprint rows are deleted by each ledger's
-compaction past its `monthly_window`, the eval rows' compaction keeps every
-month, and the retired `host-fingerprint` task runs no more.
+compaction past its `monthly_window`, and the eval rows' compaction keeps every
+month.
 
 **Every eval row is kept, and nothing summarises a month.** The ledger is the
 evidence behind every published quality claim, so its rows are kept for ever,
