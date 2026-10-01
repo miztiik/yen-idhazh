@@ -295,6 +295,18 @@ def test_a_dry_run_names_every_path_the_live_pass_changes_and_changes_nothing(
     assert dry.bytes_freed == live.bytes_freed == sum(len(before[path]) for path in live.taken)
 
 
+def test_a_window_that_only_reports_packs_a_year_as_a_live_one_does(tmp_path: Path) -> None:
+    """A window kept for ever drops nothing, so its switch changes nothing a pass packs."""
+    trees = [a_finished_year(tmp_path / "live"), a_finished_year(tmp_path / "reports")]
+
+    live = compact(trees[0], TODAY, **PACKS, monthly_window_dry_run=False)
+    reports = compact(trees[1], TODAY, **PACKS, monthly_window_dry_run=True)
+
+    assert (reports.taken, reports.written) == (live.taken, live.written)
+    assert reports.selected == live.selected == len(live.taken)
+    assert [watermark(root, Period.YEARLY) for root in trees] == ["2026", "2026"]
+
+
 # --- a pass that stopped part way ------------------------------------------------
 
 
