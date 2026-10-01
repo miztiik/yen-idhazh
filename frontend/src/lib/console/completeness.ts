@@ -12,6 +12,11 @@
  * is always spelled out, weekday and date and never `today`: the page's day is
  * the UTC day, and a reader's own day can be a different one.
  *
+ * It dates the last run and never the newest packed day, and it does not call
+ * the page complete. A chart drawn from a packed ledger can end days before
+ * that run, and the route's own note for that record says how far it reaches
+ * (`recording.ts`).
+ *
  * No clock is read here. The prerendered page has no reader's clock to judge
  * against, so it states the instant and nothing more; a browser passes its own
  * clock once the page is open, and only then can the record be late.
@@ -70,7 +75,7 @@ export function completenessSentence(state: Completeness): string {
 	}
 	const when = spelledInstant(state.finished);
 	if (state.kind === 'complete') {
-		return `Complete to ${when}. A run still going is not on this page yet.`;
+		return `The latest run on this page finished at ${when}. A run still going is not on this page yet.`;
 	}
 	const missing =
 		state.missingDays === 1 ? '1 day is missing.' : `${state.missingDays} days are missing.`;

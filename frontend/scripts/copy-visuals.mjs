@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Stage the pipeline's published visuals, public telemetry and month indexes
- * into `static/` before the build.
+ * Stage the pipeline's published visuals, public telemetry, month indexes and
+ * published ledgers into `static/` before the build.
  *
  * `frontend/public/` is where `backend/` writes, and the page reads those
  * payloads through the filesystem at build time - so the JSON never needs
@@ -53,6 +53,12 @@
  * every staged file carries its `version`. It is a contract because a reading
  * route is about to fetch it, so a browser we cannot upgrade will parse it
  * (Guardrail #3).
+ *
+ * **A published ledger is copied, never projected.** The ledgers
+ * `ledger.published` names reach the site as the committed compact files,
+ * byte for byte and at the path they have under `state/`, so a published file
+ * cannot say anything `state/` does not. `published-ledgers.mjs` decides which
+ * files, and when the build must stop.
  */
 
 import {
@@ -64,13 +70,14 @@ import {
 	statSync,
 	writeFileSync
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative as relativeTo, resolve, sep } from 'node:path';
 import { assetBaseUrl } from '../asset-base.js';
 // The allow-list and the projector itself, shared with the build-time reader in
 // `src/lib/server/payload.ts`. The `.ts` extension and the full relative path
 // are both required: this script is run by plain `node`, which strips the types
 // but resolves nothing else.
 import { ITEM_FIELDS, VIEW_VERSION, projectDay } from '../src/lib/payload/project.ts';
+import { ledgerCopy, publishedLedgers } from './published-ledgers.mjs';
 
 // What a per-item file in a day directory is named, and it is the whole rule.
 // `digest.json` and `run.json` belong to the day rather than to a story, and an
@@ -249,6 +256,66 @@ function stageConsolePayloads() {
 }
 
 stageConsolePayloads();
+
+// The ledgers the browser's query door reads, from the same state root the
+// build-time readers use, so a canary build publishes the fixture's packed
+// ledgers and never the real ones.
+const stateSource = process.env.STATE_ROOT
+	? resolve(process.env.STATE_ROOT)
+	: resolve('..', 'state');
+const stateTarget = join('static', 'state');
+/** The state root as the repository names it, so a refusal names the tree it
+ * read: a canary build reads another one than `state/`. */
+const stateLabel = relativeTo(resolve('..'), stateSource).split(sep).join('/');
+
+function stageLedgers() {
+	const ledgers = publishedLedgers();
+	const copy = ledgerCopy(stateSource, ledgers, stateLabel);
+	if (copy.refused.length > 0) {
+		console.error('published ledgers: the build stops here, because a published ledger is not whole:');
+		for (const line of copy.refused) console.error(`  ${line}`);
+		console.error(
+			'A browser asks for both indexes of a published ledger before anything else. The\n' +
+				"ledger's compaction task writes them; run it, or take the ledger out of\n" +
+				'ledger.published in config/idhazh.json.'
+		);
+		process.exit(1);
+	}
+	// A GitHub Actions annotation, so a lost day shows on the run's page and not
+	// only in its log. Degrade, do not fail: the rest of the ledger still ships.
+	for (const file of copy.missing) {
+		const [, ledger] = file.split('/');
+		console.log(
+			`::warning title=A published ledger file is missing::file-missing ${ledger} ${stateLabel}/${file}: ` +
+				'an index names it and it is not in the tree. The site is built without it, and the ' +
+				'console shows the days it covers as unreachable. Re-pack that day.'
+		);
+	}
+	// The same switch as the marks: the door asks that host for these files, so a
+	// copy staged here would be bytes nobody fetches.
+	if (servedElsewhere) {
+		rmSync(stateTarget, { recursive: true, force: true });
+		console.log(
+			`published ledgers: none staged - visuals.asset_base_url says they are served from ${assetBaseUrl()}.`
+		);
+		return;
+	}
+	const wanted = new Set();
+	let staged = 0;
+	for (const file of copy.files) {
+		const relative = join(...file.split('/'));
+		wanted.add(relative);
+		if (stage(readFileSync(join(stateSource, relative)), join(stateTarget, relative))) staged += 1;
+	}
+	const stale = reconcile(stateTarget, wanted);
+	console.log(
+		`published ledgers: staged ${staged} file(s) of ${ledgers.length} ledger(s) into static/state, ` +
+			`${wanted.size - staged} already current, ${stale} stale removed, ` +
+			`${copy.missing.length} named and missing.`
+	);
+}
+
+stageLedgers();
 
 if (!existsSync(source)) {
 	console.log(`published visuals: no payload tree at ${source}, nothing to stage.`);

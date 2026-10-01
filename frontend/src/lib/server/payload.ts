@@ -42,8 +42,9 @@ export const DIGEST_ROOT = process.env.DIGEST_ROOT
  *
  * Overridable for the same reason `DIGEST_ROOT` is: the canary suite builds a
  * site out of fixture runs, and a fixture must never be able to reach the real
- * ledger. Read at build time only. Nothing under `state/` is ever served - the
- * page carries the numbers, never the file.
+ * ledger. Read at build time only. Of everything under `state/`, the site
+ * serves only the compact files of the ledgers `ledger.published` names, which
+ * `scripts/copy-visuals.mjs` copies from this same root.
  */
 export const STATE_ROOT = process.env.STATE_ROOT
 	? resolve(process.env.STATE_ROOT)

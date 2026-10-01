@@ -221,6 +221,63 @@ part a year file read by byte range adds, are made in
 bits, never from fetched text. On disk the same paths sit under the state root
 handed to `sliceFromDisk()`.
 
+## What the site holds for the door
+
+The site holds the ledgers `ledger.published` in `config/idhazh.json` names -
+`host-fingerprint`, `item-health` and `summary-quality-evals` - and nothing else of `state/`. The
+build copies each one's three indexes and every compact file they name, byte for
+byte, to the path each has under `state/`: `frontend/scripts/copy-visuals.mjs`
+stages them into `frontend/static/state/`, which git ignores, and the bundler
+carries them into the site. A published file is the ledger itself, so it cannot
+say anything `state/` does not. `frontend/scripts/published-ledgers.mjs` decides
+which files.
+
+- **The indexes are the list.** No directory is walked, so the gardener's
+  watermark, a raw day and any file no index names stay off the site with no list
+  of things to leave out. A file whose entry has `rows: 0` is copied too, so every
+  entry resolves, although the door never asks for one.
+- **A published ledger without all three indexes stops the build**, which names the
+  ledger and the missing file. A browser asks for a ledger's indexes before
+  anything else, so a 404 there would be the only sign that the ledger was
+  published wrongly. The whole site waits, reading pages included, until the
+  ledger is whole again or leaves `ledger.published`.
+- **A data file an index names and the tree lacks does not stop it.** The build
+  copies the rest and puts a `file-missing` warning, naming the file, on the run's
+  page; the door answers `unreachable` for a span that reaches that day.
+- **The canary build publishes the fixture's ledgers**, because the copy reads the
+  same `STATE_ROOT` the build-time readers do, and a root that is not there stops
+  the build rather than publishing nothing.
+- **With `visuals.asset_base_url` set, nothing is copied**, because the door asks
+  that host. Whoever sets it puts each `state/compact/<ledger>/` tree there, and
+  the bundle gate skips the ledgers' keys.
+- **`backend/tests/contracts/test_published_ledgers_cover_the_panels.py` holds the
+  two sides together**: every ledger a panel names in a `slice()` or
+  `ledgerReach()` call, and every ledger the door's closed set admits, is in
+  `ledger.published`. `frontend/tests/published-ledgers.spec.ts` asks the built
+  site the door's own questions: every address an index names is there, at the
+  size its entry gives, and nothing else of `state/` is.
+
+**What it weighs, and what bounds it.** On 2026-09-30 the three ledgers were
+9.47 MB, summed from the sizes their committed indexes give: `item-health` 4.71 MB
+over 59 days, `summary-quality-evals` 4.45 MB over 59 and `host-fingerprint` 0.31 MB over 28,
+with 0.87 MB of it files that hold no row. That was 6.4 percent of a full site
+build that day. Day and month indexes are bounded by each ledger's declaration:
+`daily_keep_days` plus 31 day entries and the months its window keeps, or the
+months awaiting yearly packing. Eval rows are kept forever, so their year files
+and year index still grow by one file and entry per year. Each ledger's index
+directory has a `page_weight.payload_ceilings_bytes` key of 2,200 gzipped bytes,
+at least twice its longest bounded day or month index. The bundle gate weighs
+all three indexes; `backend/tests/contracts/test_page_ceilings.py` also fails
+when a day or month keep window grows past its bound. The longest day index
+today has 76 entries: 1,006
+bytes at gzip -5 through the CI runner's zlib. Size a key from the runner's
+reading, because zlib-ng, which some local Python builds use, reads the same
+index about 4 percent smaller. **The data files carry no ceiling, and no gate yet
+weighs what one span reads.** Summed from the same indexes, a 30-day span is about
+0.18 MB of `host-fingerprint`, 3.53 MB of `item-health` and 3.43 MB of `summary-quality-evals`
+(estimate): each of the last two alone is more than the 3.4 MB a cold console load
+is allowed today, which prices a panel that queries them in the browser.
+
 ## How a year file is read by byte range
 
 In a browser the page keeper hands the engine a year file's address rather than

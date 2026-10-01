@@ -1,6 +1,6 @@
 # What a reader downloads
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 The published site's size, the bytes a browser receives, and the rules for
 measuring both. [pipeline-cost.md](pipeline-cost.md) covers production compute.
@@ -23,6 +23,7 @@ Table A - Configured bounds
 | A5 | `page_weight.payload_ceilings_bytes`, `console/band.json` | 2,000 compressed bytes | Bound this fetched payload. |
 | A6 | `page_weight.payload_ceilings_bytes`, `telemetry/` | 1,100,000 compressed bytes | Bound each file under this build-relative prefix, not their combined size. |
 | A7 | `page_weight.cold_console_load_bytes` | 3,400,000 compressed bytes | Bound the payload total for a cold console opening. |
+| A8 | `page_weight.payload_ceilings_bytes`, `state/compact/<ledger>/index/`, one key per published ledger | 2,200 compressed bytes | Bound each of a published ledger's two indexes, each on its own. |
 
 These are limits, not measurements of the current site. Measure the completed
 build before reporting its size or remaining capacity. Use the commands in
@@ -83,7 +84,10 @@ own the loading and partition rules.
 Load the search encoder and browser query engine only when their features need
 them. Lazy loading saves the initial transfer, but emitted assets still count
 against the site's raw-size cap. A remotely hosted asset is outside that total
-and still costs the reader a download.
+and still costs the reader a download. The published ledgers the query engine
+reads count against the cap as well, whether or not a page asks for them; what
+they weigh and what bounds it is on the
+[query-door page](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door).
 
 Report first-use cost separately from repeat-use cost. Do not assume unchanged
 file contents stay cached across deployments: verify the origin's cache headers

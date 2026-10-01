@@ -1,8 +1,8 @@
 # Console Payloads
 
 **Last Updated**: 2026-09-30
-The operator console reads ten datasets. Nine of them come from `state/`,
-which is never served, so each one crosses a trust boundary and each crossing
+The operator console reads ten datasets. Nine of them are projected out of
+`state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
 `backend/idhazh/contracts/console_payloads.py`, and it is the one a build reads.
 
@@ -109,9 +109,11 @@ whole, because every cell on each is a count or a duration of our own work.
 **One shape refuses anything, where three used to.** `public-eval` refused
 `url_key`, `source_url` and `title`, and `public-feed-health` refused
 `endpoint_key`; both went on 2026-09-16 with the trees they shaped. The cells
-they guarded are on `EvalRow` and `FeedHealthRow` under `state/`, which is
-committed and never served, so nothing they refused can now reach a browser by
-another road.
+they guarded are on `EvalRow` and `FeedHealthRow` under `state/`. The scores
+ledger now reaches the site whole, for the browser's query door, so `url_key`,
+`source_url` and `title` do reach a browser there - as cells a panel reads as
+data, out of a repository that was public all along
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
 
 ## Retention
 

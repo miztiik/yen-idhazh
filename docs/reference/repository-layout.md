@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -35,7 +35,7 @@ question, and the four answers do not mix.
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next. Six of them partition by day - `state/seen/`, `state/feed-health/`, `state/published/`, `state/counterfactual-scores/`, `state/content-similarity-judge/scored-pairs/` and `state/content-similarity-judge/fitted-thresholds/`. A ledger more than one job writes is a day directory holding one file per writer, so two writers never share a path. A ledger that goes through the ledger door - item-health, summary-quality-evals and host-fingerprint among them - files under `state/raw/<ledger>/` and `state/compact/<ledger>/` instead ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, so everything one judge produces is one prefix for a commit step to stage; `state/llm-council/` is the other | a run, in CI | **never** |
+| `state/` | The append-only ledgers one run leaves for the next. Six of them partition by day - `state/seen/`, `state/feed-health/`, `state/published/`, `state/counterfactual-scores/`, `state/content-similarity-judge/scored-pairs/` and `state/content-similarity-judge/fitted-thresholds/`. A ledger more than one job writes is a day directory holding one file per writer, so two writers never share a path. A ledger that goes through the ledger door - item-health, summary-quality-evals and host-fingerprint among them - files under `state/raw/<ledger>/` and `state/compact/<ledger>/` instead ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, so everything one judge produces is one prefix for a commit step to stage; `state/llm-council/` is the other | a run, in CI | only the compact files of the ledgers `ledger.published` names, which the site build copies unchanged ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
 | `state/pipeline-tests*/` | A trial run's own copy of the tree above. The bench and `Model validation` write `state/pipeline-tests/`; each pipeline test case writes `state/pipeline-tests-<id>/`. Nothing reads any of it - no published series, no gate, no console band - so the gardener's `trials` task empties it past the window in `config/gardener/trials.json`, and the root goes with its last file. The task finds these roots as everything under `state/` that no other task owns and the registry does not claim, because the knob that names one is null in production and cannot be set there | a dispatch, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
 | `tests/` | Cross-cutting fixtures: captured pages, golden summaries, injection canaries | a person | no |
@@ -56,6 +56,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/var/council/` | Inside `backend/var/`, and named here for the same reason. **Everything one judging night carries between its jobs, and the only thing it carries**: the workflow uploads this directory and nothing else, so a file a tenant writes outside it is thrown away with the runner. One date a directory, and inside it a slot each for what was picked, what was judged, what the units measured and how each unit ended. A file is named `<date>-<tenant>-<unit>`, so eight units cannot land on one path and a file merged out of eight artifacts still says who wrote it. Nothing here is ever committed - a drawn row carries no verdict yet and the units rewrite it, while a row reaches `state/content-similarity-judge/scored-pairs/` once, already judged, and is never edited afterwards |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
 | `frontend/static/digest/` | Staged from `frontend/public/digest/` at build time. A copy is not a source |
+| `frontend/static/state/` | Copied from `state/compact/` at build time: the ledgers `ledger.published` names. A copy is not a source |
 
 Deleting any of them costs a re-download or a rebuild and nothing else. That is
 the test for whether something belongs here.
@@ -63,13 +64,13 @@ the test for whether something belongs here.
 ## Where the confusing ones sit, and why
 
 **`state/` is top-level because nothing else could hold it.** It is written by a
-machine, it must survive a fresh checkout, and a reader must never see it. Each
-of the other candidates fails on one of those three:
+machine, it must survive a fresh checkout, and a reader sees only what the site
+build copies out of it. Each of the other candidates fails on one of those three:
 
 | Candidate | Fails because |
 | --- | --- |
 | `backend/var/` | Gitignored, so the next run would find nothing |
-| `frontend/public/` | Published, so it would be served to a reader and count against the 1 GB site cap |
+| `frontend/public/` | Published whole, so every ledger would be served to a reader and count against the 1 GB site cap |
 | `config/` | Human-edited. A machine appending to a file a person owns invites a merge conflict every run |
 | `backend/` | Source. A ledger is not code, and a Python package is not a database |
 

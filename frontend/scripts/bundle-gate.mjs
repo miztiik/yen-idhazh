@@ -57,9 +57,13 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import ts from 'typescript';
+import { assetBaseUrl } from '../asset-base.js';
 
 const BUILD = 'build';
 const ROOT = 'build/_app/immutable';
+// Where the published ledgers sit in the build: `copy-visuals.mjs` copies each
+// file to the path it has under the repository's `state/`.
+const LEDGERS = 'state/';
 
 // Directories whose modules a browser loads before any reader gesture: the
 // entry point and the route modules. A chunk one of them imports statically is
@@ -321,6 +325,9 @@ function payloadsFor(key) {
 
 const payloadKeys = Object.keys(payloadCeilings).sort();
 const heaviestPayload = new Map();
+// With `visuals.asset_base_url` set, the build copies no ledger, because the
+// browser asks that host for them - so a ledger key here would name nothing.
+const ledgersElsewhere = assetBaseUrl() !== '';
 if (payloadKeys.length > 0) {
 	console.log(
 		'\nfetched payloads, gzip -5, against page_weight.payload_ceilings_bytes in config/idhazh.json:'
@@ -328,6 +335,12 @@ if (payloadKeys.length > 0) {
 }
 for (const key of payloadKeys) {
 	const ceiling = payloadCeilings[key];
+	if (ledgersElsewhere && key.startsWith(LEDGERS)) {
+		console.log(
+			`  ${key} is not weighed: visuals.asset_base_url serves the published ledgers from ${assetBaseUrl()}`
+		);
+		continue;
+	}
 	const found = payloadsFor(key);
 	if (found.length === 0) {
 		namesNothing.push(
@@ -363,6 +376,12 @@ for (const key of payloadKeys) {
  * shortest month there is. At the default 30 days that is three - a window
  * opening on 31 January reaches 1 March - and not the two a reader sees for
  * three hundred and sixty-three days of the year.
+ *
+ * **A key under `state/` is left out**, because it is not a month series and no
+ * cold opening of `/console/` fetches a published ledger. Its indexes are
+ * weighed file by file above. The data files the browser's query door reads for
+ * a span carry no ceiling and no gate weighs them yet: the door reads one file a
+ * day, so a span reads at most one file per day it covers.
  */
 const coldCeiling = config.page_weight?.cold_console_load_bytes ?? 0;
 if (Number.isInteger(coldCeiling) && coldCeiling > 0) {
@@ -378,6 +397,7 @@ if (Number.isInteger(coldCeiling) && coldCeiling > 0) {
 	let cold = 0;
 	const parts = [];
 	for (const key of payloadKeys) {
+		if (key.startsWith(LEDGERS)) continue;
 		const heaviest = heaviestPayload.get(key);
 		if (heaviest === undefined) continue;
 		const copies = key.endsWith('/') ? monthsTouched : 1;

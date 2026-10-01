@@ -6,7 +6,10 @@
  * enters `frontend/public/`, so an attack fixture can never be published by
  * accident - which matters, because these payloads carry raw hostile markup on
  * purpose. The state root is switched with it so the console draws the fixture
- * run manifest and the fixture feed results, never the real ledger.
+ * run manifest and the fixture feed results, never the real ledger, and so the
+ * site publishes the fixture's packed ledgers, never the real ones. The copy
+ * step stops the build when that root is not there, because an empty ledger and
+ * a working one both render.
  */
 
 import { execFileSync } from 'node:child_process';

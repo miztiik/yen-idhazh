@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 Three surfaces stand on every console route: the strip - the route tabs and the
 days control on one row - the sentence under it that says how complete the
@@ -173,7 +173,7 @@ slides back in time and looks as full as it did the day before. The sentence
 under the strip is what tells a stopped pipeline from a quiet one:
 
 ```
-Complete to 18:23 UTC on Sunday 27 September. A run still going is not on this page yet.
+The latest run on this page finished at 18:23 UTC on Sunday 27 September. A run still going is not on this page yet.
 Nothing has been recorded since 18:23 UTC on Sunday 27 September. 2 days are missing.
 ```
 
@@ -199,10 +199,14 @@ Nothing has been recorded since 18:23 UTC on Sunday 27 September. 2 days are mis
 The record's other two fields cannot say it stopped. `covers_through` is the day
 the run assembled, the same UTC day as `generated_at` on every run, and
 `compaction_lag_days` is always 0 - and a record that stopped being written is not
-rewritten to say so. Only the reader's clock can see that it is old. **When the
-panels start drawing compacted periods, the newest day a panel can draw will trail
-`generated_at`, and this sentence has to date that day instead** - otherwise it
-promises figures up to an instant the charts cannot reach.
+rewritten to say so. Only the reader's clock can see that it is old.
+
+**It dates the last run, never the newest packed day.** A panel that draws a
+packed ledger can end days before that run, and the route's own note for that
+record already says how far it reaches
+([recording.ts](../../../frontend/src/lib/console/recording.ts)). Dated from the
+newest packed day instead, the second sentence would say nothing had been recorded
+every day, while runs still land.
 
 The words live in
 [completeness.ts](../../../frontend/src/lib/console/completeness.ts), which reads
@@ -399,12 +403,14 @@ tabs would slide sideways as the strip sticks. **What it costs:** one line of
 every tab's height - the stuck strip is 70px where one line made it 46 to 50px -
 and below 1366 on Pipelines one or two tabs still need a sideways scroll.
 
-**`Complete to`, and never `today`.** The console's subject is the pipeline's own
-record, and the last run finished writing it at that instant, so `complete` is a
-promise about the left side and an admission about the right. `Today` beside a
-UTC time names the wrong day for a reader far from UTC for part of every day, and
-a prerendered page is read for a day or more after it was built. **What it
-costs:** the glance a reader got from `today`.
+**`The latest run on this page finished at`, never `Complete to`, and never
+`today`.** The console's subject is the pipeline's own record, and the last run
+finished writing it at that instant. `Complete to` made the same instant a promise
+about every chart on the page, and a chart drawn from a packed ledger can end two
+days earlier; `complete` let that chart pass for current. `Today` beside a UTC time
+names the wrong day for a reader far from UTC for part of every day, and a
+prerendered page is read for a day or more after it was built. **What it costs:**
+the glance a reader got from `today`, and a sentence six words longer.
 
 **The layout draws the control; the route holds the window.** The strip belongs
 to the shell, and the window - span, fetches, the price per preset - belongs to

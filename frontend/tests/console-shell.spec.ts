@@ -430,7 +430,7 @@ test.describe('the sentence that dates the record', () => {
 		const at = await finished(page);
 		const document = await (await page.request.get('/console/')).text();
 		expect(document).toContain(
-			`Complete to ${spelled(at)}. A run still going is not on this page yet.`
+			`The latest run on this page finished at ${spelled(at)}. A run still going is not on this page yet.`
 		);
 		expect(document).toContain('data-console-completeness="complete"');
 	});
@@ -449,7 +449,7 @@ test.describe('the sentence that dates the record', () => {
 		await hydrated(page);
 		await expect(sentence).toHaveAttribute('data-console-completeness', 'complete');
 		await expect(sentence).toHaveText(
-			`Complete to ${spelled(at)}. A run still going is not on this page yet.`
+			`The latest run on this page finished at ${spelled(at)}. A run still going is not on this page yet.`
 		);
 
 		// And the first day past it: every whole day between the record's and today.
@@ -536,7 +536,7 @@ test.describe('how complete the record is, as arithmetic', () => {
 	test('the instant is spelled in UTC, with the weekday and never "today"', () => {
 		expect(spelledInstant(at)).toBe('18:23 UTC on Sunday 27 September');
 		expect(completenessSentence({ kind: 'complete', finished: at })).toBe(
-			'Complete to 18:23 UTC on Sunday 27 September. A run still going is not on this page yet.'
+			'The latest run on this page finished at 18:23 UTC on Sunday 27 September. A run still going is not on this page yet.'
 		);
 		expect(completenessSentence({ kind: 'behind', finished: at, missingDays: 1 })).toBe(
 			'Nothing has been recorded since 18:23 UTC on Sunday 27 September. 1 day is missing.'

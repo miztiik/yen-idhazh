@@ -4,7 +4,7 @@
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
-Storage and publication are being migrated to [telemetry intent](telemetry-intent.md). Read [the ledger registry](../architecture/contracts/ledger-registry.md) for current paths. New charts fetch and query their data in the browser; remaining projections and prerendered data routes are known migration work, not patterns to extend.
+Storage and publication are being migrated to [telemetry intent](telemetry-intent.md). Read [the ledger registry](../architecture/contracts/ledger-registry.md) for current paths. New charts fetch and query their data in the browser; remaining projections and prerendered data routes are known migration work, not patterns to extend. The ledgers `ledger.published` names reach the site as copies, not projections: the build copies their compact files whole, every column included, and the repository that commits them is public, so none of their columns is private ([what the site holds for the door](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
 
 ## The envelope
 

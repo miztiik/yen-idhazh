@@ -213,7 +213,11 @@
     "compression_raw": "snappy",
     "engine_extension_repository": "https://extensions.duckdb.org",
     "format": "parquet",
-    "published": []
+    "published": [
+      "host-fingerprint",
+      "item-health",
+      "summary-quality-evals"
+    ]
   },
   "lens_weights": {
     "counterfactual_multiplier": 1.25,
@@ -259,6 +263,9 @@
     "cold_console_load_bytes": 3400000,
     "payload_ceilings_bytes": {
       "console/band.json": 2000,
+      "state/compact/host-fingerprint/index/": 2200,
+      "state/compact/item-health/index/": 2200,
+      "state/compact/summary-quality-evals/index/": 2200,
       "telemetry/": 1100000
     }
   },
