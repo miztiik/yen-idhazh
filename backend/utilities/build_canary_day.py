@@ -100,7 +100,6 @@ from idhazh.telemetry.publish import (
     run_days,
     run_timeline,
     source_health,
-    span_rollup,
 )
 
 CANARY_DIR = Path("tests/fixtures/canaries")
@@ -1406,7 +1405,6 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
     written = 0
     for producer in (
         machine,
-        span_rollup,
         run_timeline,
     ):
         written += len(

@@ -31,7 +31,6 @@ from conftest import (
     read_text,
     seed_feed_health,
     seed_item_health,
-    seed_span_rollup,
 )
 
 from idhazh import assemble, atomic_write, cli, ledger
@@ -41,7 +40,6 @@ from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
-from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.telemetry import cli as telemetry_cli
 from idhazh.telemetry import inventory
 
@@ -123,12 +121,6 @@ def _a_published_day(tmp_path: Path) -> tuple[Path, Path, str]:
     )
     seed_item_health(
         state_root, day.date, [item.model_copy(update={"date": day.date, "run_id": run_id})]
-    )
-    span = SpanRollupRow.from_json(
-        read_text(next((CONTRACT_FIXTURES_DIR / "span-rollup-row").glob("*.json")))
-    )
-    seed_span_rollup(
-        state_root, day.date, [span.model_copy(update={"date": day.date, "run_id": run_id})]
     )
     feed = FeedHealthRow.from_json(
         read_text(CONTRACT_FIXTURES_DIR / "feed-health-row" / "answered.json")
@@ -360,8 +352,8 @@ def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
     assert raw_files, "the built day filed no census, so the listing proves nothing about it"
     for relpath in raw_files:
         assert relpath in report, f"a raw day file is missing from the listing: {report}"
-    span_day = ledger.path(state_root, LedgerName.SPAN_ROLLUP, date).relative_to(state_root)
-    assert f"{span_day.as_posix()}/" in report, (
+    feed_day = ledger.path(state_root, LedgerName.FEED_HEALTH, date).relative_to(state_root)
+    assert f"{feed_day.as_posix()}/" in report, (
         f"the writer-owned day is missing from the listing: {report}"
     )
     assert packed.relative_to(state_root).as_posix() in report, (

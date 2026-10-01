@@ -110,8 +110,8 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: `day_shards.shard_files` refuses, and a second walker here would be a second
 #: answer to what a day file is. Bringing either in means teaching that one
 #: walker its suffix, which is where the question belongs. `state/candidate-models/`
-#: and `state/span-rollup/` are absent too: nobody has asked to take a range out
-#: of one, and joining this list is a decision rather than a consequence of the
+#: is absent too: nobody has asked to take a range out
+#: of it, and joining this list is a decision rather than a consequence of the
 #: shape. A ledger leaves this list in the change that moves it under `state/raw/`
 #: through the ledger door, as `visual-prunes`, `item-health`,
 #: `summary-quality-evals` and `host-fingerprint` have: a target that walked its

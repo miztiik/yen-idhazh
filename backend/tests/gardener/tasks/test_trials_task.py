@@ -101,14 +101,14 @@ def test_a_tree_that_was_never_written_is_not_an_error(tmp_path: Path) -> None:
 
 def test_the_segments_and_traces_a_trial_run_really_writes_are_read(tmp_path: Path) -> None:
     """A segment two levels down and a trace named by a day and a run are both dated by path."""
-    a_file(tmp_path, "segments/span-rollup/2026-01-01-40000000001-1-work-00.csv")
-    new_segment = a_file(tmp_path, "segments/span-rollup/2026-09-10-40000000002-1-work-00.csv")
+    a_file(tmp_path, "segments/feed-health/2026-01-01-40000000001-1-work-00.csv")
+    new_segment = a_file(tmp_path, "segments/feed-health/2026-09-10-40000000002-1-work-00.csv")
     a_file(tmp_path, "traces/2026/01/01-40000000001-00.jsonl")
 
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
     assert sorted(outcome.taken) == [
-        "state/trial-runs/segments/span-rollup/2026-01-01-40000000001-1-work-00.csv",
+        "state/trial-runs/segments/feed-health/2026-01-01-40000000001-1-work-00.csv",
         "state/trial-runs/traces/2026/01/01-40000000001-00.jsonl",
     ]
     assert new_segment.is_file()
@@ -116,7 +116,7 @@ def test_the_segments_and_traces_a_trial_run_really_writes_are_read(tmp_path: Pa
 
 def test_a_file_whose_path_spells_no_day_is_kept_rather_than_refused(tmp_path: Path) -> None:
     """Nothing reads a trial tree, so an odd name must not cost the whole pass."""
-    stray = a_file(tmp_path, "segments/span-rollup/notes.txt")
+    stray = a_file(tmp_path, "segments/feed-health/notes.txt")
 
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
@@ -137,13 +137,13 @@ def test_an_emptied_trial_root_is_taken_away_with_its_last_file(tmp_path: Path) 
 
 def test_a_month_head_is_kept_until_its_whole_month_has_aged_out(tmp_path: Path) -> None:
     """A month has no day of its own, so it takes the last day it could hold."""
-    a_file(tmp_path, "span-rollup/2026-06.csv")
+    a_file(tmp_path, "candidate-models/2026-06.csv")
 
     inside = run_task(NAME, tmp_path, today=TODAY, dry_run=True)
     outside = run_task(NAME, tmp_path, today=date(2026, 9, 30), dry_run=True)
 
     assert inside.taken == ()
-    assert outside.taken == ("state/trial-runs/span-rollup/2026-06.csv",)
+    assert outside.taken == ("state/trial-runs/candidate-models/2026-06.csv",)
 
 
 def test_a_declared_ledger_is_never_a_trial_tree_however_old_its_rows(tmp_path: Path) -> None:

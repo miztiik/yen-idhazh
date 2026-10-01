@@ -347,8 +347,7 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
     """The off position, still reachable: the same run, the same code path, no file.
 
     Tracing ships on now, so this constructs the off config rather than loading
-    the committed one. With it off the sink is a NullSink, so neither the raw
-    trace nor the span rollup is written.
+    the committed one. With it off the sink is a NullSink, so no raw trace is written.
     """
     run_plan = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
@@ -370,7 +369,6 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
         )
 
     assert not ledger.tree_root(common.STATE_ROOT, LedgerName.TRACES).exists()
-    assert not (common.STATE_ROOT / "span-rollup").exists()
 
 
 # --- The second control -----------------------------------------------------

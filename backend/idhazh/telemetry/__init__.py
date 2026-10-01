@@ -2,7 +2,7 @@
 
 `docs/concepts/telemetry.md` owns the concept, and these modules are that page's
 own sections: which line a stage logs, how a span opens and nests, where a
-finished span goes, what a shard's tree totals, where a committed trace lives,
+finished span goes, where a committed trace lives,
 what one item's terminal state was, and which feed is still worth asking.
 
 `publish/` holds the other half - every projection of those observations a run
@@ -42,10 +42,7 @@ from idhazh.telemetry.events import (
     EventName,
     event,
 )
-from idhazh.telemetry.rollup import roll_up_spans
 from idhazh.telemetry.sinks import (
-    CollectingSink,
-    FanOut,
     FileSink,
     NullSink,
 )
@@ -75,10 +72,8 @@ __all__ = [
     "MAX_ATTRIBUTE_CHARS",
     "RECORD_CELLS",
     "AttrKey",
-    "CollectingSink",
     "EventLevel",
     "EventName",
-    "FanOut",
     "FileSink",
     "NullSink",
     "OpenSpan",
@@ -97,7 +92,6 @@ __all__ = [
     "event",
     "is_final",
     "item_attributes",
-    "roll_up_spans",
     "summary_attributes",
     "trace_date",
 ]

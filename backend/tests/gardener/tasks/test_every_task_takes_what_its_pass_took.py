@@ -47,13 +47,7 @@ _FILE_ID: Final = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[
 _NOT_A_TASK: Final = "visual-prune-rows"
 
 #: Each retention task that replaced no pass of the old cleanup, and why it has none.
-_REPLACED_NO_PASS: Final = {
-    "span-rollup": (
-        "the old cleanup never pruned state/span-rollup: no pass named it, and its sweep "
-        "of trial folders skipped every folder a ledger owns. The task exists so the "
-        "tree's owner folds its closed days; test_span_rollup_task.py holds what it takes"
-    ),
-}
+_REPLACED_NO_PASS: Final[dict[str, str]] = {}
 
 #: Each recorded task that no longer does what its pass did to a tree it still
 #: owns, why, and the test file that holds what it does now.

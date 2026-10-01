@@ -1,8 +1,8 @@
 """What does the instrument hold for one day?
 
-The read side of `docs/concepts/telemetry.md`, at day grain. Three questions a
+The read side of `docs/concepts/telemetry.md`, at day grain. Two questions a
 person asks of a run that already finished: which instrument files that day has,
-how its items ended, and how long its spans took. Every answer is bounded by the
+and how its items ended. Every answer is bounded by the
 date it is asked about, so none of them costs more as the archive grows
 (Guardrail #12) - the month shard a date falls in is the largest thing opened,
 and it is named as a month in the report rather than counted as the day's.
@@ -20,11 +20,10 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
 from idhazh.assemble import month_of
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.span_rollup import SpanRollupRow
 
 
 def _day_files(state_root: Path, date: str) -> list[Path]:
@@ -118,38 +117,5 @@ def outcomes(state_root: Path, *, date: str) -> list[str]:
     report += [
         f"  {stage} {outcome} {code}  {count} items"
         for (stage, outcome, code), count in sorted(counted.items())
-    ]
-    return report
-
-
-def spans(state_root: Path, *, date: str) -> list[str]:
-    """How long this date's spans took, totalled by span name across every shard.
-
-    One day of the rollup, settled. Each writer files its rows under the day
-    their own `date` cell names, so the day directory holds this date's rows and
-    nothing else, and `total_ms` is a total rather than a mean precisely so that
-    it re-sums across the writers this adds up.
-    """
-    rows = [
-        SpanRollupRow.from_csv_row(cells)
-        for cells in day_shards.settled_day(
-            ledger.tree_root(state_root, LedgerName.SPAN_ROLLUP),
-            date,
-            ledger.SPAN_ROLLUP_KEY,
-            SpanRollupRow,
-        )
-    ]
-    if not rows:
-        return [f"{date}: the span rollup recorded no span"]
-
-    counts: Counter[str] = Counter()
-    totals: Counter[str] = Counter()
-    for row in rows:
-        counts[str(row.span_name)] += row.count
-        totals[str(row.span_name)] += row.total_ms
-    report = [f"{date}: {sum(counts.values())} spans over {len(rows)} rollup rows"]
-    report += [
-        f"  {name}  {counts[name]} spans, {totals[name]} ms in total"
-        for name in sorted(counts)
     ]
     return report

@@ -117,6 +117,7 @@ test('every step the panel draws carries a value, and the ones it does not are n
 	await page.goto('/console/');
 	const board = panel(page);
 	await expect(board).toHaveAttribute('data-run-timeline', /^\d{4}-\d{2}-\d{2}-\d+$/);
+	await expect(board.locator('[data-substeps]')).toHaveCount(0);
 
 	const drawn = ((await board.getAttribute('data-timeline-drawn')) ?? '').split(' ').filter(Boolean);
 	const unproduced = ((await board.getAttribute('data-timeline-unproduced')) ?? '')

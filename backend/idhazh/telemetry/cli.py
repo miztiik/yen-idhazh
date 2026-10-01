@@ -8,14 +8,13 @@ counts a row.
 
     idhazh telemetry show    --date <d>   which instrument files that day has
     idhazh telemetry census  --date <d>   how that day's items ended
-    idhazh telemetry rollup  --date <d>   how long that day's spans took
     idhazh telemetry publish --date <d>   write that day's projections again
     idhazh telemetry item <item_id> --date <d>
                                           health and separate item trace trees
     idhazh telemetry prune   --target <s> --since <d> --until <d>
                                           delete one ledger's days in a range
 
-Every subcommand is bounded by what it is handed - five of them by one date and
+Every subcommand is bounded by what it is handed - four of them by one date and
 `prune` by the range it names - so none of them costs more as the archive grows
 (Guardrail #12).
 
@@ -79,7 +78,6 @@ SUBCOMMANDS: Final[tuple[Subcommand, ...]] = (
         "nothing without --no-dry-run.",
         prune.add_arguments,
     ),
-    Subcommand("rollup", "Total one day's spans, by span name."),
     Subcommand("census", "Count how one day's items ended."),
     Subcommand("show", "List the instrument files one day has."),
     Subcommand("item", "Inspect one item's health and separate trace trees.", item.add_arguments),
@@ -124,7 +122,6 @@ def _parser() -> argparse.ArgumentParser:
 READERS: Final[dict[str, Callable[..., list[str]]]] = {
     "show": inventory.files,
     "census": inventory.outcomes,
-    "rollup": inventory.spans,
 }
 
 

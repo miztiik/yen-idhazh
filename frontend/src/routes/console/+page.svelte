@@ -1008,7 +1008,6 @@
 	>
 		<RunTimelinePanel
 			view={data.runTimeline}
-			subSteps={data.subSteps}
 			readoutMaxShare={data.chart.readout_max_share}
 		/>
 	</Panel>

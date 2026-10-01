@@ -50,7 +50,6 @@ class LedgerName(StrEnum):
     SUMMARY_QUALITY_EVALS_INDEX = "summary-quality-evals-index"
     CANDIDATE_MODELS = "candidate-models"
     ITEM_HEALTH_SUMMARY = "item-health-summary"
-    SPAN_ROLLUP = "span-rollup"
     PUBLISHED = "published"
     FEED_RETIREMENTS = "feed-retirements"
     VISUAL_PRUNES = "visual-prunes"
@@ -75,7 +74,6 @@ class LedgerName(StrEnum):
 #: naming any other ledger is a wrong call and is refused by name.
 DAY_TREES: Final[frozenset[LedgerName]] = frozenset(
     {
-        LedgerName.SPAN_ROLLUP,
         LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         LedgerName.CANDIDATE_MODELS,
         LedgerName.FEED_HEALTH,

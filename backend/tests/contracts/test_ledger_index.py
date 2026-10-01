@@ -31,6 +31,7 @@ from pydantic import ValidationError
 from pydantic_core import ErrorDetails
 
 from idhazh.contracts.base import Contract
+from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex, Watermark
 
 pytestmark = pytest.mark.contract
@@ -56,6 +57,28 @@ def _names_the_file(error: ErrorDetails, *words: str) -> None:
     assert error["type"] == "value_error", error
     for word in words:
         assert word in error["msg"], f"the refusal does not name {word!r}: {error['msg']}"
+
+
+@pytest.mark.parametrize("stamp", ["2026-09-30", "2026-10-01"])
+@pytest.mark.parametrize(
+    ("model", "stem", "name"),
+    [
+        (FileEnvelope, "file-envelope", "a-raw-file"),
+        (RawDayIndex, "raw-day-index", "a-populated-day"),
+        (CompactIndex, "compact-index", "a-yearly-index"),
+        (Watermark, "watermark", "a-yearly-watermark"),
+    ],
+)
+def test_surviving_ledger_payloads_keep_their_fields_when_read_under_an_older_stamp(
+    model: type[Contract], stem: str, name: str, stamp: str
+) -> None:
+    payload = _sample(stem, name)
+    original = model.model_validate(payload)
+
+    reread = model.model_validate(payload | {"version": stamp})
+
+    assert reread.version == stamp
+    assert reread.model_dump(exclude={"version"}) == original.model_dump(exclude={"version"})
 
 
 # --- RawDayIndex -------------------------------------------------------------

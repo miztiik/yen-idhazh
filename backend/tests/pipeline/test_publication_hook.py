@@ -19,9 +19,9 @@ from pathlib import Path
 import pytest
 
 from idhazh import day_shards, ledger
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.publication_checks import PublicationCheckError, registry, runner
 from utilities import build_canary_day
 
@@ -29,31 +29,27 @@ DAY = "2026-09-20"
 RUN_ID = "2026-09-20-1"
 
 
-def a_row() -> SpanRollupRow:
-    """One valid rollup row.
-
-    `ROBOTS` rather than `ITEM`, because only the item span may carry
-    `unattributed_ms` - so a robots row with that field left at its `None`
-    default is unambiguously what the contract wants.
-    """
-    return SpanRollupRow(
-        version=SpanRollupRow.schema_version(),
+def a_row() -> FeedHealthRow:
+    """One real feed response filed through the publication hook."""
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
         date=DAY,
         run_id=RUN_ID,
-        shard=0,
-        span_name=RollupSpan.ROBOTS,
-        count=1,
-        total_ms=5,
+        feed_id="example-feed",
+        checked_at=f"{DAY}T06:00:00Z",
+        outcome=FetchOutcome.OK,
+        status=200,
+        items=3,
     )
 
 
-def a_probe(row: SpanRollupRow, name: str = "probe") -> registry.Check:
+def a_probe(row: FeedHealthRow, name: str = "probe") -> registry.Check:
     """A check that measures nothing and files one row into a real ledger."""
     return registry.Check(
         name=name,
         scope=registry.CheckScope.DAY,
         run=lambda _ctx: registry.CheckResult(rows=(row,)),
-        ledger=LedgerName.SPAN_ROLLUP,
+        ledger=LedgerName.FEED_HEALTH,
     )
 
 
@@ -80,11 +76,11 @@ def test_a_declared_ledger_row_is_written_and_read_back(
     )
 
     read = [
-        SpanRollupRow.from_csv_row(cells)
+        FeedHealthRow.from_csv_row(cells)
         for cells in day_shards.settled_rows(
-            ledger.tree_root(state_dir, LedgerName.SPAN_ROLLUP),
-            ledger.SPAN_ROLLUP_KEY,
-            SpanRollupRow,
+            ledger.tree_root(state_dir, LedgerName.FEED_HEALTH),
+            ledger.FEED_HEALTH_KEY,
+            FeedHealthRow,
             days=UNBOUNDED_WINDOW,
         )
     ]
@@ -110,7 +106,7 @@ def test_a_sweep_over_the_whole_archive_files_nothing(
         == 0
     )
 
-    assert not ledger.tree_root(state_dir, LedgerName.SPAN_ROLLUP).exists()
+    assert not ledger.tree_root(state_dir, LedgerName.FEED_HEALTH).exists()
 
 
 def test_a_run_with_no_run_id_refuses_rather_than_filing_an_unattributable_row(

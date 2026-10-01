@@ -9,7 +9,6 @@ import { extraction, type Extraction } from '$lib/console/extraction';
 import { health, runOutcome, squareLabel, type DayColumn } from '$lib/console/run-square';
 import { pipelineChanges, wasCut } from '$lib/server/model-work';
 import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
-import { loadSpanRollup, subStepReadout } from '$lib/server/span-rollup';
 import { chartConfig, consoleConfig, panelGroupsFor, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
 import {
@@ -321,11 +320,6 @@ export async function load() {
 		// the run it drew. It reads one published directory bounded to two months,
 		// which is the whole series (`CLAUDE.md` Guardrail #12).
 		runTimeline: runTimelineView(loadRunTimeline()[0] ?? null, console.timeline_bars),
-		// The four steps that nest inside those steps, printed rather than drawn: at
-		// the configured track they are far under a pixel wide, and a band that small
-		// is a legend entry with no mark. It reads its own `state/` ledger, so it is
-		// often a different run again and carries its own empty state.
-		subSteps: subStepReadout(loadSpanRollup()[0] ?? null, chart.width_px),
 		// What one item cost the model, one entry per span the control offers. The
 		// browser picks the open one; nothing re-reads a ledger to change window.
 		itemCostByWindow,

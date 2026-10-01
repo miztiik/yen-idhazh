@@ -35,7 +35,7 @@ from idhazh import day_shards, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.span_rollup import SpanRollupRow
+from idhazh.contracts.validation_row import ValidationRow
 from idhazh.gardener import closed_day_fold
 
 pytestmark = pytest.mark.contract
@@ -59,7 +59,7 @@ def _root() -> Path:
     Never at module scope: a fixture opened while the module loads fails before
     any test owns the failure, and takes every test in the file with it.
     """
-    root = FIXTURE / "writer-files" / "span-rollup"
+    root = FIXTURE / "writer-files" / "candidate-models"
     assert root.is_dir(), f"the day-shards fixture is missing at {root}"
     return root
 
@@ -75,13 +75,13 @@ def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
     """The oracle. Same bytes, two settlements, one answer, row for row."""
     root = _root()
 
-    day = ledger.tree_root(tmp_path / ledger.STATE_DIRNAME, LedgerName.SPAN_ROLLUP) / "2026" / "09" / "18"
+    day = ledger.path(tmp_path / ledger.STATE_DIRNAME, LedgerName.CANDIDATE_MODELS, "2026-09-18")
     day.mkdir(parents=True)
     for name in WRITERS:
         shutil.copy(root / "2026" / "09" / "18" / name, day / name)
     folded = closed_day_fold.fold(
         tmp_path / ledger.STATE_DIRNAME,
-        [LedgerName.SPAN_ROLLUP],
+        [LedgerName.CANDIDATE_MODELS],
         now=datetime(2026, 9, 30, tzinfo=UTC),
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=False,
@@ -91,17 +91,13 @@ def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
 
     # `days=1` is the newest recorded day, which is the day directory alone -
     # the same rows the three writer files above carried.
-    settled = day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
+    settled = day_shards.settled_rows(root, ledger.VALIDATION_KEY, ValidationRow, days=1)
 
     assert settled == folded_rows
-    assert [(row["shard"], row["span_name"]) for row in settled] == [
-        ("0", "item"),
-        ("0", "robots"),
-        ("1", "item"),
-    ]
+    assert [row["model_id"] for row in settled] == ["candidate-0", "candidate-extra", "candidate-1"]
     # The supersede case: attempt 2 corrected the figures attempt 1 wrote.
-    assert settled[0]["count"] == "14"
-    assert settled[0]["total_ms"] == "5000"
+    assert settled[0]["articles"] == "14"
+    assert settled[0]["measured_hhem"] == "0.5"
 
 
 def test_the_walk_reads_every_writer_file_of_a_day_and_nothing_else() -> None:
@@ -112,7 +108,7 @@ def test_the_walk_reads_every_writer_file_of_a_day_and_nothing_else() -> None:
     assert [path.name for path in every] == list(WRITERS)
     assert [day_shards.date_of(path) for path in every] == ["2026-09-18"] * len(WRITERS)
 
-    assert len(day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)) == 3
+    assert len(day_shards.settled_rows(root, ledger.VALIDATION_KEY, ValidationRow, days=1)) == 3
     assert list(day_shards.shard_files(root.parent / "never-written", days=1)) == []
 
 
@@ -208,12 +204,8 @@ def test_settled_sorts_below_every_writer_file(tmp_path: Path) -> None:
     """A closed day's fold reads first, and a straggler beside it reads after."""
     day = tmp_path / "2026" / "09" / "18"
     day.mkdir(parents=True)
-    columns = SpanRollupRow.csv_columns()
-    settled = [
-        {**dict.fromkeys(columns, ""), "version": "2026-09-06", "date": "2026-09-18"}
-        | {"run_id": "2026-09-18-1", "shard": "0", "span_name": "item"}
-        | {"count": "12", "total_ms": "4200"}
-    ]
+    columns = ValidationRow.csv_columns()
+    settled = _rows_of(_root() / "2026" / "09" / "18" / WRITERS[0])
     (day / day_shards.SETTLED_NAME).write_text(
         ledger.render_file(columns, settled), encoding="utf-8", newline=""
     )
@@ -227,8 +219,8 @@ def test_settled_sorts_below_every_writer_file(tmp_path: Path) -> None:
 
     # Reading order is not listing order. `settled.csv` holds rows that already
     # won a settlement, so it reads at attempt 0 and the straggler corrects it.
-    rows = day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
-    assert [row["count"] for row in rows] == ["14", "12"]
+    rows = day_shards.settled_rows(tmp_path, ledger.VALIDATION_KEY, ValidationRow, days=1)
+    assert [row["articles"] for row in rows] == ["14", "12"]
 
 
 def test_every_name_no_writer_owns_reads_and_reads_before_every_writer_file() -> None:
@@ -243,7 +235,7 @@ def test_every_name_no_writer_owns_reads_and_reads_before_every_writer_file() ->
     Held against a fixture day and never `state/`, so it costs one directory
     whatever the archive grows to (Guardrail #12).
     """
-    root = FIXTURE / "migrated-day" / "span-rollup"
+    root = FIXTURE / "migrated-day" / "candidate-models"
     assert root.is_dir(), f"the migrated-day fixture is missing at {root}"
 
     # Listing order is alphabetical and reading order is not: the writer file
@@ -254,19 +246,15 @@ def test_every_name_no_writer_owns_reads_and_reads_before_every_writer_file() ->
         day_shards.SETTLED_NAME,
     ]
 
-    rows = day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
+    rows = day_shards.settled_rows(root, ledger.VALIDATION_KEY, ValidationRow, days=1)
     # First seen first, so the pre-identity bytes open the answer and the fold's
     # own row follows them.
-    assert [(row["shard"], row["span_name"]) for row in rows] == [
-        ("0", "item"),
-        ("0", "robots"),
-        ("1", "item"),
-    ]
+    assert [row["model_id"] for row in rows] == ["candidate-0", "candidate-extra", "candidate-1"]
     # The straggler corrects the pre-identity row rather than repeating it: 11
     # items where the migrated bytes said 9, and nothing else moved.
-    assert [row["count"] for row in rows] == ["11", "4", "6"]
-    assert rows[0]["total_ms"] == "3600"
-    assert rows[0]["unattributed_ms"] == "310"
+    assert [row["articles"] for row in rows] == ["11", "4", "6"]
+    assert rows[0]["measured_hhem"] == "0.36"
+    assert rows[0]["detail"] == "rerun"
 
 
 def test_a_day_directory_with_no_readable_file_stops_the_read(tmp_path: Path) -> None:
@@ -295,7 +283,7 @@ def test_a_name_inside_a_day_directory_that_is_not_a_writers_stops_the_read(
         day / "nobody-declared-this.csv",
     )
     with pytest.raises(ValueError, match="is not a writer's name"):
-        day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
+        day_shards.settled_rows(tmp_path, ledger.VALIDATION_KEY, ValidationRow, days=1)
 
 
 def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
@@ -313,8 +301,8 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
     with shard.open("a", encoding="utf-8", newline="") as handle:
         handle.write("1999-01-01,not-a-date,,,,,,\n")
 
-    with pytest.raises(ValueError, match="does not read as a SpanRollupRow"):
-        day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
+    with pytest.raises(ValueError, match="does not read as a ValidationRow"):
+        day_shards.settled_rows(tmp_path, ledger.VALIDATION_KEY, ValidationRow, days=1)
 
 
 #: Every reader of a writer-owned CSV day tree: the module, the day-file call it
@@ -353,17 +341,7 @@ MOVED: Final = (
         "shard_files(",
     ),
     ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)", "shard_files("),
-    (
-        "backend/idhazh/telemetry/inventory.py",
-        "day_files(ledger.tree_root(state_root, LedgerName.SPAN_ROLLUP))",
-        "settled_day(",
-    ),
     ("backend/idhazh/telemetry/prune.py", "day_files(state_root / ledger)", "shard_files("),
-    (
-        "backend/idhazh/telemetry/publish/span_rollup.py",
-        "day_files(source_dir)",
-        "shard_files(",
-    ),
 )
 
 #: The one ledger that keeps the day-file walk, and the reader that walks it.

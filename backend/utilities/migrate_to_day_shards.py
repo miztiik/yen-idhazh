@@ -63,7 +63,7 @@ of the ledger is what it has to move.
 Usage, from the root of a checkout:
 
     python backend/utilities/migrate_to_day_shards.py \
-        --shape month-to-day --directory state/span-rollup --date-column date
+        --shape month-to-day --directory state/candidate-models --date-column date
     python backend/utilities/migrate_to_day_shards.py \
         --shape day-to-directory --directory state/item-health
     python backend/utilities/migrate_to_day_shards.py \
