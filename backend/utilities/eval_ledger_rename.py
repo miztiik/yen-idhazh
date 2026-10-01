@@ -1,8 +1,7 @@
 """Move the eval ledger's files from the name `scores` to `summary-quality-evals`, and prove it.
 
-Removal condition: delete on 2026-10-30, with the `scores` pin in
-`migrate_to_parquet`, when GitHub's 30-day re-run window has closed on the last
-run that could still file under the old names.
+Removal condition: delete on 2026-10-30, when GitHub's 30-day re-run window has
+closed on the last run that could still file under the old names.
 
 The eval ledger was `scores` and its ID folder `score-index`. Both are now named
 for what they hold, and three folders move with whatever they hold when this

@@ -77,6 +77,9 @@ def _column_type(name: str, annotation: Any) -> tuple[ColumnType, bool]:
         nullable = len(present) < len(members)
         if len(present) == 1:
             bare = present[0]
+        # Every member a string, as `Sha256 | str` is: one string column holds them all.
+        elif all(_is_a_string(member) for member in present):
+            return ColumnType.STRING, nullable
     if get_origin(bare) is tuple:
         held = get_args(bare)
         if len(held) == 2 and held[1] is Ellipsis and _is_a_string(held[0]):

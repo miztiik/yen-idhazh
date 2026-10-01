@@ -201,13 +201,16 @@ GARDENER_TASKS_DIR: Final = "gardener"
 #: What a declaration's name ends in. The plan job's glob reads the same suffix.
 DECLARATION_SUFFIX: Final = ".json"
 
-#: The two declarations whose window a knob in `config/idhazh.json` still reads.
-#: The task deletes by its window and the knob is how far back a reader looks,
-#: so a window shorter than the knob deletes a day somebody still opens.
-_WINDOW_FLOORS: Final[Mapping[str, str]] = MappingProxyType(
+#: The knobs in `config/idhazh.json` that say how many days back a reader opens a
+#: ledger. Whichever declaration governs the ledger now - its compaction once it
+#: files under the two roots, its retention task before - may not delete a day
+#: inside that span, or the reader opens a day nothing kept. A negative knob
+#: reads every day there is, so nothing may delete the ledger at all.
+_WINDOW_FLOORS: Final[Mapping[LedgerName, str]] = MappingProxyType(
     {
-        "seen": "collect.seen_window_days",
-        "counterfactual-scores": "lens_weights.window_days",
+        LedgerName.SEEN: "collect.seen_window_days",
+        LedgerName.COUNTERFACTUAL_SCORES: "lens_weights.window_days",
+        LedgerName.PUBLISHED: "collect.published_window_days",
     }
 )
 
@@ -245,12 +248,15 @@ _SERIES: Final[Mapping[str, Mapping[str, _Series]]] = MappingProxyType(
 #: a month is deleted before it was ever summarised.
 _SUMMARY_SERIES: Final[Mapping[str, str]] = MappingProxyType({"telemetry-aggregate": "aggregate"})
 
-#: Each task whose files a console read can still open, and the series that
-#: reaches that far - None for a task's own window. A task that keeps series
-#: keeps its window equal to its full-grain one, so that series stands for it.
-_CONSOLE_READS: Final[tuple[tuple[str, str | None], ...]] = (
-    ("feed-health", None),
-    ("summary-quality-evals-index", None),
+#: Each ledger whose files a console read can still open. The declaration that
+#: governs it keeps every month file the widest read can select.
+_CONSOLE_READ_LEDGERS: Final[tuple[LedgerName, ...]] = (
+    LedgerName.FEED_HEALTH,
+    LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
+)
+
+#: Each task series whose files a console read can still open, held the same way.
+_CONSOLE_READ_SERIES: Final[tuple[tuple[str, str], ...]] = (
     ("telemetry-aggregate", FULL_GRAIN),
     ("telemetry-aggregate", PUBLIC_COPY),
 )
@@ -262,9 +268,9 @@ _CONSOLE_READS: Final[tuple[tuple[str, str | None], ...]] = (
 _PICTURE_WINDOW_TASKS: Final = ("digest-fragments", "visual-prune")
 _DAYS_A_PICTURE_MONTH: Final = 30
 
-#: The task whose ledger the published machine shard is folded from, which may
-#: therefore not keep less than `observability.public_machine_keep_months`.
-_MACHINE_SOURCE_TASK: Final = "host-fingerprint"
+#: The ledger the published machine shard is folded from, so the declaration
+#: that governs it may not keep less than `observability.public_machine_keep_months`.
+_MACHINE_SOURCE: Final = LedgerName.HOST_FINGERPRINT
 
 _TASK_POLICY: Final[TypeAdapter[TaskPolicy]] = TypeAdapter(TaskPolicy)
 _A_TASK_NAME: Final = re.compile(SLUG_PATTERN)
@@ -477,17 +483,96 @@ def _spelled(window: Window) -> str:
     return f"{window.value} {window.unit}"
 
 
+def _reach(policy: CompactionPolicy) -> int | None:
+    """The fewest days a compaction's two periods reach back, or None when it keeps for ever.
+
+    A month file lives `monthly_window` after its month is absorbed, and a month
+    is absorbed `daily_keep_days` after it ends, so no pair of the two can leave a
+    day in no period. The months are counted at the fewest days they can hold.
+    """
+    monthly = _days_kept(policy.monthly_window)
+    return None if monthly is None else policy.daily_keep_days + monthly
+
+
+def compaction_reaches(policy: CompactionPolicy, needed: Window) -> bool:
+    """Whether this compaction keeps every day `needed` asks for.
+
+    A `monthly_window` of forever reaches anything, and nothing shorter reaches a
+    floor of forever. Otherwise the pair's reach is set against the most days
+    `needed` can ask for, so the answer never depends on the day the build ran.
+    """
+    reach = _reach(policy)
+    if reach is None:
+        return True
+    wanted = _days_needed(needed)
+    return wanted is not None and reach >= wanted
+
+
+def _governing(
+    ledger: LedgerName, tasks: Mapping[str, TaskPolicy]
+) -> tuple[str, RetentionPolicy | CompactionPolicy] | None:
+    """The one declaration that says how long this ledger is kept now, with its task name.
+
+    The ledger's compaction, once it files under the two roots; else the
+    retention task whose `owns` holds the ledger's folder under `state/`; else
+    none, and nothing deletes the ledger. The name comes back with it so a
+    refusal names the file an operator edits.
+    """
+    # Imported here rather than at the top: the ledger package reads this module
+    # while it loads, so importing it back at module scope would be a cycle.
+    from idhazh.ledger.paths import STATE_DIRNAME, entry
+
+    name = f"compact-{ledger.value}"
+    compaction = tasks.get(name)
+    if isinstance(compaction, CompactionPolicy) and compaction.ledger is ledger:
+        return name, compaction
+    folder = "/".join((STATE_DIRNAME, *entry(ledger).prefix))
+    for task, policy in tasks.items():
+        if isinstance(policy, RetentionPolicy) and folder in (policy.owns or ()):
+            return task, policy
+    return None
+
+
+def _keeps(policy: RetentionPolicy | CompactionPolicy, needed: Window) -> bool:
+    """Whether the declaration that governs a ledger keeps every day `needed` asks for."""
+    if isinstance(policy, CompactionPolicy):
+        return compaction_reaches(policy, needed)
+    return _reaches(policy.window, needed)
+
+
+def _kept_by(policy: RetentionPolicy | CompactionPolicy) -> str:
+    """How far back a governing declaration keeps, in the words a refusal quotes."""
+    if isinstance(policy, RetentionPolicy):
+        return f"keeps {_spelled(policy.window)}"
+    reach = _reach(policy)
+    if reach is None:
+        return "keeps every month file for ever"
+    return (
+        f"reaches back {reach} days with daily_keep_days {policy.daily_keep_days} and "
+        f"monthly_window {_spelled(policy.monthly_window)}"
+    )
+
+
+def _a_floor(days: int) -> Window:
+    """How far back a reader opens, as a window. A negative count reads every day."""
+    if days < 0:
+        return ForeverWindow(unit="forever")
+    return DaysWindow(unit="days", value=days)
+
+
 def _refuse_a_window_under_its_floor(tasks: Mapping[str, TaskPolicy], app: AppConfig) -> None:
-    for name, knob in _WINDOW_FLOORS.items():
-        policy = tasks.get(name)
-        if policy is None:
+    """The declaration that governs a ledger keeps every day a reader's knob opens."""
+    for ledger, knob in _WINDOW_FLOORS.items():
+        governing = _governing(ledger, tasks)
+        if governing is None:
             continue
-        floor: int = attrgetter(knob)(app)
-        if not _reaches(policy.window, DaysWindow(unit="days", value=floor)):
+        name, policy = governing
+        days: int = attrgetter(knob)(app)
+        if not _keeps(policy, _a_floor(days)):
+            reads = f"reads {days} days back" if days >= 0 else f"is {days}, which reads every day"
             raise ValueError(
-                f"config/{GARDENER_TASKS_DIR}/{name}.json keeps {_spelled(policy.window)} "
-                f"and {knob} reads {floor} days back, so the task would delete days a "
-                "reader still opens"
+                f"{_where(name)} {_kept_by(policy)} and {knob} {reads}, so the task would "
+                "delete days a reader still opens"
             )
 
 
@@ -605,31 +690,40 @@ def _refuse_a_window_a_console_read_still_opens(
     """A task may not delete a month file the widest console read can still select."""
     window_days = appearance.console.max_window_days
     shards = months_a_window_can_touch(window_days)
-    for name, series in _CONSOLE_READS:
+    floor = MonthsWindow(unit="months", value=shards)
+
+    def refused(name: str, kept: str) -> ValueError:
+        return ValueError(
+            f"{_where(name)} {kept}, and a {window_days}-day console read can select "
+            f"{shards} month shards. It must keep at least {shards} months, or a panel "
+            "blanks for a month that ran"
+        )
+
+    for ledger in _CONSOLE_READ_LEDGERS:
+        governing = _governing(ledger, tasks)
+        if governing is not None and not _keeps(governing[1], floor):
+            raise refused(governing[0], _kept_by(governing[1]))
+    for name, series in _CONSOLE_READ_SERIES:
         policy = tasks.get(name)
         if policy is None:
             continue
         kept = _series_of(policy, series)
-        if not _reaches(kept, MonthsWindow(unit="months", value=shards)):
-            which = "its window" if series is None else f"its {series} series"
-            raise ValueError(
-                f"{_where(name)} keeps {which} {_spelled(kept)}, and a {window_days}-day "
-                f"console read can select {shards} month shards. It must keep at least "
-                f"{shards} months, or a panel blanks for a month that ran"
-            )
+        if not _reaches(kept, floor):
+            raise refused(name, f"keeps its {series} series {_spelled(kept)}")
 
 
 def _refuse_a_machine_source_shorter_than_its_copy(
     tasks: Mapping[str, TaskPolicy], app: AppConfig
 ) -> None:
     """The published machine shard is rebuilt from its ledger, so the ledger lasts as long."""
-    policy = tasks.get(_MACHINE_SOURCE_TASK)
-    if policy is None:
+    governing = _governing(_MACHINE_SOURCE, tasks)
+    if governing is None:
         return
+    name, policy = governing
     published = app.observability.public_machine_keep_months
-    if not _reaches(policy.window, MonthsWindow(unit="months", value=published)):
+    if not _keeps(policy, MonthsWindow(unit="months", value=published)):
         raise ValueError(
-            f"{_where(_MACHINE_SOURCE_TASK)} keeps {_spelled(policy.window)} and "
+            f"{_where(name)} {_kept_by(policy)} and "
             f"observability.public_machine_keep_months is {published}. The published "
             "machine shard is folded from the host-fingerprint ledger, so a source month "
             "deleted while the published one is still kept is a shard nothing can rebuild"
@@ -658,31 +752,22 @@ def _refuse_a_picture_window_the_archive_does_not_state(
 
 
 def _old_tree_floor(ledger: LedgerName, tasks: Mapping[str, TaskPolicy]) -> Window | None:
-    """How far back a ledger reached before it moved, read off the task that limited it.
+    """How far back a ledger reached before it moved, read off the series that kept it.
 
-    A task's series that covers the ledger, first: a task that still summarises
-    the ledger's months reads them for as long as that series lasts, whether or
-    not it still owns the tree they sat in. Else the retention task whose `owns`
-    names the ledger's old tree. A retired task keeps its declaration, so the
-    answer outlives the tree it was about.
+    A task that still summarises a ledger's months reads them for as long as the
+    series that covers the ledger lasts, whether or not it still owns the tree
+    they sat in. How long a retention task kept a ledger's old tree is not read
+    here: `CSV_LEDGERS` in `backend/utilities/migrate_to_parquet.py` records it,
+    and that table's test holds every moved ledger's compaction to it.
     """
-    # Imported here rather than at the top: the ledger package reads this module
-    # while it loads, so importing it back at module scope would be a cycle.
-    from idhazh.ledger.paths import STATE_DIRNAME
-
-    retention = {
-        name: policy for name, policy in tasks.items() if isinstance(policy, RetentionPolicy)
-    }
-    for name, policy in retention.items():
+    for name, policy in tasks.items():
+        if not isinstance(policy, RetentionPolicy):
+            continue
         allowed = _SERIES.get(name, {})
         for series, window in (policy.series or {}).items():
             kept = allowed.get(series)
             if kept is not None and kept.ledger is ledger:
                 return window
-    old_tree = f"{STATE_DIRNAME}/{ledger.value}"
-    for policy in retention.values():
-        if old_tree in (policy.owns or ()):
-            return policy.window
     return None
 
 
@@ -747,10 +832,9 @@ def _refuse_a_compaction_that_cuts_its_ledger(
 ) -> None:
     """Once a ledger is compacted its periods are its retention, so they must reach.
 
-    The pair reaches back `daily_keep_days` plus `monthly_window`, counted at the
-    fewest days those months can hold: a month file lives `monthly_window` after
-    its month is absorbed, and a month is absorbed `daily_keep_days` after it
-    ends, so no pair of the two can leave a day in no period.
+    How far back the pair reaches is `compaction_reaches`. The floor here is a
+    series that still summarises the ledger's months; the floors a reader's knob,
+    the console and the machine shard set are checked where those are.
     """
     where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
     ledger = policy.ledger
@@ -765,28 +849,22 @@ def _refuse_a_compaction_that_cuts_its_ledger(
             f"daily_keep_days {policy.daily_keep_days}. The raw index must outlive the "
             "daily period, which may still need it to rebuild a daily file"
         )
-    monthly_kept = _days_kept(policy.monthly_window)
-    reach = None if monthly_kept is None else policy.daily_keep_days + monthly_kept
+    reach = _reach(policy)
     if ledger in app.ledger.published:
         _refuse_a_published_reach_that_grows_or_falls_short(
             where, policy, reach, appearance=appearance
         )
     floor = _old_tree_floor(ledger, tasks)
-    if floor is None or isinstance(policy.monthly_window, ForeverWindow):
+    if floor is None or compaction_reaches(policy, floor):
         return
-    needed = _days_needed(floor)
-    if needed is None:
+    if isinstance(floor, ForeverWindow):
         raise ValueError(
             f"{where} keeps monthly_window {_spelled(policy.monthly_window)}, and the task "
             f"that limited {ledger.value} before it moved kept it forever. A person chose "
             "never to delete this ledger, so its compaction may not either"
         )
-    assert reach is not None
-    if reach < needed:
-        raise ValueError(
-            f"{where} reaches back {reach} days with daily_keep_days "
-            f"{policy.daily_keep_days} and monthly_window "
-            f"{_spelled(policy.monthly_window)}, and the task that limited "
-            f"{ledger.value} before it moved kept {_spelled(floor)}. The pair would "
-            "silently cut how far back the ledger reaches"
-        )
+    raise ValueError(
+        f"{where} {_kept_by(policy)}, and the task that limited {ledger.value} before it "
+        f"moved kept {_spelled(floor)}. The pair would silently cut how far back the "
+        "ledger reaches"
+    )

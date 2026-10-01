@@ -14,6 +14,7 @@ that carried the move.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -21,7 +22,8 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, SEED_COMMIT
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, SEED_COMMIT
+from gardener._garden import a_config
 
 from idhazh import config, day_shards, ledger
 from idhazh.contracts.base import ServerJob
@@ -31,9 +33,10 @@ from idhazh.contracts.eval_row import RENAMED_CELLS, EvalRow
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import DROPPED_CELLS, MACHINE_CELLS_RENAMED, ItemHealthRow
-from idhazh.contracts.knobs.gardener import CompactionPolicy
+from idhazh.contracts.knobs.gardener import CompactionPolicy, ForeverWindow, RetentionPolicy
 from idhazh.contracts.ledger_index import CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import Grain
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
@@ -53,6 +56,16 @@ RUN: Final = "2026-09-29-9001"
 ITEM: Final = LedgerName.ITEM_HEALTH
 EVALS: Final = LedgerName.SUMMARY_QUALITY_EVALS
 HOST: Final = LedgerName.HOST_FINGERPRINT
+#: The ledgers these cases build CSV trees for, each filed through the door.
+MOVED: Final = (ITEM, EVALS, HOST)
+#: Each one's row contract, the one the door table pairs it with.
+ROWS: Final[dict[LedgerName, type[ItemHealthRow | EvalRow | HostFingerprintRow]]] = {
+    ITEM: ItemHealthRow,
+    EVALS: EvalRow,
+    HOST: HostFingerprintRow,
+}
+#: A ledger the registry still files as CSV, whose CSV tree a case builds.
+ON_CSV: Final = LedgerName.FEED_HEALTH
 
 type Cells = dict[str, str]
 type ByKey = dict[tuple[str, ...], Cells]
@@ -156,24 +169,22 @@ def _csv(
 
 
 def _by_key(which: LedgerName, rows: Sequence[Cells]) -> ByKey:
-    _, key = migration.LEDGERS[which]
+    key = ledger.door_key(which)
     return {tuple(cells[name] for name in key): cells for cells in rows}
 
 
 def _todays_reader(state: Path, which: LedgerName) -> dict[str, ByKey]:
     """Every CSV day of a ledger, as today's CSV reader returns it."""
-    model, key = migration.LEDGERS[which]
     root = migration.csv_root(state, which)
     return {
-        day: _by_key(which, day_shards.settled_day(root, day, key, model))
+        day: _by_key(which, day_shards.settled_day(root, day, ledger.door_key(which), ROWS[which]))
         for day in migration.csv_days(state, which)
     }
 
 
 def _read_back(state: Path, which: LedgerName, day: str) -> ByKey:
     """One day as the door serves it, from whichever file serves it."""
-    model, _ = migration.LEDGERS[which]
-    rows = ledger.load_days(state, which, [day], model=model)
+    rows = ledger.load_days(state, which, [day], model=ROWS[which])
     return _by_key(which, [row.csv_row() for row in rows])
 
 
@@ -192,9 +203,20 @@ def _stored(path: Path) -> list[dict[str, Any]]:
     return (parquet.read if data.startswith(b"PAR1") else json_lines.read)(data)[1]
 
 
+def _beside(state: Path) -> Path:
+    """A config folder beside this state tree, holding every committed declaration.
+
+    Only the state tree beside its config folder is packed, so a case that wants
+    packing builds one, as a checkout holds one beside `state/`.
+    """
+    return a_config(state.parent, CONFIG_DIR / "gardener")
+
+
 def _run(state: Path, *which: LedgerName, today: date = TODAY) -> list[migration.Moved]:
-    """The migration of these ledgers, run on the wake `today`."""
-    return migration.migrate(state, which, run_id=RUN, git_sha=SEED_COMMIT, today=today)
+    """The migration of these ledgers, run on the wake `today` with the committed declarations."""
+    return migration.migrate(
+        state, which, run_id=RUN, git_sha=SEED_COMMIT, today=today, config_dir=_beside(state)
+    )
 
 
 def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path: Path) -> None:
@@ -223,13 +245,13 @@ def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path:
     _csv(state, HOST, OLD, _writer(OLD, 1, ServerJob.WORK), halves)
     halves = [_probe(NEW, ServerJob.PLAN).csv_row(), _clock(NEW, ServerJob.PLAN).csv_row()]
     _csv(state, HOST, NEW, _writer(NEW, 1, ServerJob.PLAN), halves)
-    wanted = {which: _todays_reader(state, which) for which in migration.LEDGERS}
+    wanted = {which: _todays_reader(state, which) for which in MOVED}
     lines = {
         which: sum(1 for path in migration.left(state, [which]) for _ in day_shards.rows_of(path))
-        for which in migration.LEDGERS
+        for which in MOVED
     }
 
-    moved = {each.which: each for each in _run(state, *migration.LEDGERS)}
+    moved = {each.which: each for each in _run(state, *MOVED)}
 
     for which, days in wanted.items():
         assert moved[which].rows == sum(len(rows) for rows in days.values())
@@ -240,7 +262,7 @@ def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path:
         assert not migration.csv_root(state, which).exists(), (
             "every CSV file and emptied folder goes"
         )
-    assert not migration.left(state, list(migration.LEDGERS))
+    assert not migration.left(state, list(MOVED))
     item_key = (OLD, f"{OLD}-100", "ai-01")
     assert _read_back(state, ITEM, OLD)[item_key]["machine_job"] == ServerJob.WORK.value
     assert {cells["score_ms"] for cells in _read_back(state, EVALS, OLD).values()} == {"0", "200"}
@@ -260,11 +282,11 @@ def test_a_second_run_changes_no_byte(tmp_path: Path) -> None:
     _csv(state, ITEM, NEW, _writer(NEW, 1, ServerJob.ASSEMBLE), [_item(NEW, "ai-03", machine=False).csv_row()])
     _csv(state, EVALS, NEW, _writer(NEW, 1, ServerJob.WORK), [_score(NEW, 1).csv_row()])
     _csv(state, HOST, NEW, _writer(NEW, 1, ServerJob.WORK), [_probe(NEW).csv_row(), _clock(NEW).csv_row()])
-    _run(state, *migration.LEDGERS)
+    _run(state, *MOVED)
     before = _hashes(tmp_path)
-    waiting = [ledger.raw_days(state, which) for which in migration.LEDGERS]
+    waiting = [ledger.raw_days(state, which) for which in MOVED]
 
-    again = _run(state, *migration.LEDGERS, today=date(2026, 9, 11))
+    again = _run(state, *MOVED, today=date(2026, 9, 11))
     argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT]
 
     assert [(each.days, each.filed, each.packed) for each in again] == [(0, 0, [])] * 3
@@ -321,7 +343,7 @@ class _Packed:
 
 
 def _packed(state: Path, which: LedgerName) -> _Packed:
-    model, _ = migration.LEDGERS[which]
+    model = ROWS[which]
     index = CompactIndex.read(ledger.compact_index_path(state, which, Period.DAILY))
     daily: dict[str, tuple[object, ...]] = {}
     for entry in index.entries:
