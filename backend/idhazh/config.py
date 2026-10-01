@@ -698,27 +698,14 @@ def _refuse_a_published_reach_that_grows_or_falls_short(
     Month files kept forever would make the monthly index a reader fetches first
     grow with the archive, unless the ledger packs each finished year into one
     file: its month files then last until their year is packed, and the yearly
-    index grows by one entry a year. A ledger that packs years keeps its month
-    files long enough that the widest console read, which ends on the newest day
-    compacted, never reaches a year file. The door reads a year file by byte
-    range, but a page that holds part of one asks for the next part naming the
-    ETag it kept, every deploy changes that ETag, and a host that honours the
-    check then sends the whole file. A ledger that deletes its month files
-    reaches back at least the widest span the console offers.
+    index grows by one entry a year. A ledger that packs years keeps every month
+    until its year is packed and every year for ever, so it reaches back past any
+    span the console offers, and it waits as long as its own declaration says. A
+    ledger that deletes its month files reaches back at least the widest span the
+    console offers.
     """
     ledger = policy.ledger.value
     if policy.monthly_keep_days is not None:
-        widest_read = appearance.console.max_window_days
-        floor = widest_read + policy.compact_after_days
-        if policy.monthly_keep_days < floor:
-            raise ValueError(
-                f"{where} packs each year {policy.monthly_keep_days} days after it ends, and "
-                f"{ledger} is in ledger.published. A console read reaches back "
-                f"console.max_window_days {widest_read} from the newest day compacted, which is "
-                f"compact_after_days {policy.compact_after_days} and more before the wake, so "
-                f"monthly_keep_days must be at least {floor}, or that read can be answered "
-                "with a whole year file after a deploy"
-            )
         return
     if reach is None:
         raise ValueError(
