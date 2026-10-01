@@ -42,18 +42,27 @@ cell equal but `ledger`; every envelope key equal but `ledger`,
 `content_sha256` and `writer_version`; every listing, index and watermark equal
 but its name and its sizes; the ledger's settled rows equal on every day an old
 file served; and the dedupe's recorded measurements equal. A refusal in any
-pass deletes no old file, and a refusal in the first writes nothing.
+pass deletes no old file, a refusal in the first writes nothing, and a refusal
+in the second or third gives a file rewritten where it lies its own bytes back.
 
 **Running it again is safe, and is how a late file moves.** A new address that
 already holds the same bytes is not written again, and one that holds other
 bytes is refused before anything is written. A run that started before the
 rename still files under the old names, and the next run of this moves what it
-filed. With nothing under an old name, a run reads nothing and writes nothing.
+filed. With nothing left to move, a run writes nothing.
 
-**What it reads (Guardrail #12).** Every file under the old names, the ledger
-files already under the new name for the days those files serve, and the whole
-ID folder, which is what the dedupe reads on every run. It is run by hand, and
-only until the removal date above.
+**A file git carried across is rewritten where it lies.** A merge or a rebase
+that meets the rename moves a file added under an old folder into the new one,
+and that file still names the old ledger, so no reader accepts it. Merge with
+`git -c merge.directoryRenames=false` and it stays under the old name, where the
+move above takes it. Merged any other way, it is found by its envelope or its
+name field, rewritten in place under the new name, and never deleted.
+
+**What it reads (Guardrail #12).** Every file under the old names, the envelope
+of every ledger file under the new names and every listing, index and watermark
+there, the ledger files under the new name for the days a moved file serves,
+and the whole ID folder, which is what the dedupe reads on every run. It is run
+by hand, and only until the removal date above.
 """
 
 from __future__ import annotations
@@ -148,6 +157,8 @@ class Plan:
     settled: list[EvalRow] = field(default_factory=list)
     #: Every measurement the dedupe held.
     observations: set[str] = field(default_factory=set)
+    #: The bytes of every file rewritten where it lies, put back if a later pass refuses.
+    originals: dict[Path, bytes] = field(default_factory=dict)
 
     def targets(self) -> list[tuple[Path, Path, bytes]]:
         """Every old path, its new path, and the bytes that go there."""
@@ -190,9 +201,46 @@ def _files(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*") if path.is_file()) if root.is_dir() else []
 
 
+def _names_the_old_ledger(path: Path, parts: tuple[str, ...]) -> bool:
+    """Whether one file under a new folder still names the old ledger, read before any check."""
+    try:
+        if parts[0] == ledger.paths.INDEX_DIRNAME or parts[-1] == ledger.paths.WATERMARK_FILENAME:
+            held = json.loads(path.read_text(encoding="utf-8"))
+            return isinstance(held, dict) and held.get("ledger") == OLD_LEDGER
+        with path.open("rb") as handle:
+            first = handle.readline() if handle.read(1) == json_lines.MAGIC else b""
+        if first:
+            envelope = json.loads(json_lines.MAGIC + first)
+            return isinstance(envelope, dict) and envelope.get("ledger") == OLD_LEDGER
+        return parquet.read_envelope(path).get(b"ledger") == OLD_LEDGER.encode()
+    except ValueError:
+        return False
+
+
+def _strays(root: Path) -> list[Path]:
+    """Every file under a new folder that still names the old ledger: one git carried there."""
+    return [
+        path for path in _files(root) if _names_the_old_ledger(path, path.relative_to(root).parts)
+    ]
+
+
+def _to_move(old: Path, new: Path) -> list[tuple[Path, Path]]:
+    """Every file one folder has to move, beside the root its place is read from.
+
+    The files under the old name, then the files under the new name that still
+    name the old ledger, which are rewritten where they lie.
+    """
+    return [(old, path) for path in _files(old)] + [(new, path) for path in _strays(new)]
+
+
 def left(state_dir: Path) -> list[Path]:
-    """Every file still under an old name."""
-    return [path for root in old_roots(state_dir) for path in _files(root)]
+    """Every file still under an old name, or under a new one and still naming the old ledger."""
+    raw, compact, ids = old_roots(state_dir)
+    return [
+        *(path for _, path in _to_move(raw, ledger.raw_root(state_dir, LEDGER))),
+        *(path for _, path in _to_move(compact, _compact_root(state_dir))),
+        *_files(ids),
+    ]
 
 
 def _shown(state_dir: Path, path: Path) -> str:
@@ -250,9 +298,9 @@ def _copied(old: Path, new: Path) -> Move:
     return Move(old=old, new=new, data=old.read_bytes(), payload=None)
 
 
-def _each_file(state_dir: Path, root: Path, take: Taker) -> None:
-    """Hand every file under one old folder to `take`, naming the file a refusal came from."""
-    for path in _files(root):
+def _each_file(state_dir: Path, held: list[tuple[Path, Path]], take: Taker) -> None:
+    """Hand every file to `take` with its place below its root; a refusal names the file."""
+    for root, path in held:
         try:
             take(path, path.relative_to(root).parts)
         except ValueError as refusal:
@@ -272,7 +320,7 @@ def _plan_raw(state_dir: Path, plan: Plan) -> None:
         else:
             plan.moves.append(_copied(path, new_root.joinpath(*parts)))
 
-    _each_file(state_dir, old_roots(state_dir)[0], take)
+    _each_file(state_dir, _to_move(old_roots(state_dir)[0], new_root), take)
 
 
 def _plan_compact(state_dir: Path, plan: Plan) -> None:
@@ -296,7 +344,7 @@ def _plan_compact(state_dir: Path, plan: Plan) -> None:
         else:
             plan.moves.append(_copied(path, new_root.joinpath(*parts)))
 
-    _each_file(state_dir, old_roots(state_dir)[1], take)
+    _each_file(state_dir, _to_move(old_roots(state_dir)[1], new_root), take)
     for path, period in indexes:
         try:
             new = ledger.compact_index_path(state_dir, LEDGER, period)
@@ -443,7 +491,9 @@ def plan_move(state_dir: Path) -> Plan:
     except ValueError as refusal:
         raise NotProvenError(f"the ledger before the move would not read: {refusal}") from refusal
     for old, new, data in plan.targets():
-        if new.is_file() and new.read_bytes() != data:
+        if old == new:
+            plan.originals[old] = old.read_bytes()
+        elif new.is_file() and new.read_bytes() != data:
             raise NotProvenError(
                 f"{_shown(state_dir, new)} already holds other bytes than "
                 f"{_shown(state_dir, old)} becomes"
@@ -512,8 +562,12 @@ def prove(state_dir: Path, plan: Plan) -> None:
 
 
 def delete(state_dir: Path, plan: Plan) -> int:
-    """Pass four: every old file this run read is deleted, then every folder it emptied."""
-    for old, _, _ in plan.targets():
+    """Pass four: every old file this run read is deleted, then every folder it emptied.
+
+    A file rewritten where it lay is the new file, so it stays.
+    """
+    moved = [old for old, new, _ in plan.targets() if old != new]
+    for old in moved:
         old.unlink()
     for root in old_roots(state_dir):
         if not root.is_dir():
@@ -523,16 +577,30 @@ def delete(state_dir: Path, plan: Plan) -> int:
                 folder.rmdir()
         if not any(root.iterdir()):
             root.rmdir()
-    return len(plan.targets())
+    return len(moved)
+
+
+def restore(plan: Plan) -> None:
+    """Every file rewritten where it lies gets its own bytes back."""
+    for path, data in plan.originals.items():
+        atomic_write.write_atomic_bytes(path, data)
 
 
 def move(state_dir: Path) -> Moved:
-    """The four passes, each over every file before the next. Raises `NotProvenError`."""
+    """The four passes, each over every file before the next. Raises `NotProvenError`.
+
+    A refusal in the second or third pass puts back every file rewritten where
+    it lies, so nothing a run read is lost.
+    """
     if not left(state_dir):
         return Moved()
     plan = plan_move(state_dir)
-    written, already = write(plan)
-    prove(state_dir, plan)
+    try:
+        written, already = write(plan)
+        prove(state_dir, plan)
+    except BaseException:
+        restore(plan)
+        raise
     return Moved(
         files=len(plan.targets()),
         written=written,
@@ -562,8 +630,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.check:
         remaining = left(state_dir)
         for path in remaining:
-            print(f"{_shown(state_dir, path)} is still under an old name")
-        print(f"{len(remaining)} file(s) left under an old name")
+            print(f"{_shown(state_dir, path)} is still under or names an old name")
+        print(f"{len(remaining)} file(s) left under or naming an old name")
         return EXIT_NOT_PROVEN if remaining else EXIT_MOVED
     try:
         moved = move(state_dir)
@@ -571,7 +639,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"not proven, nothing deleted: {refusal}", file=sys.stderr)
         return EXIT_NOT_PROVEN
     print(
-        f"{moved.files} file(s) under the old names: {moved.written} written, "
+        f"{moved.files} file(s) moved or rewritten: {moved.written} written, "
         f"{moved.already} already in place, {moved.deleted} old file(s) deleted"
     )
     print(

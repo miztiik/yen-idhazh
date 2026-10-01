@@ -182,6 +182,57 @@ def test_a_file_filed_under_an_old_name_after_the_move_moves_on_the_next_run(
     assert (moved.days, moved.settled_rows) == (1, len(served))
 
 
+def _carried(state: Path) -> tuple[Path, bytes]:
+    """The late raw file, put under the new folder as git's rename detection puts it there.
+
+    A merge or a rebase that meets the rename moves a file added under the old
+    folder into the new one, and the file still names the old ledger.
+    """
+    late = FIXTURE / "late"
+    source = next(late.rglob("*.parquet"))
+    carried = _new_address(state, source.relative_to(late).as_posix())
+    carried.write_bytes(source.read_bytes())
+    return carried, source.read_bytes()
+
+
+def test_a_file_git_carried_into_the_new_folder_is_rewritten_where_it_lies(
+    tmp_path: Path,
+) -> None:
+    state = _tree(tmp_path)
+    rename.move(state)
+    carried, held = _carried(state)
+    assert rename.left(state) == [carried], "a file naming the old ledger is still to move"
+
+    moved = rename.move(state)
+
+    assert (moved.files, moved.written, moved.deleted, moved.ledger_files) == (1, 1, 0, 1)
+    was_envelope, was_rows = parquet.read(held)
+    now_envelope, now_rows = parquet.read(carried.read_bytes())
+    assert now_rows == [{**cells, "ledger": LEDGER.value} for cells in was_rows]
+    assert _without(now_envelope, RENAMED) == _without(was_envelope, RENAMED)
+    assert rename.left(state) == []
+    assert len(ledger.list_raw_files(state, LEDGER, days={RAW_DAY})) == 3
+
+
+def test_a_file_rewritten_where_it_lies_gets_its_bytes_back_when_the_read_back_refuses(
+    tmp_path: Path,
+) -> None:
+    """The third pass refuses, so the file the second pass rewrote in place is put back."""
+    state = _tree(tmp_path)
+    rename.move(state)
+    carried, held = _carried(state)
+    plan = rename.plan_move(state)
+    rename.write(plan)
+    envelope, rows = parquet.read(carried.read_bytes())
+    carried.write_bytes(json_lines.render(rows, envelope=envelope | {b"written_at_ms": b"1"}))
+
+    with pytest.raises(rename.NotProvenError, match="does not read back"):
+        rename.prove(state, plan)
+    rename.restore(plan)
+
+    assert carried.read_bytes() == held
+
+
 def _occupied(state: Path) -> None:
     """A new address already holds other bytes than the old file becomes."""
     taken = ledger.raw_index_path(state, LEDGER, "2026-08-22")
@@ -267,7 +318,7 @@ def test_check_names_every_file_left_under_an_old_name(
     left = len(_files(state))
 
     assert rename.main(["--state-dir", str(state), "--check"]) == rename.EXIT_NOT_PROVEN
-    assert f"{left} file(s) left under an old name" in capsys.readouterr().out
+    assert f"{left} file(s) left under or naming an old name" in capsys.readouterr().out
     assert len(_files(state)) == left, "a check wrote or deleted a file"
 
     assert rename.main(["--state-dir", str(state)]) == rename.EXIT_MOVED
