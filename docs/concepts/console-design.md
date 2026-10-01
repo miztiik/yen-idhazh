@@ -64,7 +64,7 @@ the figure changes.
 This is the normal case rather than the exception. Measured 2026-08-31 on the
 committed tree: `job_seconds` and `cpu_model` are empty on **24 of 54** counter
 rows, the three host cells on **34 of 54**, and the counters ledger starts five
-days after the score ledger - so five days inside a thirty-day window have
+days after the eval ledger - so five days inside a thirty-day window have
 scores and no server figures at all. A console that only designed the loaded
 state would be mostly undesigned.
 

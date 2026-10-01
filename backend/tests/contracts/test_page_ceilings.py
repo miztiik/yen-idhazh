@@ -12,7 +12,7 @@ from conftest import CONFIG_DIR, read_text
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.file_envelope import Period
-from idhazh.contracts.knobs.gardener import CompactionPolicy, DaysWindow, MonthsWindow, Window
+from idhazh.contracts.knobs.gardener import CompactionPolicy, DaysWindow, MonthsWindow
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
@@ -77,13 +77,27 @@ def gzipped(data: bytes) -> int:
     return len(gzip.compress(data, compresslevel=5, mtime=0))
 
 
-def months_kept(window: Window) -> int:
+def months_kept(policy: CompactionPolicy) -> int:
     """The most month files a monthly window keeps at once."""
+    window = policy.monthly_window
     if isinstance(window, MonthsWindow):
         return window.value
     if isinstance(window, DaysWindow):
         return months_a_window_can_touch(window.value)
-    raise AssertionError("a published ledger may not keep its month files forever")
+    if policy.monthly_keep_days is not None:
+        return 12 + months_a_window_can_touch(policy.monthly_keep_days)
+    raise AssertionError("a published ledger needs a finite month window or yearly packing")
+
+
+@pytest.mark.parametrize("keep_days", [93, 180, 367])
+def test_yearly_packing_bounds_month_files_while_every_row_is_kept(keep_days: int) -> None:
+    declared = CompactionPolicy.model_validate_json(
+        read_text(CONFIG_DIR / "gardener" / "compact-summary-quality-evals.json")
+    )
+    policy = CompactionPolicy.model_validate(
+        declared.model_dump() | {"monthly_keep_days": keep_days}
+    )
+    assert months_kept(policy) == 12 + months_a_window_can_touch(keep_days)
 
 
 def test_no_page_number_names_a_route_that_grows_when_a_run_publishes() -> None:
@@ -204,7 +218,7 @@ def test_every_published_ledger_bounds_its_indexes_at_twice_their_longest() -> N
             f"{ledger.value} is published and no compaction task writes its indexes"
         )
         days = policy.daily_keep_days + LONGEST_MONTH_DAYS
-        months = months_kept(policy.monthly_window)
+        months = months_kept(policy)
         heaviest = max(
             gzipped(an_index(ledger, Period.DAILY, days)),
             gzipped(an_index(ledger, Period.MONTHLY, months)),
@@ -218,7 +232,10 @@ def test_every_published_ledger_bounds_its_indexes_at_twice_their_longest() -> N
 
 def test_the_index_the_ceilings_are_checked_against_weighs_what_a_real_one_does() -> None:
     """A made-up index that gzips better than a real one would pass a cap that is too low."""
-    assert gzipped(an_index(LedgerName.SCORES, Period.DAILY, 62)) >= REAL_DAY_INDEX_AT_62_ENTRIES
+    assert (
+        gzipped(an_index(LedgerName.SUMMARY_QUALITY_EVALS, Period.DAILY, 62))
+        >= REAL_DAY_INDEX_AT_62_ENTRIES
+    )
 
 
 def test_a_page_ceiling_bounds_a_route_and_bounds_it_above_zero() -> None:

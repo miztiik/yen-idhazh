@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 Which instruments run at all, and how long what they write is kept. The switches
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
@@ -17,7 +17,7 @@ why these are knobs rather than constants, is [../config.md](../config.md).
 
 | Knob | Default | What it switches off |
 | --- | --- | --- |
-| `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in the scores ledger. |
+| `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in the eval ledger. |
 | `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
 | `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
@@ -28,7 +28,7 @@ why these are knobs rather than constants, is [../config.md](../config.md).
 | `cost_output_per_million` | `0.60` | Nothing. The same, for a million written tokens. |
 
 **Four switches and not one master switch.** Collection, scoring, publishing and
-tracing fail in different ways: the score ledger empties when the scorer will
+tracing fail in different ways: the eval ledger empties when the scorer will
 not load, the published telemetry file stops when a run does not publish, and
 the counters file is silent when llama-server was gone before it was read. Under
 one switch a reader sees three absences and cannot say which instrument went
@@ -113,7 +113,7 @@ that mapping yet, because no console read opens one of its shards today
 | Ledger | Full grain | Summary after it | Declared in |
 | --- | --- | --- | --- |
 | the item-health ledger, `state/raw/item-health/` and `state/compact/item-health/` | 14 months before a month is summarised; its rows go when the 15-month `monthly_window` of its compaction passes | forever, in `state/item-health-summary/` | `config/gardener/telemetry-aggregate.json`, series `full-grain` and `aggregate`, and `config/gardener/compact-item-health.json` |
-| the scores ledger, `state/raw/scores/` and `state/compact/scores/` | the 15-month `monthly_window` of its compaction, once that compaction is live | none written today: `state/score-archive/` was built from the CSV day files, and nothing builds it from the door's rows yet | `config/gardener/compact-scores.json` |
+| the eval ledger, `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | forever - the `monthly_window` of its compaction is `forever`, so no row is ever deleted | none - a chart that wants a monthly figure computes it from the rows | `config/gardener/compact-summary-quality-evals.json` |
 | `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
 | `state/feed-health/` | 14 months | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/feed-health.json` |
 | the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`, with the floor it must reach in the retired `config/gardener/host-fingerprint.json` |
@@ -160,7 +160,7 @@ the run's own artifacts by nothing.
 
 **A summary is kept forever unless a value says otherwise, and a finite value
 must sit above its own full-grain window.** The gardener loader refuses any
-other pair for the two tasks that keep series, and the `observability` contract
+other pair for the one task that keeps series, and the `observability` contract
 refuses it for the visual pair. Either way a month can never be deleted before
 the thing that replaces it has been written.
 
@@ -198,8 +198,8 @@ The retired check compared the old age times 30 against `max_window_days` - `390
 month is not thirty days. The check now compares against the shards, and
 `backend/tests/contracts/` sweeps every end date in one 400-year
 Gregorian cycle to prove it. The gardener loader makes the same comparison for
-every declaration whose files a console read opens - the `feed-health` window,
-the `full-grain` series of `scores` and `telemetry-aggregate`, and the
+every declaration whose files a console read opens - the `feed-health` and
+`summary-quality-evals-index` windows, the `full-grain` series of `telemetry-aggregate`, and the
 `public-copy` series - and refuses a window under fourteen months by naming the
 file. Measured 2026-09-02 over all **146,097** anchor
 dates - arithmetic over the calendar, so the spread is zero by construction:
@@ -238,8 +238,8 @@ still spelling a moved name is refused the same way, naming the new place:
 | `observability.item_health_full_grain_months` | 14 | `series.full-grain` in `config/gardener/telemetry-aggregate.json` |
 | `observability.item_health_aggregate_keep_months` | null | `series.aggregate` in `config/gardener/telemetry-aggregate.json`, as `forever` |
 | `observability.public_telemetry_keep_months` | 14 | `series.public-copy` in `config/gardener/telemetry-aggregate.json` |
-| `observability.scores_full_grain_months` | 14 | `series.full-grain` in `config/gardener/scores.json` |
-| `observability.score_archive_keep_months` | null | `series.archive` in `config/gardener/scores.json`, as `forever` |
+| `observability.scores_full_grain_months` | 14 | `monthly_window` in `config/gardener/compact-summary-quality-evals.json`, as `forever` since 2026-09-30 |
+| `observability.score_archive_keep_months` | null | `monthly_window` in `config/gardener/compact-summary-quality-evals.json`, as `forever`: no month is summarised |
 | `observability.feed_health_keep_months` | 14 | `window` in `config/gardener/feed-health.json` |
 | `observability.host_fingerprint_keep_months` | 14 | `window` in `config/gardener/host-fingerprint.json` |
 | `observability.trace_window_days` | 7 | `window` in `config/gardener/traces.json`, in days |
@@ -251,7 +251,11 @@ A task that keeps series keeps its own `window` equal to its `full-grain`
 series, so the two spellings of that number are refused unless they agree.
 `backend/tests/gardener/tasks/test_every_window_moved_unchanged.py` reads each
 old value from a frozen copy of the file as it was and checks the declaration
-holds the same one, key by key.
+holds the same one, key by key. **One value changed later, on purpose.** The eval
+rows' 14 months became `forever` when every eval row was kept for ever and
+nothing summarised a month, so both score names now point at
+the compaction window that keeps every row, and the test names that one change
+with its reason.
 
 **Validation reads `config/appearance.json`.** That file owns the console window
 the published site really uses, and `AppConfig.console` is the layer under it, so
@@ -289,32 +293,20 @@ stands, and the measurement only strengthens it.
 `telemetry-aggregate` task summarises an item-health month past its `full-grain`
 series and unlinks the browser's copy of that month past its `public-copy`
 series; the `feed-health` task deletes `state/feed-health/` past its window; and
-the `scores` task deletes a `state/score-index/` day once an archive covers its
-month. Its `archive` series is `forever`, so nothing has ever deleted an archive.
-The item-health, scores and host-fingerprint rows are deleted by each ledger's
-compaction past its `monthly_window`, and the retired `host-fingerprint` task
-runs no more.
+the `summary-quality-evals-index` task keeps every `state/summary-quality-evals-index/` day, because its window is
+`forever`. The item-health and host-fingerprint rows are deleted by each ledger's
+compaction past its `monthly_window`, the eval rows' compaction keeps every
+month, and the retired `host-fingerprint` task runs no more.
 
-**A score month has to be summarised before it is deleted, and nothing
-summarises one today.** The archive is
-`state/score-archive/<YYYY-MM>.json`: the shard's SHA-256 and row count, one
-digest per distinct measurement, and one cohort per (date, run, row version,
-model, pipeline, scorer) carrying counts, ten faithfulness deciles, three bands,
-the boolean signal counts, the cut counts, the premise-digest counts and
-`{n, sum, sum_squares, min, max}` per numeric column. Two things make that
-necessary rather than tidy: the ledger is the evidence behind every published
-quality claim, and `evals.writer` refuses a repeat measurement by reading the
-rows - so a shard deleted with no index would make every measurement in it
-scoreable again as if it were new. The `scores` task built the archive from a
-month's CSV day files and hashed their bytes, and those files are gone, so no
-month is archived now and the `scores` compaction stays report-only until an
-archive is built from the door's rows
-([../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#design-rationale)).
-**Measured 2026-09-03 over both committed
-shards: 4,266,655 bytes of shard become 557,290 bytes of archive, 13.1 percent,
-and three reads gave byte-identical results so the spread is zero.** What that
-buys, in years, is in
-[../../architecture/publishing/retention.md](../../architecture/publishing/retention.md#what-bounds-the-committed-state-tree).
+**Every eval row is kept, and nothing summarises a month.** The ledger is the
+evidence behind every published quality claim, so its rows are kept for ever,
+and a chart that wants a monthly figure computes it from the rows when it draws
+([../evaluation.md](../evaluation.md#design-rationale)). The `monthly_window` of
+`config/gardener/compact-summary-quality-evals.json` is `forever`, so its compaction may pack a
+month and never drops one, and its `monthly_keep_days` packs a finished year's
+months into one year file. The index a run dedupes against keeps every day for
+its own reason: an observation key carries no date, so a dropped day would make
+every measurement in it new again.
 
 **Feed health is deleted and never summarised.** Its rows are per-feed-per-run
 evidence, the quarantine reads 31 days, and the console reaches at most 366 - so
@@ -324,13 +316,15 @@ beside it. `state/seen/` is not on that list at all because it is a lookup rathe
 than a measurement: an out-of-window day file is deleted by the `seen` task,
 whose window may not sit below `collect.seen_window_days`.
 
-**And every task ships in dry run.** Each declaration carries `dry_run: true`,
+**And every retention task ships in dry run.** Each retention declaration carries
+`dry_run: true`,
 so a pass lists every file a live pass would remove and removes none of them.
 The `history` job of `.github/workflows/idhazh-gardener.yml` squashes and force-pushes
 `main` on a schedule, so a state file deleted here stops being recoverable from
 history once that prune passes over it (`CLAUDE.md` section 8) - which makes
 "read the list first" the only safe order. Turning one task's deletion on is a
-one-line commit to that task's own declaration
+change to that task's own declaration and its entry in the contract test's list
+of live switches
 ([../../how-to/run-the-pipeline.md](../../how-to/run-the-pipeline.md#turning-state-cleanup-on)).
 Measured on this checkout on 2026-09-13: a live run today
 removes nothing, the first file any tree loses is `state/seen/2026/08/23.csv` on
@@ -342,9 +336,10 @@ together, on **2027-10-01**. The sight date was 2026-11-30 while that ledger
 filed by month, because a whole month shard survived if any of its days was in
 range; at day grain the file the window stops naming is the file that goes.
 Reading committed files against a fixed calendar is deterministic, so the spread
-is zero. The item-health and scores rows have since moved to the ledger door, so
-they no longer go on that date: they go when each compaction's `monthly_window`
-passes, once a person turns that compaction on.
+is zero. The item-health and eval rows have since moved to the ledger door, so
+they no longer go on that date. The item-health rows go when the 15-month
+`monthly_window` of their compaction passes, and that compaction packs live; no
+eval row is ever deleted.
 
 ## See also
 

@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -41,41 +41,64 @@ of four nothings without inspecting an error:
 | --- | --- | --- |
 | 1 | `ok`, with the rows | At least one row matched. The rows are what the files hold, sorted by the requested columns left to right; the door never merges two rows, because the compaction already wrote one row per record |
 | 2 | `quiet` | Every day asked for is covered and nothing matched, or the whole span lies after the newest day compacted. A filter that matches nothing is `quiet`, never an empty `ok` |
-| 3 | `missing` | The ledger has no `daily.json`, so it is not published |
-| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why: a day named by neither index, a named file that did not arrive whole, an index this build will not act on, or an engine that could not run the query |
+| 3 | `missing` | The ledger has no `daily.json`, so it is not published. Its fault is `not-packed` |
+| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why. A file the ledger should hold and does not is named as one of four faults ([below](#when-a-file-is-missing)); the other causes are a span that starts before the oldest day any index names, a named file that arrived at the wrong length or could not be fetched, an index this build will not act on, and an engine that could not run the query |
 
 `ok` and `quiet` carry `through`, the newest day `daily.json` names - `null`
 before the first compaction - so a panel can say how far its data reaches. A day
 after `through` has not been compacted yet, so it is clamped away rather than
-drawn as a zero.
+drawn as a zero. `missing` and `unreachable` carry `fault`, the name of the
+missing file behind them, or `null` for an `unreachable` with another cause.
 
 ## Which files a span reads
 
 The ledger carries its own indexes, because a browser cannot list a directory:
-`state/compact/<ledger>/index/daily.json` and `index/monthly.json`, written by the
-gardener's compaction task and declared as `CompactIndex` in
+`state/compact/<ledger>/index/daily.json`, `index/monthly.json` and
+`index/yearly.json`, written together by the gardener's compaction task - an
+index for a period never packed names nothing - and declared as `CompactIndex` in
 `backend/idhazh/contracts/ledger_index.py`.
 
-1. **`daily.json` first, and `monthly.json` only when the span starts before the
-   oldest day `daily.json` names.** A span of 30 days or less reads one index.
-2. **For each day, the coarsest period that holds it**: the month file when
-   `monthly.json` names that month, otherwise the day file. A day is read through
-   exactly one file, so a day both indexes name is read from the month - reading
-   it twice would double every number drawn from it.
-3. **A day neither index names, at or before `through`, is a hole**, and the answer
-   is `unreachable` at the first one. Drawing the days around it would be an
-   undercount nobody could see.
+1. **`daily.json` first; `monthly.json` only when the span starts before the
+   oldest day `daily.json` names; and `yearly.json` only when it starts before the
+   oldest day those two name.** A span of 30 days or less reads one index.
+2. **For each day, the coarsest period that holds it**: the year file when
+   `yearly.json` names that year, else the month file when `monthly.json` names
+   that month, otherwise the day file. A day is read through exactly one file, so
+   a day two indexes name is read from the coarser - reading it twice would double
+   every number drawn from it.
+3. **A day no index names, between the oldest day any index names and
+   `through`, is a hole**, and the answer is `unreachable` at the first one,
+   named `day-missing`. Drawing the days around it would be an undercount nobody
+   could see. A span that starts before the oldest named day is `unreachable` at
+   its first day with no fault: those days were never packed, and a route clamps
+   its span to the reach's `first` (below).
 4. **An entry with `rows: 0` is never fetched.** A span of quiet days loads no
    engine at all.
 5. **A file whose decoded length differs from its entry's `bytes` is refused**, and
-   so is one that does not arrive. The decoded length, never `Content-Length`,
-   because Pages compresses what it serves.
+   so is one that does not arrive; one the site answers is not there is
+   `file-missing`. The decoded length, never `Content-Length`,
+   because Pages compresses what it serves. A year file read by byte range is
+   held to the same rule by the length the engine opened it at.
+6. **A day in a packed year is read from its year file by byte range.** In a
+   browser the engine asks the host for the year file's footer and then for the
+   parts of the months the query touches, because the gardener writes a year file
+   one row group a month. One month of 10 columns out of a 29.8 MB year cost
+   243,046 bytes, a tenth of that month's own file
+   ([the measurement](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md)).
+   A day file and a month file are fetched whole, and at build time every file is.
+   The gardener still keeps a published ledger's month files at least
+   `console.max_window_days` plus `compact_after_days` after their year ends, so
+   no read the console can widen to reaches a year file, because a page can still
+   be sent a whole year file after a deploy
+   ([below](#how-a-year-file-is-read-by-byte-range)). A span panned further back
+   than that reads one.
 
 An index is asked for with `cache: 'no-store'`, so a page's one read of it gets
 what the site holds now rather than a copy an HTTP cache kept, and the page then
 keeps it (next section). A data file is asked for with `?v=<rows>-<bytes>` from
 its entry: a compact file is written once, so the browser may keep it for as long
-as that version names it.
+as that version names it. A year file read by byte range is asked for at the same
+address.
 
 ## What a page keeps
 
@@ -83,17 +106,24 @@ A page keeps what the door read for it, so nothing crosses the network or enters
 the engine twice. The keeper is `frontend/src/lib/data/page-keeper.ts`.
 
 - **Each index is read once a page and kept.** Every slice and every reach on the
-  page acts on the same `daily.json` and `monthly.json`. Two asks at the same
-  moment share one fetch. A 404 is kept, because it is an answer; a fetch that
-  threw is not, so the next ask tries again.
+  page acts on the same `daily.json`, `monthly.json` and `yearly.json`. Two asks
+  at the same moment share one fetch. A 404 is kept, because it is an answer; a
+  fetch that threw is not, so the next ask tries again.
 - **Each data file enters the engine once, and the page keeps its name, never its
   bytes.** A file is known by its path and the version its entry names. A
   browser's engine takes the buffer it is handed and leaves the page's copy empty,
-  so bytes kept on the page would read as an empty file the second time. A file
-  of the wrong length is neither registered nor kept, and a file that is not there
-  is kept as absent.
-- **The engine starts only when every file a slice needs has arrived whole**, so
-  a slice that cannot be answered never loads it.
+  so bytes kept on the page would read as an empty file the second time. A year
+  file read by byte range never crosses as bytes: the engine opens it at its
+  address, and the page keeps the name the engine opened it under. A file of the
+  wrong length is neither registered nor kept, and a file that is not there is
+  kept as absent.
+- **The engine starts only when every file a slice fetches whole has arrived
+  whole**, so a slice that cannot be answered never loads it. A slice that reads a
+  year file by byte range starts the engine while its other files arrive, because
+  only the engine can open the year file.
+- **Each console line is printed once for the page's life.** Every panel that
+  meets one missing file prints the same line, so fifteen panels on a page
+  print it once.
 
 `ledger.ts` makes one keeper when a panel first asks and keeps it until the page
 is reloaded. `sliceFromDisk()` makes a fresh one for each call, so it reads the
@@ -105,7 +135,7 @@ reads `state/` again as it changes.
 compacted after the page opened appears only after a reload. A day file the
 deploy re-packed or removed, and that the page had not read yet, answers
 `unreachable`, and the console says why - it arrived at a length its kept entry
-does not give, or it is not there. A reload fixes both.
+does not give, or it is not there, which is `file-missing`. A reload fixes both.
 
 **Why the index is kept rather than read again.** A console route anchors its
 span on a first and a newest day fixed for the page, and a panel that read a
@@ -121,16 +151,56 @@ route can anchor its span on the data rather than on the clock:
 
 | # | Answer | When |
 | --- | --- | --- |
-| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day either index names, a month counting from its first day |
+| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day any index names, a month counting from its first day and a year from its 1 January. Its `fault` is `index-missing` when there is no `monthly.json` or no `yearly.json`, and `first` is then the oldest day the indexes that are there name |
 | 2 | `quiet` | `daily.json` names no day yet |
-| 3 | `missing` | There is no `daily.json`, so the ledger is not published |
+| 3 | `missing` | There is no `daily.json`, so the ledger is not published. Its fault is `not-packed` |
 | 4 | `unreachable` | `daily.json` is one this build will not act on, or could not be read. It carries no day, because the reach asks for none; the console says why |
 
-It reads both indexes at the same time through the page's keeper, so a slice
-asked after it reads neither again, and it starts no engine. A `monthly.json` this
-build will not act on leaves the days `daily.json` names, and the console says
-why. The logic is `frontend/src/lib/data/ledger-reach.ts`, which reads each index
-with the slice's own reader, so the two never disagree about what an index says.
+It reads all three indexes at the same time through the page's keeper, so a slice
+asked after it reads none again, and it starts no engine. A `monthly.json` or
+`yearly.json` this build will not act on leaves the days the other indexes name,
+and the console says why. A packed year counts from its 1 January even when the
+ledger's first rows came later in it. The logic is
+`frontend/src/lib/data/ledger-reach.ts`, which reads each index with the slice's
+own reader, so the two never disagree about what an index says.
+
+## When a file is missing
+
+A packed ledger lists its own files in its three indexes, so a file it should
+hold and does not is a named fault, never an empty answer. The rule, the four
+names and what the gardener does about each are on the compaction's page
+([idhazh-gardener.md](idhazh-gardener.md#the-three-indexes-and-a-file-that-is-missing)).
+`LEDGER_FAULTS` in `frontend/src/lib/data/slice-shapes.ts` declares the names,
+and this is what each one draws:
+
+| # | Fault | What is missing | A slice answers | A reach answers |
+| --- | --- | --- | --- | --- |
+| 1 | `not-packed` | `daily.json` | `missing`, and the route's note says the record is not packed yet | `missing` |
+| 2 | `index-missing` | `monthly.json` or `yearly.json`, while `daily.json` is there | A span that needs only the indexes that are there draws; one that reaches back far enough to need the missing one is `unreachable` at its first day | `ok` from the oldest day the other indexes name |
+| 3 | `file-missing` | A file an index names | `unreachable` from the first day that file covers in the span | Unchanged: a reach reads no data file |
+| 4 | `day-missing` | A day between the oldest and the newest packed day that no index names | `unreachable` at that day | Unchanged |
+
+**Each fault prints one console line**, in one shape - the fault, the ledger,
+the committed path, what is wrong and what fixes it:
+
+```text
+[ledger] file-missing summary-quality-evals state/compact/summary-quality-evals/daily/2026/09/12.parquet: daily.json names it; it is not there. Reload; if it stays, re-pack that day.
+```
+
+The line names no span, so every panel that meets one fault prints the same
+line, and the page keeper prints it once for the page's life; a build-time call
+prints it once a call. The line is `faultLine()` in
+`frontend/src/lib/data/slice-reader.ts`. A route's note for a record uses the
+same names: a record whose packed file or packed day is missing says which,
+because each has its own fix (`recordNotes` in
+`frontend/src/lib/console/recording.ts`).
+
+**Three gaps are expected, and none of them is a fault or a request**: a day
+after the newest packed day is clamped away, an entry with `rows: 0` is never
+fetched, and an empty `monthly.json` or `yearly.json` names nothing. None of
+them makes the door
+ask the site for a file that is not there, and `frontend/tests/ledger-door.spec.ts`
+counts what a byte source is asked to prove it.
 
 ## Where each file is asked for
 
@@ -141,6 +211,7 @@ already checked:
 - `<prefix>/state/compact/<ledger>/index/<period>.json`
 - `<prefix>/state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet`
 - `<prefix>/state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet`
+- `<prefix>/state/compact/<ledger>/yearly/<YYYY>/<YYYY>.parquet`
 
 `<prefix>` is `visuals.asset_base_url` in `config/idhazh.json`, or SvelteKit's own
 repository prefix when that knob is empty, which is the shipped default. It comes
@@ -150,8 +221,8 @@ asks. On disk the same paths sit under the state root handed to `sliceFromDisk()
 ## What the site holds for the door
 
 The site holds the ledgers `ledger.published` in `config/idhazh.json` names -
-`host-fingerprint`, `item-health` and `scores` - and nothing else of `state/`. The
-build copies each one's two indexes and every compact file they name, byte for
+`host-fingerprint`, `item-health` and `summary-quality-evals` - and nothing else of `state/`. The
+build copies each one's three indexes and every compact file they name, byte for
 byte, to the path each has under `state/`: `frontend/scripts/copy-visuals.mjs`
 stages them into `frontend/static/state/`, which git ignores, and the bundler
 carries them into the site. A published file is the ledger itself, so it cannot
@@ -162,7 +233,7 @@ which files.
   watermark, a raw day and any file no index names stay off the site with no list
   of things to leave out. A file whose entry has `rows: 0` is copied too, so every
   entry resolves, although the door never asks for one.
-- **A published ledger without both indexes stops the build**, which names the
+- **A published ledger without all three indexes stops the build**, which names the
   ledger and the missing file. A browser asks for a ledger's indexes before
   anything else, so a 404 there would be the only sign that the ledger was
   published wrongly. The whole site waits, reading pages included, until the
@@ -185,7 +256,7 @@ which files.
 
 **What it weighs, and what bounds it.** On 2026-09-30 the three ledgers were
 9.47 MB, summed from the sizes their committed indexes give: `item-health` 4.71 MB
-over 59 days, `scores` 4.45 MB over 59 and `host-fingerprint` 0.31 MB over 28,
+over 59 days, `summary-quality-evals` 4.45 MB over 59 and `host-fingerprint` 0.31 MB over 28,
 with 0.87 MB of it files that hold no row. That was 6.4 percent of a full site
 build that day. The archive does not grow it: a ledger
 keeps at most `daily_keep_days` plus 31 day files and the month files its
@@ -197,9 +268,59 @@ bytes at gzip -5 through the CI runner's zlib. Size a key from the runner's
 reading, because zlib-ng, which some local Python builds use, reads the same
 index about 4 percent smaller. **The data files carry no ceiling, and no gate yet
 weighs what one span reads.** Summed from the same indexes, a 30-day span is about
-0.18 MB of `host-fingerprint`, 3.53 MB of `item-health` and 3.43 MB of `scores`
+0.18 MB of `host-fingerprint`, 3.53 MB of `item-health` and 3.43 MB of `summary-quality-evals`
 (estimate): each of the last two alone is more than the 3.4 MB a cold console load
 is allowed today, which prices a panel that queries them in the browser.
+
+## How a year file is read by byte range
+
+In a browser the page keeper hands the engine a year file's address rather than
+its bytes, through `registerAddress` in `frontend/src/lib/data/engine.ts`. The
+engine opens the file with a 1-byte GET and a `HEAD`, then asks only for its
+footer and for the parts of the row groups the query touches. Which periods are
+read this way is `RANGED_PERIODS` in `frontend/src/lib/data/slice-reader.ts`.
+`sliceFromDisk()` reads every file whole, because the engine's Node half reads no
+host. `frontend/tests/ledger-ranges.spec.ts` drives a real browser against a host
+on 127.0.0.1 that answers the way Pages does. Five facts shape the design.
+
+- **The engine's own default reads an address whole.** DuckDB-Wasm opens with
+  `forceFullHTTPReads` on, and then reads a registered address in one GET with no
+  `Range`. `engine.ts` opens the database with it off. A read answered 200 rather
+  than 206 also makes the engine take the whole body without a word, so the spec
+  requires every GET for a year file to name a range and be answered 206,
+  uncompressed.
+- **Pages answers a `HEAD` that carries a `Range` with 200 and the full length.**
+  The engine takes a file's length from that `HEAD`, and accepts a 200 only while
+  `allowFullHTTPReads` is on, so that setting stays on. The length it opened must
+  equal the entry's `bytes`, or the slice is `unreachable` and the console says
+  `<path> opened at <n> bytes to be read by range, and its entry says <m>`.
+- **Pages ignores the query string.** `?v=a` and `?v=b` get the same bytes and the
+  same ETag, so the version in the address never reaches the host. The engine
+  reads the file under a name the keeper mints for each path and version, so two
+  versions never share a name on one page.
+- **A year file is written once and never rewritten in place.** The gardener
+  writes it when the year is packed and never again, so ranges read at different
+  times all come from the same bytes.
+- **Every Pages deploy gives every file a new ETag**, over the same bytes. Chromium
+  keeps the ranges a page fetched, and asks for a range it does not hold with
+  `If-Range` naming the ETag it kept. A host that honours `If-Range` answers a
+  changed ETag with 200 and the whole file: in the measurement, a page that read
+  June out of a year file, and read July after the ETag changed, was sent all
+  29,816,165 bytes. A new page is not caught: it opens the file again, the browser
+  checks the first byte it kept with `If-None-Match`, and drops the rest. A new
+  page that finds that byte still fresh, within Pages' `max-age=600`, is caught,
+  and the spec holds that case as a test expected to fail.
+
+**Pages honours `If-Range`, measured on the live site.** A ranged GET whose
+`If-Range` names the ETag Pages serves now is answered 206 with the range; one
+naming an older ETag, or a date before the file's, is answered 200 with the whole
+file. Every file in one deploy carries that deploy's time as its `Last-Modified`
+and in its ETag, eleven seconds after the build job ended, so the build cannot pin
+it, and an unchanged file still gets a new ETag. So the gardener's loader refuses
+a published ledger whose month files would be packed sooner than
+`console.max_window_days` plus `compact_after_days` after their year ends (rule 6
+above), and only a span panned further back than any console window reads a year
+file at all.
 
 ## The index copy, and the stamp it reads
 
@@ -335,11 +456,19 @@ empty, so the second slice would hand it an empty file, while the Node engine
 copies and every Node test would pass. Weighed and refused on 2026-09-29.
 
 **No retry after a deploy.** A kept index that names a file the deploy re-packed
-or removed answers `unreachable` rather than reading both indexes again and
+or removed answers `unreachable` rather than reading the indexes again and
 retrying once. The retry is about twenty lines, and it would move a page's first
 and newest day under panels already drawn. It is the move if an open tab is ever
 seen answering `unreachable` after a deploy; nothing has shown one yet. Ruled on
 2026-09-29.
+
+**A year file is read by byte range, and a day or month file is fetched whole.**
+A year file holds twelve months, so fetching it whole to draw one month pays for
+eleven nobody asked for: about twelve times the month's own file. A day file is
+small. A month file read by byte range drew sooner on the slow link measured, 9.5
+seconds against 15.2, but it asks for 13 round trips where its whole fetch asks
+for one, and no faster link has been measured. Reading by range needs nothing the
+engine does not already ship, so it adds no dependency.
 
 **The add-on comes from DuckDB's host, not ours.** It is what every site running
 this engine does, and it keeps 3.2 MB off the site and a download step out of the
@@ -366,5 +495,6 @@ wrong count nobody can see.
 
 - [../../concepts/console-design/how-a-console-chart-gets-its-data.md](../../concepts/console-design/how-a-console-chart-gets-its-data.md) - the seven rules a panel's data obeys.
 - [../contracts/schemas.md](../contracts/schemas.md) - the hand copy of the index shapes and the test that binds it.
+- [../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md) - what one month read by byte range out of a year file costs, and what a deploy costs.
 - [../../reference/site-weight.md](../../reference/site-weight.md#optional-assets) - deployed size, lazy downloads and cache assumptions.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the bundle gate that keeps the engine off the first load.

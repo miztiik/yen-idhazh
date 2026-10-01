@@ -1,11 +1,12 @@
 """Is every date of a ledger read from exactly one file, and is a missing day named rather than skipped?
 
-A ledger the door files lives in three kinds of file as it ages - raw files,
-one compact file a day, one compact file a month - and the reader in
-`ledger/ledger_files.py` reads the month when the monthly index names it, else
-the day when the daily index names it, else the raw files of that day. These
-tests hold that rule over a small tree holding all three, and hold the reader
-to answering what the raw reader answered for a ledger nothing has compacted.
+A ledger the door files lives in up to four kinds of file as it ages - raw
+files, one compact file a day, one a month, and where it packs years one a year
+- and the reader in `ledger/ledger_files.py` reads the year when the yearly
+index names it, else the month when the monthly index names it, else the day
+when the daily index names it, else the raw files of that day. These tests hold
+that rule over small trees holding every kind, and hold the reader to answering
+what the raw reader answered for a ledger nothing has compacted.
 
 Every tree is written under `tmp_path` through the door, inside each test, so
 nothing reads the committed `state/` (CLAUDE.md section 13).
@@ -204,6 +205,55 @@ def test_the_rows_come_back_oldest_first_from_every_kind_of_file(
     assert 7 not in {row.payload_bytes_before for row in rows}
     assert "state/compact/visual-prunes/index/daily.json" in caplog.text
     assert "2026-08-03" in caplog.text
+    assert f"fault={ledger.LedgerFault.DAY_MISSING}" in caplog.text
+
+
+def test_a_named_file_that_is_not_there_is_named_file_missing_and_the_other_days_still_read(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An index naming a file that is gone is a fault, never an empty file read without a word."""
+    made = a_tree_with_every_kind_of_file(tmp_path)
+    made["first"].unlink()
+
+    with caplog.at_level(logging.WARNING):
+        rows = ledger.load_days(
+            tmp_path, WHICH, days("2026-08-01", "2026-08-02"), model=VisualPruneRow
+        )
+
+    assert [row.date for row in rows] == ["2026-08-02"]
+    lines = [record.getMessage() for record in caplog.records]
+    assert any(
+        f"fault={ledger.LedgerFault.FILE_MISSING}" in line
+        and "state/compact/visual-prunes/index/daily.json" in line
+        and "covers=2026-08-01" in line
+        for line in lines
+    ), lines
+
+
+def test_a_daily_index_alone_is_named_index_missing_and_empty_coarser_ones_are_not(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The compaction writes the three together, so daily.json alone hides whatever months or years it packed."""
+    compacted(tmp_path, Period.DAILY, "2026-08-01", [a_pass("2026-08-01")])
+    indexed(tmp_path, Period.DAILY, ["2026-08-01"])
+
+    with caplog.at_level(logging.WARNING):
+        ledger.list_ledger_files(tmp_path, WHICH)
+    lines = [record.getMessage() for record in caplog.records]
+    for period in (Period.MONTHLY, Period.YEARLY):
+        assert any(
+            f"fault={ledger.LedgerFault.INDEX_MISSING}" in line
+            and f"state/compact/visual-prunes/index/{period.value}.json" in line
+            for line in lines
+        ), lines
+
+    indexed(tmp_path, Period.MONTHLY, [])
+    indexed(tmp_path, Period.YEARLY, [])
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        found = ledger.list_ledger_files(tmp_path, WHICH)
+    assert caplog.text == ""
+    assert [source.covers for source in found.sources] == ["2026-08-01"]
 
 
 def test_a_day_both_indexes_name_is_read_once_from_its_month(
@@ -220,6 +270,38 @@ def test_a_day_both_indexes_name_is_read_once_from_its_month(
 
     assert [row.date for row in rows] == ["2026-07-05"]
     assert "read from its month" in caplog.text
+
+
+def test_a_packed_year_serves_its_days_once_and_names_all_its_months_and_days(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A month both the yearly and the monthly index name is read once, from its year.
+
+    That is the state a pass leaves when it stopped between writing a year and
+    deleting its months. The names a caller walks come from the indexes alone,
+    so a packed year names every month and every day it covers.
+    """
+    compacted(tmp_path, Period.YEARLY, "2025", [a_pass("2025-03-05"), a_pass("2025-11-20")])
+    compacted(tmp_path, Period.MONTHLY, "2025-11", [a_pass("2025-11-20")])
+    compacted(tmp_path, Period.DAILY, "2026-01-02", [a_pass("2026-01-02")])
+    indexed(tmp_path, Period.YEARLY, ["2025"])
+    indexed(tmp_path, Period.MONTHLY, ["2025-11"])
+    indexed(tmp_path, Period.DAILY, ["2026-01-02"])
+
+    with caplog.at_level(logging.WARNING):
+        rows = ledger.load_visual_prunes(tmp_path)
+        found = ledger.list_ledger_files(tmp_path, WHICH)
+
+    assert [row.date for row in rows] == ["2025-03-05", "2025-11-20", "2026-01-02"]
+    assert "read from its year" in caplog.text
+    assert [source.period for source in found.sources] == [Period.YEARLY, Period.DAILY]
+    assert found.holes == ("2026-01-01",)
+    assert ledger.held_months(tmp_path, WHICH) == [f"2025-{n:02d}" for n in range(1, 13)] + [
+        "2026-01"
+    ]
+    assert len(ledger.held_days(tmp_path, WHICH)) == 365 + 1
+    asked = ["2025-11-20", "2025-11-21"]
+    assert ledger.load_days(tmp_path, WHICH, asked, model=VisualPruneRow) == [a_pass("2025-11-20")]
 
 
 def test_a_ledger_nothing_has_compacted_reads_as_its_raw_files_did(tmp_path: Path) -> None:

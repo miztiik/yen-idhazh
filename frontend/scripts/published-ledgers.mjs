@@ -2,7 +2,7 @@
  * Which files of `state/` does the site publish, and which faults stop the build?
  *
  * For every ledger `ledger.published` names in `config/idhazh.json`, the site
- * carries that ledger's two compact indexes and every compact file they name,
+ * carries that ledger's three compact indexes and every compact file they name,
  * each at the path it has under `state/`, so the address a browser asks for and
  * the committed path are one string. `copy-visuals.mjs` stages what this
  * returns; nothing here writes.
@@ -15,14 +15,14 @@
  *
  * **A missing index stops the build; a missing data file does not.** The
  * browser asks for a published ledger's indexes before anything else, so a
- * published ledger without both is published wrongly and a 404 would be the only
+ * published ledger without all three is published wrongly and a 404 would be the only
  * sign of it. A data file an index names and the tree lacks is one lost day: the
  * rest is copied, the build log names the file and the fix, and the browser's
  * query door answers `unreachable` for a span that reaches it - degrade, do not
  * fail (CLAUDE.md section 1a).
  *
  * **Every path is built from checked parts.** A ledger name is lower-case words
- * joined by hyphens, and a `covers` value is a UTC day or month in digits, or
+ * joined by hyphens, and a `covers` value is a UTC day, month or year in digits, or
  * the name or the index is refused, so no value in a file can move where a copy
  * lands.
  */
@@ -37,8 +37,8 @@ const CONFIG_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'c
 /** A ledger name as `LedgerName` spells one: lower-case words joined by hyphens. */
 const LEDGER_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
-/** The two compact periods, each with one index. A format literal of the ledger layout. */
-const PERIODS = /** @type {const} */ (['daily', 'monthly']);
+/** The compact periods, each with one index. A format literal of the ledger layout. */
+const PERIODS = /** @type {const} */ (['daily', 'monthly', 'yearly']);
 
 /** @typedef {(typeof PERIODS)[number]} Period */
 
@@ -86,6 +86,9 @@ function namedFile(period, covers) {
 		const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(covers);
 		return day ? `daily/${day[1]}/${day[2]}/${day[3]}.parquet` : null;
 	}
+	if (period === 'yearly') {
+		return /^\d{4}$/.test(covers) ? `yearly/${covers}/${covers}.parquet` : null;
+	}
 	const month = /^(\d{4})-(\d{2})$/.exec(covers);
 	return month ? `monthly/${month[1]}/${month[2]}.parquet` : null;
 }
@@ -94,7 +97,7 @@ function namedFile(period, covers) {
  * The files one index names, or the reason it cannot be acted on.
  *
  * Only what the copy needs is checked: that the file is this ledger's index for
- * this period, and that every entry covers a day or a month of that period.
+ * this period, and that every entry covers a day, month or year of that period.
  * The browser's door checks the rest of the shape when it reads the file.
  *
  * @param {string} text
@@ -122,7 +125,8 @@ function filesNamedIn(text, ledger, period) {
 		const covers = entry !== null && typeof entry === 'object' ? entry.covers : undefined;
 		const file = namedFile(period, covers);
 		if (file === null) {
-			return `names ${JSON.stringify(covers)}, which is not a UTC ${period === 'daily' ? 'day' : 'month'}`;
+			const unit = period === 'daily' ? 'day' : period === 'monthly' ? 'month' : 'year';
+			return `names ${JSON.stringify(covers)}, which is not a UTC ${unit}`;
 		}
 		files.push(`compact/${ledger}/${file}`);
 	}

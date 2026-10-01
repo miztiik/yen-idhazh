@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from conftest import CONFIG_DIR
 from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import ValidationError
 
@@ -23,6 +24,7 @@ from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import (
     DEFAULT_CLOSED_AFTER_DAYS,
     DEFAULT_COMPACT_AFTER_DAYS,
+    GITHUB_RERUN_DAYS,
     CollectionTaskPolicy,
     CompactionPolicy,
     FoldPolicy,
@@ -81,18 +83,34 @@ FOLD_ALREADY_RAN_LIVE: Final = (
     "the gardener took it over, and a fold changes no answer a reader gets"
 )
 
+#: Why two of the ledgers the console reads are packed at every wake.
+PACKED_FOR_THE_CONSOLE: Final = (
+    "packed live by owner decision: the console reads this ledger from its packed "
+    "files only, so a finished day is packed within about two days and a month 31 "
+    "days after it ends"
+)
+
+#: The two packing tasks a person turned live.
+PACKED_LIVE: Final = ("compact-host-fingerprint", "compact-item-health")
+
 #: Every switch that ships live, keyed by its task and by the key a person edits
 #: to turn it off, each beside the decision that put it there. Every other switch
 #: ships `dry_run: true`: a task earns its first deletion from a person reading
 #: its records, never from the change that added it.
 LIVE_BY_DECISION: Final = {
+    ("compact-host-fingerprint", "dry_run"): PACKED_FOR_THE_CONSOLE,
+    ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
     ("corpus-squash", "dry_run"): (
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
     ),
     ("counterfactual-scores", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
     ("feed-health", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
-    ("scores", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
+    ("summary-quality-evals-index", "fold.dry_run"): (
+        f"{FOLD_ALREADY_RAN_LIVE}; and a person ruled that the eval ledger's ID files stop "
+        "growing by a file a day with no summary, so the same switch settles each closed "
+        "month of them into one file"
+    ),
     ("span-rollup", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
 }
 
@@ -185,6 +203,30 @@ def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None
     )
 
 
+def test_the_two_packing_tasks_the_person_turned_on_pack_a_month_31_days_after_it_ends() -> None:
+    """31 is the shortest wait no GitHub re-run can outlast; eval packing only reports."""
+    tasks = config.load_gardener().tasks
+    for name in PACKED_LIVE:
+        policy = tasks[name]
+        assert isinstance(policy, CompactionPolicy), name
+        assert (policy.dry_run, policy.daily_keep_days) == (False, GITHUB_RERUN_DAYS + 1), name
+    evals = tasks["compact-summary-quality-evals"]
+    assert isinstance(evals, CompactionPolicy) and evals.dry_run
+
+
+@pytest.mark.parametrize("name", PACKED_LIVE)
+def test_a_live_packing_task_that_waits_30_days_is_refused_by_name(
+    tmp_path: Path, name: str
+) -> None:
+    """A month absorbed 30 days after it ends could still take a re-run's rows."""
+    config_dir = a_config(tmp_path, CONFIG_DIR / "gardener")
+    path = config_dir / "gardener" / f"{name}.json"
+    declared = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps(declared | {"daily_keep_days": 30}), encoding="ascii")
+    message = refused(config_dir)
+    assert f"config/gardener/{name}.json is refused" in message and "daily_keep_days" in message
+
+
 def test_every_csv_day_tree_is_folded_by_the_task_that_owns_it() -> None:
     """A tree nobody folds keeps a file per writer per day for ever (Guardrail #12).
 
@@ -214,6 +256,33 @@ def test_a_fold_closes_a_day_by_the_same_default_a_compaction_does() -> None:
     """One rule decides when a day is closed, for a CSV day tree and a raw ledger alike."""
     assert FoldPolicy(dry_run=True).after_days == DEFAULT_CLOSED_AFTER_DAYS
     assert DEFAULT_COMPACT_AFTER_DAYS == DEFAULT_CLOSED_AFTER_DAYS
+
+
+def test_a_fold_settles_a_month_only_where_its_own_declaration_asks() -> None:
+    """Off by default, so a tree keeps one file a closed day unless its task says otherwise."""
+    assert FoldPolicy(dry_run=True).settles_months is False
+
+
+@pytest.mark.parametrize(
+    ("window", "loads"),
+    [({"unit": "days", "value": 7}, False), (MONTHS, True), ({"unit": "forever"}, True)],
+)
+def test_a_month_settles_only_beside_a_window_that_keeps_whole_months(
+    tmp_path: Path, window: dict[str, Any], loads: bool
+) -> None:
+    """A settled month's file names no day, so a window of days would take it whole.
+
+    It would take the month once the month's first day aged out, and with it the
+    rows of every later day the window still keeps.
+    """
+    declared = fixture("traces", window=window, fold={"dry_run": False, "settles_months": True})
+    config_dir = a_garden(tmp_path, traces=declared)
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "config/gardener/traces.json is refused" in message
+        assert "settles_months" in message
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
@@ -379,7 +448,7 @@ def test_a_series_task_names_every_series_it_keeps_and_no_other(
 
 def test_only_the_tasks_that_keep_several_series_carry_series(tmp_path: Path) -> None:
     declared = fixture("traces", series={"full-grain": MONTHS})
-    assert "Only scores, telemetry-aggregate keep several series" in refused(
+    assert "only telemetry-aggregate may keep several series at once" in refused(
         a_garden(tmp_path, traces=declared)
     )
 
@@ -394,9 +463,7 @@ def test_a_task_that_keeps_series_keeps_its_window_as_its_full_grain_series(
     )
 
 
-@pytest.mark.parametrize(
-    ("name", "summary"), [("telemetry-aggregate", "aggregate"), ("scores", "archive")]
-)
+@pytest.mark.parametrize(("name", "summary"), [("telemetry-aggregate", "aggregate")])
 @pytest.mark.parametrize(("months", "loads"), [(13, False), (14, False), (15, True)])
 def test_a_summary_series_sits_above_the_rows_it_summarises(
     tmp_path: Path, name: str, summary: str, months: int, loads: bool
@@ -437,7 +504,9 @@ def _thirteen_months(name: str) -> dict[str, Any]:
     return declared
 
 
-@pytest.mark.parametrize("name", ["feed-health", "scores", "telemetry-aggregate"])
+@pytest.mark.parametrize(
+    "name", ["feed-health", "summary-quality-evals-index", "telemetry-aggregate"]
+)
 def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: str) -> None:
     """A 366-day read reaches fourteen month shards, and thirteen is one short of it.
 
@@ -496,7 +565,7 @@ def test_with_no_picture_window_the_cleanup_keeps_every_picture(tmp_path: Path) 
     config.load_gardener(config_dir)
 
 
-@pytest.mark.parametrize("name", ["scores", "telemetry-aggregate"])
+@pytest.mark.parametrize("name", ["telemetry-aggregate"])
 def test_a_task_that_summarises_whole_months_carries_no_ceiling(tmp_path: Path, name: str) -> None:
     """A ceiling could stop part way through a month, and the next summary would be partial."""
     declared = fixture(name, max_deletes_per_run=50)
@@ -560,6 +629,28 @@ def test_a_compaction_carries_no_second_window_no_ceiling_and_no_month_a_re_run_
     assert "config/gardener/compact-gardener.json is refused" in message and field in message
 
 
+@pytest.mark.parametrize(
+    ("changes", "refusal"),
+    [
+        ({"monthly_keep_days": 77}, "It must be forever"),
+        ({"monthly_window": {"unit": "forever"}, "monthly_keep_days": 76}, "set at least 77"),
+        ({"monthly_window": {"unit": "forever"}, "monthly_keep_days": 77}, None),
+    ],
+    ids=["a-window-that-deletes-a-month-first", "a-wait-that-changes-nothing", "packs"],
+)
+def test_packing_years_keeps_every_month_until_its_year_and_waits_past_the_next_january(
+    tmp_path: Path, changes: dict[str, Any], refusal: str | None
+) -> None:
+    """A window would drop a month its year never gets; a wait below 77 acts as 77 does."""
+    config_dir = a_garden(tmp_path, compact_gardener=a_compaction("gardener", **changes))
+    if refusal is None:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "config/gardener/compact-gardener.json is refused" in message
+        assert refusal in message
+
+
 def published(config_dir: Path, *ledgers: str) -> Path:
     """The same config, with these ledgers in `ledger.published`."""
     app = config_dir / "idhazh.json"
@@ -569,21 +660,47 @@ def published(config_dir: Path, *ledgers: str) -> Path:
     return config_dir
 
 
+#: What a published ledger that packs years keeps its months for, at least: the
+#: console's widest read, 366 days, and the one day a compacted day lags a wake.
+PAST_THE_WIDEST_READ: Final = 367
+
+
 @pytest.mark.parametrize(
     ("changes", "refusal"),
     [
-        ({"monthly_window": {"unit": "forever"}}, "may not keep its month files forever"),
+        (
+            {"monthly_window": {"unit": "forever"}},
+            "keeps its month files forever only when it packs each finished year",
+        ),
         (
             {"daily_keep_days": 31, "monthly_window": {"unit": "days", "value": 40}},
             "would have days no file holds",
         ),
         ({"monthly_window": {"unit": "months", "value": 13}}, None),
+        (
+            {
+                "monthly_window": {"unit": "forever"},
+                "monthly_keep_days": PAST_THE_WIDEST_READ - 1,
+            },
+            f"monthly_keep_days must be at least {PAST_THE_WIDEST_READ}",
+        ),
+        (
+            {"monthly_window": {"unit": "forever"}, "monthly_keep_days": PAST_THE_WIDEST_READ},
+            None,
+        ),
     ],
-    ids=["forever", "short-of-the-widest-window", "long-enough"],
+    ids=[
+        "forever",
+        "short-of-the-widest-window",
+        "long-enough",
+        "packs-years-inside-the-widest-read",
+        "packs-years-past-the-widest-read",
+    ],
 )
-def test_a_published_ledger_reaches_the_widest_window_and_is_never_kept_forever(
+def test_a_published_ledger_reaches_the_widest_window_and_keeps_months_forever_only_packed(
     tmp_path: Path, changes: dict[str, Any], refusal: str | None
 ) -> None:
+    """What a reader fetches first stays bounded, and no console read fetches a year file."""
     compaction = a_compaction("gardener", **changes)
     config_dir = published(a_garden(tmp_path, compact_gardener=compaction), "gardener")
     if refusal is None:

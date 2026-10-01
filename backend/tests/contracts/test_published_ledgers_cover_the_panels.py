@@ -154,7 +154,7 @@ def test_a_call_naming_a_ledger_the_site_does_not_publish_is_found() -> None:
     panel = """
 <script lang="ts">
     import { ledgerReach as reachOf, slice, type LedgerName } from '$lib/data/ledger';
-    const reach = reachOf("scores");
+    const reach = reachOf("summary-quality-evals");
     const rows = slice('span-rollup', { columns: ['date'], from: '2026-09-01', to: '2026-09-30' });
     const cut = [1, 2, 3].slice(0, 2);
 </script>
@@ -163,7 +163,7 @@ def test_a_call_naming_a_ledger_the_site_does_not_publish_is_found() -> None:
     calls, problems = door_calls(panel)
     assert problems == []
     assert sorted(calls) == [
-        ("ledgerReach", "scores"),
+        ("ledgerReach", "summary-quality-evals"),
         ("slice", "item-health"),
         ("slice", "span-rollup"),
     ]
@@ -175,7 +175,7 @@ def test_a_call_this_test_cannot_read_is_refused_by_name() -> None:
 import * as door from '../../lib/data/ledger';
 import { slice } from '$lib/data/ledger.ts';
 export { ledgerReach } from '$lib/data/ledger';
-const ledger = 'scores';
+const ledger = 'summary-quality-evals';
 door.slice('host-fingerprint', { columns: ['date'], from, to });
 slice(ledger, { columns: ['date'], from, to });
 const later = await import('$lib/data/ledger');

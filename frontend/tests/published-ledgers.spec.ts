@@ -11,7 +11,7 @@ import type { LedgerName } from '../src/lib/data/slice-shapes';
  * built site, and nothing else of `state/` is there.
  *
  * `scripts/copy-visuals.mjs` copies each ledger `ledger.published` names out of
- * the state root: its two indexes and every compact file they name, at the path
+ * the state root: its three indexes and every compact file they name, at the path
  * each has under `state/`. This file reads the build the preview server is about
  * to serve and asks it the door's own questions - the addresses
  * `slice-reader.ts` composes and the guard `compact-index.ts` applies to an

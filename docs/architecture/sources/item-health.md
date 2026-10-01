@@ -76,7 +76,8 @@ one-line commit taken after a scheduled run has printed the list. Measured on
 this checkout on 2026-09-02, the earliest a live run would remove anything is
 **2027-10-01**, when August 2026 falls below the window and its published copy
 goes. The month's rows are not this step's to remove: they are the
-`item-health` compaction's, which ships report-only too.
+`item-health` compaction's, which packs live and deletes a month's rows only
+when its 15-month `monthly_window` passes.
 
 The 30-day window on this page is a read-side parameter and is unrelated to that
 age. Day files follow `state/published/`, and `state/seen/` and

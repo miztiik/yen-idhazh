@@ -42,8 +42,14 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
         ),
         "feed_health_keep_months": "window.value in config/gardener/feed-health.json",
         "host_fingerprint_keep_months": "window.value in config/gardener/host-fingerprint.json",
-        "scores_full_grain_months": "series.full-grain.value in config/gardener/scores.json",
-        "score_archive_keep_months": "series.archive in config/gardener/scores.json",
+        "scores_full_grain_months": (
+            "monthly_window in config/gardener/compact-summary-quality-evals.json, which "
+            "keeps every eval row for ever and summarises no month"
+        ),
+        "score_archive_keep_months": (
+            "monthly_window in config/gardener/compact-summary-quality-evals.json, which "
+            "keeps every eval row for ever and summarises no month"
+        ),
     }
 )
 
@@ -171,8 +177,8 @@ class ObservabilityConfig(Model):
         default=True,
         description=(
             "Whether the faithfulness scorer runs. False writes no row to "
-            "the scores ledger, so for those days the eval dashboard and the console's "
-            "score panels list nothing and each item bands from the model-free "
+            "the summary-quality-evals ledger, so for those days the eval dashboard and the "
+            "console's score panels list nothing and each item bands from the model-free "
             "counterweights instead. The digest still publishes. `--no-faithfulness` "
             "is the same switch for one invocation and overrides this; no flag turns "
             "it back on. It governs the daily pipeline's work stage only: `validate` "

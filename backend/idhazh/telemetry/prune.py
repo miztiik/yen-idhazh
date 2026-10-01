@@ -82,7 +82,7 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: file system is the one accident nobody can undo.
 #:
 #: The rule that decides membership is one line: a ledger files
-#: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two ledgers below.
+#: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the ledgers refused below.
 #: `state/day-metrics/` and `state/traces/` are day-shaped and are deliberately
 #: absent - they file `.json` and `.jsonl`, which
 #: `day_shards.shard_files` refuses, and a second walker here would be a second
@@ -101,12 +101,10 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: its machine rows with it: until their compactions bound the raw tree, that is
 #: a person's job, and `docs/architecture/publishing/retention.md` says so.
 #:
-#: **`score-index` is half of a pair whose other half is no longer here.**
-#: `evals.writer` refuses a repeat measurement by reading the index rather than
-#: the rows, so a range taken out of the index makes every measurement in it
-#: re-measurable as if new, while the rows it indexed stay on the door. Repair
-#: with `idhazh rebuild-score-index --month <YYYY-MM>` afterwards. The dry run is
-#: where that is read, which is why it is the default.
+#: **`summary-quality-evals-index` left too, and is refused by name below.** It is
+#: what the eval writer reads to refuse a measurement it already holds, and once a
+#: month is closed the gardener settles its days into one file, which no range of
+#: days can take part of.
 #:
 #: **`content-similarity-judge-scored-pairs` and
 #: `content-similarity-judge-fitted-thresholds` are
@@ -129,7 +127,6 @@ _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-    LedgerName.SCORE_INDEX,
     LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
 )
 
@@ -146,7 +143,7 @@ TARGETS: Final[Mapping[str, str]] = MappingProxyType(
 )
 
 
-#: The two ledgers this refuses by name, each with the reason it is refused.
+#: The ledgers this refuses by name, each with the reason it is refused.
 #:
 #: Named rather than left out of the list above, because a ledger missing from a
 #: vocabulary reads as an oversight and a ledger refused with a sentence reads as
@@ -162,6 +159,12 @@ REFUSED: Final[Mapping[str, str]] = {
         "it is what the planner remembers having already seen, so removing a day "
         "from it lets the next run rediscover every address it holds - one "
         "operator command becomes a loop"
+    ),
+    LedgerName.SUMMARY_QUALITY_EVALS_INDEX: (
+        "it is what the eval writer reads to refuse a measurement it already holds, "
+        "so an identity taken out of it makes that measurement count as new, and no "
+        "identity is ever deleted. A closed month of it is one file besides, which no "
+        "range of days can take part of"
     ),
 }
 
@@ -216,7 +219,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
             "Which ledger to delete from. One of "
             + ", ".join(TARGETS)
             + ". Never a path: "
-            + " and ".join(REFUSED)
+            + ", ".join(REFUSED)
             + " are refused by name."
         ),
     )

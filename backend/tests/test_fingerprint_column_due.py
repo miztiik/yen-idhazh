@@ -139,13 +139,13 @@ def test_a_measurement_two_writers_filed_holds_the_column_and_counts_once(
     ledger.persist(
         state,
         [_a_row(day, stamped=True)],
-        ledger=LedgerName.SCORES,
+        ledger=LedgerName.SUMMARY_QUALITY_EVALS,
         covers=day,
         identity=writer_identity(f"{day}-2"),
     )
     config = _config(tmp_path / "config", 366)
 
-    assert len(ledger.list_raw_files(state, LedgerName.SCORES, days=[day])) == 2
+    assert len(ledger.list_raw_files(state, LedgerName.SUMMARY_QUALITY_EVALS, days=[day])) == 2
     assert _ask(state, config, "2026-09-20") == 0
 
     said = _read(capsys)

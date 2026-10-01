@@ -168,10 +168,6 @@ LEDGERS_AN_OWNER_WRITES: Final[Mapping[str, str]] = MappingProxyType(
             "idhazh.stages.assemble through idhazh.assemble.fragment_path, one JSON "
             "block per run of a date, written by `python -m idhazh assemble`"
         ),
-        "state/score-archive": (
-            "idhazh.evals.archive, called by the gardener's scores task the first time "
-            "a month of scores ages out; the gardener stages each file it writes"
-        ),
     }
 )
 

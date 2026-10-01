@@ -23,10 +23,9 @@ FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
     ),
     "backend/idhazh/contracts/eval_row.py": (
         "the one field that survives the drop, because the console reads its "
-        "state/scores/ column for every day that recorded its identity that way - "
+        "summary-quality-evals column for every day that recorded its identity that way - "
         "the condition that removes it is on the line that declares it"
     ),
-    "backend/idhazh/contracts/score_archive.py": "a changelog entry and a docstring, both history",
     "backend/idhazh/contracts/evidence.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/label_row.py": "a changelog entry, which is history",
     "frontend/src/lib/server/model-work.ts": (

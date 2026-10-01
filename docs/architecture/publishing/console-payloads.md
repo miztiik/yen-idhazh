@@ -271,7 +271,7 @@ payloads, `day-metrics` and `span-rollup` have no age on the state side, and
 **`public_scores_keep_months` and `public_feed_health_keep_months` were two more
 until 2026-09-16.** They are refused by name now rather than ignored, because a
 config file still spelling one is an operator believing a number nothing reads.
-There is no successor to send them to: the `scores` and `feed-health`
+There is no successor to send them to: the `compact-summary-quality-evals` and `feed-health`
 declarations under `config/gardener/` govern the `state/` ledgers, which are
 still there and keep their own ages.
 
@@ -509,7 +509,9 @@ folded census days held 0 repeated keys between them and the unfolded day held
 237 keys. **Each route says where its panels stop**, in one plain line under its
 introduction, when a record is not packed yet, did not load, or stops two or
 more days before the newest published day (`recordNotes` in
-`frontend/src/lib/console/recording.ts`).
+`frontend/src/lib/console/recording.ts`). A record that did not load because a
+packed file or a packed day is missing says which, because each has its own fix
+([the four faults](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)).
 
 **The settlement is per day, never over the whole cover, and that is the part
 that carries the weight.** `OBSERVATION_KEY` carries no date. It is the article,

@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -291,7 +291,7 @@ so a hand run records both weights as empty and is never over.
 **128 MB is the committed ceiling, and it is an estimate.** A megabyte here is
 1024 x 1024 bytes. A shard downloads only what its tasks read: the days and
 months a compaction packs, the months the census summary summarises. Measured
-on the development machine on 2026-09-30, a month of the scores ledger is 31
+on the development machine on 2026-09-30, a month of the eval ledger is 31
 files and 3.5 MB, so 128 leaves room for a compaction that catches up on
 several months at once. Move it to about twice the largest `downloaded_bytes`
 of the first thirty scheduled wakes. A month file sits in its year folder, so a
@@ -380,18 +380,23 @@ and deletes nothing. How to read the list and turn one live is
 
 **A compaction moves one ledger's rows out of the many small raw files its
 writers leave, into one file a day and then one file a month, and deletes what
-it moved.** A raw file holds one writer's rows for one day, so a ledger gains a
-file on every run, and at a few rows a file a parquet file is mostly its footer.
+it moved.** Where its declaration asks, it then packs each finished year's month
+files into one file a year. A raw file holds one writer's rows for one day, so a
+ledger gains a file on every run, and at a few rows a file a parquet file is
+mostly its footer.
 One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
 by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
 ledger is one declaration and no Python. Six ship - for `gardener`,
-`visual-prunes`, `feed-retirements`, `item-health`, `scores` and
-`host-fingerprint` - and all six only report. The last three are the ledgers the
-console reads, and the console reads their packed files, so until a person turns
-those three on it shows data up to the day their migration ran
+`visual-prunes`, `feed-retirements`, `item-health`, `summary-quality-evals` and
+`host-fingerprint`. **`item-health` and `host-fingerprint` pack live**, and each
+packs a month 31 days after it ends: the console reads their packed files and
+nothing newer, so a finished day reaches it within about 48 hours. The other
+four only report, so the console shows the `summary-quality-evals` days up to the day that
+ledger's migration ran
 ([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
-**`scores` stays report-only until the score archive is built from the door's
-rows** ([below](#design-rationale)). The files it
+**`summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so it may pack
+the eval rows and never drops a month** ([below](#design-rationale)). It is the one
+ledger that packs a finished year into one year file ([A year](#a-year)). The files it
 writes are laid out in
 [../contracts/persistence.md](../contracts/persistence.md#the-two-roots), and
 its knobs are in
@@ -408,25 +413,36 @@ flowchart TB
 
   subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
     DROP["1 and 2. drop the month files, listings<br/>and raw days the windows no longer keep"]
+    YDONE{"a year done?<br/>monthly_keep_days since it ended,<br/>its next January absorbed, every month named"}
+    YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
+    YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
+    PACK["3. pack it, one row group a month:<br/>year file, yearly.json, delete its month files,<br/>monthly.json, yearly/watermark.json last"]
     MDONE{"a month done?<br/>daily_keep_days since it ended,<br/>every day compacted, no raw day left"}
     MWAIT["the month waits for a later wake"]
     MHOLE["a day of it is named nowhere:<br/>refused by name, exit 1"]
-    ABSORB["3. absorb it: month file, monthly.json,<br/>delete its day files, daily.json,<br/>monthly/watermark.json last"]
+    ABSORB["4. absorb it: month file, monthly.json,<br/>delete its day files, daily.json,<br/>monthly/watermark.json last"]
     DDUE{"compact_after_days whole days<br/>since the day ended?"}
     DHOLD["the day waits: a run may still be writing"]
-    TAKE["4. take it: read and settle its raw files,<br/>write its listing, its day file and daily.json,<br/>delete the raw files, daily/watermark.json last"]
+    TAKE["5. take it: read and settle its raw files,<br/>write its listing, its day file and daily.json,<br/>delete the raw files, daily/watermark.json last"]
     DRY{"dry_run?"}
-    REPORT["report every path, land the record only<br/>all six compactions, today"]
+    REPORT["report every path, land the record only<br/>four of the six compactions, today"]
     LAND["land every write and delete<br/>in the shard's one commit"]
   end
 
   DAILY[("state/compact/ledger/daily/YYYY/MM/DD.parquet<br/>index/daily.json, daily/watermark.json")]
   MONTHLY[("state/compact/ledger/monthly/YYYY/MM.parquet<br/>index/monthly.json, monthly/watermark.json")]
-  READER["ledger_files.py: each date from one file<br/>its month, else its day, else its raw files"]
+  YEARLY[("state/compact/ledger/yearly/YYYY.parquet<br/>index/yearly.json, yearly/watermark.json")]
+  READER["ledger_files.py: each date from one file<br/>its year, else its month, else its day,<br/>else its raw files"]
 
   W --> RAWF
   RAWF --> DROP
-  DROP --> MDONE
+  DROP --> YDONE
+  YDONE -->|"not yet, or not asked"| YWAIT
+  YDONE -->|"a month missing"| YHOLE
+  YDONE -->|"yes"| PACK
+  YWAIT --> MDONE
+  YHOLE --> MDONE
+  PACK --> MDONE
   MDONE -->|"not yet"| MWAIT
   MDONE -->|"a day missing"| MHOLE
   MDONE -->|"yes"| ABSORB
@@ -441,9 +457,11 @@ flowchart TB
   DRY -->|"no"| LAND
   LAND --> DAILY
   LAND --> MONTHLY
+  LAND --> YEARLY
   RAWF --> READER
   DAILY --> READER
   MONTHLY --> READER
+  YEARLY --> READER
 
   classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
   classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
@@ -454,12 +472,12 @@ flowchart TB
   classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
   classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
 
-  class W,DROP,ABSORB,TAKE,READER stage;
-  class MDONE,DDUE,DRY decision;
+  class W,DROP,PACK,ABSORB,TAKE,READER stage;
+  class YDONE,MDONE,DDUE,DRY decision;
   class LAND yes;
-  class MHOLE no;
-  class MWAIT,DHOLD,REPORT warn;
-  class RAWF,DAILY,MONTHLY ledger;
+  class YHOLE,MHOLE no;
+  class YWAIT,MWAIT,DHOLD,REPORT warn;
+  class RAWF,DAILY,MONTHLY,YEARLY ledger;
   class REFRESH sysPublish;
   class GARDEN sysOps;
 ```
@@ -474,14 +492,15 @@ tree, in [the closed-day fold](#the-closed-day-fold) below.
 | --- | --- |
 | 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json` |
 | 2 | Drops each raw listing older than `raw_index_keep_days` whose day is compacted and whose raw folder is empty, and every raw day in a month the window no longer keeps |
-| 3 | Absorbs every month that is done into its month file |
-| 4 | Takes every raw day that is due into its day file |
+| 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
+| 4 | Absorbs every month that is done into its month file |
+| 5 | Takes every raw day that is due into its day file |
 
 **Drops first and days last, because no pass may write a path it deletes.** A
 shard refuses a path it both wrote and deleted, so a pass that did either would
-stall every wake after it. In this order a month absorbs day files
-an earlier wake wrote, never one this pass wrote, and a month whose last days
-this pass takes is absorbed at the next wake.
+stall every wake after it. In this order a year packs month files and a month
+absorbs day files that an earlier wake wrote, never one this pass wrote, and a
+period whose last part this pass writes is taken at the next wake.
 
 **Every rule counts whole UTC days after a period's own end.** The pass measures
 from 00:00 UTC on the wake's own day, so every wake of one UTC day gets the same
@@ -561,6 +580,89 @@ absorbed.
 window, so no re-run can land there; a file that does is for a person to read.
 The rest of the pass still runs.
 
+### A year
+
+**A year is packed only where its declaration sets `monthly_keep_days`.** One
+declaration sets it: `compact-summary-quality-evals`, whose `monthly_keep_days` in
+`config/gardener/compact-summary-quality-evals.json` (93) is how many whole days
+after a year ends the eval ledger waits to pack it. Every
+other ledger keeps its month files exactly as `monthly_window` says. A ledger
+that packs years keeps `monthly_window` forever, because a window would delete a
+month file before its year took it, and its year files are kept for ever.
+
+**A year is packed whole or not at all, and only when three things are true**:
+`monthly_keep_days` whole days have passed since it ended, at 00:00 UTC on 1
+January; the monthly watermark is past its December, so its next January is
+absorbed; and `index/monthly.json` names every one of its months, each with its
+file. A year that fails the first or second waits for a later wake. A year
+missing a month is refused by name, the yearly watermark stays, and the task
+exits 1. A year's months run from January to December, except in the first year
+a ledger packs, whose months start at the oldest month the monthly index names.
+That year's file still covers the whole year, so a reach that counts from the
+yearly index starts on its 1 January even when its first rows came later.
+
+**The earliest a year can go is `daily_keep_days` plus 32 days after it ends.**
+Its next January is absorbed `daily_keep_days` after that January ends, 31 days
+into the new year, and the pass packs years before it absorbs months, so the
+year goes one wake later. A smaller `monthly_keep_days` would change nothing, so
+the loader refuses one. At the default of 45, 2026 is packed on 19 March 2027 at
+the earliest.
+
+Packing is five steps in this order: the year file, `index/yearly.json`, the
+deletion of its month files, `index/monthly.json`, and `yearly/watermark.json`
+last. The month files are joined as they are and never settled, and the monthly
+watermark stays where it is. A pass that stopped before the yearly index leaves
+every month file, so the next wake packs that year again. A pass that stopped
+after it leaves a year the yearly index already names, so the next wake deletes
+the month files still there, rewrites the monthly index and moves the
+watermark, and builds nothing. Either way a reader in between reads each month
+once: a month both indexes name is read from its year.
+
+**A year file is built one month at a time, one row group a month.** The pass
+holds one month's rows at a time rather than the year's, and a reader that
+filters on a date can skip the row groups of the other months. A year file over
+50 MiB, the size at which GitHub warns about a pushed file, is refused by name
+and its month files are kept: GitHub refuses a push that holds a file over
+100 MiB, and one that did would stall every later wake.
+
+### The three indexes, and a file that is missing
+
+**A ledger's three indexes exist together.** Whatever writes one of
+`index/daily.json`, `index/monthly.json` and `index/yearly.json` also writes
+each of the others the ledger does not have, with no entries, and no pass
+deletes one. An empty index truthfully says no period of its kind is packed yet;
+a missing one says nothing, so a reader could not tell a lost list from a period
+never packed, and would have to ask the site for a file that is not there. A
+ledger that holds `daily.json` alone gains the other two, empty, at its next pass
+that writes a day. A ledger whose declaration packs no year still has an empty
+`yearly.json`, because the console reads all three together
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-far-a-ledger-reaches)).
+
+**An index its watermark says was packed, and that is not there, stops the
+pass by name.** A pass that read it as empty would rewrite it naming only what
+this pass packs, and every period packed before would drop out of sight. The task
+fails that wake, and a person restores the file from git history.
+
+**A missing file has one of four names**, declared once as `LEDGER_FAULTS` in
+`frontend/src/lib/data/slice-shapes.ts`. The backend's copy is `LedgerFault` in
+`backend/idhazh/ledger/faults.py`, and
+`backend/tests/contracts/test_frontend_index_shapes.py` holds the two to one list.
+The query door carries the name on its answer
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)),
+and the gardener's logs and the backend's own ledger reader print it as
+`fault=<name>`, so one search finds a fault on both sides.
+
+| # | Name | What is missing | What the gardener does |
+| --- | --- | --- | --- |
+| 1 | `not-packed` | `index/daily.json`: no day of the ledger is packed | A first pass writes all three indexes |
+| 2 | `index-missing` | `index/monthly.json` or `index/yearly.json`, while `index/daily.json` is there | Writes an empty one when no period of its kind was ever packed; stops the pass by name when that period's watermark says one was |
+| 3 | `file-missing` | A file an index names | Refuses the year it would pack, the month it would absorb, or the day it would take again, and keeps every file it would have read; a person restores the file from git history |
+| 4 | `day-missing` | A day between the first and the newest packed day that no index names | Refuses the month or the year that holds it |
+
+**Three gaps are expected, and none of them is a fault**: a day newer than the
+newest packed day, an entry with `rows: 0`, and an index with no entries. None
+of them makes a reader ask for a file that is not there.
+
 ### What a dry run does, and what the record says
 
 **A dry run does all of the work and changes nothing.** It reads every file,
@@ -574,8 +676,8 @@ the files it wrote: the net is `bytes_freed` minus the `bytes` of the index
 entries it wrote. `candidates_seen` counts every raw day folder it listed and
 every file it read or weighed, so a listing that grows while a compaction only
 reports shows in every row. `until` is the newest day that was due. A pass that
-used its budget stops `ceiling`, with `resume_from` naming the day or month the
-next pass starts at; one that refused a period stops `failed`, naming it.
+used its budget stops `ceiling`, with `resume_from` naming the day, month or
+year the next pass starts at; one that refused a period stops `failed`, naming it.
 
 ## The closed-day fold
 
@@ -589,21 +691,32 @@ the files it read. It changes no answer a reader gets
 ([../../concepts/partitions.md](../../concepts/partitions.md)).
 
 **The retention task that owns each tree folds it**, when its declaration
-carries a `fold` block: `feed-health`, `counterfactual-scores`, `scores` (its
-`score-index`) and `span-rollup`, whose window is `forever` so the fold is its
+carries a `fold` block: `feed-health`, `counterfactual-scores`,
+`summary-quality-evals-index` (the eval ledger's ID folder) and `span-rollup`, whose window is `forever` so the fold is its
 only live action. Which trees a task folds is read off the folders it walks, so
 one job writes each tree a wake and no tree is checked out twice. No
 `candidate-models` tree is committed under `state/`, so nothing folds one. The
-item-health, scores and host-fingerprint ledgers are not CSV day trees any more,
+item-health, summary-quality-evals and host-fingerprint ledgers are not CSV day trees any more,
 so no fold reads them: their compaction packs them.
+
+**A task may settle a closed month whole.** With `fold.settles_months`, once a
+month's last day is closed - `fold.after_days` whole days after the month ends -
+the fold settles every file of that month, each day's writer files and settled
+files alike, into one `settled.csv` in the month's own folder,
+`state/<tree>/<YYYY>/<MM>/settled.csv`, and deletes what it read. A day of a
+closed month is the month's from then on, and a file a re-run adds to it later
+is settled in at the next wake. Only the ID folder's task asks for it: that
+folder keeps every file for ever, and the dedupe reads all of it on every run.
+A month's rows name no day, so the loader refuses the switch beside a window of
+days, which would take the month's file whole once its first day aged out.
 
 | Step | What happens |
 | --- | --- |
 | 1 | The task's window runs first, dry or live, and returns what it took |
 | 2 | The runner calls the fold, unless the window failed - then the fold waits a wake, and the row's fold cells stay empty |
-| 3 | The fold lists every day of each tree the task walks and takes each day that is closed - `fold.after_days` whole days after it ended, default 1, the rule `compact_after_days` reads - and still holds a writer file |
-| 4 | It skips a day folder the window took, or would take on a dry run: a shard refuses a path it both writes and deletes |
-| 5 | It settles the day, writes `settled.csv` and deletes the rest - or, on a dry run, reads and settles the day and changes nothing |
+| 3 | The fold lists every day of each tree the task walks and takes each day that is closed - `fold.after_days` whole days after it ended, default 1, the rule `compact_after_days` reads - and still holds a writer file. With `fold.settles_months` it first takes each closed month that still holds a day's file, and leaves that month's days to it |
+| 4 | It skips a day folder the window took, or would take on a dry run, and a month holding one: a shard refuses a path it both writes and deletes |
+| 5 | It settles each month, then each day, writes `settled.csv` in its folder and deletes the rest - or, on a dry run, reads and settles each one and changes nothing |
 
 **The fold lands on its own switch.** `fold.dry_run` is the fold's, apart from
 the window's `dry_run`, and the runner lands the fold's writes and deletions
@@ -613,14 +726,17 @@ owns, like every other. All four folds ship live, because they copy the fold
 `digest.yml` ran after each day's commit until the gardener took it over; every
 window beside them still only reports.
 
-**The row says what the fold did.** `fold_dry_run`, `folded_days` and
-`folded_files` sit on the task's own row beside the window's `dry_run`, `deleted`
-and `bytes_freed`, and are empty when the fold did not run. A fold that stops
-part way - a row that will not read, a stray file - keeps the days it settled,
-turns the row's `stopped_because` to `failed`, and the task exits 1.
+**The row says what the fold did.** `fold_dry_run`, `folded_days`,
+`folded_months` and `folded_files` sit on the task's own row beside the window's
+`dry_run`, `deleted` and `bytes_freed`, and are empty when the fold did not run.
+`folded_months` counts the closed months settled whole, 0 where none was, and
+`folded_files` counts every file a month or a day replaced. A fold that stops
+part way - a row that will not read, a stray file - keeps the months and days it
+settled, turns the row's `stopped_because` to `failed`, and the task exits 1.
 
 **A re-run that lands after a fold is folded in at the next wake.** Its writer
-file sits beside the day's `settled.csv`, and the next fold reads both. One that
+file sits beside the day's `settled.csv`, or in a day of a settled month, and the
+next fold reads it with the settled file it joins. One that
 lands while the fold's push is still trying survives too: each try stages the
 fold's own paths on the new tip, and the re-run's file is not one of them.
 Staging names a deleted file as deleted even where git would call the pair a
@@ -690,11 +806,52 @@ sooner could still be reached by one. The 30 is declared once, as
 floor is derived from it. A raw file that lands in an absorbed month anyway is
 refused and kept for a person (Carmack and Fowler).
 
+**The two ledgers packed live wait 31 days, not the default 45.** 31 is the
+shortest wait that still catches every re-run GitHub allows, and nothing needs
+the 14 days more that 45 waits. A shorter wait, such as 15 days, would need a
+month file rebuilt when a late re-run lands, which the packing refuses. The two
+declarations set 31, and the default stays 45 for the four that only report.
+
+**A missing file has a name, and a ledger's three indexes always exist.** Large
+table formats handle a missing file the same way, and this design copies them:
+
+| # | Platform | What it does |
+| --- | --- | --- |
+| 1 | Delta Lake | The first version of a table must hold its `metaData` action, so the log exists before any data file does, and readers take the files to read from the log rather than from a listing ([protocol](https://github.com/delta-io/delta/blob/master/PROTOCOL.md)). Its errors have fixed names, such as `DELTA_PATH_DOES_NOT_EXIST`, `DELTA_FILE_NOT_FOUND` and `DELTA_VERSIONS_NOT_CONTIGUOUS` for a gap in the log ([error classes](https://raw.githubusercontent.com/delta-io/delta/master/spark/src/main/resources/error/delta-error-classes.json)) |
+| 2 | Apache Iceberg | The table tracks individual data files rather than directories, and a scan is planned by reading the manifests of the current snapshot ([spec](https://iceberg.apache.org/spec/)) |
+| 3 | Apache Spark | A file a table names that is gone is `FAILED_READ_FILE.FILE_NOT_EXIST`, and the message names the fix, `REFRESH TABLE` ([error conditions](https://spark.apache.org/docs/latest/sql-error-conditions.html)). Skipping such files instead, `ignoreMissingFiles`, is an option a reader has to switch on ([file source options](https://spark.apache.org/docs/latest/sql-data-sources-generic-options.html)) |
+| 4 | Apache Hudi | The table keeps its own file listings, so a reader or writer need not ask storage whether a file exists ([metadata](https://hudi.apache.org/docs/metadata)) |
+
+Three rules follow. **An empty index is right, and an empty data file never
+is**: an empty `monthly.json` or `yearly.json` truthfully says no month or year
+is packed, while an empty
+day file standing in for a lost one would draw a lost day as a quiet one. **No
+list of allowed 404s**: it would be Spark's `ignoreMissingFiles` under another
+name, and a lost index would then look exactly like one never written. So a
+ledger that packs no year still carries an empty `yearly.json`. **No
+field in `daily.json` names the other indexes**: it would change a stored shape
+to say what an empty file already says.
+
 **2026-09-28: a first pass starts on the first of a month.** Starting at the
 oldest raw day would leave the daily index holding part of a month, and that
 month's check would call the days before it holes. The start asks the same
 function the window drops months by, `first_kept_month`, so a first pass never
 takes a day the same pass would drop (Carmack and Fowler).
+
+**A finished year's month files may be packed into one year file.** A ledger
+may pack each finished year into one file, kept for ever, rather than delete its
+month files once they pass `monthly_window`. The packing is written once and
+turned on in each ledger's own declaration. The switch is one field,
+`monthly_keep_days`, whose null packs nothing, so no ledger's behaviour changes
+until its declaration says so. A pass packs years before it absorbs months,
+which keeps it from deleting a file it wrote. A year waits for its next January,
+and a smaller wait is refused rather than silently lengthened. The year is built
+one month at a time: for the eval ledger at September 2026's rate, that holds
+about a quarter of the memory a whole-year build holds, 0.33 GB against 1.41 GB,
+measured once on a laptop. The first live pass times it on a runner. A year file
+sits in a folder of its own, `yearly/<YYYY>/<YYYY>.parquet`, because a shard
+fetches a watermark together with every file beside it: a year file beside the
+year watermark would be downloaded on every wake, one more file every year.
 
 **2026-09-30: the alarm is on what a shard downloads, and it is 128 MB.** Over
 it, a shard still runs its tasks and lands its record, then exits 1: stopping
@@ -787,15 +944,32 @@ Carmack). A day is closed one whole day after it ends, the compaction's rule: of
 755 writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after
 its day ended (Carmack's reading).
 
-**The `scores` compaction stays report-only until the score archive is built
-from the door's rows.** The `scores` task used to summarise a month past its
-`full-grain` series into `state/score-archive/<YYYY-MM>.json`, and it built that
-summary from the month's CSV day files and hashed their bytes. Those files are
-gone, so the task builds no archive now; it keeps only the score index and the
-summaries already written. Turned live, the compaction's monthly window would
-delete a month's rows with no summary written for them, and the summary is the
-evidence behind every quality claim once the rows are gone. Building it from the
-door's rows changes the archive's own shape, so it is a change of its own.
+**The `compact-summary-quality-evals` compaction packs the eval rows and never drops a month.** Every
+eval row is kept for ever and nothing summarises a month: the
+rows are the evidence behind every quality claim, and a chart that wants a
+monthly figure computes it from them when it draws. So the `monthly_window` of
+`config/gardener/compact-summary-quality-evals.json` is `forever`, and a live pass may make one
+file a day and one a month without taking a row. Its `monthly_keep_days` packs a
+finished year's month files into one year file, kept for ever, so the month files
+stop adding up and no row goes. The `summary-quality-evals-index` retention task
+keeps every day of the ID folder for the same end - a dropped index day would
+make every measurement in it new again - so its window is `forever` too, and its
+one live action is its fold, which settles each closed month into one file
+([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).
+
+**The ID folder is settled a month at a time by the fold.** It keeps every file
+for ever and the dedupe reads all of it on every run, so one file a closed day
+was a read that grew by 365 files a year: about 6 seconds a run at one year and
+about a minute at ten, at a measured 16 ms a file. A packed ledger and reading
+the IDs from the eval rows' key columns were the other two ways to stop it.
+Reading the key columns keeps no second copy, but the rows sit in one raw file a
+write until the eval ledger's packing runs live, so it would stop the growth
+only then. A month step on the fold that already runs live writes the CSV shape
+every reader already settles, moves no `dry_run`, needs no migration - the next
+wake settles the days already there - and deletes no ID, so the dedupe reads
+about 43 files at one year and 151 at ten (an estimate counted from the
+calendar). The operator prune refuses the folder by name: a month's file cannot
+serve a delete of a range of days, and no ID is ever deleted.
 
 ## See also
 
@@ -803,5 +977,5 @@ door's rows changes the archive's own shape, so it is a change of its own.
 - [committing.md](committing.md) - how every other job commits, and why the gardener stages its own files.
 - [../contracts/state-ledgers.md](../contracts/state-ledgers.md) - the gardener's ledger, and what one of its rows holds.
 - [../contracts/ledger-registry.md](../contracts/ledger-registry.md) - the grain that ledger files at, and the builders that refuse it.
-- [../contracts/persistence.md](../contracts/persistence.md) - the two roots a compaction writes under, and how a ledger is read back from all three kinds of file.
+- [../contracts/persistence.md](../contracts/persistence.md) - the two roots a compaction writes under, and how a ledger is read back from every kind of file.
 - [../../concepts/atomic-deletes.md](../../concepts/atomic-deletes.md) - what one delete at a time buys.

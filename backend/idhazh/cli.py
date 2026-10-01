@@ -84,7 +84,7 @@ from idhazh.stages import (
     qualify,
     qualify_canaries,
     qualify_decide,
-    rebuild_score_index,
+    rebuild_summary_quality_evals_index,
     record,
     score_merge_line_holdout,
     site_weight,
@@ -137,7 +137,7 @@ STAGES: Final[tuple[str, ...]] = (
     "job-clock",
     "assemble",
     "harvest",
-    "rebuild-score-index",
+    "rebuild-summary-quality-evals-index",
     "run",
     "validate",
     "decide",
@@ -508,9 +508,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=[],
         metavar="YYYY-MM",
         help=(
-            "A month for `rebuild-score-index` to write again from the rows beside it, "
-            "repeatable. Every committed day of that month is rewritten. A month that "
-            "is not committed is an error, not a skip."
+            "A month for `rebuild-summary-quality-evals-index` to write again from the "
+            "rows beside it, repeatable. Every committed day of that month is rewritten. "
+            "A month that is not committed is an error, not a skip."
         ),
     )
     parser.add_argument(
@@ -518,8 +518,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help=(
             "The operator's full pass over every committed shard, and the only one that "
-            "costs more every month. `rebuild-score-index` rewrites every month's index "
-            "rather than the months named."
+            "costs more every month. `rebuild-summary-quality-evals-index` rewrites every "
+            "month's index rather than the months named."
         ),
     )
     args = parser.parse_args(argv)
@@ -659,7 +659,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    if args.stage == "rebuild-score-index":
+    if args.stage == "rebuild-summary-quality-evals-index":
         # Above the fetcher because it reads and rewrites committed files only.
         #
         # The cover is stated, never defaulted. `--month` names what to rewrite;
@@ -667,10 +667,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         # index exists to avoid, so it is a person's decision (Guardrail #12).
         if bool(args.month) == args.every_shard:
             parser.error(
-                "rebuild-score-index needs --month (the months to rewrite) "
+                "rebuild-summary-quality-evals-index needs --month (the months to rewrite) "
                 "or --every-shard (the operator's full pass), and not both"
             )
-        return rebuild_score_index.stage_rebuild_score_index(
+        return rebuild_summary_quality_evals_index.stage_rebuild_summary_quality_evals_index(
             months=None if args.every_shard else args.month
         )
 

@@ -135,7 +135,9 @@ def _file_measurement(root: Path) -> int:
     [
         pytest.param(LedgerName.ITEM_HEALTH, _file_census, id="item-health"),
         pytest.param(LedgerName.HOST_FINGERPRINT, _file_machine, id="host-fingerprint"),
-        pytest.param(LedgerName.SCORES, _file_measurement, id="scores"),
+        pytest.param(
+            LedgerName.SUMMARY_QUALITY_EVALS, _file_measurement, id="summary-quality-evals"
+        ),
     ],
 )
 def test_the_check_passes_the_raw_files_a_test_case_run_files(

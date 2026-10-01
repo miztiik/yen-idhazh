@@ -15,7 +15,12 @@ from idhazh import cli, config, month_partition
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.collect import SUPERSEDED_COLLECT_NAMES, CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
-from idhazh.contracts.knobs.gardener import ForeverWindow, MonthsWindow, RetentionPolicy
+from idhazh.contracts.knobs.gardener import (
+    CompactionPolicy,
+    ForeverWindow,
+    MonthsWindow,
+    RetentionPolicy,
+)
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import SUPERSEDED_RETENTION_NAMES, ObservabilityConfig
 from idhazh.contracts.knobs.retention import SUPERSEDED_RETENTION_KNOBS
@@ -27,14 +32,27 @@ pytestmark = pytest.mark.contract
 
 
 def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
-    """A summary costs kilobytes and is what makes a year-over-year claim citable."""
+    """A summary costs kilobytes and is what makes a year-over-year claim citable.
+
+    The eval ledger has no summary at all. Every row is kept for ever, so its
+    compaction may pack a month and never drops one, and the index the dedupe
+    reads keeps every day.
+    """
     tasks = config.load_gardener().tasks
-    for name, summary in (("telemetry-aggregate", "aggregate"), ("scores", "archive")):
-        policy = tasks[name]
-        assert isinstance(policy, RetentionPolicy) and policy.series is not None
-        assert isinstance(policy.series[summary], ForeverWindow), (
-            f"config/gardener/{name}.json deletes its {summary} series"
-        )
+    folded = tasks["telemetry-aggregate"]
+    assert isinstance(folded, RetentionPolicy) and folded.series is not None
+    assert isinstance(folded.series["aggregate"], ForeverWindow), (
+        "config/gardener/telemetry-aggregate.json deletes its aggregate series"
+    )
+    packed = tasks["compact-summary-quality-evals"]
+    assert isinstance(packed, CompactionPolicy)
+    assert isinstance(packed.monthly_window, ForeverWindow), (
+        "config/gardener/compact-summary-quality-evals.json drops a month of eval rows"
+    )
+    assert isinstance(tasks["summary-quality-evals-index"].window, ForeverWindow), (
+        "config/gardener/summary-quality-evals-index.json takes a day of the index the "
+        "dedupe reads"
+    )
 
 
 def test_the_committed_config_no_longer_emits_a_removed_name() -> None:
@@ -60,8 +78,16 @@ MOVED_TO_A_DECLARATION = [
     ("observability", "trace_window_days", "config/gardener/traces.json"),
     ("observability", "feed_health_keep_months", "config/gardener/feed-health.json"),
     ("observability", "host_fingerprint_keep_months", "config/gardener/host-fingerprint.json"),
-    ("observability", "scores_full_grain_months", "config/gardener/scores.json"),
-    ("observability", "score_archive_keep_months", "config/gardener/scores.json"),
+    (
+        "observability",
+        "scores_full_grain_months",
+        "config/gardener/compact-summary-quality-evals.json",
+    ),
+    (
+        "observability",
+        "score_archive_keep_months",
+        "config/gardener/compact-summary-quality-evals.json",
+    ),
     (
         "observability",
         "item_health_full_grain_months",

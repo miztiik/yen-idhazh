@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -131,8 +131,8 @@ reading the control's own attribute back against the panel's.
 `/console/machine/`, and `scoredDays` with `modelByDate` on `/console/model/`,
 read the score record's newest packed days - the widest window preset, the cover
 every other panel on those routes reads - and never the whole ledger. The
-`scores` compaction deletes a month only once it is past the 15-month
-`monthly_window`, far behind any day those three draw, so turning it live moves
+`compact-summary-quality-evals` compaction never drops a month: its `monthly_window`
+is `forever`, and a year it packs keeps every row, so turning it live moves
 none of their dates.
 
 ## The prerendered seed carries the window, and no more

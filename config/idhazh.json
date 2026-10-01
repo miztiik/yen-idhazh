@@ -216,7 +216,7 @@
     "published": [
       "host-fingerprint",
       "item-health",
-      "scores"
+      "summary-quality-evals"
     ]
   },
   "lens_weights": {
@@ -265,7 +265,7 @@
       "console/band.json": 2000,
       "state/compact/host-fingerprint/index/": 2200,
       "state/compact/item-health/index/": 2200,
-      "state/compact/scores/index/": 2200,
+      "state/compact/summary-quality-evals/index/": 2200,
       "telemetry/": 1100000
     }
   },

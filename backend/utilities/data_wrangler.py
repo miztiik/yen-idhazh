@@ -50,7 +50,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
-from idhazh.evals import archive
 from idhazh.ledger import STATE_DIRNAME
 from idhazh.stages import common
 from idhazh.stages.common import Fetcher, published_days
@@ -341,8 +340,8 @@ class _Rebuildable(NamedTuple):
 
 
 def _ledger_rows(state_dir: Path) -> list[EvalRow]:
-    """Every scored row the scores ledger holds, read through the ledger door and settled once."""
-    return ledger.load_ledger_rows(state_dir, LedgerName.SCORES, model=EvalRow)
+    """Every scored row the eval ledger holds, read through the ledger door and settled once."""
+    return ledger.load_ledger_rows(state_dir, LedgerName.SUMMARY_QUALITY_EVALS, model=EvalRow)
 
 
 def _digest_items(digest_root: Path) -> dict[str, _Entry]:
@@ -455,23 +454,12 @@ def refill(
     under it, and a row that needs the article to have moved is not a row worth
     teaching.
 
-    **How far back it reaches is now a configured number.** Every candidate comes
-    from a ledger row, and the scores ledger keeps the scores task's full-grain
-    window of rows before a month
-    becomes a summary. A summarised month carries no address and no digest, so
-    there is nothing to re-fetch and nothing to join - those months are counted
-    and named rather than left as a gap in the ledger count above.
+    **It reaches every row the ledger holds.** Every candidate comes from a
+    ledger row, and the eval ledger keeps every row for ever, so no month is
+    out of reach.
     """
-    summarised = archive.archived_months(state_dir)
-    if not ledger.held_days(state_dir, LedgerName.SCORES):
-        if summarised:
-            print(
-                f"the scores ledger holds no day - {', '.join(summarised)} have aged out of "
-                f"the full-grain window and a summary carries no address to re-fetch. "
-                f"{archive.RAW_WINDOW_NOTE}"
-            )
-        else:
-            print("the scores ledger holds no day")
+    if not ledger.held_days(state_dir, LedgerName.SUMMARY_QUALITY_EVALS):
+        print(f"the {LedgerName.SUMMARY_QUALITY_EVALS.value} ledger holds no day")
         return 1
     if not digest_root.is_dir():
         print(f"{digest_root.as_posix()} is not a directory")
@@ -512,8 +500,6 @@ def refill(
     queued = candidates[:wanted]
 
     print(f"{'ledger rows':<{_WIDTH}} {len(recorded)}")
-    if summarised:
-        print(f"{'months aged out':<{_WIDTH}} {', '.join(summarised)} - no row to re-fetch")
     print(f"{'rows before':<{_WIDTH}} {before}")
     for reason, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])):
         print(f"  skipped {reason:<38} {count:>5}")

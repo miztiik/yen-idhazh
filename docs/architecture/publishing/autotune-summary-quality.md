@@ -106,7 +106,7 @@ flowchart TD
     sum --> rouge["Term recall<br/>Coverage 0..1"]
     art --> rouge
     sum --> mini["MiniLM adjacent cosine<br/>Coherence -1..1"]
-    hhem --> row[("EvalRow<br/>state/raw/scores")]
+    hhem --> row[("EvalRow<br/>state/raw/summary-quality-evals")]
     rouge --> row
     mini --> row
   end

@@ -26,7 +26,7 @@ import { readSlice } from './slice-reader';
 import type { LedgerName, SliceOptions, SliceResult } from './slice-shapes';
 
 export type { LedgerReach } from './ledger-reach';
-export type { DateStamp, LedgerName, Predicate, Row, SliceOptions, SliceResult } from './slice-shapes';
+export type { DateStamp, LedgerFault, LedgerName, Predicate, Row, SliceOptions, SliceResult } from './slice-shapes';
 
 let kept: PageKeeper | null = null;
 
@@ -46,7 +46,7 @@ export function slice(ledger: LedgerName, options: SliceOptions): Promise<SliceR
 	return readSlice(keeper(), ledger, options);
 }
 
-/** How far a committed ledger reaches: the oldest and the newest day its two
+/** How far a committed ledger reaches: the oldest and the newest day its
  *  indexes name. Reads nothing else and starts no engine. */
 export function ledgerReach(ledger: LedgerName): Promise<LedgerReach> {
 	return readReach(keeper(), ledger);

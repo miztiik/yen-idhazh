@@ -1943,8 +1943,8 @@ test('nothing under the heading is a score or an internal column name', async ({
 	expect(section).not.toMatch(/\b[01]\.\d/);
 
 	// A ledger column name on screen makes a reader open the schema to read the
-	// page. Every one of these is a real column of `state/scores/` or
-	// `state/item-health/`.
+	// page. Every one of these is a real column of the eval ledger or the
+	// item-health ledger.
 	for (const name of [
 		'hhem',
 		'coverage',

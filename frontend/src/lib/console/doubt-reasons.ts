@@ -7,7 +7,7 @@
  *
  * **The source is the committed day payload, not the score ledger.**
  * `band_reason` is decided in `backend/idhazh/evals/score.py` and published on
- * the item. `state/scores/` carries the inputs the reason is decided from -
+ * the item. The `summary-quality-evals` ledger carries the inputs the reason is decided from -
  * `hhem`, `coverage`, `unsupported_numbers`, `hedge_dropped` - and the band, and
  * no reason column at all. Re-deriving the reason from those inputs would be a
  * second copy of `verdict()` in a second language, and the day the two disagree

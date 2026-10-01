@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -55,7 +55,7 @@ starts its own server and probes it on loopback.
 | --- | --- |
 | `--date YYYY-MM-DD` | Re-run a specific day. Defaults to today, UTC. |
 | `--shard N --shards M` | Take one worker's share. Round-robin, so lengths spread evenly. |
-| `--no-faithfulness` | Skip the scorer. The digest still publishes; **the score ledger stays empty.** |
+| `--no-faithfulness` | Skip the scorer. The digest still publishes; **the eval ledger stays empty.** |
 | `--config PATH` | Point at a different `config/` directory. |
 
 ## Where things land
@@ -65,7 +65,7 @@ starts its own server and probes it on loopback.
 | `backend/var/run/<date>/plan.json` | The day's work list | no - gitignored |
 | `backend/var/run/<date>/items/*.json` | Per-item article, summary and eval | no - gitignored |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
-| `state/raw/scores/<YYYY>/<MM>/<DD>/` | One row per scored item, packed later under `state/compact/scores/` | **yes** |
+| `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/` | One row per scored item, packed later under `state/compact/summary-quality-evals/` | **yes** |
 | `state/seen/<YYYY>/<MM>/<DD>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
 | `state/feed-health/<YYYY>/<MM>/<DD>/` | What every feed did on every run | **yes** |
@@ -98,7 +98,7 @@ not a recovery path here. Until the gardener's own workflow runs the tasks on a
 schedule, `python -m idhazh gardener run-task NAME --run-id RUN_ID --attempt N
 --git-sha SHA` runs one in a checkout and prints what it would take.
 
-Turning one task's deletion on is a separate one-line commit to its own
+Turning one task's deletion on is a change of its own to that task's
 declaration, and this is the order:
 
 1. Wait for a scheduled pass whose output would name at least one file. **For the
@@ -111,23 +111,23 @@ declaration, and this is the order:
 3. Check the list against what you expect. On 2027-10-01 the retention tasks
  name two trees - `frontend/public/telemetry/2026-08.csv` and the day files under
  `state/feed-health/2026/08/`. A third name, or a month that is not the oldest,
- means a boundary is wrong and the switch waits. The item-health and scores rows
- are not on that list: their compactions delete them, and a compaction's own list
- is read as
+ means a boundary is wrong and the switch waits. The item-health rows are not on
+ that list: their compaction deletes them, and a compaction's own list is read as
  [the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-dry-run-does-and-what-the-record-says)
- says.
-4. Do not turn `compact-scores` on yet. The `scores` task built the score archive
- from the CSV day files, which moved to the ledger door, so it builds none now;
- until an archive is built from the door's rows, a live `compact-scores` would
- delete months with no summary written for them
- ([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md#design-rationale)).
-5. Only then set that task's `dry_run` to `false` in its own declaration, in a
- commit that changes nothing else.
+ says. The eval rows are on no list at all, because nothing deletes one.
+4. `compact-summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so a
+ live pass packs the eval rows into fewer files and drops none of them
+ ([../concepts/evaluation.md](../concepts/evaluation.md#design-rationale)).
+5. Only then set that task's `dry_run` to `false` in its own declaration. In the
+ same change, name the task in `LIVE_BY_DECISION` in
+ `backend/tests/contracts/test_gardener_config.py`, with the reason in plain
+ words, and correct every doc sentence the switch makes false: that test fails
+ on a live switch the list does not name.
 
 **The console ledgers' packing tasks are the ones to turn on first.**
-`compact-item-health`, `compact-scores` and `compact-host-fingerprint` ship
-report-only, and the console reads their packed files, so until they run live it
-shows data up to the day the migration ran. `compact-scores` waits for step 4.
+`compact-item-health` and `compact-host-fingerprint` pack live.
+`compact-summary-quality-evals` ships report-only, and the console reads its packed files, so
+until it runs live the console shows its days up to the day the migration ran.
 
 **Each task is switched on by itself, and the picture cleanup is a task of its
 own.** `visual-prune` files a row under `state/raw/visual-prunes/` saying what it
@@ -144,7 +144,7 @@ What each ledger keeps, and why, is on the doc that owns it:
 [../architecture/sources/health.md](../architecture/sources/health.md) for feed
 health, [../architecture/sources/item-health.md](../architecture/sources/item-health.md)
 for the item census, [../concepts/evaluation.md](../concepts/evaluation.md) for
-the score archive, and
+the eval ledger, and
 [../architecture/publishing/layout.md](../architecture/publishing/layout.md) for
 the whole committed tree.
 
@@ -215,7 +215,7 @@ two may not do. Which ledgers it accepts, why those two are refused, and what
 makes it safe to stop half way is
 [../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days).
 
-`item-health`, `scores` and `host-fingerprint` are not targets: they file through
+`item-health`, `summary-quality-evals` and `host-fingerprint` are not targets: they file through
 the ledger door, and until each ledger's compaction runs live nothing offers a
 range delete for them, the same as `visual-prunes`.
 

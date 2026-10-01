@@ -8,7 +8,7 @@ read by this project alone. `published` names the ledgers whose compact files a
 browser may fetch.
 
 **`published` names the three ledgers the console reads**: `host-fingerprint`,
-`item-health` and `scores`. The site build copies each one's two indexes and
+`item-health` and `summary-quality-evals`. The site build copies each one's two indexes and
 every compact file they name, unchanged, and refuses a ledger that lacks either
 index. A backend test holds every ledger a console panel asks the browser's
 query door for to this list.
