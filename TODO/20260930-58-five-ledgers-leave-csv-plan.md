@@ -4,7 +4,7 @@
 
 **Level**: 4 (CLAUDE.md section 6). Each ledger row deletes committed CSV once its rows are proven in parquet, and a deletion the history squash has passed cannot be undone (CLAUDE.md section 8). So reverting a row costs more than writing it. No row changes a persisted contract; a row that needs to stops at ESCALATE trigger 4.
 
-**Status**: written 2026-09-30, refined 2026-10-01 after Fowler's review, and corrected the same day after a second review. Later on 2026-10-01 the person asked for packing by month and by year on every door ledger, the three moved before this plan included, with every packing, prune and retention setting in JSON: row 8 is new, rows 2 to 6 pack live with their windows reporting, and section 4's decisions 2 and 3 are answered. No row has started. Plan 56's rename row is done (#1179), so rows 1 and 3 are ready. Row 8 waits on plan 51's packing row (#1177), which on 2026-10-01 is open and in conflict with main, and the ledger rows wait on row 8. Row 5 also waits on the person's answers to section 4 decisions 1 and 4.
+**Status**: written 2026-09-30, refined 2026-10-01 after Fowler's review, and corrected the same day after a second review. Later on 2026-10-01 the person asked for packing by month and by year on every door ledger, the three moved before this plan included, with every packing, prune and retention setting in JSON: row 8 is new, rows 2 to 6 pack live with their windows reporting, and section 4's decisions 2 and 3 are answered. No row has finished. Plan 56's rename row is done (#1179), and rows 1 and 3 started on 2026-10-01. Row 8 waits on plan 51's packing row (#1177), which on 2026-10-01 is open and in conflict with main, and the ledger rows wait on row 8. Row 5 also waits on the person's answers to section 4 decisions 1 and 4.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. The person authorized execution on 2026-10-01.
 
@@ -38,9 +38,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Every shape the moves need is declared, and a guard holds each moved ledger to it | - | A | PENDING | - | - | - |
+| 1 | Every shape the moves need is declared, and a guard holds each moved ledger to it | - | A | IN-FLIGHT | p58r1 | - | p58-r1-worker |
 | 2 | The migrator reads both CSV layouts in every root, packs every period, and the recipe is written down | 1, 3, 8 | C | PENDING | - | - | - |
-| 3 | The prune verb reaches every ledger on the door | - | A | PENDING | - | - | - |
+| 3 | The prune verb reaches every ledger on the door | - | A | IN-FLIGHT | p58r3 | - | p58-r3-worker |
 | 4 | The counterfactual scores and the candidate verdicts move to the door | 1, 3, 8 | C | PENDING | - | - | - |
 | 5 | The seen and published ledgers move to the door, and their union drivers retire | 2, 4 | D | PENDING | - | - | - |
 | 6 | Feed health moves to the door, and the Voices page reads it packed | 5 | E | PENDING | - | - | - |
@@ -418,7 +418,7 @@ Row 2 packs `item-health`, `host-fingerprint` and `summary-quality-evals` once, 
 | --- | --- | --- |
 | 1 | One pull request lands every shared shape before any ledger moves, so a ledger row edits only the lines that must change with its grain | Fowler, 2026-10-01 |
 | 2 | The registry grain is the only switch, and every rule that depends on a move reads it | Fowler, 2026-10-01 |
-| 3 | `seen` and `published` take keys that only exact copies share, and no preference. In the committed CSV no `seen` address repeats within a day, and 3,050 of the 3,052 same-day `published` repeats are exact copies | Fowler, 2026-10-01, counted over the committed CSV; it withdraws the per-ledger preference ruled on 2026-09-30 |
+| 3 | `seen` and `published` take keys that only exact copies share, and no preference. In the committed CSV no `seen` address repeats within a day, and every one of the 3,143 `published` rows that repeat a whole key within a day is an exact copy | Fowler, 2026-10-01, counted over the committed CSV; it withdraws the per-ledger preference ruled on 2026-09-30. Recounted by the owner at dispatch, 2026-10-01, by the whole key; the figure first written was 3,050 exact copies of 3,052 repeats |
 | 4 | The old-window table lives in the migrator, and its test reads the committed declarations on every pull request | Fowler, 2026-10-01 |
 | 5 | Floors are keyed by ledger and read from the governing declaration, and a ledger that none governs meets every floor | Fowler, 2026-10-01 |
 | 6 | The guard is a pytest test built from the registry; the check that no CSV file is left stays in `--check` | Fowler, 2026-09-30 |
