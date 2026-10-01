@@ -1,4 +1,4 @@
-"""Does the one-shot migration move every row today's CSV reader returns, and nothing else?
+"""Does the migration move every row today's CSV reader returns, and nothing it may not?
 
 Each case builds a small CSV day tree under `tmp_path` the way the retired
 writers filed one - one file per writer, `<run_id>-<attempt>-<job>-<shard>.csv`,
@@ -9,6 +9,14 @@ the files: a re-run's superseded attempt is not one of those rows. Nothing here
 reads the committed `state/` (CLAUDE.md section 13): the parity run over the
 committed tree is an operator's one-off, and its figures are in the pull request
 that carried the move.
+
+"Nothing it may not" is the refusals and the table. A ledger the registry still
+files as CSV, one with no compaction, and one whose compaction keeps less than
+its CSV was kept are refused before a file is written; a root other than the
+state tree beside `config/` is filed raw and never packed. The table of where
+each ledger's CSV sat is held against the committed registry and declarations,
+which those two cases read rather than build, so a pull request that changes
+either is checked against it.
 """
 
 from __future__ import annotations
@@ -30,10 +38,11 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
 from idhazh.contracts.eval_row import RENAMED_CELLS, EvalRow
+from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import DROPPED_CELLS, MACHINE_CELLS_RENAMED, ItemHealthRow
-from idhazh.contracts.knobs.gardener import CompactionPolicy, ForeverWindow, RetentionPolicy
+from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
@@ -89,6 +98,12 @@ def _item(day: str, item: str, *, machine: bool, words: int = 120) -> ItemHealth
             "machine_shard": 0 if machine else None,
         }
     )
+
+
+def _feed(day: str) -> FeedHealthRow:
+    """One feed-health row, from the committed fixture, filed for `day` by the plan job."""
+    base = FeedHealthRow.model_validate_json(_fixture("feed-health-row", "answered.json"))
+    return FeedHealthRow.model_validate({**base.model_dump(), "date": day, "run_id": f"{day}-100"})
 
 
 def _score(day: str, number: int, **changed: Any) -> EvalRow:
@@ -325,6 +340,170 @@ def test_the_eval_ledgers_csv_tree_is_read_where_its_old_name_filed_it(tmp_path:
     assert not (state / "scores").exists()
 
 
+def test_every_unmoved_table_entry_is_the_registry_entry() -> None:
+    """A ledger still on CSV sits where the registry files it, so its move changes neither.
+
+    Read off the committed `config/ledgers.json`: a change that files a ledger's
+    CSV somewhere else, and leaves its table entry behind, fails here.
+    """
+    door = set(migration.door_ledgers())
+    unmoved = [name for name in migration.CSV_LEDGERS if name not in door]
+
+    assert {name: migration.CSV_LEDGERS[name].old_entry for name in unmoved} == {
+        name: ledger.entry(name) for name in unmoved
+    }
+
+
+def test_every_moved_ledger_keeps_its_old_window() -> None:
+    """A moved ledger's committed compaction keeps every day a task kept of its CSV.
+
+    Read off the committed declarations, so a change that shortens one fails
+    here rather than at the first live pass that deletes those days.
+    """
+    tasks = config.load_gardener().tasks
+    moved = migration.door_ledgers()
+    short: list[str] = []
+    for name in moved:
+        policy = tasks[f"compact-{name.value}"]
+        assert isinstance(policy, CompactionPolicy), name
+        if not config.compaction_reaches(policy, migration.CSV_LEDGERS[name].old_window):
+            short.append(name.value)
+
+    assert moved, "no ledger in the table has moved, so nothing is checked"
+    assert short == []
+
+
+def test_a_ledger_still_on_csv_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A run naming a ledger the registry still files as CSV exits 1 and writes nothing.
+
+    Its writers still write CSV, so a door copy of its rows is one no reader
+    opens. A door ledger named beside it does not move either: the whole run is
+    refused before its first file is read.
+    """
+    state = tmp_path / "state"
+    _csv(state, ON_CSV, OLD, _writer(OLD, 1, ServerJob.PLAN), [_feed(OLD).csv_row()])
+    _csv(state, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [_item(OLD, "ai-01", machine=True).csv_row()])
+    before = _hashes(tmp_path)
+    argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT]
+
+    code = migration.main([*argv, "--ledger", ITEM.value, "--ledger", ON_CSV.value])
+
+    assert code == migration.EXIT_NOT_PROVEN
+    assert (
+        f"refused, nothing written: config/ledgers.json files {ON_CSV.value} as "
+        f"{Grain.DAY_TREE.value}," in capsys.readouterr().err
+    )
+    assert _hashes(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    ("change", "refusal"),
+    [
+        (None, "compact-summary-quality-evals.json does not declare a compaction"),
+        (
+            {"monthly_window": {"unit": "months", "value": 13}, "monthly_keep_days": None},
+            "does not reach the window of forever that kept summary-quality-evals on CSV",
+        ),
+    ],
+    ids=["no-compaction", "short-of-the-csv"],
+)
+def test_a_door_ledger_whose_compaction_cannot_hold_its_csv_is_refused(
+    tmp_path: Path, change: dict[str, Any] | None, refusal: str
+) -> None:
+    """Refused before a file is read: nothing says which days to pack, or a pass deletes them.
+
+    No task ever deleted an eval row, so a compaction keeping thirteen months
+    would delete, at its first live pass, days its CSV still held.
+    """
+    state = tmp_path / "state"
+    _csv(state, EVALS, NEW, _writer(NEW, 1, ServerJob.WORK), [_score(NEW, 1).csv_row()])
+    config_dir = _beside(state)
+    declaration = config_dir / "gardener" / f"compact-{EVALS.value}.json"
+    if change is None:
+        declaration.unlink()
+    else:
+        declared = json.loads(declaration.read_text(encoding="utf-8"))
+        declaration.write_text(json.dumps(declared | change), encoding="ascii")
+    before = _hashes(tmp_path)
+
+    with pytest.raises(migration.RefusedError, match=refusal):
+        migration.migrate(
+            state, [EVALS], run_id=RUN, git_sha=SEED_COMMIT, today=TODAY, config_dir=config_dir
+        )
+
+    assert _hashes(tmp_path) == before
+
+
+def test_check_reads_moved_ledgers_unless_named(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With no `--ledger`, a check reads the table ledgers the registry files through the door.
+
+    A ledger still on CSV writes a CSV file on every run, so a check that read
+    it unasked could never pass. Named, it is read, and `--ledger` repeats.
+    """
+    state = tmp_path / "state"
+    feed = _csv(state, ON_CSV, OLD, _writer(OLD, 1, ServerJob.PLAN), [_feed(OLD).csv_row()])
+    argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT, "--check"]
+
+    assert migration.main(argv) == migration.EXIT_MIGRATED
+    assert capsys.readouterr().out.splitlines() == ["0 CSV file(s) left"]
+
+    item = _csv(state, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [_item(OLD, "ai-01", machine=True).csv_row()])
+    named = [*argv, "--ledger", ITEM.value, "--ledger", ON_CSV.value]
+
+    assert migration.main(named) == migration.EXIT_NOT_PROVEN
+    assert capsys.readouterr().out.splitlines() == [
+        f"{migration._shown(state, item)} is still a CSV",
+        f"{migration._shown(state, feed)} is still a CSV",
+        "2 CSV file(s) left",
+    ]
+
+
+def test_a_layout_this_does_not_read_is_refused_by_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`seen` sat in one shared CSV file a day, which this does not read: named, never skipped.
+
+    A check that read nothing there would pass over every file it holds.
+    """
+    argv = ["--state-dir", str(tmp_path / "state"), "--run-id", RUN, "--git-sha", SEED_COMMIT]
+
+    code = migration.main([*argv, "--check", "--ledger", LedgerName.SEEN.value])
+
+    assert code == migration.EXIT_NOT_PROVEN
+    assert "seen sat in the day layout, and this reads only the tree layout" in (
+        capsys.readouterr().err
+    )
+
+
+def test_a_root_beside_no_config_is_filed_raw_and_never_packed(tmp_path: Path) -> None:
+    """Only the state tree beside `config/` is packed; a trial run's tree inside it is filed raw.
+
+    Nothing reads a packed trial root, and the trials task empties it, so its
+    day files and indexes would be files nobody opens. Its days are still read
+    back cell for cell before its CSV goes.
+    """
+    state = tmp_path / "state"
+    trial = state / "pipeline-tests"
+    _csv(trial, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [_item(OLD, "ai-01", machine=True).csv_row()])
+    wanted = _todays_reader(trial, ITEM)
+
+    (moved,) = migration.migrate(
+        trial, [ITEM], run_id=RUN, git_sha=SEED_COMMIT, today=TODAY, config_dir=_beside(state)
+    )
+
+    assert (moved.days, moved.filed, moved.packed) == (1, 1, [])
+    assert ledger.raw_days(trial, ITEM) == [OLD], "a day the rule admits stays raw here"
+    assert not ledger.compact_index_path(trial, ITEM, Period.DAILY).exists()
+    assert _read_back(trial, ITEM, OLD) == wanted[OLD]
+    assert not migration.left(trial, [ITEM])
+    assert migration.packs_here(REPO_ROOT / ledger.STATE_DIRNAME, CONFIG_DIR)
+    assert not migration.packs_here(REPO_ROOT / ledger.STATE_DIRNAME / "pipeline-tests", CONFIG_DIR)
+
+
 @dataclass(frozen=True, slots=True)
 class _Packed:
     """What packing left for one ledger, less what names who packed it and when.
@@ -409,7 +588,7 @@ def test_packing_leaves_what_a_live_compaction_leaves_over_the_same_raw_files(
             _csv(root / "state", ITEM, day, _writer(day, 1, ServerJob.ASSEMBLE), [row.csv_row()])
 
     _run(migrated / "state", ITEM, today=today)
-    model, key = migration.LEDGERS[ITEM]
+    model, key = ROWS[ITEM], ledger.door_key(ITEM)
     identity = migration._identity(RUN, SEED_COMMIT)
     for day in days:
         cells = day_shards.settled_day(migration.csv_root(live / "state", ITEM), day, key, model)
@@ -540,12 +719,12 @@ def test_a_day_that_does_not_read_back_leaves_every_csv_of_every_ledger_in_place
     _csv(state, HOST, OLD, _writer(OLD, 1, ServerJob.WORK), [probe.csv_row()])
     later = migration._identity(RUN, SEED_COMMIT).model_copy(update={"attempt": 2})
     ledger.persist(state, [probe.model_copy(update={"cores": 64})], ledger=HOST, covers=OLD, identity=later)
-    kept = {path: path.read_bytes() for path in migration.left(state, list(migration.LEDGERS))}
+    kept = {path: path.read_bytes() for path in migration.left(state, list(MOVED))}
 
     with pytest.raises(migration.NotProvenError, match=rf"host-fingerprint {OLD} .*cores='64'"):
-        _run(state, *migration.LEDGERS)
+        _run(state, *MOVED)
 
-    assert {path: path.read_bytes() for path in migration.left(state, list(migration.LEDGERS))} == kept
+    assert {path: path.read_bytes() for path in migration.left(state, list(MOVED))} == kept
     assert len(kept) == 2
 
 

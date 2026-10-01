@@ -751,14 +751,16 @@ def _refuse_a_picture_window_the_archive_does_not_state(
             )
 
 
-def _old_tree_floor(ledger: LedgerName, tasks: Mapping[str, TaskPolicy]) -> Window | None:
-    """How far back a ledger reached before it moved, read off the series that kept it.
+def _old_tree_floor(
+    ledger: LedgerName, tasks: Mapping[str, TaskPolicy]
+) -> tuple[str, str, Window] | None:
+    """The series that still summarises a ledger's months: its task, its name and its window.
 
-    A task that still summarises a ledger's months reads them for as long as the
-    series that covers the ledger lasts, whether or not it still owns the tree
-    they sat in. How long a retention task kept a ledger's old tree is not read
-    here: `CSV_LEDGERS` in `backend/utilities/migrate_to_parquet.py` records it,
-    and that table's test holds every moved ledger's compaction to it.
+    A task that summarises a ledger's months reads them for as long as the series
+    that covers the ledger lasts, whether or not it still owns the tree they sat
+    in. How long a retention task kept a moved ledger's CSV is not read here:
+    `CSV_LEDGERS` in `backend/utilities/migrate_to_parquet.py` records it, and
+    that table's test holds every moved ledger's compaction to it.
     """
     for name, policy in tasks.items():
         if not isinstance(policy, RetentionPolicy):
@@ -767,7 +769,7 @@ def _old_tree_floor(ledger: LedgerName, tasks: Mapping[str, TaskPolicy]) -> Wind
         for series, window in (policy.series or {}).items():
             kept = allowed.get(series)
             if kept is not None and kept.ledger is ledger:
-                return window
+                return name, series, window
     return None
 
 
@@ -855,16 +857,11 @@ def _refuse_a_compaction_that_cuts_its_ledger(
             where, policy, reach, appearance=appearance
         )
     floor = _old_tree_floor(ledger, tasks)
-    if floor is None or compaction_reaches(policy, floor):
+    if floor is None or compaction_reaches(policy, floor[2]):
         return
-    if isinstance(floor, ForeverWindow):
-        raise ValueError(
-            f"{where} keeps monthly_window {_spelled(policy.monthly_window)}, and the task "
-            f"that limited {ledger.value} before it moved kept it forever. A person chose "
-            "never to delete this ledger, so its compaction may not either"
-        )
+    task, series, kept = floor
     raise ValueError(
-        f"{where} {_kept_by(policy)}, and the task that limited {ledger.value} before it "
-        f"moved kept {_spelled(floor)}. The pair would silently cut how far back the "
-        "ledger reaches"
+        f"{where} {_kept_by(policy)}, and the {series} series of {_where(task)} keeps "
+        f"{ledger.value} {_spelled(kept)}. The pair would delete a month before that series "
+        "is done with it"
     )

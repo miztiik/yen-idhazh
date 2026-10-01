@@ -359,8 +359,8 @@ def _declared(
             raise RefusedError(
                 f"config/gardener/{task}.json keeps daily_keep_days {policy.daily_keep_days} "
                 f"and monthly_window {_spelled(policy.monthly_window)}, which does not reach "
-                f"the {_spelled(kept)} {name.value} was kept on CSV, so its first live pass "
-                "would delete days the CSV still held"
+                f"the window of {_spelled(kept)} that kept {name.value} on CSV, so its first "
+                "live pass would delete days the CSV still held"
             )
         declared[name] = policy.model_copy(
             update={"dry_run": False, "max_periods_per_run": PACK_EVERY_DAY}

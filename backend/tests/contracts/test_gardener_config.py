@@ -832,7 +832,11 @@ def test_a_series_is_the_floor_of_the_ledger_it_covers(tmp_path: Path) -> None:
     """`item-health` reaches back as far as the full-grain series, not the aggregate one."""
     short = a_compaction("item-health", monthly_window={"unit": "months", "value": 12})
     message = refused(a_garden(tmp_path, compact_item_health=short))
-    assert "compact-item-health.json" in message and "kept 14 months" in message
+    assert "compact-item-health.json reaches back 410 days" in message
+    assert (
+        "the full-grain series of config/gardener/telemetry-aggregate.json keeps item-health "
+        "14 months" in message
+    )
 
 
 def test_the_month_rule_counts_the_fewest_and_the_most_days() -> None:
