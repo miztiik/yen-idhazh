@@ -15,7 +15,7 @@
  * Pure functions only. No browser, no SvelteKit alias, no `$app` import.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { machineName } from '../src/lib/charts/machine-name';

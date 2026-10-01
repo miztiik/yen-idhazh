@@ -19,7 +19,7 @@
  * three machines with one of them unrecorded, and that is the case that matters.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/browser';
 import {
 	cacheWords,
 	clockSentence,

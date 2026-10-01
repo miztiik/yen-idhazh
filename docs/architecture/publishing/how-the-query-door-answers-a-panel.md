@@ -452,14 +452,20 @@ another address, the engine asked for
 that layout. Pointed at a file on disk instead of an address, the Node half waits
 for ever rather than failing, so a mirror is an `https://` address, never a path.
 
-**In Node** the engine downloads the add-on over HTTPS the first time and keeps it
-under the user's home directory, in `.duckdb/extensions/<host>/v1.5.4/wasm_eh/`, so
-later runs read it from disk; the first read took 1.3 seconds on a developer
-machine. So the door's oracle in `frontend/tests/ledger-door.spec.ts` reaches the
-network once on a fresh machine - a CI runner, every run. That is the one
-exception to "no test touches the network", taken by the owner on 2026-09-28. A
-host that is down or has moved fails those tests and any build-time read, which is
-where somebody wants to learn it.
+**No test downloads the add-on.** `frontend/scripts/setup-duckdb.ts` prepares
+the one cache all worktrees share under the user's home directory:
+`.duckdb/extensions/<host>/<runtime version>/<platform>/`. It derives the runtime
+version and platform from the installed engine, not from a second version pin.
+Playwright's global setup checks that file without downloading. The shared
+browser context fixture answers the worker's add-on request from the same bytes.
+Tests of HTTP caching use their own local add-on host, because a routed context
+disables HTTP caching.
+
+CI restores a cache named by the installed package, runtime and platform before
+any frontend test or build. A miss runs the explicit setup command. The weekly
+main-branch refresh downloads the current file and saves a new cache entry under
+that version's prefix, so normal runs restore the newest prepared copy without
+depending on the add-on host. See [the gate commands](../../how-to/run-the-gates.md#the-frontend-gates).
 
 ## Design rationale
 
@@ -469,8 +475,8 @@ nothing tied to one environment and take a byte source and an engine as
 arguments. `ledger.ts` binds the published site, which needs `$app/paths`;
 `ledger-disk.ts` binds the disk under `$lib/server/`, where SvelteKit refuses a
 browser import. So `frontend/tests/ledger-door.spec.ts` drives the real reader
-over recorded responses and over the disk, with no browser, and no network but
-the engine's own first download of its add-on. The engine it drives takes each
+over recorded responses and over the disk, with no browser or network download.
+The engine it drives takes each
 buffer the way a browser's engine does, leaving the caller's copy empty, because
 the Node engine copies instead and would hide a door that handed one buffer over
 twice.

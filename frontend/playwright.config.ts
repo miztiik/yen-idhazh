@@ -140,6 +140,7 @@ function workerCount(asked: string | undefined): number {
 
 export default defineConfig({
 	testDir: 'tests',
+	globalSetup: './tests/support/check-addons.ts',
 	outputDir: 'test-results/browser',
 	testIgnore: [
 		WHOLE_DAY,

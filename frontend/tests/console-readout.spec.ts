@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './support/browser';
 import { readoutOf } from '../src/lib/charts/readout';
 import { clocksChart } from '../src/lib/charts/machine';
 import { stacked } from '../src/lib/charts/stacked';

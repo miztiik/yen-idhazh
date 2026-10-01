@@ -30,9 +30,8 @@ import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledge
  * answered from the fixture files under `tests/fixtures/ledger-door/`, read
  * inside the test that asks, and a case that needs a 404, a short body, a
  * refused fetch or a different stamp says so by path. Nothing here touches the
- * network but the engine itself: a machine's first query downloads its parquet
- * add-on from `ledger.engine_extension_repository` and keeps it in a cache under
- * the home directory (owner ruling, 2026-09-28).
+ * network. The setup command prepares the engine's Parquet add-on in the shared
+ * home cache before tests, and global setup refuses a missing cached file.
  *
  * The fixture holds a monthly file for 2026-08, daily files for 2026-08-31,
  * 09-01, 09-02 and 09-05, a zero-row day on 09-03, and a hole on 09-04.

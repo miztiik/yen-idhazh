@@ -7,7 +7,6 @@ export default defineConfig({
 	...config,
 	outputDir: 'test-results/logic',
 	webServer: undefined,
-	globalSetup: undefined,
 	projects: [{
 		name: 'logic',
 		testMatch: groupedSpecs(fileURLToPath(new URL('./tests/', import.meta.url))).logic

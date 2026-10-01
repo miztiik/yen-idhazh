@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/browser';
 
 /**
  * What the stolen-processor panel says on the archive as it stands.

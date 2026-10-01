@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -398,6 +398,22 @@ formatting alone.
 ## The frontend gates
 
 Run from `frontend/`.
+
+Prepare the engine's Parquet add-on before tests, once per installed version:
+
+```powershell
+npm run setup:duckdb
+npm run setup:duckdb -- --check
+```
+
+The setup command may download it. Playwright's global setup only checks the
+shared home cache and fails with the setup command when the file is absent.
+Hardware browser specs use `tests/support/browser.ts` to answer the worker from
+that cached file. HTTP-cache tests keep their local add-on host instead, because
+Playwright routing disables the browser's HTTP cache. CI prepares the same cache
+before tests; the weekly add-on workflow refreshes it on main. The source and
+version rules are in
+[the query reader's page](../architecture/publishing/how-the-query-door-answers-a-panel.md#where-the-parquet-reader-comes-from).
 
 ```powershell
 npm run check

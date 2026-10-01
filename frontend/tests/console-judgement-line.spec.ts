@@ -12,7 +12,7 @@
  * life, which is exactly when somebody is watching it.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

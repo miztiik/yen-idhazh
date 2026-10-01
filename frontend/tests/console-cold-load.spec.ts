@@ -1,4 +1,4 @@
-import { expect, test, type Request } from '@playwright/test';
+import { expect, test, type Request } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 

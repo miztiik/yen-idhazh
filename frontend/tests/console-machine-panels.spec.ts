@@ -14,7 +14,7 @@
  * the numbers below are recomputed from that file rather than from the page.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { WATCHED_FLAG } from '../src/lib/server/host-fingerprint';

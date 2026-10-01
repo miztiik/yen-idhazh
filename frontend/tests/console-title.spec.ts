@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/browser';
 
 /**
  * One grammar for every title on the console, and no address moved to get it.
