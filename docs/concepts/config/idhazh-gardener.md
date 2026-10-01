@@ -60,10 +60,10 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 Each deletes what it owns past its window, and each ships `dry_run: true`. The
 windows were keys in `config/idhazh.json` until 2026-09-28 and moved here with
 no value changed, because each task is the only thing that reads its number.
-Four of them also fold the closed days of the CSV day trees they own, and that
+Three of them also fold the closed days of the CSV day trees they own, and that
 fold ships live, `fold.dry_run: false`: `summary-quality-evals-index`, the eval
 ledger's ID folder,
-`feed-health`, `counterfactual-scores` and `span-rollup`. The item-health, eval
+`feed-health` and `counterfactual-scores`. The item-health, eval
 and host-fingerprint rows moved to the ledger door, so no fold reads them.
 The digest workflow ran that same fold live on every run until the gardener
 took it over, and a fold changes no answer a reader gets. The ID folder's fold
@@ -79,8 +79,7 @@ Why each tree gets the age it has is
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
 | `seen` | `state/seen` | 90 days | at least `collect.seen_window_days`, the days the collector reads |
 | `counterfactual-scores` | `state/counterfactual-scores` | 30 days | at least `lens_weights.window_days`, the days a reader opens |
-| `traces` | `state/traces` | 7 days | a trace is opened to see one recent run, and the span rollup is the record that stays |
-| `span-rollup` | `state/span-rollup` | forever | nobody has said how long a span total is wanted, so it keeps every month. The task exists so the tree's closed days are folded, and no old cleanup ever deleted from it |
+| `traces` | `state/traces` | 7 days | an item inspection reads recent trace detail; item health keeps its stage measurements |
 | `trials` | everything under `state` that no other task owns and no ledger claims | 90 days | nothing reads a trial's rows, and 90 days is the artifact retention used everywhere else |
 | `digest-fragments` | `state/digest-fragments` | 390 days | 30 days times `retention.image_months`, the window the archive page states; past it a run's block of a day is a second copy nothing reads |
 | `visual-prune` | `frontend/public/digest` | 390 days, at most 200 files a pass | the same stated window. It deletes rendered charts only, and files a report of every pass into `visual-prunes` |
@@ -203,7 +202,7 @@ fold's as well as the task's own, and every compaction's
 `false` too. It names the live ones as its exceptions, each with the decision
 beside it: `corpus-squash`'s `dry_run`, the `dry_run` and the
 `monthly_window_dry_run` of `compact-item-health` and
-`compact-host-fingerprint`, and the four `fold.dry_run` switches above. A task
+`compact-host-fingerprint`, and the three `fold.dry_run` switches above. A task
 earns its first deletion from a person reading its records, so turning one live
 is an edit to that list, never a side effect of the change that added the task.
 

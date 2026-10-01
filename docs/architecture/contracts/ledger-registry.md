@@ -61,7 +61,6 @@ A ledger that goes through the ledger door files under two roots rather than one
 | `published` | `stages/assemble.py` | `stages/plan.py` | the union driver keeps both |
 | `feed-health` | `stages/plan.py` | `stages/plan.py`, `telemetry/source_health.py`, `telemetry/publish/source_health.py`, `telemetry/publish/console_band.py`, `payload.ts` | cannot happen: one file per writer |
 | `summary-quality-evals-index` | `evals/writer.py` | `evals/writer.py` | cannot happen: one file per writer |
-| `span-rollup` | `stages/work.py` | `telemetry/publish/span_rollup.py`, `telemetry/inventory.py`, `span-rollup.ts` | cannot happen: one file per writer |
 | `counterfactual-scores` | `stages/plan.py` | nothing yet | cannot happen: one file per writer |
 | `candidate-models` | `stages/decide.py`, `stages/qualify_decide.py` | nothing yet | cannot happen: one file per writer |
 | `item-health-summary` | `gardener/tasks/telemetry_aggregate.py` | nothing yet | cannot happen: one writer rewrites a month whole |

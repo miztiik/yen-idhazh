@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -26,7 +26,6 @@ Every path below is under `frontend/public/`. Every shape is a contract under `b
 | Published charts | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Day metrics | `payload.ts` `dayMetrics` | `day-metrics/<YYYY-MM>.json` | `day-metrics` |
 | Machine counters | `machine-counters.ts` `loadMachineCounters` | `machine/<YYYY-MM>.csv` | `machine-shard-row` |
-| Span rollup | `span-rollup.ts` `loadSpanRollup` | `span-rollup/<YYYY-MM>.csv` | `span-rollup-row` |
 | Run timeline | `run-timeline.ts` `loadRunTimeline` | `run-timeline/<YYYY-MM>.csv` | `run-timeline-row` |
 | Source health | `payload.ts` `sourceHealthView` | `source-health.json` | `source-health-view` |
 
@@ -103,7 +102,7 @@ shapes forbid nothing. `public-run-day` and `console-band` are not projections
 of a ledger row at all - one is a reduction of two documents to counts, the
 other a set of sentences the pipeline composed about its own run - so the
 refusal is structural: a fetched string has no field to arrive in. `day-metrics`,
-`machine-shard-row`, `span-rollup-row` and `source-health-view` are published
+`machine-shard-row` and `source-health-view` are published
 whole, because every cell on each is a count or a duration of our own work.
 
 **One shape refuses anything, where three used to.** `public-eval` refused
@@ -137,7 +136,6 @@ day the run is publishing, and every projection's body stays in its own module
 | `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
 | `machine.py` | `machine/<YYYY-MM>.csv` | one month of the item-health and host-fingerprint ledgers, through `ledger.load_days` |
-| `span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY>/<MM>/<DD>/` |
 | `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of the item-health ledger, through `ledger.load_days` |
 
 `scores.py` and `feed_health.py` were two more rows of that table until
@@ -240,32 +238,30 @@ the payload is.
 
 ## Retention
 
-Five of the ten file by month, and a payload a run appends to with no age is
+The retained monthly copies have a configured age. A payload a run appends to with no age is
 a directory that grows for ever (Guardrail #12). Every one of them has an age
-that ends. Four are knobs under `observability` in `config/idhazh.json`, each
+that ends. Three are knobs under `observability` in `config/idhazh.json`, each
 with a **non-null** default:
 
 `public_run_days_keep_months`, `public_day_metrics_keep_months`,
-`public_machine_keep_months`, `public_span_rollup_keep_months`.
+`public_machine_keep_months`.
 
-The fifth, `telemetry`, is the `public-copy` series of
+The telemetry copy is the `public-copy` series of
 `config/gardener/telemetry-aggregate.json`, because the gardener task that folds
 the ledger it copies is the thing that deletes it.
 
-All five are **14** months, and 14 is not a round number. `console.max_window_days`
-is 366, a 367-day inclusive read starting on the last day of a month can touch
-fourteen month shards, and `ObservabilityConfig.refuse_windows_shorter_than`
-refuses any of the four knobs set below that - the gardener loader refuses the
-same of the `public-copy` series. **A shard deleted while a window preset can
+`ObservabilityConfig.refuse_windows_shorter_than` checks those settings against
+the widest configured console read, and the gardener loader checks the
+`public-copy` series. **A shard deleted while a window preset can
 still reach it blanks that panel silently**, because a month with no file reads
 exactly like a month with no runs.
 
-One of the five projects a state ledger, and it is held **equal** to the ledger
+The telemetry copy projects a state ledger and is held **equal** to the ledger
 it projects: the `public-copy` series to the `full-grain` series of the same
 declaration. Any other pair leaves either a published month nothing can check
 against its source, or a source month the console has no copy of to draw. The
-other four have no state ledger of their own: `run-days` reduces the committed day
-payloads, `day-metrics` and `span-rollup` have no age on the state side, and
+other copies have no state ledger of their own: `run-days` reduces the committed day
+payloads, `day-metrics` has no age on the state side, and
 `machine` is where the month boundary is first drawn at all.
 
 **`public_scores_keep_months` and `public_feed_health_keep_months` were two more
@@ -462,20 +458,12 @@ three independent derivations of one list is three chances to miss the same
 entry. Naming it first is what makes a missing dataset fail at import instead of
 at review. Fowler, 2026-09-08, during the shell-and-fetch migration.
 
-**Re-deriving it from the code found two datasets the plan's own table missed.**
-`dayMetrics` and `loadSpanRollup` are console reads out of `state/` and were not
-on the list of ten. Row 9 would have written ten producers and left two readers
-with nothing to fetch. The table also recorded `telemetryRows` as reading
-`state/telemetry/`; there is no such directory, and `TELEMETRY_ROOT` points at
-`frontend/public/telemetry/`.
+**Derive the inventory from actual readers.** A missing reader leaves the
+published side incomplete. `TELEMETRY_ROOT` names `frontend/public/telemetry/`,
+not a state directory.
 
-**Three shapes are published whole rather than projected.** The row asked for
-one model per dataset with no published shape, and for `day-metrics`,
-`machine-shard-row` and `span-rollup-row` that would have produced a
-projection field-for-field identical to its source - two schemas for one row,
-which is what rejected alternative 2 refuses for telemetry. The refusal is the
-same either way and it is written down either way; what changes is whether a
-committed shard has one shape to validate against or two.
+**Publish a shape whole when no field needs projection.** A second model with
+the same fields would duplicate validation and create another place to drift.
 
 **A dataset's entry names its producer and its reader function, never its
 route.** Row #13 moved four panels from `/console/` to `/console/voices/` on

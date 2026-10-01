@@ -179,7 +179,6 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/summary-quality-evals-index/` | Keep | none, deliberately | an identity set carrying no date. It is what stops an old measurement being scored again as if it were new |
 | `state/published/` | Keep | none - the **read** carries the cover, `collect.published_window_days` | forgetting an address republishes it as new |
 | `state/day-metrics/` | Keep | none of its own | about 13 KB a day, measured 2026-09-12 over 23 committed days, and the only place a band count or an extraction census survives the fold above |
-| `state/span-rollup/` | Keep | none of its own | the committed record a trace is not. No committed instance yet |
 | `state/raw/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
 | `state/raw/feed-retirements/` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
@@ -212,7 +211,6 @@ is the program the `history` job of `idhazh-gardener.yml` runs to do it
 | `frontend/public/run-days/` | Delete | `observability.public_run_days_keep_months` | a reduction of the day payloads to counts. It has no state ledger to be paired with |
 | `frontend/public/day-metrics/` | Delete | `observability.public_day_metrics_keep_months` | bounds the published copy without claiming to bound the ledger, which has no age of its own |
 | `frontend/public/machine/` | Delete | `observability.public_machine_keep_months` | the source is the host-fingerprint and item-health ledgers, and the copy is the first place a month is one file before their compactions run live |
-| `frontend/public/span-rollup/` | Delete | `observability.public_span_rollup_keep_months` | the record starts 2026-09-06, so for its first year this deletes nothing |
 | `frontend/public/console/band.json` | Keep | none needed | one file, rewritten whole each run. Question 1 stops here |
 | `frontend/public/source-health.json` | Keep | none needed | one file, rewritten whole each run |
 | `frontend/public/assist/index/` | **No policy** | none | see below |
