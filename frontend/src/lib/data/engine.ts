@@ -6,14 +6,25 @@
  * it moves. Everything else reaches it through `QueryEngine` in `slice-query.ts`,
  * and the query door reaches this module only through a dynamic `import()`.
  *
- * **Every file it is handed gets a name it mints**, `door/<n>.parquet` from a
- * counter, never from an index, a `covers` value or a caller, so no fetched text
- * can name a file. Every file the door registers sits under that one directory,
- * which is what an engine that admits one directory alone can still read.
+ * **Every file it takes gets a name it mints**, whole or at an address:
+ * `door/<n>.parquet` from a counter, never from an index, a `covers` value or a
+ * caller, so no fetched text can name a file. Every file the door registers sits
+ * under that one directory, which is what an engine that admits one directory
+ * alone can still read.
  *
  * **In a browser the engine takes the buffer it is handed**: registering moves it
  * to the engine's worker and leaves the caller's copy empty. In Node the engine
  * copies it. So a caller hands a buffer over once, and keeps the name instead.
+ *
+ * **In a browser it can also read a file at an address by byte range**, asking the
+ * host only for the parts a query needs, and it opens the file as it registers it
+ * so the caller learns the length the host gave. The engine's own default reads a
+ * registered address whole, in one request with no `Range`, so the database is
+ * opened with `forceFullHTTPReads` off. `allowFullHTTPReads` stays on: with it off
+ * the engine opens a file only when its opening `HEAD` is answered 206, and Pages
+ * answers 200. The address is made absolute, because a `blob:` worker resolves no
+ * relative one. The Node half has no reader for a host, so every file it reads is
+ * handed to it.
  *
  * **In a browser** it loads the single-threaded build that needs WebAssembly
  * exception handling, and nothing else: the threaded build needs response
@@ -109,6 +120,7 @@ async function startInBrowser(repository: string): Promise<QueryEngine> {
 	try {
 		const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(bootstrap));
 		await db.instantiate(new URL(wasm.default, location.href).href);
+		await db.open({ filesystem: { forceFullHTTPReads: false } });
 		const connection = await db.connect();
 		for (const statement of repositorySetting(repository)) await connection.query(statement);
 		return {
@@ -116,6 +128,19 @@ async function startInBrowser(repository: string): Promise<QueryEngine> {
 				const name = mintName();
 				await db.registerFileBuffer(name, bytes);
 				return name;
+			},
+			async registerAddress(url) {
+				const name = mintName();
+				await db.registerFileURL(name, new URL(url, location.href).href, duckdb.DuckDBDataProtocol.HTTP, false);
+				try {
+					// The engine learns a file's length when a statement first opens it.
+					await connection.query(`SELECT size FROM read_blob('${name.replaceAll("'", "''")}')`);
+				} catch (error) {
+					await db.dropFile(name);
+					throw error;
+				}
+				const [opened] = await db.globFiles(name);
+				return { name, bytes: opened?.fileSize ?? Number.NaN };
 			},
 			async drop(names) {
 				await db.dropFiles([...names]);

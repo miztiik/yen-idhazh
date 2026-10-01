@@ -39,7 +39,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	'model-search': ['search'],
 	publishing: [
 		'assist-guard', 'canaries', 'charts', 'day-seam', 'empty-day', 'icons',
-		'malformed-day', 'payload-weight', 'served-day', 'staged-day'
+		'ledger-ranges', 'malformed-day', 'payload-weight', 'served-day', 'staged-day'
 	]
 };
 

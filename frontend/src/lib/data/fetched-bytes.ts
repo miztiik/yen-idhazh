@@ -13,6 +13,9 @@
  * into `unreachable`. The length the reader checks is the length of the bytes
  * that arrived, never `Content-Length`, because Pages compresses what it serves.
  *
+ * **A file read by byte range is not fetched here.** Its address is the one a
+ * whole fetch would use, version and all, and the engine reads it there itself.
+ *
  * The prefix comes from this build's own config, never from a payload, so no
  * fetched text can move where the door asks (Guardrail #11). Imports nothing
  * tied to one environment: the caller hands it `fetch`.
@@ -26,6 +29,7 @@ export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
 /** A byte source over HTTP, rooted at `prefix` - this site, or the knob that moves its assets. */
 export function fetchedBytes(prefix: string, fetcher: Fetcher): ByteSource {
 	const root = `${prefix.replace(/\/+$/, '')}/state/`;
+	const dataAddress = (path: string, version: string): string => `${root}${path}?v=${encodeURIComponent(version)}`;
 	async function bytesAt(url: string, init: RequestInit): Promise<Uint8Array | null> {
 		const response = await fetcher(url, init);
 		if (response.status === 404) return null;
@@ -34,6 +38,7 @@ export function fetchedBytes(prefix: string, fetcher: Fetcher): ByteSource {
 	}
 	return {
 		index: (path) => bytesAt(`${root}${path}`, { cache: 'no-store' }),
-		data: (path, version) => bytesAt(`${root}${path}?v=${encodeURIComponent(version)}`, {})
+		data: (path, version) => bytesAt(dataAddress(path, version), {}),
+		address: dataAddress
 	};
 }

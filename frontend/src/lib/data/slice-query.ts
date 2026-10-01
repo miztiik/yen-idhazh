@@ -28,6 +28,13 @@ export const DATE_COLUMN = 'date';
 /** A value a statement binds. */
 export type Bound = string | number;
 
+/** A file the engine reads by byte range: the name it reads it under, and the
+ *  length in bytes the host gave when the engine opened it. */
+export interface OpenedAddress {
+	name: string;
+	bytes: number;
+}
+
 /** The engine, as the door needs it: bytes in, a name out, and rows out of a
  *  statement over names. */
 export interface QueryEngine {
@@ -35,7 +42,12 @@ export interface QueryEngine {
 	 *  which the engine mints. A browser's engine takes the buffer and leaves
 	 *  `bytes` empty, so a caller hands one buffer over once. */
 	register(bytes: Uint8Array): Promise<string>;
-	/** Forgets files registered earlier, by the names `register` gave them. */
+	/** Has the engine read the file at `url` by byte range, opens it, and answers
+	 *  the name it now reads it under, which the engine mints, and the length the
+	 *  host gave. Only an engine that reads a host itself has it. */
+	registerAddress?(url: string): Promise<OpenedAddress>;
+	/** Forgets files registered earlier, by the names `register` or
+	 *  `registerAddress` gave them. */
 	drop(names: readonly string[]): Promise<void>;
 	/** Every row `sql` returns with `params` bound in order, as the engine hands them back. */
 	rows(sql: string, params: readonly Bound[]): Promise<Record<string, unknown>[]>;
