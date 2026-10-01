@@ -72,7 +72,7 @@ A worker commits and pushes the moment its gates pass, and measures after.
 | 4 | The browser reads a year file by byte ranges | 2 | B | DONE | p56r4 | #1178 | p56-r4-worker |
 | 5 | The eval ledger's ID files are packed a month at a time | 3 | C | DONE | p56r5 | #1180 | p56-r5-worker |
 | 6 | The live site is checked to serve a `.parquet` byte range uncompressed | 4, plan 51 row 3 | C | NOT STARTED | - | - | - |
-| 7 | A year file is read under an address no earlier read used, and a published ledger's declaration sets its own wait | 4 | C | NOT STARTED | - | - | - |
+| 7 | A year file is read under an address no earlier read used, and a published ledger's declaration sets its own wait | 4 | C | DONE | p56r7 | #1183 | p56-r7-worker |
 
 ## 2. Deviations and rulings to date
 
