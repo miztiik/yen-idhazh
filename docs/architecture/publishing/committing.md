@@ -175,7 +175,7 @@ two rewrites is a file with every row twice.
 
 **Eight `state/` paths left this list on 2026-09-22 and the reason is the same
 for all of them.** Seven are written once - item-health, host-fingerprint,
-scores, score-index, span-rollup, traces and segments, which is gone - so each
+summary-quality-evals, its ID folder, span-rollup, traces and segments, which is gone - so each
 now names its file for the single writer that wrote it, two runs never compute
 different bytes for one path, and there is nothing to hand back.
 `state/published` left beside them for a different reason: it is union-safe, and

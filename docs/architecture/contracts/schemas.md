@@ -109,8 +109,8 @@ The shapes, and where each one lives once written:
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
 | `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
-| `EvalRow` | `eval-row` | one row of `state/raw/scores/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/scores/` |
-| `ObservationIndexRow` | `observation-index-row` | one row of `state/score-index/<YYYY>/<MM>/<DD>/`, the identity of one measurement the day beside it holds |
+| `EvalRow` | `eval-row` | one row of `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/summary-quality-evals/` |
+| `ObservationIndexRow` | `observation-index-row` | one row of `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/`, the identity of one measurement the day beside it holds |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY>/<MM>/<DD>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one row of `state/feed-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
@@ -170,7 +170,7 @@ every row of a payload the reader downloads, which no panel reads.
 The stamp is not lost: it is a field of the shape, and
 `PublicTelemetryRow` is where a reader of an old shard looks it
 up. What the row loses is the ability to say which *row* predates a change, which
-is the thing the scores ledger needs and this file does not - the console reads the
+is the thing the eval ledger needs and this file does not - the console reads the
 projection for rates and never branches on a row's age.
 
 It is also the only contract here whose forbidden fields are a rule rather than
@@ -209,8 +209,8 @@ mirrors the digest tree its rows are derived from.
 | `state/raw/item-health/` and `state/compact/item-health/` | a raw file per write by day, packed into day and month files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30), and `ledger.load_days` opens only the days it names |
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
-| `state/raw/scores/` and `state/compact/scores/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| `state/score-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains |
+| `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
+| `state/summary-quality-evals-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
@@ -227,7 +227,7 @@ opens 91 days and reads 90 days of rows, where four month shards could hold up t
 
 `month_partition.shards_in_window` is that rule one grain up, and **no ledger is read with
 it any more** - `drift.read_windows` was the last and moved on 2026-09-13 with
-`state/scores/`. What it still answers is how many month-shaped buckets a
+the eval ledger's month files. What it still answers is how many month-shaped buckets a
 day-counted window reaches, which is what sizes the `keep_months` knobs.
 
 **A ledger and its published mirror may file at different grains, and the
@@ -331,7 +331,7 @@ The rewrite is small enough to be reviewed as a diff rather than run as a utilit
 
 One utility is possible because the two things it needs are already registered elsewhere. The ledger comes from the prune vocabulary, so a word means the same ledger in every command an operator types. The contract that reads a row comes from whichever of the two reader registries holds that ledger: `ledger.keys._TREE_SHAPES` through `segment_contract` and `segment_carried` for a day tree, and `ledger.keyed_paths` for a ledger the post-merge settlement covers. No list is restated in the utility, so none can drift from it, and a ledger that ships before its writer reports nothing rather than failing.
 
-**Asking both registries is not defensive, it is the repair for a measured outage.** The door shipped asking `keyed_paths` alone, and on 2026-09-22 five day trees left that registry when each became a day directory - `item-health`, `feed-health`, `host-fingerprint`, `counterfactual-scores` and `span-rollup`, joined there by `scores` and `score-index`. Two files that no writer can both open need no settlement to tell them apart, so the registry was right to drop them; the door was never repointed. Measured 2026-09-23: four of the fourteen ledgers in the vocabulary resolved and ten were refused. The refusal read as correct because refusing a ledger with no reader IS correct - it is the same sentence for a ledger that never had one and a ledger that lost one, and nothing in the utility could tell them apart. What made it invisible for a day was the test suite: every case drove `content-similarity-judge-scored-pairs`, which stayed in `keyed_paths`, and the one test watching a refusal was watching `scores`, which had just stopped deserving it. The fix is one lookup over both registries; the guard is a census that names the four ledgers with no reader and asserts set equality in both directions, so a ledger that loses its reader is named rather than counted.
+**Asking both registries is not defensive, it is the repair for a measured outage.** The door shipped asking `keyed_paths` alone, and on 2026-09-22 five day trees left that registry when each became a day directory - `item-health`, `feed-health`, `host-fingerprint`, `counterfactual-scores` and `span-rollup`, joined there by the eval ledger and its ID folder. Two files that no writer can both open need no settlement to tell them apart, so the registry was right to drop them; the door was never repointed. Measured 2026-09-23: four of the fourteen ledgers in the vocabulary resolved and ten were refused. The refusal read as correct because refusing a ledger with no reader IS correct - it is the same sentence for a ledger that never had one and a ledger that lost one, and nothing in the utility could tell them apart. What made it invisible for a day was the test suite: every case drove `content-similarity-judge-scored-pairs`, which stayed in `keyed_paths`, and the one test watching a refusal was watching the eval ledger, which had just stopped deserving it. The fix is one lookup over both registries; the guard is a census that names the four ledgers with no reader and asserts set equality in both directions, so a ledger that loses its reader is named rather than counted.
 
 Four ledgers are still refused, and the refusal is the right answer for each: `published` and `seen` append through `ledger.extend_ledger_file` from a caller that owns its own repeats, and `content-similarity-judge-metrics` and `content-similarity-judge-merge-line-holdout-scores` have shapes but no registry entry. Registering one of them is the row that makes it re-filable; until then the door says which registry to put it in.
 

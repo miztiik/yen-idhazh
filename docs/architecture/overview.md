@@ -28,7 +28,7 @@ flowchart LR
  direction TB
  D1["frontend/public/digest/&lt;Y&gt;/&lt;M&gt;/&lt;D&gt;/digest.json"]
  D2["...&lt;item_id&gt;.json"]
- D3["state/raw/scores/"]
+ D3["state/raw/summary-quality-evals/"]
  end
 
  subgraph fe["frontend/ - GitHub Pages"]
