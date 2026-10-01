@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -291,7 +291,7 @@ so a hand run records both weights as empty and is never over.
 **128 MB is the committed ceiling, and it is an estimate.** A megabyte here is
 1024 x 1024 bytes. A shard downloads only what its tasks read: the days and
 months a compaction packs, the months the census summary summarises. Measured
-on the development machine on 2026-09-30, a month of the scores ledger is 31
+on the development machine on 2026-09-30, a month of the eval ledger is 31
 files and 3.5 MB, so 128 leaves room for a compaction that catches up on
 several months at once. Move it to about twice the largest `downloaded_bytes`
 of the first thirty scheduled wakes. A month file sits in its year folder, so a
@@ -387,13 +387,14 @@ mostly its footer.
 One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
 by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
 ledger is one declaration and no Python. Six ship - for `gardener`,
-`visual-prunes`, `feed-retirements`, `item-health`, `scores` and
+`visual-prunes`, `feed-retirements`, `item-health`, `summary-quality-evals` and
 `host-fingerprint` - and all six only report. The last three are the ledgers the
 console reads, and the console reads their packed files, so until a person turns
 those three on it shows data up to the day their migration ran
 ([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
-**`scores` keeps every month: its `monthly_window` is `forever`, so it may pack
-the eval rows and never drops a month** ([below](#design-rationale)). The files it
+**`summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so it may pack
+the eval rows and never drops a month** ([below](#design-rationale)). It is the one
+ledger that packs a finished year into one year file ([A year](#a-year)). The files it
 writes are laid out in
 [../contracts/persistence.md](../contracts/persistence.md#the-two-roots), and
 its knobs are in
@@ -579,7 +580,10 @@ The rest of the pass still runs.
 
 ### A year
 
-**A year is packed only where its declaration sets `monthly_keep_days`.** Every
+**A year is packed only where its declaration sets `monthly_keep_days`.** One
+declaration sets it: `compact-summary-quality-evals`, whose `monthly_keep_days` in
+`config/gardener/compact-summary-quality-evals.json` (93) is how many whole days
+after a year ends the eval ledger waits to pack it. Every
 other ledger keeps its month files exactly as `monthly_window` says. A ledger
 that packs years keeps `monthly_window` forever, because a window would delete a
 month file before its year took it, and its year files are kept for ever.
@@ -647,12 +651,12 @@ the files it read. It changes no answer a reader gets
 ([../../concepts/partitions.md](../../concepts/partitions.md)).
 
 **The retention task that owns each tree folds it**, when its declaration
-carries a `fold` block: `feed-health`, `counterfactual-scores`, `scores` (its
-`score-index`) and `span-rollup`, whose window is `forever` so the fold is its
+carries a `fold` block: `feed-health`, `counterfactual-scores`,
+`summary-quality-evals-index` (the eval ledger's ID folder) and `span-rollup`, whose window is `forever` so the fold is its
 only live action. Which trees a task folds is read off the folders it walks, so
 one job writes each tree a wake and no tree is checked out twice. No
 `candidate-models` tree is committed under `state/`, so nothing folds one. The
-item-health, scores and host-fingerprint ledgers are not CSV day trees any more,
+item-health, summary-quality-evals and host-fingerprint ledgers are not CSV day trees any more,
 so no fold reads them: their compaction packs them.
 
 | Step | What happens |
@@ -860,13 +864,15 @@ Carmack). A day is closed one whole day after it ends, the compaction's rule: of
 755 writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after
 its day ended (Carmack's reading).
 
-**The `scores` compaction packs the eval rows and never drops a month.** Every
+**The `compact-summary-quality-evals` compaction packs the eval rows and never drops a month.** Every
 eval row is kept for ever and nothing summarises a month: the
 rows are the evidence behind every quality claim, and a chart that wants a
 monthly figure computes it from them when it draws. So the `monthly_window` of
-`config/gardener/compact-scores.json` is `forever`, and a live pass may make one
-file a day and one a month without taking a row. The `scores` retention task
-keeps every day of the score index for the same end - a dropped index day would
+`config/gardener/compact-summary-quality-evals.json` is `forever`, and a live pass may make one
+file a day and one a month without taking a row. Its `monthly_keep_days` packs a
+finished year's month files into one year file, kept for ever, so the month files
+stop adding up and no row goes. The `summary-quality-evals-index` retention task
+keeps every day of the ID folder for the same end - a dropped index day would
 make every measurement in it new again - so its window is `forever` too, and its
 one live action is the closed-day fold
 ([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).

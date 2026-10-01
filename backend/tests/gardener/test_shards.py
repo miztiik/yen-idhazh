@@ -49,8 +49,8 @@ def test_the_split_is_round_robin_over_sorted_names(tmp_path: Path) -> None:
     assert [shard.task_names for shard in planned.shards] == [
         ("compact-gardener", "traces"),
         ("feed-health", "trials"),
-        ("scores", "workflow-artifacts"),
-        ("seen",),
+        ("seen", "workflow-artifacts"),
+        ("summary-quality-evals-index",),
         ("telemetry-aggregate",),
     ]
     assert shards.fullest(planned) == planned.shards[0]

@@ -29,12 +29,12 @@ _ROLLUP_KEY_AND_STAMP: frozenset[str] = frozenset(
 )
 
 #: Every committed ledger a span-rollup row could restate a measurement of, and
-#: where it lives. `state/scores/` holds the eval rows - a rollup must not
-#: restate them.
+#: where it lives. `state/raw/summary-quality-evals/` holds the eval rows - a
+#: rollup must not restate them.
 _LEDGERS_A_ROLLUP_MUST_NOT_RESTATE: dict[str, type[Contract]] = {
     "state/item-health": ItemHealthRow,
     "state/host-fingerprint": HostFingerprintRow,
-    "state/scores": EvalRow,
+    "state/raw/summary-quality-evals": EvalRow,
     "state/visuals": VisualDecision,
 }
 
