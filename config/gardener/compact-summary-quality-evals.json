@@ -4,6 +4,7 @@
   "ledger": "summary-quality-evals",
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
+  "monthly_keep_days": 93,
   "monthly_window": {
     "unit": "forever"
   },
