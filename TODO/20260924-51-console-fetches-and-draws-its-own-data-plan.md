@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-01
 
-**Status**: Row 10 and plan 56's fresh-address prerequisite are merged. Row 3 publishes all three compact periods under the current ledger names, and its publication and config checks pass. Row 8 has its first pass and a passing add-on interception probe; its second pass remains. Row 11 has not started.
+**Status**: Rows 3 and 10 are merged, as is plan 56's fresh-address prerequisite. Row 8's second pass is in flight on its existing branch. Row 11 is in flight in p51r11. They run in separate worktrees; row 8 merges first, and row 11 then takes main in before its final checks.
 
 **Level**: 5 (CLAUDE.md section 6). Row 3 decides whether `state/` reaches a browser, which is a publishing contract, and sections 2.6 to 2.9 are the design contract the panels are built to. The other rows are Level 2 to Level 3 and carry no contract change beyond one copied settlement key.
 
@@ -34,7 +34,8 @@ last update, rows 1, 2, 4, 5, 6, 7, 9 and 10 had merged. The remaining work is:
   row 10  DONE. PR #1177 merged as b9c09ee66 at 2026-10-01T07:28:41Z after all
     seven CI checks passed and both writer workflows were quiet. Its clean
     worktree and local branch are removed. Do not repeat its checks.
-  row 3   PR #1169, worktree p51r3, branch p51r3-the-console-ledgers-are-published.
+    row 3   DONE. PR #1169 merged as 9f31378e6 at 2026-10-01T14:00:21Z. Worktree
+      p51r3 is ready for clean-up, not more implementation. Recorded checks:
     Built and pushed at b0a0ddb3a. The inherited commits were preserved.
     Main through row 10 is merged; the copy now includes all three indexes
     and year files, and uses summary-quality-evals. Nine copy tests, five
@@ -43,13 +44,10 @@ last update, rows 1, 2, 4, 5, 6, 7, 9 and 10 had merged. The remaining work is:
     site-size check and both publication-oracle cases passed. Browser smoke
     rendered three routes and fetched all nine indexes with zero errors or
     failed requests. No stand-in indexes were used.
-    BLOCKER: load_gardener refuses publishing summary-quality-evals with
-    its declared monthly_keep_days 93 while the published-year minimum is
-    367. Plan 56 row 7 removes that minimum after fixing stale cached ranges.
-          The person authorized this owner to deliver that tested fix in a
-          separate worktree, p51prereq, without changing p56r7. After its PR
-          merges, take main into row 3 and rerun the final config check. No packing
-          knob changes. Reports: %TEMP%/p51c-report.md and %TEMP%/p51r3/.
+          The former blocker is resolved: plan 56 row 7 merged in #1182 as
+          ec77908e0. All 14 publication contract checks and all 35 canary checks
+          passed, then all seven CI jobs passed on 2f72d1ce4. No packing knob
+          changed. Reports: %TEMP%/p51c-report.md and %TEMP%/p51r3/.
   row 8   PR #1171, worktree p51r8, branch
           p51r8-one-panel-fetches-its-ledger-and-draws-in-d3. Pass A is done,
     smoke-tested, and passed all seven checks at 28242e632. Pass B is not
@@ -59,7 +57,7 @@ last update, rows 1, 2, 4, 5, 6, 7, 9 and 10 had merged. The remaining work is:
     downloads, including a pass-through service worker. Routing disables
     HTTP caching, so do not use that setup to certify cache behavior.
     Report: %TEMP%/p51r8/report-a.md. Probe: %TEMP%/p51c-addon-probe/.
-  row 11  Not started, and no worktree yet.
+  row 11  IN-FLIGHT in p51r11, branch p51r11-retire-span-rollup-and-read-item-traces.
 Worktree p51own (branch p51-owner-settles-rows-3-and-8) holds no unmerged work;
 remove it with the others at closure. A row's worker works in worktree p51r<row> and
 keeps its running report in %TEMP%\p51r<row>\report.md. A report under %TEMP% can be
@@ -215,10 +213,10 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | DONE | p51r5 | #1143 | p51-r5-worker |
 | 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | DONE | p51r6 | #1144 | p51-r6-worker |
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | DONE | p51r7 | #1154 | p51-r7-worker |
-| 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9, 10 | D | PENDING | - | - | - |
+| 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9, 10 | D | IN-FLIGHT | p51r8 | #1171 | p51-r8-pass-b |
 | 9 | The door keeps what it fetched for the page's life, and says how far a ledger reaches | 7 | C | DONE | p51r9 | #1157 | p51-r9-worker |
 | 10 | Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily | 7, 9 | C | DONE | p51r10 | #1177 | p51-r10-worker-2 |
-| 11 | The span-rollup ledger is deleted, and one item's trace is a command | 3 | E | PENDING | - | - | - |
+| 11 | The span-rollup ledger is deleted, and one item's trace is a command | 3 | E | IN-FLIGHT | p51r11 | - | p51-r11-worker |
 
 **Readiness is the file-disjointness test, not the group letter** (execute-a-plan.md). The letters record which rows the author believed independent; the `Files touched` lists are the fact, and the shared-file notes below are why three depends-on edges exist that the letters do not show.
 
