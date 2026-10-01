@@ -27,6 +27,14 @@ hole: its rows went somewhere no reader can find them. It is logged by name,
 and any raw files it still has are read, which is the safe direction for a
 retirement - an address read twice is still retired once.
 
+**A missing file is named the way the query door names it** (`LedgerFault`):
+a hole is `day-missing`, a file an index names that is not there is
+`file-missing`, and a daily index with no monthly or yearly index beside it is
+`index-missing`, because the compaction writes the three together. Each is a
+warning naming the fault and the path, and the read goes on with what it can
+find; a named file that is not there is never read as an empty one without a
+word.
+
 **What it reads, and how that grows (Guardrail #12).** Three small indexes,
 every compact file they name - at most `monthly_window` month files and 45 to 76
 day files a ledger at the defaults, or for a ledger that packs years, one file
@@ -57,6 +65,7 @@ from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths, raw_files
+from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.persist import StoredRow, load_stored
 
 logger = logging.getLogger(__name__)
@@ -117,6 +126,31 @@ def _index(state_dir: Path, ledger: LedgerName, period: Period) -> CompactIndex 
         )
         return None
     return index
+
+
+def _indexes(
+    state_dir: Path, ledger: LedgerName
+) -> tuple[CompactIndex | None, CompactIndex | None, CompactIndex | None]:
+    """The yearly, monthly and daily index, each None when absent or unreadable by this build.
+
+    A daily index with no monthly or no yearly index file beside it is
+    `index-missing`, said once by name for each: the compaction writes the three
+    together, so any month or year it packed is out of this read's sight.
+    """
+    yearly = _index(state_dir, ledger, Period.YEARLY)
+    monthly = _index(state_dir, ledger, Period.MONTHLY)
+    daily = _index(state_dir, ledger, Period.DAILY)
+    if daily is not None:
+        for period in (Period.MONTHLY, Period.YEARLY):
+            path = paths.compact_index_path(state_dir, ledger, period)
+            if not path.is_file():
+                logger.warning(
+                    "a daily index has no %s index beside it fault=%s path=%s",
+                    period.value,
+                    LedgerFault.INDEX_MISSING,
+                    _shown(state_dir, path),
+                )
+    return yearly, monthly, daily
 
 
 def compact_file(state_dir: Path, ledger: LedgerName, period: Period, covers: str) -> Path | None:
@@ -191,9 +225,7 @@ _STRETCH: Final[dict[Period, str]] = {
 
 def list_ledger_files(state_dir: Path, ledger: LedgerName) -> LedgerFiles:
     """Every source this ledger is read from, oldest first, each date from exactly one."""
-    yearly = _index(state_dir, ledger, Period.YEARLY)
-    monthly = _index(state_dir, ledger, Period.MONTHLY)
-    daily = _index(state_dir, ledger, Period.DAILY)
+    yearly, monthly, daily = _indexes(state_dir, ledger)
     years = [entry.covers for entry in yearly.entries] if yearly else []
     months = [entry.covers for entry in monthly.entries] if monthly else []
     days = [entry.covers for entry in daily.entries] if daily else []
@@ -219,7 +251,8 @@ def list_ledger_files(state_dir: Path, ledger: LedgerName) -> LedgerFiles:
             found = compact_file(state_dir, ledger, period, covers)
             if found is None:
                 logger.warning(
-                    "a compact index names a file that is not there path=%s covers=%s",
+                    "a compact index names a file that is not there fault=%s path=%s covers=%s",
+                    LedgerFault.FILE_MISSING,
                     _shown(state_dir, paths.compact_index_path(state_dir, ledger, period)),
                     covers,
                 )
@@ -262,7 +295,8 @@ def load_ledger_rows[C: Contract](
     if found.holes:
         logger.warning(
             "days no compact file holds are read from their raw files, if any are left "
-            "path=%s holes=%s",
+            "fault=%s path=%s holes=%s",
+            LedgerFault.DAY_MISSING,
             _shown(state_dir, paths.compact_index_path(state_dir, ledger, Period.DAILY)),
             ",".join(found.holes),
         )
@@ -349,6 +383,22 @@ def _stored_or_skipped[C: Contract](
         return []
 
 
+def _compact_rows[C: Contract](
+    state_dir: Path, ledger: LedgerName, period: Period, covers: str, *, model: type[C]
+) -> list[StoredRow[C]]:
+    """The rows of the compact file an index names, or none with a warning naming the fault."""
+    found = compact_file(state_dir, ledger, period, covers)
+    if found is None:
+        logger.warning(
+            "a compact index names a file that is not there fault=%s path=%s covers=%s",
+            LedgerFault.FILE_MISSING,
+            _shown(state_dir, paths.compact_index_path(state_dir, ledger, period)),
+            covers,
+        )
+        return []
+    return _stored_or_skipped(state_dir, found, model=model)
+
+
 def load_days[C: Contract](
     state_dir: Path, ledger: LedgerName, days: Collection[str], *, model: type[C]
 ) -> list[C]:
@@ -372,9 +422,7 @@ def load_days[C: Contract](
             f"idhazh/ledger/keys.py, and this read asked for {model.__name__}"
         )
     key = keys.door_key(ledger)
-    yearly = _index(state_dir, ledger, Period.YEARLY)
-    monthly = _index(state_dir, ledger, Period.MONTHLY)
-    daily = _index(state_dir, ledger, Period.DAILY)
+    yearly, monthly, daily = _indexes(state_dir, ledger)
     years = {entry.covers for entry in yearly.entries} if yearly else set()
     months = {entry.covers for entry in monthly.entries} if monthly else set()
     compact_days = {entry.covers for entry in daily.entries} if daily else set()
@@ -392,9 +440,8 @@ def load_days[C: Contract](
     def rows_of(period: Period, covers: str) -> list[StoredRow[C]]:
         """One month or year file's rows, read once however many of its days are asked."""
         if (period, covers) not in period_rows:
-            found = compact_file(state_dir, ledger, period, covers)
-            period_rows[period, covers] = (
-                _stored_or_skipped(state_dir, found, model=model) if found else []
+            period_rows[period, covers] = _compact_rows(
+                state_dir, ledger, period, covers, model=model
             )
         return period_rows[period, covers]
 
@@ -409,8 +456,7 @@ def load_days[C: Contract](
         if coarse is not None:
             files = [[held for held in coarse if held.identity.covers == day]]
         elif day in compact_days:
-            found = compact_file(state_dir, ledger, Period.DAILY, day)
-            files = [_stored_or_skipped(state_dir, found, model=model)] if found else []
+            files = [_compact_rows(state_dir, ledger, Period.DAILY, day, model=model)]
         else:
             files = [
                 _stored_or_skipped(state_dir, path, model=model)

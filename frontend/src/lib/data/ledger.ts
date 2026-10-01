@@ -26,7 +26,7 @@ import { readSlice } from './slice-reader';
 import type { LedgerName, SliceOptions, SliceResult } from './slice-shapes';
 
 export type { LedgerReach } from './ledger-reach';
-export type { DateStamp, LedgerName, Predicate, Row, SliceOptions, SliceResult } from './slice-shapes';
+export type { DateStamp, LedgerFault, LedgerName, Predicate, Row, SliceOptions, SliceResult } from './slice-shapes';
 
 let kept: PageKeeper | null = null;
 

@@ -198,7 +198,7 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | DONE | p51r7 | #1154 | p51-r7-worker |
 | 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9, 10 | D | PENDING | - | - | - |
 | 9 | The door keeps what it fetched for the page's life, and says how far a ledger reaches | 7 | C | DONE | p51r9 | #1157 | p51-r9-worker |
-| 10 | Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily | 7, 9 | C | PENDING | - | - | - |
+| 10 | Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily | 7, 9 | C | DONE | p51r10 | #1177 | p51-r10-worker-2 |
 | 11 | The span-rollup ledger is deleted, and one item's trace is a command | 3 | E | PENDING | - | - | - |
 
 **Readiness is the file-disjointness test, not the group letter** (execute-a-plan.md). The letters record which rows the author believed independent; the `Files touched` lists are the fact, and the shared-file notes below are why three depends-on edges exist that the letters do not show.
@@ -1177,6 +1177,17 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 2 | **No list of allowed 404s anywhere.** It would be Spark's `ignoreMissingFiles` under another name: a lost index would look the same as one never written | Fowler, 2026-09-30 |
   | 3 | **No field in `daily.json` naming the other indexes.** A stored-format change to say what an empty file already says | Fowler, 2026-09-30 |
   | 4 | **31 days, not 15.** A 15-day lag needs a month file rebuilt when a late re-run lands, which the packing rules refuse today; 31 is the shortest wait that still catches every re-run GitHub allows | Carmack, 2026-09-30; the person chose 31 |
+
+- **Found in execution, 2026-09-30** (the row's second worker finished the first worker's uncommitted draft):
+  - **The packing now learns which files exist from the commit, not the disk** (plan 50's last change, #1173, landed while this row ran), so the check below reads that list.
+  - **An index its watermark says was packed, and that is not there, stops the pass by name** as `index-missing`. Read as empty, the pass would rewrite it naming only what it packs, and every period packed before would drop out of sight. That is what makes "write the other index when there is none" safe.
+  - **No one config file sets `daily_keep_days`.** It is a key of each packing declaration, 45 by default in code. The two live declarations set 31; the four that only report keep 45, so whoever turns one of them on chooses its wait.
+  - **A span that starts before the oldest day either index names is `unreachable` with no fault**, not `day-missing`: those days were never packed, so "re-pack that day" would send an operator to fix nothing. Its console line says to clamp the span to the reach's first day.
+  - **A reach with no `monthly.json` is `ok` from the oldest daily day and carries `index-missing`**, so a route anchored on it still draws every day the door can read. The build-time readers anchor on that reach, so `index-missing` shows in the build log, never in a route's note.
+  - **Four more doc pages said the switch had not happened**, found with plan 57's search: `docs/how-to/run-the-pipeline.md` (its step 5 now also names the `LIVE_BY_DECISION` entry), `docs/architecture/sources/item-health.md`, `docs/concepts/config/retention-ages.md` and `docs/architecture/publishing/console-payloads.md`. The config page's counts were stale too: twenty declarations, six packing tasks, four live folds.
+  - **For plan 57:** `compact-item-health` now deletes a month's rows once its 15-month window passes, the first about 1 January 2028 (an estimate). That month's summary is written by `telemetry-aggregate`, which still only reports, so it has to run live before then.
+  - **Overlap with plan 56's open pull request #1172** (a year period): it edits `_compact_tree.py`, `_monthly_period.py`, `ledger_files.py`, `slice-reader.ts`, `ledger-reach.ts`, `slice.ts`, `ledger-door.spec.ts` and both door and gardener pages, and adds `Period.YEARLY`. Whichever merges second decides whether a year index is written with the other two or only when a year is packed.
+  - **#1172 merged first, so this row decided: the year index is written with the other two.** As #1172 shipped, the reach asks for `yearly.json` on every page and no ledger has one, so every console page met a 404 again, the thing this row removes. So whatever writes one index writes each of the three the ledger lacks, empty; the three console ledgers and both fixture roots carry an empty third index; a missing `yearly.json` beside `daily.json` is `index-missing`, like a missing `monthly.json`; and the year step names its refusals `day-missing` and `file-missing`, as the month step does. #1172's year tests set a daily watermark with no daily index, which the pass now refuses by name, so their checkout gains an empty daily index.
 
 ---
 

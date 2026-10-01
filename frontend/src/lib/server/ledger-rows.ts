@@ -145,13 +145,13 @@ export async function newestRows(
 	const reach = await reachFromDisk(root, ledger);
 	// `quiet` here is an index that names no day yet: nothing has been packed.
 	if (reach.state === 'missing' || reach.state === 'quiet') return empty({ state: 'not-packed' });
-	if (reach.state === 'unreachable') return empty({ state: 'unreadable', at: null });
+	if (reach.state === 'unreachable') return empty({ state: 'unreadable', at: null, fault: null });
 
 	const every = days < 1;
 	const from = every ? reach.first : later(reach.first, shiftDay(reach.through, 1 - days));
 	const found = await ask(from, reach.through);
 	if (found.state === 'missing') return empty({ state: 'not-packed' });
-	if (found.state === 'unreachable') return empty({ state: 'unreadable', at: found.at });
+	if (found.state === 'unreachable') return empty({ state: 'unreadable', at: found.at, fault: found.fault });
 	const read: RecordRead = { state: 'read', through: found.through ?? reach.through };
 	if (found.state === 'quiet') return empty(read);
 
@@ -160,7 +160,9 @@ export async function newestRows(
 	const lag = daysBetween(newest, reach.through) - 1;
 	if (!every && lag > 0 && from > reach.first) {
 		const before = await ask(later(reach.first, shiftDay(from, -lag)), shiftDay(from, -1));
-		if (before.state === 'unreachable') return empty({ state: 'unreadable', at: before.at });
+		if (before.state === 'unreachable') {
+			return empty({ state: 'unreadable', at: before.at, fault: before.fault });
+		}
 		if (before.state === 'ok') rows = [...before.rows, ...rows];
 	}
 	return { rows: rows.map(textCells), columns: [...columns], read };

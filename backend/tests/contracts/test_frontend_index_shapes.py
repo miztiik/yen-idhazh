@@ -5,8 +5,10 @@ by hand and carries the stamp it reads, because the query door runs in a browser
 that cannot import a Pydantic model. This holds that copy in step: each shape's
 field set, each field's TypeScript type and their order, the stamp against
 `CompactIndex.schema_version()`, and the periods against `Period`. It also
-holds two names the door carries beside the copy: every ledger it may query is a
-`LedgerName`, and the cell it filters days on is the ledger's own date cell.
+holds three names the door carries beside the copy: every ledger it may query is
+a `LedgerName`, the cell it filters days on is the ledger's own date cell, and
+the four faults it names a missing file with are the backend's `LedgerFault`, in
+the same order, so the gardener's logs say what the console says.
 
 The expected types are computed from `CompactIndex.json_schema()` by the narrow
 mapper below, which covers the node kinds these two shapes use and refuses every
@@ -26,6 +28,7 @@ from conftest import REPO_ROOT, read_text
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.keys import DATE_CELL
 
 pytestmark = pytest.mark.contract
@@ -152,3 +155,13 @@ def test_the_door_filters_days_on_the_ledger_s_own_date_cell() -> None:
     """Every compacted row carries its UTC day in one cell, and the door filters on that cell."""
     query = DOOR / "slice-query.ts"
     assert constant(read_text(query), "DATE_COLUMN", query) == DATE_CELL
+
+
+def test_the_four_missing_file_faults_are_one_list_on_both_sides() -> None:
+    """The door names a missing file with these words, and the gardener's logs with the same."""
+    shapes = DOOR / "slice-shapes.ts"
+    names = constant_list(read_text(shapes), "LEDGER_FAULTS", shapes)
+    assert names == [fault.value for fault in LedgerFault], (
+        f"{shapes.name} names the faults {names} and LedgerFault in "
+        f"backend/idhazh/ledger/faults.py names {[fault.value for fault in LedgerFault]}"
+    )

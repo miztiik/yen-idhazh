@@ -29,7 +29,10 @@ even when it filed fewer rows.
 The watermark stays where it is, and the day counts against the budget, oldest
 first. Raw files in a month already absorbed are refused by name and kept:
 `daily_keep_days` outlasts GitHub's re-run window, so no re-run can land there
-and a person decides what they are.
+and a person decides what they are. **A day the daily index names whose compact
+file is not there is refused too**, as `file-missing`, and its raw files are
+kept: rebuilt from the re-run's files alone it would hold only the shards that
+ran again, and its index entry would call that smaller day complete.
 
 **A first run starts on the first of a month**: the month of the older of the
 oldest raw day and the newest eligible day, or the oldest month the monthly
@@ -125,28 +128,39 @@ def _take[C: Contract](
     key: tuple[str, ...],
     identity: WriterIdentity,
     stamp: str,
-) -> str | None:
-    """Compact one day, or say why it cannot be. Nothing is decided for a day that fails."""
+) -> tuple[str, ledger.LedgerFault | None] | None:
+    """Compact one day, or say why it cannot be and which fault that is, if any.
+
+    Nothing is decided for a day that fails.
+    """
     try:
         files = ledger.read_day_files(tree.state_dir, tree.ledger, day)
     except ValueError as refusal:
-        return str(refusal)
+        return str(refusal), None
     if len(files) > policy.max_raw_files_per_period:
         return (
             f"it holds {len(files)} raw files and one period is built from at most "
-            f"{policy.max_raw_files_per_period}"
+            f"{policy.max_raw_files_per_period}",
+            None,
         )
     existing = (
         named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day)
         if day in tree.daily
         else None
     )
+    if day in tree.daily and existing is None:
+        where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.DAILY)
+        return (
+            f"{where.name} names the day and its file is not there. Restore the file from "
+            "git history, and the next wake takes the re-run in",
+            ledger.LedgerFault.FILE_MISSING,
+        )
     try:
         rows = [tree.load(existing, model=model)] if existing is not None else []
         for held in files:
             rows.append(tree.load(held.path, model=model))
     except ValueError as refusal:
-        return str(refusal)
+        return str(refusal), None
     settled = ledger.settle_rows(rows, key)
     built = ledger.render_period(
         tree.state_dir,
@@ -218,12 +232,15 @@ def compact(
             stops.append(Stop(StopReason.CEILING, day))
             break
         fresh = tree.daily_through is None or day > tree.daily_through
-        why = _take(tree, policy, day, model=model, key=key, identity=identity, stamp=stamp)
-        if why is not None:
+        refused = _take(tree, policy, day, model=model, key=key, identity=identity, stamp=stamp)
+        if refused is not None:
+            why, fault = refused
             logger.error(
-                "a raw day is not compacted, and its files are kept ledger=%s day=%s reason=%s",
+                "a raw day is not compacted, and its files are kept "
+                "ledger=%s day=%s fault=%s reason=%s",
                 tree.ledger.value,
                 day,
+                fault or "none",
                 why,
             )
             stops.append(Stop(StopReason.FAILED, day))

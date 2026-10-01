@@ -213,10 +213,15 @@ test.describe('a year file read by byte range, in a browser', () => {
 		// Twice on one page: a refused file is not kept, so the second slice opens it again.
 		for (let turn = 0; turn < 2; turn += 1) {
 			const { timed, asked } = await sliceOn(page, host, 'longer', SPAN);
-			expect(timed.result).toEqual({ state: 'unreachable', rows: [], at: SPAN.from });
-			expect(timed.warned.join('\n')).toContain(
-				`${YEAR_FILE} opened at ${size} bytes to be read by range, and its entry says ${size + 1}`
-			);
+			expect(timed.result).toEqual({ state: 'unreachable', rows: [], at: SPAN.from, fault: null });
+			if (turn === 0) {
+				expect(timed.warned).toHaveLength(1);
+				expect(timed.warned[0]).toContain(
+					`${YEAR_FILE} opened at ${size} bytes to be read by range, and its entry says ${size + 1}`
+				);
+			} else {
+				expect(timed.warned).toEqual([]);
+			}
 			// An opening is one 1-byte GET, which the browser may answer from what it kept,
 			// and one HEAD, which it never does.
 			expect(requestsFor(asked, YEAR_FILE, 'HEAD'), `turn ${turn}`).toHaveLength(1);

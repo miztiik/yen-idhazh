@@ -316,13 +316,15 @@ beside it. `state/seen/` is not on that list at all because it is a lookup rathe
 than a measurement: an out-of-window day file is deleted by the `seen` task,
 whose window may not sit below `collect.seen_window_days`.
 
-**And every task ships in dry run.** Each declaration carries `dry_run: true`,
+**And every retention task ships in dry run.** Each retention declaration carries
+`dry_run: true`,
 so a pass lists every file a live pass would remove and removes none of them.
 The `history` job of `.github/workflows/idhazh-gardener.yml` squashes and force-pushes
 `main` on a schedule, so a state file deleted here stops being recoverable from
 history once that prune passes over it (`CLAUDE.md` section 8) - which makes
 "read the list first" the only safe order. Turning one task's deletion on is a
-one-line commit to that task's own declaration
+change to that task's own declaration and its entry in the contract test's list
+of live switches
 ([../../how-to/run-the-pipeline.md](../../how-to/run-the-pipeline.md#turning-state-cleanup-on)).
 Measured on this checkout on 2026-09-13: a live run today
 removes nothing, the first file any tree loses is `state/seen/2026/08/23.csv` on
@@ -335,8 +337,9 @@ filed by month, because a whole month shard survived if any of its days was in
 range; at day grain the file the window stops naming is the file that goes.
 Reading committed files against a fixed calendar is deterministic, so the spread
 is zero. The item-health and eval rows have since moved to the ledger door, so
-they no longer go on that date: they go when each compaction's `monthly_window`
-passes, once a person turns that compaction on.
+they no longer go on that date. The item-health rows go when the 15-month
+`monthly_window` of their compaction passes, and that compaction packs live; no
+eval row is ever deleted.
 
 ## See also
 

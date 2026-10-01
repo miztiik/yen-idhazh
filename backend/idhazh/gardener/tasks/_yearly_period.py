@@ -72,9 +72,17 @@ def _ready(tree: CompactTree, year: str, *, now: datetime, after_days: int) -> b
     )
 
 
-def _refused(tree: CompactTree, year: str, why: str) -> tuple[Stop, ...]:
+def _refused(
+    tree: CompactTree, year: str, why: str, fault: ledger.LedgerFault | None = None
+) -> tuple[Stop, ...]:
     """A year that cannot be packed, said once by name. The watermark stays where it is."""
-    logger.error("a year is not packed ledger=%s year=%s reason=%s", tree.ledger.value, year, why)
+    logger.error(
+        "a year is not packed ledger=%s year=%s fault=%s reason=%s",
+        tree.ledger.value,
+        year,
+        fault or "none",
+        why,
+    )
     return (Stop(StopReason.FAILED, year),)
 
 
@@ -85,14 +93,24 @@ def _pack(
     missing = [month for month in months if month not in tree.monthly]
     if missing:
         where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.MONTHLY)
-        return _refused(tree, year, f"{where.name} does not name {', '.join(missing)}")
+        return _refused(
+            tree,
+            year,
+            f"{where.name} does not name {', '.join(missing)}",
+            ledger.LedgerFault.DAY_MISSING,
+        )
     files = [
         named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month)
         for month in months
     ]
     absent = [month for month, found in zip(months, files, strict=True) if found is None]
     if absent:
-        return _refused(tree, year, f"no monthly file holds {', '.join(absent)}")
+        return _refused(
+            tree,
+            year,
+            f"no monthly file holds {', '.join(absent)}",
+            ledger.LedgerFault.FILE_MISSING,
+        )
     held = [found for found in files if found is not None]
     model = ledger.door_contract(tree.ledger)
     try:
@@ -131,7 +149,12 @@ def _finish(tree: CompactTree, year: str) -> tuple[Stop, ...]:
     held = named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.YEARLY, year)
     if held is None:
         where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.YEARLY)
-        return _refused(tree, year, f"{where.name} names it and no yearly file holds it")
+        return _refused(
+            tree,
+            year,
+            f"{where.name} names it and no yearly file holds it",
+            ledger.LedgerFault.FILE_MISSING,
+        )
     left = [month for month in sorted(tree.monthly) if month[:4] == year]
     for month in left:
         found = named_trees.compact_file(

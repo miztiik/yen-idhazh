@@ -21,7 +21,17 @@ would happen, naming the path, and the pass then fails before anything lands.
 
 A watermark or index this build cannot read stops the pass rather than being
 read as absent: a compaction that guessed where it had got to would rewrite, or
-delete, a period it had already finished.
+delete, a period it had already finished. So does an index that is not there
+while its period's watermark says the period was packed - the `index-missing`
+fault - because a pass that read it as empty would write a list that forgets
+every period packed before.
+
+**A ledger's three indexes exist together.** Whatever writes one writes each of
+the others the ledger has none of yet, and those are empty: a period with no
+watermark was never packed, so an empty list is the truth about it. A reader
+that finds `index/daily.json` can then tell a lost `index/monthly.json` or
+`index/yearly.json` from a period never packed, and asks for no file that is not
+there.
 """
 
 from __future__ import annotations
@@ -96,6 +106,8 @@ class CompactTree:
     raw_days: list[str]
     #: How many raw day folders the pass listed, before any step set a day aside.
     listed: int = 0
+    #: The periods whose index the pass found on disk.
+    indexed: frozenset[Period] = frozenset()
     changes: list[Change] = field(default_factory=list)
     #: Every file the pass read or weighed.
     looked: set[Path] = field(default_factory=set)
@@ -117,6 +129,7 @@ class CompactTree:
         )
         through: dict[Period, str | None] = {}
         entries: dict[Period, dict[str, CompactEntry]] = {}
+        indexed: set[Period] = set()
         for period in Period:
             mark = marks[period]
             through[period] = (
@@ -125,7 +138,18 @@ class CompactTree:
                 else None
             )
             index = indexes[period]
-            held = _read(CompactIndex, index, ledger_name, period) if listing.holds(index) else None
+            present = listing.holds(index)
+            if not present and through[period] is not None:
+                shown = f"{ledger.STATE_DIRNAME}/{index.relative_to(state_dir).as_posix()}"
+                raise ValueError(
+                    f"{ledger.LedgerFault.INDEX_MISSING}: {shown} is not there, and "
+                    f"{mark.name} says the {period.value} period is packed through "
+                    f"{through[period]}. Restore {index.name} from git history before the next "
+                    "wake; an empty one would forget every period packed before"
+                )
+            if present:
+                indexed.add(period)
+            held = _read(CompactIndex, index, ledger_name, period) if present else None
             entries[period] = {entry.covers: entry for entry in held.entries} if held else {}
         raw_days = named_trees.raw_days(listing, state_dir, ledger_name)
         return cls(
@@ -140,6 +164,7 @@ class CompactTree:
             yearly=entries[Period.YEARLY],
             raw_days=raw_days,
             listed=len(raw_days),
+            indexed=frozenset(indexed),
         )
 
     def raw_day_folder(self, day: str) -> Path:
@@ -187,7 +212,22 @@ class CompactTree:
                 assert_never(period)
 
     def write_index(self, period: Period) -> None:
-        """Decide to rewrite one period's index from what the pass holds now."""
+        """Decide to rewrite one period's index from what the pass holds now.
+
+        Each other period's index is written with it when the ledger has none yet
+        and this pass has not written it, so a ledger never holds one index
+        without the others. A period with no index has no watermark either -
+        `read` refuses that pair - so what the pass holds for it is nothing, and
+        the index says so.
+        """
+        self._decide_index(period)
+        for other in Period:
+            path = ledger.compact_index_path(self.state_dir, self.ledger, other)
+            if other in self.indexed or any(change.path == path for change in self.changes):
+                continue
+            self._decide_index(other)
+
+    def _decide_index(self, period: Period) -> None:
         held = self.entries(period)
         index = CompactIndex(
             version=CompactIndex.schema_version(),

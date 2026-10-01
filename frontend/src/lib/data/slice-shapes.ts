@@ -5,7 +5,9 @@
  * wants, a filter. It gets back one of four answers, so a panel draws the right
  * one of four nothings without inspecting an error. A request the door cannot
  * answer is the caller's defect rather than the data's, so it is refused by name
- * before anything is fetched: that refusal is `SliceRequestError`.
+ * before anything is fetched: that refusal is `SliceRequestError`. A file the
+ * ledger should hold and does not is the data's defect, and the answer names
+ * which of four faults it is.
  *
  * Every day here is a UTC day, written `YYYY-MM-DD` (CLAUDE.md section 2).
  * Imports nothing tied to one environment, so a Node test loads it as it is.
@@ -39,14 +41,38 @@ export type SliceOptions = {
 /** One parquet row as the door hands it back. An integer is a `number`. */
 export type Row = Record<string, string | number | boolean | null>;
 
+/** The four ways a packed ledger can be missing a file, declared once. The door
+ *  carries them on its answers, the console's readers and notes take them from
+ *  here, and the gardener's logs use the same words (`LedgerFault` in
+ *  `backend/idhazh/ledger/faults.py`, held to this list by a backend test).
+ *
+ *  - `not-packed`: there is no `daily.json`, so no day of the ledger is packed.
+ *  - `index-missing`: `daily.json` is there and `monthly.json` or `yearly.json`
+ *    is not. The packing writes the three together, so the months or years it
+ *    may have packed are out of sight.
+ *  - `file-missing`: an index names a file that is not there.
+ *  - `day-missing`: a day between the first and the newest packed day that no
+ *    index names, so its rows are in no file a reader can find.
+ *
+ *  Three gaps are expected and are none of these: a day after the newest packed
+ *  day, an entry with `rows: 0`, and a `monthly.json` or `yearly.json` with no
+ *  entries. */
+export const LEDGER_FAULTS = ['not-packed', 'index-missing', 'file-missing', 'day-missing'] as const;
+
+export type LedgerFault = (typeof LEDGER_FAULTS)[number];
+
 /** What the door hands a panel. `rows` is empty for every state but `ok`.
  *  `through` is the newest day `daily.json` names, or `null` before the first
- *  compaction, so a panel can say how far its data reaches. */
+ *  compaction, so a panel can say how far its data reaches. `fault` names the
+ *  missing file behind a `missing` or an `unreachable`, and is `null` for an
+ *  `unreachable` with another cause: an index this build will not act on, a file
+ *  that did not arrive whole, an engine that could not answer, or a span that
+ *  starts before the oldest day any index names. */
 export type SliceResult =
 	| { state: 'ok'; rows: Row[]; through: DateStamp }
 	| { state: 'quiet'; rows: []; through: DateStamp | null }
-	| { state: 'missing'; rows: [] }
-	| { state: 'unreachable'; rows: []; at: DateStamp };
+	| { state: 'missing'; rows: []; fault: Extract<LedgerFault, 'not-packed'> }
+	| { state: 'unreachable'; rows: []; at: DateStamp; fault: Exclude<LedgerFault, 'not-packed'> | null };
 
 /** A request the door refuses before it fetches anything. */
 export class SliceRequestError extends Error {

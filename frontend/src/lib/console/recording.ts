@@ -19,9 +19,11 @@
  * missing rather than typed here.
  *
  * Pure and dependency-free apart from the date formatter, so the browser suite
- * drives every state without a page.
+ * drives every state without a page. The names of a ledger's missing-file faults
+ * are types from the query door, and nothing of the door runs here.
  */
 
+import type { LedgerFault } from '../data/ledger';
 import { shortDate } from '../format';
 
 /** A measurement that was switched off, and when it last recorded anything.
@@ -183,15 +185,17 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
  *
  * A console route reads three records from their packed files only, so a record
  * has two states a day file never had. `not-packed` is a record with no packed
- * day at all - a fresh clone, or a packing step not yet run. `unreadable` is a
- * packed day, or the list of them, that did not load; `at` is the first day that
- * failed, or null when the list itself did not load. `read` carries the newest
- * packed day, which is where every panel built on the record stops.
+ * day at all - a fresh clone, or a packing step not yet run - and is the query
+ * door's fault of that name. `unreadable` is a packed day, or the list of them,
+ * that did not load; `at` is the first day that failed, or null when the list
+ * itself did not load, and `fault` names the missing file behind it as the door
+ * does, or is null for another cause. `read` carries the newest packed day,
+ * which is where every panel built on the record stops.
  */
 export type RecordRead =
 	| { state: 'read'; through: string }
-	| { state: 'not-packed' }
-	| { state: 'unreadable'; at: string | null };
+	| { state: Extract<LedgerFault, 'not-packed'> }
+	| { state: 'unreadable'; at: string | null; fault: Exclude<LedgerFault, 'not-packed'> | null };
 
 /** The three records the console reads at build time, as its notes name them. */
 export type RecordName = 'article' | 'score' | 'machine';
@@ -211,6 +215,24 @@ function recordsNamed(records: readonly RecordName[]): string {
 
 function recordNoun(records: readonly RecordName[]): string {
 	return `${recordsNamed(records)} ${records.length === 1 ? 'record' : 'records'}`;
+}
+
+/** The sentence for a record that did not load. A missing file and a missing
+ * day send an operator to different fixes, so each has its own words; every
+ * other cause of a day that failed shares one. */
+function unreadableText(record: RecordName, read: Extract<RecordRead, { state: 'unreadable' }>): string {
+	const after = 'has anything to show. This is a fault to fix, not a quiet day.';
+	if (read.at === null) {
+		return `The ${record} record's list of packed days did not load, so nothing below that uses it ${after}`;
+	}
+	const day = shortDate(read.at);
+	if (read.fault === 'file-missing') {
+		return `The ${record} record lists a packed file for ${day} that is not there, so nothing below that uses this record ${after}`;
+	}
+	if (read.fault === 'day-missing') {
+		return `The ${record} record is missing ${day}, a day between packed days, so nothing below that uses this record ${after}`;
+	}
+	return `The ${record} record's day for ${day} did not load, so nothing below that uses this record ${after}`;
 }
 
 /** What a route says about the records it read, before any panel draws from them.
@@ -244,15 +266,7 @@ export function recordNotes(
 	}
 	for (const { record, read } of reads) {
 		if (read.state !== 'unreadable') continue;
-		const what =
-			read.at === null
-				? `The ${record} record's list of packed days did not load`
-				: `The ${record} record's day for ${shortDate(read.at)} did not load`;
-		notes.push({
-			kind: 'unreadable',
-			records: [record],
-			text: `${what}, so nothing below that uses it has anything to show. This is a fault to fix, not a quiet day.`
-		});
+		notes.push({ kind: 'unreadable', records: [record], text: unreadableText(record, read) });
 	}
 	if (newestDay === null) return notes;
 	const behind = new Map<string, RecordName[]>();
