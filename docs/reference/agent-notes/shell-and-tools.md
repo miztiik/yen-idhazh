@@ -20,6 +20,7 @@ Checks before trusting command output or an editor operation. Keep instructions 
 - In a shared terminal, start each command with a unique tag and an explicit working directory. A returned transcript can include older commands; match the tag, exit status and output file before using it as evidence.
 - If a long pasted command has no confirmed result, inspect its effects first. Put a still-needed sequence in a script and invoke it with a short command; do not paste the same writes again on the assumption that none ran.
 - For a non-interactive `gh` watch, redirect output to a unique file. An alternate-screen display alone gives no usable job result; verify the final job states before reporting success.
+- Keep printed output short: write a long result to a file and read the file. A terminal that replays its old scrollback can return thousands of lines and stall the session.
 - For cross-plan dependencies, run `python backend/utilities/plan_status.py --no-gh` without `--plan`. The filter narrows the dependency index as well as the report, so an external dependency can appear missing. Omit `--no-gh` when remote pull-request checks are needed.
 
 ## The editor's own file and search tools
@@ -27,10 +28,12 @@ Checks before trusting command output or an editor operation. Keep instructions 
 - Verify which checkout a search or edit tool targets. For a worktree outside the open workspace, use explicit paths or a search rooted in that worktree.
 - Confirm a claimed absence with a direct search or file read before deleting or redoing work. When tool results disagree, check the current file bytes and Git diff.
 - Edit one file sequentially. Create an input before starting its reader, inspect structural diffs, and check for unintended files after a move.
+- In a worktree outside the open workspace, the file reader can return a copy from before the last edit. Read such a file through the terminal before an edit depends on its text.
 
 ## Nested subagents
 
 - Check the [host's delegation requirements](https://code.visualstudio.com/docs/agents/run/subagents#_nested-subagents) before relying on nested calls. Verify required tools are available; report a blocked consultation to the coordinating agent.
+- Give a long review subagent a tool-call budget and a findings file it rewrites as it works. Its report exists only in its final message, so an interrupted turn loses everything it found.
 
 ## The Python environment
 
