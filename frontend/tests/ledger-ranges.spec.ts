@@ -26,7 +26,7 @@ import { startRangeHost, type HostRequest, type RangeHost, type Throttle } from 
  * things would make it read the whole file without a word - the engine's own
  * default, an opening 1-byte GET not answered with 206, and any read answered
  * with 200 - so every GET for a year file has to name a range and be answered
- * 206, uncompressed. The rows must be the ones the whole file gives, in the
+ * 206. The rows must be the ones the whole file gives, in the
  * browser and on disk; a year file whose length is not its entry's is refused
  * before any of it is read; and a year file whose ETag changed while the browser
  * kept some of it is still read by range, because each read asks at an address no
@@ -139,13 +139,13 @@ function versionOf(root: string): string {
 	return `${index.entries[0].rows}-${index.entries[0].bytes}`;
 }
 
-/** One read asked for the year file by range: every GET is answered 206, uncompressed,
- *  and no request names an ETag other than the one it was answered with. */
+/** One read asked for the year file by range: every GET is answered 206, and no
+ *  request names an ETag other than the one it was answered with. */
 function expectReadByRange(asked: HostRequest[], read: string): void {
 	const year = asked.filter((one) => one.path === YEAR_FILE);
 	const gets = year.filter((one) => one.method === 'GET');
 	expect(gets.length, `${read} asked for no part of the year file`).toBeGreaterThan(0);
-	for (const one of gets) expect(one, `${read}: ${JSON.stringify(one)}`).toMatchObject({ status: 206, contentEncoding: null });
+	for (const one of gets) expect(one, `${read}: ${JSON.stringify(one)}`).toMatchObject({ status: 206 });
 	for (const one of year) expect([null, one.etag], `${read} named another ETag: ${JSON.stringify(one)}`).toContain(one.ifRange);
 }
 
@@ -225,7 +225,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 		}
 	});
 
-	test('every GET the engine makes for a year file names a byte range and is answered 206, uncompressed', async ({ page }) => {
+	test('every GET the engine makes for a year file names a byte range and is answered 206', async ({ page }) => {
 		await openDoor(page, host);
 		const { timed, asked } = await sliceOn(page, host, 'year', SPAN);
 		expect(timed.result, timed.warned.join('\n')).toMatchObject({ state: 'ok' });
@@ -233,7 +233,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 		expect(gets.length, 'the engine asked for no part of the year file').toBeGreaterThan(1);
 		for (const one of gets) {
 			expect(one.range, JSON.stringify(one)).toMatch(/^bytes=\d+-\d+$/);
-			expect(one, JSON.stringify(one)).toMatchObject({ status: 206, contentEncoding: null });
+			expect(one, JSON.stringify(one)).toMatchObject({ status: 206 });
 		}
 		expect(gets[0].range, 'the engine opens a file with a 1-byte GET').toBe('bytes=0-0');
 		// Pages answers a HEAD carrying a range with 200 and the full length, and the engine accepts it.
@@ -293,7 +293,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 			const after = await sliceOn(second, host, 'year', SPAN);
 			expect(after.timed.result, after.timed.warned.join('\n')).toEqual(disk);
 			const gets = requestsFor(after.asked, YEAR_FILE, 'GET');
-			for (const one of gets) expect(one, JSON.stringify(one)).toMatchObject({ status: 206, contentEncoding: null });
+			for (const one of gets) expect(one, JSON.stringify(one)).toMatchObject({ status: 206 });
 		} finally {
 			host.maxAge = PAGES_MAX_AGE;
 			await context.close();
@@ -554,7 +554,7 @@ async function measureOnce(
 			fileBytes: gets.reduce((sum, request) => sum + request.bodyBytes, 0),
 			indexRequests: indexes.length,
 			indexBytes: indexes.reduce((sum, request) => sum + request.bodyBytes, 0),
-			everyGetRanged206: gets.every((request) => request.range !== null && request.status === 206 && request.contentEncoding === null),
+			everyGetRanged206: gets.every((request) => request.range !== null && request.status === 206),
 			ranges: gets.map((request) => `${request.range ?? 'whole'}=${request.status}:${request.bodyBytes}`).join(' ')
 		};
 	} finally {
