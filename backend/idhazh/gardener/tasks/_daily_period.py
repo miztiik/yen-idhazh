@@ -7,10 +7,11 @@ day finds the same newest day. At one, a wake on the 25th takes days up to the
 
 **Days are taken in order, each on its own, at most `max_periods_per_run` a
 pass.** For each day: list its raw folder and read every file in it, settle the
-rows, write the day's listing and its compact file, rewrite the daily index,
-delete the raw files, and advance the watermark last. A pass that dies part
-way leaves the watermark behind the truth, so the next wake takes that one day
-again and loses nothing. A file that cannot be read stops its day and is never
+rows, and plan the day's listing and its compact file. The pass writes its
+final daily index once, then deletes raw files, and advances its watermark
+once, last. Before the index lands, raw files survive; after it lands, the
+next wake rebuilds from the indexed day and any raw files left.
+A file that cannot be read stops its day and is never
 deleted; a day holding more than `max_raw_files_per_period` files is refused
 the same way. Either one leaves the watermark before that day, so the next
 wake retries it rather than stepping past it.
@@ -218,7 +219,7 @@ def _take[C: Contract](
         tree.delete(existing)
     tree.write(built.path, built.data)
     tree.daily[day] = CompactEntry(covers=day, rows=len(settled), bytes=len(built.data))
-    tree.write_index(Period.DAILY)
+    tree.mark_index(Period.DAILY)
     for held in files:
         tree.delete(held.path)
     if tree.daily_through is None or day > tree.daily_through:

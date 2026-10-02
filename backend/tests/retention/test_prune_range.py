@@ -641,7 +641,7 @@ PRUNE_WRITER: Final = WriterIdentity(
 #: filed daily files and the first raw day. The census's first and last filed
 #: days stay, in the year file and in a raw file.
 SINCE: Final = "2025-12-20"
-UNTIL: Final = "2026-03-19"
+UNTIL: Final = RAW_DAYS[0]
 
 
 def the_range() -> list[str]:

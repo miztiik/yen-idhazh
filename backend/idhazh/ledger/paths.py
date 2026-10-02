@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from functools import cache
 from pathlib import Path, PurePath
 from typing import Final
 
@@ -209,10 +210,16 @@ def tree_relpath(ledger: LedgerName) -> str:
 # --- the two roots the ledger door files under --------------------------------
 
 
+@cache
+def _resolved_root(absolute: Path) -> Path:
+    """Resolve one absolute state root for this process; candidate paths remain checked fresh."""
+    return absolute.resolve()
+
+
 def _shown(state_dir: Path, built: Path) -> str:
     """A path as it may leave the process: relative to the state root, POSIX (section 2)."""
     try:
-        below = os.path.relpath(built.resolve(), state_dir.resolve())
+        below = os.path.relpath(built.resolve(), _resolved_root(state_dir.absolute()))
     except ValueError:
         return built.name
     return PurePath(STATE_DIRNAME, below).as_posix()
@@ -227,7 +234,7 @@ def _under_the_two_roots(state_dir: Path, built: Path) -> Path:
     rule as the production one.
     """
     try:
-        first = built.resolve().relative_to(state_dir.resolve()).parts[:1]
+        first = built.resolve().relative_to(_resolved_root(state_dir.absolute())).parts[:1]
     except ValueError:
         first = ()
     if not first or first[0] not in _THE_TWO_ROOTS:

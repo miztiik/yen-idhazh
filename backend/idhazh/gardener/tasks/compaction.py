@@ -106,6 +106,7 @@ def run(context: TaskContext) -> Pass:
             first_kept=None if reports else first_kept,
         ),
     )
+    tree.finish()
     if not policy.dry_run:
         tree.apply()
 

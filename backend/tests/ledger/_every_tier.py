@@ -8,9 +8,10 @@ is a file a wake would have left.
 
 The knobs that decide which file a day ends up in are written out here rather
 than read from the committed declaration, so a change to that declaration
-cannot move a day to another kind of file under a test: a month is absorbed 45
-days after it ends, months are kept for ever, and a finished year is packed 77
-days after it ends, the shortest wait 45 allows.
+cannot move a day to another kind of file under a test: a month is absorbed 31
+days after it ends, months are kept for ever, and a finished year is packed 63
+days after it ends. These are the smallest waits the contract allows. Two months
+in the year prove that removing all rows of one month removes one row group.
 """
 
 from __future__ import annotations
@@ -31,14 +32,14 @@ from idhazh.contracts.ledger_name import LedgerName
 CENSUS: Final = LedgerName.ITEM_HEALTH
 TASK: Final = "compact-item-health"
 
-#: The wake every pass runs at. It takes days up to the 18th of March, absorbs
-#: the months up to January, and packs 2025: 78 days after 2025 ended.
-TODAY: Final = date(2026, 3, 20)
+#: The earliest wake with all four tiers at the minimum waits: 63 days after
+#: 2025 ended. It takes days up to March 3, absorbs January, and packs 2025.
+TODAY: Final = date(2026, 3, 5)
 
 KNOBS: Final[dict[str, Any]] = {
-    "daily_keep_days": 45,
+    "daily_keep_days": 31,
     "monthly_window": {"unit": "forever"},
-    "monthly_keep_days": 77,
+    "monthly_keep_days": 63,
     "compact_after_days": 1,
     "max_periods_per_run": 400,
 }
@@ -48,8 +49,8 @@ KNOBS: Final[dict[str, Any]] = {
 #: groups.
 YEAR_DAYS: Final = ("2025-11-14", "2025-12-05", "2025-12-20")
 MONTH_DAYS: Final = ("2026-01-08", "2026-01-22")
-DAILY_DAYS: Final = ("2026-02-10", "2026-03-18")
-RAW_DAYS: Final = ("2026-03-19", "2026-03-20")
+DAILY_DAYS: Final = ("2026-02-10", "2026-03-03")
+RAW_DAYS: Final = ("2026-03-04", "2026-03-05")
 FILED_DAYS: Final = (*YEAR_DAYS, *MONTH_DAYS, *DAILY_DAYS, *RAW_DAYS)
 
 #: How many census rows each of those days holds.

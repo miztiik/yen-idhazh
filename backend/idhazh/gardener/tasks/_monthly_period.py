@@ -13,10 +13,11 @@ refusal names the fault the query door gives the same gap - `day-missing` for
 a day the index does not name, `file-missing` for a day file that is not there -
 so one search finds it in the gardener's log and in the browser's console.
 
-**Absorbing is five steps, in this order and no other**: the month file, the
-monthly index, the deletion of the daily files it absorbed, the daily index,
-and the monthly watermark last. A pass that dies part way leaves the watermark
-behind the truth, so the next wake absorbs that month again and loses nothing.
+**The pass writes all month files, then the final monthly and daily indexes
+once, then deletes absorbed daily files, then advances the monthly watermark
+once, last.** Before the monthly index lands, daily files survive. After it
+lands, the next wake keeps the indexed month, removes remaining daily files
+by their calendar dates, and advances the watermark without rebuilding.
 The daily files are joined as they are and never settled across days: a key
 with no date cell may repeat on two days, and both rows are facts.
 
@@ -121,7 +122,7 @@ def drop(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
             )
         del tree.monthly[month]
     if gone:
-        tree.write_index(Period.MONTHLY)
+        tree.mark_index(Period.MONTHLY)
     return ()
 
 
@@ -157,6 +158,30 @@ def _refused(
     return (Stop(StopReason.FAILED, month),)
 
 
+def _finish(tree: CompactTree, month: str) -> tuple[Stop, ...]:
+    """Finish an indexed month without rebuilding it from its remaining daily files."""
+    found = named_trees.compact_file(
+        tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
+    )
+    if found is None:
+        return _refused(
+            tree,
+            month,
+            "the monthly index names it and no monthly file holds it",
+            ledger.LedgerFault.FILE_MISSING,
+        )
+    tree.listing.fetch([tree.daily_month_folder(month)])
+    for day in days_of(month):
+        held = named_trees.compact_file(
+            tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day
+        )
+        if held is not None:
+            tree.delete(held)
+        tree.daily.pop(day, None)
+    tree.mark_index(Period.DAILY)
+    return ()
+
+
 def absorb(
     tree: CompactTree,
     policy: CompactionPolicy,
@@ -173,6 +198,8 @@ def absorb(
     model = ledger.door_contract(tree.ledger)
     if tree.monthly_through is not None:
         month = shift(tree.monthly_through, 1)
+    elif tree.monthly:
+        month = min(tree.monthly)
     elif tree.daily:
         month = min(tree.daily)[:7]
     else:
@@ -187,6 +214,17 @@ def absorb(
     while _ready(tree, month, now=now, after_days=policy.daily_keep_days):
         if taken == policy.max_periods_per_run:
             return (Stop(StopReason.CEILING, month),)
+        if month in tree.monthly:
+            stops = _finish(tree, month)
+            if stops:
+                return stops
+            tree.monthly_through = month
+            tree.write_watermark(
+                Period.MONTHLY, through=month, advanced_at=stamp, run_id=identity.run_id
+            )
+            taken += 1
+            month = shift(month, 1)
+            continue
         days = days_of(month)
         missing = [day for day in days if day not in tree.daily]
         if missing:
@@ -228,12 +266,12 @@ def absorb(
         )
         tree.write(built.path, built.data)
         tree.monthly[month] = CompactEntry(covers=month, rows=len(rows), bytes=len(built.data))
-        tree.write_index(Period.MONTHLY)
+        tree.mark_index(Period.MONTHLY)
         for path in held:
             tree.delete(path)
         for day in days:
             del tree.daily[day]
-        tree.write_index(Period.DAILY)
+        tree.mark_index(Period.DAILY)
         tree.monthly_through = month
         tree.write_watermark(
             Period.MONTHLY, through=month, advanced_at=stamp, run_id=identity.run_id

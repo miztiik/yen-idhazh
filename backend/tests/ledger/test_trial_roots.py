@@ -125,6 +125,18 @@ def test_a_path_that_walks_back_out_of_a_root_is_refused(tmp_path: Path) -> None
         paths._under_the_two_roots(state, tmp_path / "elsewhere" / "raw" / "a.parquet")
 
 
+def test_a_root_is_resolved_once_but_each_candidate_is_still_checked(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    before = paths._resolved_root.cache_info()
+    ledger.raw_index_path(state, WHICH, A_DAY)
+    ledger.compact_index_path(state, WHICH, Period.DAILY)
+    after = paths._resolved_root.cache_info()
+    assert after.misses - before.misses == 1
+    assert after.hits - before.hits == 2
+    with pytest.raises(ValueError, match="outside the two roots"):
+        paths._under_the_two_roots(state, state / "raw" / ".." / "scores" / "a.parquet")
+
+
 @pytest.mark.parametrize(
     ("period", "covers"),
     [

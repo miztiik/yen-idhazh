@@ -416,14 +416,14 @@ flowchart TB
     YDONE{"a year done?<br/>monthly_keep_days since it ended,<br/>its next January absorbed, every month named"}
     YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
     YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
-    PACK["3. pack it, one row group a month:<br/>year file, yearly.json, delete its month files,<br/>monthly.json, yearly/watermark.json last"]
+    PACK["3. plan year files, one row group a month:<br/>indexes and deletes wait for the end of the pass"]
     MDONE{"a month done?<br/>daily_keep_days since it ended,<br/>every day compacted, no raw day left"}
     MWAIT["the month waits for a later wake"]
     MHOLE["a day of it is named nowhere:<br/>refused by name, exit 1"]
-    ABSORB["4. absorb it: month file, monthly.json,<br/>delete its day files, daily.json,<br/>monthly/watermark.json last"]
+    ABSORB["4. plan month files:<br/>indexes and deletes wait for the end of the pass"]
     DDUE{"compact_after_days whole days<br/>since the day ended?"}
     DHOLD["the day waits: a run may still be writing"]
-    TAKE["5. take it: read and settle its raw files,<br/>write its listing, its day file and daily.json,<br/>delete the raw files, daily/watermark.json last"]
+    TAKE["5. plan day listings and files:<br/>write all data, each final index once,<br/>delete sources, each watermark once last"]
     DRY{"dry_run?"}
     REPORT["report every path, land the record only<br/>four of the six compactions, today"]
     LAND["land every write and delete<br/>in the shard's one commit"]
@@ -515,15 +515,21 @@ Days go in order, each on its own, at most `max_periods_per_run` a pass. For eac
 one the pass reads every raw file of the day and settles the rows: one file's
 rows per work unit - the last file of its highest attempt - then the first row
 of each key. It writes the day's listing,
-`state/raw/<ledger>/index/<YYYY-MM-DD>.json`, then its day file, then
-`index/daily.json`; it deletes the raw files; and it moves `daily/watermark.json`
-last. A pass that stops part way leaves the watermark behind the truth, so the
-next wake takes that one day again and loses nothing.
+`state/raw/<ledger>/index/<YYYY-MM-DD>.json`, then its day file.
+After all stages decide their files, the pass writes each final index once,
+in yearly, monthly, daily order; deletes source files; then writes each changed
+watermark once, last. Monthly absorption and new days share one final daily
+index. Index bytes grow linearly with the final entry count, not with that count
+times the number of days taken. Before the indexes land, source files survive.
+After they land, an interrupted pass resumes from the indexed compact files
+and any source files left, with no row lost.
+The bounded fixture measurement is
+[what-a-compaction-pass-costs.md](../../reference/benchmarks/what-a-compaction-pass-costs.md).
 
 **A watermark records what the data covers, never when a job ran.** It names
-the newest day taken, so a lost watermark write costs one repeat and never a
-skipped day: the next wake finds the mark behind and takes that day again, from
-its day file and any raw files still there.
+the newest day taken, so a lost watermark write costs repeated work and never a
+skipped day: the next wake finds the mark behind and takes those days again,
+from their indexed day files and any raw files still there.
 
 **A quiet day still gets a file.** A day with no raw files gets a day file with
 no rows and an index entry. So the newest day `index/daily.json` names is always
@@ -561,9 +567,11 @@ wake. **A month whose days the daily index does not all name is a hole**: it is
 refused by name, the watermark stays, and the task exits 1, because absorbing it
 would put the missing day in no file.
 
-Absorbing is five steps in this order: the month file, `index/monthly.json`, the
-deletion of its day files, `index/daily.json`, and `monthly/watermark.json` last.
-A live pass lands all five in the shard's one commit, so no commit on `main`
+Month files follow the pass-wide write order described above. A pass that stops
+before the monthly index lands keeps all daily sources. Once that index names
+the month, the next pass keeps its file and removes any remaining daily files
+by their calendar dates, even if the daily index already excludes them.
+The monthly watermark advances last. A live pass lands all changes in one commit, so no commit on `main`
 holds one of the month's dates in both periods, or in neither.
 The day files are joined as they are and never settled across days: a key with
 no date in it may repeat on two days, and both rows are facts.
@@ -611,13 +619,13 @@ year goes one wake later. A smaller `monthly_keep_days` would change nothing, so
 the loader refuses one. At a `daily_keep_days` of 45, 2026 is packed on 19 March
 2027 at the earliest.
 
-Packing is five steps in this order: the year file, `index/yearly.json`, the
-deletion of its month files, `index/monthly.json`, and `yearly/watermark.json`
-last. The month files are joined as they are and never settled, and the monthly
+Year files follow the pass-wide write order described above.
+The month files are joined as they are and never settled, and the monthly
 watermark stays where it is. A pass that stopped before the yearly index leaves
 every month file, so the next wake packs that year again. A pass that stopped
 after it leaves a year the yearly index already names, so the next wake deletes
-the month files still there, rewrites the monthly index and moves the
+the month files still there by calendar month, even if the monthly index no
+longer names them, rewrites the monthly index and moves the
 watermark, and builds nothing. Either way a reader in between reads each month
 once: a month both indexes name is read from its year.
 

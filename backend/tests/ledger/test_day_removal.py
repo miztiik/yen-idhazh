@@ -25,7 +25,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period, Tier, WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow
 
-from ._every_tier import CENSUS, QUIET_DAY, YEAR_DAYS, a_census_in_every_tier
+from ._every_tier import CENSUS, QUIET_DAY, RAW_DAYS, YEAR_DAYS, a_census_in_every_tier
 
 pytestmark = pytest.mark.contract
 
@@ -66,12 +66,12 @@ def test_every_kind_of_file_that_holds_a_day_of_the_range_is_named(every_tier: P
     Raw files first, then daily, monthly and yearly. A day whose daily file
     counts no row, and a day no file covers, are named by nothing.
     """
-    days = ["2025-12-20", "2026-01-22", "2026-02-10", QUIET_DAY, "2026-03-19", "2027-01-01"]
+    days = ["2025-12-20", "2026-01-22", "2026-02-10", QUIET_DAY, RAW_DAYS[0], "2027-01-01"]
 
     held = ledger.find_holding_files(every_tier, CENSUS, days)
 
     assert [(found.tier, found.period, found.covers, found.days) for found in held] == [
-        (Tier.RAW, None, "2026-03-19", ("2026-03-19",)),
+        (Tier.RAW, None, RAW_DAYS[0], (RAW_DAYS[0],)),
         (Tier.COMPACT, Period.DAILY, "2026-02-10", ("2026-02-10",)),
         (Tier.COMPACT, Period.MONTHLY, "2026-01", ("2026-01-22",)),
         (Tier.COMPACT, Period.YEARLY, "2025", ("2025-12-20",)),
@@ -143,10 +143,10 @@ def test_a_year_file_is_built_one_row_group_for_each_month_that_keeps_a_row(
 
 def test_a_raw_file_is_refused_because_a_day_taken_out_takes_it_whole(every_tier: Path) -> None:
     """A raw file holds one writer's rows of one day, so it is deleted, never rebuilt."""
-    (raw,) = ledger.find_holding_files(every_tier, CENSUS, ["2026-03-19"])
+    (raw,) = ledger.find_holding_files(every_tier, CENSUS, [RAW_DAYS[0]])
 
     with pytest.raises(ValueError, match="is a raw file"):
-        ledger.rebuild_without(every_tier, raw, ["2026-03-19"], identity=WRITER)
+        ledger.rebuild_without(every_tier, raw, [RAW_DAYS[0]], identity=WRITER)
 
 
 def test_a_file_asked_for_as_another_period_is_refused(every_tier: Path) -> None:
