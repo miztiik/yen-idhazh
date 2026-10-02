@@ -1,0 +1,47 @@
+{
+  "entries": [
+    {
+      "bytes": 5349,
+      "covers": "2026-09-01",
+      "rows": 0
+    },
+    {
+      "bytes": 5349,
+      "covers": "2026-09-02",
+      "rows": 0
+    },
+    {
+      "bytes": 5349,
+      "covers": "2026-09-03",
+      "rows": 0
+    },
+    {
+      "bytes": 5349,
+      "covers": "2026-09-04",
+      "rows": 0
+    },
+    {
+      "bytes": 5349,
+      "covers": "2026-09-05",
+      "rows": 0
+    },
+    {
+      "bytes": 5349,
+      "covers": "2026-09-06",
+      "rows": 0
+    },
+    {
+      "bytes": 5349,
+      "covers": "2026-09-07",
+      "rows": 0
+    },
+    {
+      "bytes": 5349,
+      "covers": "2026-09-08",
+      "rows": 0
+    }
+  ],
+  "ledger": "candidate-models",
+  "period": "daily",
+  "version": "2026-10-01"
+}
