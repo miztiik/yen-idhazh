@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from _source_files import source_files
 from conftest import (
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
@@ -1543,7 +1544,10 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
 
     callers = sorted(
         path.relative_to(REPO_ROOT).as_posix()
-        for path in (REPO_ROOT / "backend" / "idhazh").rglob("*.py")
+        for path in source_files(
+            roots=(REPO_ROOT / "backend" / "idhazh",),
+            suffixes=(".py",),
+        )
         if "rebuild_index(" in read_text(path)
     )
     assert callers == [

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 
 import pytest
+from _source_files import source_files
 from conftest import REPO_ROOT
 
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
@@ -64,7 +65,7 @@ def test_every_path_under_state_is_built_from_a_name_this_vocabulary_declares() 
     """
     generic: set[str] = set()
     naming: dict[str, str] = {}
-    for source in sorted(LEDGER_PACKAGE.rglob("*.py")):
+    for source in source_files(roots=(LEDGER_PACKAGE,), suffixes=(".py",)):
         takes, names = _path_builders(ast.parse(source.read_text(encoding="utf-8")))
         generic |= takes
         naming.update(dict.fromkeys(names, source.name))
