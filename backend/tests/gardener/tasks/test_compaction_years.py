@@ -312,8 +312,8 @@ def test_a_window_that_only_reports_packs_a_year_as_a_live_one_does(tmp_path: Pa
 
 @pytest.mark.parametrize(
     "landed",
-    [1, 2, 5],
-    ids=["the-year-file-alone", "the-year-file-and-its-index", "three-months-deleted"],
+    [1, 2, 3, 6, 15],
+    ids=["data", "year-index", "both-indexes", "three-months-deleted", "all-months-deleted"],
 )
 def test_a_pass_that_stopped_part_way_is_finished_by_the_next_with_no_row_lost_or_read_twice(
     tmp_path: Path, landed: int
@@ -332,13 +332,14 @@ def test_a_pass_that_stopped_part_way_is_finished_by_the_next_with_no_row_lost_o
     )
 
     assert stops == ()
+    tree.finish()
     compact_root = f"{ledger.STATE_DIRNAME}/compact/{VISUALS.value}"
     decided = [change.path.relative_to(root).as_posix() for change in tree.changes]
     assert decided == [
         f"{compact_root}/yearly/2026/2026.parquet",
         f"{compact_root}/index/yearly.json",
-        *[f"{compact_root}/monthly/{month.replace('-', '/')}.parquet" for month in MONTHS_OF_2026],
         f"{compact_root}/index/monthly.json",
+        *[f"{compact_root}/monthly/{month.replace('-', '/')}.parquet" for month in MONTHS_OF_2026],
         f"{compact_root}/yearly/watermark.json",
     ]
     dataclasses.replace(tree, changes=tree.changes[:landed]).apply()
