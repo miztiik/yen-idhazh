@@ -308,11 +308,8 @@ def stage_work(
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
     model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     shard_started = time.monotonic()
-    tracing = settings.app.observability.tracing_enabled
-    collector = telemetry.CollectingSink()
-    base_sink = trace_sink(settings, run_id=plan.run_id, shard=shard)
     tracer = telemetry.Tracer(
-        sink=telemetry.FanOut((base_sink, collector)) if tracing else base_sink,
+        sink=trace_sink(settings, run_id=plan.run_id, shard=shard),
         now=assemble.utc_now,
     )
     read_url = fetcher or common.live_fetcher(settings, tracer=tracer)
@@ -687,33 +684,6 @@ def stage_work(
         slowest=_slowest(finished),
     )
     tracer.flush()
-    if tracing:
-        # Fed by every span (the CollectingSink saw them all), reconciled to the
-        # shard's own monotonic wall clock so the item spans plus the residual it
-        # leaves add up to it - the invariant roll_up_spans enforces.
-        rows = telemetry.roll_up_spans(
-            collector.spans(),
-            date=plan.date,
-            run_id=plan.run_id,
-            shard=shard,
-            wall_clock_ms=int((time.monotonic() - shard_started) * 1000),
-        )
-        # Into this shard's own segment, not into the month head every other
-        # shard opens. Eight shards folding one month file is the collision the
-        # segment ledger exists to stop, and the attempt is in the name, so a
-        # re-run corrects its first try rather than adding a second fold of the
-        # same spans. A reader settles them by key, and the gardener's closed-day
-        # fold writes that answer into one file once the day is closed.
-        landed = ledger.write_segment(
-            common.STATE_ROOT,
-            LedgerName.SPAN_ROLLUP,
-            rows,
-            run_id=plan.run_id,
-            attempt=run_context.run_attempt(),
-            job=ServerJob.WORK,
-            shard=shard,
-        )
-        LOG.info("rolled up spans shard=%s span_rows=%s", shard, landed)
 
 
 def _write_evidence(row: EvalRow, *, premise: str, summary: str) -> Path:

@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds three of its panels - where a run's time went, what one item cost
@@ -33,39 +33,26 @@ verdicts the route goes first, which is the thirteenth chart rule applied
 Pipelines takes one untitled group in `console.panel_groups`: what it needed was
 an order, not headings, and it already carries four section headings of its own.
 
-**One panel, not two, and the grain is why.** Drawing a shard's clock from
-`state/span-rollup/` beside an item timeline from `frontend/public/run-timeline/`
-is two folds over two ledgers that can name different runs as the newest, and on
-the committed data they routinely did - the rollup and the published mirror start
-on different days. The merged panel folds both grains from one set of rows in one
+**One panel, one source for both grains.** The panel folds item and shard rows in one
 builder call, so a step's seconds are the same seconds whichever row a reader is
 on. A shard's bar runs from its first item's start to its last item's end, which
 is the stretch it held a worker for, and its steps are that shard's items added
 up.
 
-**A separate shard panel is refused, and thickness was never the defect.**
-Measured 2026-09-17 over 23 shard rows of `state/span-rollup/2026-09.csv`, the
-four sub-steps of a shard's clock together drew **0.026 px of a 760 px track**
-and the residual drew **0.039 px**. A browser paints neither, so such a panel
-publishes a legend teaching a reader that four categories were zero when they
-were only unmeasurable at that scale. No bar thickness fixes a band that narrow.
-
-**Every figure it would carry survives, printed.** The four sub-steps sit under
-the bars as figures, each beside the step it runs inside - `tag read` is the
-tagging step inside taking the article out, not a step beside it, and a reader
-who takes it for one adds it twice. The overhead outside every item is printed
-with them, and the run's item time plus that overhead is still the shards' whole
-clock. Nothing visible is lost, because none of it was ever visible.
+**Detailed sub-steps belong to an item inspection.** The page does not print
+robots, tag, prompt-render or reply-parse totals below the timeline. The reader
+keeps the eight stage fields and the timeline, but loses those four aggregate
+figures. The [item command](../../concepts/telemetry.md#the-committed-traces-briefly)
+prints recent trace trees with their run and attempt instead of adding item
+passes together. Expired detail remains unavailable.
 
 **Hollow is unclaimed, hatched is overclaimed, and both carry a legend key.** A
 reader cannot name the hatched notch on sight, which is the test: a texture
 nobody can read is a texture that says nothing. Neither is tinted - nobody has
 agreed how much overhead is too much.
 
-The readers are
-[../../../frontend/src/lib/server/run-timeline.ts](../../../frontend/src/lib/server/run-timeline.ts)
-and
-[../../../frontend/src/lib/server/span-rollup.ts](../../../frontend/src/lib/server/span-rollup.ts);
+The reader is
+[../../../frontend/src/lib/server/run-timeline.ts](../../../frontend/src/lib/server/run-timeline.ts);
 the producer of the published mirror is
 [../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
 its shape is [run-timeline.md](run-timeline.md) and every drawing rule is
@@ -73,23 +60,14 @@ its shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 [../../../frontend/tests/console-pipeline-timeline.spec.ts](../../../frontend/tests/console-pipeline-timeline.spec.ts)
 holds the shard grain against the item grain per shard and per step, and fails on
 a declared column that is empty across every canary row.
-[../../../frontend/tests/console-substeps.spec.ts](../../../frontend/tests/console-substeps.spec.ts)
-re-derives each printed figure straight from the committed rollup cells, proves
-the sub-pixel rule on a built fixture in both directions, and reaches the empty
-state through a rollup truncated to its header. The fixture rollup the canary
-draws is written in
-[../../../frontend/scripts/build-canary.mjs](../../../frontend/scripts/build-canary.mjs).
+It also checks that no separate sub-step readout remains.
 
 **It is a snapshot, so the window control does not reach it.** A bar's position
 is measured from its own run's start and a span cannot narrow one run, so the
 panel names the run it drew. It reads one published directory bounded to two
-months and one `state/` ledger bounded to the archive window, and with either
-gone the view is empty by construction and the route still renders whole.
+months. With that data absent, the view is empty and the route still renders.
 
-**Pipelines depends on `$lib/charts/machine` for its `seconds` formatter, and on
-`STATE_ROOT`.** The second is the one worth knowing: a build with `STATE_ROOT`
-unset draws the named empty state for the sub-steps, which is correct rather than
-broken.
+**Pipelines depends on `$lib/charts/machine` for its `seconds` formatter.**
 
 ## Run health is one panel: the day's articles, and every run under them
 

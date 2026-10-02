@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import itertools
 import json
 import threading
@@ -17,7 +16,7 @@ from typing import Any, Final
 
 import pytest
 
-from idhazh import config, day_shards, ledger
+from idhazh import config, ledger
 from idhazh.classify.calls import build_label_request
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
@@ -35,7 +34,6 @@ from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.corpus import Published
@@ -176,47 +174,6 @@ def seed_host_fingerprint(
     return filed
 
 
-def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
-    """Put a day's span fold on disk the way a finished run leaves it.
-
-    The same fixture builder as `seed_item_health`, for the same reason: a work
-    shard writes its fold to its own file in the day directory and the caller
-    here wants the day ALREADY folded - it is checking what a listing, a
-    projection or a prune does with the record - so the fold itself stays in
-    `tests/gardener/test_closed_day_fold.py` and this puts the finished file there.
-
-    Settled means what the compaction means by it: the first row for a
-    `SPAN_ROLLUP_KEY` wins, because the row is a fold of one shard's spans and a
-    second row for one key adds a count to itself rather than recording a new
-    fact.
-
-    Returns the rows the file gained, so a caller that asserted on the old
-    writer's count asserts on the same number.
-    """
-    path = ledger.path(state_dir, LedgerName.SPAN_ROLLUP, date) / day_shards.SETTLED_NAME
-    columns = SpanRollupRow.csv_columns()
-    ledger.migrate_header(path, columns, ledger.refiler(SpanRollupRow))
-    held = ledger.recorded_span_rollup(path)
-    kept: list[dict[str, str]] = []
-    for row in rows:
-        cells = row.csv_row()
-        key = tuple(cells[name] for name in ledger.SPAN_ROLLUP_KEY)
-        if key in held:
-            continue
-        held.add(key)
-        kept.append(cells)
-    if not kept:
-        return 0
-    path.parent.mkdir(parents=True, exist_ok=True)
-    exists = path.exists()
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        if not exists:
-            out.writeheader()
-        out.writerows({name: cells[name] for name in columns} for cells in kept)
-    return len(kept)
-
-
 def seed_feed_health(
     state_dir: Path,
     date: str,
@@ -348,8 +305,7 @@ def llama_server_flags() -> frozenset[str]:
 def isolate_committed_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """No test writes the repository's own state/ tree, whatever stage it runs.
 
-    Tracing is on in the committed config (2026-09-06), so `stage_work` writes a
-    span fold under `state/segments/span-rollup/` and both it and
+    Tracing is on in the committed config, so `stage_work` and
     `stage_visual_planner` write a raw trace under `state/traces/` - committed
     paths keyed off `common.STATE_ROOT`. A stage test that only redirected
     `VAR_ROOT` would otherwise write real committed files. This points

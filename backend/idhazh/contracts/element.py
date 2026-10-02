@@ -5,7 +5,7 @@ a claim - together with the character range of `Article.text` it was cut from.
 The range is what makes a drawn figure checkable: anybody holding the article
 can re-slice it and see the same characters.
 
-**A span here is a character range, not a trace span.** `span_rollup.py` uses
+**A span here is a character range, not a trace span.** `telemetry/spans.py` uses
 the word for an execution timing and this module never does. `span_start` and
 `span_end` are indices into one string, half-open in Python's own convention, so
 `article.text[span_start:span_end]` is `span_excerpt` and nothing else.

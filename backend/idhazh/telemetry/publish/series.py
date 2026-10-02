@@ -3,8 +3,8 @@
 `backend/idhazh/contracts/console_payloads.py` says WHICH datasets the console
 fetches and what may not cross with each. This module says WHERE each one is
 written and HOW: one file per calendar month, written only when its bytes move,
-and deleted once it is past its own configured age. Five producer modules sit
-on top of it - `run_days`, `day_metrics`, `machine`, `span_rollup` and
+and deleted once it is past its own configured age. Four producer modules sit
+on top of it - `run_days`, `day_metrics`, `machine` and
 `run_timeline` - plus `console_band`, which is one file rather than a series,
 and none of them spells a path or a prune of its own.
 
@@ -45,11 +45,10 @@ from idhazh.month_partition import month_files, oldest_month_kept
 CONSOLE_DIRNAME: Final = "console"
 BAND_FILENAME: Final = "band.json"
 
-#: The five month series, each the directory name under `frontend/public/`.
+#: The four month series, each the directory name under `frontend/public/`.
 RUN_DAYS_DIRNAME: Final = "run-days"
 DAY_METRICS_DIRNAME: Final = "day-metrics"
 MACHINE_DIRNAME: Final = "machine"
-SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 RUN_TIMELINE_DIRNAME: Final = "run-timeline"
 
 #: Every root this module owns, with the suffix its month files take. The
@@ -62,7 +61,6 @@ MONTH_SERIES: Final[tuple[tuple[str, str], ...]] = (
     (RUN_DAYS_DIRNAME, ".json"),
     (DAY_METRICS_DIRNAME, ".json"),
     (MACHINE_DIRNAME, ".csv"),
-    (SPAN_ROLLUP_DIRNAME, ".csv"),
     (RUN_TIMELINE_DIRNAME, ".csv"),
 )
 
@@ -75,7 +73,6 @@ PUBLISHED_ROOTS: Final[tuple[str, ...]] = (
     RUN_DAYS_DIRNAME,
     DAY_METRICS_DIRNAME,
     MACHINE_DIRNAME,
-    SPAN_ROLLUP_DIRNAME,
     RUN_TIMELINE_DIRNAME,
 )
 
@@ -88,7 +85,6 @@ __all__ = [
     "PUBLISHED_ROOTS",
     "RUN_DAYS_DIRNAME",
     "RUN_TIMELINE_DIRNAME",
-    "SPAN_ROLLUP_DIRNAME",
     "console_root",
     "encode_csv",
     "month_path",

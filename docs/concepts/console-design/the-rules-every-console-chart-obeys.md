@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-10-01
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -95,12 +95,8 @@ which shape a panel reaches for is
   hover.
 - **A segment under 1 px at `console.chart_width` is not drawn as a segment.**
   Where a split's smallest band falls below that, the split becomes a printed
-  figure and the bar draws whole. Measured 2026-09-17 over 23 shard-rows of
-  `state/span-rollup/2026-09.csv`: the four sub-steps of a shard's clock together
-  draw 0.026 px of a 760 px track and the residual draws 0.039 px, and a browser
-  paints neither. **A band at 0.026 px is a legend entry with no mark**, which
-  teaches a reader the category is zero when it is only unmeasurable at this
-  scale.
+  figure and the bar draws whole. A band the browser cannot paint leaves a
+  legend entry with no mark, which can make a small value look like zero.
 - **A legend key for a series with no committed rows is deleted, not drawn
   empty.** A key for an absent series is a claim the data does not support.
 - **A figure with a span is drawn as a range, never written as two sentences.**

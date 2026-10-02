@@ -97,7 +97,6 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, SourceForm, Sources
-from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -181,7 +180,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     SimilarityHoldoutPair,
     SourceHealthView,
     Sources,
-    SpanRollupRow,
     StorySimilarityDistribution,
     StorySimilarityPair,
     Summary,
