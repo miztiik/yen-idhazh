@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-10-02
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -91,6 +91,7 @@ The console knobs are:
 - `console.source_rows`
 - `console.feed_rows`
 - `console.completeness_grace_days`
+- `console.data_explorer_tab`
 - `console.judged_panel_ids`
 - `console.plot_min_fill_share`
 - `console.machine_colour_stops`
@@ -98,13 +99,24 @@ The console knobs are:
 - `console.absent_hatch_degrees`
 - `console.fleet_dot_max_px`
 
-The 30-day setting is a viewport. It never deletes rows. `failure_list_max` is
+The 14-day setting is a viewport. It never deletes rows. It is fourteen on every
+route, so two routes always open on the same span and a reader can compare
+them. It was thirty until 2026-10-02, chosen because a page that states a
+fourteen-day rule shows that rule with no margin either side of it at fourteen;
+that is the cost of the change, and thirty is one press away. `failure_list_max` is
 the same idea one level down: the failed-item list shows a page at a time and
 offers the rest, so the charts above it stay reachable. `source_rows` and
 `feed_rows` are caps on two ranked lists beside it - the sources a window's
 failures cost the most articles, and the feeds that failed at least once. Both
 state their tail in one sentence rather than offering more rows, because a
 ranking is read from the top and a tail is a number, not a page.
+
+`data_explorer_tab` (false) decides whether the strip draws its sixth tab,
+Records, which opens `/console/data-explorer/`. The band carries that route
+either way. The flag stays off until the page exists, because a tab pointing at
+a page that is not there is worse than no tab, and the change that ships the
+page deletes it
+([../../architecture/publishing/console.md](../../architecture/publishing/console.md#the-console-is-five-routes-and-a-sixth-is-declared)).
 
 `window_presets` is the list of spans the console's window control offers, and
 one control sets the span for every section that follows it. Five presets rather
@@ -214,9 +226,10 @@ where it does not - the same rule `console.default_window_days` has had since
 2026-08-29. So the contract holds exactly one list of spans, and the archive and
 the console cannot end up offering different day counts for the same idea. The
 cost of that is real and is the price of one list: a config that narrows the
-presets has to name the archive's span inside the narrowed list. Thirty is what
-the console opens on and about the reach `assist.search_months` already gives a
-search, so the control ships opening on what the archive costs today. Nothing
+presets has to name the archive's span inside the narrowed list. Thirty is about
+the reach `assist.search_months` already gives a search, so the control ships
+opening on what the archive costs today; it was also what the console opened on
+until the console moved to fourteen on 2026-10-02. Nothing
 reads it yet; the control is row 25 of
 [../../../TODO/20260906-constant-cost-reads-plan.md](../../../TODO/20260906-constant-cost-reads-plan.md).
 

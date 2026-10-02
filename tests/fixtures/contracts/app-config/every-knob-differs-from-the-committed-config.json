@@ -114,6 +114,7 @@
     "completeness_grace_days": 2,
     "context_cut_off_reason": "max_tokens",
     "context_high_percentile": 95.0,
+    "data_explorer_tab": true,
     "default_window_days": 21,
     "doubt_rows": 6,
     "failure_list_max": 10,

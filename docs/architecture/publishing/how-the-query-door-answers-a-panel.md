@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -289,8 +289,9 @@ reading, because zlib-ng, which some local Python builds use, reads the same
 index about 4 percent smaller. **The data files carry no ceiling, and no gate yet
 weighs what one span reads.** Summed from the same indexes, a 30-day span is about
 0.18 MB of `host-fingerprint`, 3.53 MB of `item-health` and 3.43 MB of `summary-quality-evals`
-(estimate): each of the last two alone is more than the 3.4 MB a cold console load
-is allowed today, which prices a panel that queries them in the browser.
+(estimate): each of the last two alone is more than the 2.3 MB a cold console load
+is allowed at the 14-day default window, which prices a panel that queries them in
+the browser.
 
 ## How a year file is read by byte range
 

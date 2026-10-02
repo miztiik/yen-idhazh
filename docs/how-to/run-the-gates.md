@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -503,8 +503,10 @@ fetches leaves every page guardrail behind, while a reader still waits for it. `
 one cold opening of the console asks for - the design rather than the data, so
 what it catches is a widened `console.default_window_days` rather than a heavier
 shard. Its partner is `frontend/tests/console-cold-load.spec.ts`, which counts
-the serial round trips instead of the bytes: four is the ceiling, three is what a
-cold load takes today, and each extra telemetry month is one more.
+the serial round trips instead of the bytes: four is the ceiling, three is the
+most a cold load takes at the 14-day default window - the document, then one
+telemetry month, then the next, because fourteen days touch at most two months -
+and each extra telemetry month is one more.
 
 **A route takes a number only if its weight does not move when a run publishes.**
 Two routes qualify - `/404` and `/evals/`, which move only when a person edits

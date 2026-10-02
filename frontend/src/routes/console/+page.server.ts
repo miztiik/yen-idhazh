@@ -367,10 +367,6 @@ export async function load() {
 		// operator downloaded to open the console, for panels most visits never
 		// scroll to (measured 2026-09-09, Intel Core i7-1265U, one build).
 		console,
-		// This route's window fetches month files, so the days control prices each
-		// preset - and it has to know that before the route's script runs, because
-		// a tile keeps the room for its price from the first paint.
-		windowPriced: true,
 		// The order the sections above are drawn in, and the headings they group
 		// under, from `config/appearance.json` rather than from markup order.
 		panelGroups: panelGroupsFor('pipelines', DRAWN_PANELS),

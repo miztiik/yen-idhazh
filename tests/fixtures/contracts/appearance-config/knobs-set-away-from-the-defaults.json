@@ -43,6 +43,7 @@
     "completeness_grace_days": 2,
     "context_cut_off_reason": "length",
     "context_high_percentile": 99.0,
+    "data_explorer_tab": true,
     "default_window_days": 30,
     "doubt_rows": 10,
     "failure_list_max": 25,

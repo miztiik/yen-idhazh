@@ -234,6 +234,10 @@ export interface ConsoleConfig {
 	 * how many days are missing. It decides when the count is said, never what
 	 * it counts. */
 	completeness_grace_days: number;
+	/** Whether the strip draws its sixth tab, Records. Off until the page at
+	 * `/console/data-explorer/` exists; the change that ships that page deletes
+	 * this field. */
+	data_explorer_tab: boolean;
 	pan_days: number;
 	zoom_factor: number;
 	min_window_days: number;
@@ -522,10 +526,11 @@ const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 	]
 };
 const CONSOLE_DEFAULTS: ConsoleConfig = {
-	default_window_days: 30,
+	default_window_days: 14,
 	window_presets: [1, 7, 14, 30, 90],
 	today_anchor: 'right',
 	completeness_grace_days: 1,
+	data_explorer_tab: false,
 	pan_days: 7,
 	zoom_factor: 1.5,
 	min_window_days: 1,

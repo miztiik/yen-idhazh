@@ -1,9 +1,19 @@
 <script lang="ts">
-	/** What the days control is holding, said as one sentence under the band.
+	/** What the days control is holding, and what a wider span would fetch, said
+	 * as one sentence under the band.
 	 *
 	 * It was the control's own line until the control moved onto the strip. A
 	 * sentence is not a control, so it did not go with it: it stays under the
 	 * band and over the panels it describes, and the strip stays one row.
+	 *
+	 * **The price of a wider span lives here, not on the tiles.** A price that
+	 * appeared and disappeared on a tile moved seven panels by 15 px when it
+	 * landed or cleared (measured 2026-09-09), so the tiles once kept a second
+	 * line for it whether or not one was due. This sentence is always drawn and
+	 * keeps room for its longest form, so the price holds still and the tiles
+	 * hold one line. What it costs: on a phone the price stands a band's height
+	 * below the control, and while the strip is stuck to the top of a wide
+	 * screen it is off screen.
 	 */
 	import { plural } from '$lib/format';
 
@@ -24,7 +34,14 @@
 	} = $props();
 
 	const pending = $derived(monthsFor(days));
-	const priced = $derived(presets.some((preset) => monthsFor(preset) > 0));
+
+	/** Each wider preset that would fetch something, narrowest first. */
+	const priced = $derived(
+		presets
+			.filter((preset) => preset > days)
+			.map((preset) => ({ preset, months: monthsFor(preset) }))
+			.filter((entry) => entry.months > 0)
+	);
 
 	const status = $derived.by(() => {
 		if (!ready) {
@@ -36,7 +53,10 @@
 		}
 		if (busy) return `Fetching ${plural(pending, 'month', 'months')}.`;
 		const shown = `Every windowed section below is showing ${plural(days, 'day', 'days')}.`;
-		return priced ? `${shown} A month count on a preset is what picking it will fetch.` : shown;
+		const [first, ...wider] = priced;
+		if (first === undefined) return shown;
+		const rest = wider.map((entry) => `, ${entry.preset}D ${entry.months} more`).join('');
+		return `${shown} ${first.preset}D would fetch ${plural(first.months, 'more month', 'more months')}${rest}.`;
 	});
 </script>
 
@@ -44,15 +64,27 @@
 
 <style>
 	.window-status {
-		/* Two lines, always. The four sentences this slot holds are different
-		   lengths, and the no-script one is the longest - so without a floor the
-		   slot loses a line the moment a browser hydrates and every panel below it
-		   jumps 16 px up. Measured 2026-09-09 at 1280 CSS px on an Intel Core
-		   i7-1265U: seven panels moved by exactly that, for a sentence changing. */
-		min-block-size: calc(2 * var(--leading-xs));
+		/* Room for the longest sentence this slot holds, always. The sentences are
+		   different lengths - the no-script one, and the price with every wider
+		   preset named, are the longest - so without a floor the slot would lose a
+		   line the moment a browser hydrates or a price clears, and every panel
+		   below it would jump. Measured 2026-09-09 at 1280 CSS px on an Intel Core
+		   i7-1265U: seven panels moved by one line for a sentence changing. Three
+		   lines on a phone: the longest price, about 111 characters, wraps to
+		   three in the 358px a 390px screen gives 12px text. */
+		min-block-size: calc(3 * var(--leading-xs));
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-xs);
 		line-height: var(--leading-xs);
 		color: var(--color-text-tertiary);
+	}
+
+	/* The value matches `frame.breakpoints_px[0]` in `config/appearance.json`; a
+	   media query cannot read a custom property. From there up the longest
+	   sentence takes two lines. */
+	@media (min-width: 640px) {
+		.window-status {
+			min-block-size: calc(2 * var(--leading-xs));
+		}
 	}
 </style>
