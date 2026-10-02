@@ -139,9 +139,19 @@
       "bytes": 15367,
       "covers": "2026-09-28",
       "rows": 30
+    },
+    {
+      "bytes": 15518,
+      "covers": "2026-09-29",
+      "rows": 29
+    },
+    {
+      "bytes": 16109,
+      "covers": "2026-09-30",
+      "rows": 30
     }
   ],
   "ledger": "host-fingerprint",
   "period": "daily",
-  "version": "2026-09-27"
+  "version": "2026-10-01"
 }
