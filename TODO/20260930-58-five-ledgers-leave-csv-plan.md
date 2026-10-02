@@ -43,7 +43,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3 | The prune verb reaches every ledger on the door | - | A | DONE | p58r3 | #1181 | p58-r3-worker |
 | 4 | The counterfactual scores and the candidate verdicts move to the door | 1, 3, 8 | C | DONE | p58r4 | #1186 | p58-r4-worker |
 | 5 | The seen and published ledgers move to the door, and their union drivers retire | 2, 4 | D | DONE | p58r5 | #1194 | p58-r5-worker |
-| 6 | Feed health moves to the door, and the Voices page reads it packed | 5 | E | PENDING | - | - | - |
+| 6 | Feed health moves to the door, and the Voices page reads it packed | 5 | E | DONE | p58r6 | - | p58-r6-worker |
 | 7 | The map of the ledgers left on CSV is written, and the plan closes | 6 | F | PENDING | - | - | - |
 | 8 | Every compaction declaration names every setting it runs with, and a window can report while packing runs live | 1, 3 | B | DONE | p58r8 | #1185 | p58-r8-worker |
 
