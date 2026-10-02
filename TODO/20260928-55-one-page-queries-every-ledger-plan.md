@@ -1,6 +1,6 @@
 # Plan 55 - One page queries every ledger
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-02
 
 **Level**: 5 (CLAUDE.md section 6). It adds a member to a persisted vocabulary (`RouteId` on the console band), it adds an entry point to the query door, it changes how the shared engine starts, and it opens a surface where an operator's own text reaches a query engine.
 
@@ -584,7 +584,7 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
   | 6 | **Every migrated ledger ships, whatever it weighs, and the row never narrows the set to fit.** Where a future measurement shows the 1 GB cap approaching, what moves is the gardener's keep windows - how much history is held - and never which ledgers the owner is allowed to look at | Owner, 2026-09-28 |
   | 7 | **Every column of every published ledger is published.** A narrowed copy stops being the ledger, which is the property that makes it unable to disagree with `state/` | Owner, 2026-09-26 |
   | 8 | **This row declares `archive_base_url` and reads it in `asset-base.js`; row 6 is the first to fetch through it.** Declaring it here is what keeps `knobs/ledger.py` and `config/idhazh.json` in one row's hands, and shipping it empty means the declaration changes no behaviour | Fowler |
-  | 9 | **This row supersedes the earlier three-ledger publishing row, whichever lands first.** If that row has landed, this one widens its list and its copy step. If it has not, it collapses into this one and its dependants read this row's pull request | Fowler; plan 51's row titled "The three ledgers the console reads are published" |
+  | 9 | **This row widens the shipped three-ledger publication (#1169).** It extends the list and copy step described by [the query reader's publication contract](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door) | Fowler |
 
 - **Rejected alternatives:**
 
@@ -756,7 +756,7 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
 
 ## Dependent plans
 
-- [`20260924-51-console-fetches-and-draws-its-own-data-plan.md`](20260924-51-console-fetches-and-draws-its-own-data-plan.md). Its row titled **The query door module and its two entry points** is DONE and is what section 2.1 maps; every frontend row here extends it, and section 2.6 keeps its boundary exactly as it shipped. Its row titled **The three ledgers the console reads are published** is **PENDING and never started** - no branch, no pull request, and `ledger.published` is still `[]` on `main` (read 2026-09-29). **Row 3 here supersedes it**: whichever lands first, the other reads its pull request (row 3 decision 9).
+- [The shared query reader](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md) owns the shipped reader, page cache and publication contract. Those prerequisites are complete (#1154, #1157, #1169); section 2.1 maps what the frontend rows extend, section 2.6 keeps its boundary, and row 3 widens the published set and copy step.
 - [`20260924-50-idhazh-gardener-plan.md`](20260924-50-idhazh-gardener-plan.md). Row 2 here reads the `RawDayIndex` its row titled **The index and watermark shapes are declared** already delivered (#1136). **Row 3 here can publish only what that plan has packed, and on 2026-09-29 that is nothing**: its row titled **The three ledgers the console's routes read become parquet** is PENDING and `state/compact/` does not exist. **So row 3 is buildable and testable today against its fixture, and ships a real picker over an empty published set until that row lands.** The page is honest in that state - every one of the twenty-six ledgers is listed and answers `missing` by name - but **the owner cannot ask a real question until plan 50 packs a ledger**, and no row here can move that.
 - [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md). Delivered (#613, #614, #645, #649). Its ruling keeps the six prerendered routes and its section 6 is the executable price of reversing that. **This plan neither reverses it nor depends on it**: the new route simply never prerenders, the way the two dated routes already do. **It also inherits one contradiction and does not repair it** - telemetry-intent N4 says the existing prerendered routes come off, and plan 26 ruled they stay. That disagreement is older than this plan and belongs to whichever of the two moves next.
 - [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md). It moves fifty panels onto the query door. **Row 2 here changes nothing it uses**: `engine.ts` is untouched, and `ask()` is a second entry point beside the `slice()` its panels call. The two can run beside each other.

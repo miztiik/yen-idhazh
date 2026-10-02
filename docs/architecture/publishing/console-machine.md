@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -16,9 +16,9 @@ describes that file rather than repeating a count that a config edit moves.
 Every panel reads the item-health ledger, the host-fingerprint ledger or both -
 the two instruments this route puts beside each other - and the machine panels
 and the split take the processor and the flags off the machine record as well.
-Both ledgers are read at build time under `$lib/server/` and nothing on the
-route is fetched: neither adds a telemetry column and no reader sees a cell of
-either.
+The machine mix queries the packed host-fingerprint ledger in the browser
+through [the shared query reader](how-the-query-door-answers-a-panel.md).
+The other panels still read their ledgers at build time under `$lib/server/`.
 
 | Group | Panel | Grain | The sentence it is for |
 | --- | --- | --- | --- |
@@ -532,8 +532,8 @@ wants the day. The strip below the
 plot prints every run of the hovered day, each with the swatch it is drawn in
 and what it did in counts - `8 of 8 succeeded`, `nothing new to try` - after the
 day's own counts from the chart, and the arrow keys step through the days. The
-`title` and the `aria-label` stay on each square, because nothing the readout
-reports may be needed to read the chart
+`aria-label` stays on each square; no square carries a native `title`. The
+readout is not the only way to read a square's verdict
 ([../../concepts/design-system.md](../../concepts/design-system.md)).
 
 **The standing key went with it.** The readout prints the swatch and the counts
