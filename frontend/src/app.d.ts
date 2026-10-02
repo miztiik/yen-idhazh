@@ -32,7 +32,7 @@ declare global {
 	const __ENGINE_EXTENSION_REPOSITORY__: string;
 
 	/** The newest staged raw day listing per ledger. */
-	const __RAW_LISTED_THROUGH__: Partial<Record<import('$lib/data/slice-shapes').LedgerName, import('$lib/data/slice-shapes').DateStamp>>;
+	const __RAW_LISTED_THROUGH__: Partial<Record<string, string>>;
 
 	namespace App {}
 }
