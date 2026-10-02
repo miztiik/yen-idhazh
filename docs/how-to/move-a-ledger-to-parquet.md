@@ -55,3 +55,5 @@ After the merge, run `--check` again over `state/` and every trial root in the n
 - [Ship a pull request](ship-a-pr.md) - branch, commit and review steps.
 - [Documentation structure](../reference/documentation-structure.md) - where current rules belong.
 - [CLAUDE.md](../../CLAUDE.md) - sections 2, 8, 9, 11 and 13.
+
+Every ledger `config/ledgers.json` declares is already in `LEDGER_NAMES`; a page may read one once `ledger.published` names it.

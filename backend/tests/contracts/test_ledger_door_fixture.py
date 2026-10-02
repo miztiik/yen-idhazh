@@ -18,17 +18,19 @@ drives the door through, so a regenerated fixture cannot drop one quietly.
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
 
+import duckdb
 import pyarrow.parquet
 import pytest
 from conftest import REPO_ROOT
 
 from idhazh.contracts.file_envelope import Period, Tier
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
-from idhazh.contracts.ledger_index import CompactIndex
+from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import load, read_envelope
 from idhazh.ledger.paths import compact_index_path, compact_path
@@ -143,3 +145,35 @@ def test_the_packed_year_holds_the_first_root_s_rows_one_row_group_a_month() -> 
     footer = pyarrow.parquet.read_metadata(year)
     groups = [footer.row_group(at).num_rows for at in range(footer.num_row_groups)]
     assert groups == [len(month) for month in months]
+
+
+def test_raw_listings_name_files_and_sizes() -> None:
+    listing = RawDayIndex.read(FIXTURE / "state" / "raw" / "item-health" / "index" / "2026-09-06.json")
+
+    assert listing.bytes is not None
+    for name, size in zip(listing.files, listing.bytes, strict=True):
+        path = FIXTURE / "state" / "raw" / "item-health" / "2026" / "09" / "06" / name
+        assert path.is_file(), f"{name} is listed and not on disk"
+        assert path.stat().st_size == size
+
+
+def test_answer_fixtures_are_recomputed_with_duckdb() -> None:
+    con = duckdb.connect()
+    host = (FIXTURE / "state" / "compact" / "host-fingerprint" / "daily" / "2026" / "09" / "01.parquet").as_posix()
+    item = (FIXTURE / "state" / "compact" / "item-health" / "daily" / "2026" / "09" / "01.parquet").as_posix()
+    rows = con.execute(
+        f"SELECT h.date, h.job, i.job AS item_job FROM read_parquet('{host}') h "
+        f"JOIN read_parquet('{item}') i USING (date) ORDER BY h.shard, i.shard LIMIT 3"
+    ).fetchall()
+    columns = [column[0] for column in con.description]
+    expected = json.loads((FIXTURE / "answers" / "join-two-ledgers.json").read_text())
+    assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
+
+    raw = sorted((FIXTURE / "state" / "raw" / "item-health" / "2026" / "09" / "06").glob("*.parquet"))
+    files = ", ".join(f"'{path.as_posix()}'" for path in raw)
+    rows = con.execute(
+        f"SELECT date, run_id, hostile FROM read_parquet([{files}], union_by_name=true) ORDER BY run_id"
+    ).fetchall()
+    columns = [column[0] for column in con.description]
+    expected = json.loads((FIXTURE / "answers" / "raw-writer-day.json").read_text())
+    assert [dict(zip(columns, row, strict=True)) for row in rows] == expected

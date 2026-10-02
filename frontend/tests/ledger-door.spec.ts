@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type Period } from '../src/lib/data/compact-index';
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
+import { readAsk, readAskCost } from '../src/lib/data/ask-reader';
 import { readReach } from '../src/lib/data/ledger-reach';
 import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper, type WantedFile } from '../src/lib/data/page-keeper';
 import { daysBetween, filesFor } from '../src/lib/data/slice';
@@ -1129,5 +1130,59 @@ test.describe('an empty monthly.json or yearly.json is a gap the design expects:
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
+	});
+});
+
+
+test.describe('THE ORACLE for ask(): a written question over chosen ledgers', () => {
+	const opts = {
+		ledgers: ['host-fingerprint', 'item-health'] as const,
+		from: '2026-09-01',
+		to: '2026-09-01',
+		sql: 'SELECT h.date, h.job, i.job AS item_job FROM "host-fingerprint" h JOIN "item-health" i USING (date) ORDER BY h.shard, i.shard',
+		maxChars: 1000,
+		maxRows: 3,
+		maxFetchBytes: 100_000_000
+	};
+
+	test('a join over two selected ledgers returns typed text rows and the expected cap', async () => {
+		const { fetcher } = recorded();
+		const answer = await readAsk(freshPage(fetcher), opts, {});
+		expect(answer).toMatchObject({ state: 'ok', capped: true });
+		if (answer.state !== 'ok') return;
+		expect(answer.columns.map((column) => column.name)).toEqual(['date', 'job', 'item_job']);
+		expect(answer.rows).toHaveLength(3);
+		expect(answer.rows[0]).toEqual({ date: '2026-09-01', job: 'plan', item_job: 'work' });
+	});
+
+	test('the next call drops the unselected ledger view', async () => {
+		const page = freshPage(recorded().fetcher);
+		expect((await readAsk(page, opts, {})).state).toBe('ok');
+		const answer = await readAsk(page, { ...opts, ledgers: ['host-fingerprint'], sql: 'SELECT * FROM "item-health"', maxRows: 10 }, {});
+		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
+	});
+
+	test('the writers tier is priced from its listing and read once when listed through', async () => {
+		const page = freshPage(recorded().fetcher);
+		const cost = await readAskCost(page, ['item-health'], '2026-09-06', '2026-09-06', { 'item-health': '2026-09-06' });
+		expect(cost.files).toBe(2);
+		expect(cost.unpackedDays).toEqual(['2026-09-06']);
+		const answer = await readAsk(page, { ledgers: ['item-health'], from: '2026-09-06', to: '2026-09-06', sql: 'SELECT date, run_id, hostile FROM "item-health" ORDER BY run_id', maxChars: 200, maxRows: 10, maxFetchBytes: 100_000_000 }, { 'item-health': '2026-09-06' });
+		expect(answer).toMatchObject({ state: 'ok', unpackedDays: ['2026-09-06'] });
+		if (answer.state === 'ok') expect(answer.rows.map((row) => row.run_id)).toEqual(['raw-1', 'raw-2']);
+	});
+
+	test('a byte ceiling refuses before any data file is fetched', async () => {
+		const { fetcher, asked } = recorded();
+		const answer = await readAsk(freshPage(fetcher), { ...opts, maxFetchBytes: 1 }, {});
+		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'over-ceiling' } });
+		expect(dataAsked(asked)).toEqual([]);
+	});
+
+	test('a bad statement is refused before the engine starts', async () => {
+		const engine = counted();
+		const answer = await readAsk(freshPage(recorded().fetcher, engine), { ...opts, sql: 'SELECT 1; DROP VIEW "host-fingerprint"' }, {});
+		expect(answer).toEqual({ state: 'refused', because: { kind: 'statements', count: 2 } });
+		expect(engine.opened()).toBe(0);
 	});
 });

@@ -31,6 +31,9 @@ declare global {
 	/** `ledger.engine_extension_repository`: where the query engine downloads its add-ons. */
 	const __ENGINE_EXTENSION_REPOSITORY__: string;
 
+	/** The newest staged raw day listing per ledger. */
+	const __RAW_LISTED_THROUGH__: Partial<Record<import('$lib/data/slice-shapes').LedgerName, import('$lib/data/slice-shapes').DateStamp>>;
+
 	namespace App {}
 }
 

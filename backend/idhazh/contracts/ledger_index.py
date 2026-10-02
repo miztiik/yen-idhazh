@@ -77,6 +77,11 @@ class RawDayIndex(Contract):
     __schema_stem__: ClassVar[str] = "raw-day-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-02",
+            change="bytes is an optional size for each listed file, filled by the site build.",
+            why="A browser prices and checks writer files before it fetches them.",
+        ),
+        ChangelogEntry(
             version="2026-10-01T16:50",
             change="Remove the retired aggregate from the ledger vocabulary.",
             why="Only declared families may reach an index; surviving fields are unchanged.",
@@ -113,6 +118,14 @@ class RawDayIndex(Contract):
             "digests the empty string."
         )
     )
+    bytes: list[int] | None = Field(
+        default=None,
+        description=(
+            "The size in bytes of each file in `files`, in the same order. The "
+            "compaction listing may omit it; the site build fills it for days not "
+            "packed yet so the browser can price and check each file before it fetches it."
+        ),
+    )
     listed_at: Timestamp = Field(
         description=(
             "When the compaction task last listed the day's directory, UTC, to the whole "
@@ -133,6 +146,13 @@ class RawDayIndex(Contract):
                 f"{where} lists its files out of order: {descent[0]!r} comes before "
                 f"{descent[1]!r}, and the names must ascend"
             )
+        if self.bytes is not None and len(self.bytes) != len(self.files):
+            raise ValueError(
+                f"{where} lists {len(self.files)} files and {len(self.bytes)} sizes; "
+                "bytes must match files one for one"
+            )
+        if self.bytes is not None and any(size < 0 for size in self.bytes):
+            raise ValueError(f"{where} bytes contains negative sizes")
         return self
 
 
@@ -168,6 +188,11 @@ class CompactIndex(Contract):
 
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-02",
+            change="bytes is an optional size for each listed file, filled by the site build.",
+            why="A browser prices and checks writer files before it fetches them.",
+        ),
         ChangelogEntry(
             version="2026-10-01T16:50",
             change="Remove the retired aggregate from the ledger vocabulary.",
@@ -235,6 +260,11 @@ class Watermark(Contract):
 
     __schema_stem__: ClassVar[str] = "watermark"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-02",
+            change="bytes is an optional size for each listed file, filled by the site build.",
+            why="A browser prices and checks writer files before it fetches them.",
+        ),
         ChangelogEntry(
             version="2026-10-01T16:50",
             change="Remove the retired aggregate from the ledger vocabulary.",

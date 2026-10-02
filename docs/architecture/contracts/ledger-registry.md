@@ -245,3 +245,5 @@ CLAUDE.md section 11 does not apply to this file. It is a config file this proje
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection costs, which is why no walk over `state/` decides which ledgers exist.
 - [../../concepts/glossary.md](../../concepts/glossary.md) - family and ledger, each in one line.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #12, sections 2, 4, 8 and 11.
+
+A new `LedgerName` member also joins `LEDGER_NAMES` in `frontend/src/lib/data/slice-shapes.ts`; `test_every_ledger_the_door_may_query_is_a_ledger` holds the two sets equal.
