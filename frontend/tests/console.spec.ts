@@ -97,7 +97,7 @@ const DEFAULT_WINDOW_DAYS = (
 	JSON.parse(
 		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
 	) as { console?: { default_window_days?: number } }
-).console?.default_window_days ?? 30;
+).console?.default_window_days ?? 14;
 
 /** Every span the control offers, from the same knob the control reads. */
 const WINDOW_PRESETS = (
@@ -179,6 +179,37 @@ function days(start: string, count: number): string[] {
 	const first = new Date(`${start}T00:00:00Z`).getTime();
 	return Array.from({ length: count }, (_, index) =>
 		new Date(first + index * 86_400_000).toISOString().slice(0, 10)
+	);
+}
+
+/** The narrowest preset that reaches back past the canary's first recorded run.
+ *
+ * The console opens on fourteen days since 2026-10-02, and the canary records
+ * twenty, so the default window holds no day without a run and fewer columns
+ * than a phone is wide. A rule about either needs a wider span, and this finds
+ * it from the fixture and the presets, so a canary that grows a day moves the
+ * span rather than a renumbered test.
+ */
+function presetPastTheCanary(): number {
+	const recorded = manifestDays().map((day) => day.date);
+	const first = new Date(`${recorded[0]}T00:00:00Z`).getTime();
+	const last = new Date(`${recorded.at(-1)}T00:00:00Z`).getTime();
+	const span = Math.round((last - first) / 86_400_000) + 1;
+	const wide = WINDOW_PRESETS.find((preset) => preset > span);
+	expect(wide, `no preset reaches back past the canary's ${span} days`).toBeDefined();
+	return wide as number;
+}
+
+/** Open `/console/` on a stored span, the way a reader's last choice reopens it. */
+async function openOnWindow(page: Page, days: number) {
+	await page.addInitScript(
+		(stored) => localStorage.setItem('idhazh:console-window', String(stored)),
+		days
+	);
+	await page.goto('/console/');
+	await expect(page.locator('[data-window-control]')).toHaveAttribute(
+		'data-window-days',
+		String(days)
 	);
 }
 
@@ -328,10 +359,13 @@ test('the strip reads oldest to newest, left to right', async ({ page }) => {
 		nodes.map((node) => node.getAttribute('data-day') ?? '')
 	);
 	// The window's own calendar, one column a day, consecutive and oldest first.
-	// The days that carried a run are a subset of it in the same order.
+	// The days that carried a run inside it are a subset of it in the same order.
 	expect(dates.length).toBe(DEFAULT_WINDOW_DAYS);
 	expect(dates).toEqual(days(dates[0], dates.length));
-	const ran = manifestDays().map((day) => day.date);
+	const committed = manifestDays().map((day) => day.date);
+	const span = openWindow(committed);
+	const ran = committed.filter((date) => date >= span.start && date <= span.end);
+	expect(ran.length, 'the window reaches no committed day, so this asserts nothing').toBeGreaterThan(0);
 	expect(dates.filter((date) => ran.includes(date))).toEqual(ran);
 
 	// Chronology a reader can see, not only one the DOM asserts.
@@ -342,12 +376,15 @@ test('the strip reads oldest to newest, left to right', async ({ page }) => {
 });
 
 test('every recorded run gets a square, and nothing else does', async ({ page }) => {
-	await page.goto('/console/');
+	// Wide enough to reach back past the canary's first run, so the window holds
+	// empty days as well as recorded ones and the rule below has both to check.
+	const wide = presetPastTheCanary();
+	await openOnWindow(page, wide);
 
 	const expected = manifestDays();
 	// One column a day of the WINDOW, not one a manifest. An empty column is the
 	// fact the strip exists to show, and the days with runs are a subset of it.
-	await expect(page.locator('[data-day]')).toHaveCount(DEFAULT_WINDOW_DAYS);
+	await expect(page.locator('[data-day]')).toHaveCount(wide);
 	await expect(page.locator('[data-health]')).toHaveCount(
 		expected.reduce((total, day) => total + day.runs, 0)
 	);
@@ -558,7 +595,8 @@ test('THE ORACLE: the run strip fills its frame, keeps a cadence and reads a day
 
 test('on a phone the strip scrolls, and opens on the newest run', async ({ page }) => {
 	await page.setViewportSize({ width: 360, height: 720 });
-	await page.goto('/console/');
+	// More history than a phone is wide: the default fourteen days fit one.
+	await openOnWindow(page, presetPastTheCanary());
 
 	// More history than a phone is wide. The operator reaches the rest by
 	// scrolling, and starts where the newest run is.
@@ -1689,7 +1727,13 @@ test('the measured day prints rates, and the day with no minutes prints dashes',
 	// A quiet day ran and published nothing, so its visual planner never
 	// started. Zero items reached is a measurement; zero minutes would be an
 	// invention, and a per-visual cost over no visuals is not a number at all.
-	const quiet = page.locator(`[data-chart-day="${manifestDays()[0].date}"]`);
+	// The table follows the open window, so the quiet day is the oldest
+	// committed day inside it.
+	const committed = manifestDays().map((day) => day.date);
+	const span = openWindow(committed);
+	const quietDay = committed.find((date) => date >= span.start && date <= span.end && date !== DAY);
+	expect(quietDay, 'the open window holds no quiet day, so this asserts nothing').toBeDefined();
+	const quiet = page.locator(`[data-chart-day="${quietDay}"]`);
 	await expect(quiet.locator('[data-charts-cell="reached"]')).toHaveText('0');
 	await expect(quiet.locator('[data-charts-cell="published"]')).toHaveText('0');
 	await expect(quiet.locator('[data-charts-cell="minutes"]')).toHaveText('-');

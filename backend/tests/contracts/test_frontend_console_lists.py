@@ -1,12 +1,13 @@
 """Does every hand-written list in the console still name what its contract declares?
 
-Seven console modules carry a value that has to match what a Pydantic contract
+Eight console modules carry a value that has to match what a Pydantic contract
 declares - the eval panel's column map, the settings vocabulary, the doubt
 reasons, the bandwidth margin, the prompt-reuse column grammar, the date the
-busy share stopped holding the stolen half, and the article and feed records'
-column lists. A copy that has fallen behind its contract draws a panel with a
-column missing from it, names a column no run writes, or prints a correction for
-the wrong day, and none of those shows up as an error anywhere.
+busy share stopped holding the stolen half, the article and feed records'
+column lists, and the routes the strip draws. A copy that has fallen behind its
+contract draws a panel with a column missing from it, names a column no run
+writes, or prints a correction for the wrong day, and none of those shows up as
+an error anywhere.
 
 **These six moved here from the browser suite on 2026-09-23**, where each read
 the generated `schemas/<stem>.schema.json`, or the TypeScript generated beside
@@ -26,11 +27,13 @@ from typing import Final
 import pytest
 from conftest import REPO_ROOT, read_text
 
+from idhazh.contracts.console_band import RouteId
 from idhazh.contracts.eval_row import BandReason, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.telemetry.publish.console_band import ROUTES
 
 pytestmark = pytest.mark.contract
 
@@ -57,6 +60,32 @@ def quoted_strings(text: str, name: str) -> list[str]:
     found = re.search(rf"export const {name}\b[^=]*= \[(.*?)\n\] as const;", text, re.DOTALL)
     assert found, f"no exported constant array named {name}"
     return re.findall(r"'([^']*)'", found[1])
+
+
+def test_the_strip_names_every_route_the_band_declares_in_the_order_it_writes_them() -> None:
+    """The fallback strip and the published one must name one set of routes, in one order.
+
+    `band.ts` types `RouteId` and `ROUTE_IDS` by hand, and `readBand()` draws one
+    tab per entry of `ROUTE_IDS` in that order whatever the payload holds. A route
+    the contract gains and the list lacks would never reach the strip; a route
+    the list names and the contract lacks would draw a tab no band can fill.
+    """
+    text = read_text(CONSOLE / "band.ts")
+    typed = re.search(r"^export type RouteId = ([^;]*);$", text, re.MULTILINE)
+    assert typed, "band.ts no longer declares the RouteId union on one line"
+    listed = re.search(r"^const ROUTE_IDS: RouteId\[\] = \[([^\]]*)\];$", text, re.MULTILINE)
+    assert listed, "band.ts no longer declares ROUTE_IDS on one line"
+
+    written = [route_id.value for route_id, *_ in ROUTES]
+    assert sorted(written) == sorted(member.value for member in RouteId), (
+        "ROUTES in the band producer does not write every RouteId exactly once"
+    )
+    assert re.findall(r"'([^']*)'", typed[1]) == written, (
+        "the RouteId union in band.ts is not RouteId's members in the order ROUTES writes them"
+    )
+    assert re.findall(r"'([^']*)'", listed[1]) == written, (
+        "ROUTE_IDS in band.ts is not RouteId's members in the order ROUTES writes them"
+    )
 
 
 def test_the_article_record_asks_for_every_column_the_contract_declares_in_its_order() -> None:

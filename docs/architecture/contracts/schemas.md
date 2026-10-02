@@ -58,7 +58,7 @@ Four tests in `backend/tests/contracts/`, each named for what it proves.
 | --- | --- |
 | `test_frontend_field_set.py` | the hand-written `HostFingerprintRow` names exactly the columns the Pydantic one declares, in the same order, with the same TypeScript type for each. Types are computed from `json_schema()` by a narrow mapper that refuses a node kind it has not met, so a field with an unfamiliar shape fails rather than passes |
 | `test_frontend_vocabularies.py` | `SERVER_JOB` and `WATCHED_FLAG` hold exactly their Python enums' members, in order |
-| `test_frontend_console_lists.py` | six console lists still name what their contracts declare - the eval panel's column map, the census row's column list in `ledger-rows.ts`, the settings vocabulary, the doubt reasons, the bandwidth margin and the prompt-reuse column grammar |
+| `test_frontend_console_lists.py` | seven console lists still name what their contracts declare - the eval panel's column map, the census row's column list in `ledger-rows.ts`, the settings vocabulary, the doubt reasons, the bandwidth margin, the prompt-reuse column grammar, and the routes the strip draws: `RouteId` and `ROUTE_IDS` in `band.ts` name `RouteId`'s members in the order the band producer's `ROUTES` writes them |
 | `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; every ledger the door may query is a `LedgerName`; and the cell it filters days on is the ledger's own date cell |
 
 A fourth, `test_no_generated_layer.py`, refuses the generated trees coming back one file at a time.
@@ -92,6 +92,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `frontend/src/lib/server/ledger-rows.ts` | `ITEM_HEALTH_COLUMNS` and `FEED_HEALTH_COLUMNS`, the column names of `ItemHealthRow` and `FeedHealthRow` a console route asks the door for. |
 | `frontend/src/lib/server/config.ts` | The hand copy of `ConsolePanelGroup`. |
 | `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, and the stamp the query door reads. |
+| `frontend/src/lib/console/band.ts` | The hand copy of `RouteId` and `ROUTE_IDS`, the routes the console strip draws, in the order the band producer writes them. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `DigestDay`. Hand-written, and bound by nothing. |
 
 The shapes, and where each one lives once written:
@@ -206,7 +207,7 @@ mirrors the digest tree its rows are derived from.
 | --- | --- | --- | --- |
 | `state/raw/seen/` and `state/compact/seen/` | a raw file per write by day, packed into day and month files | how old is this address? | yes, `collect.seen_window_days`, and `ledger.load_days` opens only the days it names. The loader refuses a compaction that keeps fewer days than that window ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
 | `state/raw/feed-health/` and `state/compact/feed-health/` | a raw file per write by day, packed into day and month files | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS`, and `ledger.load_days` opens only the newest days it names |
-| `state/raw/item-health/` and `state/compact/item-health/` | a raw file per write by day, packed into day and month files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30), and `ledger.load_days` opens only the days it names |
+| `state/raw/item-health/` and `state/compact/item-health/` | a raw file per write by day, packed into day and month files | what did every planned item do? | yes - the console pans a window (`default_window_days` 14), and `ledger.load_days` opens only the days it names |
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |

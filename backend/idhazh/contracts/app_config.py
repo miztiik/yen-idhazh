@@ -110,6 +110,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-02",
+            change="console.default_window_days 30 to 14; console.data_explorer_tab added.",
+            why="One opening span on every route, and the sixth tab waits for its page.",
+        ),
+        ChangelogEntry(
             version="2026-09-30",
             change="console.machine_colour_stops 7 to 5, and three machine-panel knobs added.",
             why="A machine's colour is a speed ramp of five steps, not a key-ordered palette.",
@@ -126,11 +131,6 @@ class AppConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-27",
-            change="ledger block, additive: format, two compressions and the published list.",
-            why="The ledger door reads its format and compressions from config, not from source.",
-        ),
-        ChangelogEntry(
-            version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),

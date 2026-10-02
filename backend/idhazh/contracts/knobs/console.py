@@ -50,13 +50,14 @@ class ConsoleConfig(Model):
     """Knobs for the operator console's time viewport."""
 
     default_window_days: int = Field(
-        default=30,
+        default=14,
         ge=1,
         description=(
             "Initial time span for the console charts. A viewport, not a deletion. "
-            "Thirty rather than fourteen because the page states its own retirement "
-            "rules over fourteen days, so a window equal to the rule shows the rule "
-            "with no margin either side of it."
+            "Fourteen on every route, so two routes always open on the same span and "
+            "a reader can compare them. What it costs: a route that states a "
+            "fourteen-day rule opens on a window equal to the rule, with no margin "
+            "either side of it, and thirty days is one press away."
         ),
     )
     window_presets: list[int] = Field(
@@ -92,6 +93,20 @@ class ConsoleConfig(Model):
             "recorded. It decides only when the count is said, never what it "
             "counts - the count is the whole days between the record's day and "
             "today, so at least one, which is why zero is refused."
+        ),
+    )
+    # REMOVE THIS FLAG in the change that ships the page at /console/data-explorer/.
+    # The condition is in the description too, because an operator reads the
+    # schema and not this.
+    data_explorer_tab: bool = Field(
+        default=False,
+        description=(
+            "Whether the strip draws its sixth tab, Records, which opens "
+            "/console/data-explorer/. Off until that page exists, because a tab "
+            "pointing at a page that is not there is worse than no tab. The band "
+            "carries the route either way; this decides only whether the strip "
+            "draws it. Retire it in the change that ships the page, which deletes "
+            "this field and its readers."
         ),
     )
     pan_days: int = Field(default=7, ge=1, description="Days moved by one arrow-key pan.")

@@ -158,6 +158,12 @@ ROUTES: Final[tuple[tuple[RouteId, str, str, str], ...]] = (
         "/console/voices/",
         "Who supplied the day, and how far each feed is discounted.",
     ),
+    (
+        RouteId.DATA_EXPLORER,
+        "Records",
+        "/console/data-explorer/",
+        "What the ledgers hold, and whatever you ask of them.",
+    ),
 )
 
 __all__ = [
@@ -1086,6 +1092,9 @@ def build(
         RouteId.MACHINE: worst_machine,
         RouteId.JUDGEMENT: worst_judgement,
         RouteId.VOICES: worst_voices,
+        # The Records route reads whatever an operator asks of it and judges
+        # nothing, so it has no worst state to carry.
+        RouteId.DATA_EXPLORER: None,
     }
     carries = _carries(newest, newest_model, health_rows, trouble)
     routes: list[ConsoleRoute] = []
@@ -1278,6 +1287,9 @@ def _carries(
                 if feeds.failed > 0
                 else f"No feed failed or rested over these {plural(feeds.runs, 'run', 'runs')}."
             )
+        ),
+        RouteId.DATA_EXPLORER: (
+            "Every published ledger the other routes draw from, open to a question of your own."
         ),
     }
 
