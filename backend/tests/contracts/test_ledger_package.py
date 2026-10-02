@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from _source_files import source_files
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
@@ -92,7 +93,11 @@ def _backend_modules() -> dict[str, ast.Module]:
     """
     return {
         path.relative_to(REPO_ROOT).as_posix(): ast.parse(path.read_text(encoding="utf-8"))
-        for path in sorted(BACKEND.rglob("*.py"))
+        for path in source_files(
+            roots=(BACKEND,),
+            suffixes=(".py",),
+            excluded_roots=(BACKEND / "var",),
+        )
     }
 
 

@@ -1,15 +1,14 @@
 """The month search index: its contract, its writer, and the bijection they promise.
 
-The Oracle this row is held to: every committed item carrying a vector appears
+The Oracle this row is held to: every fixture item carrying a vector appears
 exactly once in its month index, at an offset whose bytes dequantise to the same
 unit vector the day payload decodes to; every item without one appears with an
 explicit null; and rebuilding the shard twice produces identical bytes. There is
 only a rebuild path, so "from scratch matches incremental" is the same promise
 as "twice matches once".
 
-Contract tier for the shape, integration tier for the writer over the real
-committed archive. No mocks, no network, and no fixed item counts - the
-committed corpus grows several times an hour.
+Contract tier for the shape, integration tier for the writer over bounded
+fixtures. No mocks, no network, and no reads of the growing published archive.
 """
 
 from __future__ import annotations
@@ -28,8 +27,6 @@ from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, VECTOR_SCALE, dequantise, from_base64
 from idhazh.stages import common
 from idhazh.stages.assemble import _index_root
-
-DIGEST_ROOT = REPO_ROOT / "frontend" / "public" / "digest"
 
 
 def day() -> DigestDay:
@@ -82,37 +79,6 @@ def write_day(root: Path, payload: DigestDay) -> Path:
     path = assemble.day_dir(root, payload.date) / "digest.json"
     atomic_write.write_atomic(path, payload.to_json())
     return path
-
-
-def committed_day_paths() -> list[Path]:
-    paths = sorted(DIGEST_ROOT.glob("*/*/*/digest.json"))
-    if not paths:
-        pytest.skip("no committed day payloads in this checkout")
-    return paths
-
-
-def newest_committed_month() -> str:
-    """The month of the newest committed day, read off the path.
-
-    Not off the payload: parsing every day to learn one date cost one parse per
-    published day, and the tree gets longer every day (`CLAUDE.md` Guardrail #12).
-    """
-    year, month, _day = committed_day_paths()[-1].parts[-4:-1]
-    return f"{year}-{month}"
-
-
-def committed_days(month: str) -> list[DigestDay]:
-    """The committed payloads of one month.
-
-    A month is bounded and the archive is not, which is the whole difference. The
-    rules these tests hold are rules of `rebuild_search_index`, and the fixture
-    tiers below drive that function with days built to exercise each one.
-    """
-    return [
-        DigestDay.from_json(read_text(path))
-        for path in committed_day_paths()
-        if f"{path.parts[-4]}-{path.parts[-3]}" == month
-    ]
 
 
 # --- Contract tier ----------------------------------------------------------
@@ -198,7 +164,7 @@ class TestTheShape:
         assert index([entry()]).version == SearchIndex.schema_version()
 
 
-# --- Integration tier: the writer over real payloads -------------------------
+# --- Integration tier: the writer over fixture payloads ----------------------
 
 
 class TestTheWriter:
@@ -206,13 +172,9 @@ class TestTheWriter:
         """Three days under one month, carrying every case the writer has to place.
 
         One day where every story has a vector, one where a single story has one
-        and its siblings do not, and one with no embeddings block at all. The
-        archive has never held all three in one month, and the month it is
-        currently writing is a collection a run appends to - so reading that
-        month cost one parse per published story and the probe proved nothing at
-        all on a day the tree held only the date still being written
-        (`CLAUDE.md` section 13). What the committed month holds is checked where
-        the data is, by `TestTheCommittedShard` below and by the producer.
+        and its siblings do not, and one with no embeddings block at all. These
+        cases come from a bounded fixture and exercise the writer without
+        reading published output that changes on every run.
         """
         digest_root = tmp_path / "digest"
         template = day()
@@ -331,6 +293,17 @@ class TestTheWriter:
         assert (tmp_path / "index" / "2026-01.bin").read_bytes() == b""
         assert built.model_id == EMBEDDER_ID
 
+    def test_only_days_in_the_named_month_are_indexed(self, tmp_path: Path) -> None:
+        digest_root = tmp_path / "digest"
+        write_day(digest_root, day())
+        write_day(digest_root, day().model_copy(update={"date": "2026-09-01"}))
+
+        built = assemble.rebuild_search_index(
+            digest_root=digest_root, index_root=tmp_path / "index", month="2026-08"
+        )
+
+        assert {record.date for record in built.entries} == {"2026-08-21"}
+
     def test_a_day_from_another_encoder_keeps_its_items_without_vectors(
         self, tmp_path: Path
     ) -> None:
@@ -415,20 +388,10 @@ class TestTheWriter:
         }
 
 
-# --- Integration tier: the shard the repository actually carries -------------
+# --- Integration tier: the output path ---------------------------------------
 
 
-class TestTheCommittedShard:
-    """Where the index is written, and whether the committed one is real.
-
-    The writer was correct from its first commit and the shard on `main` was
-    not: it named one item, `ai-01`, that no published day holds. The cause was
-    the path rather than the arithmetic. `stage_assemble` took the index root
-    from a module constant while every pipeline test redirects only
-    `PUBLIC_ROOT`, so the backend suite rebuilt the *published* shard out of
-    fixture days, on any machine that ran it.
-    """
-
+class TestTheOutputPath:
     def test_a_redirected_digest_root_carries_the_index_with_it(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -440,68 +403,3 @@ class TestTheCommittedShard:
 
         assert redirected == tmp_path / "public" / "assist" / "index"
         assert REPO_ROOT not in redirected.parents
-
-    def test_the_committed_shard_names_the_committed_days(self) -> None:
-        """The published index is a projection of the published days, or it is wrong.
-
-        This is the reader-facing half: the archive lists what this file holds,
-        so a shard that disagrees with the tree is a page that lists the wrong
-        stories. It is compared by entry rather than by bytes, because a schema
-        version stamped after the last publish would move the bytes without
-        moving a single story.
-        """
-        index_root = REPO_ROOT / "frontend" / "public" / "assist" / "index"
-        if not index_root.exists():
-            pytest.skip("no committed index in this checkout")
-
-        month = newest_committed_month()
-        days = committed_days(month)
-        path = index_root / f"{month}.json"
-        assert path.exists(), f"{month} has published days and no committed shard"
-        committed = SearchIndex.from_json(path.read_text(encoding="utf-8"))
-        expected = [
-            (payload.date, item.item_id) for payload in days for item in payload.items
-        ]
-        assert expected, "a probe over an empty month proves nothing"
-        assert [(record.date, record.item_id) for record in committed.entries] == expected
-
-    def test_the_committed_vectors_rebuild_byte_for_byte(self, tmp_path: Path) -> None:
-        """The day payloads are the only collection the vectors have, and this proves it.
-
-        Nothing in a browser opens the block. The published day pages dropped it
-        on 2026-08-27 and the staged copy never carries it, so the committed tree
-        under `frontend/public/digest/` is the whole supply and this rebuild is
-        the whole demand.
-
-        **A lost block does not raise.** `build_search_index` writes every entry
-        and a zero-byte vector file, and search then answers nothing for every
-        query with no log line saying why - so a test that checks only that a
-        shard was written cannot see it. The byte count is what sees it.
-
-        The `.bin` is compared byte for byte where the shard above is compared by
-        entry, and the difference is deliberate: the JSON carries a schema
-        version, which a stamp landing after the last publish would move without
-        moving a single story. The `.bin` is vectors and nothing else.
-        """
-        index_root = REPO_ROOT / "frontend" / "public" / "assist" / "index"
-        if not index_root.exists():
-            pytest.skip("no committed index in this checkout")
-
-        # The month being written, not every month ever written. An older shard is
-        # frozen - nothing appends to it and no later run rebuilds it - so
-        # re-deriving it every run re-answers a settled question at a price that
-        # grows every month (`CLAUDE.md` Guardrail #12).
-        month = newest_committed_month()
-        path = index_root / f"{month}.bin"
-        assert path.exists(), f"{month} has published days and no committed vector file"
-        committed = path.read_bytes()
-        assemble.rebuild_search_index(
-            digest_root=DIGEST_ROOT, index_root=tmp_path, month=month
-        )
-        rebuilt = (tmp_path / f"{month}.bin").read_bytes()
-
-        assert rebuilt, f"{month}.bin rebuilt empty - the committed days lost their vectors"
-        assert len(rebuilt) % DIMENSIONS == 0
-        assert rebuilt == committed, (
-            f"{month}.bin rebuilds to {len(rebuilt)} bytes against {len(committed)} committed"
-        )

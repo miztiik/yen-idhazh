@@ -5,10 +5,10 @@ from __future__ import annotations
 import ast
 import json
 import re
-import subprocess
 from pathlib import Path
 
 import pytest
+from _source_files import source_files
 from conftest import (
     CONFIG_DIR,
     CONTRACT_FIXTURES_DIR,
@@ -442,31 +442,30 @@ def test_the_retired_word_has_not_come_back() -> None:
     It came back through the docs, the tests and the plan-docs while only the
     code was swept, so all of them are swept.
 
-    **What it reads, and why it is bounded** (Guardrail #12): the tracked files
-    of the trees `RETIRED_LEDGER_WORD_SWEEP` lists below - code, tests, docs,
+    **What it reads, and why it is bounded** (Guardrail #12): tracked files and
+    untracked, non-ignored files in the trees `RETIRED_LEDGER_WORD_SWEEP` lists
+    below - code, tests, docs,
     schemas, config and the plan-docs, all of which grow with what somebody
     wrote. It opens nothing a run appends to: not `state/`, `corpus/`,
     `backend/var/`, `frontend/public/` or `frontend/build/`, and not
     `node_modules/`, `.svelte-kit/` or `test-results/`, none of which
-    `git ls-files` lists. So it costs the same on the thousandth published day
-    as on the third. A Python file's syntax tree is parsed only when that file
-    has a hit, to excuse the changelog entry that records a rename.
+    the shared source-file helper lists. So it costs the same on the thousandth
+    published day as on the third. A Python file's syntax tree is parsed only
+    when that file has a hit, to excuse the changelog entry that records a rename.
 
     What this cannot settle: whether the replacement reads naturally. A person
     reads the sentence; this only refuses the word.
     """
-    listed = subprocess.run(
-        ["git", "ls-files", "--", *RETIRED_LEDGER_WORD_SWEEP],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.splitlines()
+    listed = source_files(
+        roots=tuple(REPO_ROOT / root for root in RETIRED_LEDGER_WORD_SWEEP),
+        excluded_roots=(REPO_ROOT / "backend" / "var",),
+    )
     assert len(listed) > 900, "the sweep found almost nothing, so it would pass on nothing"
 
     offenders: list[str] = []
-    for relative in listed:
-        text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
+    for path in listed:
+        relative = path.relative_to(REPO_ROOT).as_posix()
+        text = path.read_bytes().decode("utf-8", "replace")
         hits: list[tuple[int, str]] = []
         for number, line in enumerate(text.split("\n"), start=1):
             counted = ARMS_LENGTH.sub("", SOMEBODY_ELSES_ADDRESS.sub("", line))
@@ -502,9 +501,8 @@ def test_the_retired_word_has_not_come_back() -> None:
 #: the loose word.
 RETIRED_LEDGER_PATH = re.compile(r"state/[s]tory-similarity|STORY[_]SIMILARITY_DIRNAME")
 
-#: The five trees a person edits, swept through `git ls-files` rather than a
-#: directory walk: an untracked scratch file cannot turn this red, and a tracked
-#: one cannot escape it.
+#: The five trees a person edits, selected from tracked and untracked,
+#: non-ignored files while generated output stays out of the read.
 RETIRED_LEDGER_SWEEP = ("backend", "frontend/src", ".github", "docs", "config")
 
 
@@ -516,29 +514,28 @@ def test_no_reader_resolves_a_path_under_the_retired_store_name() -> None:
     is not there: the backend reads an empty ledger and says nothing, and the
     console draws a panel with no data. Both look like a quiet night.
 
-    **What it reads, and why it is bounded** (Guardrail #12): the tracked files
-    of the six trees above - roughly a thousand files of code, docs, schemas and
-    config that somebody wrote. It does not read `state/`, `corpus/` or
-    `frontend/public/`, which is where every collection a run appends to lives,
-    so this costs the same on the thousandth published day as on the third.
+    **What it reads, and why it is bounded** (Guardrail #12): tracked files and
+    untracked, non-ignored files in the roots above - roughly a thousand
+    files of code, docs, schemas and config that somebody wrote. It does not
+    read `state/`, `corpus/` or `frontend/public/`, which is where every
+    collection a run appends to lives, so this costs the same on the thousandth
+    published day as on the third.
 
     What it cannot settle: whether the moved tree still holds the right bytes.
     That is a question about a working copy rather than about code
     (`CLAUDE.md` section 13), and it was answered once by comparing each file's
     blob across the move.
     """
-    listed = subprocess.run(
-        ["git", "ls-files", "--", *RETIRED_LEDGER_SWEEP],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
+    listed = source_files(
+        roots=tuple(REPO_ROOT / root for root in RETIRED_LEDGER_SWEEP),
+        excluded_roots=(REPO_ROOT / "backend" / "var",),
+    )
     assert len(listed) > 500, "the sweep found almost nothing, so it would pass on nothing"
 
     offenders: list[str] = []
-    for relative in listed:
-        text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
+    for path in listed:
+        relative = path.relative_to(REPO_ROOT).as_posix()
+        text = path.read_bytes().decode("utf-8", "replace")
         for number, line in enumerate(text.split("\n"), start=1):
             if RETIRED_LEDGER_PATH.search(line):
                 offenders.append(f"{relative}:{number}: {line.strip()}")
@@ -573,10 +570,9 @@ NOT_THE_LEDGER_WORD = ("no-store", "ast.Store")
 #: removed, so the visible text of a Markdown link is still counted.
 SOMEBODY_ELSES_ADDRESS = re.compile(r"https?://\S+")
 
-#: The six trees a person edits plus the plan-docs, swept through `git ls-files`
-#: so an untracked scratch file cannot turn this red and a tracked one cannot
-#: escape it. `backend/var` is excluded by name: a run writes it, and what a test
-#: reads may not grow with what a run has piled up (Guardrail #12).
+#: Source trees and plan-docs a person edits. `backend/var` is excluded by name:
+#: a run writes it, and what a test reads may not grow with what a run has
+#: piled up (Guardrail #12).
 RETIRED_LEDGER_WORD_SWEEP = (
     "backend",
     "frontend/src",
@@ -585,7 +581,6 @@ RETIRED_LEDGER_WORD_SWEEP = (
     "docs",
     "TODO",
     ".github",
-    ":(exclude)backend/var",
 )
 
 
@@ -599,29 +594,28 @@ def test_the_retired_ledger_word_has_not_come_back() -> None:
     walks back in - it was swept out of the plan-docs once already and returned
     with the next draft.
 
-    **What it reads, and why it is bounded** (Guardrail #12): the tracked files
-    of the trees above - code, tests, docs, schemas, config and the plan-docs,
+    **What it reads, and why it is bounded** (Guardrail #12): tracked files and
+    untracked, non-ignored files of the trees above - code, tests, docs, schemas,
+    config and the plan-docs,
     all of which grow with what somebody wrote. It opens nothing a run appends
     to: not `state/`, `corpus/`, `backend/var/`, `frontend/public/` or
     `frontend/build/`, and not `node_modules/`, `.svelte-kit/` or
-    `test-results/`, none of which `git ls-files` lists. So it costs the same on
-    the thousandth published day as on the third.
+    `test-results/`, none of which the shared helper lists. So it costs the same
+    on the thousandth published day as on the third.
 
     What this cannot settle: whether the replacement reads naturally. A person
     reads the sentence; this only refuses the word.
     """
-    listed = subprocess.run(
-        ["git", "ls-files", "--", *RETIRED_LEDGER_WORD_SWEEP],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.splitlines()
+    listed = source_files(
+        roots=tuple(REPO_ROOT / root for root in RETIRED_LEDGER_WORD_SWEEP),
+        excluded_roots=(REPO_ROOT / "backend" / "var",),
+    )
     assert len(listed) > 900, "the sweep found almost nothing, so it would pass on nothing"
 
     offenders: list[str] = []
-    for relative in listed:
-        text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
+    for path in listed:
+        relative = path.relative_to(REPO_ROOT).as_posix()
+        text = path.read_bytes().decode("utf-8", "replace")
         for number, line in enumerate(text.split("\n"), start=1):
             counted = SOMEBODY_ELSES_ADDRESS.sub("", line)
             for spelling in NOT_THE_LEDGER_WORD:
@@ -692,8 +686,9 @@ def test_the_judging_council_spells_its_shard_and_its_count_plainly() -> None:
     reading a second name for something that already has one (CLAUDE.md section
     0b).
 
-    **What it reads, and why it is bounded** (Guardrail #12): the tracked files
-    of the six trees below, which is code, docs, schemas and config somebody
+    **What it reads, and why it is bounded** (Guardrail #12): tracked files and
+    untracked, non-ignored files in the source trees below, which is code, docs,
+    schemas and config somebody
     wrote. It never opens `state/`, `corpus/` or `frontend/public/`, where every
     collection a run appends to lives, so it costs the same on the thousandth
     published day as on the third.
@@ -714,20 +709,18 @@ def test_the_judging_council_spells_its_shard_and_its_count_plainly() -> None:
     underscore is a word character: `_fold_day` reads as one word to a word
     boundary and would walk straight through the council's own files.
     """
-    listed = subprocess.run(
-        ["git", "ls-files", "--", *RETIRED_LEDGER_SWEEP],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
+    listed = source_files(
+        roots=tuple(REPO_ROOT / root for root in RETIRED_LEDGER_SWEEP),
+        excluded_roots=(REPO_ROOT / "backend" / "var",),
+    )
     assert len(listed) > 500, "the sweep found almost nothing, so it would pass on nothing"
 
     loose = re.compile(r"(?<![A-Za-z])([l]egs?|[f]old(s|ed|ing)?)(?![A-Za-z])")
     offenders: list[str] = []
-    for relative in listed:
+    for path in listed:
+        relative = path.relative_to(REPO_ROOT).as_posix()
         inside = relative.startswith(JUDGE_SUBSYSTEM)
-        text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
+        text = path.read_bytes().decode("utf-8", "replace")
         for number, line in enumerate(text.split("\n"), start=1):
             used = RETIRED_SPELLING_NAMED.sub("", line)
             if BORROWED_JUDGE_WORD.search(used) or (inside and loose.search(used)):
