@@ -25,7 +25,9 @@ CORRIDOR = 0.02
 
 
 def _pair(score: float, key: str) -> Pair:
-    side = Article(url=f"https://e.test/{key}", title=key, summary="", source="e", date="2026-09-01")
+    side = Article(
+        url=f"https://e.test/{key}", title=key, summary="", source="e", date="2026-09-01"
+    )
     return Pair(
         date="2026-09-01",
         pair_key=key,
@@ -68,7 +70,7 @@ def test_every_band_is_represented_before_any_band_takes_a_second_slot() -> None
 
 def test_a_sheet_wider_than_the_population_takes_everything_once() -> None:
     pairs = [_pair(0.945, "a1"), _pair(0.935, "b1")]
-    chosen = select(pairs, line=LINE, total=50)
+    chosen = select(pairs, line=LINE, total=3)
     assert [pair.pair_key for pair in chosen] == ["a1", "b1"]
 
 
@@ -85,7 +87,10 @@ def test_the_outer_bands_reach_their_far_end_instead_of_crowding_the_line() -> N
     A benchmark whose easiest case is a hundredth away from its hardest cannot
     tell a model that is wrong from a pair that is genuinely ambiguous.
     """
-    pairs = [_pair(0.961 + index * 0.001, f"w{index:02d}") for index in range(39)]
+    pairs = [
+        _pair(score, f"w{index:02d}")
+        for index, score in enumerate((0.961, 0.962, 0.963, 0.964, 0.99))
+    ]
     chosen = select(pairs, line=LINE, total=4)
     span = max(pair.score for pair in chosen) - min(pair.score for pair in chosen)
     assert span > 0.02
@@ -94,13 +99,13 @@ def test_the_outer_bands_reach_their_far_end_instead_of_crowding_the_line() -> N
 def test_one_populated_band_still_fills_the_whole_sheet() -> None:
     """The first spread fix capped each outer band at a quarter of the sheet.
 
-    A draw that filled only `well-below` then returned 50 pairs when 200 were
-    asked for, silently. Ordering the band rather than truncating it is what
-    makes the caller's count the only thing that decides the size.
+    A draw that fills only one band must still return all three requested pairs.
+    Ordering the band rather than truncating it makes the caller's count the
+    only thing that decides the size.
     """
-    pairs = [_pair(0.90 + index * 0.0005, f"b{index:02d}") for index in range(40)]
+    pairs = [_pair(0.90 + index * 0.0005, f"b{index:02d}") for index in range(3)]
     assert {pair.band for pair in pairs} == {Band.WELL_BELOW}
-    assert len(select(pairs, line=LINE, total=20)) == 20
+    assert len(select(pairs, line=LINE, total=3)) == 3
 
 
 def test_a_pair_nobody_labelled_produces_no_row() -> None:

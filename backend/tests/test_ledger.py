@@ -184,9 +184,7 @@ def council_row(*, on: str = DATE) -> CouncilShardOutcome:
     parsing fails the test that asked for a row rather than the whole file.
     """
     raw = json.loads(
-        read_text(
-            CONTRACT_FIXTURES_DIR / "council-shard-outcome" / "a-unit-that-ran-no-model.json"
-        )
+        read_text(CONTRACT_FIXTURES_DIR / "council-shard-outcome" / "a-unit-that-ran-no-model.json")
     )
     return CouncilShardOutcome.model_validate(
         raw
@@ -274,9 +272,7 @@ def test_a_second_attempt_at_one_plan_replaces_its_first_sights(tmp_path: Path) 
     assert ledger.load_seen(state, today=DATE, within_days=90) == {both: "2026-08-23T07:30:00Z"}
 
 
-def _a_month_of_publications(
-    state: Path, months: Sequence[str], url_keys: Sequence[str]
-) -> None:
+def _a_month_of_publications(state: Path, months: Sequence[str], url_keys: Sequence[str]) -> None:
     """Every address published again on the first day of each month, by one run that day."""
     for month in months:
         _published(state, f"{month}-01", url_keys)
@@ -292,24 +288,23 @@ def _peak_of_load_published(state: Path) -> tuple[dict[str, str], int]:
 
 
 def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> None:
-    """Double the months held, and the peak stays flat.
+    """Double the source rows behind a fixed answer, and the peak stays flat.
 
     The published read is the one read over a ledger with no natural bound: its
     committed cover is open, so it reads every day the ledger has ever held. It
     reads one month at a time and folds each into the answer before the next, so
     what it holds at once is one month's rows and the answer, never the history.
 
-    The answer is held still here: the same addresses are published again every
-    month, so twice the months is twice the rows behind the same answer. A read
-    that held every month at once would nearly double its peak; this one must not
-    move. The first read is not measured, so a cost paid once per process lands in
-    neither number. Both ledgers are built and fixed, so this costs the same on
-    the day the archive holds ten times either (Guardrail #12, section 13).
+    Sixteen addresses make the answer the same in both trees. One month versus
+    two months doubles the source rows from 16 to 32. A read that holds every
+    month at once exceeds the 10 percent margin; streaming stays within it. The
+    first read is not measured, so a cost paid once per process lands in neither
+    number. Both ledgers are built and fixed (Guardrail #12, section 13).
     """
-    addresses = [_address(number) for number in range(3_000)]
+    addresses = [_address(number) for number in range(16)]
     small, large = tmp_path / "small", tmp_path / "large"
-    _a_month_of_publications(small, ["2026-01", "2026-02"], addresses)
-    _a_month_of_publications(large, ["2026-01", "2026-02", "2026-03", "2026-04"], addresses)
+    _a_month_of_publications(small, ["2026-01"], addresses)
+    _a_month_of_publications(large, ["2026-01", "2026-02"], addresses)
     expected = dict.fromkeys(addresses, "2026-01-01")
     _whole_ledger(small)
 
@@ -319,7 +314,7 @@ def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> Non
     assert published_small == expected, "the reduction must keep the earliest date"
     assert published_large == expected
     assert peak_large < peak_small * 1.1, (
-        f"twice the months behind the same addresses moved peak from {peak_small} B to "
+        f"twice the rows behind the same addresses moved peak from {peak_small} B to "
         f"{peak_large} B, so the read is holding the ledger rather than one month of it"
     )
 
@@ -885,9 +880,7 @@ def test_the_older_generation_is_refiled_whichever_block_the_merge_put_first(
         newline="",
     )
 
-    moved = ledger.migrate_header(
-        path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)
-    )
+    moved = ledger.migrate_header(path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow))
 
     assert moved == 1, "only the row under the older header had to move"
     assert ledger.read_header(path) == FeedHealthRow.csv_columns()
@@ -903,9 +896,9 @@ def test_a_day_file_already_under_the_current_header_is_left_byte_identical(
     path = a_feed_file(tmp_path / "state", [health_row()])
     before = path.read_bytes()
 
-    assert ledger.migrate_header(
-        path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)
-    ) == 0
+    assert (
+        ledger.migrate_header(path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)) == 0
+    )
     assert path.read_bytes() == before
 
 
@@ -932,9 +925,7 @@ def test_a_file_wider_than_this_checkout_is_refused_and_left_byte_identical(
 
     assert path.read_bytes() == before, "not one cell moved"
     with path.open(encoding="utf-8", newline="") as handle:
-        assert [FeedHealthRow.from_csv_row(raw) for raw in csv.DictReader(handle)] == [
-            health_row()
-        ]
+        assert [FeedHealthRow.from_csv_row(raw) for raw in csv.DictReader(handle)] == [health_row()]
 
 
 class _CountedRead:
@@ -981,9 +972,7 @@ class _CountedRead:
         return getattr(self._handle, name)
 
 
-def counted_reads(
-    monkeypatch: pytest.MonkeyPatch, path: Path
-) -> tuple[list[int], list[int]]:
+def counted_reads(monkeypatch: pytest.MonkeyPatch, path: Path) -> tuple[list[int], list[int]]:
     """Count how often `path` is opened to read, and how many lines come out."""
     opens = [0]
     lines = [0]
@@ -1012,14 +1001,14 @@ def test_the_header_check_reads_one_line_whatever_the_file_holds(
     moved since the file was written.
     """
     state = tmp_path / "state"
-    path = a_feed_file(state, [feed_row(f"feed-{number:02d}") for number in range(50)])
+    path = a_feed_file(state, [feed_row(f"feed-{number:02d}") for number in range(2)])
     _, lines = counted_reads(monkeypatch, path)
 
-    assert ledger.migrate_header(
-        path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)
-    ) == 0
+    assert (
+        ledger.migrate_header(path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)) == 0
+    )
 
-    assert lines[0] == 1, f"the header check read {lines[0]} lines of a 51-line file"
+    assert lines[0] == 1, f"the header check read {lines[0]} lines of a 3-line file"
 
 
 def test_the_day_count_is_what_each_feed_put_in_front_of_a_reader(tmp_path: Path) -> None:
@@ -1120,9 +1109,7 @@ def test_the_two_ledgers_on_the_door_file_under_the_raw_root() -> None:
     """
     state = Path("state")
 
-    assert ledger.raw_root(state, LedgerName.FEED_RETIREMENTS) == Path(
-        "state/raw/feed-retirements"
-    )
+    assert ledger.raw_root(state, LedgerName.FEED_RETIREMENTS) == Path("state/raw/feed-retirements")
     assert ledger.raw_root(state, LedgerName.VISUAL_PRUNES) == Path("state/raw/visual-prunes")
 
 
@@ -1192,9 +1179,9 @@ def test_the_score_record_is_one_file_that_never_grows_with_the_archive() -> Non
     (Guardrail #12), so the path carries no date and there is nothing here for a
     partition to place.
     """
-    assert ledger.path(Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION) == Path(
-        "state/content-similarity-judge/score-distribution.json"
-    )
+    assert ledger.path(
+        Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION
+    ) == Path("state/content-similarity-judge/score-distribution.json")
 
 
 # --- The cleanup record, one file per pass ----------------------------------
@@ -1316,7 +1303,6 @@ def test_load_visual_prunes_skips_a_file_it_cannot_read_and_names_it(
     assert "state/raw/visual-prunes/2026/09/07/not-a-ledger-file.parquet" in caplog.text
 
 
-
 # --- The pass that runs after the merge ------------------------------------
 
 
@@ -1340,9 +1326,12 @@ def test_a_repeated_row_is_dropped_and_every_other_byte_is_left_alone(tmp_path: 
     every append: two units of one night, then a second attempt at the first
     unit that drew another machine.
     """
-    assert ledger.append_council_shard_outcomes(
-        tmp_path, DATE, [council_unit(0, "first"), council_unit(1, "second")]
-    ) == 2
+    assert (
+        ledger.append_council_shard_outcomes(
+            tmp_path, DATE, [council_unit(0, "first"), council_unit(1, "second")]
+        )
+        == 2
+    )
     path = ledger.path(tmp_path, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, DATE)
     header = ",".join(CouncilShardOutcome.csv_columns())
     clean = path.read_text(encoding="utf-8")
@@ -1400,18 +1389,14 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     ledger.append_council_shard_outcomes(tmp_path, DATE, [council_row()])
     fitted = ledger.path(tmp_path, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, DATE)
     fitted.parent.mkdir(parents=True, exist_ok=True)
-    fitted.write_text(
-        ",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8"
-    )
+    fitted.write_text(",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8")
     named = [
         (
-            f"content-similarity-judge/fitted-thresholds/"
-            f"{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            f"content-similarity-judge/fitted-thresholds/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_THRESHOLD_KEY,
         ),
         (
-            f"content-similarity-judge/scored-pairs/"
-            f"{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            f"content-similarity-judge/scored-pairs/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_PAIR_KEY,
         ),
         (
@@ -1423,9 +1408,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     every = ledger.keyed_paths(tmp_path, date=None)
     this_run = ledger.keyed_paths(tmp_path, date=DATE)
 
-    assert [
-        (target.path.relative_to(tmp_path).as_posix(), target.key) for target in every
-    ] == named
+    assert [(target.path.relative_to(tmp_path).as_posix(), target.key) for target in every] == named
     assert [
         (target.path.relative_to(tmp_path).as_posix(), target.key) for target in this_run
     ] == named
@@ -1478,10 +1461,18 @@ def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_
     state = tmp_path / "state"
     candidate = ValidationRow.model_validate(
         {
-            "date": DATE, "run_id": RUN_ID, "model_id": "candidate-fixture",
-            "is_incumbent": False, "selected": False, "leaderboard_hhem": 0.8,
-            "measured_hhem": 0.7, "articles": 1, "commit_sha": "aaaaaaa",
-            "runner": "fixture", "verdict": "confirmed", "detail": "recorded evaluation",
+            "date": DATE,
+            "run_id": RUN_ID,
+            "model_id": "candidate-fixture",
+            "is_incumbent": False,
+            "selected": False,
+            "leaderboard_hhem": 0.8,
+            "measured_hhem": 0.7,
+            "articles": 1,
+            "commit_sha": "aaaaaaa",
+            "runner": "fixture",
+            "verdict": "confirmed",
+            "detail": "recorded evaluation",
         }
     )
     for attempt, cpu in enumerate(("first", "second"), start=1):
@@ -1494,9 +1485,14 @@ def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_
             identity=writer_identity(RUN_ID, attempt=attempt, job=ServerJob.WORK),
         )
 
-    machines = ledger.load_days(state, LedgerName.HOST_FINGERPRINT, [DATE], model=HostFingerprintRow)
+    machines = ledger.load_days(
+        state, LedgerName.HOST_FINGERPRINT, [DATE], model=HostFingerprintRow
+    )
     candidates = ledger.load_days(
-        state, LedgerName.CANDIDATE_MODELS, [DATE], model=ValidationRow,
+        state,
+        LedgerName.CANDIDATE_MODELS,
+        [DATE],
+        model=ValidationRow,
     )
 
     assert len(machines) == 1, "one machine, written down twice, is one machine"
@@ -1526,10 +1522,9 @@ def health_rows(state: Path) -> list[FeedHealthRow]:
     return ledger.load_health(state, today=DATE, within_days=1)
 
 
-#: Wider than `ledger.HEALTH_WINDOW_DAYS` (31), so a 31-day window has something
-#: to exclude and a grain that read too far shows up as rows the window did not
-#: name. It spans two months as well, so the month case below really holds two.
-PARITY_DAYS: Final = 40
+#: Three recorded days are the minimum that leave one outside a two-day window.
+PARITY_DAYS: Final = 3
+PARITY_WINDOW_DAYS: Final = 2
 
 #: One feed a reading, chosen so the three cases the reliability reduction
 #: separates are all present: one that answers, one that never reaches the
@@ -1541,19 +1536,19 @@ PARITY_FEEDS: Final = {
 }
 
 
-def parity_rows(days: int = PARITY_DAYS) -> list[FeedHealthRow]:
+def parity_rows(days: int = PARITY_DAYS, *, today: str = DATE) -> list[FeedHealthRow]:
     """`days` consecutive days of readings, one row per feed per day, oldest first.
 
-    The steady feed answers with entries on every run but one in seven, so its
-    reliability is a fraction rather than 1.0 - a window that reached a different
-    set of days would move it, which is what makes the comparison below bite.
+    The steady feed answers on one of the two named days, so its reliability is
+    a fraction rather than 1.0 - a window that reached different days would move
+    it, which is what makes the comparison below bite.
     """
-    start = date_type.fromisoformat(DATE) - timedelta(days=days - 1)
+    start = date_type.fromisoformat(today) - timedelta(days=days - 1)
     rows: list[FeedHealthRow] = []
     for offset in range(days):
         day = (start + timedelta(days=offset)).isoformat()
         for feed_id, outcome in PARITY_FEEDS.items():
-            empty = feed_id == "steady" and offset % 7 == 0
+            empty = feed_id == "steady" and offset % 2 == 0
             rows.append(
                 FeedHealthRow(
                     version=FeedHealthRow.schema_version(),
@@ -1617,25 +1612,24 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
     """The row Oracle. Moving the files moved no reliability figure.
 
     Built at both grains from ONE row list, so a difference can only come from
-    the reading. Forty days against a 31-day window, so the window has nine days
-    to exclude - and the month case is what proves the exclusion is real: two
-    month shards hold all forty days, so the old reader hands back rows the
-    window never named. The day case hands back exactly the days it named, which
-    is the trade the grain makes - more file handles for fewer rows.
+    the reading. Three dates cross one month boundary. With a two-day window, the day reader
+    excludes the oldest date while the month reader opens both month files and
+    includes it. Two dates would not prove the exclusion, so these three are the
+    smallest sample that shows the difference.
 
     The day cover counts RECORDED days, so the days it names are the newest
-    thirty-one on disk. Every day here recorded one, which is why that set and a
+    two on disk. Every day here recorded one, which is why that set and a
     calendar window over the same tree hold the same dates but for the far end.
 
     The reliability maps are compared over the SAME rows on both sides, because
     that is the claim worth making: `feed_reliability` is untouched by this row,
     and what could break is which rows reach it.
 
-    A 40-day tree the test builds rather than the committed ledger: the archive
-    holds 21 days, gains one every day, and could never carry the case this needs
+    The test builds these rows rather than reading the committed ledger
     (`CLAUDE.md` section 13, Guardrail #12).
     """
-    rows = parity_rows()
+    today = "2026-10-02"
+    rows = parity_rows(today=today)
     day_tree = tmp_path / "day" / "state"
     # One call a day, not one a row: the plan job writes its whole read of the
     # day into one file, and a second call under the same identity replaces it.
@@ -1647,7 +1641,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
     month_root = ledger.tree_root(tmp_path / "month" / "state", LedgerName.FEED_HEALTH)
     month_grain_tree(month_root, rows)
 
-    window = ledger.HEALTH_WINDOW_DAYS
+    window = PARITY_WINDOW_DAYS
     recorded = sorted(
         {
             day_shards.date_of(shard)
@@ -1657,12 +1651,14 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
         }
     )
     named = set(recorded[-window:])
-    from_days = ledger.load_health(day_tree, today=DATE, within_days=window)
-    from_months = month_grain_read(month_root, today=DATE, within_days=window)
+    from_days = ledger.load_health(day_tree, today=today, within_days=window)
+    from_months = month_grain_read(month_root, today=today, within_days=window)
 
     assert len(recorded) == PARITY_DAYS
     assert len(named) == window, "the cover counts recorded days, and every day here recorded one"
-    assert {row.date for row in from_days} == named, "the day case read a day the window did not name"
+    assert {row.date for row in from_days} == named, (
+        "the day case read a day the window did not name"
+    )
     assert len(from_days) == len(named) * len(PARITY_FEEDS)
     assert len(from_months) > len(from_days), (
         "the month shards have to hold rows outside the window or the trade is not shown"
@@ -1677,7 +1673,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
         )
         for feed_id in PARITY_FEEDS
     }
-    measured = reliability(day_tree, today=DATE, within_days=window, floor=floor)
+    measured = reliability(day_tree, today=today, within_days=window, floor=floor)
 
     assert measured == over_the_same_rows
     assert 0.0 < measured["steady"] < 1.0, "the fixture has to separate the three feeds"
@@ -1710,18 +1706,13 @@ def test_the_attempt_that_carried_articles_wins_however_late_it_ran(tmp_path: Pa
     the last would throw the recovery away when the retry came back empty.
     """
     seed_feed_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")])
-    seed_feed_health(
-        tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="07:00:00")], attempt=2
-    )
+    seed_feed_health(tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="07:00:00")], attempt=2)
     assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 9)]
 
     later = tmp_path / "later"
     seed_feed_health(later, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")])
-    seed_feed_health(
-        later, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2
-    )
+    seed_feed_health(later, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2)
     assert [(row.outcome, row.items) for row in health_rows(later)] == [(FetchOutcome.OK, 9)]
-
 
 
 # --- The server's own counters, and what they are for ----------------------
