@@ -394,7 +394,6 @@ def stage_assemble(
     )
     _report_prose_change(recorded_inputs, previous_manifest)
     atomic_write.write_atomic(target / "run.json", manifest.to_json())
-    published = ledger.append_published(common.STATE_ROOT, day.date, _published_rows(day, plan))
     # This job's own raw files, never another writer's. A work shard recorded the
     # same items hours ago on another runner, and each files its own file through
     # the ledger door; the settlement keeps one row an item. `assemble` runs once
@@ -406,6 +405,9 @@ def stage_assemble(
         shard=ASSEMBLE_SHARD,
         producer=PRODUCER,
         git_sha=commit_sha,
+    )
+    published = ledger.append_published(
+        common.STATE_ROOT, day.date, _published_rows(day, plan), identity=identity
     )
     filed = ledger.persist(
         common.STATE_ROOT,
@@ -554,8 +556,8 @@ def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
     joined here rather than widening the published payload with anything the
     skip read does not open.
 
-    That join is also the filter, and it is load-bearing: `ledger.extend_ledger_file`
-    writes every row it is handed, so nothing downstream would collapse a
+    That join is also the filter, and it is load-bearing: `ledger.append_published`
+    files every row it is handed, so nothing downstream would collapse a
     repeat. A day carries yesterday's items forward, and re-recording them would
     move their published date every morning. They do not survive the join
     because `rank.plan_vertical` has already dropped every address

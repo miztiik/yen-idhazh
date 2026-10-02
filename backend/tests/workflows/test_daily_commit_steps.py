@@ -442,14 +442,14 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
         for value in (settings["REFRESH_PATHS"], settings["REGENERATE_COMMAND"])
     )
     # The plan job records what it saw and cannot rebuild it, so it resolves a
-    # race by rebasing, and `.gitattributes` unions its ledgers. It commits no
-    # rendered asset either, so it has nothing to drop.
+    # race by rebasing alone. It commits no rendered asset either, so it has
+    # nothing to drop.
     assert "REGENERATE_COMMAND" not in _commit_call("plan")[1]
     assert "DROP_RACED_ASSETS_COMMAND" not in _commit_call("plan")[1]
 
 
 def test_only_the_collections_this_repository_declares_union() -> None:
-    """A union merge keeps both sides, which is right for nine of these and wrong for the rest.
+    """A union merge keeps both sides, which is right for a few of these and wrong for the rest.
 
     Every file under `state/` carried this driver until 2026-09-19. It kept two
     attempts at one row as readily as two independent rows, and a lost push race

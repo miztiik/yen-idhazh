@@ -17,7 +17,7 @@ hold exactly 90.
 
 | | |
 | --- | --- |
-| Instrument | `backend/utilities/measure_day_window.py`, default arguments |
+| Instrument | `backend/utilities/measure_day_window.py`, default arguments. It was deleted when the seen ledger moved to the ledger door; git history holds it |
 | Runtime | CPython 3.14.2, Windows 11 (26200) |
 | Box | A developer machine, not a runner. Nothing else heavy was running |
 | Fixture | 120 consecutive days, 3,152 sight rows a day, 378,240 rows in all |
@@ -34,13 +34,12 @@ the data. The month case is `ledger.load_seen` itself. The day case is the same
 reduction over `<YYYY>/<MM>/<DD>.csv`, written inside the instrument because no
 ledger files sight rows by day yet - which is the change being priced.
 
-**The two cases swapped on 2026-09-13, and the reading above did not move.**
-`state/seen/` filed by day that day, so `ledger.load_seen` is the DAY case now and
-the month case is the layout written out inside the instrument. Which case is the
-ledger's own code says nothing about what either case costs - both read the same
-rows with the same reduction, which is the property this record rests on - but a
-reader running the tool today would otherwise find the sentence above inverted.
-The numbers below stand as taken.
+**The seen ledger has moved twice since, and the reading above did not move.**
+It filed by day on 2026-09-13, and later moved to the ledger door, where its
+rows are read through `ledger.load_days`; the instrument was deleted with the
+CSV reader it measured. Neither move says anything about what either case cost -
+both read the same rows with the same reduction, which is the property this
+record rests on. The numbers below stand as taken.
 
 **The cases are interleaved because a stopwatch here measures the page cache.**
 The same bounded reads over one fixture came out 16.6 percent apart minutes

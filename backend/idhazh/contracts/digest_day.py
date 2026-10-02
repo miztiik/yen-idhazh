@@ -444,7 +444,7 @@ class DigestItem(Model):
         description=(
             "Reserved. Null in every payload ever written, because no run can revise "
             "an item: `rank.plan_vertical` drops a candidate already in the published "
-            "ledger under `state/published/`, `cli` supplies that set, and "
+            "ledger, `cli` supplies that set, and "
             "`assemble.build_day` drops an item the day already holds. If a run ever "
             "does revise, the rule it must keep is that the item says so."
         ),

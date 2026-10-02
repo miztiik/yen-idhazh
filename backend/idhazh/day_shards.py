@@ -49,8 +49,8 @@ that made the directory and wrote nothing into it is a defect, and an empty
 answer would read as a day nothing ran on.
 
 `day_partition.day_files` is not touched and keeps refusing a directory loudly.
-It has callers over `state/published/`, which is not moving, and its refusal is
-the tripwire that catches a twelfth tree arriving without a plan.
+It has callers over the similarity judge's and the council's day files, and its
+refusal is the tripwire that catches a twelfth tree arriving without a plan.
 """
 
 from __future__ import annotations

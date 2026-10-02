@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -26,10 +26,10 @@ naming both values.
 
 ## One declaration a task
 
-A task is named by its file: `config/gardener/seen.json` declares the task
-`seen`. A missing `config/gardener/` means no tasks. Twenty ship today: eleven
-`retention` tasks, two `collection` tasks, six `compaction` tasks (below) and
-`corpus-squash`, the one `history` task (below).
+A task is named by its file: `config/gardener/traces.json` declares the task
+`traces`. A missing `config/gardener/` means no tasks. Twenty ship today:
+seven `retention` tasks, two `collection` tasks, ten `compaction` tasks (below)
+and `corpus-squash`, the one `history` task (below).
 **There is no index file and no `name` key**, so a task can never be listed under
 one name and filed under another.
 
@@ -78,7 +78,6 @@ Why each tree gets the age it has is
 | `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health` and `state/compact/item-health`, which `compact-item-health` owns, so it finds its due months whichever shard it lands in |
 | `summary-quality-evals-index` | `state/summary-quality-evals-index` | forever | the index a run dedupes against, and an observation key carries no date, so a dropped day would make every measurement in it new again. Every eval row is kept for ever and nothing summarises a month, so the task takes nothing; it exists so the index's closed months become one file each, and the open month's closed days one file each |
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
-| `seen` | `state/seen` | 90 days | at least `collect.seen_window_days`, the days the collector reads |
 | `traces` | `state/traces` | 7 days | an item inspection reads recent trace detail; item health keeps its stage measurements |
 | `trials` | everything under `state` that no other task owns and no ledger claims | 90 days | nothing reads a trial's rows, and 90 days is the artifact retention used everywhere else |
 | `digest-fragments` | `state/digest-fragments` | 390 days | 30 days times `retention.image_months`, the window the archive page states; past it a run's block of a day is a second copy nothing reads |
@@ -89,21 +88,24 @@ Why each tree gets the age it has is
 Each moves one ledger's rows out of its raw files into one file a day and then
 one file a month, and deletes what it moved. A declaration that sets
 `monthly_keep_days` also packs each finished year's month files into one file a
-year. Two of the eight set it, `compact-summary-quality-evals` and
-`compact-candidate-models`, whose `monthly_keep_days` (93) is how many whole days
+year. Three of the ten set it, `compact-summary-quality-evals`,
+`compact-candidate-models` and `compact-published`, whose `monthly_keep_days`
+(93) is how many whole days
 after a UTC year ends each waits to pack that year. Each ledger's own
 `monthly_keep_days` sets its wait, a ledger the site publishes included, and the
 loader checks only that the value can take effect: at least `daily_keep_days`
 plus 32 days. How a pass runs is
 [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#the-compaction).
-Four pack live - `compact-item-health`, `compact-host-fingerprint`,
-`compact-counterfactual-scores` and `compact-candidate-models` - and the other
-four ship `dry_run: true`. Each owns its ledger's two folders,
+Six pack live - `compact-item-health`, `compact-host-fingerprint`,
+`compact-counterfactual-scores`, `compact-candidate-models`, `compact-seen` and
+`compact-published` - and the other four ship `dry_run: true`. Each owns its
+ledger's two folders,
 `state/raw/<ledger>` and `state/compact/<ledger>`. Six set
 `monthly_window_dry_run` to `false`, so `compact-item-health` and
 `compact-host-fingerprint` delete what their monthly windows drop, and a
 `dry_run` turned `false` later turns a window live with it.
-`compact-counterfactual-scores` and `compact-candidate-models` set it to `true`:
+`compact-counterfactual-scores`, `compact-candidate-models`, `compact-seen` and
+`compact-published` set it to `true`:
 packing runs live in the change that moves a ledger to the door, because it
 writes every row into a coarser file before it deletes one, and the window only
 reports what it would delete ([the two switches](#the-keys-of-a-compaction)).
@@ -115,6 +117,8 @@ reports what it would delete ([the two switches](#the-keys-of-a-compaction)).
 | `compact-feed-retirements` | `feed-retirements`, the addresses the pipeline stopped fetching | day files for 45 to 76 days, then 60 month files | a retirement the window deletes is a feed the pipeline asks for again, so it keeps five years (owner, 2026-09-27). The price: an address retired more than 60 months ago is asked for once more, and is retired again if it is still gone |
 | `compact-counterfactual-scores` | `counterfactual-scores`, what another lens weight would have scored | day files for 45 to 76 days, then 1 month file | its floor is `lens_weights.window_days`, 30 days, the days a reader opens. It packs live and its window only reports, as the 30-day window on its CSV did |
 | `compact-candidate-models` | `candidate-models`, the verdicts on candidate models | day files for 45 to 76 days, then every month file until its year is packed 93 days after it ends, then one year file for ever | a verdict is why a model was adopted or refused, so none is dropped, and nothing deleted its CSV either. It packs live and its window only reports. Only a qualification writes it, under its trial root, which nothing packs |
+| `compact-seen` | `seen`, the first sight of every address | day files for 45 to 76 days, then 2 month files | its floor is `collect.seen_window_days`, 90 days, the days the collector reads. 45 days and the fewest days 2 months can hold reach back 104 days; 1 month would reach only 73. It packs live and its window only reports. The prune verb refuses it: a day taken out of it lets the next run find every address that day held as new |
+| `compact-published` | `published`, every address a digest carried | day files for 45 to 76 days, then every month file until its year is packed 93 days after it ends, then one year file for ever | `collect.published_window_days` is -1, which reads every day, so the loader refuses any window that drops a month. It packs live. The prune verb refuses it: it is the guard against publishing one story twice |
 | `compact-item-health` | `item-health`, the census | day files for 31 to 62 days, then 15 month files | its floor is the `full-grain` series of `telemetry-aggregate`, 14 months, and a month is summarised before this can delete it. It packs live, with `daily_keep_days` 31: the shortest wait no GitHub re-run can outlast ([why 31](../../architecture/publishing/idhazh-gardener.md#design-rationale)) |
 | `compact-summary-quality-evals` | `summary-quality-evals`, the eval ledger | day files for 45 to 76 days, then every month file until its year is packed `monthly_keep_days` after it ends, then one year file for ever | every eval row is kept for ever and nothing summarises a month, so it may pack a month or a year and never drops one |
 | `compact-host-fingerprint` | `host-fingerprint`, the machine record | day files for 31 to 62 days, then 14 month files | its floor is `public_machine_keep_months`, 14 months, because the published machine shard is folded from this ledger; its CSV was kept the same 14 months. It packs live, with `daily_keep_days` 31, as `compact-item-health` does |
@@ -210,8 +214,9 @@ fold's as well as the task's own, and every compaction's
 `false` too. It names the live ones as its exceptions, each with the decision
 beside it: `corpus-squash`'s `dry_run`, the `dry_run` and the
 `monthly_window_dry_run` of `compact-item-health` and
-`compact-host-fingerprint`, the `dry_run` of `compact-counterfactual-scores` and
-`compact-candidate-models`, and the two `fold.dry_run` switches above. A task
+`compact-host-fingerprint`, the `dry_run` of `compact-counterfactual-scores`,
+`compact-candidate-models`, `compact-seen` and `compact-published`, and the
+two `fold.dry_run` switches above. A task
 earns its first deletion from a person reading its records, so turning one live
 is an edit to that list, never a side effect of the change that added the task.
 

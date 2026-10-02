@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-02
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -56,15 +56,15 @@ The gate reads the date the run believes, not the date the feed printed - so a f
 
 Plenty of feeds carry no publish date, and the ones that omit it omit it consistently. For those the only honest age is the first time we saw the address, so the planning step writes one down.
 
-`state/seen/<YYYY>/<MM>/<DD>.csv` is append-only: the URL key, the timestamp, and the run that saw it first. It carries no address, because `ledger.load_seen` opens the key and the timestamp and nothing else - the address was 49.1 percent of the file for no reader, and it came off on 2026-08-31 for the reason `PublishedRow` shed its own on 2026-08-26. An address seen for the first time is treated as new, which is the truth as far as we can check it. Every run after that reads its real first-sighting.
+Each plan job files the addresses it saw for the first time - the URL key, the timestamp, and the run that saw it - as one raw file through the ledger door, under `state/raw/seen/<YYYY>/<MM>/<DD>/` ([../contracts/persistence.md](../contracts/persistence.md)). No run edits a row another run filed, and a second attempt at one plan job replaces its first attempt's file rather than adding to it. A row carries no address, because `ledger.load_seen` reads the key and the timestamp and nothing else - the address was 49.1 percent of the file for no reader, and it came off on 2026-08-31 for the reason `PublishedRow` shed its own on 2026-08-26. An address seen for the first time is treated as new, which is the truth as far as we can check it. Every run after that reads its real first-sighting.
 
-**Which file a row sits in is `first_seen_run`, not `first_seen_at`.** A run id is `<date>-<n>`, so its first ten characters are the run's digest date - the date `ledger.append_seen` is handed and files by. `first_seen_at` is a wall clock taken at the top of the planning stage, and it crosses midnight independently of the run it belongs to. The two agree over every committed row today and they are not the same rule, which is why the migration to day files used the run id.
+**Which day a row is filed under is the run's digest date, not `first_seen_at`.** `ledger.append_seen` is handed the run's date and files under it, and a run id is `<date>-<n>`, so the first ten characters of `first_seen_run` name the same day. `first_seen_at` is a wall clock taken at the top of the planning stage, and it crosses midnight independently of the run it belongs to. The migration to day files used the run id for that reason, and the move to the ledger door kept every row under the day its CSV file named.
 
 **An undated article is therefore never refused for age on the day we find it, and is always refused a day later.** Dropping it on sight would silently retire every feed that omits a date, which is a different decision from refusing a back catalogue, and it is not the one taken here.
 
-The file is one day and the lookback is `seen_window_days` (90). An address older than the window is not worth a lookup - it is past the gate several times over. A day file below that window is therefore deleted rather than kept: the gardener's `seen` task takes its floor from `day_partition.days_in_window`, the same function the read uses, so the two cannot drift. It deletes what is *older* than the oldest day that helper names and never merely what is outside the window - the window is drawn around whatever date the prune is handed, and a run given a date in the past would otherwise delete the live file.
+A day is the unit and the lookback is `seen_window_days` (90): `ledger.load_seen` reads the days `day_partition.days_in_window` names and no others. An address older than the window is not worth a lookup - it is past the gate several times over. What keeps those days is the ledger's compaction, `config/gardener/compact-seen.json`. It packs each finished day, keeps day files for 45 days after their month ends and month files for 2 months after that, so it reaches back at least 104 days. The gardener loader refuses a compaction that reaches back fewer days than `seen_window_days` reads. The 2-month window only reports what it would delete until a person turns it live.
 
-**The grain moved on 2026-09-13 and the margin went with it.** At month grain a whole shard survived if any of its days was in range, so what the prune kept reached back 90 to 120 days for a 90-day read - measured over 366 anchor dates. At day grain the two are the same unit and the retained span is exactly the window on every date. What that costs is file handles: a 90-day read opens at most 91 files where it opened at most 4. What it buys is fewer rows, a removal that is one `rm`, and a first-sight record two runs collide on only when they are the same day - which an append-only ledger cannot express inside a shared shard. It also means a day leaves 8 days earlier than it used to: the first file this ledger loses is `state/seen/2026/08/23.csv` on 2026-11-22, where the month rule took `2026-08.csv` whole on 2026-11-30.
+**The grain moved from months to days on 2026-09-13.** At month grain a whole shard survived the prune if any of its days was in range, so what was kept reached back 90 to 120 days for a 90-day read - measured over 366 anchor dates. At day grain the read names exactly the days in the window. The move to the ledger door kept the day grain and gave every writer a file of its own, so two runs never share a file.
 
 ## A date in the future is ignored
 
@@ -88,18 +88,17 @@ This is the fix for a real hazard, not tidiness. Both fallbacks above - an undat
 
 An article published at 23:00 on Monday is seven hours old at 06:00 on Tuesday. Any freshness rule you can write will happily plan it a second time.
 
-So the assemble stage appends to `state/published/<YYYY>/<MM>/<DD>.csv`, and the planning step skips any address already in it. **The assemble stage writes it, not the planning step** - until a digest is committed, nothing was published, and a run that dies mid-way must not leave behind a claim that it finished.
+So the assemble stage files every address it published into the published ledger, one raw file a run under `state/raw/published/<YYYY>/<MM>/<DD>/`, and the planning step skips any address already in it. **The assemble stage writes it, not the planning step** - until a digest is committed, nothing was published, and a run that dies mid-way must not leave behind a claim that it finished.
 
-No run ever rewrites either ledger. A mutable `published` flag on a seen row would turn an append into a read-modify-write over the whole file, and two runs racing on that would lose rows. A one-shot migration by an operator is the one exception, and it has happened twice - see below.
+No run ever rewrites a row another run filed in either ledger. A mutable `published` flag on a seen row would turn an append into a read-modify-write over the whole history, and two runs racing on that would lose rows. A one-shot migration by an operator is the one exception, and it has happened three times - see below.
 
 ### The published ledger files by day, and the read carries a cover
 
-`state/seen/`, `state/feed-health/` and `state/published/` all file by day now:
-one `YYYY/MM/DD.csv` per digest date. For `state/published/` that day mirrors
-the day the rows are derived from, and its dedupe read carries
-`collect.published_window_days`, a cover the committed config sets to `-1` - so
-the read is whole today and the guard still answers "have we ever published this
-address?"
+The seen, feed-health and published ledgers all file by day: one day per digest
+date. For the published ledger that day mirrors the day the rows are derived
+from, and its dedupe read carries `collect.published_window_days`, a cover the
+committed config sets to `-1` - so the read is whole today, one held month at a
+time, and the guard still answers "have we ever published this address?"
 
 **This reverses what this page argued until 2026-09-08, and the argument it
 reverses was right when it was written.** The old text said the ledger must not
@@ -109,8 +108,8 @@ nothing. That still holds for a read with no cover. What changed is that the
 read got one. Guardrail #12 landed on 2026-09-05 and makes constant cost the default,
 so a read whose cost rises because a run appended now needs a person's name
 against it rather than an argument in its favour. The cover is where that name
-goes: `-1` keeps today's guarantee unchanged, and a finite value opens only the
-day files in range. Without a partition there is nothing for a finite value to
+goes: `-1` keeps today's guarantee unchanged, and a finite value reads only the
+days in range. Without a partition there is nothing for a finite value to
 skip, so the partition had to land first even though it buys nothing on its own.
 
 **The grain is a day, and neither speed nor repository size is a reason for it.**
@@ -120,24 +119,24 @@ over a synthetic year of 176,295 rows, day files take twice the wall clock of
 month files for a 120-day window, and after packing they leave the largest
 `.git`. Three reasons survive. The digest tree is already day-partitioned and
 every published row is derived from one of those days, so one partition rule
-covers both. Taking a day off the site becomes one `rm`, where a month file
-would need a row deleted inside it and an append-only ledger cannot express a deletion.
-And two runs collide on a file only when they are the same day, where a month
-file is shared by about 150 runs.
+covers both. Taking a day off the record names one day, where a month file
+would need a row deleted inside it and an append-only ledger cannot express a
+deletion. And two runs never share a file: since the move to the ledger door,
+each writer files its own, where a month file was shared by about 150 runs.
 
-The bound this costs, measured 2026-08-26 and recorded in
-[../../reference/pipeline-cost.md](../../reference/pipeline-cost.md): 2,213 rows
-at 110.7 B, so 40.4 MB a year at the structural ceiling of 1,000 rows a day.
-`load_published` peaks at 498.1 B a row while it reads, which is 182 MB at that
-ceiling - 1.1 percent of the runner's 16 GB, in the one job that loads no model.
-Those figures were taken over the flat file this ledger has since moved off; the
-row is the same row and the arithmetic is the same arithmetic.
+The bound this costs: on 2026-08-26 the CSV ledger held 2,213 rows at 110.7 B a
+row, recorded in [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
+`load_published` reads one held month at a time, so what it holds while it reads
+is one month's rows and the answer, however long the history grows - at the
+structural ceiling of 1,000 rows a day, a month is about 31,000 rows.
+`backend/tests/test_ledger.py::test_load_published_costs_the_answer_and_not_the_file`
+doubles the months held and checks that the peak stays flat.
 
 **`canonical_url` was 48.6 percent of the row, and it is gone.**
 `load_published` reads `url_key` and `published_on` by name, and nothing else
 opens the file, so the column was paying for a lookup no run ever made. It left
-on 2026-08-26: the contract narrowed, and
-`backend/utilities/migrate_published_ledger.py` rewrote the committed ledger in
+on 2026-08-26: the contract narrowed, and a one-shot program, deleted when the
+ledger moved to the ledger door, rewrote the committed ledger in
 the same commit. The file went from 476,809 B to 244,910 B - 231,899 B and
 104.8 B off every row - on a ledger that had no cover at the time and therefore
 never stopped growing. That is 21.2 MB a year at the rate the ledger itself
@@ -147,23 +146,23 @@ ledger is unbounded and the migration was one file and one pass; the same
 arithmetic over a file that stops growing would not have earned a contract
 break.
 
-**One commit, because the reader never cared and the writer never bargains.**
-`load_published` maps cells by name, so it returns the same mapping from a
-five-column file and from a four-column one - measured 2026-08-26 over two
-fixtures of eleven real rows in
-`backend/tests/test_ledger.py::test_load_published_answers_the_same_from_either_header`.
-The check that does care is `require_matching_header`, and it is called from
-`extend_ledger_file` and from nothing on the read path: a run that tried to append a
-four-column row onto a five-column file raises `Migrate the ledger before
-appending to it`. So the shape change and the file rewrite are one atomic act,
-and there was no read-side transition to stage.
+**One commit, because the reader never cared and the writer never bargained.**
+The CSV reader `load_published` used then mapped cells by name, so it returned
+the same mapping from a five-column file and from a four-column one - measured
+2026-08-26 over two fixtures of eleven real rows, by a test deleted with that
+reader. The check that did care was `require_matching_header`, and it was
+called from `extend_ledger_file` and from nothing on the read path: a run that
+tried to append a four-column row onto a five-column file raised `Migrate the
+ledger before appending to it`. So the shape change and the file rewrite were
+one atomic act, and there was no read-side transition to stage.
 
 **What it cost, and how to get an address back.** What the column bought was
 that a person could grep the ledger for an address and get the day and the item
 id back. That look is now a two-step join, and the answer is exact:
 
-1. Find the row in `state/published/<YYYY>/<MM>/<DD>.csv`. It gives
- `published_on` and `item_id`, and the file name already gives the day.
+1. Read that day's rows with `ledger.load_days(state, LedgerName.PUBLISHED,
+ [day], model=PublishedRow)`. The files are parquet, so a grep no longer finds
+ a row. A row gives `published_on` and `item_id`.
 2. Open `frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json` for that date and
  read `source_url` off the item with that `item_id`.
 
@@ -380,7 +379,7 @@ Measured over the committed 30-day window ending 2026-09-06 (a developer machine
 
 The pass records what it would collapse before it cuts anything, because a cut nobody has read the record of is a cut nobody can defend. The first scheduled run writes the day's would-collapse count to the log; the number the pass would remove on a live day is knowable from that log, not asserted here (Guardrail #10). The within-day count is bounded by the day's plan and never by the archive - the safety ceiling caps the stories walked, and the vectors are the day's own (Guardrail #12).
 
-**It compares a day against itself, and not against the days already published - deliberately, and for now.** The design called for a second comparison: embed the stories published in a trailing window, decayed by recency, and drop today's story if it repeats one, so a re-run of the same day cannot publish the same story twice. That step is deferred, because the ledger it would read cannot answer it. `state/published/` carries `item_id`, `published_on` and `url_key` and no title, so even under a finite `collect.published_window_days` there is no text to embed. Embedding a trailing window of published stories needs a bounded, title-carrying published surface that does not exist, and creating one is a new retention surface this plan refused. The within-day collapse is the honest part today's committed state supports; the cross-day part waits for a surface that carries the text (Guardrail #12).
+**It compares a day against itself, and not against the days already published - deliberately, and for now.** The design called for a second comparison: embed the stories published in a trailing window, decayed by recency, and drop today's story if it repeats one, so a re-run of the same day cannot publish the same story twice. That step is deferred, because the ledger it would read cannot answer it. The published ledger carries `item_id`, `published_on` and `url_key` and no title, so even under a finite `collect.published_window_days` there is no text to embed. Embedding a trailing window of published stories needs a bounded, title-carrying published surface that does not exist, and creating one is a new retention surface this plan refused. The within-day collapse is the honest part today's committed state supports; the cross-day part waits for a surface that carries the text (Guardrail #12).
 
 **Two knobs shipped, not four.** The deferred cross-day step needs a window length and a recency half-life; both are added when that step lands, not before, because a config knob no code reads is a knob nobody can trust. The threshold reuses `assemble.same_story.floor_min` rather than minting a second number for the same question one stage earlier: both ask whether two of a day's stories are one, both score cosine over MiniLM vectors, and 0.94 was set by hand labels for exactly that question (measured 2026-09-01, a developer machine, 3,978 items). The text each embeds differs - a feed's lead here, our own summary at assemble - so the reused number is the labelled answer to the same question, not a claim the inputs are identical.
 
@@ -438,7 +437,7 @@ about the story. `too_old` on each vertical's plan summary is what makes that
 checkable - a desk that thins can say whether a gate or a dead feed did it.
 The threshold is `collect.max_age_hours` and moving it is a config edit.
 
-Both first-sighting and the published ledger are append-only files under `state/`, committed by CI. That is not a preference - it is the only shape available. There is no database (Guardrail #1), and anything a later run must read has to survive as a committed file. The second one-shot migration was 2026-09-08: `backend/utilities/split_published_ledger.py` moved every row of the flat `state/published.csv` into the day file its own date names and removed the flat file, copying each row's bytes across unchanged.
+Both first-sighting and the published ledger are files under `state/` that no run edits once another run has filed them, committed by CI. That is not a preference - it is the only shape available. There is no database (Guardrail #1), and anything a later run must read has to survive as a committed file. The second one-shot migration was 2026-09-08: a program since deleted moved every row of the flat `state/published.csv` into the day file its own date names and removed the flat file, copying each row's bytes across unchanged. The third moved both ledgers from their CSV day files onto the ledger door through `backend/utilities/migrate_to_parquet.py`, which reads every day back cell for cell before it deletes a CSV file.
 
 ### A per-run reading budget was proposed on 2026-08-25 and refused
 
@@ -494,7 +493,7 @@ and guessing it is what this refusal is about.
 | Writing the published ledger at plan time | A run that dies mid-way would leave behind a claim it published something it did not, and the article would never be publishable again. |
 | A per-run reading budget at the planning step | Refused 2026-08-25 by Carmack and Fowler. The bound already exists one stage later and is a clock; the artifact loss it answered already carries `if: always`; its value came from a measurement taken before `diagram` was switched off; and it deletes about 436 items from a 731-item day. See the design rationale above. |
 | A score floor set now rather than measured | A floor is the right control and the wrong thing to guess. It waits on the retrieval eval, which is the instrument that can say what a score is worth. |
-| Sharding `state/published.csv` by month | Refused until 2026-09-08, and then overturned. The reasoning stood while the read had no cover: every shard is opened anyway, so it adds file opens and removes nothing. Guardrail #12 made constant cost the default, the read gained `collect.published_window_days`, and the ledger moved to `state/published/YYYY/MM/DD.csv` - a day rather than a month, for the three reasons in the section above. |
+| Sharding `state/published.csv` by month | Refused until 2026-09-08, and then overturned. The reasoning stood while the read had no cover: every shard is opened anyway, so it adds file opens and removes nothing. Guardrail #12 made constant cost the default, the read gained `collect.published_window_days`, and the ledger moved to day files - a day rather than a month, for the three reasons in the section above. The move to the ledger door kept the day. |
 | Windowing the dedupe read without sharding the file | Filtering rows after reading them saves no I/O. A window pays only when it can decide which files to skip - which is why the partition landed before the cover did. |
 | Shipping a finite `collect.published_window_days` | The machinery is in and the value is `-1`. A finite cover forgets an address and lets it publish again, and how many days is worth forgetting is a question the refusal ages on the plan payload can answer and prose cannot. |
 | Pruning the published ledger | It is the only record of what a digest carried. Pruning makes a re-publish look new, which is the exact failure the ledger exists to stop. |

@@ -53,9 +53,9 @@ def first_kept_day(
     """The oldest day a window keeps, or None when it keeps every day there will ever be.
 
     `days_back` is how this task's ledger counts a window of days, because the
-    readers disagree and each prune has always matched its own reader: the seen
-    planner opens `today` and the ninety days before it, while a trace is kept
-    while it is less than seven days old.
+    readers disagree and each prune has always matched its own reader: a day's
+    digest fragments are kept for `today` and the window's days before it, while
+    a trace is kept while it is less than seven days old.
     """
     if isinstance(window, ForeverWindow):
         return None

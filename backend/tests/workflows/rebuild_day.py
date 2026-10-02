@@ -11,10 +11,10 @@ repository - and it would put the pipeline under test rather than the git loop.
 So this is a real program doing real file I/O with `stage_assemble`'s shape:
 read the previous day, drop the items it already carries, replace this run's
 entry in the run list, copy each decision's asset path into the day the way
-`to_digest_visual` does, blind-append the one ledger that blind-appends, write
-the two day trees one file per writer, and rebuild the month search index from
-the days on disk. It decides nothing - no model, no scorer, no contracts -
-because the thing under test is the loop, not the digest.
+`to_digest_visual` does, write the three day trees one file per writer, and
+rebuild the month search index from the days on disk. It decides nothing - no
+model, no scorer, no contracts - because the thing under test is the loop, not
+the digest.
 
 Usage: rebuild_day.py --date YYYY-MM-DD --writer NAME, from the root of a
 checkout. This run's artifacts are read from `backend/var/run/<date>/items.json`,
@@ -125,18 +125,18 @@ def rebuild(root: Path, date: str, writer: str) -> None:
     )
     _write_json(day_dir / "run.json", {"date": date, "runs": runs})
 
-    # `state/published` appends blind, as `ledger.extend_ledger_file` does: a row
-    # is a fact about a run, and a run that runs twice records twice. It is one
-    # day file that two runs can both append to, and a union merge driver is
-    # what settles them.
-    published_path = root / "state" / "published" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-    published = _read_rows(published_path)
-    published += [{"item_id": item, "published_on": date} for item in mine]
-    _write_rows(published_path, PUBLISHED_COLUMNS, published)
-
-    # The other two are day directories, and this run writes the one file it
+    # All three ledgers are day directories, and this run writes the one file it
     # owns inside each. Two runs of one day write two names, so there is nothing
-    # for a merge to settle and nothing a rebase has to choose between.
+    # for a merge to settle and nothing a rebase has to choose between. The
+    # published ledger files this way through the ledger door: one written-once
+    # file per writer, which a rerun replaces rather than adds to.
+    published_day = root / "state" / "published" / date[:4] / date[5:7] / date[8:10]
+    _write_rows(
+        published_day / writer,
+        PUBLISHED_COLUMNS,
+        [{"item_id": item, "published_on": date} for item in mine],
+    )
+
     health_day = root / "state" / "item-health" / date[:4] / date[5:7] / date[8:10]
     _write_rows(
         health_day / writer,

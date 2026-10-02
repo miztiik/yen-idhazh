@@ -83,7 +83,7 @@ def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
     assert isinstance(scores, CompactionPolicy)
     assert isinstance(machine, CompactionPolicy)
     now: dict[str, Any] = {
-        "collect.seen_window_days": _days(tasks["seen"].window),
+        "collect.seen_window_days": _days(CSV_LEDGERS[LedgerName.SEEN].old_window),
         "lens_weights.window_days": _days(
             CSV_LEDGERS[LedgerName.COUNTERFACTUAL_SCORES].old_window
         ),

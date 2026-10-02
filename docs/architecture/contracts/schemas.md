@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -111,8 +111,8 @@ The shapes, and where each one lives once written:
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one row of `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/summary-quality-evals/` |
 | `ObservationIndexRow` | `observation-index-row` | one row of `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/` or of a closed month's `<YYYY>/<MM>/settled.csv`, the identity of one measurement the eval ledger holds |
-| `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY>/<MM>/<DD>.csv` |
-| `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
+| `SeenRow` | `seen-row` | one row of `state/raw/seen/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/seen/` |
+| `PublishedRow` | `published-row` | one row of `state/raw/published/<YYYY>/<MM>/<DD>/`, in the raw file the assemble job files through the ledger door, packed later under `state/compact/published/` |
 | `FeedHealthRow` | `feed-health-row` | one row of `state/feed-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
 | `FeedRetirementRow` | `feed-retirement-row` | one row of `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/`, in the file its writer owns, filed under the day the address was retired |
 | `ItemHealthRow` | `item-health-row` | one row of `state/raw/item-health/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/item-health/` |
@@ -199,16 +199,16 @@ What would overturn it: a published surface that needs the raw readings, which w
 Some `state/` ledgers are one file and some are a directory of shards. The rule
 is one question: **does the read that consumes this ledger carry a time
 window?** The grain follows what the reader asks for - a month for the ledgers
-whose windows are measured in months, a day for `state/published/`, which
+whose windows are measured in months, a day for the published ledger, which
 mirrors the digest tree its rows are derived from.
 
 | Ledger | Layout | The question it answers | Windowed on read |
 | --- | --- | --- | --- |
-| `state/seen/` | day files | how old is this address? | yes, `collect.seen_window_days` - and it is the one window here counted in days, so the prune keeps exactly the files the read opens |
+| `state/raw/seen/` and `state/compact/seen/` | a raw file per write by day, packed into day and month files | how old is this address? | yes, `collect.seen_window_days`, and `ledger.load_days` opens only the days it names. The loader refuses a compaction that keeps fewer days than that window ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
 | `state/feed-health/` | day files | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
 | `state/raw/item-health/` and `state/compact/item-health/` | a raw file per write by day, packed into day and month files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30), and `ledger.load_days` opens only the days it names |
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
-| `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
+| `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
 | `state/summary-quality-evals-index/` | a file per writer by day, and one file a closed month | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains. Once a month is closed the gardener settles its days into one `settled.csv` in the month's folder, which the dedupe reads as it reads a day |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
@@ -303,7 +303,7 @@ The source-state CSV ledgers compare the committed header to the row contract be
 
 A reader built on `csv.DictReader` maps cells by name off the file's own header, so dropping a column nothing reads changes no answer the reader gives. What refuses is the append: `require_matching_header` compares the committed header to the contract's columns and raises rather than write. That is called from `extend_ledger_file` and from nothing on the read path, so the model change and the file rewrite have to land together - and once they do there is no read-side transition left to stage, which is what removes the expand-migrate-contract sequence a breaking change usually needs.
 
-The rewrite is a committed one-shot utility rather than an ad-hoc script, so a fork or a stale branch can reproduce the same migration. `backend/utilities/migrate_published_ledger.py` is the worked example: it refuses a ledger that is already narrow, and it refuses to write at all unless the rewritten file carries the same rows, in the same order, with the same values in the cells the read path opens. `PublishedRow` lost `canonical_url` this way on 2026-08-26 ([../sources/freshness.md](../sources/freshness.md)).
+The rewrite is a committed one-shot utility rather than an ad-hoc script, so a fork or a stale branch can reproduce the same migration. `backend/utilities/migrate_published_ledger.py` was the worked example until the published ledger moved to the ledger door and the program was deleted; git history holds it. It refused a ledger that was already narrow, and it refused to write at all unless the rewritten file carried the same rows, in the same order, with the same values in the cells the read path opens. `PublishedRow` lost `canonical_url` this way on 2026-08-26 ([../sources/freshness.md](../sources/freshness.md)).
 
 A migrated row keeps the `version` cell it was written with. The base contract accepts an older stamp on purpose, so a later read-side migration has something to branch on; restamping every row would erase the only marker of which rows predate the change.
 

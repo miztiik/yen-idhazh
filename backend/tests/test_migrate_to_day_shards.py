@@ -46,9 +46,8 @@ from utilities import migrate_to_day_shards as migrate
 
 FIXTURE: Final = FIXTURES_DIR / "day-shard-migration"
 
-#: The column the fixture files by, and the one three of the five real ledgers
-#: carry. `state/seen/` carries `first_seen_run` instead, which is why `day_of`
-#: is pinned on a run id below rather than only on a bare date.
+#: The column the fixture files by. A ledger that names its day in another column
+#: is moved by passing that column's name instead.
 DATE_COLUMN: Final = "date"
 
 #: The day files `clean` becomes, in the order the report names them.
@@ -220,26 +219,32 @@ def test_two_shards_that_disagree_on_the_header_stop_the_run(tmp_path: Path) -> 
     assert _bytes(ledger) == before
 
 
-@pytest.mark.parametrize(
-    ("cell", "day"),
-    [("2026-09-07", "2026-09-07"), ("2026-08-23-3", "2026-08-23"), ("2026-08-23-11", "2026-08-23")],
-)
-def test_a_day_or_a_run_id_names_a_day(cell: str, day: str) -> None:
-    """A run id is `<date>-<n>`, so `state/seen/` files by `first_seen_run`."""
-    assert migrate.day_of(cell) == day
+def test_a_day_names_itself() -> None:
+    """A cell is exactly a `YYYY-MM-DD` day, and that day is the one it names."""
+    assert migrate.day_of("2026-09-07") == "2026-09-07"
 
 
 @pytest.mark.parametrize(
     "cell",
-    ["", "pending", "2026-08-23T15:20:27Z", "20260907", "2026-W01-1", "2026-09-07 "],
+    [
+        "",
+        "pending",
+        "2026-08-23T15:20:27Z",
+        "2026-08-23-3",
+        "20260907",
+        "2026-W01-1",
+        "2026-09-07 ",
+    ],
 )
 def test_a_cell_that_names_no_day_file_is_refused(cell: str) -> None:
-    """Each of these is refused by a different clause, and one of them is a decision.
+    """None of these names a day file, and two of the refusals are decisions.
 
-    `2026-08-23T15:20:27Z` is `first_seen_at`, and refusing it is what stops
-    `state/seen/` being filed by a wall-clock stamp that crosses midnight
-    independently of the run its row belongs to. `20260907` and `2026-W01-1` are
-    both accepted by `date.fromisoformat` and name no `<YYYY>/<MM>/<DD>` path.
+    `2026-08-23T15:20:27Z` is a wall-clock stamp, and refusing it is what stops a
+    tree being filed by a stamp that crosses midnight independently of the day
+    its writer filed the row under. `2026-08-23-3` is a run id: `state/seen/` was
+    filed by one until it moved under `state/raw/`, and no ledger this moves
+    carries one now. `20260907` and `2026-W01-1` are both accepted by
+    `date.fromisoformat` and name no `<YYYY>/<MM>/<DD>` path.
     """
     with pytest.raises(ValueError, match="is dated"):
         migrate.day_of(cell)

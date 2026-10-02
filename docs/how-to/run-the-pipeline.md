@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -66,8 +66,8 @@ starts its own server and probes it on loopback.
 | `backend/var/run/<date>/items/*.json` | Per-item article, summary and eval | no - gitignored |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
 | `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/` | One row per scored item, packed later under `state/compact/summary-quality-evals/` | **yes** |
-| `state/seen/<YYYY>/<MM>/<DD>.csv` | First sight of every address, so an undated article still has an age | **yes** |
-| `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
+| `state/raw/seen/<YYYY>/<MM>/<DD>/` | First sight of every address, so an undated article still has an age, packed later under `state/compact/seen/` | **yes** |
+| `state/raw/published/<YYYY>/<MM>/<DD>/` | Every address that reached a digest, so nothing runs twice, packed later under `state/compact/published/` | **yes** |
 | `state/feed-health/<YYYY>/<MM>/<DD>/` | What every feed did on every run | **yes** |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/` | Every endpoint the run stopped asking, and the evidence | **yes** |
 | `state/raw/item-health/<YYYY>/<MM>/<DD>/` | What every planned item did on every run, packed later under `state/compact/item-health/` | **yes** |

@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -18,8 +18,8 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 
 | Ledger | Answers | Grain | Read window |
 | --- | --- | --- | --- |
-| `state/seen/<YYYY>/<MM>/<DD>.csv` | How old is this? - for an article whose feed carried no date | day file | `collect.seen_window_days` |
-| `state/published/<YYYY>/<MM>/<DD>.csv` | Have we already run this? | day file | `collect.published_window_days` |
+| `state/raw/seen/<YYYY>/<MM>/<DD>/<file_id>.parquet` | How old is this? - for an article whose feed carried no date. One file per plan job | raw and compact | `collect.seen_window_days` |
+| `state/raw/published/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Have we already run this? One file per assemble job | raw and compact | `collect.published_window_days` |
 | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | Is this source still working? One row per feed per run | day file | `HEALTH_WINDOW_DAYS` |
 | `state/raw/item-health/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did every planned item do? One row per planned item per run, one file per writer | raw and compact | the published projection, a month at a time |
 | `state/item-health-summary/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
@@ -27,7 +27,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
 
-`state/seen/` has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
+The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
 
 `state/feed-health/` is read by the console directly at build time. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
@@ -43,22 +43,13 @@ Nothing reads it yet, so it has no read window. It files at the `raw-and-compact
 
 ## The published ledger sizes from the ceiling, not from today
 
-`state/published/` is the grain the published tree itself uses, and a run appends to the day its own rows name and to nothing else.
+The published ledger files by the day the published tree itself uses. The assemble job files one raw file under `state/raw/published/` for the day its own rows name, and writes no other day.
 
-Its read carries `collect.published_window_days`, and the committed config sets that to `-1`. So today every day file is opened and the answer is every address ever published. **The day grain is what makes a finite cover possible at all**: it names the days in range and opens those files and no others. Until a window is set, the grain buys a small merge surface and a removal that is one `rm`, and not a faster read.
+Its read carries `collect.published_window_days`, and the committed config sets that to `-1`. So today every day is read, one held month at a time, and the answer is every address ever published. **The day grain is what makes a finite cover possible at all**: it names the days in range and reads those days and no others. Until a window is set, the grain buys a file of its own for every writer, and not a faster read.
 
 Size it from the ceiling. A run plans at most `run.safety_ceiling_per_run` items, which the committed config sets to 80, and the schedule fires five times a day - so a day writes at most 400 rows and a year at most about 146,000.
 
-Measured 2026-09-08 on an Intel Core i7-1265U over the 7,600 committed rows, header included:
-
-| Quantity | Reading |
-| --- | --- |
-| A row on disk | 106.9 B |
-| A year at the ceiling | 15.6 MB |
-| Reading the whole file | median 32.7 ms over fifteen consecutive runs, best 30.1, worst 37.5 |
-| The same read with other jobs on the box | as slow as 68.6 ms |
-
-That last row is the number to remember before reading any wall clock here as a property of the file. The 16 committed days average 475 rows a day, which is above the ceiling arithmetic because they were written under three different ceilings - 200 until 2026-08-26, 160 until 2026-09-07, 80 since - and the newest full day wrote 357. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
+The whole read holds one month's rows and the answer at a time, whatever the history holds. `backend/tests/test_ledger.py::test_load_published_costs_the_answer_and_not_the_file` doubles the months held and checks that the peak stays flat. The read times measured on 2026-09-08 were of the CSV day files this ledger no longer keeps, so they are not repeated here; git history holds them. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 
 ## The item-health summary files by month because it summarises a month
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 import io
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Protocol
 
@@ -112,15 +112,6 @@ def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvR
     So each caller owns its own repeats, and each one is named here because the
     guarantee does not live in this file:
 
-    - **seen** - `stages.plan.stage_plan` builds its rows from `_first_sights`, which
-      subtracts what `load_seen` already holds. A sight older than the window is
-      outside that subtraction, and `load_seen` keeps the earliest of two, so the
-      repeat costs bytes and never moves an age.
-    - **published** - `stages.assemble._published_rows` joins the day against this run's plan,
-      and `rank.plan_vertical` has already dropped every address `load_published`
-      returned. Measured on this checkout 2026-08-27: 2,097 rows and 2,097
-      distinct addresses. `load_published` keeps the earliest date, so a repeat
-      costs bytes and never moves a publication date.
     - **feed-health** - one row per feed per run. A repeat needs a run to be run
       twice under one `run_id`. Two runs cannot compute one any more - a run id
       now carries the identity of the execution that made it (`stages.plan.stage_plan`)
@@ -130,10 +121,6 @@ def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvR
       against `FEED_HEALTH_KEY` at read time, so the winner is picked by the rule
       in `contracts.feed_health.supersedes` rather than by which line landed
       first.
-
-    Both filters read the file the job checked out, which is frozen at the
-    commit its run was triggered at, so neither can see a row a second attempt
-    pushed afterwards. `drop_repeated_rows` settles that after the merge.
 
     **It takes contracts and renders them here.** A `dict[str, str]` is not a
     contract: anything can build one, nothing validates it, and a caller that
@@ -163,19 +150,3 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
         return []
     with path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
-
-
-def _stream_rows(path: Path) -> Iterator[dict[str, str]]:
-    """Row by row, for a reader that reduces rather than keeps.
-
-    `_read_rows` materialises the whole file first, which costs the caller its
-    entire size in peak memory before the first row is looked at. Measured
-    2026-09-07 on an Intel Core i7-1265U over the flat `state/published.csv`
-    this ledger has since moved off: 500.9 B of peak per row against a stored
-    row of 106.9 B. A reduction never needs the list, so it should not pay for
-    one.
-    """
-    if not path.exists():
-        return
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        yield from csv.DictReader(handle)

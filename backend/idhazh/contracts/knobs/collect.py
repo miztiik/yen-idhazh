@@ -332,10 +332,10 @@ class CollectConfig(Model):
         ge=1,
         description=(
             "How far back the first-sight ledger is consulted. It is counted in days "
-            "and the ledger files by day, so the window names the files it opens and "
-            "the prune keeps exactly those. Older day files stay committed and "
-            "readable until that prune reaches them; they are just not evidence "
-            "about today."
+            "and the ledger files by day, so the window names the days it reads, and "
+            "the ledger's compaction keeps at least those. Older days stay committed "
+            "and readable until the compaction's monthly window takes them; they are "
+            "just not evidence about today."
         ),
     )
     published_window_days: int = Field(

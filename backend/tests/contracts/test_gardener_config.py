@@ -118,6 +118,8 @@ LIVE_BY_DECISION: Final = {
     ("compact-host-fingerprint", "monthly_window_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
     ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
     ("compact-item-health", "monthly_window_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
+    ("compact-published", "dry_run"): PACKED_ON_THE_MOVE,
+    ("compact-seen", "dry_run"): PACKED_ON_THE_MOVE,
     ("corpus-squash", "dry_run"): (
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"

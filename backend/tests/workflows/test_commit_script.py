@@ -74,12 +74,12 @@ def _a_writers_file(*, attempt: int) -> str:
 
 
 def _stand_in_day(tree: str, date: str) -> str:
-    """Where the harness's stand-in producer files one day of one of its two trees.
+    """Where the harness's stand-in producer files one day of one of its three trees.
 
     `rebuild_day.py` has no ledger behind it: it writes each run's rows by hand,
     one CSV file per writer, into a day folder it spells itself. So the folder
     is asked of that same spelling rather than of the ledger registry, which
-    files neither of these ledgers by day folder any more.
+    files none of these ledgers by day folder any more.
     """
     return f"{ledger.STATE_DIRNAME}/{tree}/{date[:4]}/{date[5:7]}/{date[8:10]}"
 
@@ -668,25 +668,18 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     manifest = json.loads(_git(origin, env, "show", f"main:{SUBSTITUTED_DAY_DIR}/run.json"))
     assert manifest["runs"] == day["runs"]
 
-    published = _rows(
-        _git(origin, env, "show", f"main:{ledger.relpath(LedgerName.PUBLISHED, date)}")
-    )
+    published = _committed_day(origin, env, _stand_in_day("published", date))
     scores = _committed_day(origin, env, _stand_in_day("scores", date))
     health = _committed_day(origin, env, _stand_in_day("item-health", date))
     every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
-    # Exactly once each in the two day trees. Each run writes the one file its
+    # Exactly once each in the three day trees. Each run writes the one file its
     # own run, attempt, job and shard name, so a rebuild cannot add to what a
-    # previous attempt wrote - it replaces the file it owns.
+    # previous attempt wrote - it replaces the file it owns. The published
+    # ledger stacked a second copy of this run's rows here while it was one
+    # shared file a day that a union driver settled.
+    assert [row["item_id"] for row in published] == every_item
     assert [row["item_id"] for row in scores] == every_item
     assert [row["item_id"] for row in health] == every_item
-    # `state/published` is the one ledger here that is still one file a day and
-    # still appends blind, and it is deliberately not handed back to the tip:
-    # the union driver settles it. The rebuild therefore appends this run's two
-    # items a second time, on top of the pair its first attempt had already
-    # written. That costs two rows and moves no publication date, because
-    # `ledger.load_published` keeps the earliest date per address.
-    assert [row["item_id"] for row in published] == [*every_item, "item-d", "item-e"]
-    assert sorted({row["item_id"] for row in published}) == every_item
 
     telemetry = _rows(_git(origin, env, "show", f"main:frontend/public/telemetry/{month}.csv"))
     assert telemetry == health, "the public projection is a rewrite of item-health, not a merge"

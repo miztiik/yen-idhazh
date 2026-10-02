@@ -32,15 +32,6 @@
       "state/score-archive/2026-09.json"
     ]
   },
-  "seen": {
-    "dry_written": [],
-    "removed": [
-      "state/seen/2026/01/01.csv",
-      "state/seen/2027/08/15.csv",
-      "state/seen/2027/08/16.csv"
-    ],
-    "written": []
-  },
   "telemetry-aggregate": {
     "dry_written": [],
     "removed": [

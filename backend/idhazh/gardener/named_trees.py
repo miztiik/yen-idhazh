@@ -1,10 +1,9 @@
 """Which members does a dated tree hold, read from a listing's names and never from the disk?
 
-Each tree a gardener task keeps has a grammar: `YYYY/MM/DD.csv` day files, a
-`YYYY/MM/DD/` folder of writer files beside a closed month's own `settled.csv`,
-a published day's folder of pictures,
-`YYYY-MM` month files, a trace under its day's folders, a ledger's raw day
-folders. The walk that reads each grammar off the disk lives beside the
+Each tree a gardener task keeps has a grammar: a `YYYY/MM/DD/` folder of writer
+files beside a closed month's own `settled.csv`, a published day's folder of
+pictures, `YYYY-MM` month files, a trace under its day's folders, a ledger's raw
+day folders. The walk that reads each grammar off the disk lives beside the
 pipeline code that writes it. A gardener task reads the same grammar off the
 names its `FileListing` holds, which is what lets it decide from a commit whose
 files it never downloaded.
@@ -102,27 +101,6 @@ def shards_by_month(listing: FileListing, root: Path) -> dict[str, list[Path]]:
     for shard in shard_files(listing, root):
         months.setdefault(day_shards.date_of(shard)[:7], []).append(shard)
     return months
-
-
-def day_files(listing: FileListing, root: Path) -> Iterator[Path]:
-    """Every `YYYY/MM/DD.csv` of a day-file tree, oldest first.
-
-    The twin of `day_partition.day_files`: anything else under the root is
-    refused, at the point the walk reaches it.
-    """
-    for parts in _below(listing, root):
-        name = Path(parts[-1])
-        if (
-            len(parts) != 3
-            or name.suffix != ".csv"
-            or not _real_day(parts[0], parts[1], name.stem)
-        ):
-            raise ValueError(
-                f"{root.parent.name}/{root.name} holds {'/'.join(parts)}, which is not a "
-                "YYYY/MM/DD day file. A file the reader cannot place is how it starts missing "
-                "rows, so it refuses the read rather than skipping the file."
-            )
-        yield root.joinpath(*parts)
 
 
 @dataclass(frozen=True, slots=True)

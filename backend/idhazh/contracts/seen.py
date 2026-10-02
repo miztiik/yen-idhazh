@@ -35,16 +35,16 @@ from idhazh.contracts.base import (
 
 
 class SeenRow(Contract):
-    """One row of `state/seen/<YYYY>/<MM>/<DD>.csv`, appended the first time an address
-    is a candidate.
+    """One first sight, filed under `state/raw/seen/` the first time an address is
+    a candidate.
 
     It carries no address, for the reason `PublishedRow` carries none: nothing on
     the read path opens one. `ledger.load_seen` reads `url_key` and
     `first_seen_at` and returns a map of the two.
 
-    `first_seen_run` is what says which file the row lives in. A run id is
+    `first_seen_run` is what says which day the row is filed under. A run id is
     `<date>-<n>`, so its first ten characters are the run's digest date, which is
-    the date `ledger.append_seen` files by. `first_seen_at` is a wall clock and
+    the day `ledger.append_seen` files by. `first_seen_at` is a wall clock and
     crosses midnight independently of the run it belongs to, so it names the day
     a row was written and not the day the row is filed under.
     """
@@ -79,7 +79,7 @@ class SeenRow(Contract):
 
 
 class PublishedRow(Contract):
-    """One row of `state/published/YYYY/MM/DD.csv`, appended when an item reaches a
+    """One published item, filed under `state/raw/published/` when it reaches a
     committed digest.
 
     It carries no address. `item_id` and `published_on` join to that day's

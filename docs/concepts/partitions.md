@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -14,7 +14,7 @@ state ledger is derived from the published tree:
 | Collection | Writer |
 | --- | --- |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `stages.assemble.stage_assemble` |
-| `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` |
+| `state/raw/published/<YYYY>/<MM>/<DD>/` | `ledger.append_published`, through `ledger.persist` |
 | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` |
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/` | the gardener's `visual-prune` task, through `ledger.persist` |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/` | `telemetry.source_health.file_retirements`, through `ledger.persist` |
@@ -121,11 +121,12 @@ copy of.
 | **union-safe** | append-only rows, `merge=union`, **and a named read-side property that makes a repeat change no answer** | both sides land whole, and the reader settles them |
 
 **A union-safe path with no such property is a derived path written badly**, so
-the property is named rather than assumed. `state/seen` qualifies because
-`load_seen` keeps the earliest stamp per address; `state/published` because
-`load_published` keeps the earliest publication date; a council or judge row
+the property is named rather than assumed. A council or judge row qualifies
 because one row is one measurement of one thing on one day, and says nothing
-about any other row. The merge driver concatenates whatever it is handed, so a
+about any other row. `state/seen` and `state/published` qualified too, because
+their readers keep the earliest stamp and the earliest publication date per
+address, until they moved under `state/raw/`, where every file is written once.
+The merge driver concatenates whatever it is handed, so a
 path that cannot name the sentence does not get the driver.
 
 **The three classes are closed, and that is what makes the layout survive the
@@ -208,8 +209,8 @@ so an empty one is a writer that made the directory and lost its rows. Reading
 it as a day that recorded nothing would draw an empty panel on a passing build.
 
 **`day_partition.day_files` is not taught the directory shape, on purpose.** It
-keeps its callers over the union-safe ledgers - `state/published/` and
-`state/seen/` - which stay one file a day, and its loud refusal of
+keeps its callers over the union-safe ledgers - the judge's and the council's
+day files - which stay one file a day, and its loud refusal of
 a directory is the tripwire that catches a ledger arriving in the new shape
 without a plan.
 
@@ -256,12 +257,12 @@ unreadable by the pipeline. A flat ledger sitting beside its own directory is
 refused for the same reason. The repair is a restore from the trunk rather than a second
 pass, because a second pass cannot know which rows the first one had already moved.
 
-**Which cell names the day, and why `state/seen/` files by `first_seen_run`.** The day
-is the cell's first ten characters, and the cell is either exactly those ten or
-continues with `-`. A run id is `<date>-<n>`, so filing by `first_seen_run` reproduces
-`ledger.append_seen`'s own filing exactly. A wall-clock stamp is `<date>T<time>Z`, and
-the `T` is refused - `first_seen_at` crosses midnight independently of the run its row
-belongs to, so a tree filed by it would disagree with the writer that built it. One
+**Which cell names the day.** The cell is exactly ten characters, `YYYY-MM-DD`.
+A wall-clock stamp is `<date>T<time>Z` and is refused: a stamp crosses midnight
+independently of the day its writer filed the row under, so a tree filed by one
+would disagree with the writer that built it. A run id, `<date>-<n>`, was read
+as its date while `state/seen/` was filed by `first_seen_run`; that ledger has
+moved under `state/raw/`, and a run id is refused now. One
 clause makes that choice mechanical instead of leaving it to a comment.
 
 Changing grain is a different operation from [a correction](#a-correction-to-a-closed-month),
@@ -298,13 +299,13 @@ Authority: owner, 2026-09-06.
 | Eval ledger | `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, packed under `state/compact/summary-quality-evals/` | `evals.writer.file_measurements`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. Every write is a file of its own, so two runs never collide on one, and a packing task makes each finished day one file. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Eval ledger ID folder | `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/`, and `<YYYY>/<MM>/settled.csv` once a month closes | `evals.writer.file_measurements` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22, and it files by the ledger's day rather than a grain of its own: two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-summary-quality-evals-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. Once a month is closed, the gardener settles every file of it into one `settled.csv` in the month's folder, so the folder gains a file a month rather than a file a day. |
 | Item health | `state/raw/item-health/<YYYY>/<MM>/<DD>/`, packed under `state/compact/item-health/` | `ledger.persist`, from `stages.record` and `stages.assemble` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. Each write files its own rows under the day those rows name, as a file of its own, so two runs never collide on one. Closed once the run's date leaves the day. |
-| Feed health | `state/feed-health/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. The same one-date write, settled against `FEED_HEALTH_KEY` at read time. Closed once the run's date leaves the day. The day grain buys what it buys for `state/published/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
-| Seen addresses | `state/seen/<YYYY>/<MM>/<DD>.csv` | `ledger.append_seen` | Partitioned by **day** since 2026-09-13. The same one-date append, and the date is the run's own digest date - which is why `first_seen_run[:10]` names the file every row inside it sits in. Closed once the run's date leaves the day. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
+| Feed health | `state/feed-health/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. The same one-date write, settled against `FEED_HEALTH_KEY` at read time. Closed once the run's date leaves the day. The day grain buys it what it bought the published ledger's day files: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
+| Seen addresses | `state/raw/seen/<YYYY>/<MM>/<DD>/`, packed under `state/compact/seen/` | `ledger.append_seen`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. The plan job files under the run's own digest date and nothing else, as a file of its own, so two runs never collide on one, and a second attempt at one plan job replaces its first attempt's file. Closed once the run's date leaves the day. Its compaction makes each finished day one file, and the loader refuses one that keeps fewer days than `collect.seen_window_days`. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
 | Counterfactual scores | `state/raw/counterfactual-scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/counterfactual-scores/` | `stages.plan`, through `ledger.persist` | Partitioned by **day** since 2026-09-14, and filed through the ledger door since it moved. The plan stage writes the run's own digest date and nothing else, so the day closes when the day's last run finishes. Every write is a file of its own, so two runs never collide on one, and its compaction makes each finished day one file. Its only reader will open a trailing window, `lens_weights.window_days`, and the loader refuses a compaction that keeps less. |
 | Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `telemetry.publish.public_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
 | Folded item health | `state/item-health-summary/<YYYY-MM>.csv` | `retention.compact_month`, written by `ledger.write_item_health_summary` | Written once, when the item-health month passes the `full-grain` series of `config/gardener/telemetry-aggregate.json` (14 months). It stays **monthly** while the ledger below it files by day, because it summarises a month and a day file of a month's totals is a shape nothing consumes - so the summary is where the two grains meet, reading the month's days through `ledger.load_days` and writing one file. Closed the moment it is written; the rows it summarises go later, when the item-health compaction's `monthly_window` passes, and nothing writes the summary again. No file is committed yet. |
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `stages.assemble.stage_assemble` rebuilds only `month_of(plan.date)`. |
-| Published addresses | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` | Partitioned by **day**, not by month. The caller hands the date and the writer appends to that day alone, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
+| Published addresses | `state/raw/published/<YYYY>/<MM>/<DD>/`, packed under `state/compact/published/` | `ledger.append_published`, through `ledger.persist` | Partitioned by **day**, not by month, and filed through the ledger door since it moved. The caller hands the date and the writer files that day alone, as a file of its own, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
 | Day metrics | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` | Partitioned by **day**. One record per published day, mirroring the published tree it is derived from, and closed the moment that day is. The site opens only the dates a page names, so nothing walks the tree. |
 | Visual prunes | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/` | the gardener's `visual-prune` task, through `ledger.persist` | Partitioned by **day**, and one of the two collections here whose read will never carry a window - the question is the whole series. It files by day anyway, for the two things the grain buys with no read time at all: every pass files a file of its own, so two passes never write one path and the tree needs no merge driver, and taking a day back off the record is one `rm` of that day's folder. It moved under `state/raw/` on 2026-09-28, from `<YYYY>/<MM>/<DD>.csv` day files that carried a `merge=union` line. Closed once the pass's date leaves the day. |
 | Feed retirements | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/` | `telemetry.source_health.file_retirements`, through `ledger.persist` | Partitioned by **day** since 2026-09-28, where it was one flat file, `state/feed-retirements.csv`. A retirement files under the day the address was retired, so a day is closed once the run's date leaves it. It is the other collection here whose read never carries a window: a retirement is permanent for one address, so the reader opens every file. The grain buys it what it buys the cleanup record above. |
@@ -393,11 +394,13 @@ worse: the removal silently did not happen. And a shard's header is checked
 against the contract
 before any append, so a rewrite that changes the shape has to move every month at once.
 A correction therefore ships as a committed one-shot utility under `backend/utilities/`,
-not as an ad-hoc script; `migrate_published_ledger.py` and `migrate_to_day_shards.py` are
-the worked examples. A utility whose input layout no longer exists is deleted with
-the layout: `migrate_feed_health.py` and `migrate_score_ledger.py` both went that way
-in September 2026, and the item-health widener followed them once `widen_ledger_header.py`
-could re-file any ledger from a command line.
+not as an ad-hoc script; `migrate_to_day_shards.py` is the worked example. A
+utility whose input layout no longer exists is deleted with the layout:
+`migrate_feed_health.py` and `migrate_score_ledger.py` both went that way
+in September 2026, the item-health widener followed them once `widen_ledger_header.py`
+could re-file any ledger from a command line, and `migrate_published_ledger.py`
+and `split_published_ledger.py` went when the published ledger moved to the
+ledger door.
 
 ### A deletion
 
@@ -448,7 +451,7 @@ commitment to convert any of them.
 | --- | --- | --- | --- |
 | Source health view | `frontend/public/source-health.json` | `telemetry.publish.source_health` | One document, rewritten whole each run. Row 20 of the constant-cost-reads plan bounded the read behind it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |
 | Training corpus | `corpus/corpus.jsonl`, `corpus/corpus.meta.json`, `corpus/holdout.txt` | `idhazh.corpus`, rolled by `backend/utilities/data_wrangler.py` | A rolling training window bounded by `finetune.corpus_rows` and by the corpus squash in `idhazh-gardener.yml`, not by a calendar. Deliberately given no union merge driver, because the union of two rolls holds evicted rows again. |
-| Published days | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `stages.assemble.stage_assemble` | Partitioned by **day**, and listed here because it is the tree the day grain came from rather than because it is unpartitioned. A day is frozen the moment it is written. The month partitions above are keyed off this tree, and so is `state/published/`. |
+| Published days | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `stages.assemble.stage_assemble` | Partitioned by **day**, and listed here because it is the tree the day grain came from rather than because it is unpartitioned. A day is frozen the moment it is written. The month partitions above are keyed off this tree, and so is the published ledger. |
 
 ## Design rationale
 

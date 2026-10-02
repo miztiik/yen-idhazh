@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 Which instruments run at all, and how long what they write is kept. The switches
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
@@ -136,12 +136,14 @@ rather than ignored, and it is sent nowhere: the two ledgers above keep their
 own ages, which is a different number for a different ledger.
 
 **Three more ledgers are bounded by a read, and a declaration that deletes what
-the read opens is refused.** `state/seen/` keeps 90 days, the window of
-`config/gardener/seen.json`, and the gardener loader refuses that window below
-`collect.seen_window_days`, the day files the collector reads. The
+the read opens is refused.** The seen ledger's compaction,
+`config/gardener/compact-seen.json`, keeps day files for 45 days after their
+month ends and then 2 month files, which reaches back 104 days, and the gardener
+loader refuses one that reaches back fewer days than `collect.seen_window_days`,
+the days the collector reads. The
 counterfactual-scores ledger's compaction,
 `config/gardener/compact-counterfactual-scores.json`, is held the same way above
-`lens_weights.window_days`, and `published` above
+`lens_weights.window_days`, and the published ledger's above
 `collect.published_window_days`, which is `-1` and so reads every day: nothing
 may delete that ledger. Each floor belongs to the ledger and is held against
 whichever declaration governs it - its retention task while it is on CSV, its
@@ -315,9 +317,10 @@ every measurement in it new again.
 evidence, the quarantine reads 31 days, and the console reaches at most 366 - so
 no older total has a reader, and writing one would persist a shape nothing
 consumes. That is why the table above gives it a full-grain age and no summary
-beside it. `state/seen/` is not on that list at all because it is a lookup rather
-than a measurement: an out-of-window day file is deleted by the `seen` task,
-whose window may not sit below `collect.seen_window_days`.
+beside it. The seen ledger is not on that list at all because it is a lookup
+rather than a measurement: its compaction's monthly window is what drops an
+old month, and that window may not reach back fewer days than
+`collect.seen_window_days`.
 
 **And every retention task ships in dry run.** Each retention declaration carries
 `dry_run: true`,
@@ -330,17 +333,16 @@ change to that task's own declaration and its entry in the contract test's list
 of live switches
 ([../../how-to/run-the-pipeline.md](../../how-to/run-the-pipeline.md#turning-state-cleanup-on)).
 Measured on this checkout on 2026-09-13: a live run today
-removes nothing, the first file any tree loses is `state/seen/2026/08/23.csv` on
-**2026-11-22**, and the first files the fourteen-month rules take are the day
+removes nothing, and the first files the fourteen-month rules take are the day
 files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`,
 the day files under `state/feed-health/2026/08/` and the day files under
 `state/scores/2026/08/`,
-together, on **2027-10-01**. The sight date was 2026-11-30 while that ledger
-filed by month, because a whole month shard survived if any of its days was in
-range; at day grain the file the window stops naming is the file that goes.
+together, on **2027-10-01**.
 Reading committed files against a fixed calendar is deterministic, so the spread
 is zero. The item-health and eval rows have since moved to the ledger door, so
-they no longer go on that date. The item-health rows go when the 15-month
+they no longer go on that date. The seen ledger moved too: its first day was to
+go on 2026-11-22 under its old retention task, and its compaction's 2-month
+window now only reports what it would delete. The item-health rows go when the 15-month
 `monthly_window` of their compaction passes, and that compaction packs live; no
 eval row is ever deleted. A compaction's window has a switch of its own,
 `monthly_window_dry_run`, so a ledger can pack live while its window only

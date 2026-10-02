@@ -31,12 +31,12 @@ AN_ONBOARDING: Final = "2026-09-01"
 
 
 def a_registry(config_dir: Path) -> Path:
-    """The committed registry with the seen family paused, described and dated anew."""
+    """The committed registry with the day-metrics family paused, described and dated anew."""
     held: dict[str, Any] = json.loads(
         (REPO_ROOT / "config" / paths.REGISTRY_FILENAME).read_text(encoding="utf-8")
     )
     for family in held["families"]:
-        if family["name"] == LedgerName.SEEN.value:
+        if family["name"] == LedgerName.DAY_METRICS.value:
             family["lifecycle_status"] = "paused"
             family["description"] = A_DESCRIPTION
             family["onboarded"] = AN_ONBOARDING
@@ -58,9 +58,9 @@ def test_each_family_prints_its_status_its_day_and_what_it_holds(tmp_path: Path)
     """The four facts a family carries, one block per family, in the registry's order."""
     lines = ledger_families.listing(a_registry(tmp_path / "config"), tmp_path / "state")
 
-    first = lines.index(f"seen: paused, onboarded {AN_ONBOARDING} UTC")
+    first = lines.index(f"day-metrics: paused, onboarded {AN_ONBOARDING} UTC")
     assert lines[first + 1] == f"  {A_DESCRIPTION}"
-    assert lines[first + 2] == "  - seen: 0 files"
+    assert lines[first + 2] == "  - day-metrics: 0 files"
     assert any(line.startswith("content-similarity-judge: active, onboarded ") for line in lines)
 
 
@@ -74,8 +74,8 @@ def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> N
     state = a_state_tree(
         tmp_path / "state",
         (
-            "seen/2026/09/18.csv",
-            "seen/2026/09/19.csv",
+            "day-metrics/2026/09/18.json",
+            "day-metrics/2026/09/19.json",
             "content-similarity-judge/holdout-pairs.csv",
             "content-similarity-judge/scored-pairs/2026/09/18.csv",
             "traces/.gitkeep",
@@ -84,7 +84,7 @@ def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> N
 
     lines = ledger_families.listing(a_registry(tmp_path / "config"), state)
 
-    assert "  - seen: 2 files" in lines
+    assert "  - day-metrics: 2 files" in lines
     assert "  - holdout-pairs: 1 file" in lines
     assert "  - scored-pairs: 1 file" in lines
     assert "  - traces: 0 files" in lines

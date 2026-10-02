@@ -95,7 +95,10 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     published = DigestDay.from_json(read_text(day_path))
     assert published.items, "run 1 published nothing, so there is no window to test"
 
-    ledger.path(state, LedgerName.PUBLISHED, run_plan.date).unlink()
+    filed = ledger.list_raw_files(state, LedgerName.PUBLISHED, days=[run_plan.date])
+    assert filed, "run 1 filed no published row, so removing it proves nothing"
+    for held in filed:
+        held.path.unlink()
     window = settings.app.collect.published_window_days
     assert not ledger.load_published(state, today=run_plan.date, within_days=window), (
         "the guard still holds these addresses, so this is not the crash the window leaves"

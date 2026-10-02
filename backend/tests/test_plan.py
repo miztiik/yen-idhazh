@@ -23,7 +23,14 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text, seed_feed_health, seed_item_health
+from conftest import (
+    CONFIG_DIR,
+    FIXTURES_DIR,
+    read_text,
+    seed_feed_health,
+    seed_item_health,
+    writer_identity,
+)
 
 from idhazh import cli, config, day_shards, fetch, ledger
 from idhazh.contracts.app_config import AppConfig
@@ -879,7 +886,7 @@ def test_first_sight_survives_the_run_that_saw_it() -> None:
     """The second run of a later day reads the age the first run wrote down."""
     state = Path(tempfile.mkdtemp())
     plan([LAB, TRADE, NOTICES], now="2026-08-22T06:00:00Z", state=state)
-    later = plan([LAB, TRADE, NOTICES], now="2026-08-22T18:00:00Z", state=state)
+    later = plan([LAB, TRADE, NOTICES], now="2026-08-22T18:00:00Z", run_n=2, state=state)
     undated = [item for item in later.items if item.source_id == "notices"]
     assert undated
     for item in undated:
@@ -958,6 +965,7 @@ def test_a_published_address_is_never_planned_again() -> None:
                 item_id=ran.item_id,
             )
         ],
+        identity=writer_identity(f"{DATE}-1"),
     )
     again = plan([LAB, TRADE, COMMUNITY], state=state)
     assert ran.url_key not in {item.url_key for item in again.items}
@@ -967,7 +975,7 @@ def test_a_published_address_is_never_planned_again() -> None:
 
 
 def _published_days_ago(state: Path, item: PlannedItem, *, days: int) -> str:
-    """File one published row into the day file its own date names."""
+    """File one published row under the day its own date names."""
     on = (date_type.fromisoformat(DATE) - timedelta(days=days)).isoformat()
     ledger.append_published(
         state,
@@ -980,6 +988,7 @@ def _published_days_ago(state: Path, item: PlannedItem, *, days: int) -> str:
                 item_id=item.item_id,
             )
         ],
+        identity=writer_identity(f"{on}-1"),
     )
     return on
 

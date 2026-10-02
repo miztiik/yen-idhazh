@@ -276,20 +276,20 @@ def test_the_commit_listing_names_the_owned_folders_it_holds_and_every_child_of_
     _, checkout = an_origin(
         tmp_path,
         {
-            "state/seen/2026/09/01.csv": "a\n",
+            "state/traces/2026/09/01/0001-0.jsonl": "a\n",
             "state/raw/visual-prunes/2026/09/01/x.csv": "b\n",
             "state/a-trial-run/2026-05-01.txt": "c\n",
             "frontend/public/digest/2026/09/01/digest.json": "{}\n",
         },
     )
-    shutil.rmtree(checkout / "state" / "seen")
+    shutil.rmtree(checkout / "state" / "traces")
 
     listed = gardener_publish.Checkout(checkout).committed_folders(
-        ["state/seen/", "state/summary-quality-evals-index", "state/raw/visual-prunes", "frontend/public/digest"]
+        ["state/traces/", "state/summary-quality-evals-index", "state/raw/visual-prunes", "frontend/public/digest"]
     )
 
     assert listed == {
-        "state/seen",
+        "state/traces",
         "state/raw/visual-prunes",
         "state/a-trial-run",
         "frontend/public/digest",
