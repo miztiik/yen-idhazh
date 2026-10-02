@@ -407,3 +407,24 @@ test('the day-tick grid keeps its shape across a resize', () => {
 	expect(wide.map((tick) => tick.index)).toEqual(narrow.map((tick) => tick.index));
 });
 
+test('two inset dates use the outside room instead of pointing their labels at each other', () => {
+	const ticks = dayTicks(['2026-08-19', '2026-08-20'], {
+		density: 6,
+		columns: [150, 185],
+		bounds: [34, 352]
+	});
+	expect(ticks.map((tick) => tick.text)).toEqual(['19 Aug 2026', '20 Aug']);
+	expect(ticks.map((tick) => tick.anchor)).toEqual(['end', 'start']);
+});
+
+test('dates at the plot edges still face inward and a lone day stays centred', () => {
+	const ticks = dayTicks(['2026-08-19', '2026-08-20'], {
+		density: 6,
+		columns: [34, 352],
+		bounds: [34, 352]
+	});
+	expect(ticks.map((tick) => tick.anchor)).toEqual(['start', 'end']);
+	expect(ticks.every((tick) => tick.text !== '')).toBe(true);
+	expect(dayTicks(['2026-08-20'], { density: 6, columns: [193], bounds: [34, 352] })[0].anchor).toBe('middle');
+});
+

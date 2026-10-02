@@ -30,9 +30,8 @@ import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledge
  * answered from the fixture files under `tests/fixtures/ledger-door/`, read
  * inside the test that asks, and a case that needs a 404, a short body, a
  * refused fetch or a different stamp says so by path. Nothing here touches the
- * network but the engine itself: a machine's first query downloads its parquet
- * add-on from `ledger.engine_extension_repository` and keeps it in a cache under
- * the home directory (owner ruling, 2026-09-28).
+ * network. The setup command prepares the engine's Parquet add-on in the shared
+ * home cache before tests, and global setup refuses a missing cached file.
  *
  * The fixture holds a monthly file for 2026-08, daily files for 2026-08-31,
  * 09-01, 09-02 and 09-05, a zero-row day on 09-03, and a hole on 09-04.
@@ -190,6 +189,40 @@ function askedCounts(asked: Asked[]): Record<string, number> {
 /** A fixture day file's path, and its bytes read from the fixture. */
 const dayFile = (covers: string): string => dataPath(LEDGER, 'daily', covers);
 const bytesOf = (relative: string): Uint8Array => new Uint8Array(readFileSync(path.join(STATE, ...relative.split('/'))));
+
+test('the engine starts while a whole file is still arriving', async () => {
+	const { fetcher } = recorded();
+	const engine = counted();
+	let releaseArrival!: () => void;
+	let markRequested!: () => void;
+	const pending = new Promise<void>((resolve) => { releaseArrival = resolve; });
+	const requested = new Promise<void>((resolve) => { markRequested = resolve; });
+	const keeper = freshPage(async (url, init) => {
+		if (new URL(url).pathname.endsWith('.parquet')) {
+			markRequested();
+			await pending;
+		}
+		return fetcher(url, init);
+	}, engine);
+	const reading = readSlice(keeper, LEDGER, ask('2026-09-01', '2026-09-01'));
+	try {
+		await requested;
+		expect(engine.opened(), 'engine startup must overlap the whole-file fetch').toBe(1);
+		releaseArrival();
+		const result = await reading;
+		expect(result.state).toBe('ok');
+		expect(result.rows.map((row) => [row.date, row.job, row.shard])).toEqual([
+			['2026-09-01', 'plan', 0],
+			['2026-09-01', 'work', 0],
+			['2026-09-01', 'work', 1]
+		]);
+		expect(engine.registered).toHaveLength(1);
+	} finally {
+		releaseArrival();
+		await reading;
+		await keeper.release();
+	}
+});
 
 test.describe('which files a range needs', () => {
 	test('each day is read through the coarsest period that holds it, one file a day', () => {
@@ -403,7 +436,8 @@ test.describe('the four states, before the engine is needed', () => {
 			readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-01', '2026-09-02'))
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02', fault: 'file-missing' });
-		expect(engine.opened()).toBe(0);
+		expect(engine.opened()).toBe(1);
+		expect(engine.registered).toEqual([]);
 	});
 
 	test('a file whose decoded length is not its entry bytes is unreachable, and the engine never sees it', async () => {
@@ -415,7 +449,8 @@ test.describe('the four states, before the engine is needed', () => {
 			readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-08-30', '2026-09-01'))
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30', fault: null });
-		expect(engine.opened()).toBe(0);
+		expect(engine.opened()).toBe(1);
+		expect(engine.registered).toEqual([]);
 		const month = fixtureEntries('monthly').find((entry) => entry.covers === '2026-08');
 		expect(month, 'the fixture names no 2026-08 month file').toBeDefined();
 		expect(warned.join('\n')).toContain(`arrived as ${(month?.bytes ?? 0) - 1} bytes and its entry says ${month?.bytes}`);

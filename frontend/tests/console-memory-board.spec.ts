@@ -20,7 +20,7 @@
  * `frontend/scripts/build-canary.mjs` writes the ledgers the browser half reads.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {

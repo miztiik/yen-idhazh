@@ -19,7 +19,7 @@
  * three machines with one of them unrecorded, and that is the case that matters.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/browser';
 import {
 	cacheWords,
 	clockSentence,
@@ -39,7 +39,9 @@ import { ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig } from '../src/lib/server/config';
 
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 21_600 };
-const STOPS = 7;
+/** The speed ramp's steps and floor, `console.machine_colour_stops` and
+ * `console.machine_colour_floor_share`. */
+const COLOUR = { stops: 5, floor: 0.4 };
 
 /** The margin these cases drive the pure function with.
  *
@@ -117,7 +119,7 @@ const RUN = onlyRun([
 function cardsFor(rows: HostFingerprint[], recording = true) {
 	return machineCards(RUN, rows, {
 		watchedFlags: FLAGS,
-		colourStops: STOPS,
+		colour: COLOUR,
 		cacheMargin: MARGIN,
 		recording
 	});
@@ -223,13 +225,13 @@ test.describe('the copy speed and the buffer it was taken with', () => {
 		const row = fingerprint({ l3_cache_bytes: 260 * MIB, memcpy_probe_mib: 512 });
 		const strict = machineCards(RUN, [row], {
 			watchedFlags: FLAGS,
-			colourStops: STOPS,
+			colour: COLOUR,
 			cacheMargin: 2,
 			recording: true
 		}).cards[0];
 		const loose = machineCards(RUN, [row], {
 			watchedFlags: FLAGS,
-			colourStops: STOPS,
+			colour: COLOUR,
 			cacheMargin: 1,
 			recording: true
 		}).cards[0];
@@ -464,7 +466,7 @@ test.describe('when there is nothing to draw', () => {
 	test('recording switched off is a different sentence from nothing recorded', () => {
 		const nowhere = machineCards(null, [], {
 			watchedFlags: FLAGS,
-			colourStops: STOPS,
+			colour: COLOUR,
 			cacheMargin: MARGIN,
 			recording: false
 		});
@@ -472,7 +474,7 @@ test.describe('when there is nothing to draw', () => {
 
 		const nothing = machineCards(null, [], {
 			watchedFlags: FLAGS,
-			colourStops: STOPS,
+			colour: COLOUR,
 			cacheMargin: MARGIN,
 			recording: true
 		});
@@ -485,7 +487,7 @@ test.describe('when there is nothing to draw', () => {
 		// silently would read as a machine with nothing to report.
 		const view = machineCards(RUN, [], {
 			watchedFlags: FLAGS,
-			colourStops: STOPS,
+			colour: COLOUR,
 			cacheMargin: MARGIN,
 			recording: false
 		});
@@ -498,7 +500,7 @@ test.describe('when there is nothing to draw', () => {
 		const blank = onlyRun([{ shard: 0 }, { shard: 1 }]);
 		const view = machineCards(blank, [], {
 			watchedFlags: FLAGS,
-			colourStops: STOPS,
+			colour: COLOUR,
 			cacheMargin: MARGIN,
 			recording: true
 		});
@@ -523,13 +525,13 @@ test.describe('a day that published and kept no machine row', () => {
 	test('a loss is a different state from a record that had not begun', () => {
 		const quiet = machineCards(RUN, [], {
 			watchedFlags: FLAGS,
-			colourStops: STOPS,
+			colour: COLOUR,
 			cacheMargin: MARGIN,
 			recording: true
 		});
 		const lost = machineCards(RUN, [], {
 			watchedFlags: FLAGS,
-			colourStops: STOPS,
+			colour: COLOUR,
 			cacheMargin: MARGIN,
 			recording: true,
 			lost: LOST
@@ -547,12 +549,12 @@ test.describe('a day that published and kept no machine row', () => {
 	test('a run with no placement at all names the loss before the quiet day', () => {
 		const blank = onlyRun([{ shard: 0 }, { shard: 1 }]);
 		expect(
-			machineCards(blank, [], { watchedFlags: FLAGS, colourStops: STOPS, cacheMargin: MARGIN, recording: true }).nothing
+			machineCards(blank, [], { watchedFlags: FLAGS, colour: COLOUR, cacheMargin: MARGIN, recording: true }).nothing
 		).toBe('no-machine');
 		expect(
 			machineCards(blank, [], {
 				watchedFlags: FLAGS,
-				colourStops: STOPS,
+				colour: COLOUR,
 				cacheMargin: MARGIN,
 				recording: true,
 				lost: LOST
@@ -563,7 +565,7 @@ test.describe('a day that published and kept no machine row', () => {
 	test('recording switched off outranks a loss, because nothing was there to lose', () => {
 		const view = machineCards(RUN, [], {
 			watchedFlags: FLAGS,
-			colourStops: STOPS,
+			colour: COLOUR,
 			cacheMargin: MARGIN,
 			recording: false,
 			lost: LOST

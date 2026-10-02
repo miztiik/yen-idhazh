@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-01
 
-**Status**: Rows 3 and 10 are merged, as is plan 56's fresh-address prerequisite. Row 8's second pass is in flight on its existing branch. Row 11 is in flight in p51r11. They run in separate worktrees; row 8 merges first, and row 11 then takes main in before its final checks.
+**Status**: Rows 3 and 10 are merged, as is plan 56's fresh-address prerequisite. Row 8's second pass is complete in PR #1171 and awaits the owner's merge. Row 11 is in flight in p51r11. They run in separate worktrees; row 8 merges first, and row 11 then takes main in before its final checks.
 
 **Level**: 5 (CLAUDE.md section 6). Row 3 decides whether `state/` reaches a browser, which is a publishing contract, and sections 2.6 to 2.9 are the design contract the panels are built to. The other rows are Level 2 to Level 3 and carry no contract change beyond one copied settlement key.
 
@@ -213,7 +213,7 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | DONE | p51r5 | #1143 | p51-r5-worker |
 | 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | DONE | p51r6 | #1144 | p51-r6-worker |
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | DONE | p51r7 | #1154 | p51-r7-worker |
-| 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9, 10 | D | IN-FLIGHT | p51r8 | #1171 | p51-r8-pass-b |
+| 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9, 10 | D | DONE | p51r8 | #1171 | p51-r8-pass-b |
 | 9 | The door keeps what it fetched for the page's life, and says how far a ledger reaches | 7 | C | DONE | p51r9 | #1157 | p51-r9-worker |
 | 10 | Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily | 7, 9 | C | DONE | p51r10 | #1177 | p51-r10-worker-2 |
 | 11 | The span-rollup ledger is deleted, and one item's trace is a command | 3 | E | IN-FLIGHT | p51r11 | - | p51-r11-worker |
@@ -1148,7 +1148,51 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   - **Added to Files touched:** `frontend/src/lib/server/machine-counters.ts`, `frontend/tests/support/machine-rows.ts`, `frontend/src/lib/components/MemoryBoard.svelte`, `DateSeries.svelte` under `frontend/src/lib/charts/d3/`, `frontend/src/service-worker.ts`, `frontend/src/lib/offline.ts`, `frontend/tests/service-worker.spec.ts`, `frontend/src/lib/data/page-keeper.ts`, `frontend/tests/ledger-door.spec.ts`, `frontend/tests/console-cold-load.spec.ts`, `frontend/tests/console-query-door.spec.ts` (new), the setup script and the test helper (new), `.github/workflows/ci.yml` and the weekly job, `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`, `docs/reference/site-weight.md`, `TODO/20260823-known-defects-plan.md`.
   - **It also depends on row 10**: without the month indexes, the panel's first load asks for a file that does not exist.
 
+- **Found in execution, 2026-09-30 (pass A)**:
+  - **The standfirst's last sentence was false in the dark theme.** The ramp mixes its hue toward the panel's ground, so the stronger step is darker in light and brighter in dark. It reads "The stronger the colour, the faster the machine.", and "One bar is one kind of machine on one day" reads "Each day is split by the kind of machine that ran its jobs", which is true of the bars and of the squares (Susan and Reader).
+  - **The ramp's slowest step stood 1.31 to 1.36 to 1 against the panel.** A knob, `console.machine_colour_floor_share` at 0.4, gives it 1.89 to 1 in both themes, and a line of the panel's ground parts two segments where they meet, so two kinds on one step read as two (Susan and Jony).
+  - **Two kinds of one processor name are called the faster and the slower**, each with its median speed as its note (Reader, over "another"; Susan's rate note kept).
+  - **Known machines with no speed reading past the named rows fold into one striped row**; as one job's square they are hollow, because stripes on a square this small read as the flat grey of no machine (Susan; Jony on the squares). The squares' size cap is a knob, `console.fleet_dot_max_px` at 8 (Susan).
+  - **Decision 7 is amended: the list a pick opens closes on its Close button, Escape or a second click on its day, not on a click elsewhere**; another day replaces it, the open day is outlined, and focus moves to the list and back to the chart (Jony; Susan).
+  - **The full-record context band is not drawn.** The window always ends on the newest day, so the band would outline the same right-hand edge every time, and the route already prints the window's dates. The reader loses a picture of where a short span sits in the record; picking a longer span shows it (Jony, over Susan's caption fix).
+  - **Eight kinds get a row of their own today**, past the five series the vocabulary gives a date series: the four most placed, and four leftovers each alone on its speed step (Susan; a design rationale line on the machine page).
+  - **The speed key names each step by the medians of the kinds on it**, "none" for an empty step, with the unit once and no grey swatch, because the strip names the greys (Susan; Jony).
+  - **`RESERVED_GREY` is declared in `ordered-colour.ts` and re-exported by `machine-colour.ts`**, the other way round from section 2.3, because `machine-colour.ts` now calls `orderedRamp` and the old direction was an import cycle. There is still one grey. The worker's call: no behaviour differs between the two directions.
+  - **A job whose machine was not recorded is now counted, as the last grey row.** The build-time reader used to skip it. A span whose every job lost its machine on a day that published still prints the loss sentence.
+  - **Settled by Susan, 2026-09-30** (raised by Jony, an estimate): at about 25 jobs a day the 7-day span would hold about 170 placements and flip between bars and squares on an ordinary week. Measured on the real build it holds 204, so decision 6 stands; the ruling is in the review line below.
+  - **The oracle's fixture is the door's own answer for 26 to 28 September**, recorded once through `sliceFromDisk`. That record holds no job without a machine and no fold, so those cases are built rows in the same spec.
+  - **The one-pass reductions golden moved, on purpose.** Defect 39's fix carries each shard's fingerprint, so every one of the golden's 32 shards gains `"fingerprint": null` (its built rows carry none), and nothing else in it moved.
+  - **The standfirst is not verbatim, because a standing console check holds every Hardware subtitle to one sentence ending on its span in digits.** The subtitle reads "The platform picks the machine for every job, so a slow week can be the machine and not the code - each day split by the kind that ran its jobs, over the last N days."; the speed key leads with "The stronger the colour, the faster the machine."; the line above the plot ends "This counts what we were given and predicts nothing about the next job." (Susan, 2026-09-30.)
+  - **Susan's review of the built panel, 2026-09-30: SEND BACK, six fixes, all made in this pass.** A stray word left by a spliced edit in `FleetDots.svelte`; the subtitle above; the outline of the day held open hugs its squares; a day's squares stand as a block no wider than the busiest day's is tall (30 jobs stand 5 by 6), so "slowest at the bottom" does not turn into "slowest at the left"; the job list takes two lines a job below 48rem instead of scrolling sideways; and the key leaves out a step no kind lands on. She kept decision 6: an ordinary week does not flip, because a full day is 30 jobs (5 runs of 6) and the 7-day span held 204 on the real build; only a week with two or more lost days draws squares. She kept the shared axis top at a full day's 30, and refused a panel-only shortening of the strip's names, because a shortened name is a second spelling of the one the job list prints.
+  - **A tap that opened a day's list blanked the strip.** Focus moves to the list, and the strip read only the pointer's column, so it fell back to the newest day while the list showed another. The strip now rests on the day held open. The readout spec's tap test reaches this panel only when the charts above it have not drawn, which is why CI stayed green; the panel's own click test now holds the strip to the day and failed on the old build.
+  - **Handed to pass B by Susan, before the pull request is marked ready**, each its own commit: the shared strip lets a swatch, a name and a count each take a line on a phone - the swatch stays on the name's first line and the count follows its last word; and the shared day axis always runs the first label right and the last left, so two days near the middle collide and only the newest is named.
+  - **Files added to pass A**: `frontend/src/lib/console/machine/FleetDots.svelte` (new), `MachineCard.svelte`, `MachineSplitGroup.svelte`, `machine-cards.ts` and `machine-split.ts` (the three panels move together), `MemoryBoardPanel.svelte` and the route's `+page.svelte` (the hatch angle), `readout.ts` (`columnPick`), `d3/dateSeries.ts`, `d3/ordered-colour.ts`, `frontend/tests/platform-mix.spec.ts` (new, logic group) and `tests/fixtures/platform-mix/` in place of `console-fleet.spec.ts`, `chart-vocabulary.spec.ts`, `panel-sufficiency.spec.ts`, `console-machine-cards.spec.ts`, `frontend/tests/fixtures/one-pass-golden.json`, `frontend/scripts/test-groups.ts`, `docs/concepts/config/appearance.md`, `docs/architecture/publishing/console-machine.md`, both config contracts' changelogs, and `backend/tests/contracts/test_app_config.py`.
+
 ---
+
+### Row 8 pass B completion
+
+The panel reads the published machine ledger after mount, keeps the shared
+colour ramp, and no longer serializes fleet rows. Its window is bounded by the
+packed record. The real reader supplies all four states and the drill-through
+reuses fetched rows. The add-on is prepared outside tests; the real worker's
+request reaches the production service worker; content-named engine files
+survive an unchanged deploy. Fresh year addresses and named missing-file faults
+are unchanged.
+
+The cold-load check keeps the four-hop limit. Separate real-response gates
+prove data and engine downloads are independent; a planted serial wait makes
+the normal budget assertion fail. The two shared layout fixes are separate
+commits: wrapped readouts and date-axis endpoint labels. Their current rules
+live on the [shared chart page](../docs/concepts/console-design/the-rules-every-console-chart-obeys.md).
+
+Code candidate `eaec3fa33` passed CI run `36914917243`: 5,944 backend tests,
+465 frontend logic tests, 1,480 browser tests and 53 tooling tests. All seven
+jobs passed, including whole-day. Local real and canary smoke, six native
+width/theme captures, four-state gates, worker CSP, file reuse and cache
+retirement passed. Susan's final ruling is SHIP. Sparse views keep their
+reserved plot space and small job squares. No further implementation remains
+in this row; the owner merges PR #1171 before row 11.
 
 ### Row #9 - The door keeps what it fetched for the page's life, and says how far a ledger reaches
 

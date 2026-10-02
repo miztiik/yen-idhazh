@@ -329,17 +329,14 @@ class ConsoleConfig(Model):
         ge=1,
         le=6,
         description=(
-            "How many kinds of machine keep a bar of their own on the fleet trend "
-            "before the rest fold into one row named in words. A grouped bar is "
-            "only a bar while it is wide enough to paint. At chart_width of 760 "
-            "and the widest span the window control offers, 90 days, a day band is "
-            "8.4 px; five bars in it draw 1.09 px each after the chart engine's own "
-            "gaps and seven draw 0.77 px, which is the sub-pixel band the chart "
-            "rules already refuse. Four kinds plus the fold row is the largest set "
-            "that stays over a pixel there. It costs little: of the 40 placements "
-            "on the committed machine record on 2026-09-20, seven distinct machines "
-            "in all, the top four hold 37. The upper bound is six because the "
-            "colour ramp keeps seven stops and the fold row needs one of them."
+            "How many kinds of machine keep a row of their own on the fleet panel, "
+            "the most placed first, before the rest may fold. A kind past these "
+            "folds only with kinds on its own speed step, and a step holding one "
+            "such kind names it, because a fold that crossed a step would say two "
+            "speeds were one. So this chooses how many rows are named for being "
+            "common, and the speed steps choose which of the rest may combine. Six "
+            "at most, because every named row is one more entry in the strip under "
+            "the plot and one more segment in each day's bar."
         ),
     )
     bandwidth_min_kinds: int = Field(
@@ -355,16 +352,50 @@ class ConsoleConfig(Model):
         ),
     )
     machine_colour_stops: int = Field(
-        default=7,
+        default=5,
         ge=1,
         le=7,
         description=(
-            "How many machines get a colour of their own before the rest fold into "
-            "one row named in words. Seven, because the chart ramp holds eight stops "
-            "and the eighth is reserved for shards that recorded no machine at all - "
-            "an absence is not a machine and must not take a machine's hue. Folding "
-            "is what keeps the assignment bounded: without it a seventh kind would "
-            "either collide with a sixth or need a ninth stop nobody has drawn."
+            "How many steps the machine colour has, slowest to fastest. A machine "
+            "kind takes the step its median prompt reading speed falls in, cut at "
+            "the quantiles of every kind's median over the whole record the page "
+            "holds, so a machine keeps its colour when the span changes. Five, "
+            "because a reader cannot rank many steps of one hue on a thin bar. "
+            "Kinds on one step share its colour, and the name and the speed are "
+            "printed beside every one of them."
+        ),
+    )
+    machine_colour_floor_share: float = Field(
+        default=0.4,
+        gt=0.0,
+        lt=1.0,
+        description=(
+            "How much of the machine hue the slowest step carries, the rest being "
+            "the panel's own ground; the steps above it rise evenly to the full "
+            "hue. 0.4, because at 0.2 the slowest step stood 1.3 to 1 against the "
+            "panel and nearly vanished, and slow machines are what the panel exists "
+            "to show. Measured 2026-09-30 on --chart-1: 1.89 to 1 in both themes."
+        ),
+    )
+    absent_hatch_degrees: int = Field(
+        default=45,
+        ge=0,
+        lt=180,
+        description=(
+            "The angle of the stripes that mark a known thing with no reading - a "
+            "machine nobody timed, an item that carries no kernel reading. One "
+            "angle for every such hatch, so the texture means one thing on every "
+            "panel that draws it."
+        ),
+    )
+    fleet_dot_max_px: int = Field(
+        default=8,
+        ge=2,
+        le=24,
+        description=(
+            "The largest square, in CSS pixels, the fleet panel draws for one job "
+            "when the open span holds too few placements for bars. A busier day "
+            "draws smaller squares, so the busiest day still fits the plot."
         ),
     )
     processor_lost_pct_marked: float = Field(

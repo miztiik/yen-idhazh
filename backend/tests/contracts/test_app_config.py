@@ -658,6 +658,39 @@ def test_a_completeness_grace_of_zero_days_is_refused() -> None:
         ConsoleConfig(completeness_grace_days=0)
 
 
+@pytest.mark.parametrize(
+    "knob",
+    [
+        "machine_colour_stops",
+        "machine_colour_floor_share",
+        "absent_hatch_degrees",
+        "fleet_dot_max_px",
+    ],
+)
+def test_the_machine_colour_knobs_are_ones_the_frontend_agrees_with(knob: str) -> None:
+    """Three panels on the Hardware route draw a machine in the colour these decide.
+
+    The frontend keeps its own console defaults so a fresh clone renders with no
+    `config/`. A clone with a different number of steps, a different floor or a
+    different hatch would colour one machine two ways between a build and a clone.
+    """
+    console = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json")).console
+    drawn = getattr(console, knob)
+    assert getattr(ConsoleConfig(), knob) == drawn, (
+        f"config/appearance.json sets console.{knob} a clone with no config/ would not"
+    )
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(rf"\b{knob}:\s*([\d.]+)", reader)
+    assert mirrored is not None, f"the frontend console defaults dropped {knob}"
+    assert float(mirrored.group(1)) == drawn
+
+
+def test_a_machine_colour_floor_of_the_whole_hue_is_refused() -> None:
+    """A floor of the full hue would draw every step the same colour."""
+    with pytest.raises(ValidationError, match="machine_colour_floor_share"):
+        ConsoleConfig(machine_colour_floor_share=1.0)
+
+
 #: The four thresholds that decide when a quiet day is drawn as a loud one, and
 #: what the pair means: crossing the first fills that day's tile, crossing the
 #: second puts the day in the panel's headline sentence.

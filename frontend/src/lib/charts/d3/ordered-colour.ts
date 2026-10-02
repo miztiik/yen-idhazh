@@ -11,9 +11,13 @@
  * window.** A value keeps its step when the operator changes the span, which is
  * the one thing a colour that carries rank has to survive.
  *
- * **One grey, and it is never on the ramp.** `RESERVED_GREY` is the stop
- * `machine-colour.ts` already keeps for a machine nobody recorded, re-exported
- * rather than minted again, so the console has one grey for an absence and not
+ * **The weakest step is not the page.** It carries a floor of the hue, passed
+ * in, because a step mixed almost wholly into the surface is a mark nobody can
+ * find - and the weakest step is often the one a panel exists to show.
+ *
+ * **One grey, and it is never on the ramp.** `RESERVED_GREY` is the chart stop
+ * kept for an absence, and `machine-colour.ts` re-exports it as the colour of a
+ * machine nobody recorded, so the console has one grey for an absence and not
  * two that drift. The hatch is that grey in stripes on the page surface, for a
  * known thing with no reading, and it is never laid over a grey fill: flat grey
  * already means "not recorded", and a hatch on grey would read the same.
@@ -23,17 +27,26 @@
  */
 import { scaleQuantile } from 'd3-scale';
 
-import { machineColour, UNRECORDED_STOP } from '../machine-colour';
 import type { ChartToken } from '../theme';
 
-export { UNRECORDED_STOP as RESERVED_GREY } from '../machine-colour';
+/** The chart stop kept for an absence and given to nothing that was measured.
+ *
+ * `--chart-8`, the grey. A stop number rather than a colour so a caller that
+ * draws with the categorical ramp and one that draws with an ordered one name
+ * the same grey.
+ */
+export const RESERVED_GREY = 8;
+
+/** The reserved grey as a custom-property reference. */
+export const RESERVED_GREY_INK = `var(--chart-${RESERVED_GREY})`;
 
 export interface OrderedRamp {
 	/** Each step's colour, weakest first. The strongest is the token itself. */
 	colours: string[];
 	/** The values the steps are cut at, one fewer than the steps. A value
 	 * below `cuts[0]` is step 1; a value at or above the last cut is the top
-	 * step. A key prints these, so each step is named by its range. */
+	 * step. They are where the ramp divides, not readings anybody took, so a key
+	 * names a step by the values that land on it rather than by these. */
 	cuts: number[];
 	/** The 1-based step a value lands on. */
 	stepOf: (value: number) => number;
@@ -42,10 +55,11 @@ export interface OrderedRamp {
 /** One step of the ramp: the token at its own share, the rest page surface.
  *
  * Mixed in OKLab, where equal steps of the mix look like equal steps of
- * lightness, which is what makes a rank readable by eye.
+ * lightness, which is what makes a rank readable by eye. The shares rise evenly
+ * from `floor` at the weakest step to the whole token at the strongest.
  */
-function stepColour(token: ChartToken, step: number, stops: number): string {
-	const share = Math.round((step / stops) * 100);
+function stepColour(token: ChartToken, step: number, stops: number, floor: number): string {
+	const share = stops === 1 ? 100 : Math.round((floor + ((1 - floor) * (step - 1)) / (stops - 1)) * 100);
 	return share === 100
 		? `var(${token})`
 		: `color-mix(in oklab, var(${token}) ${share}%, var(--color-surface))`;
@@ -54,23 +68,28 @@ function stepColour(token: ChartToken, step: number, stops: number): string {
 /** The ordered ramp over a whole record.
  *
  * `record` is every value the colour must stay stable across, not only the
- * ones on screen. Null where the record holds no finite value, because there is
- * nothing to rank a value against.
+ * ones on screen. `floor` is the share of the hue the weakest step carries,
+ * above nothing and below the whole. Null where the record holds no finite
+ * value, because there is nothing to rank a value against.
  */
 export function orderedRamp(
 	record: readonly number[],
 	stops: number,
-	token: ChartToken
+	token: ChartToken,
+	floor: number
 ): OrderedRamp | null {
 	if (!Number.isInteger(stops) || stops < 1) {
 		throw new RangeError(`An ordered ramp has a whole number of steps, one or more; got ${stops}.`);
+	}
+	if (!(floor > 0 && floor < 1)) {
+		throw new RangeError(`The weakest step carries some of the hue and not all of it; got ${floor}.`);
 	}
 	const finite = record.filter((value) => Number.isFinite(value));
 	if (finite.length === 0) return null;
 	const steps = Array.from({ length: stops }, (_, index) => index + 1);
 	const quantile = scaleQuantile<number>().domain(finite).range(steps);
 	return {
-		colours: steps.map((step) => stepColour(token, step, stops)),
+		colours: steps.map((step) => stepColour(token, step, stops, floor)),
 		cuts: quantile.quantiles(),
 		stepOf: (value: number) => quantile(value)
 	};
@@ -108,7 +127,7 @@ export function absentHatch(pattern: HatchPattern): AbsentHatch {
 			`A hatch needs a finite angle and a gap and a stripe wider than nothing; got ${degrees}, ${gapPx}, ${linePx}.`
 		);
 	}
-	const ink = machineColour(UNRECORDED_STOP);
+	const ink = RESERVED_GREY_INK;
 	const size = gapPx + linePx;
 	return {
 		degrees,

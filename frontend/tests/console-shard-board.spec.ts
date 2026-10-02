@@ -18,7 +18,7 @@
  * `frontend/scripts/build-canary.mjs` writes both records this reads.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/browser';
 import { canaryArticleRows, canaryMachineRows, heldRows } from './support/canary-records';
 
 /** Every row of one canary record, as the canary packed it.

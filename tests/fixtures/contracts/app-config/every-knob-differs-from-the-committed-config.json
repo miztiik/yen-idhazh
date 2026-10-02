@@ -103,6 +103,7 @@
     "watchlist_max_entities": 24
   },
   "console": {
+    "absent_hatch_degrees": 30,
     "band_outlier_rows": 6,
     "bandwidth_min_kinds": 4,
     "chart_coverage_pct": 5.0,
@@ -119,13 +120,15 @@
     "faithfulness_axis_floor_max": 60,
     "faithfulness_axis_step": 10,
     "feed_rows": 6,
+    "fleet_dot_max_px": 6,
     "fleet_min_rows": 80,
     "fleet_top_kinds": 2,
     "judged_panel_ids": [
       "platform-mix",
       "run-health"
     ],
-    "machine_colour_stops": 5,
+    "machine_colour_floor_share": 0.5,
+    "machine_colour_stops": 4,
     "max_window_days": 180,
     "min_attempts_for_rate": 3,
     "min_window_days": 7,

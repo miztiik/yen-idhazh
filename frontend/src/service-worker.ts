@@ -78,10 +78,12 @@
  */
 
 import { base, build, files, version } from '$service-worker';
+import engineAssets from '../.svelte-kit/query-engine-assets.generated.js';
 import {
 	BYTES_HELD,
 	DAY_CACHE,
 	DAY_PAYLOAD,
+	ENGINE_CACHE_PREFIX,
 	KILL_FILE,
 	SHELL_CACHE_PREFIX,
 	evictions,
@@ -100,6 +102,8 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 /** One shell cache per build. `version` is SvelteKit's own build id, which
  * moves on every build, so a deploy never reads the last one's chunks. */
 const SHELL_CACHE = `${SHELL_CACHE_PREFIX}${version}`;
+const ENGINE_CACHE = `${ENGINE_CACHE_PREFIX}${engineAssets.version}`;
+const ENGINE_PATHS = new Set(engineAssets.files.map((file) => `${base}/${file}`));
 const KILL_URL = `${base}/${KILL_FILE}`;
 
 /** The document a static host answers an address it does not have with, and
@@ -211,7 +215,7 @@ sw.addEventListener('activate', (event) => {
 			const names = await caches.keys();
 			await Promise.all(
 				names
-					.filter((name) => ours(name) && name !== SHELL_CACHE && name !== DAY_CACHE)
+					.filter((name) => ours(name) && name !== SHELL_CACHE && name !== DAY_CACHE && name !== ENGINE_CACHE)
 					.map((name) => caches.delete(name))
 			);
 			await sw.clients.claim();
@@ -238,11 +242,34 @@ sw.addEventListener('fetch', (event) => {
 	// its own `Cache` is a switch that says whatever it said last time.
 	if (url.pathname === KILL_URL) return;
 	if (isEncoder(url.pathname)) return;
+	if (ENGINE_PATHS.has(url.pathname)) {
+		event.respondWith(fromEngineCache(request));
+		return;
+	}
 
 	event.respondWith(
 		DAY_PAYLOAD.test(url.pathname) ? fromDayCache(event) : fromNetworkFirst(request, url)
 	);
 });
+
+async function fromEngineCache(request: Request): Promise<Response> {
+	if (request.headers.has('Range')) return fetch(request);
+	try {
+		const held = await caches.match(request, { cacheName: ENGINE_CACHE, ignoreVary: true });
+		if (held) return held;
+	} catch (error) {
+		console.warn('[offline] The query engine cache could not be read.', error);
+	}
+	const answer = await fetch(request);
+	if (answer.ok && answer.status === 200 && !answer.redirected) {
+		try {
+			await (await caches.open(ENGINE_CACHE)).put(request, answer.clone());
+		} catch (error) {
+			console.warn('[offline] The query engine was not kept on this device.', error);
+		}
+	}
+	return answer;
+}
 
 /** A published day: from the device if it is there, and refreshed behind the
  * reader either way.

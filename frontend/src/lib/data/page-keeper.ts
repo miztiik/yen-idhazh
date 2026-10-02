@@ -36,10 +36,10 @@
  * ETag. A source with no address, or an engine that reads no host, gets the file
  * fetched whole instead, and kept like any other.
  *
- * **The engine starts only when every file a call fetches has arrived whole**, so
- * a call that cannot be answered never loads it. A call that may read a file by
- * byte range starts the engine while it fetches the rest, because only the engine
- * can open that file.
+ * **The engine starts beside the selected data fetches.** The reader has already
+ * validated the indexes and selected non-empty files before calling `hold`, so
+ * a quiet span or missing index starts no engine. A failed data fetch can still
+ * overlap startup, without registering its bytes or hiding its fault.
  *
  * **A console line is printed once for the keeper's life.** A missing file is
  * met by every panel that reads it, and fifteen panels on one page would print
@@ -218,9 +218,8 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 		const addresses = files.map((file) =>
 			file.byRange && source.address !== undefined ? source.address(file.path, file.version) : null
 		);
-		// Only the engine can open a file at its address, so it starts while the rest arrive.
-		const starting = addresses.some((address) => address !== null) ? openEngine() : null;
-		starting?.catch(() => undefined);
+		const starting = openEngine();
+		void starting.catch(() => undefined);
 		const arriving = files.map((file, at) =>
 			names.has(keys[at]) || addresses[at] !== null ? null : arrive(file, keys[at])
 		);
@@ -229,7 +228,7 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 			arrived = await Promise.all(arriving);
 			const failed = arrived.findIndex((one) => one !== null && 'reason' in one);
 			if (failed !== -1) return { failed, shortfall: arrived[failed] as FileShortfall };
-			const engine = await (starting ?? openEngine());
+			const engine = await starting;
 			registeredWith = engine;
 			// A file the engine opens at an address is this call's alone: never kept, and dropped by `done`.
 			const opening = files.map((file, at) => {

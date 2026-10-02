@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -399,6 +399,22 @@ formatting alone.
 
 Run from `frontend/`.
 
+Prepare the engine's Parquet add-on before tests, once per installed version:
+
+```powershell
+npm run setup:duckdb
+npm run setup:duckdb -- --check
+```
+
+The setup command may download it. Playwright's global setup only checks the
+shared home cache and fails with the setup command when the file is absent.
+Hardware browser specs use `tests/support/browser.ts` to answer the worker from
+that cached file. HTTP-cache tests keep their local add-on host instead, because
+Playwright routing disables the browser's HTTP cache. CI prepares the same cache
+before tests; the weekly add-on workflow refreshes it on main. The source and
+version rules are in
+[the query reader's page](../architecture/publishing/how-the-query-door-answers-a-panel.md#where-the-parquet-reader-comes-from).
+
 ```powershell
 npm run check
 npm run build
@@ -747,7 +763,7 @@ the same derivation the config runs:
 node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd).digest.readUInt32BE(0)%10000)"
 ```
 
-Three traps make this suite lie to you.
+Check these conditions before trusting browser evidence.
 
 - **`frontend/build` is one shared directory.** `npm run build` and
  `npm run build:canary` both write it. If anything rebuilds the real site
@@ -764,6 +780,12 @@ Three traps make this suite lie to you.
  up with several topics cannot be tested here. Put that rule in a pure module
  and unit-test it there - `frontend/src/lib/day-shape.ts` exists for exactly
  this reason.
+
+- **Verify the captured viewport, not only the requested size.** An embedded
+ browser can retain its own viewport. Read `innerWidth` before a width-specific
+ screenshot. If it does not match, use the native Playwright capture runner;
+ do not label that image with the requested width. A hidden embedded page can
+ also suspend animation-frame waits, so make it visible before relying on them.
 
 ## A chart has no plot until somebody scrolls to it
 

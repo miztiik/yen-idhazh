@@ -46,6 +46,7 @@
 		type RangeMark
 	} from '$lib/charts/machine';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
+	import { absentHatch } from '$lib/charts/d3/ordered-colour';
 	import { namesMoved, type SettingsMoved } from '$lib/console/settings-moved';
 	import { grouped } from '$lib/charts/series';
 
@@ -53,7 +54,8 @@
 		board,
 		moved = [],
 		windowDays,
-		readoutMaxShare
+		readoutMaxShare,
+		hatchDegrees
 	}: {
 		board: MemoryBoardView;
 		/** Every day inside the page's span the run record says a setting moved on,
@@ -65,7 +67,14 @@
 		windowDays: number;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
+		/** `console.absent_hatch_degrees`: the angle of the stripes an item with no
+		 * reading is drawn in, the one hatch the console has for no reading. */
+		hatchDegrees: number;
 	} = $props();
+
+	/** An item with no reading: the reserved grey in stripes on the page, a gap of
+	 * three pixels between stripes one pixel wide. */
+	const hatch = $derived(absentHatch({ degrees: hatchDegrees, gapPx: 3, linePx: 1 }));
 
 	const tightestItem = $derived(board.items.find((item) => item.tightest) ?? null);
 
@@ -302,7 +311,7 @@
 						data-memory-item-tightest={String(item.tightest)}
 					>
 						{#if item.headroom.empty}
-							<span class="bar absent-bar"></span>
+							<span class="bar absent-bar" style="background: {hatch.background}"></span>
 						{:else}
 							<span class="bar floor" style="block-size: {item.headroom.floorWidth}"></span>
 							{#if item.headroom.endBytes !== null}
@@ -436,7 +445,7 @@
 						data-readout-picked={picked === index ? 'yes' : undefined}
 					>
 						{#if item.load === null}
-							<span class="bar absent-bar"></span>
+							<span class="bar absent-bar" style="background: {hatch.background}"></span>
 						{:else}
 							<span class="bar load" style="block-size: {item.loadWidth}"></span>
 						{/if}
@@ -574,16 +583,10 @@
 	}
 
 	/* An unmeasured item is a gap in the strip and never a bar of no height:
-	   a zero-length mark says the reading was taken and came back zero. */
+	   a zero-length mark says the reading was taken and came back zero. Its
+	   stripes are the console's one hatch for no reading, set inline. */
 	.absent-bar {
 		block-size: 100%;
-		background: repeating-linear-gradient(
-			45deg,
-			transparent,
-			transparent 3px,
-			var(--color-rule) 3px,
-			var(--color-rule) 4px
-		);
 	}
 
 	.notch {

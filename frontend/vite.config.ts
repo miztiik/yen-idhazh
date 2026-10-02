@@ -3,9 +3,10 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { assetBaseUrl, encoderSource } from './asset-base.js';
 import { assistConfig, engineExtensionRepository, uiConfig } from './src/lib/server/config';
+import { queryEngineAssetModule } from './scripts/query-engine-assets';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [tailwindcss(), sveltekit(), queryEngineAssetModule()],
 	define: {
 		// Where a drawing is asked for. A build-time constant and not a fetch,
 		// because it cannot change between builds and a reader should not spend a

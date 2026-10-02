@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -27,7 +27,7 @@ either.
 | What the machine was doing | Whether the machine took the model's memory back | one tile a day | Whether the model waited on the disk for weight pages the kernel had reclaimed. |
 | What the machine was doing | Which machines this run was given | one card a machine | What machine this is, what it can do against the others this run drew, what clock and uptime it had when we got it, and whether its record survived the day. |
 | What the machine was doing | Whether some machines do the same work slower | one group a machine | What a written token costs against a read one, on the machine that paid it. |
-| What the machine was doing | What kinds of machine we keep being given | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
+| What the machine was doing | Which machines ran our jobs, day by day | one bar a day, split by machine kind; one square a job under `console.fleet_min_rows` placements | What kinds of machine we keep being handed, how fast each reads, and whether that is changing. |
 | Where the time went | Which parts of the last run took longest | one row a shard | Was the day slow because of the work or because of the machine. |
 | Where the time went | Whether the slowest articles are getting slower | one plot a percentile, one mark a run | Whether the slow end of a run is moving, and how wide the gap is today. |
 | How close we are to the limits | How close an article came to using up the machine's memory | one mark an item of the newest run | How little the kernel had left at one article's worst moment, whether it gave the memory back, and how long the queue was. |

@@ -45,6 +45,7 @@ import { percentOf } from './rank';
 import {
 	machineKeys,
 	machineRamp,
+	promptRate,
 	type MachineIdentity,
 	type MachineKey,
 	type MachineRamp,
@@ -278,7 +279,8 @@ export function machineCards(
 	fingerprints: readonly HostFingerprint[],
 	options: {
 		watchedFlags: readonly string[];
-		colourStops: number;
+		/** The speed ramp's steps and floor, for a ramp built over this run alone. */
+		colour: { stops: number; floor: number };
 		/** False where the machine record is switched off. */
 		recording: boolean;
 		/** How many times a machine's cache the probe buffer has to be before its
@@ -340,7 +342,18 @@ export function machineCards(
 		};
 	}
 
-	const ramp = options.ramp ?? machineRamp(placements, options.colourStops);
+	const ramp =
+		options.ramp ??
+		machineRamp(
+			placements.map((placement) => ({
+				machine: { key: placement.key, name: placement.name },
+				rate:
+					placement.row === null
+						? null
+						: promptRate(placement.row.server_prompt_tokens, placement.row.server_prompt_seconds)
+			})),
+			options.colour
+		);
 	const byIdentity = new Map<string, Placement[]>();
 	for (const placement of placements) {
 		const identity = ramp.at.get(placement.key);

@@ -283,19 +283,26 @@ export interface ConsoleConfig {
 	/** The share of a day's published items that must carry a chart, in whole percent. */
 	chart_coverage_pct: number;
 	/** Recorded job placements needed before the machine counts are drawn as bars.
-	 * Under it the panel lists them in words rather than drawing a distribution
-	 * that is not one. A declared estimate - see `console.py`. */
+	 * Under it the panel draws one square a job rather than a bar a small count
+	 * cannot support. A declared estimate - see `console.py`. */
 	fleet_min_rows: number;
-	/** Machine kinds that keep a bar of their own on the fleet trend before the
-	 * rest fold into one named row. Four, because a fifth bar in a day band goes
-	 * under a pixel at the widest span the control offers - see `console.py`. */
+	/** Machine kinds that keep a row of their own on the fleet panel, the most
+	 * placed first. The rest fold only with kinds on their own speed step, and a
+	 * step holding one of them names it - see `console.py`. */
 	fleet_top_kinds: number;
+	/** The largest square the fleet panel draws for one job, in CSS pixels. */
+	fleet_dot_max_px: number;
 	/** Distinct machine kinds that must carry a bandwidth reading before bandwidth
 	 * may be plotted against decode speed. Nothing plots it today. */
 	bandwidth_min_kinds: number;
-	/** Machines that get a colour of their own before the rest fold into one row
-	 * named in words. The eighth chart stop is reserved for an unrecorded machine. */
+	/** Steps of the machine speed colour, slowest to fastest, cut from every
+	 * kind's median prompt reading speed over the record the page holds. */
 	machine_colour_stops: number;
+	/** The share of the machine hue the slowest step carries; the rest is the
+	 * panel's own ground, and the steps above it rise evenly to the full hue. */
+	machine_colour_floor_share: number;
+	/** The angle of the stripes that mark a known thing with no reading. */
+	absent_hatch_degrees: number;
 	/** The share of an interval the host gave to another tenant's machine at which
 	 * that day is drawn as a filled tile. A declared estimate - see `console.py`. */
 	processor_lost_pct_marked: number;
@@ -541,8 +548,11 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	chart_coverage_pct: 5,
 	fleet_min_rows: 160,
 	fleet_top_kinds: 4,
+	fleet_dot_max_px: 8,
 	bandwidth_min_kinds: 3,
-	machine_colour_stops: 7,
+	machine_colour_stops: 5,
+	machine_colour_floor_share: 0.4,
+	absent_hatch_degrees: 45,
 	processor_lost_pct_marked: 1.0,
 	processor_lost_pct_named: 10.0,
 	model_disk_reads_marked: 1,

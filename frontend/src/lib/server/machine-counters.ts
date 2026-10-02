@@ -125,6 +125,10 @@ export interface ShardCounters {
 	jobUsedPct: number | null;
 	/** The processor the host drew, as the text /proc/cpuinfo printed. */
 	cpuModel: string | null;
+	/** The machine record's digest of the host this shard drew. Null where the
+	 * record's probe never reached the shard. The key the page colours a machine
+	 * by, so a shard and the machine card of the job that ran it are one machine. */
+	fingerprint: string | null;
 	/** The least busy the processor was over any one item's model window. */
 	cpuBusyPct: number | null;
 	/** Cores the host let this job see. What `loadMax` is read against: a queue
@@ -346,6 +350,7 @@ const lowest = (values: number[]): number => Math.min(...values);
  * answering for one shard, and the run is refused.
  */
 const HOST_CELLS = [
+	'fingerprint',
 	'cpu_model',
 	'cores',
 	'job_seconds',
@@ -356,6 +361,7 @@ const HOST_CELLS = [
 
 /** One shard's machine cells, merged from however many halves the record holds. */
 interface HostCells {
+	fingerprint: string | null;
 	cpuModel: string | null;
 	cores: number | null;
 	jobSeconds: number | null;
@@ -513,6 +519,7 @@ function mergeHost(rows: Record<string, string>[]): HostCells | null {
 		}
 	}
 	return {
+		fingerprint: text(held.get('fingerprint')),
 		cpuModel: text(held.get('cpu_model')),
 		cores: measured(held.get('cores')),
 		jobSeconds: measured(held.get('job_seconds')),
@@ -563,6 +570,7 @@ function shardCounters(
 		// item ledger's copy is the fallback for a shard the record never reached,
 		// which would otherwise draw as a machine nobody can name.
 		cpuModel: host.cpuModel ?? fold.cpuModel,
+		fingerprint: host.fingerprint,
 		cpuBusyPct: fold.cpuBusyPct,
 		cores: host.cores,
 		cpuBusyMedianPct: median(fold.busy),

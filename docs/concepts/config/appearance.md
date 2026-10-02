@@ -93,6 +93,10 @@ The console knobs are:
 - `console.completeness_grace_days`
 - `console.judged_panel_ids`
 - `console.plot_min_fill_share`
+- `console.machine_colour_stops`
+- `console.machine_colour_floor_share`
+- `console.absent_hatch_degrees`
+- `console.fleet_dot_max_px`
 
 The 30-day setting is a viewport. It never deletes rows. `failure_list_max` is
 the same idea one level down: the failed-item list shows a page at a time and
@@ -146,6 +150,17 @@ second. Neither is in what `consoleConfig()` inlines into the five console
 documents, because a page has no use for a number only its tests read. The
 contract refuses a judged id that no console route draws, and one named twice
 ([../design-system.md](../design-system.md#sufficiency-is-a-gate-not-a-taste)).
+
+Four knobs decide how the Hardware route colours a machine. A machine's colour
+is its speed: one hue in `machine_colour_stops` (5) steps, slowest to fastest,
+each kind of machine taking the step its median prompt reading speed falls in.
+`machine_colour_floor_share` (0.4) is how much of the hue the slowest step
+carries, the rest being the panel's own ground - at 0.2 the slowest step stood
+1.3 to 1 against the panel and nearly vanished. `absent_hatch_degrees` (45) is
+the angle of the stripes that mark a known thing with no reading, on every panel
+that draws them. `fleet_dot_max_px` (8) is the largest square the machine-kinds
+panel draws for one job when the open span holds too few placements for bars
+([console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md)).
 
 ## Reader surface
 

@@ -14,7 +14,7 @@
  * the numbers below are recomputed from that file rather than from the page.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { WATCHED_FLAG } from '../src/lib/server/host-fingerprint';
@@ -123,6 +123,7 @@ function newestDrawnRun(): CanaryShard[] {
 async function setWindow(page: Page, days: number) {
 	await page.locator(`[data-window-preset="${days}"]`).click();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', String(days));
+	await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
 }
 
 test.describe('reading against writing, machine by machine', () => {
@@ -204,35 +205,43 @@ test.describe('the colour a machine takes', () => {
 		}
 	});
 
-	test('no two named machines share a stop, and the grey is only an absence', async ({ page }) => {
+	test('a machine keeps one step, the step follows its speed, and the grey is only an absence', async ({
+		page
+	}) => {
 		await page.goto('/console/machine/');
 		const marks = await page
 			.locator('[data-machine-group], [data-machine-card]')
 			.evaluateAll((nodes) =>
 				nodes.map((node) => ({
+					key: node.getAttribute('data-machine-group') ?? node.getAttribute('data-machine-card') ?? '',
 					name: node.getAttribute('data-machine-name') ?? '',
-					stop: Number(node.getAttribute('data-machine-stop')),
+					step: node.getAttribute('data-machine-step'),
+					speed: node.getAttribute('data-machine-speed'),
 					unrecorded: node.getAttribute('data-machine-unrecorded') === 'yes'
 				}))
 			);
 		expect(marks.length).toBeGreaterThan(0);
 
-		const named = marks.filter((mark) => !mark.unrecorded);
-		const byName = new Map<string, Set<number>>();
-		for (const mark of named) {
-			expect(mark.stop, 'a named machine took the reserved grey').toBeLessThan(8);
-			expect(mark.stop).toBeLessThanOrEqual(APPEARANCE.console.machine_colour_stops);
-			byName.set(mark.name, (byName.get(mark.name) ?? new Set()).add(mark.stop));
+		// One machine, one step, on the split and on its card alike.
+		const byKey = new Map<string, Set<string | null>>();
+		for (const mark of marks) byKey.set(mark.key, (byKey.get(mark.key) ?? new Set()).add(mark.step));
+		for (const [key, steps] of byKey) expect(steps.size, `${key} took two steps`).toBe(1);
+
+		// A step is a speed band: a faster machine never sits on a slower step.
+		const timed = marks
+			.filter((mark) => mark.step !== 'none' && mark.speed !== null && mark.speed !== 'none')
+			.map((mark) => ({ step: Number(mark.step), speed: Number(mark.speed) }));
+		expect(timed.length, 'the canary names a machine with a speed').toBeGreaterThan(0);
+		for (const one of timed) {
+			expect(one.step).toBeGreaterThanOrEqual(1);
+			expect(one.step).toBeLessThanOrEqual(APPEARANCE.console.machine_colour_stops);
+			for (const other of timed) {
+				if (one.speed < other.speed) expect(one.step).toBeLessThanOrEqual(other.step);
+			}
 		}
-		// One name, one stop - and one stop, one name.
-		for (const [name, stops] of byName) {
-			expect(stops.size, `${name} took two stops`).toBe(1);
-		}
-		const stops = [...byName.values()].map((set) => [...set][0]);
-		expect(new Set(stops).size, 'two named machines share a stop').toBe(stops.length);
 
 		for (const mark of marks.filter((one) => one.unrecorded)) {
-			expect(mark.stop).toBe(8);
+			expect(mark.step).toBe('none');
 			expect(mark.name).toBe('Machine not recorded');
 		}
 	});
@@ -484,44 +493,132 @@ test.describe('the machine record names which state it is in', () => {
 	});
 });
 
-test.describe('what the platform has been giving us', () => {
-	test('under the threshold it lists the counts and draws no bar', async ({ page }) => {
+test.describe('which machines ran our jobs, day by day', () => {
+	async function openFleet(page: Page): Promise<void> {
 		await page.goto('/console/machine/');
+		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
+	}
+
+	test('under the threshold it draws one square a job, over it one bar a day', async ({ page }) => {
+		await openFleet(page);
 		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		await expect(panel).toBeVisible();
-		const list = panel.locator('[data-fleet-list]');
-		if ((await list.count()) === 0) {
-			// At or above the threshold the panel draws a trend instead. The fold
-			// arithmetic is asserted over built rows in `console-fleet.spec.ts`;
-			// what is asserted here is that the drawn bar and the counts it was
-			// folded from are the same figure.
-			const board = panel.locator('[data-fleet-series]');
-			await expect(board).toBeVisible();
-			await expect(panel.locator('[data-chart]')).toHaveCount(1);
-			await expect(board).toHaveAttribute('data-panel-question', 'is it working');
-			const kept = Number(await board.getAttribute('data-fleet-top-kinds'));
-			const drawn = Number(await board.getAttribute('data-fleet-series'));
-			expect(drawn).toBeLessThanOrEqual(kept + 1);
-			expect(await board.getAttribute('data-fleet-other')).toBe(
-				await board.getAttribute('data-fleet-outside-top')
-			);
-			return;
+		await expect(panel.locator('.panel-title')).toHaveText('Which machines ran our jobs, day by day');
+		const body = panel.locator('[data-fleet-shape]');
+		await expect(body).toHaveCount(1);
+		const placements = Number(await body.getAttribute('data-fleet-placements'));
+		const shape = await body.getAttribute('data-fleet-shape');
+		expect(shape).toBe(placements < APPEARANCE.console.fleet_min_rows ? 'dots' : 'bars');
+		if (shape === 'dots') {
+			// The canary is far under the floor on purpose: a square a job, every job.
+			await expect(panel.locator('[data-fleet-squares]')).toHaveAttribute('data-fleet-squares', String(placements));
+			await expect(panel.locator('[data-fleet-square]')).toHaveCount(placements);
+		} else {
+			await expect(panel.locator('[data-series-bar]').first()).toBeVisible();
 		}
-		const placements = Number(await list.getAttribute('data-fleet-list'));
-		expect(placements).toBeLessThan(APPEARANCE.console.fleet_min_rows);
-		await expect(panel.locator('[data-chart]')).toHaveCount(0);
-		await expect(panel.locator('[data-fleet-under]')).toContainText(
-			String(APPEARANCE.console.fleet_min_rows)
-		);
+		// Its hover is the strip under the plot, a column a day drawn.
+		const days = await body.getAttribute('data-fleet-days');
+		await expect(panel.locator('[data-readout-columns]')).toHaveAttribute('data-readout-columns', days ?? '');
+		// The three things the sufficiency gates read off it.
+		await expect(panel.locator('[data-lede]')).toHaveCount(1);
+		await expect(panel.locator('[data-comparison]')).toHaveAttribute('data-comparison', 'composition');
+		await expect(panel.locator('[data-model-rule]')).toHaveAttribute('data-model-rule', 'no');
+		expect((await panel.locator('[data-model-rule]').getAttribute('data-model-rule-none'))?.split(' ').length).toBeGreaterThanOrEqual(5);
+		// No native tooltip on a mark.
+		await expect(panel.locator('svg title')).toHaveCount(0);
 	});
 
-	test('nothing in the panel is a share, a rate or a probability', async ({ page }) => {
-		await page.goto('/console/machine/');
+	test('every row of the strip says the speed its colour stands for, and no machine is last', async ({
+		page
+	}) => {
+		await openFleet(page);
+		const panel = page.locator('[data-console-panel-id="platform-mix"]');
+		const rows = await panel.locator('[data-readout-row]').evaluateAll((nodes) =>
+			nodes.map((node) => node.getAttribute('data-readout-row') ?? '')
+		);
+		expect(rows.length).toBeGreaterThan(0);
+		for (const row of rows.filter((one) => !one.startsWith('Machine not recorded'))) {
+			expect(row, 'a row with no speed').toMatch(/tokens a second\)$|no speed reading\)$/);
+		}
+		// The canary holds one job the record reached with no machine on it.
+		expect(rows.at(-1)).toBe('Machine not recorded');
+		await expect(panel.locator('[data-fleet-speed-key]')).toContainText('Slower');
+		await expect(panel.locator('[data-fleet-speed-key]')).toContainText('tokens a second');
+		// A step no kind of machine lands on names nothing, so the key leaves it out.
+		await expect(panel.locator('[data-fleet-speed-key]')).not.toContainText('none');
+	});
+
+	test('a click or Enter lists the day and the strip keeps it, Escape or Close shuts the list, and focus comes back', async ({
+		page
+	}) => {
+		await openFleet(page);
+		const panel = page.locator('[data-console-panel-id="platform-mix"]');
+		await panel.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
+		const plot = panel.locator('svg[data-chart-name="machine-fleet"]');
+		await expect(plot).toBeVisible();
+		const jobs = panel.locator('[data-fleet-jobs]');
+		await expect(jobs).toHaveCount(0);
+
+		const box = await plot.boundingBox();
+		if (box === null) throw new Error('the plot has no box');
+		const strip = panel.locator('[data-readout] [data-readout-day]').first();
+		const resting = await strip.innerText();
+		// The oldest day is the first column; point near the left of the plot, then
+		// press there, which is what a click is.
+		await page.mouse.move(box.x + 4, box.y + box.height * 0.5);
+		await expect(strip).not.toHaveText(resting);
+		const pointed = await strip.innerText();
+		await page.mouse.down();
+		await page.mouse.up();
+		await expect(jobs).toHaveCount(1);
+		await expect(jobs).toBeFocused();
+		// Focus has left the plot for the list, and the strip still reads the day
+		// the list is of rather than falling back to the newest.
+		await expect(strip).toHaveText(pointed);
+		const listed = Number(await body(panel).getAttribute('data-fleet-placements'));
+		expect(await jobs.locator('tbody tr').count()).toBeGreaterThan(0);
+		expect(await jobs.locator('tbody tr').count()).toBeLessThanOrEqual(listed);
+		await page.keyboard.press('Escape');
+		await expect(jobs).toHaveCount(0);
+		await expect(plot).toBeFocused();
+
+		await page.keyboard.press('Enter');
+		await expect(jobs).toHaveCount(1);
+		await jobs.locator('button').click();
+		await expect(jobs).toHaveCount(0);
+	});
+
+	test('nothing in the panel is a share, a rate of a draw or a probability', async ({ page }) => {
+		await openFleet(page);
 		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		const text = await panel.innerText();
 		expect(text).not.toMatch(/\d\s*%|percent|probability|chance of/i);
 	});
+
+	test('on a phone a listed job takes two lines, and the list never scrolls sideways', async ({ page }) => {
+		// Six columns do not fit 390px. A list that scrolled sideways hid the speed,
+		// which is what ties a job to its colour.
+		await page.setViewportSize({ width: 390, height: 844 });
+		await openFleet(page);
+		const panel = page.locator('[data-console-panel-id="platform-mix"]');
+		await panel.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
+		const plot = panel.locator('svg[data-chart-name="machine-fleet"]');
+		await expect(plot).toBeVisible();
+		await plot.focus();
+		await page.keyboard.press('Enter');
+		const jobs = panel.locator('[data-fleet-jobs]');
+		await expect(jobs).toHaveCount(1);
+		expect(await jobs.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(0);
+		const box = await jobs.boundingBox();
+		const speed = await jobs.locator('tbody tr').first().locator('td').last().boundingBox();
+		if (box === null || speed === null) throw new Error('the list or its speed cell has no box');
+		expect(speed.x + speed.width, 'the speed cell runs past the list').toBeLessThanOrEqual(box.x + box.width);
+	});
 });
+
+function body(panel: import('@playwright/test').Locator) {
+	return panel.locator('[data-fleet-shape]');
+}
 
 test.describe('what a run reads against what it writes', () => {
 	const PANEL = '[data-console-panel-id="read-against-written"]';

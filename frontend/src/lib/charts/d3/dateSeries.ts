@@ -30,6 +30,11 @@ export interface SeriesInput {
 	label: string;
 	token: ChartToken;
 	points: readonly SeriesPoint[];
+	/** A paint of the series' own in place of its token: a step of an ordered
+	 * ramp, which is a mix of a token and not a token. */
+	fill?: string;
+	/** Drawn as the hatch for a known thing with no reading, in place of a fill. */
+	hatched?: boolean;
 }
 
 export interface DateSeriesOptions {
@@ -64,6 +69,9 @@ export interface SeriesBar {
 	date: string;
 	label: string;
 	token: ChartToken;
+	/** What the bar is filled with: the series' own paint, or its token. */
+	fill: string;
+	hatched: boolean;
 	value: number;
 	x: number;
 	y: number;
@@ -71,11 +79,22 @@ export interface SeriesBar {
 	height: number;
 }
 
+/** Where two stacked segments of one day meet. A line of the ground is drawn
+ * over it, so two segments of one colour still read as two, and neither loses
+ * height to it. */
+export interface SeriesJoin {
+	x: number;
+	y: number;
+	width: number;
+}
+
 export interface SeriesGeometry {
 	frame: Frame;
 	dates: string[];
 	/** Where each day's column is centred, in the chart's own pixels. */
 	columns: number[];
+	/** How wide one day's column is drawn, in the chart's own pixels. */
+	bandwidth: number;
 	ticks: DayTick[];
 	axis: ValueAxis;
 	stacked: boolean;
@@ -83,6 +102,8 @@ export interface SeriesGeometry {
 	lines: SeriesLine[];
 	/** Empty when not stacked. */
 	bars: SeriesBar[];
+	/** Empty when not stacked. */
+	joins: SeriesJoin[];
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -117,7 +138,7 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 
 	const band = bandScale(dates, box, 'x', opts.padding);
 	const columns = dates.map((date) => (band(date) ?? 0) + band.bandwidth() / 2);
-	const ticks = dayTicks(dates, { density: opts.density, columns });
+	const ticks = dayTicks(dates, { density: opts.density, columns, bounds: [box.left, box.right] });
 
 	if (!stacked) {
 		const axis = valueAxis(values, box, { along: 'y', ticks: opts.valueTicks });
@@ -142,7 +163,7 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 			);
 			return { label: entry.label, token: entry.token, path: draw(row) ?? '', points };
 		});
-		return { frame: box, dates, columns, ticks, axis, stacked, lines, bars: [] };
+		return { frame: box, dates, columns, bandwidth: band.bandwidth(), ticks, axis, stacked, lines, bars: [], joins: [] };
 	}
 
 	const keys = series.map((entry) => entry.label);
@@ -159,11 +180,14 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 			const value = table[at][layer.key];
 			if (value === null || value === 0) return [];
 			const top = axis.scale(span[1]);
+			const entry = series[index];
 			return [
 				{
 					date: dates[at],
 					label: layer.key,
-					token: series[index].token,
+					token: entry.token,
+					fill: entry.fill ?? `var(${entry.token})`,
+					hatched: entry.hatched ?? false,
 					value,
 					x: band(dates[at]) ?? 0,
 					y: top,
@@ -173,5 +197,12 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 			];
 		})
 	);
-	return { frame: box, dates, columns, ticks, axis, stacked, lines: [], bars };
+	// Every segment's top edge but the highest one a day: that is where the next
+	// segment up begins.
+	const highest = new Map<string, number>();
+	for (const bar of bars) highest.set(bar.date, Math.min(highest.get(bar.date) ?? Infinity, bar.y));
+	const joins = bars
+		.filter((bar) => bar.y > (highest.get(bar.date) ?? bar.y))
+		.map((bar) => ({ x: bar.x, y: bar.y, width: bar.width }));
+	return { frame: box, dates, columns, bandwidth: band.bandwidth(), ticks, axis, stacked, lines: [], bars, joins };
 }

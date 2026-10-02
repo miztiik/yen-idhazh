@@ -13,7 +13,7 @@
  * strings landed on a phone, and no amount of arithmetic answers that.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/browser';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

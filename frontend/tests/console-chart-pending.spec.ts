@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/browser';
 
 /**
  * What stands in a browser-drawn chart's box until a mark lands there, and what

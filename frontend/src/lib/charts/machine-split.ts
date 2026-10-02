@@ -103,18 +103,22 @@ function whole(shard: ShardCounters): boolean {
 
 /** What each shard recorded about its machine.
  *
- * `fingerprints` carries the digest the machine record wrote for this run's work
- * shards where it reached them; a shard it missed carries only the processor's
- * own string, which the same record holds on its other half.
+ * The shard's own fingerprint where the machine record reached it, then the
+ * digest `fingerprints` carries for its index; a shard neither reached carries
+ * only the processor's own string, which the same record holds on its other half.
  */
 function seenBy(shard: ShardCounters, fingerprints: ReadonlyMap<number, string>): MachineSeen {
-	return { fingerprint: fingerprints.get(shard.shard) ?? null, cpuModel: shard.cpuModel };
+	return {
+		fingerprint: shard.fingerprint ?? fingerprints.get(shard.shard) ?? null,
+		cpuModel: shard.cpuModel
+	};
 }
 
 export function splitByMachine(
 	run: MachineRun | null,
 	options: {
-		colourStops: number;
+		/** The speed ramp's steps and floor, for a ramp built over this run alone. */
+		colour: { stops: number; floor: number };
 		/** Shard index to fingerprint, for the shards the machine record reached. */
 		fingerprints?: ReadonlyMap<number, string>;
 		/** The page's own ramp, assigned over every machine any panel can show.
@@ -146,7 +150,12 @@ export function splitByMachine(
 	const seen = reported.map((shard) => seenBy(shard, fingerprints));
 	const resolve = options.keys ?? machineKeys(seen);
 	const keys = seen.map(resolve);
-	const ramp = options.ramp ?? machineRamp(keys, options.colourStops);
+	const ramp =
+		options.ramp ??
+		machineRamp(
+			reported.map((shard, index) => ({ machine: keys[index], rate: shard.readTokensPerSecond })),
+			options.colour
+		);
 	const byIdentity = new Map<string, ShardCounters[]>();
 	reported.forEach((shard, index) => {
 		const identity = ramp.at.get(keys[index].key);

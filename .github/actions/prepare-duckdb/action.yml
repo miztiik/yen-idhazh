@@ -1,0 +1,35 @@
+name: Prepare the Parquet add-on
+description: Cache the installed DuckDB runtime's Parquet add-on before tests or builds.
+inputs:
+  refresh:
+    description: Download and check a fresh add-on instead of using the cached file.
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - id: addon
+      shell: bash
+      run: echo "key=$(node frontend/scripts/setup-duckdb.ts --key)" >> "$GITHUB_OUTPUT"
+
+    - id: cached
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.duckdb/extensions
+        key: ${{ runner.os }}-${{ steps.addon.outputs.key }}-${{ github.run_id }}
+        restore-keys: ${{ runner.os }}-${{ steps.addon.outputs.key }}-
+
+    - shell: bash
+      env:
+        REFRESH: ${{ inputs.refresh }}
+      run: |
+        if [ "$REFRESH" = true ]; then
+          npm --prefix frontend run setup:duckdb -- --refresh
+        else
+          npm --prefix frontend run setup:duckdb
+        fi
+
+    - uses: actions/cache/save@v6
+      if: inputs.refresh == 'true' || steps.cached.outputs.cache-matched-key == ''
+      with:
+        path: ~/.duckdb/extensions
+        key: ${{ runner.os }}-${{ steps.addon.outputs.key }}-${{ github.run_id }}
