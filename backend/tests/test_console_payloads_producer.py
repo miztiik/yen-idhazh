@@ -896,7 +896,7 @@ def test_the_band_prints_the_size_against_the_cap_with_the_days_it_measured(
 
     band = _band(state, digest)
 
-    assert band.size.bytes == 1_000_000 + 19 * 30_000
+    assert band.size.bytes == 1_000_000 + (len(MONTHS) - 1) * 30_000
     # Three published days fall inside the 90-day span the widest preset offers,
     # and the oldest of them has no day before it to difference against.
     assert band.size.measured_days == 2

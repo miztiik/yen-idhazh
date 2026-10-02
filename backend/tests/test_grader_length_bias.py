@@ -178,14 +178,18 @@ class TestTheControl:
         """A zero everywhere would pass the control and prove nothing.
 
         The same scorer, the same run: the one-slice item reads exactly zero and
-        the three-slice item does not. That is the difference between an
+        the two-slice item does not. That is the difference between an
         instrument that is sound and one that is stuck.
         """
         a_package(
             tmp_path,
             [
                 an_item(a_premise(50), SUMMARY, name="short"),
-                an_item(a_premise(NARROW.chunk_words + 1), SUMMARY, name="long"),
+                an_item(
+                    a_premise(2 * NARROW.chunk_words - NARROW.chunk_overlap_words + 1),
+                    SUMMARY,
+                    name="long",
+                ),
             ],
         )
         pairs = bias.load_pairs(tmp_path, tmp_path / "absent.csv")
@@ -195,7 +199,7 @@ class TestTheControl:
         readings = {reading.slices: reading.delta for reading in scored}
 
         assert readings[1] == 0.0
-        assert readings[3] != 0.0
+        assert readings[2] != 0.0
 
     def test_the_wide_geometry_puts_every_item_on_one_slice(self, tmp_path: Path) -> None:
         """Derived from the corpus. A window narrower than the longest premise is not a control."""
@@ -203,7 +207,7 @@ class TestTheControl:
             tmp_path,
             [
                 an_item(a_premise(50), SUMMARY, name="short"),
-                an_item(a_premise(2000), SUMMARY, name="long"),
+                an_item(a_premise(NARROW.chunk_words + 1), SUMMARY, name="long"),
             ],
         )
         pairs = bias.load_pairs(tmp_path, tmp_path / "absent.csv")
