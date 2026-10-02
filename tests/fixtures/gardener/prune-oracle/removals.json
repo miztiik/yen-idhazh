@@ -1,12 +1,4 @@
 {
-  "counterfactual-scores": {
-    "dry_written": [],
-    "removed": [
-      "state/counterfactual-scores/2027/10/14/2027-10-14-1-1-plan-00.csv",
-      "state/counterfactual-scores/2027/10/15/2027-10-15-1-1-plan-00.csv"
-    ],
-    "written": []
-  },
   "digest-fragments": {
     "dry_written": [],
     "removed": [

@@ -6,6 +6,8 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 
 from __future__ import annotations
 
+from typing import Final
+
 from idhazh import (
     atomic_write,
     config,
@@ -13,6 +15,7 @@ from idhazh import (
     run_context,
 )
 from idhazh.contracts.base import ServerJob, fit_field
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.qualification import (
     GateStatus,
@@ -30,9 +33,19 @@ from idhazh.stages import common
 from idhazh.stages.common import LOG
 from idhazh.stages.decide import DECIDE_SHARD
 
+#: The name the verdict file this stage writes through the ledger door carries
+#: as its producer: this module's own dotted name, less the package.
+PRODUCER: Final = __name__.partition(".")[2]
+
 
 def stage_qualify_decide(
-    *, settings: config.Settings, date: str, run_id: str, job_budget_minutes: float, runner: str
+    *,
+    settings: config.Settings,
+    date: str,
+    run_id: str,
+    commit_sha: str,
+    job_budget_minutes: float,
+    runner: str,
 ) -> int:
     """Merge the shards, run the gates this run can ask, and say which number failed.
 
@@ -41,6 +54,9 @@ def stage_qualify_decide(
     and stops rather than switching anything itself.
 
     Every gate is asked of every run, and a report missing one is refused.
+
+    `commit_sha` is the commit this job checked out, which the verdict's file
+    names as its writer's code.
     """
     paths = sorted(common.QUALIFICATION_ROOT.glob("shard-*.json"))
     shards = [QualificationShard.read(path) for path in paths]
@@ -109,14 +125,13 @@ def stage_qualify_decide(
     mean_hhem = (
         sum(score.hhem for score in frozen.scores) / len(frozen.scores) if frozen.scores else 0.0
     )
-    # This dispatch's own segment, never the day file. Two candidates can be
-    # dispatched at once and both judge the same day, so the run id in the
-    # filename is what keeps their verdicts off one path. The state root is the
-    # one the config names, so a qualification writes nothing a published day
-    # is built from.
-    ledger.write_segment(
+    # Filed through the ledger door as this dispatch's own work unit. Two
+    # candidates can be dispatched at once and both judge the same day: each run
+    # id is its own work unit and each file its own minted name, so neither
+    # verdict replaces the other. The state root is the one the config names, so
+    # a qualification writes nothing a published day is built from.
+    ledger.persist(
         common.STATE_ROOT,
-        LedgerName.CANDIDATE_MODELS,
         [
             ValidationRow(
                 version=ValidationRow.schema_version(),
@@ -143,10 +158,16 @@ def stage_qualify_decide(
                 ),
             )
         ],
-        run_id=run_id,
-        attempt=run_context.run_attempt(),
-        job=ServerJob.DECIDE,
-        shard=DECIDE_SHARD,
+        ledger=LedgerName.CANDIDATE_MODELS,
+        covers=date,
+        identity=WriterIdentity(
+            run_id=run_id,
+            attempt=run_context.run_attempt(),
+            job=ServerJob.DECIDE,
+            shard=DECIDE_SHARD,
+            producer=PRODUCER,
+            git_sha=commit_sha,
+        ),
     )
 
     for outcome in outcomes:

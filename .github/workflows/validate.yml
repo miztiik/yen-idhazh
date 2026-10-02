@@ -453,9 +453,12 @@ jobs:
       #
       # `--execution ${{ github.run_id }}` is what keeps two candidates apart.
       # GitHub allocates that number and no second dispatch can reproduce it, so
-      # the verdict's run id - and the segment filename built from it - differ
+      # the verdict's run id - and the work unit its file is filed under - differ
       # even when both dispatches judge the same day. Left out, the run counts
       # off the last committed manifest and two dispatches read the same answer.
+      #
+      # `--commit` names the commit this job checked out, which the verdict's
+      # file records as the code that wrote it.
       - name: Run the gates
         id: gates
         continue-on-error: true
@@ -464,6 +467,7 @@ jobs:
             --config backend/var/candidate-config \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
+            --commit "${GITHUB_SHA}" \
             --job-budget-minutes "${{ fromJSON(inputs.job_budget_minutes) }}" \
             --runner ubuntu-latest
 
@@ -480,14 +484,14 @@ jobs:
       # redirected here by the config step above, so everything under this path
       # that is dirty on this runner was written by this runner.
       #
-      # The trial root rather than `state/pipeline-tests/candidate-models`, and
-      # that is the trade digest.yml's `Commit what this shard measured` records:
-      # `git add` on a path the checkout does not hold aborts the whole step
-      # under `set -e`, and a dispatch whose gates wrote no verdict has no
-      # candidate-models directory at all. The trial root is in every checkout.
+      # The trial root rather than `state/pipeline-tests/raw/candidate-models`,
+      # and that is the trade digest.yml's `Commit what this shard measured`
+      # records: `git add` on a path the checkout does not hold aborts the whole
+      # step under `set -e`, and a dispatch whose gates wrote no verdict has no
+      # candidate-models folder at all. The trial root is in every checkout.
       #
-      # What it commits is the gates' writer file under the trial root's own
-      # candidate-models day, unfolded: nothing folds a trial root, and a fold
+      # What it commits is the raw file the gates filed through the ledger door
+      # under the trial root, unpacked: nothing packs a trial root, and packing
       # would change no answer a reader gets.
       - name: Commit the candidate-models ledger
         env:

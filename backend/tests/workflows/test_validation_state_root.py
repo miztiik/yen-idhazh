@@ -50,9 +50,9 @@ VALIDATION_CONFIG_JOBS = ("plan", "qualify", "decide")
 VALIDATION_PLAN_STEP = "Read the feeds"
 
 #: The two steps of the decide job, in the order they have to run: the gates
-#: write the verdict into the trial root's own day, and the commit stages it.
-#: Nothing folds a trial root, so the verdict lands as the writer file the gates
-#: wrote.
+#: file the verdict through the ledger door under the trial root, and the commit
+#: stages it. Nothing packs a trial root, so the verdict lands as the raw file the
+#: gates filed.
 VALIDATION_GATES_STEP = "Run the gates"
 
 VALIDATION_COMMIT_STEP = "Commit the candidate-models ledger"
@@ -215,6 +215,10 @@ def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
     assert [path for path in written if not path.startswith(trial_tree)] == [], (
         f"a stage on a trial config wrote outside {trial_tree}: {written}"
     )
-    assert not ledger.tree_root(production_root, LedgerName.CANDIDATE_MODELS).exists(), (
+    assert not ledger.raw_root(production_root, LedgerName.CANDIDATE_MODELS).exists(), (
         "the production tree gained a candidate-models ledger"
+    )
+    trial_root = production_root / BENCH_TRIAL_STATE
+    assert ledger.list_raw_files(trial_root, LedgerName.CANDIDATE_MODELS), (
+        "the verdict was not filed through the ledger door under the trial root"
     )

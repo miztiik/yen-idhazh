@@ -80,9 +80,10 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     ever rewrote the file.
 
     The feed retirements and the visual cleanup record left for the same reason
-    when they moved under `state/raw/`, and item-health and host-fingerprint have
-    moved there since: every writer holds its own file there too, and their
-    readers keep one row per key as they read (`ledger/raw_files.py`).
+    when they moved under `state/raw/`, and item-health, host-fingerprint and the
+    counterfactual scores have moved there since: every writer holds its own file
+    there too, and their readers keep one row per key as they read
+    (`ledger/raw_files.py`).
 
     `state/content-similarity-judge/fitted-thresholds/` is registered before
     anything writes it: the settlement runs over whatever it finds, a missing

@@ -126,7 +126,7 @@ The shapes, and where each one lives once written:
 | `CouncilShardOutcome` | `council-shard-outcome` | one appended row of `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` - whether one unit of work finished, stopped on its deadline or had nothing to do, and what the work it hosted cost. It carries no name for the unit, so it reads the same whichever tenant ran |
 | `ContentSimilarityJudgeMetrics` | `content-similarity-judge-metrics` | one appended row of `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` - what one shard of that judge's night dealt, read, agreed and lost, plus its two rates and its clocks |
 | `MergeLineHoldoutScore` | `content-similarity-judge-merge-line-holdout-score` | one appended row of `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` - the line in force, the four cells it scored against the hand-marked holdout, and what the line was made of. No model runs in it, so it carries no call stamp |
-| `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/candidate-models/<YYYY>/<MM>/<DD>/`, folded in from a segment |
+| `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/raw/candidate-models/<YYYY>/<MM>/<DD>/`, in the raw file the gates file through the ledger door. Nothing packs a trial root |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 | `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |

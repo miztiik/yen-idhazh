@@ -283,7 +283,7 @@ def test_the_plan_stage_with_seen_paused_still_lands_feed_health_and_counterfact
     assert built.items, "the stage planned nothing, so this proves nothing"
     assert not ledger.tree_root(state, LedgerName.SEEN).exists()
     assert list(ledger.tree_root(state, LedgerName.FEED_HEALTH).rglob("*.csv"))
-    assert list(ledger.tree_root(state, LedgerName.COUNTERFACTUAL_SCORES).rglob("*.csv"))
+    assert ledger.list_raw_files(state, LedgerName.COUNTERFACTUAL_SCORES)
     skipped = [r.getMessage() for r in caplog.records if SKIPPED in r.getMessage()]
     assert len(skipped) == 1
     assert skipped[0].startswith(f"{SKIPPED} ledger=seen family=seen status=paused rows=")

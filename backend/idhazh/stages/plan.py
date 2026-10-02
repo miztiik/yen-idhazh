@@ -105,8 +105,9 @@ def stage_plan(
     guard: it works per vertical, before the day is deduplicated, and a run that
     does not ask for it plans exactly what it planned before.
 
-    `commit_sha` is the commit this run checked out. A retirement this run files
-    names it, so the file can be traced to the code that decided it.
+    `commit_sha` is the commit this run checked out. Every file this run writes
+    through the ledger door - a retirement, the counterfactual scores - names it,
+    so the file can be traced to the code that decided it.
     """
     read_url = fetcher or common.live_fetcher(settings)
     clock = now or assemble.utc_now
@@ -116,6 +117,16 @@ def stage_plan(
     # Named by the execution that made it, not by a count of what is committed.
     # See `_next_run_n` for what the count could not do.
     run_id = _run_id(date, execution)
+    # Who wrote every file this stage files through the ledger door: built once,
+    # so its writers name one run, one attempt and one commit.
+    identity = WriterIdentity(
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.PLAN,
+        shard=PLAN_SHARD,
+        producer=PRODUCER,
+        git_sha=commit_sha,
+    )
 
     candidates: list[discover.Candidate] = []
     health: list[FeedHealthRow] = []
@@ -136,18 +147,7 @@ def stage_plan(
         run_id=run_id,
     )
     if filed:
-        source_health.file_retirements(
-            state,
-            filed,
-            WriterIdentity(
-                run_id=run_id,
-                attempt=run_context.run_attempt(),
-                job=ServerJob.PLAN,
-                shard=PLAN_SHARD,
-                producer=PRODUCER,
-                git_sha=commit_sha,
-            ),
-        )
+        source_health.file_retirements(state, filed, identity)
         gone |= {row.endpoint_key for row in filed}
     retired = source_health.retired(settings.sources.feeds, gone)
     read = failed = skipped = 0
@@ -398,31 +398,29 @@ def stage_plan(
 
     scored = sum(len(pool) for pool in pools.values())
     LOG.info("desks scored candidates=%s planned=%s", scored, len(items))
-    # This job's own file, for the reason the feed verdicts above take one: two
-    # plan jobs of one night both score the day's candidates, and a shared path
-    # made them conflict.
-    recorded = ledger.write_segment(
-        state,
-        LedgerName.COUNTERFACTUAL_SCORES,
-        _counterfactual_rows(
-            pools,
-            items,
-            date=date,
-            run_id=run_id,
-            lens_hits=lens_hits,
-            multiplier=lens_multiplier,
-            refused_per_desk=settings.app.lens_weights.counterfactual_refused_per_desk,
-        ),
+    # Filed through the ledger door as this run's own work unit, so two plan jobs
+    # of one night that both score the day's candidates never write one file.
+    counterfactual = _counterfactual_rows(
+        pools,
+        items,
+        date=date,
         run_id=run_id,
-        attempt=run_context.run_attempt(),
-        job=ServerJob.PLAN,
-        shard=PLAN_SHARD,
+        lens_hits=lens_hits,
+        multiplier=lens_multiplier,
+        refused_per_desk=settings.app.lens_weights.counterfactual_refused_per_desk,
+    )
+    scored_files = ledger.persist(
+        state,
+        counterfactual,
+        ledger=LedgerName.COUNTERFACTUAL_SCORES,
+        covers=date,
+        identity=identity,
     )
     LOG.info(
-        "counterfactual scores recorded rows=%s of %s scored file=%s",
-        recorded,
+        "counterfactual scores recorded rows=%s of %s scored files=%s",
+        len(counterfactual) if scored_files else 0,
         scored,
-        ledger.relpath(LedgerName.COUNTERFACTUAL_SCORES, date),
+        [f"{ledger.STATE_DIRNAME}/{path.relative_to(state).as_posix()}" for path in scored_files],
     )
     counts = Counter(item.vertical for item in items)
     verticals = [
@@ -552,7 +550,7 @@ def _counterfactual_rows(
     The bound is per run rather than per day or per archive, so this costs a
     five-year-old repository exactly what it costs a fresh clone (CLAUDE.md
     Guardrail #12). What the ledger holds in total is bounded at the other end,
-    by the retention pass keeping `lens_weights.window_days`.
+    by its compaction's window, which keeps at least `lens_weights.window_days`.
 
     `taken` is read against the run's FINAL items rather than against what each
     desk took, so a story the day-wide duplicate fold or the run's safety

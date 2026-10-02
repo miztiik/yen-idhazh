@@ -186,9 +186,9 @@ OBSERVATION_INDEX_KEY: Final = ("observation_digest",)
 #: What makes two validation rows the same record. One candidate, judged once,
 #: by one execution. `run_id` is in the key because two dispatches of one model
 #: on one day are two verdicts about two trees, and the committed ledger held
-#: exactly that pair - drop it and the fold would keep whichever landed first.
-#: `model_id` is in it because a dispatch judges one candidate and the golden
-#: set judges several, so a date and a run alone would collapse them.
+#: exactly that pair - drop it and the settlement would keep whichever was filed
+#: first. `model_id` is in it because a dispatch judges one candidate and the
+#: golden set judges several, so a date and a run alone would collapse them.
 VALIDATION_KEY: Final = ("date", "run_id", "model_id")
 
 
@@ -303,11 +303,7 @@ class _TreeShape(NamedTuple):
 _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
     LedgerName.SPAN_ROLLUP: _TreeShape(SPAN_ROLLUP_KEY, SpanRollupRow),
     LedgerName.SUMMARY_QUALITY_EVALS_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
-    LedgerName.CANDIDATE_MODELS: _TreeShape(VALIDATION_KEY, ValidationRow),
     LedgerName.FEED_HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
-    LedgerName.COUNTERFACTUAL_SCORES: _TreeShape(
-        COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow
-    ),
 }
 
 

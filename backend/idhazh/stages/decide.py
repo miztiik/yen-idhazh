@@ -6,12 +6,15 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 
 from __future__ import annotations
 
+from typing import Final
+
 from idhazh import (
     config,
     ledger,
     run_context,
 )
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.validation_row import (
     ValidationVerdict,
@@ -22,6 +25,10 @@ from idhazh.stages.common import LOG
 
 #: The decider runs once for a whole comparison, so it is shard 0 of one.
 DECIDE_SHARD = 0
+
+#: The name the verdict file this stage writes through the ledger door carries
+#: as its producer: this module's own dotted name, less the package.
+PRODUCER: Final = __name__.partition(".")[2]
 
 
 def stage_decide(
@@ -61,17 +68,23 @@ def stage_decide(
         commit_sha=commit_sha,
         runner=runner,
     )
-    # This execution's own segment, never the day file. Two comparisons can be
-    # judged on one date, and the state root is the one the config names - so a
-    # trial run leaves nothing in the tree a published day is built from.
-    ledger.write_segment(
+    # Filed through the ledger door as this execution's own work unit, so two
+    # comparisons judged on one date never replace each other. The state root is
+    # the one the config names - so a trial run leaves nothing in the tree a
+    # published day is built from.
+    ledger.persist(
         common.STATE_ROOT,
-        LedgerName.CANDIDATE_MODELS,
         rows,
-        run_id=run_id,
-        attempt=run_context.run_attempt(),
-        job=ServerJob.DECIDE,
-        shard=DECIDE_SHARD,
+        ledger=LedgerName.CANDIDATE_MODELS,
+        covers=date,
+        identity=WriterIdentity(
+            run_id=run_id,
+            attempt=run_context.run_attempt(),
+            job=ServerJob.DECIDE,
+            shard=DECIDE_SHARD,
+            producer=PRODUCER,
+            git_sha=commit_sha,
+        ),
     )
 
     LOG.info("verdict=%s winner=%s", decision.verdict.value, decision.winner)
