@@ -328,12 +328,10 @@ The run timeline on `/console/` draws
   items cost added up, and the second divided by the first. That third number is
   the one that says staircase or block - one means a queue however many shards
   were running, and four means four shards genuinely busy together.
-- **The four sub-steps are printed figures and never bands.** `robots`, `tag`,
-  `render_prompt` and `parse_reply` nest inside steps the bars already draw, and
-  together they come to far under one pixel of the track, so they sit under the
-  bars as figures with the step each runs inside. A reader who takes `tag read`
-  for a step beside taking the article out adds it twice, which is why the place
-  it runs is printed next to it rather than left to be guessed.
+- **Sub-step detail belongs to the bounded item command, not the timeline.**
+  [The telemetry item command](../telemetry.md#the-committed-traces-briefly)
+  shows one item's settled health and retained trace trees for a named UTC day;
+  the timeline keeps its eight stages and does not draw nested work twice.
 
 **A column the panel reads has to carry a value somewhere on the canary day, or
 the panel does not ship.**
@@ -359,6 +357,16 @@ behind it - `day-metrics.addresses_considered` - which is a different defect and
 a cheaper one. The `run-days` payload is clean.
 
 ## Design rationale
+
+**The window needs no full-record context band.** It always ends at the newest
+day, and the route prints its dates; another band would repeat that context.
+
+**The job list closes with Close, Escape or selecting the same day.** Outside
+clicks do not discard a deliberate selection, and closing returns focus to the
+chart.
+
+**Sparse windows keep the reserved plot space and small job squares.** Enlarging
+a few jobs would make the same count look different when the window changes.
 
 **`console.fleet_min_rows` ships at 160 and 160 is a declared estimate, not a
 measurement.** The share behind it is measured: the rarest of six machine kinds
