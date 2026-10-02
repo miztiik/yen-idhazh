@@ -357,7 +357,6 @@
   },
   "run": {
     "max_parallel": 2,
-    "push_deadline_seconds": 45,
     "qualification_repeats": 5,
     "qualify_on_the_production_path": false,
     "safety_ceiling_per_day": 640,

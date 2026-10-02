@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-10-02
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once: the false
@@ -28,8 +28,31 @@ trap even when the run was a browser suite.
 | [agent-notes/gates-and-builds.md](agent-notes/gates-and-builds.md) | `test:changed`, `pytest`, `ruff`, `mypy`, the schema export, `npm run build`, the canary day | A gate is red, green or slow for a reason that is not your change. |
 | [agent-notes/browser.md](agent-notes/browser.md) | Playwright, the integrated browser, the service worker, the Svelte components a spec drives | A page test fails on something the page does correctly by hand. |
 
-No entry lives on this page. An entry written here is the first line of the file
-this split removed.
+Command-specific entries live on those pages. The two entries below stay
+together because one fixture run needs both Git isolation and Python imports.
+
+## Git fixtures and child producers
+
+**A fixture origin looks broken; inherited Git settings prevent reading it.**
+In the Copilot app, `GIT_CONFIG_COUNT` can inject `safe.bareRepository=explicit`.
+A test can create and push to its temporary bare origin, then fail reading
+`main` with exit 128. Confirm the inherited key before treating this as data loss.
+For the fixture command only, use a fresh shell and ignore the counted settings;
+do not change global Git config.
+```powershell
+Get-ChildItem Env:GIT_CONFIG_KEY_* | ForEach-Object { $_.Value }
+$env:GIT_CONFIG_COUNT = '0'
+```
+
+**Pytest imports the producer; its child process cannot find `idhazh`.**
+A dependency-only virtual environment has libraries but no installed project.
+Pytest's `pythonpath` setting reaches the test process, not the producer started
+inside a temporary clone. The tell is `ModuleNotFoundError: No module named
+'idhazh'` in the child while collection succeeds. Before running the fixture
+command, set the import path to this worktree's backend, not another checkout.
+```powershell
+$env:PYTHONPATH = Join-Path (Get-Location) 'backend'
+```
 
 ## Adding an entry
 

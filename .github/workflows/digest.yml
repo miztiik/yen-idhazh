@@ -103,7 +103,6 @@ jobs:
       shards: ${{ steps.fanout.outputs.shards }}
       matrix: ${{ steps.fanout.outputs.matrix }}
       shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
-      push_deadline_seconds: ${{ steps.bounds.outputs.push_deadline_seconds }}
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
       llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
     steps:
@@ -209,8 +208,6 @@ jobs:
         run: |
           set -euo pipefail
           python3 backend/utilities/shard_bound.py >> "$GITHUB_OUTPUT"
-          python3 backend/utilities/shard_bound.py \
-            --key run.push_deadline_seconds >> "$GITHUB_OUTPUT"
 
       # GitHub queues a scheduled workflow by load and silently drops the slots
       # it cannot place. Measured 2026-08-27 to 2026-08-29: 13 slots elapsed, 5
@@ -399,7 +396,6 @@ jobs:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing new to record"
           PUSH_FAILED_MESSAGE: "could not push what the plan saw"
-          PUSH_DEADLINE_SECONDS: ${{ steps.bounds.outputs.push_deadline_seconds }}
         run: >-
           python backend/utilities/commit_and_push.py
           state
@@ -752,11 +748,8 @@ jobs:
       # and the committed trace alike. Two shards never write one path and two
       # attempts at one shard never write one path, so no merge driver is needed
       # anywhere below and a lost push race costs a rebase rather than the rows.
-      # `PUSH_DEADLINE_SECONDS` is this job's own number and not the one the
-      # rest of the run uses. A shard keeps back `run.shard_wrap_up_minutes` -
-      # 12 minutes - for everything after its last item, so the 300 s the knob
-      # declares would be 5 of those 12. 120 s is 16.7 percent of the reserve,
-      # which is four attempts at the capped backoff.
+      # config/push-retry.json gives work shards their shorter deadline, so the
+      # push leaves time for the artifact upload after the last item.
       #
       # `SHARD` is here so the `push attempt` record names which of the shards
       # it came from. Eight of them commit to one branch, and a contention
@@ -768,7 +761,6 @@ jobs:
           COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
           NOTHING_STAGED_MESSAGE: "nothing measured to record"
           PUSH_FAILED_MESSAGE: "could not push what this shard measured"
-          PUSH_DEADLINE_SECONDS: "120"
           SHARD: ${{ matrix.shard }}
         run: >-
           python backend/utilities/commit_and_push.py
@@ -1165,7 +1157,6 @@ jobs:
           COMMIT_MESSAGE: "digest: ${{ needs.plan.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing changed"
           PUSH_FAILED_MESSAGE: "could not push the day"
-          PUSH_DEADLINE_SECONDS: ${{ needs.plan.outputs.push_deadline_seconds }}
           REFRESH_PATHS: ${{ steps.derived.outputs.refresh_paths }}
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}

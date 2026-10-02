@@ -290,14 +290,32 @@ it.
 was the number until 2026-09-22, and under several runs committing together each
 loser spent its three while the tip kept moving. An optimistic rebase-and-push
 converges in expectation at any commit rate; a counter does not. So the loop runs
-until `run.push_deadline_seconds` is gone, waiting `min(2^(k-1), 8)` seconds
-between attempts for k failures so far, drawn against U(0.5, 1.5) - the spread
-widens with the backoff, so collisions fall as more runs contend.
+until the deadline in `config/push-retry.json` is gone. That file declares
+`deadline_seconds`, `base_step_seconds`, `ceiling_seconds` and `ceiling_after`.
+`deadline_seconds` maps `default` to the normal deadline and workflow job ids
+to overrides. The program selects the job's entry, or `default` if none exists.
+A test checks each override against the workflow jobs that run the commit
+program, so a renamed job cannot silently lose its override.
+The program reads the file with the standard
+library before it writes to git; a missing or invalid knob stops the step and
+names the knob. No producer install is needed.
+
+For k rejected pushes, the wait step is `base_step_seconds` multiplied by
+2 to the power of `min(k - 1, ceiling_after)`, capped at `ceiling_seconds`.
+Both the exponent and the wait are bounded. The production steps remain
+1, 2, 4, 8, 8 seconds, each multiplied
+by a random factor from 0.5 to 1.5. The spread widens with the wait, so runs that
+lost the same race do not all fetch together.
+
+`PUSH_RETRY_CONFIG` selects another config file through the same input in a
+workflow or a test. Tests write a real config with millisecond steps, then run
+the real git commands and real sleeps. The deadline-exhaustion test uses a short
+deadline. A failed rebuild stops at its first failure, not at the deadline.
 
 **300 s is 25 percent of the assemble job's 20-minute timeout.** Measured on run
 `35701213155`, that job used 1.8 of its 20 minutes, so 18.2 minutes were spare.
-The work shard is the one caller that overrides it, with 120 s in its own `env:`
-block: the whole of what a shard keeps back for everything after its last item is
+The work shard takes `deadline_seconds.work`, which remains 120 s:
+the whole of what a shard keeps back for everything after its last item is
 `run.shard_wrap_up_minutes`, which is 12 minutes, and 300 s would be 5 of them.
 
 **Each attempt publishes six stamps**, to the job log and to the step summary,
@@ -466,6 +484,7 @@ already landed, and the three checks it runs over what it staged, are
 
 ## See also
 
+- [../../reference/benchmarks/push-retry-tests.md](../../reference/benchmarks/push-retry-tests.md) - the measured test durations and the sleep cost removed.
 - [idhazh-gardener.md](idhazh-gardener.md) - the one program that deletes and rewrites what the repository keeps, and how it lands a shard.
 - [a-losing-push-rebuilds-rather-than-rebases.md](a-losing-push-rebuilds-rather-than-rebases.md) - why the rebase this page describes does no work, what should replace it, and the one guardrail exception that needs.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - which workflows exist, when each runs, and what each does.
