@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -36,20 +36,31 @@ The chart rules these panels obey are
  did - would have had two machines averaged into it.
 - **A run that drew one machine says so too.** That is a good state, 4 of 90,
  and the panel reads as one rather than as a panel with a missing spread.
-- **Colour is assigned ascending by key, and the key is the machine's digest
- where one was recorded and its model-name string where none was.** Arbitrary
- on purpose: by speed or by draw count the ramp would encode an ordering it
- does not mean, and by order of first appearance a machine would change colour
- when the operator changed the span - which is the control the colour exists to
- survive. The ramp is assigned once for the page, over every machine any panel
- can show at any preset, so the assignment is fixed for a build.
+- **A machine's colour is its speed, and nothing else.** A kind of machine is
+ one fingerprint, and it takes the step of one hue its median prompt reading
+ speed falls in - `server_prompt_tokens` over `server_prompt_seconds`, one
+ reading a job that took one. The steps are cut at the quantiles of every
+ kind's median over the whole record the page holds, never of the open span, so
+ a machine keeps its colour when the operator moves the window; and they are cut
+ from each kind's median rather than from every job, because one machine gives
+ most of the readings - 102 of 176 on 2026-09-30 - and would otherwise take most
+ of the steps for itself. The stronger the colour, the faster the machine, in
+ both themes. The ramp is assigned once for the page, so the machine-kinds
+ panel, the machine cards and the machine split colour one machine alike. The
+ key over the machine-kinds plot names each step by the medians of the kinds on
+ it, and leaves out a step no kind lands on, because a chip that names nothing
+ is a chip a reader has to learn to skip.
 - **`--chart-8`, the grey, is reserved for "Machine not recorded" and is given
  to no machine.** An absence is not a machine and must not take a machine's
- hue.
-- **`console.machine_colour_stops` bounds the ramp, and the overflow is named in
- words.** Seven machines take seven stops; an eighth folds the tail into one
- row that lists its members. Never two machines in one colour without the page
- saying so.
+ hue. A known machine none of whose jobs took a speed reading is that grey in
+ stripes - hollow where it is one job's small square - because it is a machine
+ and not an absence.
+- **`console.machine_colour_stops` is how many steps the speed has: five.**
+ A reader cannot rank more steps of one hue on a thin bar. Kinds on one step
+ share its colour, so a colour says how fast and never which machine - which is
+ why every machine drawn prints its name and its speed beside the colour, and
+ two kinds of one processor name are told apart in words as the faster and the
+ slower.
 - **The name is on the row, always.** Colour here encodes a fact, so it is
  semantic and may never be the only carrier of it. That is also why the split
  is rows rather than a scatter: a scatter cannot carry a name per mark.
@@ -106,44 +117,52 @@ The chart rules these panels obey are
     `data-machine-bar-state` carries whichever holds.
 - **A count of machine kinds is a count and never a rate.** No percentage, no
  probability, no pie: what the next job will draw is precisely what the
- processor lottery refuses to quote. Under `console.fleet_min_rows` it is a
- list with a sentence and **no bar at all** - bars over a handful of placements
- read as a distribution, and a reader who has read one will act on it. **It
- ships at 160 as a declared estimate and not a measurement** - see the design
- rationale below.
-- **Over that floor the count is a trend, one group a day and one bar a kind.**
- The panel's title asks what the platform has been giving us lately, and a
- ranked list answers which is biggest rather than what is changing. The
- ordering the list carried is not lost, it is the sentence above the plot.
- **Only days that recorded a placement are drawn** - a zero-height group would
- say the platform gave us nothing that day, and a day the record never reached
- says nothing at all - so the count of days missing from the window is printed
- in the same sentence.
-- **Past `console.fleet_top_kinds` the rarest kinds are one bar, named in
- words.** A grouped bar is only a bar while it is wide enough to paint: at
- `console.chart_width` of 760 and the widest span the window control offers, 90
- days, a day band is 8.4 px, five bars in it draw 1.09 px each after the chart
- engine's own gaps and seven draw 0.77 px. Four kinds plus the fold row is the
- largest set that clears a pixel there. **The fold bar equals the kinds it
- folded, in the window and on every day of it**, and the page carries both
- figures so it can be held to them agreeing.
-- **The colour ramp's own `Other machines` group never takes one of those named
- slots.** It is the machines the page ran out of colours for - the ramp folds by
- key order, not by rarity - so it is not a kind of machine, and it always joins
- the last bar and keeps the ramp's colour there. Given a slot, it ranked second on
- the committed record on 2026-09-27 and took the three rarest kinds into itself:
- one bar of 68 of 260 placements, drawn as the second most common machine. **The
- sentence above the plot says what the last bar holds, in two parts**, because
- only one of them is rare: the kinds too rare for a bar of their own, and the
- machines the page has no colour left for. Each is named once, off the open span's
- own placements, and a machine whose name also has a bar is called another one.
- The count it prints is the number of names it lists. Ruled 2026-09-27: Jony on
- the bar, breaking a tie between Fowler for it and Susan against; Susan on the
- words.
-- **None of the empty states is tinted and none gets the reserved box.** The
- route is prerendered and reads `state/` at build time, so there is no fetch,
- no waiting state and no unreachable state. Every nothing here is settled at
- build time and gets words. The heading and the note always stay.
+ processor lottery refuses to quote. Under `console.fleet_min_rows` placements
+ it is **one square a job**, a column a day - a bar over a handful of
+ placements reads as "this much" and invites a rate the count cannot support,
+ while a square a job reads as "these ones", because every mark is a job a
+ reader can point at. A day's squares stand as a block no wider than the
+ busiest day's is tall, so a day's height is its count and the slowest machine
+ stays at the bottom however wide a column is; a day in one long row would turn
+ "slowest at the bottom" into "slowest at the left". **It switches at 160 as a
+ declared estimate and not a measurement** - see the design rationale below.
+- **Over that floor the count is one bar a day, split by the kind of machine
+ that ran its jobs, slowest at the bottom.** The panel's title asks which
+ machines ran our jobs, day by day, and a ranked list answers which is biggest
+ rather than what is changing. The slowest sit on the baseline every day
+ shares, because slow machines are what the panel exists to find. The ordering
+ the list carried is not lost, it is the sentence above the plot. **Only days
+ that recorded a placement are drawn** - a zero-height day would say the
+ platform gave us nothing that day, and a day the record never reached says
+ nothing at all - so the count of days is printed in the same sentence.
+- **Placements pick which kinds get a row of their own, and speed only sets the
+ colour.** The `console.fleet_top_kinds` kinds placed most in the open span are
+ named, a tie going to the kind placed most recently. The rest fold only with
+ kinds on their own speed step, because a fold that crossed a step would say
+ two speeds were one, and a step holding one of them names it. Known machines
+ with no speed reading fold into one striped row, since none has a speed a merge
+ could misstate. No machine recorded is always its own row, last, and never
+ folded. A click or Enter on a day lists every job of it under the plot, each
+ under its own machine's name, so a fold hides no machine from a reader who
+ asks. The day held open is outlined at the size of its bar or its squares, the
+ strip under the plot stays on it until the list closes, and on a phone a job
+ takes two lines rather than scrolling sideways, because the speed at the end of
+ the row is what ties a job to its colour.
+- **The machine mix reads after mount through the shared query reader.** Its
+ window ends on the newest packed day and starts no earlier than the oldest
+ packed day. It asks only for the columns it draws. Changing the window keeps
+ whole files already read, and a late answer cannot replace a newer selection.
+ The route still computes the common colour ramp for its other machine panels,
+ but carries no fleet rows in its document. The drill-through uses the rows
+ already fetched for the window. `data-readout-fetched` declares that this
+ panel's strip arrives with those rows and is absent from the initial document.
+- **The machine mix draws four distinct empty states.** Loading keeps the
+ chart's reserved height and shimmer. A covered window without jobs is quiet;
+ an unpublished ledger is missing; a hole, failed fetch or engine failure is
+ unreachable and uses the warning tint. Other machine panels still use their
+ build-time recording notes. The heading and note always stay. The shared
+ [query-reader contract](../../architecture/publishing/how-the-query-door-answers-a-panel.md)
+ owns the fault names and file rules.
 
 **A panel title may not name a machine as if a run had one.** "The host under
 the newest run" let the page carry one processor string for the whole of its
@@ -347,22 +366,42 @@ held 11 of 356 committed counter rows, 3.1 percent. The row count is not.
 `console.min_attempts_for_rate` already sets five placements as the floor under
 a rate, and five at 3.1 percent needs about 162 rows, so 160 is that arithmetic
 rounded. It justifies nothing about the shape of the page: above the gate the
-counts are bars, below it the same counts are a list, and both say the same
-thing. What would settle it is a seventh machine kind arriving - every share
+counts are bars, below it the same counts are a square a job, and both say the
+same thing. What would settle it is a seventh machine kind arriving - every share
 drops, the rarest gets rarer and the bar rises - so the number is re-derived
 from the committed rows rather than argued with.
 
-**On the dark theme the machine-kinds chart fails the two-second check, and
-ships.** Its first two bars, AMD EPYC 7763 and AMD EPYC 9V74, hold chart stops 3
-and 6, and in the dark theme those two look the same: 2.3 apart on the CIEDE2000
-scale, where about 2 is the smallest difference most people can see and every
-other pair of the first seven stops is 9.3 or more. Since the ramp's own
-`Other machines` group moved to the last bar, the two stand side by side in 8 of
-the 11 day groups over 30 days, measured 2026-09-27, and a glance reads them as
-one kind. The readout names every bar and the order never changes, so a reader
-who looks loses nothing. The fault is in the ramp the whole site shares, so it
-is fixed there, in its own change, and not in this panel: it is defect 37 in the
-known-defects plan. Susan, 2026-09-27.
+**A machine's colour became its speed on 2026-09-30, and the reader loses a
+colour that names a machine.** The colour had been a hue a machine, handed out
+in the order of an arbitrary key, so that it implied no order; and when the
+seven hues ran out, the machines whose keys sorted last went without one
+however often they ran - on the committed record the other AMD EPYC 9V74 held 27
+placements inside the fold against 25 on the named bar. An ordered one-hue ramp
+carries an order by construction, and speed is the order this panel's question
+needs: whether a slow week was the machine. The cost is that kinds on one step
+share a colour and a new fast kind can move a slower one down a step; cutting
+the steps over the whole record the page holds keeps that rare, and the name
+and the speed are printed beside every machine. Susan, with Jony on the ramp.
+
+**The slowest step carries 40 percent of the hue.** Mixed from nothing, the
+slowest of five steps stood 1.36 to 1 against the panel in light and 1.31 to 1
+in dark on `--chart-1`, measured 2026-09-30, and slow machines are what the
+panel exists to show; at 40 percent it stands 1.89 to 1 in both. The steps sit
+closer together for it - 1.31 to 1.39 to 1 apart rather than 1.40 to 1.55 - so
+a line of the panel's own ground is drawn where two segments of a bar meet, and
+two machines on one step still read as two. `console.machine_colour_floor_share`
+is the value. Susan and Jony.
+
+**The machine-kinds panel compares no two quantities.** A stacked count of kinds
+over days is a composition, so it declares `data-comparison="composition"` under
+the sufficiency gate for a comparison rather than a sentence with "against" in
+it, and its bars show two fills or more wherever the platform handed out more
+than one kind of machine. Fowler and Susan.
+
+**Eight kinds get a row of their own today, past the five series a date series
+is for.** Four are the most placed, and each of the other four sits alone on its
+speed step, so folding it would hide its name and save no colour - the plot
+still draws at most five colours of the ramp and two greys. Susan.
 
 **The machine card's two readings are lengths rather than sentences, and that is
 what carries the two-second check.** `32 MiB` beside `260 MiB` on two cards is a

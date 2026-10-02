@@ -491,6 +491,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-30",
+            change="console.machine_colour_stops 7 to 5, and three machine-panel knobs added.",
+            why="A machine's colour is a speed ramp of five steps, not a key-ordered palette.",
+        ),
+        ChangelogEntry(
             version="2026-09-28",
             change="console.judged_panel_ids and console.plot_min_fill_share, additive.",
             why="The sufficiency gates judge an opt-in list of panels against a fill floor.",
@@ -504,11 +509,6 @@ class AppearanceConfig(Contract):
             version="2026-09-24",
             change="digest.filter_settle_ms, additive, default 120.",
             why="The list narrows on the keystroke; the count beside it settles after one.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T23:00",
-            change="console.panel_groups.machine names prompt-reuse where it named prompt-cache.",
-            why="The panel now reads one span a request rather than one column a day.",
         ),
         ChangelogEntry(
             version="2026-08-29",

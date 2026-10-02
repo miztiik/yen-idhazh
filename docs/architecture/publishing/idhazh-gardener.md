@@ -708,13 +708,13 @@ the files it read. It changes no answer a reader gets
 ([../../concepts/partitions.md](../../concepts/partitions.md)).
 
 **The retention task that owns each tree folds it**, when its declaration
-carries a `fold` block: `feed-health`, `counterfactual-scores`,
+carries a `fold` block: `feed-health`,
 and `summary-quality-evals-index` (the eval ledger's ID folder).
 Which trees a task folds is read off the folders it walks, so
-one job writes each tree a wake and no tree is checked out twice. No
-`candidate-models` tree is committed under `state/`, so nothing folds one. The
-item-health, summary-quality-evals and host-fingerprint ledgers are not CSV day trees any more,
-so no fold reads them: their compaction packs them.
+one job writes each tree a wake and no tree is checked out twice. The
+item-health, summary-quality-evals, host-fingerprint, counterfactual-scores and
+candidate-models ledgers are not CSV day trees any more, so no fold reads them:
+their compaction packs them.
 
 **A task may settle a closed month whole.** With `fold.settles_months`, once a
 month's last day is closed - `fold.after_days` whole days after the month ends -

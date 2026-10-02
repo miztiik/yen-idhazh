@@ -34,6 +34,11 @@ names a column that is not lower case, digits and `_`, gives a day that is not a
 real UTC day, puts `from` after `to`, or filters on an empty `in` list. Those are
 the caller's defects, found the first time the panel runs.
 
+The chart-contract check reads each call with TypeScript's parser. Columns may
+be an inline literal or a named static array, including an imported declaration.
+Unknown runtime expressions and `*` fail the check. Both date endpoints must be
+present; shorthand fields carry the same boundary as explicit assignments.
+
 Everything else comes back as one of four answers, so a panel draws the right one
 of four nothings without inspecting an error:
 
@@ -116,10 +121,11 @@ exception: each read asks the host for the parts it needs again. The keeper is
   each read has the engine open it at an address of its own, and the engine drops
   it when the read ends, answered or not. A file of the wrong length is neither
   registered nor kept, and a file that is not there is kept as absent.
-- **The engine starts only when every file a slice fetches whole has arrived
-  whole**, so a slice that cannot be answered never loads it. A slice that reads a
-  year file by byte range starts the engine while its other files arrive, because
-  only the engine can open the year file.
+- **The engine starts beside the selected data fetches**, after the indexes have
+  passed validation and selected non-empty files. Quiet spans, missing indexes
+  and holes start no engine. A failed data fetch can overlap startup, but its
+  bytes never enter the engine and its named fault is preserved. Whole-file
+  downloads and year-range reads use the same startup order.
 - **Each console line is printed once for the page's life.** Every panel that
   meets one missing file prints the same line, so fifteen panels on a page
   print it once.
@@ -142,6 +148,14 @@ newer index than its neighbour would draw a different span beside it. Reading th
 index again before every slice would also put one more round trip in front of
 each one, where a cold load allows four serial round trips in all
 (`frontend/tests/console-cold-load.spec.ts`).
+
+The Hardware cold-load check measures the larger of two paths: document,
+indexes, whole-file data and add-on; or document, indexes, core wasm and add-on.
+Data and core wasm are independent after file selection. A fast local data
+response ending before the wasm request starts does not prove an extra wait.
+Separate real-response gates hold each branch in turn and require the other to
+progress. The timing run holds nothing, counts planted pre-index waits on both
+paths, and keeps the four-hop ceiling and every engine download in scope.
 
 ## How far a ledger reaches
 
@@ -294,8 +308,7 @@ on 127.0.0.1 that answers the way Pages does. Five facts shape the design.
   `forceFullHTTPReads` on, and then reads a registered address in one GET with no
   `Range`. `engine.ts` opens the database with it off. A read answered 200 rather
   than 206 also makes the engine take the whole body without a word, so the spec
-  requires every GET for a year file to name a range and be answered 206,
-  uncompressed.
+  requires every GET for a year file to name a range and be answered 206.
 - **Pages answers a `HEAD` that carries a `Range` with 200 and the full length.**
   The engine takes a file's length from that `HEAD`, and accepts a 200 only while
   `allowFullHTTPReads` is on, so that setting stays on. The length it opened must
@@ -332,6 +345,26 @@ address no earlier read used is what keeps a deploy from costing a whole file, s
 a published ledger packs a year as soon as its own declaration says
 ([../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship)),
 and a console read may reach a year file.
+
+**Pages compresses a range only when the request accepts compression, measured
+on the live site.** It sends a `.parquet` as `application/octet-stream` and
+compresses it on request like any other file. The eval ledger's day file for
+2026-09-01 is 180,579 bytes, and 166,859 compressed:
+
+| Request | Accepting gzip | Accepting `identity` only |
+| --- | --- | --- |
+| `HEAD`, `Range: bytes=0-` | 200, compressed, length 166,859 | 200, length 180,579 |
+| GET, `Range: bytes=0-0` | 206, compressed, `bytes 0-0/166859` | 206, `bytes 0-0/180579` |
+| GET, `Range: bytes=90000-90999` | 206, compressed, `bytes 90000-90999/166859` | 206, `bytes 90000-90999/180579` |
+
+A browser always asks the second way. The Fetch standard adds
+`Accept-Encoding: identity` to every request that carries a `Range`, and page
+code cannot change that header, because only the browser may set it. Chromium
+sent `identity` with all three against the live site and got the right-hand
+column, so the engine reads a year file's own bytes and opens it at its true
+length, and the spec's host compresses nothing. A request with no `Range`, such
+as a day file fetched whole, does come back compressed, and the browser unpacks
+it before the engine sees it.
 
 **One case is not covered: a deploy inside one read.** A deploy that lands between
 a read's first request and its last gives the file a new ETag mid-read, and the
@@ -384,6 +417,22 @@ exception handling. The threaded build needs response headers a static host cann
 send. A browser without the feature gets `unreachable`. Count the emitted engine
 assets in deployed size even though they load lazily
 ([../../reference/site-weight.md](../../reference/site-weight.md#optional-assets)).
+
+**The device keeps one content-named engine cache.** The client build reads
+Vite's manifest from the engine entry through its imports, dynamic imports and
+assets. It writes a private generated module for the service-worker build,
+including the anonymous JavaScript chunks; a filename search for `duckdb`
+would miss them. The sorted content-named paths determine the cache identity,
+not the site's build date. A deploy with those same paths keeps the engine.
+
+The service worker answers those same-origin assets from this cache first and
+keeps successful complete responses after their first real request. It does not
+prefetch the engine. Activation drops older engine caches, while the retirement
+switch clears this cache with the other project-owned caches. Cache-storage
+failure leaves the network response usable. Ledger files and the off-origin
+Parquet add-on do not enter this cache. The browser test updates the real worker
+while leaving engine files unchanged, with HTTP caching disabled, and requires
+no repeated engine download and successful offline reads.
 
 **None of it is first-load.** `ledger.ts` reaches the engine only through a
 dynamic `import()`, and the engine reaches its package, its wasm and its worker
@@ -451,14 +500,20 @@ another address, the engine asked for
 that layout. Pointed at a file on disk instead of an address, the Node half waits
 for ever rather than failing, so a mirror is an `https://` address, never a path.
 
-**In Node** the engine downloads the add-on over HTTPS the first time and keeps it
-under the user's home directory, in `.duckdb/extensions/<host>/v1.5.4/wasm_eh/`, so
-later runs read it from disk; the first read took 1.3 seconds on a developer
-machine. So the door's oracle in `frontend/tests/ledger-door.spec.ts` reaches the
-network once on a fresh machine - a CI runner, every run. That is the one
-exception to "no test touches the network", taken by the owner on 2026-09-28. A
-host that is down or has moved fails those tests and any build-time read, which is
-where somebody wants to learn it.
+**No test downloads the add-on.** `frontend/scripts/setup-duckdb.ts` prepares
+the one cache all worktrees share under the user's home directory:
+`.duckdb/extensions/<host>/<runtime version>/<platform>/`. It derives the runtime
+version and platform from the installed engine, not from a second version pin.
+Playwright's global setup checks that file without downloading. The shared
+browser context fixture answers the worker's add-on request from the same bytes.
+Tests of HTTP caching use their own local add-on host, because a routed context
+disables HTTP caching.
+
+CI restores a cache named by the installed package, runtime and platform before
+any frontend test or build. A miss runs the explicit setup command. The weekly
+main-branch refresh downloads the current file and saves a new cache entry under
+that version's prefix, so normal runs restore the newest prepared copy without
+depending on the add-on host. See [the gate commands](../../how-to/run-the-gates.md#the-frontend-gates).
 
 ## Design rationale
 
@@ -468,8 +523,8 @@ nothing tied to one environment and take a byte source and an engine as
 arguments. `ledger.ts` binds the published site, which needs `$app/paths`;
 `ledger-disk.ts` binds the disk under `$lib/server/`, where SvelteKit refuses a
 browser import. So `frontend/tests/ledger-door.spec.ts` drives the real reader
-over recorded responses and over the disk, with no browser, and no network but
-the engine's own first download of its add-on. The engine it drives takes each
+over recorded responses and over the disk, with no browser or network download.
+The engine it drives takes each
 buffer the way a browser's engine does, leaving the caller's copy empty, because
 the Node engine copies instead and would hide a door that handed one buffer over
 twice.

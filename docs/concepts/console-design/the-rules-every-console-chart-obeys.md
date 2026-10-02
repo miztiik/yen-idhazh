@@ -199,11 +199,13 @@ estimate over it only drops one label the axis could have carried.
 even where the date is gone, so the marks come from the ceiling and only the
 dates thin.
 
-**The end labels anchor inwards.** The first and last tick sit ON the plot edges,
-so a centred label there hangs half its width outside the frame and an `svg` cuts
-what hangs. Measured 2026-08-31 at 1440, one axis drew `10,000` 3.2px past its
-own `svg` and read `10,00`. `tickAnchor` is the rule and it binds a value axis as
-well as a date one.
+**An endpoint label uses the room around its actual column.** At a plot edge it
+faces inward, because a centred label there would be clipped. Inset date columns
+pass the plot bounds to `dayTicks`: the first label can face left and the last
+right when that room exists, or remain centred when only half a label fits
+outside. Two dates near the middle must not lose one label merely because both
+were pointed into the gap between them. A lone date stays centred. `tickAnchor`
+still supplies the inward rule for value axes whose endpoints are the edges.
 
 Two console axes are drawn by the engine, and the engine owns where its labels go
 - `hideOverlap` is its own measured rule. What they take from here is the date
@@ -249,6 +251,10 @@ column - four series or one - and the rules are not negotiable per chart:
  room at every width. Measured 2026-09-28: an uncapped reserve pushed `/evals/`
  and the console 31 px sideways at 360 px. A share of the plot and not a pixel
  count, so the rule holds at every window width. Susan, 2026-09-28.
+- **A long entry wraps as text, not as three separate boxes.** Its swatch stays
+ on the name's first line and its value follows the name's last word. The
+ value still keeps its reserved width. A phone must not strand the swatch or
+ put a short count on a line of its own while the name has room beside it.
 - **A vertical guide down the hovered column**, across every series.
 - **Reachable by keyboard.** Left and Right step, Home and End jump, Escape
  returns to rest. **A tooltip is never the only place a value appears**: a

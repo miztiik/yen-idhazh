@@ -31,6 +31,8 @@ export interface ShardReading {
 	serverPromptSeconds?: number | '';
 	jobSeconds?: number | '';
 	cpuModel?: string;
+	/** The machine record's digest of the host. Empty where the probe missed it. */
+	fingerprint?: string;
 	/** Cores the host let the job see. What a load reading is read against. */
 	cores?: number | '';
 	modelLoadMs?: number | '';
@@ -99,6 +101,7 @@ export function hostRow(reading: ShardReading): Record<string, string> {
 		run_id: reading.runId ?? RUN,
 		job: reading.job ?? '',
 		shard: cell(reading.shard ?? 0),
+		fingerprint: cell(reading.fingerprint),
 		cpu_model: cell(reading.cpuModel),
 		cores: cell(reading.cores),
 		model_load_ms: cell(reading.modelLoadMs),

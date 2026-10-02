@@ -110,6 +110,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-30",
+            change="console.machine_colour_stops 7 to 5, and three machine-panel knobs added.",
+            why="A machine's colour is a speed ramp of five steps, not a key-ordered palette.",
+        ),
+        ChangelogEntry(
             version="2026-09-28",
             change="console.judged_panel_ids and console.plot_min_fill_share, additive.",
             why="The sufficiency gates judge an opt-in list of panels against a fill floor.",
@@ -123,11 +128,6 @@ class AppConfig(Contract):
             version="2026-09-27",
             change="ledger block, additive: format, two compressions and the published list.",
             why="The ledger door reads its format and compressions from config, not from source.",
-        ),
-        ChangelogEntry(
-            version="2026-09-24",
-            change="ui.filter_settle_ms, additive, default 120.",
-            why="The list narrows on the keystroke; the count beside it settles after one.",
         ),
         ChangelogEntry(
             version="2026-08-21",

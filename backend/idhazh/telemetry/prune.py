@@ -109,12 +109,10 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: absent - they file `.json` and `.jsonl`, which
 #: `day_shards.shard_files` refuses, and a second walker here would be a second
 #: answer to what a day file is. Bringing either in means teaching that one
-#: walker its suffix, which is where the question belongs. `state/candidate-models/`
-#: is absent too: nobody has asked to take a range out
-#: of it, and joining this list is a decision rather than a consequence of the
-#: shape. A ledger leaves this list in the change that moves it under `state/raw/`
-#: through the ledger door, as `visual-prunes`, `item-health`,
-#: `summary-quality-evals` and `host-fingerprint` have: a target that walked its
+#: walker its suffix, which is where the question belongs. A ledger leaves this
+#: list in the change that moves it under `state/raw/` through the ledger door,
+#: as `visual-prunes`, `item-health`, `summary-quality-evals`, `host-fingerprint`,
+#: `counterfactual-scores` and `candidate-models` have: a target that walked its
 #: old folder would select nothing for ever, and on the door it is a target of the
 #: other kind.
 #:
@@ -138,7 +136,6 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: the judge's rather than the council's: what a reading is about decides where
 #: it is filed, never what executed it.
 _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
-    LedgerName.COUNTERFACTUAL_SCORES,
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
     LedgerName.FEED_HEALTH,
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,

@@ -6,6 +6,11 @@ the tasks that read them. Each is read back here out of the declaration that too
 it, and the three that stayed in `config/idhazh.json` are read back from there as
 well, so a window that changed while it moved fails by name. A window changed on
 purpose after it moved is named below with its reason.
+
+A window whose declaration went when its ledger moved to the ledger door is read
+from the migrator's table of how long each moved ledger's CSV was kept, which
+`backend/tests/ledger/test_migrate_to_parquet.py` holds the ledger's compaction
+to.
 """
 
 from __future__ import annotations
@@ -27,6 +32,8 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
     Window,
 )
+from idhazh.contracts.ledger_name import LedgerName
+from utilities.migrate_to_parquet import CSV_LEDGERS
 
 from ._task import declared
 
@@ -77,7 +84,9 @@ def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
     assert isinstance(machine, CompactionPolicy)
     now: dict[str, Any] = {
         "collect.seen_window_days": _days(tasks["seen"].window),
-        "lens_weights.window_days": _days(tasks["counterfactual-scores"].window),
+        "lens_weights.window_days": _days(
+            CSV_LEDGERS[LedgerName.COUNTERFACTUAL_SCORES].old_window
+        ),
         "observability.feed_health_keep_months": _months(tasks["feed-health"].window),
         "observability.host_fingerprint_keep_months": _months(machine.monthly_window),
         "observability.item_health_aggregate_keep_months": _months(_series(folded, "aggregate")),

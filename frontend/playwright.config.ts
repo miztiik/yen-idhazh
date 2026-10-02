@@ -140,6 +140,7 @@ function workerCount(asked: string | undefined): number {
 
 export default defineConfig({
 	testDir: 'tests',
+	globalSetup: './tests/support/check-addons.ts',
 	outputDir: 'test-results/browser',
 	testIgnore: [
 		WHOLE_DAY,
@@ -167,11 +168,9 @@ export default defineConfig({
 	projects: FRONTEND_GROUPS.filter((name) => name !== 'logic').map((name) => ({
 		name,
 		testMatch: GROUPS[name].map((filename) => `**/${filename}`),
-		// `offline` rewrites the kill switch the served site shares, and
-		// `reading-page` in `reader` installs the worker that obeys it. Beside each
-		// other the reader's worker retires itself and the case times out, so the one
-		// small project runs to completion before the large one starts.
-		...(name === 'reader' ? { dependencies: ['offline'] } : {}),
+		// The reader and query-worker specs install the worker that obeys the
+		// shared kill switch, so neither runs beside the offline retirement test.
+		...(['reader', 'console'].includes(name) ? { dependencies: ['offline'] } : {}),
 		// Twelve page loads of captures sit in one file, and one file runs in one
 		// worker unless its tests may spread. Each capture test writes only its own
 		// images, so they may, and the last one to finish costs one page load

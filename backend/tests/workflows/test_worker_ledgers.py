@@ -319,8 +319,6 @@ def test_every_path_the_work_job_stages_is_in_a_fresh_checkout() -> None:
 
     The commit step runs under `set -euo pipefail` and stages every path in one
     call, so one absent path takes all the others down with it on a fresh clone.
-    The same reason `state/counterfactual-scores/` ships with a header and no
-    rows, as the feed retirements did while they were a CSV.
 
     Asked of the staged list rather than of a list written again here, so a path
     added to the commit step without a seed fails this instead of failing a

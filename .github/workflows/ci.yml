@@ -274,6 +274,8 @@ jobs:
       - name: Install the backend and test tooling
         run: pip install -e ".[dev]"
 
+      - uses: ./.github/actions/prepare-duckdb
+
       # The build strips types, so it passes on code the type-checker rejects.
       # Without this gate a type error only shows up in an editor.
       - name: Type-check
@@ -348,6 +350,8 @@ jobs:
       # a payload shape nothing actually writes.
       - name: Install the backend, for the canary day builder
         run: pip install -e .
+
+      - uses: ./.github/actions/prepare-duckdb
 
       # The oracle for the assist row: delete the whole model directory, build,
       # and the digest must be untouched. If it degrades at all, the feature is
@@ -479,6 +483,8 @@ jobs:
       - name: Install
         working-directory: frontend
         run: npm ci
+
+      - uses: ./.github/actions/prepare-duckdb
 
       # The same key the `browser` job uses, so the two jobs of one run share
       # one entry rather than filling two. Neither warms the other - they start

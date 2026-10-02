@@ -139,7 +139,8 @@ own ages, which is a different number for a different ledger.
 the read opens is refused.** `state/seen/` keeps 90 days, the window of
 `config/gardener/seen.json`, and the gardener loader refuses that window below
 `collect.seen_window_days`, the day files the collector reads. The
-`counterfactual-scores` window is held the same way above
+counterfactual-scores ledger's compaction,
+`config/gardener/compact-counterfactual-scores.json`, is held the same way above
 `lens_weights.window_days`, and `published` above
 `collect.published_window_days`, which is `-1` and so reads every day: nothing
 may delete that ledger. Each floor belongs to the ledger and is held against

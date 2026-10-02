@@ -1,11 +1,12 @@
 """What a run's ranker would have done if one lens had been weighted differently.
 
-`state/counterfactual-scores/YYYY/MM/DD.csv`. One row per candidate a run
+The counterfactual-scores ledger, filed through the ledger door under
+`state/raw/counterfactual-scores/`. One row per candidate a run
 scored, written by the plan stage after the day's items are settled. The row
 records two numbers for one story: the score it got at the lens weights in
 `config/taxonomy.json`, and the score it would have got at a candidate weight.
 It changes nothing. The run takes what the committed weights told it to take,
-and this file is the note it leaves behind about the question it did not act on.
+and this ledger is the note it leaves behind about the question it did not act on.
 
 **The refused candidates are the reason the file exists.** A story a run
 published leaves a payload, a summary and a published row, so its score can be

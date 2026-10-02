@@ -1,6 +1,6 @@
 # What a reader downloads
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 The published site's size, the bytes a browser receives, and the rules for
 measuring both. [pipeline-cost.md](pipeline-cost.md) covers production compute.
@@ -95,6 +95,13 @@ and the application's cache behavior. The
 [query-engine design](../architecture/publishing/how-the-query-door-answers-a-panel.md)
 and [encoder design](../architecture/publishing/the-on-device-encoder-and-its-vectors.md)
 own those choices.
+
+The query engine's same-origin files have a separate content-named service-worker
+cache. It keeps one engine version on first use, not on site installation, and
+survives a deploy whose engine files are unchanged. This reduces repeat network
+transfer, not deployed size or first-use cost. The cached bodies consume device
+storage at their decoded size; the ledger and off-origin add-on are not part of
+this cache.
 
 ### What a published day adds in rendered visuals
 

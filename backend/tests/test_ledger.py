@@ -27,7 +27,6 @@ from idhazh import config, day_shards, ledger, month_partition
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
-from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -112,30 +111,6 @@ def prune_row(*, on: str = DATE, run: str = "1", before: int = 1000) -> VisualPr
         oldest_kept=None,
         payload_bytes_before=before,
         payload_bytes_after=before,
-    )
-
-
-def counterfactual_row(
-    *, on: str = DATE, run: str = "1", url_key: str = "example.org/a"
-) -> CounterfactualScoreRow:
-    """One candidate scored twice. The lens is worth 0.3 and the probe asks 1.25x.
-
-    So the two scores differ by 0.075, which the row's own validator checks - a
-    helper that got the arithmetic wrong would fail here rather than in the test
-    that uses it.
-    """
-    return CounterfactualScoreRow(
-        version=CounterfactualScoreRow.schema_version(),
-        date=on,
-        run_id=f"{on}-{run}",
-        vertical="ai",
-        url_key=url_key,
-        taken=True,
-        lens_id="chips",
-        lens_bonus=0.3,
-        lens_multiplier=1.25,
-        score_committed=1.2,
-        score_counterfactual=1.275,
     )
 
 
