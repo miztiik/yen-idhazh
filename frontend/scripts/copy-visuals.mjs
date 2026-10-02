@@ -263,6 +263,8 @@ const stateSource = process.env.STATE_ROOT
 	? resolve(process.env.STATE_ROOT)
 	: resolve('..', 'state');
 const stateTarget = join('static', 'state');
+const registrySource = resolve('..', 'config', 'ledgers.json');
+const registryTarget = join('static', 'config', 'ledgers.json');
 /** The state root as the repository names it, so a refusal names the tree it
  * read: a canary build reads another one than `state/`. */
 const stateLabel = relativeTo(resolve('..'), stateSource).split(sep).join('/');
@@ -304,7 +306,11 @@ function stageLedgers() {
 	for (const file of copy.files) {
 		const relative = join(...file.split('/'));
 		wanted.add(relative);
-		if (stage(readFileSync(join(stateSource, relative)), join(stateTarget, relative))) staged += 1;
+		const bytes =
+			copy.indexes[file] === undefined
+				? readFileSync(join(stateSource, relative))
+				: Buffer.from(copy.indexes[file], 'utf8');
+		if (stage(bytes, join(stateTarget, relative))) staged += 1;
 	}
 	const stale = reconcile(stateTarget, wanted);
 	console.log(
@@ -315,6 +321,20 @@ function stageLedgers() {
 }
 
 stageLedgers();
+
+function stageLedgerRegistry() {
+	if (!existsSync(registrySource)) {
+		rmSync(dirname(registryTarget), { recursive: true, force: true });
+		console.log('ledger registry: no config/ledgers.json, nothing to stage.');
+		return;
+	}
+	const changed = stage(readFileSync(registrySource), registryTarget);
+	console.log(
+		`ledger registry: ${changed ? 'staged' : 'already current'} config/ledgers.json into static/config.`
+	);
+}
+
+stageLedgerRegistry();
 
 if (!existsSync(source)) {
 	console.log(`published visuals: no payload tree at ${source}, nothing to stage.`);

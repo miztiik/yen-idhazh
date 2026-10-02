@@ -2,13 +2,15 @@
  * Which files of `state/` does the site publish, and which faults stop the build?
  *
  * For every ledger `ledger.published` names in `config/idhazh.json`, the site
- * carries that ledger's three compact indexes and every compact file they name,
- * each at the path it has under `state/`, so the address a browser asks for and
- * the committed path are one string. `copy-visuals.mjs` stages what this
- * returns; nothing here writes.
+ * carries that ledger's three compact indexes trimmed to the widest console span
+ * and every compact file those trimmed indexes name, each at the path it has
+ * under `state/`, so the address a browser asks for and the committed path are
+ * one string. `copy-visuals.mjs` stages what this returns; nothing here writes.
  *
  * **The indexes are the list, and no directory is walked.** A reader asks only
  * for files an index names, so a file no index names is bytes nobody fetches.
+ * The copy is capped from each ledger's newest packed day rather than the build
+ * clock, so a canary build keeps publishing the same fixture files next month.
  * Reading the list rather than the tree also keeps `daily/watermark.json`, the
  * gardener's own marker, and any stray file off the site with no list of things
  * to leave out.
@@ -33,6 +35,13 @@ import { fileURLToPath } from 'node:url';
 
 /** The tunable knobs, the same file `backend/idhazh/contracts/app_config.py` validates. */
 const CONFIG_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'config', 'idhazh.json');
+const APPEARANCE_FILE = join(
+	dirname(fileURLToPath(import.meta.url)),
+	'..',
+	'..',
+	'config',
+	'appearance.json'
+);
 
 /** A ledger name as `LedgerName` spells one: lower-case words joined by hyphens. */
 const LEDGER_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
@@ -45,6 +54,7 @@ const PERIODS = /** @type {const} */ (['daily', 'monthly', 'yearly']);
 /**
  * @typedef {object} LedgerCopy
  * @property {string[]} files Every file to publish, as a POSIX path under the state root.
+ * @property {Record<string, string>} indexes Trimmed index payloads, keyed by the same path in `files`.
  * @property {string[]} refused One line a fault that stops the build; empty when it may go on.
  * @property {string[]} missing Every data file an index names and the tree lacks, under the state root.
  */
@@ -72,6 +82,56 @@ export function publishedLedgers(file = CONFIG_FILE) {
 	return named;
 }
 
+export function publishedWindowDays(file = APPEARANCE_FILE) {
+	const presets = JSON.parse(readFileSync(file, 'utf8'))?.console?.window_presets ?? [];
+	if (!Array.isArray(presets) || presets.length === 0) {
+		throw new Error('console.window_presets in config/appearance.json is not a non-empty list');
+	}
+	const values = presets.filter((value) => Number.isInteger(value) && value > 0);
+	if (values.length !== presets.length) {
+		throw new Error('console.window_presets in config/appearance.json names a non-positive day count');
+	}
+	return Math.max(...values);
+}
+
+/** @param {string} day */
+function dayNumber(day) {
+	const found = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+	if (!found) return null;
+	return Math.floor(Date.UTC(Number(found[1]), Number(found[2]) - 1, Number(found[3])) / 86_400_000);
+}
+
+/** @param {string} month */
+function monthRange(month) {
+	const found = /^(\d{4})-(\d{2})$/.exec(month);
+	if (!found) return null;
+	const first = Math.floor(Date.UTC(Number(found[1]), Number(found[2]) - 1, 1) / 86_400_000);
+	const after = Math.floor(Date.UTC(Number(found[1]), Number(found[2]), 1) / 86_400_000);
+	return { first, last: after - 1 };
+}
+
+/** @param {string} year */
+function yearRange(year) {
+	if (!/^\d{4}$/.test(year)) return null;
+	const first = Math.floor(Date.UTC(Number(year), 0, 1) / 86_400_000);
+	const after = Math.floor(Date.UTC(Number(year) + 1, 0, 1) / 86_400_000);
+	return { first, last: after - 1 };
+}
+
+/**
+ * @param {Period} period
+ * @param {unknown} covers
+ */
+function entryRange(period, covers) {
+	if (typeof covers !== 'string') return null;
+	if (period === 'daily') {
+		const day = dayNumber(covers);
+		return day === null ? null : { first: day, last: day };
+	}
+	if (period === 'monthly') return monthRange(covers);
+	return yearRange(covers);
+}
+
 /**
  * The file one index entry names, under `compact/<ledger>/`, or null when
  * `covers` is not that period's shape.
@@ -94,7 +154,7 @@ function namedFile(period, covers) {
 }
 
 /**
- * The files one index names, or the reason it cannot be acted on.
+ * The files one index names after trimming it to the published window, or the reason it cannot be acted on.
  *
  * Only what the copy needs is checked: that the file is this ledger's index for
  * this period, and that every entry covers a day, month or year of that period.
@@ -103,9 +163,11 @@ function namedFile(period, covers) {
  * @param {string} text
  * @param {string} ledger
  * @param {Period} period
- * @returns {string[] | string} The named files, or why the index was refused.
+ * @param {number} firstDay
+ * @param {number} lastDay
+ * @returns {{files: string[], text: string} | string} The named files and trimmed index, or why it was refused.
  */
-function filesNamedIn(text, ledger, period) {
+function filesNamedIn(text, ledger, period, firstDay, lastDay) {
 	/** @type {unknown} */
 	let index;
 	try {
@@ -121,6 +183,7 @@ function filesNamedIn(text, ledger, period) {
 	if (!Array.isArray(held.entries)) return 'has no list of entries';
 	/** @type {string[]} */
 	const files = [];
+	const entries = [];
 	for (const entry of held.entries) {
 		const covers = entry !== null && typeof entry === 'object' ? entry.covers : undefined;
 		const file = namedFile(period, covers);
@@ -128,9 +191,35 @@ function filesNamedIn(text, ledger, period) {
 			const unit = period === 'daily' ? 'day' : period === 'monthly' ? 'month' : 'year';
 			return `names ${JSON.stringify(covers)}, which is not a UTC ${unit}`;
 		}
+		const range = entryRange(period, covers);
+		if (range === null) return `names ${JSON.stringify(covers)}, which is not a UTC period`;
+		if (range.last < firstDay || range.first > lastDay) continue;
+		entries.push(entry);
 		files.push(`compact/${ledger}/${file}`);
 	}
-	return files;
+	return { files, text: `${JSON.stringify({ ...held, entries }, null, 2)}\n` };
+}
+
+/**
+ * @param {string} stateRoot
+ * @param {string} ledger
+ */
+function newestPackedDay(stateRoot, ledger) {
+	const at = join(stateRoot, 'compact', ledger, 'index', 'daily.json');
+	if (!existsSync(at)) return null;
+	let index;
+	try {
+		index = JSON.parse(readFileSync(at, 'utf8'));
+	} catch {
+		return null;
+	}
+	if (index === null || typeof index !== 'object' || !Array.isArray(index.entries)) return null;
+	let newest = null;
+	for (const entry of index.entries) {
+		const day = entry !== null && typeof entry === 'object' ? dayNumber(entry.covers) : null;
+		if (day !== null && (newest === null || day > newest)) newest = day;
+	}
+	return newest;
 }
 
 /**
@@ -149,7 +238,7 @@ function filesNamedIn(text, ledger, period) {
  */
 export function ledgerCopy(stateRoot, ledgers, rootName = 'state') {
 	/** @type {LedgerCopy} */
-	const copy = { files: [], refused: [], missing: [] };
+	const copy = { files: [], indexes: {}, refused: [], missing: [] };
 	if (ledgers.length === 0) return copy;
 	if (!existsSync(stateRoot) || !statSync(stateRoot).isDirectory()) {
 		copy.refused.push(
@@ -161,7 +250,23 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state') {
 	const files = new Set();
 	/** @type {Set<string>} */
 	const missing = new Set();
+	const spanDays = publishedWindowDays();
 	for (const ledger of ledgers) {
+		const missingIndexes = PERIODS.filter(
+			(period) => !existsSync(join(stateRoot, 'compact', ledger, 'index', `${period}.json`))
+		);
+		if (missingIndexes.length > 0) {
+			for (const period of missingIndexes) {
+				copy.refused.push(`${ledger}: ${rootName}/compact/${ledger}/index/${period}.json is missing`);
+			}
+			continue;
+		}
+		const newest = newestPackedDay(stateRoot, ledger);
+		if (newest === null) {
+			copy.refused.push(`${ledger}: ${rootName}/compact/${ledger}/index/daily.json names no packed day`);
+			continue;
+		}
+		const firstDay = newest - spanDays + 1;
 		for (const period of PERIODS) {
 			const index = `compact/${ledger}/index/${period}.json`;
 			const at = join(stateRoot, ...index.split('/'));
@@ -169,13 +274,14 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state') {
 				copy.refused.push(`${ledger}: ${rootName}/${index} is missing`);
 				continue;
 			}
-			const named = filesNamedIn(readFileSync(at, 'utf8'), ledger, period);
+			const named = filesNamedIn(readFileSync(at, 'utf8'), ledger, period, firstDay, newest);
 			if (typeof named === 'string') {
 				copy.refused.push(`${ledger}: ${rootName}/${index} ${named}`);
 				continue;
 			}
+			copy.indexes[index] = named.text;
 			files.add(index);
-			for (const file of named) {
+			for (const file of named.files) {
 				if (existsSync(join(stateRoot, ...file.split('/')))) files.add(file);
 				else missing.add(file);
 			}

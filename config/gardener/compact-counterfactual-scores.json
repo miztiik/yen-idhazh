@@ -11,7 +11,7 @@
   "monthly_keep_days": null,
   "monthly_window": {
     "unit": "months",
-    "value": 1
+    "value": 2
   },
   "monthly_window_dry_run": true,
   "owns": [

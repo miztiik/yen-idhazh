@@ -120,6 +120,13 @@ Most knobs are read only by the producer and never reach a reader: source lists,
 
 A knob is shipped **only** when a published surface genuinely needs it - for example, how the dashboard buckets the ledger it renders. When that happens the value is *imported into the bundle at build time*, never fetched at read time: it is tiny, it is needed before the first paint, and fetching it would put a round trip on the critical path for something that cannot change between builds.
 
+The exception is `config/ledgers.json`. It is a registry, not a knob: a list of
+ledger families and ledgers that the Records page refreshes and compares with
+the site's published list. The build copies it verbatim to the site at the same
+path, and the page fetches it when the operator opens that page. That makes the
+refresh a real read of the site's declaration rather than a rebuild-time
+constant. Owner ruling, 2026-09-28.
+
 ## Design rationale
 
 Keeping tunables in schema-validated files rather than in code exists so that tuning the system never requires reading it, and so that a change of threshold is a reviewable one-line diff with a date on it rather than an archaeological dig. Treating config as a versioned contract - rather than as "just a JSON file" - is what stops a silently-renamed key from failing a run at 6 a.m. on a Sunday. Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).

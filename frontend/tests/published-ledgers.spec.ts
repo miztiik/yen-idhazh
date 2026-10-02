@@ -25,6 +25,7 @@ import type { LedgerName } from '../src/lib/data/slice-shapes';
  */
 
 const STATE = resolve(process.cwd(), 'build', 'state');
+const BUILD = resolve(process.cwd(), 'build');
 
 /** Every file under a directory, as a POSIX path relative to it. */
 function filesUnder(root: string, prefix = ''): string[] {
@@ -38,6 +39,28 @@ function filesUnder(root: string, prefix = ''): string[] {
 
 function at(path: string): string {
 	return join(STATE, ...path.split('/'));
+}
+
+function dayNumber(day: string): number {
+	const [year, month, date] = day.split('-').map(Number);
+	return Math.floor(Date.UTC(year, month - 1, date) / 86_400_000);
+}
+
+function rangeFor(period: string, covers: string): { first: number; last: number } {
+	if (period === 'daily') {
+		const day = dayNumber(covers);
+		return { first: day, last: day };
+	}
+	if (period === 'monthly') {
+		const [year, month] = covers.split('-').map(Number);
+		const first = Math.floor(Date.UTC(year, month - 1, 1) / 86_400_000);
+		const after = Math.floor(Date.UTC(year, month, 1) / 86_400_000);
+		return { first, last: after - 1 };
+	}
+	const year = Number(covers);
+	const first = Math.floor(Date.UTC(year, 0, 1) / 86_400_000);
+	const after = Math.floor(Date.UTC(year + 1, 0, 1) / 86_400_000);
+	return { first, last: after - 1 };
 }
 
 /** What the published indexes send the door to, and each file's size as its entry names it. */
@@ -94,4 +117,38 @@ test('nothing else of state/ reaches the site: no raw day, no watermark, no othe
 		built.filter((path) => !sizes.has(path)),
 		'a file no published index names is in the build'
 	).toEqual([]);
+});
+
+test('every published index is capped to the widest console span, anchored on its ledger data', () => {
+	const appearance = JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8'));
+	const widest = Math.max(...appearance.console.window_presets);
+	for (const ledger of publishedLedgers() as LedgerName[]) {
+		const daily = readIndex(
+			JSON.parse(readFileSync(at(indexPath(ledger, 'daily')), 'utf8')),
+			ledger,
+			'daily'
+		);
+		expect('index' in daily && daily.index.entries.length, `${ledger} has no newest day`).toBeTruthy();
+		if (!('index' in daily)) continue;
+		const newest = Math.max(...daily.index.entries.map((entry) => dayNumber(entry.covers)));
+		const first = newest - widest + 1;
+		for (const period of COMPACT_PERIODS) {
+			const reading = readIndex(JSON.parse(readFileSync(at(indexPath(ledger, period)), 'utf8')), ledger, period);
+			expect('index' in reading, `${ledger} ${period} index is refused`).toBeTruthy();
+			if (!('index' in reading)) continue;
+			for (const entry of reading.index.entries) {
+				const range = rangeFor(period, entry.covers);
+				expect(
+					range.last >= first && range.first <= newest,
+					`${ledger} ${period} ${entry.covers} is outside the widest published span`
+				).toBeTruthy();
+			}
+		}
+	}
+});
+
+test('the ledger registry is copied verbatim to the site', () => {
+	const committed = readFileSync(resolve(process.cwd(), '..', 'config', 'ledgers.json'), 'utf8');
+	const staged = readFileSync(join(BUILD, 'config', 'ledgers.json'), 'utf8');
+	expect(staged).toBe(committed);
 });

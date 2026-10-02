@@ -30,6 +30,10 @@ function anIndex(ledger: string, period: 'daily' | 'monthly' | 'yearly', covers:
 	return `${JSON.stringify({ entries, ledger, period, version: '2026-09-27' }, null, 2)}\n`;
 }
 
+function coversIn(index: string): string[] {
+	return (JSON.parse(index).entries as { covers: string }[]).map((entry) => entry.covers);
+}
+
 /** A whole ledger: all indexes, every file they name, the watermark beside them and a stray file. */
 function aWholeLedger(ledger: string): Record<string, string> {
 	return {
@@ -48,19 +52,66 @@ function aWholeLedger(ledger: string): Record<string, string> {
 
 test('a whole ledger publishes its three indexes and the files they name, and nothing else', () => {
 	const copy = ledgerCopy(aStateTree(aWholeLedger('summary-quality-evals')), ['summary-quality-evals']);
-	expect(copy).toEqual({
+	expect(copy.files).toEqual([
+		'compact/summary-quality-evals/daily/2026/09/01.parquet',
+		'compact/summary-quality-evals/daily/2026/09/02.parquet',
+		'compact/summary-quality-evals/index/daily.json',
+		'compact/summary-quality-evals/index/monthly.json',
+		'compact/summary-quality-evals/index/yearly.json',
+		'compact/summary-quality-evals/monthly/2026/08.parquet'
+	]);
+	expect(Object.keys(copy.indexes).sort()).toEqual([
+		'compact/summary-quality-evals/index/daily.json',
+		'compact/summary-quality-evals/index/monthly.json',
+		'compact/summary-quality-evals/index/yearly.json'
+	]);
+	expect(copy).toMatchObject({
 		files: [
 			'compact/summary-quality-evals/daily/2026/09/01.parquet',
 			'compact/summary-quality-evals/daily/2026/09/02.parquet',
 			'compact/summary-quality-evals/index/daily.json',
 			'compact/summary-quality-evals/index/monthly.json',
 			'compact/summary-quality-evals/index/yearly.json',
-			'compact/summary-quality-evals/monthly/2026/08.parquet',
-			'compact/summary-quality-evals/yearly/2025/2025.parquet'
+			'compact/summary-quality-evals/monthly/2026/08.parquet'
 		],
 		refused: [],
 		missing: []
 	});
+});
+
+test('the copy is capped from the newest packed day and trims each index to the copied files', () => {
+	const tree = {
+		'compact/item-health/index/daily.json': anIndex('item-health', 'daily', [
+			'2026-05-31',
+			'2026-06-02',
+			'2026-08-30'
+		]),
+		'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', ['2026-05', '2026-06']),
+		'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', ['2025']),
+		'compact/item-health/daily/2026/05/31.parquet': 'PAR1',
+		'compact/item-health/daily/2026/06/02.parquet': 'PAR1',
+		'compact/item-health/daily/2026/08/30.parquet': 'PAR1',
+		'compact/item-health/monthly/2026/05.parquet': 'PAR1',
+		'compact/item-health/monthly/2026/06.parquet': 'PAR1',
+		'compact/item-health/yearly/2025/2025.parquet': 'PAR1'
+	};
+	const copy = ledgerCopy(aStateTree(tree), ['item-health']);
+	expect(copy.files).toEqual([
+		'compact/item-health/daily/2026/06/02.parquet',
+		'compact/item-health/daily/2026/08/30.parquet',
+		'compact/item-health/index/daily.json',
+		'compact/item-health/index/monthly.json',
+		'compact/item-health/index/yearly.json',
+		'compact/item-health/monthly/2026/06.parquet'
+	]);
+	expect(coversIn(copy.indexes['compact/item-health/index/daily.json'])).toEqual([
+		'2026-06-02',
+		'2026-08-30'
+	]);
+	expect(coversIn(copy.indexes['compact/item-health/index/monthly.json'])).toEqual([
+		'2026-06'
+	]);
+	expect(JSON.parse(copy.indexes['compact/item-health/index/yearly.json']).entries).toEqual([]);
 });
 
 for (const period of ['daily', 'monthly', 'yearly']) {
@@ -106,7 +157,7 @@ test('a state root that is not there stops the build when a ledger is published,
 	expect(ledgerCopy(gone, ['summary-quality-evals']).refused).toEqual([
 		'the state root state/ is not there, and ledger.published names summary-quality-evals'
 	]);
-	expect(ledgerCopy(gone, [])).toEqual({ files: [], refused: [], missing: [] });
+	expect(ledgerCopy(gone, [])).toEqual({ files: [], indexes: {}, refused: [], missing: [] });
 });
 
 test('a refusal names the state root the way the build was told to, never by its absolute path', () => {
