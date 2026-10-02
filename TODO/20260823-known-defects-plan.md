@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 **Twenty-seven defects are open.** Three of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
@@ -297,6 +297,8 @@ is between living with it and merging on this machine under `TZ=UTC`, which
 changes how every row merges. Level 1 - a wrong offset is visible on the commit
 that carries it, and nothing depends on it.
 
+Execution owner: the repository owner for row 48; check both `%aI` and `%cI` on the next normal squash merge, and require UTC offsets or an explicit UTC-policy decision before closing the row.
+
 Found on 2026-09-28 by plan 51's owner, while merging that plan's row 5.
 
 ## 47 - The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 (OPEN)
@@ -332,7 +334,7 @@ printing the no-change sentence beside the chart. So a real date series can pass
 gate 6 only on that sentence, and it cannot pass at all over a span in which a
 setting did change.
 
-**The home is plan 52's row 26, the settings-change rule on every
+**The home is plan 52's row 2, the settings-change rule on every
 `dateSeries`**, and it has to land before plan 52's first date-series panel
 joins `console.judged_panel_ids`. Level 2 - one component, and every panel that
 draws it.
@@ -357,6 +359,8 @@ buy the console specs.
 the case to the truth table in `frontend/scripts/tests/test-scope.test.mjs`.
 Level 2 - the truth table is the dependant to check.
 
+Execution owner: [plan 52](20260926-52-fifty-panels-move-and-six-projections-go-plan.md) row 1; its selector truth-table case is the acceptance check for defect 45.
+
 Filed on 2026-09-28 from plan 51's rows.
 
 ## 44 - One hatch means two things on the console: no reading, and time counted twice (OPEN)
@@ -372,10 +376,10 @@ names the clash, and plan 51's row 4 made the absent hatch one builder,
 `absentHatch` in `frontend/src/lib/charts/d3/ordered-colour.ts`, for a known
 thing with no reading.
 
-**Two rows take one half each.** Plan 51's final panel row, row 8, moves
-`MemoryBoard.svelte` onto `absentHatch`, so "no reading" has one texture. The
-plan 52 row that redraws `RunTimelinePanel.svelte` resolves what its overrun is
-drawn with instead. Level 2 - two panels, each checked by name in both themes.
+**The remaining execution owner is plan 52 row 6**, which redraws
+`RunTimelinePanel.svelte` and resolves what its overrun is drawn with. The
+memory-board half is complete (#1171). Level 2 - two panels, each checked by name
+in both themes.
 
 **The first half is done**, 2026-09-30: the memory board draws an item with no
 reading in the reserved grey's stripes from `absentHatch`, at
@@ -400,6 +404,8 @@ tab strip sticks and gets shorter.
 **The home is the console layout**, as one rule for every section that follows
 the window, not a fix inside each panel. Level 2 - every windowed section on the
 five routes, each checked by name.
+
+Execution owner: this plan's row 43 worker; changing every preset at the documented widths in both themes must leave the windowed sections' settled positions unchanged.
 
 Filed on 2026-09-28 from Jony's review.
 
@@ -427,6 +433,8 @@ console by plan 51's row 2, which changes no panel.
 noun, used by every sentence that names the span. Level 1 - wording, and a wrong
 version is obvious on the page.
 
+Execution owner: this plan's row 41 worker; browser checks of one-day and multi-day windows must show the correct singular and plural wording on every console route.
+
 ## 40 - The canary never writes a job in two halves, so no built page tests the merge (OPEN)
 
 **Every job now writes its machine record in two halves** - the first names the
@@ -440,6 +448,8 @@ pass every browser spec.
 **The home is the canary builder**: write at least one job as its two halves.
 Level 2 - every browser spec shares the canary, so the specs that count machine
 rows are checked by name.
+
+Execution owner: [plan 52](20260926-52-fifty-panels-move-and-six-projections-go-plan.md) row 4; its built-page check of one merged canary job is the acceptance check for defect 40.
 
 Found on 2026-09-27 by plan 51's row 1, which built the merge.
 
@@ -617,6 +627,8 @@ and two rows that differ only in the dropped cell start settling as one.
 **Every keyed ledger is exposed to this**, not just the one it was found on. The
 fix is for one side to be derived from something other than the constant - the
 committed header, or the contract's own field list.
+
+Execution owner: this plan's row 26 worker; for each key cell, a bounded fixture pair differing only in that cell must stay separate, and dropping the cell must fail without deriving the expected answer from the key constant.
 
 ## 25 - `host_model` is a column nothing fills, and two rulings disagree (OPEN)
 

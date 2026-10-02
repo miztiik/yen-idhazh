@@ -1,6 +1,6 @@
 # Plan 57 - The upkeep tasks switch on, each with the person's approval
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 
 **Level**: 4 (CLAUDE.md section 6). A file a live task deletes is gone for good once the history squash passes its commit (CLAUDE.md section 8), and a workflow run or artifact it deletes is gone at once. So a wrong switch costs more to undo than to make.
 
@@ -23,7 +23,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
-| Packing `item-health` and `host-fingerprint` | Nothing here: another plan owns it | Plan 51's row "Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily" |
+| Packing `item-health` and `host-fingerprint` | Nothing to implement here: #1177 is merged | Row 2 still requires its first live wake to be read before more ledgers follow |
 | The `visual-prune` switch | The rendered-chart cleanup keeps only reporting | Plan 13's row "The fuse comes out, and one run is watched" |
 | A new window value, or a window moving from `forever` to bounded | A window the person thinks wrong stays as committed | The person names the new value in the answer to row 3's table, and that task's pull request carries it (ESCALATE trigger 1) |
 | Known defect 53: eight flat trace files the `traces` task cannot date | They stay after `traces` goes live | Defect 53 in [20260823-known-defects-plan.md](20260823-known-defects-plan.md): one commit of eight renames |
@@ -50,7 +50,7 @@ Rows 1 and 2 also wait on rows of other plans (section 3). The plan-queue reader
 ### Row #1 - The eval ledger is packed live, and every scores window stays forever
 
 - **Scope:** `dry_run` in `config/gardener/compact-scores.json` becomes `false`, so the console's eval panels reach past 2026-09-28. Its `monthly_window` and `window` stay `forever`.
-- **Precondition:** the person's approval (section 2). Plan 56's row "The score month summary is retired, and no eval row is ever deleted" is DONE, because it sets `monthly_window` to `forever` (15 months on main). Plan 51's packing row is DONE (section 3). And `config.load_gardener()` loads with `monthly_window` `forever`. The loader refuses `forever` for a ledger in `ledger.published`, so if plan 51's row "The three ledgers the console reads are published" lands first, row 1 waits until plans 51 and 56 settle that clash. Plan 56's row "The shared packing gains a year period", as its open pull request stands, lifts the refusal for a ledger that packs years.
+- **Precondition:** the person's approval (section 2). Plan 56's row "The score month summary is retired, and no eval row is ever deleted" must be complete, with `monthly_window` and `window` kept `forever`. Packing (#1177) and publication (#1169) are complete (section 3), and `config.load_gardener()` must accept that declaration. Year packing supports the published `forever` window; #1182 removed the publication-specific minimum wait after year reads gained fresh addresses, not by loosening a retention setting. Section 2's first-wake check still applies.
 - **Files touched:** `config/gardener/compact-scores.json`; `backend/tests/contracts/test_gardener_config.py`; `docs/concepts/config/idhazh-gardener.md`; `docs/architecture/publishing/idhazh-gardener.md`; `docs/how-to/run-the-pipeline.md`; `docs/concepts/config/retention-ages.md`; `docs/concepts/evaluation.md`; this plan's Reckoner line.
 - **Acceptance gates:** local: the checks `npm --prefix frontend run test:changed -- --list` selects, which include `pytest backend/tests/contracts/test_gardener_config.py` (its `test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live` is red until the entry is added), and `python backend/utilities/doc_load.py --changed` over the touched pages, before and after. CI: the full suite.
 - **Oracle:** the first scheduled wake after the merge moves `through` in `state/compact/scores/daily/watermark.json` past 2026-09-28. For every day that wake packed or absorbed, `load_days` returns the same rows at the task's commit as at its parent, and no raw file of that day is left. Today it fails: the task only reports, so `through` stays at 2026-09-28. It cannot settle a later wake; the first wake that absorbs a month is read the same way.
@@ -68,7 +68,7 @@ Rows 1 and 2 also wait on rows of other plans (section 3). The plan-queue reader
 ### Row #2 - The upkeep record, the picture cleanup's record and the feed retirements are packed live
 
 - **Scope:** `dry_run` becomes `false` in `config/gardener/compact-gardener.json`, `compact-visual-prunes.json` and `compact-feed-retirements.json`, so their raw files are packed into one file a day and then one a month. Their month windows stay as committed.
-- **Precondition:** the person's approval (section 2). It covers the month windows as committed, because they say when each ledger's first rows go, and a ledger the person does not approve stays report-only. Plan 51's packing row is DONE (section 3).
+- **Precondition:** the person's approval (section 2). It covers the month windows as committed, because they say when each ledger's first rows go, and a ledger the person does not approve stays report-only. Packing #1177 is merged; its first live wake must have packed `item-health` and `host-fingerprint` without failure before these three follow (section 3).
 - **Files touched:** the three declarations above; `backend/tests/contracts/test_gardener_config.py`; `docs/concepts/config/idhazh-gardener.md`; `docs/architecture/publishing/idhazh-gardener.md`; `docs/how-to/run-the-pipeline.md`; `docs/concepts/config/retention-ages.md`; this plan's Reckoner line.
 - **Acceptance gates:** as row 1.
 - **Oracle:** the first scheduled wake after the merge gives `state/compact/gardener/`, `state/compact/visual-prunes/` and `state/compact/feed-retirements/` each an `index/daily.json` and a `daily/watermark.json`. For every day it packed, `load_days` returns the same rows at the task's commit as at its parent, and no raw file of that day is left. Today it fails: none of the three folders exists. A wake packs at most `max_periods_per_run` days, so a watermark reaches the newest due day over several wakes. It cannot settle `feed-retirements`, which has no raw file yet: its first wakes pack quiet days only, and its first real move is read at the first wake after a retirement row lands.
@@ -76,7 +76,7 @@ Rows 1 and 2 also wait on rows of other plans (section 3). The plan-queue reader
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The row waits for plan 51's packing row, so the first live packing on the runner is read on two ledgers before three more follow, and these three start with both indexes | The person, 2026-09-30 |
+| 1 | The row waits for the first live wake of #1177 to be read on two ledgers before three more follow, and these three start with both indexes; a merge alone is not that check | The person, 2026-09-30 |
 
 | # | Rejected | Why | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
@@ -108,10 +108,10 @@ A pointer names the other plan's row by its title. Where a row here and a row th
 
 | Plan | Row | What it means here |
 | --- | --- | --- |
-| [51](20260924-51-console-fetches-and-draws-its-own-data-plan.md) | "Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily" | It switches `item-health` and `host-fingerprint` packing on, and commits `state/compact/scores/index/monthly.json` once. Rows 1 and 2 wait for it: a live scores packing that wrote that file first would collide with it. It edits the same test and config page as every row here |
-| [51](20260924-51-console-fetches-and-draws-its-own-data-plan.md) | "The three ledgers the console reads are published" | Publishing `scores` makes the loader refuse its `forever` month window (row 1's precondition) |
+| Completed #1177 | Packed-ledger indexes and daily packing for `item-health` and `host-fingerprint` | The code prerequisite is complete; row 2 still waits for its first live wake to be read, and every switch keeps its own section 2 oracle. [The query reader](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md) owns the published index and missing-file behavior |
+| Completed #1169 | Three-ledger publication | The publication prerequisite is complete; the obsolete publication-specific wait was removed by #1182 after fresh year-file addresses. Row 1 keeps its `forever` retention declaration and loader check |
 | [56](20260930-56-summary-quality-evals-plan.md) | "The score month summary is retired, and no eval row is ever deleted" | Row 1 waits for it: it sets the `compact-scores` `monthly_window` to `forever` |
-| [56](20260930-56-summary-quality-evals-plan.md) | "The shared packing gains a year period"; "The eval ledger becomes `summary-quality-evals`, and its ID files stop growing" | The first lifts the published `forever` refusal for a ledger that packs years; the second renames row 1's file (row 1, decision 2). Plan 56 leaves every switch to the person, and row 1's approval is that call |
+| [56](20260930-56-summary-quality-evals-plan.md) | "The shared packing gains a year period"; "The eval ledger becomes `summary-quality-evals`, and its ID files stop growing" | Year packing supports `forever` without an unbounded month index; the rename changes row 1's file (row 1, decision 2). #1182 later removed the publication-specific wait after fresh year-file addresses. Every live switch still needs the person's approval |
 | [13](20260905-13-switch-on-deletion-plan.md) | "The fuse comes out, and one run is watched" | It owns `visual-prune`, which row 3 leaves out, and edits the same test and config page as every row here |
 | [52](20260926-52-fifty-panels-move-and-six-projections-go-plan.md) | "The `telemetry` and `run-timeline` projections go" | It edits `config/gardener/telemetry-aggregate.json`, so row 3's pull request for that task waits while it is in flight |
 | [Known defects](20260823-known-defects-plan.md) | Defect 53 | It matters from the day row 3 switches `traces` on |
