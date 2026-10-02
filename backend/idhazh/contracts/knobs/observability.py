@@ -343,14 +343,6 @@ class ObservabilityConfig(Model):
             "the argument the telemetry copy makes for its own pair."
         ),
     )
-    public_span_rollup_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/span-rollup/ keeps a published shard. Fourteen "
-            "on the same argument as public_run_days_keep_months."
-        ),
-    )
     public_run_timeline_keep_months: int = Field(
         default=2,
         ge=1,
@@ -442,7 +434,6 @@ class ObservabilityConfig(Model):
                 "public_run_days_keep_months": self.public_run_days_keep_months,
                 "public_day_metrics_keep_months": self.public_day_metrics_keep_months,
                 "public_machine_keep_months": self.public_machine_keep_months,
-                "public_span_rollup_keep_months": self.public_span_rollup_keep_months,
             }
         )
 

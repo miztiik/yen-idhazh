@@ -130,7 +130,6 @@ LIVE_BY_DECISION: Final = {
         "growing by a file a day with no summary, so the same switch settles each closed "
         "month of them into one file"
     ),
-    ("span-rollup", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
 }
 
 #: The CSV day trees no task folds, each with why. A tree that joins `DAY_TREES`

@@ -38,7 +38,6 @@ from idhazh.telemetry.publish import (
     public_telemetry,
     run_days,
     series,
-    span_rollup,
 )
 
 
@@ -46,7 +45,6 @@ def _faults(root: Path, months: frozenset[str] | None) -> list[str]:
     faults: list[str] = []
     readers: tuple[tuple[str, str, Callable[[Path], object]], ...] = (
         (machine.DIRNAME, machine.SUFFIX, machine.read_shard),
-        (span_rollup.DIRNAME, span_rollup.SUFFIX, span_rollup.read_shard),
         (
             day_metrics.PUBLIC_DIRNAME,
             day_metrics.PUBLIC_SUFFIX,

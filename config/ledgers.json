@@ -121,21 +121,6 @@
       ]
     },
     {
-      "name": "span-rollup",
-      "lifecycle_status": "active",
-      "description": "How long each step of each run took, folded to one row per step and shard.",
-      "onboarded": "2026-09-15",
-      "ledgers": [
-        {
-          "name": "span-rollup",
-          "grain": "tree",
-          "prefix": ["span-rollup"],
-          "stem": null,
-          "suffix": null
-        }
-      ]
-    },
-    {
       "name": "published",
       "lifecycle_status": "active",
       "description": "Every article address already published, so a story does not run twice.",

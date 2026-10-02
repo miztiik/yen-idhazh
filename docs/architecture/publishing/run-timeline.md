@@ -1,6 +1,6 @@
 # The Run Timeline
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 **What shape does the run timeline have, and why that shape?** This page answers
 that one question. The shape landed before any producer so the writers produce
@@ -88,8 +88,6 @@ census as the source.
 `residual_ms` is `item_total_ms` minus the eight named steps, and it gets a
 column of its own because **a step that absorbed the leftover reads as slower
 than it was** and a reader cannot tell the overhead from the work.
-`SpanRollupRow.unattributed_ms` made this ruling once already for the shard; this
-is the same ruling for the item.
 
 **It is signed, for the reason `ItemHealthRow.stage_gap_ms` is signed.** Two of
 the eight genuinely overlap: the visual plan is decoded inside the
@@ -108,7 +106,7 @@ a chart and a ledger start reporting different overheads for one item.
 No address, no `url_key`, no title, no fetched text - only an item id the
 pipeline minted, a clock, and durations of our own work. So there is nothing to
 redact, and no second `public-run-timeline` shape to declare: this is published
-whole, the way `span-rollup-row`, `day-metrics` and `machine-shard-row`
+whole, the way `day-metrics` and `machine-shard-row`
 already are. Where the rows land was left to the writer, and the writer chose a
 published mirror alone: every cell is either a census column or arithmetic over
 one, so a committed `state/run-timeline/` would be a third copy of numbers git
@@ -167,7 +165,6 @@ early is one file with no caller for as long as it takes the writers to arrive.
 | Option | Why rejected | What it would cost to take |
 | --- | --- | --- |
 | Build the chart first and infer the shape from what it needs | the chart would ship against empty columns and apologise, which is what the console already does on three panels | one rebuild of the projection after the columns fill |
-| Draw from `span-rollup` alone | the rollup is folded per shard and per span name, so it knows how long fetching took and never which article was being fetched. It cannot place one item on a clock | a second per-item ledger |
 | Fold the residual into the step beside it | that step then reads as slower than it was, and no reader can tell the overhead from the work | nothing - it is cheaper to leave it out, which is what makes it a trap |
 | Clamp a negative residual to zero so every bar draws | the only signal that two steps overlapped disappears, and the known overlap is real rather than hypothetical | the same column, minus the one thing it catches |
 

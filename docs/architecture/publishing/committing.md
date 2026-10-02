@@ -171,17 +171,11 @@ time. `frontend/public/telemetry/` is a full rewrite of a month of the
 item-health ledger, which is why it is regenerated and not unioned: a union of
 two rewrites is a file with every row twice.
 
-**Eight `state/` paths left this list on 2026-09-22 and the reason is the same
-for all of them.** Seven are written once - item-health, host-fingerprint,
-summary-quality-evals, its ID folder, span-rollup, traces and segments, which is gone - so each
-now names its file for the single writer that wrote it, two runs never compute
-different bytes for one path, and there is nothing to hand back.
-`state/published` left beside them for a different reason: it was union-safe
-then, and the hand-back was discarding this run's appended rows before the union
-driver could ever fire, leaving the publication record dependent on a rebuild
-succeeding. It has since moved under `state/raw/`, where the assemble job files
-a file of its own. **What the eight buy is correctness, not time**: against a
-5-second rebuild in an 11-second step there is no time to win.
+**Do not hand back writer-owned state files.** Item health, host fingerprints,
+summary-quality evaluations, their ID files, traces and the published ledger
+name one writer per file. Two writers do not compute different bytes for the
+same path, so there is nothing to regenerate, and handing one back would
+discard the file this run wrote.
 
 **`state/day-metrics` is the one that stays**, and it is the reason `hand_back`
 still touches a `state/` path at all. It is one whole-file-per-day JSON that

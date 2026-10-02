@@ -66,7 +66,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     slower or crosses midnight.
 
     `state/feed-health/`, `state/item-health/`, `state/host-fingerprint/`,
-    `state/span-rollup/` and `state/counterfactual-scores/` were all here until
+    and `state/counterfactual-scores/` were all here until
     2026-09-22 and none of them is now. Each became a day directory where every
     writer holds its own file, so a merge has nothing to stack: two files that
     no one else can write do not need a settlement to tell them apart, and the

@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import csv
 from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR, read_text
+from pydantic import TypeAdapter
 from pytest import MonkeyPatch
 
-from idhazh import config, ledger, run_context
+from idhazh import config, run_context, telemetry
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
-from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.fingerprint import UNRECORDED_BUILD, prose_changed_alone, runtime_build, text_digest
 from idhazh.stages import common
 from idhazh.stages.assemble import _recorded_inputs, stage_assemble
@@ -168,25 +166,10 @@ def test_a_second_run_over_the_same_inputs_reports_no_prose_change(
     assert prose_changed_alone(recorded, reworded) == ("prompt_sha256",)
 
 
-def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
+def test_a_traced_work_shard_writes_separate_item_passes_and_their_children(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """Tracing on, a work shard folds its own spans into its own segment and the
-    item row's residual reconciles against the shard wall clock.
-
-    The model server refuses every completion, so the summaries fail - which is
-    fine, the fold is over the spans the shard opened (the item, the tagger, the
-    prompt render), not over a scored run. `roll_up_spans` raises if the spans
-    claim more time than the shard ran, so a residual on the item row is proof
-    they did not. The raw trace lands under state/traces/, the committed path
-    the sink now writes in place of the gitignored one.
-
-    Read at the segment rather than at the month head, because the shard is no
-    longer what writes the head: eight of them fold one month, so each writes
-    `state/segments/span-rollup/<run>-<attempt>-work-<shard>.csv` and
-    the gardener's closed-day fold settles them. The fold is
-    `tests/gardener/test_closed_day_fold.py`.
-    """
+    """The recorded model refusal still leaves the real worker's trace tree."""
     run_plan = plan()
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     settings = config.load(CONFIG_DIR)
@@ -201,32 +184,25 @@ def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
             model_endpoint=server.endpoint,
         )
 
-    shard = ledger.day_shard_path(
+    trace = telemetry.committed_trace_path(
         common.STATE_ROOT,
-        LedgerName.SPAN_ROLLUP,
-        date=run_plan.date,
         run_id=run_plan.run_id,
-        # Asked for rather than assumed: the stage names its file from
-        # GITHUB_RUN_ATTEMPT, which is 2 on a re-run of a CI job, so a hardcoded
-        # 1 here goes red on a button nobody pressed in this repository.
         attempt=run_context.run_attempt(),
         job=ServerJob.WORK,
         shard=0,
     )
-    rows = [
-        SpanRollupRow.from_csv_row(raw)
-        for raw in csv.DictReader(shard.read_text(encoding="utf-8").splitlines())
+    adapter = TypeAdapter(telemetry.Span)
+    spans = [
+        adapter.validate_json(line) for line in trace.read_text(encoding="utf-8").splitlines()
     ]
-    by_name = {row.span_name: row for row in rows}
-    assert RollupSpan.ITEM in by_name, "the shard opened no item span"
-    assert len(by_name) >= 2, "only the item span was folded; a sub-step should have too"
-    assert set(by_name) <= set(RollupSpan), "a non-committed span reached the rollup"
-
-    item = by_name[RollupSpan.ITEM]
-    assert item.unattributed_ms is not None and item.unattributed_ms >= 0
-    for name, row in by_name.items():
-        rides_on_item = name is RollupSpan.ITEM
-        assert (row.unattributed_ms is not None) is rides_on_item
-
-    traces = list(ledger.tree_root(common.STATE_ROOT, LedgerName.TRACES).rglob("*.jsonl"))
-    assert traces, "no committed trace was written under state/traces/"
+    by_id = {span.span_id: span for span in spans}
+    assert len(by_id) == len(spans)
+    roots = [span for span in spans if span.name is telemetry.SpanName.ITEM]
+    assert len(roots) >= 2
+    assert all(span.parent_id is None for span in roots)
+    children = [span for span in spans if span.parent_id is not None]
+    assert children
+    for span in children:
+        assert span.parent_id is not None
+        assert by_id[span.parent_id].trace_id == span.trace_id
+    assert telemetry.SpanName.TAG in {span.name for span in spans}

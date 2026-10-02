@@ -29,7 +29,7 @@ import pytest
 from conftest import REPO_ROOT
 
 from idhazh import telemetry
-from idhazh.telemetry import census, events, rollup, sinks, spans, traces
+from idhazh.telemetry import census, events, sinks, spans, traces
 
 pytestmark = pytest.mark.contract
 
@@ -86,7 +86,7 @@ BEFORE_THE_SPLIT: Final[frozenset[str]] = frozenset(
     }
 )
 
-MODULES: Final[tuple[ModuleType, ...]] = (census, events, rollup, sinks, spans, traces)
+MODULES: Final[tuple[ModuleType, ...]] = (census, events, sinks, spans, traces)
 
 #: The one pre-split name the package cannot re-export, and why it cannot.
 #: `telemetry/record.py` owns one item's row, and Python binds a submodule onto
@@ -128,6 +128,10 @@ DELETED_WITH_THE_HOSTED_SINK: Final[frozenset[str]] = frozenset({"langfuse_sink"
 #: the package: `ledger.tree_root(state, LedgerName.TRACES)` is the one answer.
 DELETED_FOR_THE_REGISTRY: Final[frozenset[str]] = frozenset({"TRACES_DIRNAME"})
 
+DELETED_COLLECTORS: Final[frozenset[str]] = frozenset(
+    {"CollectingSink", "FanOut", "roll_up_spans"}
+)
+
 #: Names added since the split, each with the row that added it and the caller
 #: that needs it. A public name is a promise, so one arrives here deliberately
 #: rather than by being noticed failing this test.
@@ -147,6 +151,7 @@ RE_EXPORTED: Final[frozenset[str]] = (
     - TAKEN_BY_A_MODULE
     - DELETED_WITH_THE_HOSTED_SINK
     - DELETED_FOR_THE_REGISTRY
+    - DELETED_COLLECTORS
     | ADDED_AFTER_THE_SPLIT
 )
 

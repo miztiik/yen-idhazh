@@ -77,6 +77,11 @@ class RawDayIndex(Contract):
     __schema_stem__: ClassVar[str] = "raw-day-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-01T16:50",
+            change="Remove the retired aggregate from the ledger vocabulary.",
+            why="Only declared families may reach an index; surviving fields are unchanged.",
+        ),
+        ChangelogEntry(
             version="2026-10-01",
             change="ledger may name summary-quality-evals, and scores is refused.",
             why="The eval ledger is named for what it holds; its files were rewritten.",
@@ -164,6 +169,11 @@ class CompactIndex(Contract):
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-01T16:50",
+            change="Remove the retired aggregate from the ledger vocabulary.",
+            why="Only declared families may reach an index; surviving periods are unchanged.",
+        ),
+        ChangelogEntry(
             version="2026-10-01",
             change="ledger may name summary-quality-evals, and scores is refused.",
             why="The eval ledger is named for what it holds; its files were rewritten.",
@@ -225,6 +235,11 @@ class Watermark(Contract):
 
     __schema_stem__: ClassVar[str] = "watermark"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-01T16:50",
+            change="Remove the retired aggregate from the ledger vocabulary.",
+            why="Only declared families may reach a watermark; surviving periods are unchanged.",
+        ),
         ChangelogEntry(
             version="2026-10-01",
             change="ledger may name summary-quality-evals, and scores is refused.",

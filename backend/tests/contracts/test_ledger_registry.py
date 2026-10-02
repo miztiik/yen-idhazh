@@ -94,11 +94,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/item-health-summary/2026-09.csv",
         "state/item-health-summary",
     ),
-    "SPAN_ROLLUP": (
-        "state/span-rollup/2026/09/18",
-        "state/span-rollup/2026/09/18",
-        "state/span-rollup",
-    ),
     "PUBLISHED": (
         "state/published/2026/09/18.csv",
         "state/published/2026/09/18.csv",
@@ -195,7 +190,6 @@ CLAIMED_AT_THE_BASE: Final[frozenset[str]] = frozenset(
         "score-index",
         "scores",
         "seen",
-        "span-rollup",
         "telemetry-aggregate",
         "validation",
         "visual-prunes",
