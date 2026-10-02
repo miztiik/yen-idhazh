@@ -275,10 +275,14 @@ async function main(args: string[]): Promise<number> {
 		return cached.exitCode;
 	}
 	if (!opts.inside) {
-		const lockArgs = selected.groups.every((group) => group === 'logic')
-			? ['--lock-file', join(directory, 'logic.lock')] : [];
+		const gateLock = join(root, 'backend/utilities/gate_lock.py');
+		const logicOnly = selected.groups.every((group) => group === 'logic');
+		// One run per checkout at a time, because its build and reports are shared;
+		// a browser run then also takes one of the machine-wide seats.
+		const checkoutSeat = [gateLock, '--seats', '1', '--lock-file', join(directory, logicOnly ? 'logic.lock' : 'build.lock'), '--'];
+		const machineSeat = logicOnly ? [] : [python, gateLock, '--'];
 		return (await command('waiting for the test slot', python,
-			[join(root, 'backend/utilities/gate_lock.py'), '--require-lock', ...lockArgs, '--', process.execPath,
+			[...checkoutSeat, ...machineSeat, process.execPath,
 				join(frontend, 'scripts/run-checks.ts'), ...args, '--inside-lock'], root,
 			{ ...env, IDHAZH_CHECK_EXPECTED: id, IDHAZH_CHECK_REQUESTED: String(Date.now()) })).exitCode;
 	}
