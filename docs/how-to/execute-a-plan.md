@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the execution contract)
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-10-02
 The mechanics for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it, and owns the autonomy policy it runs under (section "Escalation").
 
 ASCII only in agent/customization Markdown: "-", "->", ">=", "section".
@@ -22,6 +22,11 @@ The agent that runs a plan **owns** it. It carries a row itself, or delegates th
 8. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
 
 **Step 1, adopt or close, comes before anything else.** An interrupted run leaves a checkout with edits in it and a branch nobody proposed, and its row still reads `IN-FLIGHT`. List the worktrees and branches on the box, ask which row each belongs to, and ask the pull request host whether its pull request is open, merged or absent. Then adopt the work or remove it. The project's plan-queue reader answers all three in one command; without such a tool it is `git worktree list`, a branch list and one query for open pull requests, read against the Reckoners.
+
+On resuming, inspect every open pull request owned by the plan, not only the
+row named in the handover. Merge each authorized green candidate whose
+prerequisites are met. For one left open, name the exact unmet check or
+decision; a completed worker report is not a completed merge.
 
 **Mark a row `IN-FLIGHT` on the trunk before the branch is cut, when more than one agent is working the plan.** A status written only on the row's own branch is invisible until that branch merges, which is the window the mark exists to cover. With one agent there is nobody to collide with, so the mark buys nothing and costs a push - record the status in the change that does the work instead.
 

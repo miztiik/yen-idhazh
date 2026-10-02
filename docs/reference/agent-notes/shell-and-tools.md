@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 
 Checks before trusting command output or an editor operation. Keep instructions portable; omit machine configuration and session transcripts.
 
@@ -17,6 +17,9 @@ Checks before trusting command output or an editor operation. Keep instructions 
 - Use the command's completion status. An empty log proves neither success nor failure; before retrying, check whether the first command is still active.
 - Keep output paths unique per run. Wait for commands you started and read their results; do not leave an unattended check running after reporting completion.
 - Never queue a destructive command against files another task uses. An interrupted command may have completed some work; inspect its result before repeating it.
+- In a shared terminal, start each command with a unique tag and an explicit working directory. A returned transcript can include older commands; match the tag, exit status and output file before using it as evidence.
+- If a long pasted command has no confirmed result, inspect its effects first. Put a still-needed sequence in a script and invoke it with a short command; do not paste the same writes again on the assumption that none ran.
+- For a non-interactive `gh` watch, redirect output to a unique file. An alternate-screen display alone gives no usable job result; verify the final job states before reporting success.
 - For cross-plan dependencies, run `python backend/utilities/plan_status.py --no-gh` without `--plan`. The filter narrows the dependency index as well as the report, so an external dependency can appear missing. Omit `--no-gh` when remote pull-request checks are needed.
 
 ## The editor's own file and search tools

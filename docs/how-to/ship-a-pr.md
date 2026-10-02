@@ -1,6 +1,6 @@
 # How to ship a PR
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-10-02
 
 The end-to-end runbook for taking a worker branch from "ready to commit" to "merged + cleaned up". Procedural counterpart to [CLAUDE.md](../../CLAUDE.md) section 8 (Git Hygiene) + section 9 (Definition of Done) + section 12 (published-surface verification).
 
@@ -159,22 +159,26 @@ Confirms the new `main` HEAD matches the merge commit you just landed.
 
 ### Step 4 - prune stale local branches
 
-After several merges the local repo accumulates branches whose remote-tracking ref is `: gone`. Prune in bulk, skipping the current branch (which `git branch -vv` prefixes with `* `):
+Review only the branches this task owns. A `: gone` marker means the remote
+branch was deleted; it does not prove the pull request merged.
 
 ```powershell
-git fetch --prune
-git branch -vv | Select-String ': gone\]' | ForEach-Object {
- $tokens = ($_.Line.TrimStart('*',' ').Trim() -split '\s+')
- $branchName = $tokens[0]
- if ($branchName -and -not ($branchName -match '^(main|HEAD)$')) {
- git branch -D $branchName
- }
-}
+gh pr view NNN --repo OWNER/REPO --json state,headRefOid,mergeCommit
+git rev-parse <branch>
+git ls-remote --heads origin refs/heads/<branch>
+git worktree list --porcelain
 ```
 
-Use `git branch -D` (force), not `-d` (merged-only), because squash-merged branches do not look "merged" to git even though they are. The `: gone` marker is the safe signal - it means the upstream was deleted (only happens after the PR merges).
+Require `MERGED`, a local tip equal to the merged PR's `headRefOid`, no remote
+branch, and a clean task-owned checkout. If the local tip differs, keep the
+branch until its extra commits are accounted for. Remove its clean worktree
+before deleting the branch; never detach it to bypass this check.
 
-Do NOT prune branches without a `: gone` marker; those have live upstreams and may be parallel work-in-progress.
+After those checks, `git branch -D <branch>` can remove the verified local
+branch. A squash merge gives the change a new commit id, so `-d` can refuse
+even though the PR merged. Do not turn this exception into a bulk deletion.
+If worktree removal fails, follow the
+[locked-file check](../reference/agent-notes/git-and-github.md#worktrees).
 
 ### Step 5 - clean up tmp files
 
