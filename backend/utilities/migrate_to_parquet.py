@@ -4,20 +4,16 @@ Removal condition: delete this module and its tests with `CSV_LEDGERS`, when no
 ledger is left on CSV.
 
 `CSV_LEDGERS` records how each ledger was filed before it moved to the door, and
-how long it was kept there. One layout is read: the CSV day tree,
-`<prefix>/<YYYY>/<MM>/<DD>/`, which held one file per writer and was settled by
-every reader on read. For each day a tree holds, this takes the rows today's
-reader returns for that day (`day_shards.settled_day`), folds them onto any rows
-the door already holds for that day exactly as a writer's file beside a settled
-file is folded, and files the answer as one raw file through the door. In the
-state tree beside `config/`, the compaction's own daily step then packs every day
-its rule admits - each day's file, `index/daily.json` and the daily watermark,
-written as a live pass writes them - so a compaction turned on later resumes
-from the right day. A day the rule does not admit yet stays a raw file. Any other
-root, such as a trial run's tree inside `state/`, is filed raw and never packed:
-nothing reads a packed trial root, and the trials task empties it.
+how long it was kept there. It reads the day tree,
+`<prefix>/<YYYY>/<MM>/<DD>/*.csv`, and the shared day file,
+`<prefix>/<YYYY>/<MM>/<DD>.csv`. For each day it reads and validates the CSV
+rows, folds them onto any rows the door already holds for that day, and files
+the answer through the door. In the state tree beside `config/`, it runs the
+ledger's own compaction task until no pass writes or deletes a period. Packing
+is live; the monthly window only reports what it would delete. Any other root
+is filed raw and never packed because no reader opens a packed trial root.
 
-    python backend/utilities/migrate_to_parquet.py --state-dir state
+    python backend/utilities/migrate_to_parquet.py --state-dir state [--state-dir DIR ...]
         --run-id <YYYY-MM-DD-NNNN> --git-sha <sha> [--ledger <name> ...] [--check]
 
 With no `--ledger`, a run or a check takes every ledger in the table that
@@ -65,10 +61,10 @@ import re
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime
 from pathlib import Path
 from types import MappingProxyType
-from typing import Final, NamedTuple, cast
+from typing import Any, Final, NamedTuple, cast
 
 from idhazh import config, day_partition, day_shards, ledger
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN, Contract, ServerJob
@@ -83,14 +79,13 @@ from idhazh.contracts.knobs.gardener import (
     Window,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import Grain, LedgerEntry
-from idhazh.gardener.file_listing import FileListing
+from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
 
-# The compaction's own daily step, reached into on purpose: the packing a person
-# chose for this one move is the packing a live pass does, and a copy of it here
-# would be a second answer to when a day is packed.
-from idhazh.gardener.tasks import _daily_period, _monthly_period
-from idhazh.gardener.tasks._compact_tree import CompactTree
+# The compaction task is called directly so migration and upkeep share one set
+# of period rules.
+from idhazh.gardener.context import TaskContext
+from idhazh.gardener.file_listing import FileListing
+from idhazh.gardener.tasks import compaction
 
 #: The name every file this writes carries as its producer.
 PRODUCER: Final = "utilities.migrate_to_parquet"
@@ -98,10 +93,6 @@ PRODUCER: Final = "utilities.migrate_to_parquet"
 #: A person runs this, so it is the first and only attempt, as one shard.
 ATTEMPT: Final = 1
 SHARD: Final = 0
-
-#: How many days one packing pass may take here. The declared budget paces a
-#: daily wake; this pass takes every day the rule admits, once.
-PACK_EVERY_DAY: Final = 100_000
 
 EXIT_MIGRATED: Final = 0
 EXIT_NOT_PROVEN: Final = 1
@@ -184,29 +175,29 @@ def door_ledgers() -> list[LedgerName]:
     return [name for name in CSV_LEDGERS if ledger.entry(name).grain is Grain.RAW_AND_COMPACT]
 
 
-def _row_contract(which: LedgerName) -> type[ledger.CsvContract]:
+def _row_contract(which: LedgerName) -> type[Any]:
     """The door's row contract for this ledger, as the CSV reader takes it.
 
     The door table pairs a ledger with a `Contract`, and every ledger that was ever
     filed as CSV has one that also reads and writes a CSV row. The types cannot say
     the second of a `Contract` in general, so it is said here, once.
     """
-    return cast("type[ledger.CsvContract]", ledger.door_contract(which))
+    return cast("type[Any]", ledger.door_contract(which))
 
 
 def csv_days(state_dir: Path, which: LedgerName) -> dict[str, list[Path]]:
     """Every day this ledger's CSV still holds, to the files in it, oldest day first.
 
-    Only the day tree is read: one file a writer under each day. A ledger that sat
-    in another layout is refused by name rather than read as holding nothing, and
-    a tree that holds a name it cannot place is refused, through `day_shards`,
-    rather than leaving a file unmoved and unmentioned.
+    The day tree and shared day-file layouts are read. Any other layout, or a
+    path either layout cannot place, is refused rather than read as empty.
     """
     sat = CSV_LEDGERS[which].old_entry.grain
+    if sat is Grain.DAY_FILE:
+        return _shared_day_files(csv_root(state_dir, which), which)
     if sat is not Grain.DAY_TREE:
         raise NotProvenError(
             f"{which.value} sat in the {sat.value} layout, and this reads only the "
-            f"{Grain.DAY_TREE.value} layout, one CSV file a writer under each day"
+            f"{Grain.DAY_TREE.value} and {Grain.DAY_FILE.value} layouts"
         )
     root = csv_root(state_dir, which)
     if not root.is_dir():
@@ -221,13 +212,93 @@ def csv_days(state_dir: Path, which: LedgerName) -> dict[str, list[Path]]:
         raise NotProvenError(f"{which.value}: {refusal}") from refusal
 
 
-def _shown(state_dir: Path, path: Path) -> str:
+def _shared_day_files(root: Path, which: LedgerName) -> dict[str, list[Path]]:
+    """Every `<YYYY>/<MM>/<DD>.csv` file, refusing any path outside that layout."""
+    if root.is_symlink():
+        raise NotProvenError(
+            f"{which.value}: the shared day-file root is a symlink, not a CSV layout"
+        )
+    if not root.is_dir():
+        return {}
+    days: dict[str, list[Path]] = {}
+    for year in sorted(root.iterdir()):
+        if (
+            year.is_symlink()
+            or not year.is_dir()
+            or re.fullmatch(r"[0-9]{4}", year.name) is None
+        ):
+            raise NotProvenError(
+                f"{which.value}: {year.relative_to(root).as_posix()} is not a YYYY directory "
+                "in the shared day-file layout"
+            )
+        for month in sorted(year.iterdir()):
+            if (
+                month.is_symlink()
+                or not month.is_dir()
+                or re.fullmatch(r"[0-9]{2}", month.name) is None
+                or not 1 <= int(month.name) <= 12
+            ):
+                raise NotProvenError(
+                    f"{which.value}: {month.relative_to(root).as_posix()} is not a MM directory "
+                    "in the shared day-file layout"
+                )
+            for path in sorted(month.iterdir()):
+                try:
+                    parsed = date.fromisoformat(f"{year.name}-{month.name}-{path.stem}")
+                except ValueError as refusal:
+                    raise NotProvenError(
+                        f"{which.value}: {path.relative_to(root).as_posix()} is not a "
+                        "YYYY/MM/DD.csv file in the shared day-file layout"
+                    ) from refusal
+                if (
+                    not path.is_file()
+                    or path.is_symlink()
+                    or path.suffix != ".csv"
+                    or parsed.strftime("%d") != path.stem
+                ):
+                    raise NotProvenError(
+                        f"{which.value}: {path.relative_to(root).as_posix()} is not a "
+                        "YYYY/MM/DD.csv file in the shared day-file layout"
+                    )
+                days[parsed.isoformat()] = [path]
+    return days
+
+
+def _shown(state_dir: Path, path: Path, *, repo_root: Path | None = None) -> str:
     """A path as it may leave the process: relative, POSIX (CLAUDE.md section 2)."""
+    if repo_root is not None:
+        try:
+            return path.relative_to(repo_root).as_posix()
+        except ValueError:
+            pass
     return f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
 
 
 def _key_of(cells: dict[str, str], key: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(cells[name] for name in key)
+
+
+def _csv_rows(
+    state_dir: Path,
+    which: LedgerName,
+    day: str,
+    files: Sequence[Path],
+    key: tuple[str, ...],
+    model: type[Any],
+) -> list[dict[str, str]]:
+    """Read one day's CSV rows through its declared layout and row contract."""
+    if CSV_LEDGERS[which].old_entry.grain is Grain.DAY_TREE:
+        return day_shards.settled_day(csv_root(state_dir, which), day, key, model)
+    if len(files) != 1:
+        raise NotProvenError(f"{which.value} {day}: a shared day must have exactly one CSV file")
+    try:
+        return [
+            cast("Any", model.model_validate(raw)).csv_row()
+            for path in files
+            for _, raw in day_shards.rows_of(path)
+        ]
+    except ValueError as refusal:
+        raise NotProvenError(f"{which.value} {day}: {refusal}") from refusal
 
 
 def folded(
@@ -277,6 +348,8 @@ class Moved:
     rows: int = 0
     filed: int = 0
     packed: list[str] = field(default_factory=list)
+    compaction_written: list[str] = field(default_factory=list)
+    compaction_deleted: list[str] = field(default_factory=list)
 
 
 def _door_rows(state_dir: Path, which: LedgerName, day: str) -> list[dict[str, str]]:
@@ -293,14 +366,13 @@ def _plan(state_dir: Path, which: LedgerName) -> dict[str, _Day]:
     checks the joined row until the door files it.
     """
     model, key = _row_contract(which), ledger.door_key(which)
-    root = csv_root(state_dir, which)
     planned: dict[str, _Day] = {}
     for day, files in csv_days(state_dir, which).items():
         try:
-            arriving = day_shards.settled_day(root, day, key, model)
+            arriving = _csv_rows(state_dir, which, day, files, key, model)
         except ValueError as refusal:
             raise NotProvenError(f"{which.value} {day}: {refusal}") from refusal
-        stray = sorted({cells["date"] for cells in arriving} - {day})
+        stray = sorted({cells["date"] for cells in arriving if cells.get("date")} - {day})
         if stray:
             raise NotProvenError(
                 f"{which.value} {day}: the CSV day holds rows dated {stray}, and the door "
@@ -310,9 +382,16 @@ def _plan(state_dir: Path, which: LedgerName) -> dict[str, _Day]:
         rows = folded(held, arriving, key)
         changed = rows != held
         try:
-            models = (
-                [cast("Contract", model.from_csv_row(cells)) for cells in rows] if changed else []
-            )
+            from_csv_row = getattr(model, "from_csv_row", None)
+            models: list[Contract] = []
+            if changed:
+                for cells in rows:
+                    parsed = (
+                        from_csv_row(cells)
+                        if callable(from_csv_row)
+                        else model.model_validate(cells)
+                    )
+                    models.append(cast("Contract", parsed))
         except ValueError as refusal:
             raise NotProvenError(
                 f"{which.value} {day}: a settled row is not a {model.__name__} the door can "
@@ -337,10 +416,12 @@ def _declared(
     say which days are packed; and a compaction that keeps less than the CSV was
     kept would delete, at its first live pass, days the CSV still held.
     """
+    registry = LedgersConfig.from_json((config_dir / "ledgers.json").read_text(encoding="utf-8"))
+    entries = {entry.name: entry for family in registry.families for entry in family.ledgers}
     tasks = config.load_gardener(config_dir).tasks
     declared: dict[LedgerName, CompactionPolicy] = {}
     for name in which:
-        grain = ledger.entry(name).grain
+        grain = entries[name].grain
         if grain is not Grain.RAW_AND_COMPACT:
             raise RefusedError(
                 f"config/ledgers.json files {name.value} as {grain.value}, so it has no door "
@@ -363,7 +444,7 @@ def _declared(
                 "live pass would delete days the CSV still held"
             )
         declared[name] = policy.model_copy(
-            update={"dry_run": False, "max_periods_per_run": PACK_EVERY_DAY}
+            update={"dry_run": False, "monthly_window_dry_run": True}
         )
     return declared
 
@@ -385,31 +466,54 @@ def _pack(
     *,
     policy: CompactionPolicy,
     today: date,
-) -> list[str]:
-    """Run the compaction's daily step live over this ledger, and name the days it packed."""
-    now = datetime.combine(today, time.min, tzinfo=UTC)
-    listing = FileListing.from_disk(state_dir.parent, policy.owns or ())
-    tree = CompactTree.read(state_dir, which, listing)
-    before = dict(tree.daily)
-    first_kept = _monthly_period.first_kept_month(
-        now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
-    )
-    stops = _daily_period.compact(
-        tree,
-        policy,
-        now=now,
-        stamp=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        identity=identity,
-        first_kept=first_kept,
-    )
-    failed = [stop.resume_from for stop in stops if stop.because is StopReason.FAILED]
-    if failed:
-        raise NotProvenError(
-            f"{which.value}: the packing refused {failed}; the raw files are kept and no "
-            "CSV is deleted"
+) -> tuple[list[str], list[str], list[str]]:
+    """Run the declared compaction until it writes and deletes no period."""
+    repo_root = state_dir.parent
+    folders = tuple(policy.owns or ())
+    written: list[str] = []
+    deleted: list[str] = []
+    packed: set[str] = set()
+    while True:
+        outcome = compaction.run(
+            TaskContext(
+                state_dir=state_dir,
+                repo_root=repo_root,
+                today=today,
+                policy=policy,
+                run_id=identity.run_id,
+                attempt=identity.attempt,
+                job=ServerJob.RUN_TASKS,
+                shard=identity.shard,
+                git_sha=identity.git_sha,
+                owned_folders=folders,
+                listing=FileListing.from_disk(repo_root, folders),
+            )
         )
-    tree.apply()
-    return sorted(day for day, entry in tree.daily.items() if before.get(day) != entry)
+        written.extend(outcome.written)
+        deleted.extend(outcome.taken)
+        for path in outcome.written:
+            parts = path.split("/")
+            if "daily" in parts:
+                index = parts.index("daily")
+                if len(parts) > index + 3 and parts[-1].endswith(".parquet"):
+                    day_parts = (
+                        *parts[index + 1 : index + 3],
+                        parts[index + 3].removesuffix(".parquet"),
+                    )
+                    packed.add(date.fromisoformat("-".join(day_parts)).isoformat())
+        if outcome.stopped_because is StopReason.FAILED:
+            raise NotProvenError(
+                f"{which.value}: the compaction refused at {outcome.resume_from}; "
+                "CSV files are kept"
+            )
+        if outcome.written or outcome.taken:
+            continue
+        if outcome.stopped_because is not StopReason.EXHAUSTED:
+            raise NotProvenError(
+                f"{which.value}: the compaction stopped at {outcome.resume_from} without "
+                "writing or deleting a period; CSV files are kept"
+            )
+        return sorted(packed), list(dict.fromkeys(written)), list(dict.fromkeys(deleted))
 
 
 def prove(state_dir: Path, which: LedgerName, day: str, rows: Sequence[dict[str, str]]) -> None:
@@ -459,35 +563,77 @@ def migrate(
     ledger cannot move yet, and `NotProvenError` naming the first day that did not
     come across. Only the state tree beside `config_dir` is packed.
     """
+    return [
+        report
+        for _, report in migrate_roots(
+            [state_dir],
+            which,
+            run_id=run_id,
+            git_sha=git_sha,
+            today=today,
+            config_dir=config_dir,
+        )
+    ]
+
+
+def migrate_roots(
+    state_dirs: Sequence[Path],
+    which: Sequence[LedgerName],
+    *,
+    run_id: str,
+    git_sha: str,
+    today: date,
+    config_dir: Path = config.DEFAULT_CONFIG_DIR,
+) -> list[tuple[Path, Moved]]:
+    """Migrate every root, proving all of them before deleting any CSV file."""
     identity = _identity(run_id, git_sha)
     policies = _declared(which, config_dir)
-    packing = packs_here(state_dir, config_dir)
-    planned = {name: _plan(state_dir, name) for name in which}
-    moved: list[Moved] = []
-    for name, days in planned.items():
-        report = Moved(which=name, days=len(days))
-        for day, held in days.items():
-            report.csv_files += len(held.files)
-            report.csv_bytes += sum(path.stat().st_size for path in held.files)
-            report.rows += len(held.rows)
-            if held.changed:
-                ledger.persist(state_dir, held.models, ledger=name, covers=day, identity=identity)
-                report.filed += 1
-        if days and packing:
-            report.packed = _pack(state_dir, name, identity, policy=policies[name], today=today)
-        moved.append(report)
-    for name, days in planned.items():
-        for day, held in days.items():
-            prove(state_dir, name, day, held.rows)
-    for name, days in planned.items():
-        for held in days.values():
-            for path in held.files:
-                path.unlink()
-                day_partition.drop_empty_day_dirs(path)
-        root = csv_root(state_dir, name)
-        if root.is_dir() and not any(root.iterdir()):
-            root.rmdir()
-    return moved
+    roots = list(dict.fromkeys(path.resolve() for path in state_dirs))
+    planned = {root: {name: _plan(root, name) for name in which} for root in roots}
+    reports = {
+        (root, name): Moved(which=name, days=len(days))
+        for root, days_by_ledger in planned.items()
+        for name, days in days_by_ledger.items()
+    }
+    for root, days_by_ledger in planned.items():
+        for name, days in days_by_ledger.items():
+            report = reports[root, name]
+            for day, held in days.items():
+                report.csv_files += len(held.files)
+                report.csv_bytes += sum(path.stat().st_size for path in held.files)
+                report.rows += len(held.rows)
+                if held.changed:
+                    ledger.persist(root, held.models, ledger=name, covers=day, identity=identity)
+                    report.filed += 1
+    for root in roots:
+        if not packs_here(root, config_dir):
+            continue
+        for name in which:
+            packed, written, deleted = _pack(
+                root,
+                name,
+                identity,
+                policy=policies[name],
+                today=today,
+            )
+            report = reports[root, name]
+            report.packed = packed
+            report.compaction_written = written
+            report.compaction_deleted = deleted
+    for root, days_by_ledger in planned.items():
+        for name, days in days_by_ledger.items():
+            for day, held in days.items():
+                prove(root, name, day, held.rows)
+    for root, days_by_ledger in planned.items():
+        for name, days in days_by_ledger.items():
+            for held in days.values():
+                for path in held.files:
+                    path.unlink()
+                    day_partition.drop_empty_day_dirs(path)
+            csv_path = csv_root(root, name)
+            if csv_path.is_dir() and not any(csv_path.iterdir()):
+                csv_path.rmdir()
+    return [(root, reports[root, name]) for root in roots for name in which]
 
 
 def left(state_dir: Path, which: Sequence[LedgerName]) -> list[Path]:
@@ -510,7 +656,13 @@ def _pattern(pattern: str, what: str) -> Callable[[str], str]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n", 1)[0])
-    parser.add_argument("--state-dir", required=True, type=Path, help="The tree to migrate.")
+    parser.add_argument(
+        "--state-dir",
+        required=True,
+        action="append",
+        type=Path,
+        help="A tree to migrate; repeat for more.",
+    )
     parser.add_argument(
         "--run-id",
         required=True,
@@ -537,7 +689,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--check", action="store_true", help="Write nothing. Exit 1 if any CSV file remains."
     )
     args = parser.parse_args(argv)
-    state_dir: Path = args.state_dir
+    state_dirs: list[Path] = list(dict.fromkeys(path.resolve() for path in args.state_dir))
     which = (
         list(dict.fromkeys(LedgerName(value) for value in args.ledger))
         if args.ledger
@@ -546,18 +698,22 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.check:
         try:
-            remaining = left(state_dir, which)
+            remaining = [
+                (root, path) for root in state_dirs for path in left(root, which)
+            ]
         except NotProvenError as refusal:
             print(f"a CSV tree cannot be read: {refusal}", file=sys.stderr)
             return EXIT_NOT_PROVEN
-        for path in remaining:
-            print(f"{_shown(state_dir, path)} is still a CSV")
+        for root, path in remaining:
+            print(
+                f"{_shown(root, path, repo_root=config.DEFAULT_CONFIG_DIR.parent)} is still a CSV"
+            )
         print(f"{len(remaining)} CSV file(s) left")
         return EXIT_NOT_PROVEN if remaining else EXIT_MIGRATED
 
     try:
-        moved = migrate(
-            state_dir,
+        moved = migrate_roots(
+            state_dirs,
             which,
             run_id=args.run_id,
             git_sha=args.git_sha,
@@ -569,14 +725,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     except NotProvenError as refusal:
         print(f"not proven, nothing deleted: {refusal}", file=sys.stderr)
         return EXIT_NOT_PROVEN
-    if not packs_here(state_dir, config.DEFAULT_CONFIG_DIR):
+    if not any(packs_here(root, config.DEFAULT_CONFIG_DIR) for root in state_dirs):
         print("this root is not the state tree beside config/, so every day is filed raw")
-    for each in moved:
+    for root, each in moved:
+        try:
+            label = root.relative_to(config.DEFAULT_CONFIG_DIR.parent).as_posix()
+        except ValueError:
+            label = root.name
         print(
-            f"{each.which.value}: {each.csv_files} CSV file(s), {each.csv_bytes} bytes, over "
+            f"{label}: {each.which.value}: {each.csv_files} CSV file(s), "
+            f"{each.csv_bytes} bytes, over "
             f"{each.days} day(s) -> {each.rows} row(s); {each.filed} day(s) filed, "
             f"{len(each.packed)} day(s) packed ({each.packed[0] if each.packed else '-'} to "
-            f"{each.packed[-1] if each.packed else '-'}); every CSV file deleted"
+            f"{each.packed[-1] if each.packed else '-'}); "
+            f"{len(each.compaction_written)} compaction file(s) written, "
+            f"{len(each.compaction_deleted)} deleted; every CSV file deleted"
         )
     return EXIT_MIGRATED
 

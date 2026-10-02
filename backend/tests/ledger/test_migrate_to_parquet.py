@@ -1,14 +1,10 @@
-"""Does the migration move every row today's CSV reader returns, and nothing it may not?
+"""Does the migration move every CSV row through the door, and nothing it may not?
 
-Each case builds a small CSV day tree under `tmp_path` the way the retired
-writers filed one - one file per writer, `<run_id>-<attempt>-<job>-<shard>.csv`,
-beside the reserved `settled.csv` and `before-partition.csv` - and runs the
-migration over it. "Every row" is what today's CSV reader,
-`day_shards.settled_day`, returns for a day, read before the migration deletes
-the files: a re-run's superseded attempt is not one of those rows. Nothing here
-reads the committed `state/` (CLAUDE.md section 13): the parity run over the
-committed tree is an operator's one-off, and its figures are in the pull request
-that carried the move.
+Each case builds bounded CSV layouts under `tmp_path`: the per-writer tree,
+`YYYY/MM/DD/*.csv`, or a shared `YYYY/MM/DD.csv` file. It reads the same rows
+the old reader or row contract returns, proves each day through the door, and
+checks that CSV is deleted only after the proof. Nothing reads committed state
+(CLAUDE.md section 13).
 
 "Nothing it may not" is the refusals and the table. A ledger the registry still
 files as CSV, one with no compaction, and one whose compaction keeps less than
@@ -25,9 +21,9 @@ import hashlib
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, time
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, SEED_COMMIT
@@ -36,16 +32,19 @@ from gardener._garden import a_config
 from idhazh import config, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
 from idhazh.contracts.eval_row import RENAMED_CELLS, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import DROPPED_CELLS, MACHINE_CELLS_RENAMED, ItemHealthRow
 from idhazh.contracts.knobs.gardener import CompactionPolicy
-from idhazh.contracts.ledger_index import CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
+from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.gardener import schedule
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
@@ -68,10 +67,12 @@ HOST: Final = LedgerName.HOST_FINGERPRINT
 #: The ledgers these cases build CSV trees for, each filed through the door.
 MOVED: Final = (ITEM, EVALS, HOST)
 #: Each one's row contract, the one the door table pairs it with.
-ROWS: Final[dict[LedgerName, type[ItemHealthRow | EvalRow | HostFingerprintRow]]] = {
+ROWS: Final[dict[LedgerName, type[Any]]] = {
     ITEM: ItemHealthRow,
     EVALS: EvalRow,
     HOST: HostFingerprintRow,
+    LedgerName.SEEN: SeenRow,
+    LedgerName.PUBLISHED: PublishedRow,
 }
 #: A ledger the registry still files as CSV, whose CSV tree a case builds.
 ON_CSV: Final = LedgerName.FEED_HEALTH
@@ -104,6 +105,34 @@ def _feed(day: str) -> FeedHealthRow:
     """One feed-health row, from the committed fixture, filed for `day` by the plan job."""
     base = FeedHealthRow.model_validate_json(_fixture("feed-health-row", "answered.json"))
     return FeedHealthRow.model_validate({**base.model_dump(), "date": day, "run_id": f"{day}-100"})
+
+
+def _seen(day: str) -> SeenRow:
+    base = SeenRow.model_validate_json(_fixture("seen-row", "first-sight.json"))
+    return SeenRow.model_validate(
+        {**base.model_dump(), "first_seen_at": f"{day}T06:00:00Z", "first_seen_run": f"{day}-100"}
+    )
+
+
+def _published(day: str) -> PublishedRow:
+    base = PublishedRow.model_validate_json(_fixture("published-row", "one-item.json"))
+    return PublishedRow.model_validate({**base.model_dump(), "published_on": day})
+
+
+def _counterfactual(day: str) -> CounterfactualScoreRow:
+    return CounterfactualScoreRow(
+    version=CounterfactualScoreRow.schema_version(),
+        date=day,
+        run_id=f"{day}-100",
+        vertical="technology",
+        url_key=hashlib.sha256(day.encode()).hexdigest(),
+        taken=False,
+        lens_id="",
+        lens_bonus=0.0,
+        lens_multiplier=1.0,
+        score_committed=0.0,
+        score_counterfactual=0.0,
+    )
 
 
 def _score(day: str, number: int, **changed: Any) -> EvalRow:
@@ -183,6 +212,15 @@ def _csv(
     return path
 
 
+def _shared_csv(state: Path, which: LedgerName, day: str, rows: Sequence[Cells]) -> Path:
+    folder = migration.csv_root(state, which) / day[:4] / day[5:7]
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{day[8:10]}.csv"
+    columns = tuple(rows[0]) if rows else ROWS[which].csv_columns()
+    path.write_text(render_file(columns, rows), encoding="utf-8", newline="")
+    return path
+
+
 def _by_key(which: LedgerName, rows: Sequence[Cells]) -> ByKey:
     key = ledger.door_key(which)
     return {tuple(cells[name] for name in key): cells for cells in rows}
@@ -192,7 +230,15 @@ def _todays_reader(state: Path, which: LedgerName) -> dict[str, ByKey]:
     """Every CSV day of a ledger, as today's CSV reader returns it."""
     root = migration.csv_root(state, which)
     return {
-        day: _by_key(which, day_shards.settled_day(root, day, ledger.door_key(which), ROWS[which]))
+        day: _by_key(
+            which,
+            day_shards.settled_day(
+                root,
+                day,
+                ledger.door_key(which),
+                cast("type[ledger.CsvContract]", ROWS[which]),
+            ),
+        )
         for day in migration.csv_days(state, which)
     }
 
@@ -224,7 +270,135 @@ def _beside(state: Path) -> Path:
     Only the state tree beside its config folder is packed, so a case that wants
     packing builds one, as a checkout holds one beside `state/`.
     """
-    return a_config(state.parent, CONFIG_DIR / "gardener")
+    config_dir = a_config(state.parent, CONFIG_DIR / "gardener")
+    (config_dir / "ledgers.json").write_bytes((CONFIG_DIR / "ledgers.json").read_bytes())
+    return config_dir
+
+
+def _day_file_config(state: Path, which: Sequence[LedgerName]) -> Path:
+    """A real temporary registry and compaction declaration for shared-day migration cases."""
+    config_dir = _beside(state)
+    registry_path = config_dir / "ledgers.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    for family in registry["families"]:
+        for entry in family["ledgers"]:
+            if LedgerName(entry["name"]) in which:
+                entry.update(
+                    grain=Grain.RAW_AND_COMPACT.value,
+                    prefix=[entry["name"]],
+                    stem=None,
+                    suffix=None,
+                )
+    registry_path.write_text(json.dumps(registry, indent=2) + "\n", encoding="ascii", newline="")
+    source = config_dir / "gardener" / f"compact-{EVALS.value}.json"
+    declared = json.loads(source.read_text(encoding="utf-8"))
+    for name in which:
+        policy = declared | {
+            "ledger": name.value,
+            "owns": [f"state/raw/{name.value}", f"state/compact/{name.value}"],
+        }
+        target = config_dir / "gardener" / f"compact-{name.value}.json"
+        target.write_text(json.dumps(policy, indent=2) + "\n", encoding="ascii", newline="")
+    return config_dir
+
+
+def _compaction_identity() -> WriterIdentity:
+    return WriterIdentity(
+        run_id=RUN,
+        attempt=1,
+        job=ServerJob.RUN_TASKS,
+        shard=0,
+        producer="gardener.tasks.compaction",
+        git_sha=SEED_COMMIT,
+    )
+
+
+def _monthly_history(
+    state: Path,
+    which: LedgerName,
+    model: type[Any],
+    months: dict[str, list[tuple[str, Any]]],
+    *,
+    today: date,
+    daily_through: str | None = None,
+) -> None:
+    """Build real monthly door files and indexes for a bounded compaction fixture."""
+    scratch = state.parent / f"{which.value}-raw-source"
+    entries: list[CompactEntry] = []
+    identity = _compaction_identity()
+    for month, dated_rows in sorted(months.items()):
+        raw = [
+            path
+            for day, row in dated_rows
+            for path in ledger.persist(
+                scratch,
+                [row],
+                ledger=which,
+                covers=day,
+                identity=migration._identity(RUN, SEED_COMMIT),
+            )
+        ]
+        period = ledger.persist_period(
+            state,
+            ledger.load_stored(raw, model=model),
+            model=model,
+            ledger=which,
+            period=Period.MONTHLY,
+            covers=month,
+            identity=identity,
+            built_from=len(raw),
+        )
+        entries.append(
+            CompactEntry(covers=month, rows=len(dated_rows), bytes=period.stat().st_size)
+        )
+    monthly_index = ledger.compact_index_path(state, which, Period.MONTHLY)
+    monthly_index.parent.mkdir(parents=True, exist_ok=True)
+    monthly_index.write_bytes(
+        CompactIndex(
+            version=CompactIndex.schema_version(),
+            ledger=which,
+            period=Period.MONTHLY,
+            entries=entries,
+        ).to_json().encode("ascii")
+    )
+    latest_month = max(months)
+    monthly_mark = ledger.watermark_path(state, which, Period.MONTHLY)
+    monthly_mark.parent.mkdir(parents=True, exist_ok=True)
+    monthly_mark.write_bytes(
+        Watermark(
+            version=Watermark.schema_version(),
+            ledger=which,
+            period=Period.MONTHLY,
+            through=latest_month,
+            advanced_at="2027-03-20T00:41:00Z",
+            run_id=RUN,
+        ).to_json().encode("ascii")
+    )
+    daily_index = ledger.compact_index_path(state, which, Period.DAILY)
+    daily_index.parent.mkdir(parents=True, exist_ok=True)
+    daily_index.write_bytes(
+        CompactIndex(
+            version=CompactIndex.schema_version(),
+            ledger=which,
+            period=Period.DAILY,
+            entries=[],
+        ).to_json().encode("ascii")
+    )
+    through = daily_through or schedule.newest_eligible(
+        now=datetime.combine(today, time.min, tzinfo=UTC), after_days=1
+    ).isoformat()
+    daily_mark = ledger.watermark_path(state, which, Period.DAILY)
+    daily_mark.parent.mkdir(parents=True, exist_ok=True)
+    daily_mark.write_bytes(
+        Watermark(
+            version=Watermark.schema_version(),
+            ledger=which,
+            period=Period.DAILY,
+            through=through,
+            advanced_at="2027-03-20T00:41:00Z",
+            run_id=RUN,
+        ).to_json().encode("ascii")
+    )
 
 
 def _run(state: Path, *which: LedgerName, today: date = TODAY) -> list[migration.Moved]:
@@ -287,12 +461,7 @@ def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path:
 
 
 def test_a_second_run_changes_no_byte(tmp_path: Path) -> None:
-    """Over a migrated tree the migration finds nothing, so it writes, packs and deletes nothing.
-
-    The second run is a week later, when the day the first run left raw is old
-    enough to pack. Packing it is the compaction's job by then: the migration
-    packs only in a run that moved a CSV day.
-    """
+    """At the same wake, every period admitted by the compaction is already packed."""
     state = tmp_path / "state"
     _csv(state, ITEM, NEW, _writer(NEW, 1, ServerJob.ASSEMBLE), [_item(NEW, "ai-03", machine=False).csv_row()])
     _csv(state, EVALS, NEW, _writer(NEW, 1, ServerJob.WORK), [_score(NEW, 1).csv_row()])
@@ -301,7 +470,7 @@ def test_a_second_run_changes_no_byte(tmp_path: Path) -> None:
     before = _hashes(tmp_path)
     waiting = [ledger.raw_days(state, which) for which in MOVED]
 
-    again = _run(state, *MOVED, today=date(2026, 9, 11))
+    again = _run(state, *MOVED)
     argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT]
 
     assert [(each.days, each.filed, each.packed) for each in again] == [(0, 0, [])] * 3
@@ -465,18 +634,79 @@ def test_check_reads_moved_ledgers_unless_named(
 def test_a_layout_this_does_not_read_is_refused_by_name(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`seen` sat in one shared CSV file a day, which this does not read: named, never skipped.
+    """A malformed shared-day layout is named and refused, never skipped.
 
     A check that read nothing there would pass over every file it holds.
     """
-    argv = ["--state-dir", str(tmp_path / "state"), "--run-id", RUN, "--git-sha", SEED_COMMIT]
+    state = tmp_path / "state"
+    malformed = migration.csv_root(state, LedgerName.SEEN) / "2026" / "09" / "not-a-day.csv"
+    malformed.parent.mkdir(parents=True)
+    malformed.write_text("version,url_key,first_seen_at,first_seen_run\n", encoding="ascii")
+    argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT]
 
     code = migration.main([*argv, "--check", "--ledger", LedgerName.SEEN.value])
 
     assert code == migration.EXIT_NOT_PROVEN
-    assert "seen sat in the day layout, and this reads only the tree layout" in (
-        capsys.readouterr().err
-    )
+    assert "not-a-day.csv is not a YYYY/MM/DD.csv file" in capsys.readouterr().err
+
+
+def test_a_shared_day_file_moves_cell_for_cell(tmp_path: Path) -> None:
+    """The YYYY/MM/DD.csv layout reads through each row contract before its file is deleted."""
+    state = tmp_path / "state"
+    day = TODAY.isoformat()
+    expected = {
+        LedgerName.SEEN: {day: [_seen(day).csv_row()]},
+        LedgerName.PUBLISHED: {day: [_published(day).csv_row()]},
+    }
+    source_files = {
+        (which, day): _shared_csv(state, which, day, rows)
+        for which, days in expected.items()
+        for day, rows in days.items()
+    }
+
+    config_dir = _day_file_config(state, (LedgerName.SEEN, LedgerName.PUBLISHED))
+    moved = {
+        each.which: each
+        for _, each in migration.migrate_roots(
+            [state],
+            [LedgerName.SEEN, LedgerName.PUBLISHED],
+            run_id=RUN,
+            git_sha=SEED_COMMIT,
+            today=TODAY,
+            config_dir=config_dir,
+        )
+    }
+
+    for which, days in expected.items():
+        assert moved[which].rows == sum(len(rows) for rows in days.values())
+        for day, rows in days.items():
+            assert _read_back(state, which, day) == _by_key(which, rows)
+            assert not source_files[which, day].exists()
+        assert not migration.csv_root(state, which).exists()
+        assert not migration.left(state, [which])
+
+
+def test_a_shared_day_file_with_a_refused_layout_preserves_every_csv(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "state"
+    valid = _shared_csv(state, LedgerName.SEEN, OLD, [_seen(OLD).csv_row()])
+    refused = migration.csv_root(state, LedgerName.SEEN) / "not-a-day.csv"
+    refused.write_text("version,url_key,first_seen_at,first_seen_run\n", encoding="ascii")
+    before = {valid: valid.read_bytes(), refused: refused.read_bytes()}
+    config_dir = _day_file_config(state, (LedgerName.SEEN,))
+
+    with pytest.raises(migration.NotProvenError, match="not a YYYY directory"):
+        migration.migrate(
+            state,
+            [LedgerName.SEEN],
+            run_id=RUN,
+            git_sha=SEED_COMMIT,
+            today=TODAY,
+            config_dir=config_dir,
+        )
+
+    assert {path: path.read_bytes() for path in before} == before
 
 
 def test_a_root_beside_no_config_is_filed_raw_and_never_packed(tmp_path: Path) -> None:
@@ -502,6 +732,178 @@ def test_a_root_beside_no_config_is_filed_raw_and_never_packed(tmp_path: Path) -
     assert not migration.left(trial, [ITEM])
     assert migration.packs_here(REPO_ROOT / ledger.STATE_DIRNAME, CONFIG_DIR)
     assert not migration.packs_here(REPO_ROOT / ledger.STATE_DIRNAME / "pipeline-tests", CONFIG_DIR)
+
+
+def test_cli_migrates_each_repeated_trial_root_raw_only(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state = tmp_path / "state"
+    trials = [
+        state / "pipeline-tests",
+        state / "pipeline-tests-no-visual-plan",
+        state / "pipeline-tests-production-settings",
+    ]
+    source_files: dict[Path, tuple[Path, LedgerName, str]] = {}
+    wanted: dict[tuple[Path, LedgerName], dict[str, ByKey]] = {}
+    for number, trial in enumerate(trials):
+        day = OLD if number < 2 else NEW
+        item = _item(day, f"ai-{number + 1:02d}", machine=True)
+        host = [_probe(day).csv_row(), _clock(day).csv_row()]
+        for which, rows in ((ITEM, [item.csv_row()]), (HOST, host)):
+            path = _csv(trial, which, day, _writer(day, 1, ServerJob.WORK), rows)
+            source_files[path] = (trial, which, day)
+            wanted[trial, which] = _todays_reader(trial, which)
+    args = [
+        part
+        for trial in trials
+        for part in ("--state-dir", str(trial))
+    ]
+    args.extend(
+        [
+            "--run-id",
+            RUN,
+            "--git-sha",
+            SEED_COMMIT,
+            "--ledger",
+            ITEM.value,
+            "--ledger",
+            HOST.value,
+        ]
+    )
+
+    assert migration.main(args) == migration.EXIT_MIGRATED
+    output = capsys.readouterr().out
+    assert "every day is filed raw" in output
+    for path, (trial, which, day) in source_files.items():
+        assert not path.exists()
+        assert _read_back(trial, which, day) == wanted[trial, which][day]
+        assert not ledger.compact_index_path(trial, which, Period.DAILY).exists()
+    check = [*args, "--check"]
+    assert migration.main(check) == migration.EXIT_MIGRATED
+
+
+def test_repeated_roots_prove_every_day_before_deleting_any_csv(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    trials = [
+        state / "pipeline-tests",
+        state / "pipeline-tests-no-visual-plan",
+        state / "pipeline-tests-production-settings",
+    ]
+    _csv(trials[0], ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [_item(OLD, "ai-01", machine=True).csv_row()])
+    _csv(trials[1], ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [_item(OLD, "ai-02", machine=True).csv_row()])
+    probe = _probe(NEW)
+    source = _csv(trials[2], HOST, NEW, _writer(NEW, 1, ServerJob.WORK), [probe.csv_row()])
+    later = migration._identity(RUN, SEED_COMMIT).model_copy(update={"attempt": 2})
+    ledger.persist(
+        trials[2],
+        [probe.model_copy(update={"cores": 64})],
+        ledger=HOST,
+        covers=NEW,
+        identity=later,
+    )
+    csv_before = {
+        path: path.read_bytes()
+        for trial in trials
+        for which in (ITEM, HOST)
+        for path in migration.left(trial, [which])
+    }
+
+    with pytest.raises(migration.NotProvenError, match="cores='64'"):
+        migration.migrate_roots(
+            trials,
+            [ITEM, HOST],
+            run_id=RUN,
+            git_sha=SEED_COMMIT,
+            today=TODAY,
+        )
+
+    assert {
+        path: path.read_bytes()
+        for trial in trials
+        for which in (ITEM, HOST)
+        for path in migration.left(trial, [which])
+    } == csv_before
+    assert source.exists()
+    assert not ledger.compact_index_path(trials[0], ITEM, Period.DAILY).exists()
+    assert not ledger.compact_index_path(trials[1], ITEM, Period.DAILY).exists()
+    assert not ledger.compact_index_path(trials[2], HOST, Period.DAILY).exists()
+
+
+def test_finite_monthly_window_reports_without_losing_migrated_rows(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    which = LedgerName.COUNTERFACTUAL_SCORES
+    day = "2026-08-15"
+    month = day[:7]
+    today = date(2026, 10, 20)
+    row = _counterfactual(day)
+    _monthly_history(
+        state,
+        which,
+        CounterfactualScoreRow,
+        {month: [(day, row)]},
+        today=today,
+        daily_through="2026-08-31",
+    )
+
+    config_dir = _beside(state)
+    (moved,) = migration.migrate(
+        state,
+        [which],
+        run_id=RUN,
+        git_sha=SEED_COMMIT,
+        today=today,
+        config_dir=config_dir,
+    )
+
+    month_file = ledger.compact_file(state, which, Period.MONTHLY, month)
+    assert month_file is not None and month_file.exists()
+    assert ledger.load_days(state, which, [day], model=CounterfactualScoreRow) == [row]
+    assert not any(f"/monthly/{month.replace('-', '/')}.parquet" == path for path in moved.compaction_deleted)
+
+
+def test_migration_packs_a_finished_year_for_a_forever_ledger(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    days = [
+        f"{year}-{month:02d}-15"
+        for year in (2026, 2027)
+        for month in range(1, 13)
+    ] + ["2028-01-15"]
+    expected = {day: _score(day, number) for number, day in enumerate(days)}
+    months = {
+        day[:7]: [(day, expected[day])]
+        for day in days
+    }
+    _monthly_history(state, EVALS, EvalRow, months, today=date(2028, 4, 4))
+    config_dir = _beside(state)
+    declaration = config_dir / "gardener" / f"compact-{EVALS.value}.json"
+    policy = json.loads(declaration.read_text(encoding="utf-8"))
+    declaration.write_text(
+        json.dumps(policy | {"max_periods_per_run": 1}, indent=2) + "\n",
+        encoding="ascii",
+        newline="",
+    )
+
+    (moved,) = migration.migrate(
+        state,
+        [EVALS],
+        run_id=RUN,
+        git_sha=SEED_COMMIT,
+        today=date(2028, 4, 4),
+        config_dir=config_dir,
+    )
+
+    for year in ("2026", "2027"):
+        packed = ledger.compact_file(state, EVALS, Period.YEARLY, year)
+        assert packed is not None
+    assert [ledger.load_days(state, EVALS, [day], model=EvalRow)[0] for day in days] == [
+        expected[day] for day in days
+    ]
+    packed_years = sorted(
+        path.rsplit("/", 1)[-1].removesuffix(".parquet")
+        for path in moved.compaction_written
+        if "/yearly/" in path and path.endswith(".parquet")
+    )
+    assert packed_years == ["2026", "2027"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -591,7 +993,12 @@ def test_packing_leaves_what_a_live_compaction_leaves_over_the_same_raw_files(
     model, key = ROWS[ITEM], ledger.door_key(ITEM)
     identity = migration._identity(RUN, SEED_COMMIT)
     for day in days:
-        cells = day_shards.settled_day(migration.csv_root(live / "state", ITEM), day, key, model)
+        cells = day_shards.settled_day(
+            migration.csv_root(live / "state", ITEM),
+            day,
+            key,
+            cast("type[ledger.CsvContract]", model),
+        )
         rows = [model.from_csv_row(each) for each in cells]
         ledger.persist(live / "state", rows, ledger=ITEM, covers=day, identity=identity)
     wakes = [compaction.run(_live(live, ITEM, today)) for _ in range(2)]
