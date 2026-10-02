@@ -85,13 +85,17 @@ def test_the_outer_bands_reach_their_far_end_instead_of_crowding_the_line() -> N
     """THE BITE. Nearest-first everywhere gave a sheet spanning 0.9187 to 0.9719.
 
     A benchmark whose easiest case is a hundredth away from its hardest cannot
-    tell a model that is wrong from a pair that is genuinely ambiguous.
+    tell a model that is wrong from a pair that is genuinely ambiguous. Nine
+    scores is the smallest population where seven spread-ordered picks reach the
+    eighth score while seven nearest-first picks stay in the close cluster.
     """
     pairs = [
         _pair(score, f"w{index:02d}")
-        for index, score in enumerate((0.961, 0.962, 0.963, 0.964, 0.99))
+        for index, score in enumerate(
+            (0.961, 0.962, 0.963, 0.964, 0.965, 0.966, 0.967, 0.99, 0.999)
+        )
     ]
-    chosen = select(pairs, line=LINE, total=3)
+    chosen = select(pairs, line=LINE, total=7)
     span = max(pair.score for pair in chosen) - min(pair.score for pair in chosen)
     assert span > 0.02
 
