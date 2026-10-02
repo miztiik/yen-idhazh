@@ -295,13 +295,14 @@ def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> Non
     reads one month at a time and folds each into the answer before the next, so
     what it holds at once is one month's rows and the answer, never the history.
 
-    Sixteen addresses make the answer the same in both trees. One month versus
-    two months doubles the source rows from 16 to 32. A read that holds every
-    month at once exceeds the 10 percent margin; streaming stays within it. The
-    first read is not measured, so a cost paid once per process lands in neither
-    number. Both ledgers are built and fixed (Guardrail #12, section 13).
+    128 addresses make the answer the same in both trees. One month versus two
+    months doubles the source rows from 128 to 256. The 10 percent margin leaves
+    room for per-file allocation noise while holding both months at once still
+    adds the second 128 rows. The first read is not measured, so a cost paid once
+    per process lands in neither number. Both ledgers are built and fixed
+    (Guardrail #12, section 13).
     """
-    addresses = [_address(number) for number in range(16)]
+    addresses = [_address(number) for number in range(128)]
     small, large = tmp_path / "small", tmp_path / "large"
     _a_month_of_publications(small, ["2026-01"], addresses)
     _a_month_of_publications(large, ["2026-01", "2026-02"], addresses)
