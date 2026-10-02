@@ -1,6 +1,6 @@
 # How a day is ordered, and what each desk published
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-02
 
 Two orders run over one day and they answer different questions: the stream is
 every story in the order each run added it, and the leading block is the day's
@@ -18,7 +18,7 @@ is the day's best few, chosen across the whole day and drawn above the stream.
 leads and whether or not a group folded it.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
 flowchart TD
   subgraph plan["plan - before the article is read"]
     signals["source tier, feed weight, feed reliability,<br/>carriage, watchlist, lens, age"] --> rank["rank.score<br/>writes rank_score, once, and never again"]
@@ -34,9 +34,9 @@ flowchart TD
   stream --> page["the published day"]
   lead --> page
 
-  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-  classDef sysIngest fill:#1a1e27,stroke:#2e9c8a,stroke-width:1.5px,color:#7fe3d2;
-  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
+  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
+  classDef sysIngest fill:#f1f5f9,stroke:#0f766e,stroke-width:1.5px,color:#0f766e;
+  classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
 
   class signals,rank,fold,stream,lead,subject,covered,age,page stage;
   class plan sysIngest;

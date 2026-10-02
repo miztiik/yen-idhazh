@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -108,7 +108,7 @@ so it runs alone, once every shard has ended. Every task in the matrix only
 reports today; the squash is the one task that changes anything.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
 flowchart TB
   WAKE["a wake: 00:40 UTC every day,<br/>or a person's dispatch"]
 
@@ -162,16 +162,16 @@ flowchart TB
   RAW -->|"a live compaction lists a due day"| RIDX
   RIDX -->|"then takes it into its day file"| COMPACT
   COMPACT -->|"watermark moved last"| WM
-  WM -->|"read by its own compaction"| RUN
+  WM -.->|"Next compaction reads the updated watermark"| RUN
 
-  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
-  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
-  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
-  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
-  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
+  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
+  classDef decision fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
+  classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#166534;
+  classDef no fill:#fef2f2,stroke:#991b1b,stroke-width:1.5px,color:#991b1b;
+  classDef warn fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#92400e;
+  classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1f2937;
+  classDef sysOps fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#475569;
+  classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
 
   class WAKE,PLAN,TEND,RUN,REAPPLY,HIST stage;
   class ANY,OWNED,LANDED,PUSHED,CLEAN decision;
@@ -403,7 +403,7 @@ its knobs are in
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship).
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
 flowchart TB
   subgraph REFRESH["Content refresh - digest.yml"]
     W["work and assemble, and a re-run of either<br/>one raw file per writer per day"]
@@ -463,14 +463,14 @@ flowchart TB
   MONTHLY --> READER
   YEARLY --> READER
 
-  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
-  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
-  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
-  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
-  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
+  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
+  classDef decision fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
+  classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#166534;
+  classDef no fill:#fef2f2,stroke:#991b1b,stroke-width:1.5px,color:#991b1b;
+  classDef warn fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#92400e;
+  classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1f2937;
+  classDef sysOps fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#475569;
+  classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
 
   class W,DROP,PACK,ABSORB,TAKE,READER stage;
   class YDONE,MDONE,DDUE,DRY decision;
