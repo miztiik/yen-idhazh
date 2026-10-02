@@ -12,25 +12,24 @@ DEFAULT_CONFIG = Path("config") / "push-retry.json"
 
 @dataclass(frozen=True)
 class PushRetry:
-    deadline_seconds: float
-    work_deadline_seconds: float
+    deadline_seconds: dict[str, float]
     base_step_seconds: float
     ceiling_seconds: float
     ceiling_after: int
 
     def deadline_for(self, job: str) -> float:
-        return self.work_deadline_seconds if job == "work" else self.deadline_seconds
+        return self.deadline_seconds.get(job, self.deadline_seconds["default"])
 
     def backoff_seconds(self, failures: int) -> float:
         """The unjittered step; cap before exponentiation to avoid overflow."""
         if failures < 1:
             raise ValueError("failures must be 1 or more")
-        exponent = failures - 1
-        if failures > self.ceiling_after or exponent >= (
-            math.log2(self.ceiling_seconds) - math.log2(self.base_step_seconds)
-        ):
-            return self.ceiling_seconds
-        return min(math.ldexp(self.base_step_seconds, exponent), self.ceiling_seconds)
+        return float(
+            min(
+                self.base_step_seconds * 2 ** min(failures - 1, self.ceiling_after),
+                self.ceiling_seconds,
+            )
+        )
 
 
 def load_retry(path: Path) -> PushRetry:
@@ -39,21 +38,27 @@ def load_retry(path: Path) -> PushRetry:
     if not isinstance(declared, dict):
         raise ValueError("push retry config must be an object")
 
-    def read_seconds(key: str) -> float:
-        value = declared.get(key)
+    def read_seconds(value: object, key: str) -> float:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError(f"{key} must be a finite number of seconds greater than 0")
         if not math.isfinite(value) or value <= 0:
             raise ValueError(f"{key} must be a finite number of seconds greater than 0")
         return float(value)
 
-    deadline = read_seconds("deadline_seconds")
-    work_deadline = read_seconds("work_deadline_seconds")
-    base = read_seconds("base_step_seconds")
-    ceiling = read_seconds("ceiling_seconds")
+    deadlines = declared.get("deadline_seconds")
+    if not isinstance(deadlines, dict):
+        raise ValueError("deadline_seconds must be an object with a default deadline")
+    if "default" not in deadlines:
+        raise ValueError("deadline_seconds.default is missing")
+    deadline = {
+        job: read_seconds(value, f"deadline_seconds.{job}")
+        for job, value in deadlines.items()
+    }
+    base = read_seconds(declared.get("base_step_seconds"), "base_step_seconds")
+    ceiling = read_seconds(declared.get("ceiling_seconds"), "ceiling_seconds")
     count = declared.get("ceiling_after")
     if type(count) is not int or count < 1:
         raise ValueError("ceiling_after must be a whole number, 1 or more")
     if base > ceiling:
         raise ValueError("base_step_seconds must not exceed ceiling_seconds")
-    return PushRetry(deadline, work_deadline, base, ceiling, count)
+    return PushRetry(deadline, base, ceiling, count)

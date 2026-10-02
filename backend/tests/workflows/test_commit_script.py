@@ -33,6 +33,8 @@ from ._harness import (
     _drop_command,
     _git,
     _isolated_env,
+    _load_workflows,
+    _mapping,
     _mid_rebase,
     _push_attempts,
     _race,
@@ -46,6 +48,7 @@ from ._harness import (
     _scripted_origin,
     _seed_ledger,
     _step_outputs,
+    _steps,
     _tracked,
     _write,
     requires_space_free_paths,
@@ -59,6 +62,23 @@ def test_the_production_backoff_grows_and_caps() -> None:
     assert [retry.backoff_seconds(count) for count in range(1, 8)] == [1, 2, 4, 8, 8, 8, 8]
     assert retry.deadline_for("work") == 120
     assert retry.deadline_for("assemble") == 300
+    assert retry.deadline_for("a-new-job") == 300
+
+
+def test_every_deadline_override_names_a_job_that_runs_the_commit_program() -> None:
+    retry = load_retry(CONFIG_DIR / "push-retry.json")
+    committing_jobs = {
+        job
+        for filename, workflow in _load_workflows().items()
+        for job in _mapping(workflow.get("jobs"), f"{filename} jobs")
+        if any(
+            isinstance(script := step.get("run"), str) and "commit_and_push.py" in script
+            for step in _steps(workflow, job)
+        )
+    }
+    assert committing_jobs, "no committing workflow jobs were found"
+    stale = set(retry.deadline_seconds) - {"default"} - committing_jobs
+    assert not stale, f"deadline_seconds overrides name no committing workflow job: {sorted(stale)}"
 
 
 @pytest.mark.parametrize(
@@ -66,22 +86,22 @@ def test_the_production_backoff_grows_and_caps() -> None:
     [
         (0.003, 0.024, 4, [0.003, 0.006, 0.012, 0.024, 0.024]),
         (0.003, 0.010, 4, [0.003, 0.006, 0.010, 0.010, 0.010]),
-        (0.003, 0.024, 2, [0.003, 0.006, 0.024, 0.024, 0.024]),
+        (0.003, 0.024, 2, [0.003, 0.006, 0.012, 0.012, 0.012]),
     ],
 )
 def test_each_backoff_knob_changes_the_real_step(
     base: float, ceiling: float, after: int, expected: list[float]
 ) -> None:
-    retry = PushRetry(300, 120, base, ceiling, after)
+    retry = PushRetry({"default": 300, "work": 120}, base, ceiling, after)
     assert [retry.backoff_seconds(count) for count in range(1, 6)] == pytest.approx(expected)
-    assert retry.backoff_seconds(10**6) == ceiling
+    assert retry.backoff_seconds(10**6) == pytest.approx(expected[-1])
     with pytest.raises(ValueError, match="failures"):
         retry.backoff_seconds(0)
 
 
 @pytest.mark.parametrize(
     "key",
-    ["deadline_seconds", "work_deadline_seconds", "base_step_seconds", "ceiling_seconds", "ceiling_after"],
+    ["deadline_seconds", "base_step_seconds", "ceiling_seconds", "ceiling_after"],
 )
 @pytest.mark.parametrize("invalid", [None, True, "1", 0, -1, float("inf"), float("nan")])
 def test_invalid_or_missing_retry_knobs_are_refused_by_name(
@@ -98,11 +118,28 @@ def test_invalid_or_missing_retry_knobs_are_refused_by_name(
         load_retry(path)
 
 
+@pytest.mark.parametrize("job", ["default", "work"])
+@pytest.mark.parametrize("invalid", [None, True, "1", 0, -1, float("inf"), float("nan")])
+def test_invalid_or_missing_job_deadlines_are_refused_by_name(
+    tmp_path: Path, job: str, invalid: object
+) -> None:
+    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    if invalid is None and job == "default":
+        del config["deadline_seconds"][job]
+    else:
+        config["deadline_seconds"][job] = invalid
+    path = tmp_path / "retry.json"
+    _write(path, json.dumps(config) + "\n")
+    with pytest.raises(ValueError, match=f"deadline_seconds.{job}"):
+        load_retry(path)
+
+
 def test_the_retry_config_accepts_fractional_seconds_and_refuses_a_falling_step(
     tmp_path: Path,
 ) -> None:
     config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
-    config.update(deadline_seconds=0.05, base_step_seconds=0.003, ceiling_seconds=0.024)
+    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
+    config["deadline_seconds"]["default"] = 0.05
     path = tmp_path / "retry.json"
     _write(path, json.dumps(config) + "\n")
     retry = load_retry(path)
@@ -617,7 +654,8 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     staged_paths, settings = _commit_call("plan")
     retry_file = tmp_path / "deadline-retry.json"
     config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
-    config.update(deadline_seconds=0.05, base_step_seconds=0.003, ceiling_seconds=0.024)
+    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
+    config["deadline_seconds"]["default"] = 0.05
     _write(retry_file, json.dumps(config) + "\n")
     settings = {**settings, "PUSH_RETRY_CONFIG": str(retry_file)}
     env = _isolated_env(tmp_path)

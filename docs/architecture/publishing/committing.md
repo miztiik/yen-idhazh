@@ -291,14 +291,19 @@ was the number until 2026-09-22, and under several runs committing together each
 loser spent its three while the tip kept moving. An optimistic rebase-and-push
 converges in expectation at any commit rate; a counter does not. So the loop runs
 until the deadline in `config/push-retry.json` is gone. That file declares
-`deadline_seconds`, `work_deadline_seconds`, `base_step_seconds`,
-`ceiling_seconds` and `ceiling_after`. The program reads it with the standard
+`deadline_seconds`, `base_step_seconds`, `ceiling_seconds` and `ceiling_after`.
+`deadline_seconds` maps `default` to the normal deadline and workflow job ids
+to overrides. The program selects the job's entry, or `default` if none exists.
+A test checks each override against the workflow jobs that run the commit
+program, so a renamed job cannot silently lose its override.
+The program reads the file with the standard
 library before it writes to git; a missing or invalid knob stops the step and
 names the knob. No producer install is needed.
 
-For k rejected pushes, the wait step doubles from `base_step_seconds` until
-`ceiling_after` failures, then uses `ceiling_seconds`. The step never exceeds
-the ceiling. The production steps remain 1, 2, 4, 8, 8 seconds, each multiplied
+For k rejected pushes, the wait step is `base_step_seconds` multiplied by
+2 to the power of `min(k - 1, ceiling_after)`, capped at `ceiling_seconds`.
+Both the exponent and the wait are bounded. The production steps remain
+1, 2, 4, 8, 8 seconds, each multiplied
 by a random factor from 0.5 to 1.5. The spread widens with the wait, so runs that
 lost the same race do not all fetch together.
 
@@ -309,7 +314,7 @@ deadline. A failed rebuild stops at its first failure, not at the deadline.
 
 **300 s is 25 percent of the assemble job's 20-minute timeout.** Measured on run
 `35701213155`, that job used 1.8 of its 20 minutes, so 18.2 minutes were spare.
-The work shard takes `work_deadline_seconds`, which remains 120 s:
+The work shard takes `deadline_seconds.work`, which remains 120 s:
 the whole of what a shard keeps back for everything after its last item is
 `run.shard_wrap_up_minutes`, which is 12 minutes, and 300 s would be 5 of them.
 
