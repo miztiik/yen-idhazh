@@ -105,19 +105,26 @@ the **1** that means a day is broken.
 | A check module raises on import | The import error itself, unchanged. A rule that will not load must not be skipped. |
 | A module declares no `CHECK`/`CHECKS` | `<module> declares no CHECK/CHECKS of type Check`. A file that looks like a rule and declares none is a typo. |
 | Two modules declare one name | `two modules declare check 'x': <a> and <b>`. Silently, the second would replace the first and run alone. |
-| A check names a ledger with no tree shape | `<check> names ledger <name> with no tree-shape entry`. The write would otherwise fail after the gate had already passed the day. |
+| A check names a ledger the ledger door has no entry for | `<check> names ledger <name> with no ledger-door entry`. The write would otherwise fail after the gate had already passed the day. |
 
 ## Filing rows, and when a check does not
 
-A check that declares a ledger has its rows written through `write_segment`
-into that ledger's day tree - but only when the run names the days it is
-checking and has a state directory to write into. **A sweep over the whole
-archive files nothing.** A sweep is a re-reading of days already measured, so
-filing its rows would add a row per day per contract change: the same run that
-finds nothing wrong would grow the ledger it writes into.
+A check that declares a ledger has its rows filed through the ledger door with
+`ledger.persist`, one raw file a day under `state/raw/<ledger>/` - but only when
+the run names the days it is checking and has a state directory to write into.
+A row is filed under the day it names, and a row that names none under the
+run's own day. Each check is its own writer: its name is part of the producer
+each file names, so two checks filing one ledger in one run keep both files.
+**A sweep over the whole archive files nothing.** A sweep is a re-reading of
+days already measured, so filing its rows would add a row per day per contract
+change: the same run that finds nothing wrong would grow the ledger it writes
+into.
 
-A run that would file rows and has no `--run-id` refuses, because a row nothing
-can attribute is worse than no row at all.
+A run that would file rows and has no `--run-id` refuses, and so does a caller
+that hands the runner no commit: every door file names the run and the commit
+that wrote it, and a row nothing can attribute is worse than no row at all. The
+command line hands it `--commit`, the flag every stage that writes through the
+door takes.
 
 ## What it costs
 
@@ -152,6 +159,13 @@ for "a plugin the code does not name".
 in the runner and one integration test. A hook declared and never exercised is
 a hook that stops working silently; shipping it live means the first check that
 needs to persist a measurement adds a field rather than a subsystem.
+
+**2026-10-02: the hook files through the ledger door.** It used to write CSV day
+trees, and a tree-shape entry was how discovery knew a write would land. When
+feed health moved to the door, the only tree left was the summary-quality-evals
+index, which only the eval writer fills. So the hook moved to the door too:
+discovery now asks whether the door has an entry for the ledger, and the run
+hands over the commit each door file names.
 
 ## See also
 

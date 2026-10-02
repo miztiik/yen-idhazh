@@ -2,9 +2,9 @@
 
 Driven by built day trees and by the fixtures under `tests/fixtures/day-shards/`,
 never by the committed archive. A built tree carries the cases the archive has
-never produced - a straggler after a fold, a day that closed at midnight, two
-trees closed on one date - and it costs the same on a five-year archive as on a
-fresh clone (CLAUDE.md section 13).
+never produced - a straggler after a fold, a day that closed at midnight - and
+it costs the same on a five-year archive as on a fresh clone (CLAUDE.md section
+13).
 
 Settlement itself is not asked here: `tests/pipeline/test_day_shards.py` holds
 which of two rows wins a cell. What this file asks is narrower - given a
@@ -27,11 +27,10 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import FIXTURES_DIR, seed_feed_health
+from conftest import FIXTURES_DIR
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
@@ -53,8 +52,8 @@ OLDER_CLOSED: Final = "2026-09-04"
 #: eight files, one day directory.
 WORK_SHARDS: Final = tuple(range(8))
 
-#: The feed-health days the fixture tree carries beside its observation ID days.
-FEED_DAYS: Final = ("2026-09-05", "2026-09-06", "2026-09-07")
+#: The days the fixture tree carries where two runs each filed an observation ID.
+RUN_DAYS: Final = ("2026-09-05", "2026-09-06", "2026-09-07")
 
 DAY_SHARDS: Final = FIXTURES_DIR / "day-shards"
 ID_TREE: Final = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
@@ -128,26 +127,11 @@ def a_full_run(state: Path, day: str) -> Path:
     return ledger.path(state, ID_TREE, day)
 
 
-def a_verdict(day: str, *, run: int) -> FeedHealthRow:
-    """One feed's verdict on one run, shaped the way the contract's own validators demand."""
-    return FeedHealthRow.model_validate(
-        {
-            "run_id": f"{day}-90000000{run}",
-            "date": day,
-            "feed_id": "example-feed",
-            "checked_at": f"{day}T06:00:00Z",
-            "outcome": FetchOutcome.OK,
-            "status": 200,
-            "items": 3,
-        }
-    )
-
-
-def verdicts(state: Path, day: str, *, runs: int = 1) -> Path:
-    """The plan job of each run filing its verdict into one day, and that day's folder."""
-    for run in range(1, runs + 1):
-        seed_feed_health(state, day, [a_verdict(day, run=run)], run_id=f"{day}-90000000{run}")
-    return ledger.path(state, LedgerName.FEED_HEALTH, day)
+def two_runs(state: Path, day: str) -> Path:
+    """The first work shard of two runs, each filing its own ID into one day."""
+    for run in (1, 2):
+        file_observations(state, [an_observation(day, shard=0, run=run)], day=day, run=run)
+    return ledger.path(state, ID_TREE, day)
 
 
 def names_in(folder: Path) -> list[str]:
@@ -183,12 +167,12 @@ def every_day(state: Path) -> dict[tuple[LedgerName, str], list[dict[str, str]]]
 
 
 def the_fixture_tree(root: Path) -> Path:
-    """Three feed-health days and two observation ID days in one tree.
+    """Five observation ID days in one tree.
 
-    Six writer files over three feed-health days, where the plan jobs of two
-    runs each filed a verdict; three writer files of one day where two attempts
-    repeat an ID; and one day an earlier fold already settled, with a straggler
-    beside it.
+    Six writer files over three days, where the first work shard of two runs
+    each filed an ID; three writer files of one day where two attempts repeat
+    an ID; and one day an earlier fold already settled, with a straggler beside
+    it.
     """
     state = root / ledger.STATE_DIRNAME
     a_full_run(state, NEWEST_CLOSED)
@@ -213,8 +197,8 @@ def the_fixture_tree(root: Path) -> Path:
         day=OLDER_CLOSED,
         attempt=2,
     )
-    for day in FEED_DAYS:
-        verdicts(state, day, runs=2)
+    for day in RUN_DAYS:
+        two_runs(state, day)
     return state
 
 
@@ -325,35 +309,20 @@ def test_every_closed_day_goes_in_one_pass_so_a_missed_wake_catches_up(tmp_path:
     assert [settled.day for settled in folded.days] == [OLDER_CLOSED, NEWEST_CLOSED]
 
 
-def test_two_trees_closed_on_one_day_are_both_folded(tmp_path: Path) -> None:
-    """Every tree it is handed is folded, not the first one with a closed day."""
-    state = tmp_path / ledger.STATE_DIRNAME
-    observations = a_full_run(state, NEWEST_CLOSED)
-    feeds = verdicts(state, NEWEST_CLOSED)
-
-    folded = fold(state)
-
-    assert names_in(observations) == names_in(feeds) == [day_shards.SETTLED_NAME]
-    assert sorted(settled.tree for settled in folded.days) == sorted(
-        (LedgerName.FEED_HEALTH, ID_TREE)
-    )
-
-
 def test_only_the_trees_handed_in_are_folded(tmp_path: Path) -> None:
     """A task folds the trees it walks, so a tree another task owns is left to that task."""
     state = tmp_path / ledger.STATE_DIRNAME
     observations = a_full_run(state, NEWEST_CLOSED)
-    feeds = verdicts(state, NEWEST_CLOSED)
 
-    closed_day_fold.fold(
+    folded = closed_day_fold.fold(
         state,
-        [LedgerName.FEED_HEALTH],
+        [],
         now=midnight(WAKE),
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=False,
     )
 
-    assert names_in(feeds) == [day_shards.SETTLED_NAME]
+    assert folded.days == ()
     assert len(names_in(observations)) == len(WORK_SHARDS)
 
 

@@ -57,18 +57,17 @@ def _a_writers_file(*, attempt: int) -> str:
     """One writer's own file inside a day directory, spelled by the producer.
 
     A test of what a rebase does to two committed names has to use names a run
-    can actually produce: the shard is two digits in a committed name and the
-    date comes from the rows rather than from the runner, so a name written by
-    hand here would be a name no writer ever takes. Feed health is a tree the
-    plan job files into, and one that still keeps a day as a folder of CSV
-    files named for their writers.
+    can actually produce: the shard is two digits in a committed name, so a name
+    written by hand here would be a name no writer ever takes. The eval ledger's
+    ID folder is the tree a work shard files into, and the one that still keeps
+    a day as a folder of CSV files named for their writers.
     """
     return ledger.day_shard_relpath(
-        LedgerName.FEED_HEALTH,
+        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         date=SUBSTITUTED_DATE,
         run_id=f"{SUBSTITUTED_DATE}-40000000001",
         attempt=attempt,
-        job=ServerJob.PLAN,
+        job=ServerJob.WORK,
         shard=0,
     )
 

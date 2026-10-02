@@ -20,7 +20,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | --- | --- | --- | --- |
 | `state/raw/seen/<YYYY>/<MM>/<DD>/<file_id>.parquet` | How old is this? - for an article whose feed carried no date. One file per plan job | raw and compact | `collect.seen_window_days` |
 | `state/raw/published/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Have we already run this? One file per assemble job | raw and compact | `collect.published_window_days` |
-| `state/feed-health/<YYYY>/<MM>/<DD>.csv` | Is this source still working? One row per feed per run | day file | `HEALTH_WINDOW_DAYS` |
+| `state/raw/feed-health/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this source still working? One row per feed per run, one file per plan job | raw and compact | `HEALTH_WINDOW_DAYS` |
 | `state/raw/item-health/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did every planned item do? One row per planned item per run, one file per writer | raw and compact | the published projection, a month at a time |
 | `state/item-health-summary/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this address gone for good? One file per writer, under the day the address was retired | raw and compact | the whole tree |
@@ -29,7 +29,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
 
-`state/feed-health/` is read by the console directly at build time. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
+The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
 `state/raw/item-health/` is the fastest-growing ledger in the table above. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's days, read through `ledger.load_days` ([persistence.md](persistence.md#reading-a-whole-ledger)).
 

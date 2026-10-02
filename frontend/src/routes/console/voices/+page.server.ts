@@ -623,7 +623,7 @@ export async function load() {
 	const items = await itemHealthRows(days);
 	const itemRows = items.rows;
 	const quarantineAfter = collectConfig().availability_strikes_before_rest;
-	const results = feedResults(days);
+	const results = await feedResults(days);
 	const troubled = trouble(results, quarantineAfter);
 	// Capped here rather than in the browser: this list is inlined into the
 	// prerendered document, so the rows the cap drops cost the page nothing.

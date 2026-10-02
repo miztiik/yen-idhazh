@@ -209,9 +209,8 @@ def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
 
     Parsed here rather than compared cell by cell so the rule is written once,
     in the contract that owns what a feed result means. A row that no longer
-    parses keeps whatever is already on record - the same choice `load_health`
-    makes, and for the same reason: this ledger is diagnostic, and refusing
-    would cost a run the whole commit step this pass was called from.
+    parses keeps whatever is already on record: this ledger is diagnostic, and
+    refusing would cost the read or the packing pass this settlement runs in.
     """
     try:
         return supersedes(FeedHealthRow.from_csv_row(later), FeedHealthRow.from_csv_row(kept))
@@ -292,7 +291,6 @@ class _TreeShape(NamedTuple):
 #: the ledger and a second copy of it is how two readers start disagreeing.
 _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
     LedgerName.SUMMARY_QUALITY_EVALS_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
-    LedgerName.FEED_HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
 }
 
 

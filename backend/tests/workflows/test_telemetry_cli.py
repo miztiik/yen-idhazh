@@ -21,6 +21,7 @@ runs to completion over a real day.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Final
@@ -34,11 +35,13 @@ from conftest import (
 )
 
 from idhazh import assemble, atomic_write, cli, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.telemetry import cli as telemetry_cli
 from idhazh.telemetry import inventory
@@ -342,6 +345,18 @@ def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
     month_fold = ledger.path(state_root, LedgerName.ITEM_HEALTH_SUMMARY, assemble.month_of(date))
     month_fold.parent.mkdir(parents=True, exist_ok=True)
     month_fold.write_text("version\n", encoding="utf-8", newline="\n")
+    ids = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
+    digest = hashlib.sha256(date.encode("ascii")).hexdigest()
+    ledger.write_segment(
+        state_root,
+        ids,
+        [ObservationIndexRow(version=ObservationIndexRow.schema_version(), observation_digest=digest)],
+        run_id=f"{date}-1",
+        attempt=1,
+        job=ServerJob.WORK,
+        shard=0,
+        date=date,
+    )
 
     report = "\n".join(inventory.files(state_root, date=date))
 
@@ -352,8 +367,8 @@ def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
     assert raw_files, "the built day filed no census, so the listing proves nothing about it"
     for relpath in raw_files:
         assert relpath in report, f"a raw day file is missing from the listing: {report}"
-    feed_day = ledger.path(state_root, LedgerName.FEED_HEALTH, date).relative_to(state_root)
-    assert f"{feed_day.as_posix()}/" in report, (
+    tree_day = ledger.path(state_root, ids, date).relative_to(state_root)
+    assert f"{tree_day.as_posix()}/" in report, (
         f"the writer-owned day is missing from the listing: {report}"
     )
     assert packed.relative_to(state_root).as_posix() in report, (

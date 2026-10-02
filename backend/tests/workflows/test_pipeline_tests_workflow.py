@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -17,8 +18,8 @@ from pydantic import ValidationError
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.pipeline_tests import (
     MINIMUM_CANDIDATES,
     TRIAL_STATE_PREFIX,
@@ -737,25 +738,21 @@ def _a_downloaded_tree(root: Path, *, test_case: str) -> Path:
     moves takes this fixture with it rather than leaving it green against a
     shape nothing writes.
     """
-    row = FeedHealthRow.model_validate(
+    row = ObservationIndexRow.model_validate(
         {
-            "date": TEST_CASE_DATE,
-            "run_id": TEST_CASE_RUN_ID,
-            "feed_id": "example-feed",
-            "checked_at": f"{TEST_CASE_DATE}T06:00:00Z",
-            "outcome": "ok",
-            "status": 200,
-            "items": 2,
+            "version": ObservationIndexRow.schema_version(),
+            "observation_digest": hashlib.sha256(TEST_CASE_RUN_ID.encode("ascii")).hexdigest(),
         }
     )
     ledger.write_segment(
         root / test_case,
-        LedgerName.FEED_HEALTH,
+        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         [row],
         run_id=TEST_CASE_RUN_ID,
         attempt=TEST_CASE_ATTEMPT,
         job=TEST_CASE_JOB_KIND,
         shard=TEST_CASE_SHARD,
+        date=TEST_CASE_DATE,
     )
     trace = traces.committed_trace_path(
         root / test_case,
@@ -788,7 +785,7 @@ def test_the_check_has_nothing_to_refuse_when_nothing_arrived(tmp_path: Path) ->
     ("relative", "because"),
     [
         (
-            f"a-tenant/feed-health/{TEST_CASE_DAY_PATH}/{TEST_CASE_WRITER}",
+            f"a-tenant/summary-quality-evals-index/{TEST_CASE_DAY_PATH}/{TEST_CASE_WRITER}",
             "no declared test case",
         ),
         (
@@ -889,7 +886,7 @@ def test_every_declared_test_case_is_placed_whether_or_not_it_wrote_anything(
     for test_case in test_cases:
         assert (state / test_case.trial_state_dirname).is_dir()
     assert ledger.tree_root(
-        state / test_cases[0].trial_state_dirname, LedgerName.FEED_HEALTH
+        state / test_cases[0].trial_state_dirname, LedgerName.SUMMARY_QUALITY_EVALS_INDEX
     ).is_dir()
 
 

@@ -48,7 +48,7 @@ The union alone cannot be tested against at run time, and a reader that has to n
 
 **The query door carries a copy of the compact index, and the stamp it reads.** `frontend/src/lib/data/compact-index.ts` declares `CompactEntry` and `CompactIndex` by hand, because the door runs in a browser that fetches `state/compact/<ledger>/index/<period>.json` and cannot import the Pydantic model. Beside them sit `COMPACT_INDEX_STAMP`, the `CompactIndex` stamp this build reads, and `COMPACT_PERIODS`. **The stamp rule is the backend's own**: an index stamped at that stamp or older is read when the fields the door acts on pass its guard, and a newer one is refused with both stamps in the console, because only a build at least that new knows what the shape means. The door's rules are [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md).
 
-**The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. The two other records a console route reads keep no second list. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`, and `HOST_FINGERPRINT_COLUMNS` is keyed by the `HostFingerprintRow` copy above, so the compiler refuses a column that copy does not name.
+**The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. `FEED_HEALTH_COLUMNS` beside it names only the `FeedHealthRow` columns the Voices page reads, in the contract's order, and the same test fails when the contract renames or drops one of them. The two other records a console route reads keep no second list. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`, and `HOST_FINGERPRINT_COLUMNS` is keyed by the `HostFingerprintRow` copy above, so the compiler refuses a column that copy does not name.
 
 ## What holds the copy in step
 
@@ -89,7 +89,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `backend/idhazh/contracts/__init__.py` | `CONTRACTS`, the registry of every top-level persisted document. What a check over all of them iterates. |
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
 | `frontend/src/lib/server/host-fingerprint.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`. |
-| `frontend/src/lib/server/ledger-rows.ts` | `ITEM_HEALTH_COLUMNS`, the column names of `ItemHealthRow` a console route asks the door for. |
+| `frontend/src/lib/server/ledger-rows.ts` | `ITEM_HEALTH_COLUMNS` and `FEED_HEALTH_COLUMNS`, the column names of `ItemHealthRow` and `FeedHealthRow` a console route asks the door for. |
 | `frontend/src/lib/server/config.ts` | The hand copy of `ConsolePanelGroup`. |
 | `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, and the stamp the query door reads. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `DigestDay`. Hand-written, and bound by nothing. |
@@ -113,7 +113,7 @@ The shapes, and where each one lives once written:
 | `ObservationIndexRow` | `observation-index-row` | one row of `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/` or of a closed month's `<YYYY>/<MM>/settled.csv`, the identity of one measurement the eval ledger holds |
 | `SeenRow` | `seen-row` | one row of `state/raw/seen/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/seen/` |
 | `PublishedRow` | `published-row` | one row of `state/raw/published/<YYYY>/<MM>/<DD>/`, in the raw file the assemble job files through the ledger door, packed later under `state/compact/published/` |
-| `FeedHealthRow` | `feed-health-row` | one row of `state/feed-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
+| `FeedHealthRow` | `feed-health-row` | one row of `state/raw/feed-health/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/feed-health/` |
 | `FeedRetirementRow` | `feed-retirement-row` | one row of `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/`, in the file its writer owns, filed under the day the address was retired |
 | `ItemHealthRow` | `item-health-row` | one row of `state/raw/item-health/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/item-health/` |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
@@ -205,7 +205,7 @@ mirrors the digest tree its rows are derived from.
 | Ledger | Layout | The question it answers | Windowed on read |
 | --- | --- | --- | --- |
 | `state/raw/seen/` and `state/compact/seen/` | a raw file per write by day, packed into day and month files | how old is this address? | yes, `collect.seen_window_days`, and `ledger.load_days` opens only the days it names. The loader refuses a compaction that keeps fewer days than that window ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| `state/feed-health/` | day files | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
+| `state/raw/feed-health/` and `state/compact/feed-health/` | a raw file per write by day, packed into day and month files | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS`, and `ledger.load_days` opens only the newest days it names |
 | `state/raw/item-health/` and `state/compact/item-health/` | a raw file per write by day, packed into day and month files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30), and `ledger.load_days` opens only the days it names |
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |

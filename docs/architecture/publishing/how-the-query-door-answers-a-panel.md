@@ -266,8 +266,10 @@ which files.
   the bundle gate skips the ledgers' keys.
 - **`backend/tests/contracts/test_published_ledgers_cover_the_panels.py` holds the
   two sides together**: every ledger a panel names in a `slice()` or
-  `ledgerReach()` call, and every ledger the door's closed set admits, is in
-  `ledger.published`. `frontend/tests/published-ledgers.spec.ts` asks the built
+  `ledgerReach()` call is in `ledger.published`. The door's closed set admits one
+  more, `feed-health`, which a build-time reader asks through `sliceFromDisk`
+  and no browser panel asks, so the site holds none of its files.
+  `frontend/tests/published-ledgers.spec.ts` asks the built
   site the door's own questions: every address an index names is there, at the
   size its entry gives, and nothing else of `state/` is.
 

@@ -70,7 +70,6 @@ frontend/static/telemetry/
 frontend/static/index/
 frontend/static/console/
 frontend/static/scores/
-frontend/static/feed-health/
 frontend/static/run-days/
 frontend/static/day-metrics/
 frontend/static/machine/

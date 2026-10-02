@@ -11,6 +11,7 @@ declares, and then one file at a time is put where no door writer puts it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import uuid
@@ -31,11 +32,11 @@ from conftest import (
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.telemetry import traces
 from utilities import pipeline_test_ledgers
 
@@ -163,25 +164,20 @@ def test_a_day_shard_and_a_trace_still_pass_beside_the_door_files(tmp_path: Path
     tree, root, roots = _a_trial_tree(tmp_path)
     assert _file_census(root)
     assert _file_machine(root)
+    digest = hashlib.sha256(RUN_ID.encode("ascii")).hexdigest()
     assert ledger.write_segment(
         root,
-        LedgerName.FEED_HEALTH,
+        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         [
-            FeedHealthRow(
-                version=FeedHealthRow.schema_version(),
-                date=DAY,
-                run_id=RUN_ID,
-                feed_id="example-feed",
-                checked_at=f"{DAY}T06:00:00Z",
-                outcome=FetchOutcome.OK,
-                status=200,
-                items=2,
+            ObservationIndexRow.model_validate(
+                {"version": ObservationIndexRow.schema_version(), "observation_digest": digest}
             )
         ],
         run_id=RUN_ID,
         attempt=1,
         job=ServerJob.WORK,
         shard=0,
+        date=DAY,
     ), "no day shard was written"
     trace = traces.committed_trace_path(
         root, run_id=RUN_ID, attempt=1, job=ServerJob.WORK, shard=0
@@ -246,9 +242,12 @@ def _under_another_door_ledger(root: Path, filed: Path) -> Path:
 
 
 def _under_a_day_tree_ledger(root: Path, filed: Path) -> Path:
-    """A copy under `raw/feed-health/`, a ledger that files day trees, never door files."""
+    """A copy under `raw/summary-quality-evals-index/`, a ledger that files day trees."""
     return _copied(
-        filed, ledger.raw_path(root, LedgerName.FEED_HEALTH, DAY, uuid.UUID(filed.stem))
+        filed,
+        ledger.raw_path(
+            root, LedgerName.SUMMARY_QUALITY_EVALS_INDEX, DAY, uuid.UUID(filed.stem)
+        ),
     )
 
 

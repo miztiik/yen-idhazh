@@ -87,7 +87,9 @@ def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
         "lens_weights.window_days": _days(
             CSV_LEDGERS[LedgerName.COUNTERFACTUAL_SCORES].old_window
         ),
-        "observability.feed_health_keep_months": _months(tasks["feed-health"].window),
+        "observability.feed_health_keep_months": _months(
+            CSV_LEDGERS[LedgerName.FEED_HEALTH].old_window
+        ),
         "observability.host_fingerprint_keep_months": _months(machine.monthly_window),
         "observability.item_health_aggregate_keep_months": _months(_series(folded, "aggregate")),
         "observability.item_health_full_grain_months": _months(_series(folded, "full-grain")),

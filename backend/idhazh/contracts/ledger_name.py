@@ -75,6 +75,5 @@ class LedgerName(StrEnum):
 DAY_TREES: Final[frozenset[LedgerName]] = frozenset(
     {
         LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
-        LedgerName.FEED_HEALTH,
     }
 )

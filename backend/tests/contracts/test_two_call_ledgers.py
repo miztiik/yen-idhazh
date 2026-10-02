@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import json
 from pathlib import Path
 
@@ -10,11 +9,10 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.item_health import CALL_SLOTS, RETIRED_CELLS, ItemHealthRow
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.summary import Summary
@@ -235,27 +233,23 @@ def test_a_shard_written_under_the_retired_headings_still_reads() -> None:
 
 
 def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path: Path) -> None:
-    """Every column filled by at least one canary feed, not merely present in the header.
+    """Every column filled by at least one canary feed, not merely present in the file.
 
     The browser suite runs against this ledger, so a column no canary row fills
     is a console state that suite cannot reach - which is how the five columns
     added on 2026-09-02 would ship drawn only in their empty state.
 
-    The walk is over a tree this call just built - two day directories - rather
+    The read is over the raw files this call just filed - two days - rather
     than over anything a run appends to (`CLAUDE.md` section 13).
     """
     build_canary_day.health(tmp_path)
-    days = list(
-        day_shards.shard_files(ledger.tree_root(tmp_path, LedgerName.FEED_HEALTH), days=UNBOUNDED_WINDOW)
-    )
-    assert days, "the canary wrote no feed-health day file"
-    rows: list[dict[str, str]] = []
-    for path in days:
-        with path.open(encoding="utf-8", newline="") as handle:
-            reader = csv.DictReader(handle)
-            assert tuple(reader.fieldnames or ()) == FeedHealthRow.csv_columns(), path.name
-            rows.extend(reader)
+    days = ledger.held_days(tmp_path, LedgerName.FEED_HEALTH)
+    assert days, "the canary filed no feed-health day"
+    cells = [
+        row.csv_row()
+        for row in ledger.load_days(tmp_path, LedgerName.FEED_HEALTH, days, model=FeedHealthRow)
+    ]
 
-    unfilled = [name for name in FeedHealthRow.csv_columns() if not any(row[name] for row in rows)]
+    unfilled = [name for name in FeedHealthRow.csv_columns() if not any(c[name] for c in cells)]
     assert unfilled == [], "a canary column nothing fills is a console state no test can reach"
-    assert {row["robots_outcome"] for row in rows} == {"allowed", "denied", "unreachable", ""}
+    assert {c["robots_outcome"] for c in cells} == {"allowed", "denied", "unreachable", ""}

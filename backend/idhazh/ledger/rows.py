@@ -4,24 +4,19 @@ One verb per ledger. Each takes the state directory and the period its rows
 describe, never a file name, and each takes contracts rather than dicts - so no
 cell reaches a committed file without a model having read it.
 
-`day_shards` is imported inside the function bodies that need it, and that is
-deliberate. It imports names back out of this package at its own module top, so
-a module-scope import here would close a load-time cycle: importing the package
-runs `__init__`, which imports this module, which re-enters a half-built package.
-
 Every writer here that records new rows asks `lifecycle.accepts_new_rows` first,
 and writes nothing into a paused or retired family; `append_seen` and
 `append_published` ask through `persist`, which asks for every pipeline write.
 `write_item_health_summary` does not ask: it folds rows already recorded, and the
 ageing step reads that fold back before it deletes anything.
 
-Six readers here read a ledger that lives under `state/raw/` and
+Seven readers here read a ledger that lives under `state/raw/` and
 `state/compact/` rather than in a CSV tree - `load_seen`, `load_published`,
-`load_retirements`, `load_visual_prunes`, and the two item-health readers
-`load_settled_failures` and `load_source_counts` - and all six read it through
-`ledger/ledger_files.py`, which reads the yearly files, then the monthly files,
-then the daily files, then the raw days no compact index names, each date from
-exactly one of them. Two of their writers are here, `append_seen` and
+`load_health`, `load_retirements`, `load_visual_prunes`, and the two item-health
+readers `load_settled_failures` and `load_source_counts` - and all seven read it
+through `ledger/ledger_files.py`, which reads the yearly files, then the monthly
+files, then the daily files, then the raw days no compact index names, each date
+from exactly one of them. Two of their writers are here, `append_seen` and
 `append_published`, and both file through `persist`; every other producer hands
 its rows to `persist` itself.
 """
@@ -60,7 +55,6 @@ from idhazh.ledger.keys import (
     _TREE_SHAPES,
     COUNCIL_SHARD_OUTCOME_KEY,
     DATE_CELL,
-    FEED_HEALTH_KEY,
     STORY_SIMILARITY_PAIR_KEY,
     STORY_SIMILARITY_THRESHOLD_KEY,
     _refuse_outside_day_trees,
@@ -68,9 +62,9 @@ from idhazh.ledger.keys import (
 from idhazh.ledger.persist import persist
 from idhazh.ledger.settle import drop_repeated_rows
 
-#: How far back a health read looks. Not a policy - just enough history to reach
-#: into last month's shard, so a quarantine decided on the first of the month can
-#: still see the failures that caused it.
+#: How far back a health read looks, in days the ledger holds. Not a policy - just
+#: enough history to reach into last month, so a quarantine decided on the first
+#: of the month can still see the failures that caused it.
 HEALTH_WINDOW_DAYS: Final = 31
 
 
@@ -601,34 +595,26 @@ def load_item_health_summary(path: Path) -> list[ItemHealthSummaryRow]:
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:
-    """Every health row in the window, oldest run first.
+    """Every health row of the newest `within_days` days the ledger holds, oldest run first.
 
     Sorted by run rather than by file order so a caller can talk about "the last
-    N runs" without knowing that the file is append-ordered - which it is today,
-    and which a rebased CI push could stop being tomorrow.
+    N runs" without knowing which file a row came from.
 
-    A row that no longer parses stops the read rather than being skipped. Each
-    file is written whole by one writer from the contract's own columns, so a
-    row that will not read means the writer and this reader disagree about the
-    shape - `day_shards.parsed` says at length why that is the one ledger read
-    that does not degrade.
+    The cover counts the days the ledger holds a row for, read from its indexes
+    and its raw folder names alone (`ledger_files.held_days`), so a cover of `n`
+    days reads the newest `n` RECORDED days and a day nothing ran on is never
+    counted. `UNBOUNDED_WINDOW` reads every day it holds. `today` is not read: a
+    count back from a date would answer nothing for a ledger whose last run was
+    a week ago.
 
-    `day_shards.settled_rows` names both the cover and the settlement, so a
-    cover of `n` days reads the newest `n` RECORDED days and returns one row per
-    feed per run rather than one per write. A day the ledger never recorded has
-    no entry, which is not a fault.
+    Each day is read through the door's bounded reader and settled on its own:
+    one writer's file per work unit, the highest attempt's, then one row per
+    feed per run by `FEED_HEALTH_KEY` and its preference. A file this build
+    cannot read is skipped with a warning naming it, as every door read is.
     """
-    from idhazh import day_shards
-
-    rows = [
-        FeedHealthRow.from_csv_row(raw)
-        for raw in day_shards.settled_rows(
-            paths.tree_root(state_dir, LedgerName.FEED_HEALTH),
-            FEED_HEALTH_KEY,
-            FeedHealthRow,
-            days=within_days,
-        )
-    ]
+    held = ledger_files.held_days(state_dir, LedgerName.FEED_HEALTH)
+    days = held if within_days == UNBOUNDED_WINDOW else held[max(0, len(held) - within_days) :]
+    rows = ledger_files.load_days(state_dir, LedgerName.FEED_HEALTH, days, model=FeedHealthRow)
     rows.sort(key=lambda row: (row.date, _run_n(row.run_id)))
     return rows
 

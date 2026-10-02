@@ -2,13 +2,16 @@
 
 One shard at a time through `backend/utilities/gardener_publish.py`, the way a
 wake runs it, against a bare repository standing in for origin - no network
-(CLAUDE.md section 13). The task is the shipped `feed-health` module under the
-committed declarations, whose window reports and whose fold is live, over a
-tree its own writer files: three closed days, one day the window ages out and
-one open day, each holding the files of two runs. What reached origin is read
-back from origin, so a settled file written and never staged, or a writer file
-deleted and never staged, fails here. The last test does the same for the eval
-ledger's ID folder, whose task settles a closed month into one file.
+(CLAUDE.md section 13). The task is the shipped `summary-quality-evals-index`
+module over a tree its own writer files: three closed days, one day the window
+ages out and one open day, each holding the files of two runs. Its committed
+window keeps every month, and a window that keeps every month reports nothing,
+so the first three tests run it under the declaration the last CSV day tree
+with a reporting window shipped with: fourteen months, reported only, and a
+live fold that settles day by day. What reached origin is read back from
+origin, so a settled file written and never staged, or a writer file deleted
+and never staged, fails here. The last test runs the committed declaration,
+whose fold settles a closed month into one file.
 
 The clock is handed in rather than read, so the wake is one written out below,
 in UTC.
@@ -16,20 +19,22 @@ in UTC.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, seed_feed_health
+from conftest import CONFIG_DIR, FIXTURES_DIR
 
 from idhazh import config, day_shards, ledger
 from idhazh.config import GardenerSettings
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.gardener import runner
 from idhazh.gardener.outcome import EXIT_OK, EXIT_TASK_FAILED
 from utilities import gardener_publish
@@ -59,29 +64,51 @@ REPORTED_DAY: Final = "2025-06-10"
 #: How many runs filed each day of the tree, so how many writer files it holds.
 RUNS_A_DAY: Final = 2
 
-TREE: Final = LedgerName.FEED_HEALTH
+#: The eval ledger's ID folder, one file per work shard of each run.
+TREE: Final = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
+
+#: What the first three tests change in the committed declaration: a window
+#: that reports a month past fourteen, and a fold that keeps one settled file a
+#: closed day.
+REPORTING: Final = {
+    "window": {"unit": "months", "value": 14},
+    "fold": {"after_days": 1, "dry_run": False},
+}
 
 
-def a_verdict(day: str, *, run: str, feed: str) -> FeedHealthRow:
-    return FeedHealthRow.model_validate(
+def an_id(day: str, *, run: str, label: str) -> ObservationIndexRow:
+    """One observation ID, shaped the way the contract's validators demand."""
+    return ObservationIndexRow.model_validate(
         {
-            "run_id": run,
-            "date": day,
-            "feed_id": feed,
-            "checked_at": f"{day}T06:00:00Z",
-            "outcome": FetchOutcome.OK,
-            "status": 200,
-            "items": 3,
+            "version": ObservationIndexRow.schema_version(),
+            "observation_digest": digest_of(day, run=run, label=label),
         }
     )
 
 
+def digest_of(day: str, *, run: str, label: str) -> str:
+    return hashlib.sha256(f"{day}:{run}:{label}".encode("ascii")).hexdigest()
+
+
+def file_ids(state: Path, day: str, *, run: str, label: str) -> None:
+    """One run's work shard filing one ID into one day, the way its writer does."""
+    ledger.write_segment(
+        state,
+        TREE,
+        [an_id(day, run=run, label=label)],
+        run_id=run,
+        attempt=1,
+        job=ServerJob.WORK,
+        shard=0,
+        date=day,
+    )
+
+
 def writer_files(scratch: Path, day: str) -> dict[str, str]:
-    """Each run's plan job filing a verdict into one day, as repository paths and text."""
+    """Each run's work shard filing an ID into one day, as repository paths and text."""
     state = scratch / ledger.STATE_DIRNAME
     for number in range(1, RUNS_A_DAY + 1):
-        run = f"{day}-90000000{number}"
-        seed_feed_health(state, day, [a_verdict(day, run=run, feed=f"feed-{number}")], run_id=run)
+        file_ids(state, day, run=f"{day}-90000000{number}", label=f"id-{number}")
     folder = ledger.path(state, TREE, day)
     return {
         path.relative_to(scratch).as_posix(): path.read_text(encoding="utf-8")
@@ -111,11 +138,15 @@ def settled_rows(state: Path, day: str) -> list[dict[str, str]]:
 def a_garden(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, Path, dict[str, str], GardenerSettings]:
-    """The committed declarations over a clone of an origin holding the tree."""
+    """The committed declarations, with the reporting window, over a clone of the tree."""
     quiet_git(tmp_path, monkeypatch)
     files = the_tree(tmp_path / "scratch", (*CLOSED_DAYS, REPORTED_DAY, OPEN_DAY))
     origin, checkout = an_origin(tmp_path, files)
-    settings = config.load_gardener(a_config(checkout, CONFIG_DIR / "gardener"))
+    config_dir = a_config(checkout, CONFIG_DIR / "gardener")
+    declaration = config_dir / "gardener" / f"{TREE.value}.json"
+    declared = json.loads(declaration.read_text(encoding="utf-8"))
+    declaration.write_text(json.dumps(declared | REPORTING), encoding="utf-8")
+    settings = config.load_gardener(config_dir)
     return origin, checkout, files, settings
 
 
@@ -208,14 +239,9 @@ def test_a_writer_file_that_lands_while_the_fold_runs_survives_beside_the_settle
     day = CLOSED_DAYS[0]
     seed = tmp_path / "seed"
     late = f"{day}-900000009"
-    seed_feed_health(
-        seed / ledger.STATE_DIRNAME,
-        day,
-        [a_verdict(day, run=late, feed="a-late-feed")],
-        run_id=late,
-    )
+    file_ids(seed / ledger.STATE_DIRNAME, day, run=late, label="a-late-id")
     git(seed, "add", "--all")
-    git(seed, "commit", "--quiet", "-m", "a re-run files a verdict on a closed day")
+    git(seed, "commit", "--quiet", "-m", "a re-run files an ID on a closed day")
     git(seed, "push", "--quiet", "origin", "HEAD:refs/heads/main")
 
     said: list[str] = []
@@ -229,8 +255,8 @@ def test_a_writer_file_that_lands_while_the_fold_runs_survives_beside_the_settle
     folder = ledger.path(after / ledger.STATE_DIRNAME, TREE, day)
     names = sorted(path.name for path in folder.iterdir())
     assert day_shards.SETTLED_NAME in names and len(names) == 2, names
-    feeds = [row["feed_id"] for row in settled_rows(after / ledger.STATE_DIRNAME, day)]
-    assert "a-late-feed" in feeds, "the re-run's rows are in no file"
+    ids = [row["observation_digest"] for row in settled_rows(after / ledger.STATE_DIRNAME, day)]
+    assert digest_of(day, run=late, label="a-late-id") in ids, "the re-run's rows are in no file"
 
 
 def test_a_window_that_fails_leaves_the_fold_for_the_next_wake(
@@ -283,8 +309,6 @@ def test_a_window_that_fails_leaves_the_fold_for_the_next_wake(
     assert outcome.landing.deleted_paths == frozenset()
 
 
-#: The eval ledger's ID folder, whose task settles each closed month whole.
-ID_TREE: Final = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
 #: A wake on the first of October: August closed a month ago, the 29th of
 #: September closed a day ago, and the 30th ended at this wake's own day.
 MONTH_WAKE: Final = datetime(2026, 10, 1, 0, 40, tzinfo=UTC)
@@ -300,22 +324,22 @@ def test_a_settled_month_lands_as_one_file_and_its_days_files_leave_main(
     in its own folder, and the open day as it was.
     """
     quiet_git(tmp_path, monkeypatch)
-    source = FIXTURES_DIR / "day-shards" / "id-months" / ID_TREE.value
+    source = FIXTURES_DIR / "day-shards" / "id-months" / TREE.value
     assert source.is_dir(), f"the id-months fixture is missing at {source}"
-    tree = f"{ledger.STATE_DIRNAME}/{ID_TREE.value}"
+    tree = f"{ledger.STATE_DIRNAME}/{TREE.value}"
     files = {
         f"{tree}/{path.relative_to(source).as_posix()}": path.read_text(encoding="utf-8")
         for path in sorted(source.rglob("*.csv"))
     }
     origin, checkout = an_origin(tmp_path, files)
     settings = config.load_gardener(a_config(checkout, CONFIG_DIR / "gardener"))
-    key, model = ledger.segment_key(ID_TREE), ledger.segment_contract(ID_TREE)
-    root = ledger.tree_root(checkout / ledger.STATE_DIRNAME, ID_TREE)
+    key, model = ledger.segment_key(TREE), ledger.segment_contract(TREE)
+    root = ledger.tree_root(checkout / ledger.STATE_DIRNAME, TREE)
     before = day_shards.settled_rows(root, key, model, days=UNBOUNDED_WINDOW)
     said: list[str] = []
 
     outcome = gardener_publish.run_and_land(
-        (ID_TREE.value,),
+        (TREE.value,),
         settings=settings,
         repo_root=checkout,
         run_id=RUN_ID,
@@ -336,10 +360,10 @@ def test_a_settled_month_lands_as_one_file_and_its_days_files_leave_main(
             assert on_origin(origin, relpath) is None, f"{relpath} was folded and not deleted"
     after = tmp_path / "after"
     git(tmp_path, "clone", "--quiet", str(origin), str(after))
-    landed = ledger.tree_root(after / ledger.STATE_DIRNAME, ID_TREE)
+    landed = ledger.tree_root(after / ledger.STATE_DIRNAME, TREE)
     assert day_shards.settled_rows(landed, key, model, days=UNBOUNDED_WINDOW) == before
 
-    row = only_row(outcome.record, ID_TREE.value)
+    row = only_row(outcome.record, TREE.value)
     assert (row.fold_dry_run, row.folded_months, row.folded_days) == (False, 1, 1)
     assert row.folded_files == 6, "five files of August and one of the 29th"
     assert row.deleted == 0, "the window keeps every month and takes nothing"

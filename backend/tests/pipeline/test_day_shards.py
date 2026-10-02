@@ -343,15 +343,15 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
 #: claim is about the named call and never about the file.
 #:
 #: The entry point differs by what the reader wants. `shard_files` hands back
-#: every file, which is what a prune and a census need. `settled_rows`,
-#: `settled_day` and `one_day` settle a day's shards into one answer first,
-#: which is what a published number needs.
+#: every file, which is what a census needs. `settled_rows`, `settled_day` and
+#: `one_day` settle a day's shards into one answer first, which is what a
+#: published number needs.
 #:
-#: The item census, the eval rows, the machine rows and the counterfactual
-#: scores are not here: they moved under `state/raw/` through the ledger door,
-#: and their readers call `ledger.load_days`, which walks no day tree of this
-#: kind. The two migration utilities are not here either, because reading an
-#: older shape is their job.
+#: The item census, the eval rows, the machine rows, the counterfactual scores
+#: and the feed verdicts are not here: they moved under `state/raw/` through the
+#: ledger door, and their readers call `ledger.load_days`, which walks no day
+#: tree of this kind. The two migration utilities are not here either, because
+#: reading an older shape is their job.
 #:
 #: The cleanup passes left `retention.py` for the gardener's tasks, so their walk
 #: is named where it runs now, each with the day-file call it would be if it
@@ -360,15 +360,9 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
 #: Written out rather than discovered. A discovered list passes on a module
 #: nobody checked, and it would grow with the repository (Guardrail #12).
 MOVED: Final = (
-    (
-        "backend/idhazh/ledger/rows.py",
-        "day_files(paths.tree_root(state_dir, LedgerName.FEED_HEALTH))",
-        "settled_rows(",
-    ),
     ("backend/idhazh/gardener/closed_day_fold.py", "day_files(root)", "shard_files("),
     ("backend/idhazh/gardener/retention_files.py", "day_files(tree)", "shards_by_month("),
     ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)", "shard_files("),
-    ("backend/idhazh/telemetry/prune.py", "day_files(state_root / ledger)", "shard_files("),
 )
 
 #: A ledger that keeps the day-file walk, and the reader that walks it: the judge's

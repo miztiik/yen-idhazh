@@ -68,7 +68,7 @@ starts its own server and probes it on loopback.
 | `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/` | One row per scored item, packed later under `state/compact/summary-quality-evals/` | **yes** |
 | `state/raw/seen/<YYYY>/<MM>/<DD>/` | First sight of every address, so an undated article still has an age, packed later under `state/compact/seen/` | **yes** |
 | `state/raw/published/<YYYY>/<MM>/<DD>/` | Every address that reached a digest, so nothing runs twice, packed later under `state/compact/published/` | **yes** |
-| `state/feed-health/<YYYY>/<MM>/<DD>/` | What every feed did on every run | **yes** |
+| `state/raw/feed-health/<YYYY>/<MM>/<DD>/` | What every feed did on every run, packed later under `state/compact/feed-health/` | **yes** |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/` | Every endpoint the run stopped asking, and the evidence | **yes** |
 | `state/raw/item-health/<YYYY>/<MM>/<DD>/` | What every planned item did on every run, packed later under `state/compact/item-health/` | **yes** |
 
@@ -109,10 +109,10 @@ declaration, and this is the order:
  --log`, and grep it for `would delete`. Each task prints one line a pass and
  then one line a file it would take.
 3. Check the list against what you expect. On 2027-10-01 the retention tasks
- name two trees - `frontend/public/telemetry/2026-08.csv` and the day files under
- `state/feed-health/2026/08/`. A third name, or a month that is not the oldest,
- means a boundary is wrong and the switch waits. The item-health rows are not on
- that list: their compaction deletes them, and a compaction's own list is read as
+ name one tree - `frontend/public/telemetry/2026-08.csv`. A second name, or a
+ month that is not the oldest, means a boundary is wrong and the switch waits.
+ The item-health and feed-health rows are not on that list: their compactions
+ delete them, and a compaction's own list is read as
  [the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-dry-run-does-and-what-the-record-says)
  says. The eval rows are on no list at all, because nothing deletes one.
 4. `compact-summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so a
@@ -216,7 +216,9 @@ python -m idhazh telemetry prune --target feed-health --since 2026-09-13 --until
 ```
 
 It prints every file a live run would remove and removes nothing until you add
-`--no-dry-run`. `--target` takes the name of a ledger and never a path, and
+`--no-dry-run`. A ledger on the ledger door, as feed health is, also needs
+`--run-id` and `--commit` for that live pass, because each file it rewrites
+names the run and the commit that wrote it. `--target` takes the name of a ledger and never a path, and
 `published` and `seen` are refused by name - forgetting is the one thing those
 two may not do. Which ledgers it accepts, why those two are refused, and what
 makes it safe to stop half way is

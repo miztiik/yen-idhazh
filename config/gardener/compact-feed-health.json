@@ -1,0 +1,26 @@
+{
+  "compact_after_days": 1,
+  "daily_keep_days": 45,
+  "dry_run": false,
+  "kind": "compaction",
+  "ledger": "feed-health",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "max_periods_per_run": 8,
+  "max_raw_files_per_period": 2000,
+  "monthly_keep_days": null,
+  "monthly_window": {
+    "unit": "months",
+    "value": 14
+  },
+  "monthly_window_dry_run": true,
+  "owns": [
+    "state/raw/feed-health",
+    "state/compact/feed-health"
+  ],
+  "prune_refusal": null,
+  "raw_index_keep_days": 90,
+  "window": {
+    "unit": "forever"
+  }
+}

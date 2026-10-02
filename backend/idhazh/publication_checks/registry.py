@@ -7,7 +7,7 @@ what is wrong with one - that is a check's own job, and the runner's.
 Four wiring faults are raised rather than logged, because a gate that quietly
 ran three of its four rules is a gate nobody can trust: a module that will not
 import, a module declaring no check, two modules claiming one name, and a check
-naming a ledger with no tree shape to write into.
+naming a ledger the ledger door has no entry for.
 
 The discovery follows `idhazh.council.registry`, which finds judges the same
 way and for the same reason.
@@ -24,9 +24,10 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Final, NamedTuple
 
+from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger import CsvRecord, segment_contract
+from idhazh.ledger import door_contract
 
 #: The package every check module sits in. One name, so a move is one edit.
 CHECKS_PACKAGE: Final = "idhazh.publication_checks.checks"
@@ -105,7 +106,7 @@ class CheckResult(NamedTuple):
     """
 
     faults: tuple[str, ...] = ()
-    rows: tuple[CsvRecord, ...] = ()
+    rows: tuple[Contract, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -164,17 +165,17 @@ def discover() -> tuple[Check, ...]:
 def validate_registry(registry: Sequence[Check]) -> None:
     """Refuse a check that names a ledger nothing can write into.
 
-    A ledger with no tree shape has no header and no key, so the first row
-    would fail at the write - after the gate had already passed the day. The
-    wiring is checked before any check runs, so the failure names the check
-    rather than a row.
+    A ledger the ledger door has no entry for has no key and no row contract,
+    so the first row would fail at the write - after the gate had already
+    passed the day. The wiring is checked before any check runs, so the
+    failure names the check rather than a row.
     """
     for check in registry:
         if check.ledger is None:
             continue
         try:
-            segment_contract(check.ledger)
+            door_contract(check.ledger)
         except (KeyError, ValueError) as error:
             raise PublicationCheckError(
-                f"{check.name} names ledger {check.ledger!r} with no tree-shape entry"
+                f"{check.name} names ledger {check.ledger!r} with no ledger-door entry"
             ) from error

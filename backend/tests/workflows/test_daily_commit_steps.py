@@ -84,21 +84,22 @@ THIS_RUN: Final = f"{THE_DAY}-{THIS_EXECUTION}"
 ANOTHER_RUN: Final = f"{THE_DAY}-{ANOTHER_EXECUTION}"
 
 #: The other two elements of a writer's identity. One attempt and one job is all
-#: these three tests need: what they vary is the run.
+#: these three tests need: what they vary is the run. The job is a work shard,
+#: the job that files the one CSV day tree left, the eval ledger's ID folder.
 THIS_ATTEMPT: Final = 1
-THIS_JOB: Final = ServerJob.PLAN
+THIS_JOB: Final = ServerJob.WORK
 
-#: How the script spells this job when it refuses a path. Every job but a work
-#: shard leaves `SHARD` empty, and the filename writes a shard with two digits,
-#: so the identity ends `00`.
+#: How the script spells this job when it refuses a path. This is the first
+#: work shard, and the filename writes a shard with two digits, so the
+#: identity ends `00`.
 THIS_IDENTITY: Final = f"{THIS_EXECUTION}-{THIS_ATTEMPT}-{THIS_JOB.value}-00"
 
 
 def _as_this_job(settings: dict[str, str]) -> dict[str, str]:
     """The commit step's own settings, plus the identity a runner would set.
 
-    `SHARD` is named and left empty rather than left out. The environment a test
-    inherits could carry one, and an identity that changes with the machine is
+    `SHARD` is named rather than left out. The environment a test inherits
+    could carry another one, and an identity that changes with the machine is
     an identity no assertion can name.
     """
     return {
@@ -106,7 +107,7 @@ def _as_this_job(settings: dict[str, str]) -> dict[str, str]:
         "GITHUB_RUN_ID": THIS_EXECUTION,
         "GITHUB_RUN_ATTEMPT": str(THIS_ATTEMPT),
         "GITHUB_JOB": THIS_JOB.value,
-        "SHARD": "",
+        "SHARD": "0",
     }
 
 
@@ -115,13 +116,13 @@ def _writer_file(run_id: str) -> str:
 
     Built through `ledger.day_shard_relpath` rather than spelled here, so a test
     of the predicate that reads a filename cannot pass against a filename no
-    writer produces. Feed health is the tree this job files into itself, and a
-    CSV day tree is where a filename carries its writer: a raw file of the
+    writer produces. The ID folder is the tree this job files into itself, and
+    a CSV day tree is where a filename carries its writer: a raw file of the
     ledger door is named by a fresh id, so it never meets another file at one
     path.
     """
     return ledger.day_shard_relpath(
-        LedgerName.FEED_HEALTH,
+        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
         date=THE_DAY,
         run_id=run_id,
         attempt=THIS_ATTEMPT,
@@ -557,7 +558,7 @@ def test_two_runs_that_conflict_each_keep_the_file_they_wrote(tmp_path: Path) ->
     and the rebase applies it whole, so both writers land and neither has to
     know about the other.
     """
-    staged_paths, settings = _commit_call("plan")
+    staged_paths, settings = _commit_call("work")
     settings = _as_this_job(settings)
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
@@ -590,7 +591,7 @@ def test_a_conflicted_path_this_job_did_not_write_stops_the_push(tmp_path: Path)
     So the push stops, and the message names the path and this job. One
     identity, not two: this job is the only one the script can speak for.
     """
-    staged_paths, settings = _commit_call("plan")
+    staged_paths, settings = _commit_call("work")
     settings = _as_this_job(settings)
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
@@ -623,7 +624,7 @@ def test_a_file_this_job_wrote_that_the_tip_deleted_stops_the_push(tmp_path: Pat
     so putting it back is not a resolution this script may make. The push stops
     and the message names the path and this job.
     """
-    staged_paths, settings = _commit_call("plan")
+    staged_paths, settings = _commit_call("work")
     settings = _as_this_job(settings)
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)

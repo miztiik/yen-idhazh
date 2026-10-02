@@ -114,6 +114,7 @@ PACKED_ON_THE_MOVE: Final = (
 LIVE_BY_DECISION: Final = {
     ("compact-candidate-models", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-counterfactual-scores", "dry_run"): PACKED_ON_THE_MOVE,
+    ("compact-feed-health", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-host-fingerprint", "dry_run"): PACKED_FOR_THE_CONSOLE,
     ("compact-host-fingerprint", "monthly_window_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
     ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
@@ -124,7 +125,6 @@ LIVE_BY_DECISION: Final = {
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
     ),
-    ("feed-health", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
     ("summary-quality-evals-index", "fold.dry_run"): (
         f"{FOLD_ALREADY_RAN_LIVE}; and a person ruled that the eval ledger's ID files stop "
         "growing by a file a day with no summary, so the same switch settles each closed "
@@ -639,7 +639,7 @@ def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: st
 def test_a_compaction_keeps_every_month_file_a_console_read_still_selects(
     tmp_path: Path, months: int, loads: bool
 ) -> None:
-    """Once feed-health moves, its compaction governs it, and the widest read still floors it.
+    """Feed health's compaction governs it, and the widest read still floors it.
 
     Fourteen month shards can hold 428 days. Forty-five days and twelve months
     reach back 410; with thirteen months, 438.
