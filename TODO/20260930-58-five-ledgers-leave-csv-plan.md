@@ -39,7 +39,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Every shape the moves need is declared, and a guard holds each moved ledger to it | - | A | DONE | p58r1 | #1184 | p58-r1-worker |
-| 2 | The migrator reads both CSV layouts in every root, packs every period, and the recipe is written down | 1, 3, 8 | C | PENDING | - | - | - |
+| 2 | The migrator reads both CSV layouts in every root, packs every period, and the recipe is written down | 1, 3, 8 | C | DONE | p58r2 | #1190 | p58-r2-worker |
 | 3 | The prune verb reaches every ledger on the door | - | A | DONE | p58r3 | #1181 | p58-r3-worker |
 | 4 | The counterfactual scores and the candidate verdicts move to the door | 1, 3, 8 | C | DONE | p58r4 | #1186 | p58-r4-worker |
 | 5 | The seen and published ledgers move to the door, and their union drivers retire | 2, 4 | D | PENDING | - | - | - |
