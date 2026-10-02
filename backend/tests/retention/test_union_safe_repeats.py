@@ -1,6 +1,6 @@
 """Does a row arriving twice change any answer a union-safe tree gives?
 
-`.gitattributes` gives seven committed collections `merge=union`, so a merge that
+`.gitattributes` gives five committed collections `merge=union`, so a merge that
 finds the same row on both sides keeps both copies. That is safe only where the
 row is keyed and something settles the repeat: the same key twice is one record
 recorded twice, never two records.
@@ -25,7 +25,6 @@ from idhazh import ledger, path_classes
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
-from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 
 pytestmark = pytest.mark.contract
@@ -34,19 +33,11 @@ A_DATE = "2026-08-20"
 A_RUN = "2026-08-20-1"
 AN_ADDRESS = "a" * 64
 
-#: What makes two rows of `state/seen` and `state/published` the same record.
-#: Neither carries a key constant, because neither settles a file: both readers
-#: return a mapping from the address, so the address is the key and a second row
-#: for it lands on the first.
-ADDRESS_KEY = ("url_key",)
-
 #: Every union-safe tree, with the contract that spells its columns and what
 #: makes two of its rows one record. Checked against `path_classes.UNION_SAFE` below,
 #: so a tree added to that list without a row here fails rather than merges
 #: untested.
 _TREES = (
-    ("state/seen", SeenRow, ADDRESS_KEY, {"url_key": AN_ADDRESS}),
-    ("state/published", PublishedRow, ADDRESS_KEY, {"url_key": AN_ADDRESS}),
     (
         "state/llm-council/shard-outcomes",
         CouncilShardOutcome,
@@ -80,7 +71,7 @@ def _doubled(path: Path) -> None:
 
 
 def test_every_union_safe_tree_has_a_repeat_case_beside_it() -> None:
-    """A tenth tree joins the list and arrives with nothing proving it settles.
+    """A sixth tree joins the list and arrives with nothing proving it settles.
 
     `state/content-similarity-judge/metrics` is the one entry with no case
     below. It is named here so the gap is a known one rather than a silent one.

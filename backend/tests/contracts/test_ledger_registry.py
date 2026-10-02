@@ -365,20 +365,24 @@ def test_a_ledger_with_no_folder_is_refused_even_when_it_is_one_file() -> None:
 def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
     """The name rule, proved able to fire by filing one ledger inside another family.
 
-    `seen` moves under the judge's folder, so every other rule still holds and
-    `LedgerName.SEEN` becomes the one name that no longer says where it sits.
+    `day-metrics` moves under the judge's folder, so every other rule still holds
+    and `LedgerName.DAY_METRICS` becomes the one name that no longer says where
+    it sits. It is a ledger the registry still builds a CSV address for: a ledger
+    filed under the two roots is refused first for a prefix that is not its name.
     """
     judge = a_family("content-similarity-judge")
-    seen = a_family(LedgerName.SEEN.value)["ledgers"][0]
-    nested = {**seen, "prefix": ["content-similarity-judge", LedgerName.SEEN.value]}
+    metrics = a_family(LedgerName.DAY_METRICS.value)["ledgers"][0]
+    nested = {**metrics, "prefix": ["content-similarity-judge", LedgerName.DAY_METRICS.value]}
     widened = {**judge, "ledgers": [*judge["ledgers"], nested]}
 
     with pytest.raises(ValidationError) as refusal:
         LedgersConfig.model_validate(
-            a_registry([widened, *without("content-similarity-judge", LedgerName.SEEN.value)])
+            a_registry([widened, *without("content-similarity-judge", LedgerName.DAY_METRICS.value)])
         )
 
-    assert "LedgerName.SEEN should be CONTENT_SIMILARITY_JUDGE_SEEN" in str(refusal.value)
+    assert "LedgerName.DAY_METRICS should be CONTENT_SIMILARITY_JUDGE_DAY_METRICS" in str(
+        refusal.value
+    )
 
 
 @pytest.mark.parametrize("member", CSV_LEDGERS, ids=lambda m: m.value)

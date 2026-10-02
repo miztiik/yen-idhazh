@@ -13,7 +13,7 @@ number, never on the daily pipeline's critical path, because a check that can
 fail a publication is a check that gets switched off the first time a shard's
 server dies. It is committed rather than kept as a private script so the answer
 is reproducible from a fork or a stale branch (Guardrail #5), which is the same
-reason `migrate_published_ledger.py` lives here.
+reason `migrate_to_parquet.py` lives here.
 
 Usage, from the root of a checkout:
 
