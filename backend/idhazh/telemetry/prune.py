@@ -183,16 +183,6 @@ DOOR_LEDGERS: Final[Mapping[str, LedgerName]] = MappingProxyType(
 #: compaction declares; a ledger on the door is refused by its own declaration,
 #: in `door_refusals`.
 REFUSED: Final[Mapping[str, str]] = {
-    LedgerName.PUBLISHED: (
-        "it is the guard against publishing one story twice and it has no window "
-        "at all - collect.published_window_days is -1, so every row in it is a row "
-        "that must never be deleted. A ledger that forgets cannot be that guard"
-    ),
-    LedgerName.SEEN: (
-        "it is what the planner remembers having already seen, so removing a day "
-        "from it lets the next run rediscover every address it holds - one "
-        "operator command becomes a loop"
-    ),
     LedgerName.SUMMARY_QUALITY_EVALS_INDEX: (
         "it is what the eval writer reads to refuse a measurement it already holds, "
         "so an identity taken out of it makes that measurement count as new, and no "

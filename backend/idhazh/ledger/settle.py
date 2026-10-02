@@ -65,10 +65,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     write it, not because it is old, so the bound does not weaken as a run gets
     slower or crosses midnight.
 
-    `state/seen/` is the one that is deliberately absent. It has no key at all:
-    `load_seen` folds a second sight by keeping the earliest, so a repeat costs
-    bytes and never moves an age.
-
     `state/feed-health/`, `state/item-health/`, `state/host-fingerprint/`,
     `state/span-rollup/` and `state/counterfactual-scores/` were all here until
     2026-09-22 and none of them is now. Each became a day directory where every
@@ -158,7 +154,7 @@ def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:
     job to the commit its run was triggered at - so a second execution of the
     same work cannot see rows the first one pushed after that commit. Its append
     lands them again. On a tree that still carries a union merge driver -
-    `state/published/` is one, and `path_classes.UNION_SAFE` lists the rest -
+    `path_classes.UNION_SAFE` lists them -
     git then concatenates both sides line by line, which is the right answer for
     two runs writing different rows and exactly the wrong one for two attempts
     writing the same row.

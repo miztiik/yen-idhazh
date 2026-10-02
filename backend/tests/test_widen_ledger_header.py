@@ -73,8 +73,6 @@ NARROWER_TREE_HEADER: Final = (
 #: them.
 UNREGISTERED: Final = frozenset(
     {
-        LedgerName.PUBLISHED,
-        LedgerName.SEEN,
         "-".join(ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).prefix),
         "-".join(ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES).prefix),
     }
@@ -312,10 +310,9 @@ def test_a_dry_run_reports_what_a_live_run_writes_and_writes_nothing(tmp_path: P
 def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Path) -> None:
     """An operator who typed a real ledger is holding a real question.
 
-    `published` is in the prune vocabulary, it has committed files back to
-    2026-08, and neither registry names the contract that reads one of its rows.
-    Saying so beats reporting that nothing happened to a file that is plainly
-    there.
+    The judge's metrics are in the prune vocabulary, their day files are real,
+    and neither registry names the contract that reads one of their rows. Saying
+    so beats reporting that nothing happened to a file that is plainly there.
 
     **This target used to be `scores`, and that was the bug this commit fixes.**
     `scores` is a day tree, so the refusal it was asserting stopped being about a
@@ -323,12 +320,13 @@ def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Pat
     `DAY_TREES`. A refusal is the right answer for exactly the ledgers
     in `UNREGISTERED` below, and the census there is what keeps this one honest.
     """
-    day = ledger.path(tmp_path, LedgerName.PUBLISHED, "2026-09-18")
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
+    day = ledger.path(tmp_path, which, "2026-09-18")
     day.parent.mkdir(parents=True)
     day.write_text("version\n", encoding="utf-8", newline="")
 
     with pytest.raises(ValueError, match="names a reader for"):
-        widen_ledger_header.widen(LedgerName.PUBLISHED, state_dir=tmp_path)
+        widen_ledger_header.widen("-".join(ledger.entry(which).prefix), state_dir=tmp_path)
 
 
 def test_the_utility_refuses_a_word_that_is_not_a_store(tmp_path: Path) -> None:
@@ -337,12 +335,12 @@ def test_the_utility_refuses_a_word_that_is_not_a_store(tmp_path: Path) -> None:
         widen_ledger_header.widen("scored-pairs", state_dir=tmp_path)
 
 
-def test_the_two_stores_a_prune_refuses_by_name_are_still_re_filable() -> None:
-    """Those two are refused a DELETION, and re-filing a header deletes nothing.
+def test_the_store_a_prune_refuses_by_name_is_still_re_filable() -> None:
+    """It is refused a DELETION, and re-filing a header deletes nothing.
 
-    `published` is the guard against publishing one story twice and `seen` is
-    what the planner remembers, so neither may forget a day. Neither reason is
-    about a column list, and a widener that inherited them would refuse a
+    `summary-quality-evals-index` is what the eval writer reads to refuse a
+    measurement it already holds, so no day of it may be taken out. That reason
+    is not about a column list, and a widener that inherited it would refuse a
     legitimate migration with a sentence about deletion.
     """
     assert set(widen_ledger_header.LEDGERS) >= set(prune.REFUSED)
@@ -399,7 +397,7 @@ def test_a_day_tree_re_files_onto_the_column_list_its_contract_holds_now(
         assert FeedHealthRow.from_csv_row(new).feed_id == old["feed_id"]
 
 
-def test_every_store_in_the_vocabulary_resolves_except_the_four_named_here(
+def test_every_store_in_the_vocabulary_resolves_except_the_two_named_here(
     tmp_path: Path,
 ) -> None:
     """The census. A ledger that quietly loses its reader is named here, not counted.
@@ -410,7 +408,7 @@ def test_every_store_in_the_vocabulary_resolves_except_the_four_named_here(
     under test was one the file asserted was correct.
 
     Asserted as set equality in both directions at once, so it is red when a
-    ledger loses its reader AND red when one of these four gains one. Either way
+    ledger loses its reader AND red when one of these two gains one. Either way
     the diff names the ledger.
 
     One header-only file per ledger, because `widen` reports nothing for a ledger
@@ -429,5 +427,5 @@ def test_every_store_in_the_vocabulary_resolves_except_the_four_named_here(
 
     assert refused == UNREGISTERED
     assert len(widen_ledger_header.LEDGERS) - len(refused) == 5, (
-        "five of nine; the other four are named in UNREGISTERED with the reason"
+        "five of seven; the other two are named in UNREGISTERED with the reason"
     )

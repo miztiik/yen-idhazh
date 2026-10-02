@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 One question, asked of every file this project writes:
 
@@ -167,7 +167,7 @@ is the count of month shards a console read opens, and no read opens a visual
 
 | Artefact | Policy | Age | Why that policy |
 | --- | --- | --- | --- |
-| `state/seen/` | Delete (lookup) | `collect.seen_window_days` | `ledger.load_seen` opens the day files that window names and nothing else, so an older day answers no question anybody asks. The one age here counted in days, so the prune keeps exactly the files the read opens |
+| `state/raw/seen/`, `state/compact/seen/` | Delete (lookup) | day files for 45 to 76 days, then 2 month files, the `monthly_window` of `config/gardener/compact-seen.json`. That window only reports today | `ledger.load_seen` reads the days `collect.seen_window_days` names and nothing else, so an older day answers no question anybody asks. The gardener loader refuses a compaction that keeps fewer days than that window |
 | `state/feed-health/` | Delete (lookup) | 14 months, the window of `config/gardener/feed-health.json` | a per-feed-per-run record, not a total worth keeping. The quarantine reads 31 days and the console reaches 367 inclusive days, a year and a day |
 | `state/raw/host-fingerprint/`, `state/compact/host-fingerprint/` | Delete (lookup) | 14 months, the `monthly_window` of `config/gardener/compact-host-fingerprint.json` | one job's silicon on one run, so a total over an old month names no machine. The gardener loader refuses that compaction when it keeps less than `public_machine_keep_months`, because the published shard is folded from this ledger |
 | `state/raw/counterfactual-scores/`, `state/compact/counterfactual-scores/` | Delete (lookup) | day files for 45 to 76 days, then 1 month file, the `monthly_window` of `config/gardener/compact-counterfactual-scores.json`. That window only reports today | the lens tuning that will read these scores opens `lens_weights.window_days`, 30 days, and the gardener loader refuses a compaction that keeps less |
@@ -178,7 +178,7 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/item-health-summary/` | Keep | forever, the `aggregate` series of `config/gardener/telemetry-aggregate.json` | the fold costs a measured 63.8 bytes a row over four stages - about 93 KB a year against the shard's 77 MB - and deleting it would make a year-over-year comparison unanswerable. No committed instance yet |
 | `state/visual-aggregate/` | Keep | `observability.visual_aggregate_keep_months`, null | the same argument again, and one more of its own: it is the only record that a gate ever refused anything. No committed instance yet |
 | `state/summary-quality-evals-index/` | Keep | none, deliberately | an identity set carrying no date. It is what stops an old measurement being scored again as if it were new |
-| `state/published/` | Keep | none - the **read** carries the cover, `collect.published_window_days` | forgetting an address republishes it as new |
+| `state/raw/published/`, `state/compact/published/` | Keep | forever, the `monthly_window` of `config/gardener/compact-published.json`, which may pack a month or a finished year and never drops one. The **read** carries the cover, `collect.published_window_days` | forgetting an address republishes it as new |
 | `state/day-metrics/` | Keep | none of its own | about 13 KB a day, measured 2026-09-12 over 23 committed days, and the only place a band count or an extraction census survives the fold above |
 | `state/span-rollup/` | Keep | none of its own | the committed record a trace is not. No committed instance yet |
 | `state/raw/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |

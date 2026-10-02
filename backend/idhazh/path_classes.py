@@ -73,15 +73,13 @@ DERIVED: Final[tuple[str, ...]] = (
 #: repository's own words rather than only in a glob git reads.
 #:
 #: A union is right only where two writers appending are not in disagreement -
-#: a row about one address, one day, one shard or one pair, which a reader
-#: settles by key. Where two writers on one path ARE a disagreement, the answer
+#: a row about one day, one shard or one pair, which a reader settles by key.
+#: Where two writers on one path ARE a disagreement, the answer
 #: is the written-once name instead: a union there would make the conflict quiet
 #: rather than remove it. `state/feed-health` is the tree that says so - it
 #: takes no driver. Nothing under `state/raw/` takes one either: every file
 #: there has one writer, so a union would have nothing to settle.
 UNION_SAFE: Final[tuple[str, ...]] = (
-    "state/published",
-    "state/seen",
     "state/llm-council/shard-outcomes",
     "state/content-similarity-judge/metrics",
     "state/content-similarity-judge/merge-line-holdout-scores",

@@ -18,7 +18,7 @@ refuse the good day file too, because `07.csv` is not a day directory. A
 different shape answering a different question is not a disagreement.
 
 Every tree here is built under `tmp_path` from the constants below, so these
-checks cost the same on the day `state/published/` holds ten times the days
+checks cost the same on the day a committed day tree holds ten times the days
 (`CLAUDE.md` Guardrail #12, section 13). A built tree also carries the four cases the
 committed ledgers have never produced and never will.
 """
@@ -32,10 +32,15 @@ from typing import Final
 import pytest
 
 from idhazh import day_partition, ledger
-from idhazh.contracts.base import derive_url_key
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.seen import PublishedRow
+
+#: The ledger every reader below is driven over: the similarity judge's fitted
+#: line, one `<YYYY>/<MM>/<DD>.csv` a day, whose writer files a day even when the
+#: fit was held, so one call puts one real day file in the tree.
+FITTED: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
+
+#: Where that ledger's tree sits under the state root.
+FITTED_DIR: Final = "/".join(ledger.entry(FITTED).prefix)
 
 #: The one good day. Fixed, so nothing here expires when the calendar moves.
 DAY: Final = "2026-09-07"
@@ -62,27 +67,16 @@ STRAYS: Final = (
 EMPTY_STRAY_MONTH: Final = "2026/\u0660\u0669"
 
 
-def _write_published(root: Path, date: str) -> None:
-    ledger.append_published(
-        root.parent,
-        date,
-        [
-            PublishedRow(
-                version=PublishedRow.schema_version(),
-                url_key=derive_url_key("https://example.org/items/one"),
-                published_on=date,
-                item_id="ai-01",
-            )
-        ],
-    )
+def _write_fitted(state: Path, date: str) -> None:
+    ledger.append_fitted_thresholds(state, date, [])
 
 
-def _days_published(state: Path) -> list[str]:
-    return sorted(ledger.load_published(state, today=None, within_days=UNBOUNDED_WINDOW).values())
+def _days_keyed(state: Path) -> list[str]:
+    return sorted(day_partition.date_of(held.path) for held in ledger.keyed_paths(state, date=None))
 
 
 def _days_walked(state: Path) -> list[str]:
-    root = ledger.tree_root(state, LedgerName.PUBLISHED)
+    root = ledger.tree_root(state, FITTED)
     return sorted(day_partition.date_of(path) for path in day_partition.day_files(root))
 
 
@@ -94,12 +88,12 @@ Reader = Callable[[Path], list[str]]
 #:
 #: A row is added here when a reader is added, and that is the point - a reader
 #: this table does not drive is the reader that starts disagreeing.
-#: `ledger.load_visual_prunes` left on 2026-09-28, when the cleanup record moved
-#: under `state/raw/`: its days are folders of writer files there, walked by
-#: `ledger/raw_files.py`, not `<DD>.csv` files.
+#: `ledger.load_visual_prunes` left on 2026-09-28 and `ledger.load_published`
+#: later, when each ledger moved under `state/raw/`: its days are folders of
+#: writer files there, walked by `ledger/raw_files.py`, not `<DD>.csv` files.
 READERS: Final[tuple[tuple[str, str, Writer, Reader], ...]] = (
-    ("day_partition.day_files", LedgerName.PUBLISHED, _write_published, _days_walked),
-    ("ledger.load_published", LedgerName.PUBLISHED, _write_published, _days_published),
+    ("day_partition.day_files", FITTED_DIR, _write_fitted, _days_walked),
+    ("ledger.keyed_paths", FITTED_DIR, _write_fitted, _days_keyed),
 )
 
 READER_IDS: Final = tuple(name for name, *_ in READERS)
@@ -109,7 +103,7 @@ def _tree(tmp_path: Path, dirname: str, write: Writer, strays: Iterable[str]) ->
     """A state directory holding one real day file, plus whatever else is asked for."""
     state = tmp_path / "state"
     root = state / dirname
-    write(root, DAY)
+    write(state, DAY)
     for relative in strays:
         entry = root / relative
         entry.parent.mkdir(parents=True, exist_ok=True)
@@ -192,31 +186,31 @@ def test_the_refusal_names_the_tree_and_the_entry_in_posix_form(tmp_path: Path) 
     handed rather than from a constant, so a reader pointed at the wrong
     directory says which one it was really reading.
     """
-    state = _tree(tmp_path, LedgerName.PUBLISHED, _write_published, ("notes.txt",))
+    state = _tree(tmp_path, FITTED_DIR, _write_fitted, ("notes.txt",))
 
     with pytest.raises(ValueError) as raised:
-        _days_published(state)
+        _days_walked(state)
 
-    assert "state/published holds notes.txt" in str(raised.value)
+    assert "content-similarity-judge/fitted-thresholds holds notes.txt" in str(raised.value)
     assert "\\" not in str(raised.value)
 
 
 def test_a_fresh_clone_reads_no_days_and_is_not_a_fault(tmp_path: Path) -> None:
     """No history is what a new checkout has, and every reader answers it empty."""
-    assert list(day_partition.day_files(ledger.tree_root(tmp_path / "state", LedgerName.PUBLISHED))) == []
+    assert list(day_partition.day_files(ledger.tree_root(tmp_path / "state", FITTED))) == []
 
 
 def test_the_path_says_which_day_and_which_month_a_file_holds(tmp_path: Path) -> None:
     """`date_of` and `month_of` read the record, so nothing opens a file to ask.
 
     Both, in one test, because they are the same claim at two widths and a
-    boundary is either a day or a month: `prune_seen` compares a day,
-    `prune_telemetry` and `prune_feed_health` compare a month. Driven over the
-    tree the walk returns rather than over a path the test spelled, so a layout
-    change breaks this before it breaks a pruner.
+    boundary is either a day or a month: the prune verb compares a day, and a
+    window counted in months compares a month. Driven over the tree the walk
+    returns rather than over a path the test spelled, so a layout change breaks
+    this before it breaks a pruner.
     """
-    state = _tree(tmp_path, LedgerName.PUBLISHED, _write_published, ())
-    day = next(iter(day_partition.day_files(ledger.tree_root(state, LedgerName.PUBLISHED))))
+    state = _tree(tmp_path, FITTED_DIR, _write_fitted, ())
+    day = next(iter(day_partition.day_files(ledger.tree_root(state, FITTED))))
 
     assert day_partition.date_of(day) == DAY
     assert day_partition.month_of(day) == DAY[:7]

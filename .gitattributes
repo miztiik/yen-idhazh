@@ -6,11 +6,11 @@
 # change the hash the run manifest records for it.
 config/*.json text eol=lf
 
-# The committed run state: the eval ledger, the fingerprints, the seen-URL
-# store and the feed-health record. Rows are appended by CI on Linux and read by
-# a developer on Windows; a CRLF rewrite would show every historical row as
-# changed. `*.csv text eol=lf` near the bottom of this file is what pins them,
-# so none of them needs a line of its own for that.
+# The committed run state: the eval ledger, the fingerprints and the
+# feed-health record. Rows are appended by CI on Linux and read by a developer
+# on Windows; a CRLF rewrite would show every historical row as changed.
+# `*.csv text eol=lf` near the bottom of this file is what pins them, so none
+# of them needs a line of its own for that.
 #
 # Every one of those files carried `merge=union` until 2026-09-19, and that is
 # what a lost push race used to stack. A job's checkout is pinned to the commit
@@ -26,13 +26,10 @@ config/*.json text eol=lf
 # verdicts can disagree - so a union there would keep both and make the conflict
 # quiet rather than remove it. The written-once name removes it.
 #
-# `state/seen/` is the one that never moved to a per-writer name and took the
-# driver back instead. Its own line below says why the repeat it lets through
-# changes no answer.
-#
 # `state/feed-retirements.csv` and `state/visual-prunes/` carried a union driver
 # until 2026-09-28, when both moved under `state/raw/`: every file there has one
-# writer, so there is nothing for a union to settle.
+# writer, so there is nothing for a union to settle. `state/published/` and
+# `state/seen/` carried one until they moved there too.
 
 # One council shard's outcome. A row is one shard of one run and says nothing
 # about another shard or another run, so two writers appending are independent
@@ -48,35 +45,9 @@ state/content-similarity-judge/merge-line-holdout-scores/**/*.csv text eol=lf me
 state/content-similarity-judge/scored-pairs/**/*.csv text eol=lf merge=union
 state/content-similarity-judge/fitted-thresholds/**/*.csv text eol=lf merge=union
 
-# The published day tree. It is one of the two day trees that take a union
-# driver, and it says so in its own words rather than inheriting one from a
-# neighbour: a merge rule nobody chose is nobody's decision, and this one
-# decides whether two runs of a day can both publish.
-#
-# `merge=union` is right here because a published row is independent of every
-# other row - one item, one day, one address - so two runs of the same day that
-# both append are not in disagreement, and the union of both sides is the
-# answer. `ledger.load_published` keeps the earliest date per address, so a row
-# the union brings twice costs bytes and never moves a publication date.
-state/published/**/*.csv text eol=lf merge=union
-
-# The first-sight record's day tree, the second and last day tree that takes a
-# union driver. It had none until 2026-09-22 and fell through to `*.csv text
-# eol=lf` near the bottom of this file, so two runs of one day that both met a
-# new address conflicted at the push over a file neither of them disagreed
-# about.
-#
-# `merge=union` is right here for the reason written above `state/published/**`.
-# A row says when one address was first met, `plan` appends a row only for an
-# address `ledger.load_seen` did not already hold, and that reader keeps the
-# EARLIEST stamp per address - so a row the union brings twice costs bytes and
-# never moves an age. It is the one `state/` ledger that declares no key at all,
-# and `ledger.keyed_paths` says so in its own words.
-state/seen/**/*.csv text eol=lf merge=union
-
 # The hand-marked holdout pairs. `merge=text` is what an unnamed path would get
 # anyway, and it is written down because the reason is worth reading next to the
-# union lines above and below. A person edits this file, so two edits of it are
+# union lines above. A person edits this file, so two edits of it are
 # two people disagreeing about the same rows rather than two runs appending
 # independent ones - and a union driver on a disagreement silently keeps both
 # marks, which is a pair marked same-story and different-story at once. A text

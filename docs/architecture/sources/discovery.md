@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-10-02
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
 ## Three primitives, not one
@@ -79,7 +79,7 @@ An entity matches by the same one-sentence rule, with `aliases` in `config/watch
 
 **`watchlist_bonus` pays the candidates whose feed title matches an alias.** The title, not the article text, and the asymmetry is deliberate: a plan runs before a single page is fetched, so the title is all it has. An article whose body names an entity its title does not still earns the published tag at Extract. **The tag says what the item is about, the bonus says what we were already watching for.** Those are different questions and they are allowed to disagree.
 
-**A bonus that starts firing reorders every future day and no past one.** That makes wiring one a live ranking change and an owner's decision rather than a defect fix. The published ledger under `state/published/` stops an already-published address being planned again, so no day a reader has already seen moves.
+**A bonus that starts firing reorders every future day and no past one.** That makes wiring one a live ranking change and an owner's decision rather than a defect fix. The published ledger stops an already-published address being planned again, so no day a reader has already seen moves.
 
 **An entry is an organisation or a subject, and only the second kind has a gap worth measuring.** `EntityDef.kind` defaults to `organisation`. A company is in the news most weeks, so the time between our own mentions of it is near zero; a running story - a pandemic, a tournament, an export-control regime - goes quiet between instalments. The field exists so the second kind can enter the vocabulary at all, which an organisation-only registry could not allow. A subject carries no SEC filer id and the contract refuses one.
 

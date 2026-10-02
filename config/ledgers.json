@@ -8,10 +8,10 @@
       "ledgers": [
         {
           "name": "seen",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["seen"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         }
       ]
     },
@@ -143,10 +143,10 @@
       "ledgers": [
         {
           "name": "published",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["published"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         }
       ]
     },

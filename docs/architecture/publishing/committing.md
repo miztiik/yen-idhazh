@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-02
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the rebase loop and the clock
@@ -131,16 +131,14 @@ filters against the file it checked out, and `actions/checkout` pins the job to
 the commit its run was triggered at. A settling pass ran after each rebase to
 take the repeats back out. Both are gone: the union driver is off every head, no
 commit step settles anything, and a second attempt that really does race its own
-first attempt now stops at the rebase instead of landing a row twice. Of the
-trees a digest run writes, only `state/published/**` and `state/seen/**` keep a
-union driver, and each has one writing job; `path_classes.UNION_SAFE` lists
-every tree that keeps one. `state/visual-prunes/**` lost its driver on
-2026-09-28, when the cleanup record moved under `state/raw/`, where every run
-files a file of its own. `state/seen/` is the one that never moved
-to a segment - it is a whole day file that `plan` appends to, so two runs of one
-day that both met a new address used to conflict at the push over a file neither
-of them disagreed about. `ledger.load_seen` keeps the earliest stamp per
-address, so a row the union brings twice costs bytes and moves no age.
+first attempt now stops at the rebase instead of landing a row twice.
+`path_classes.UNION_SAFE` lists every tree that still keeps a union driver.
+`state/visual-prunes/**` lost its driver on 2026-09-28, and `state/published/**`
+and `state/seen/**` lost theirs when those ledgers moved under `state/raw/`,
+where every run files a file of its own. Two runs of one day that both meet a
+new address now write two files rather than append to one, and
+`ledger.load_seen` keeps the earliest stamp per address, so neither push
+conflicts and no age moves.
 
 A shard's two steps carry `continue-on-error`, so neither can fail the shard. The
 shard owes the run its items artifact, and assemble writes the same census again,
@@ -178,11 +176,12 @@ for all of them.** Seven are written once - item-health, host-fingerprint,
 summary-quality-evals, its ID folder, span-rollup, traces and segments, which is gone - so each
 now names its file for the single writer that wrote it, two runs never compute
 different bytes for one path, and there is nothing to hand back.
-`state/published` left beside them for a different reason: it is union-safe, and
-the hand-back was discarding this run's appended rows before the union driver
-could ever fire, leaving the publication record dependent on a rebuild
-succeeding. **What the eight buy is correctness, not time**: against a 5-second
-rebuild in an 11-second step there is no time to win.
+`state/published` left beside them for a different reason: it was union-safe
+then, and the hand-back was discarding this run's appended rows before the union
+driver could ever fire, leaving the publication record dependent on a rebuild
+succeeding. It has since moved under `state/raw/`, where the assemble job files
+a file of its own. **What the eight buy is correctness, not time**: against a
+5-second rebuild in an 11-second step there is no time to win.
 
 **`state/day-metrics` is the one that stays**, and it is the reason `hand_back`
 still touches a `state/` path at all. It is one whole-file-per-day JSON that

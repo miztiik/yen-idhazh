@@ -1162,8 +1162,8 @@ jobs:
       # `corpus` is staged here and is deliberately NOT in `REFRESH_PATHS`. The
       # window records what this run saw rather than deriving from the tip, so a
       # race is answered by replaying this run's rows onto the new base - the
-      # same branch of the script `state/seen` takes - and never by rebuilding
-      # them.
+      # same branch of the script this run's own ledger files take - and never by
+      # rebuilding them.
       #
       # The `id` is here so the rebuild below can read this step's `rebased`
       # output. Nothing else reads it.

@@ -252,8 +252,11 @@ def _under_a_day_tree_ledger(root: Path, filed: Path) -> Path:
 
 
 def _under_a_day_file_ledger(root: Path, filed: Path) -> Path:
-    """A copy under `raw/seen/`, a ledger that files one CSV file a day."""
-    return _copied(filed, ledger.raw_path(root, LedgerName.SEEN, DAY, uuid.UUID(filed.stem)))
+    """A copy under `raw/shard-outcomes/`, a ledger that files one CSV file a day."""
+    return _copied(
+        filed,
+        ledger.raw_path(root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, DAY, uuid.UUID(filed.stem)),
+    )
 
 
 def _on_a_day_no_calendar_has(root: Path, filed: Path) -> Path:

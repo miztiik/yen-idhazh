@@ -312,9 +312,9 @@ def _refuse_outside_day_trees(ledger: LedgerName) -> None:
 
     `LedgerName` spans every ledger under `state/`, and only a day tree holds one
     file per writer under a day directory. So a caller can now name a ledger that
-    is the wrong shape for a segment - `seen` is a file where this would mint a
-    directory - and a wrong call has to be answered at the call rather than by
-    writing a path no reader walks.
+    is the wrong shape for a segment - `scored-pairs` is a day file where this
+    would mint a directory - and a wrong call has to be answered at the call
+    rather than by writing a path no reader walks.
     """
     if ledger not in DAY_TREES:
         raise ValueError(f"{ledger.value} is not a day tree, so it holds no writer's segment")
