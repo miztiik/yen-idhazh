@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-02
 
 **Known noncompliance:** Existing console prerendering does not meet [Telemetry Intent](../../concepts/telemetry-intent.md) and will be migrated to browser rendering. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -64,7 +64,7 @@ Keep the first useful chart visible without making an operator scroll through
 diagnostics before reaching the status that explains them. Figures must be
 legible, tables must fit their container, and titles must use plain words.
 
-## The console is five routes
+## The console is five routes, and a sixth is declared
 
 | Path | Label | What it answers |
 | --- | --- | --- |
@@ -73,6 +73,13 @@ legible, tables must fit their container, and titles must use plain words.
 | `/console/machine/` | **Hardware** | Which hardware ran the work, and how much did it vary? |
 | `/console/judgement/` | **Judgement** | What decisions were made about articles, and where did evaluation disagree? |
 | `/console/voices/` | **Voices** | Who supplied the day, and how are feeds discounted? |
+| `/console/data-explorer/` | **Records** | What do the ledgers hold, and what does a question of my own return? |
+
+**Records is declared and not drawn yet.** The band carries it, so a band
+written today names six routes, and the strip draws its tab only while
+`console.data_explorer_tab` is on. That flag stays off until the page at
+`/console/data-explorer/` exists, because a tab pointing at a page that is not
+there is worse than no tab; the change that ships the page deletes the flag.
 
 Feed and source panels belong to Voices, not Pipelines. Keep `/console/` as the
 Pipelines address; renaming a label is not a reason to break an existing bookmark.

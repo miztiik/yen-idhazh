@@ -194,9 +194,8 @@ test("from the breakpoint up a tab's worst state stands under its label, and eve
 	page
 }) => {
 	// Side by side, a tab is as wide as its label and its worst state together,
-	// and on the landing route - whose days control is the widest, because it
-	// carries prices - the fifth tab stayed out of view at every width up to
-	// 1920. Stacked, a tab is as wide as the longer of the two.
+	// and on the landing route the fifth tab stayed out of view at every width
+	// up to 1920. Stacked, a tab is as wide as the longer of the two.
 	await page.setViewportSize(WIDE);
 	await page.goto('/console/');
 	await hydrated(page);
@@ -231,6 +230,34 @@ test("from the breakpoint up a tab's worst state stands under its label, and eve
 		);
 	}
 	expect(new Set(at.tabs.map((tab) => tab.labelTop)).size, 'the labels do not start level').toBe(1);
+});
+
+test('THE ORACLE: at 1024 every console route opens with its own tab whole', async ({ page }) => {
+	// The narrowest width the strip is one row. When the tabs are wider than the
+	// row the list scrolls, and a page that opened with its own tab cut off would
+	// not say which route it is. The band's worst route is brought into view only
+	// where the reader's own tab stays whole beside it.
+	await page.setViewportSize({ width: 1024, height: 900 });
+	for (const path of ['/console/', '/console/model/', '/console/machine/', '/console/judgement/', '/console/voices/']) {
+		await page.goto(path);
+		await hydrated(page);
+		const at = await page.evaluate(() => {
+			const list = document.querySelector('[data-console-nav] ul') as HTMLElement;
+			const shown = list.getBoundingClientRect();
+			const own = document.querySelector('[data-console-tab-active="true"]') as HTMLElement;
+			const tab = own.getBoundingClientRect();
+			return {
+				innerWidth: window.innerWidth,
+				id: own.getAttribute('data-console-tab'),
+				scrolls: list.scrollWidth > list.clientWidth,
+				whole: tab.left >= shown.left - 1 && tab.right <= shown.right + 1
+			};
+		});
+		console.log(
+			`[own tab] ${path} asked 1024 -> innerWidth ${at.innerWidth}, ${at.id} whole ${at.whole}, list scrolls ${at.scrolls}`
+		);
+		expect(at.whole, `${path} opens with its own tab, ${at.id}, cut off`).toBe(true);
+	}
 });
 
 test('THE ORACLE: every jump link lands its heading below the stuck strip', async ({ page }) => {

@@ -491,6 +491,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-02",
+            change="console.default_window_days 30 to 14; console.data_explorer_tab added.",
+            why="One opening span on every route, and the sixth tab waits for its page.",
+        ),
+        ChangelogEntry(
             version="2026-09-30",
             change="console.machine_colour_stops 7 to 5, and three machine-panel knobs added.",
             why="A machine's colour is a speed ramp of five steps, not a key-ordered palette.",
@@ -507,11 +512,6 @@ class AppearanceConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-24",
-            change="digest.filter_settle_ms, additive, default 120.",
-            why="The list narrows on the keystroke; the count beside it settles after one.",
-        ),
-        ChangelogEntry(
-            version="2026-08-29",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),

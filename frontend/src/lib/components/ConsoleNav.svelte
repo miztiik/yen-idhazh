@@ -21,10 +21,17 @@
 	 * **From `frame.breakpoints_px[1]` up it is one row, however many routes
 	 * there are.** The strip sticks to the top of the screen there, and a stuck
 	 * strip that wrapped would cover a second row of every screen. So the list
-	 * scrolls sideways when the tabs are wider than the row, no label is
-	 * shortened to make them fit, and the list opens with the band's worst route
-	 * in view - the one fact on the strip the band cannot give once the band has
-	 * scrolled away.
+	 * scrolls sideways when the tabs are wider than the row, and no label is
+	 * shortened to make them fit. The list opens with the reader's own tab whole,
+	 * because a page that cannot show which route it is has lost the strip's
+	 * first job; and with the band's worst route in view too wherever both fit -
+	 * the one fact on the strip the band cannot give once the band has scrolled
+	 * away. Where they do not both fit, the band under the strip still names the
+	 * worst route.
+	 *
+	 * **The sixth route, Records, is drawn only while
+	 * `console.data_explorer_tab` is on.** The layout hands this strip
+	 * `stripRoutes()` of the band's routes, so the flag is decided in one place.
 	 */
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
@@ -44,14 +51,27 @@
 	let list = $state<HTMLUListElement>();
 
 	onMount(() => {
-		if (list === undefined || worst === null) return;
+		if (list === undefined) return;
 		if (list.scrollWidth <= list.clientWidth) return;
-		const tab = list.querySelector(`[data-console-tab="${worst}"]`);
-		if (tab === null) return;
 		const shown = list.getBoundingClientRect();
-		const box = tab.getBoundingClientRect();
-		if (box.right > shown.right) list.scrollLeft += box.right - shown.right;
-		else if (box.left < shown.left) list.scrollLeft -= shown.left - box.left;
+		// The sideways scrolls, from where the list stands now, that leave one tab
+		// whole: from the least that brings its right edge in to the most that
+		// keeps its left edge in.
+		const whole = (id: RouteId | null): [number, number] | null => {
+			const tab = id === null ? null : list?.querySelector(`[data-console-tab="${id}"]`);
+			if (tab === null || tab === undefined) return null;
+			const box = tab.getBoundingClientRect();
+			return [box.right - shown.right, box.left - shown.left];
+		};
+		const own = whole(active);
+		if (own === null) return;
+		let [least, most] = own;
+		const named = worst === active ? null : whole(worst);
+		if (named !== null && Math.max(least, named[0]) <= Math.min(most, named[1])) {
+			least = Math.max(least, named[0]);
+			most = Math.min(most, named[1]);
+		}
+		list.scrollLeft += Math.min(Math.max(0, least), most);
 	});
 </script>
 

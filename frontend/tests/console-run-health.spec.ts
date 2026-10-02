@@ -128,6 +128,32 @@ async function setWindow(page: Page, days: number) {
 		String(days)
 	);
 }
+
+/** The narrowest preset that reaches back past the canary's first published day.
+ *
+ * The console opens on fourteen days since 2026-10-02, which fit one phone, so a
+ * rule about a strip wider than a phone needs a wider span. Found from the
+ * fixture's own days and the presets, so a canary that grows a day moves it.
+ */
+function presetPastTheCanary(): number {
+	const root = join(CANARY, 'digest');
+	const dirs = (at: string) =>
+		readdirSync(at, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name)
+			.sort();
+	const published = dirs(root).flatMap((year) =>
+		dirs(join(root, year)).flatMap((month) =>
+			dirs(join(root, year, month)).map((day) => `${year}-${month}-${day}`)
+		)
+	);
+	const first = new Date(`${published[0]}T00:00:00Z`).getTime();
+	const last = new Date(`${published.at(-1)}T00:00:00Z`).getTime();
+	const span = Math.round((last - first) / 86_400_000) + 1;
+	const wide = WINDOW_PRESETS.find((preset) => preset > span);
+	expect(wide, `no preset reaches back past the canary's ${span} days`).toBeDefined();
+	return wide as number;
+}
 const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
 
@@ -792,8 +818,19 @@ test('on a phone a tap or a step on the chart brings its day into view, and a ho
 	page
 }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
+	// More days than a phone is wide - the default fourteen fit one - so the page
+	// opens on a wider span, the way a reader's stored choice reopens it.
+	const wide = presetPastTheCanary();
+	await page.addInitScript(
+		(stored) => localStorage.setItem('idhazh:console-window', String(stored)),
+		wide
+	);
 	await page.goto('/console/');
 	await expect(page.locator('label[data-window-preset] input').first()).toBeEnabled();
+	await expect(page.locator('[data-window-control]')).toHaveAttribute(
+		'data-window-days',
+		String(wide)
+	);
 
 	const strip = page.locator('[data-run-history]');
 	const scroll = () => strip.evaluate((node) => node.scrollLeft);

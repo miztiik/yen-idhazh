@@ -110,7 +110,7 @@
     "watchlist_max_entities": 30
   },
   "console": {
-    "default_window_days": 30,
+    "default_window_days": 14,
     "doubt_rows": 10,
     "failure_list_max": 25,
     "feed_rows": 10,
@@ -259,7 +259,7 @@
       "/404": 4400,
       "/evals/": 6600
     },
-    "cold_console_load_bytes": 3400000,
+    "cold_console_load_bytes": 2300000,
     "payload_ceilings_bytes": {
       "console/band.json": 2000,
       "state/compact/host-fingerprint/index/": 2200,

@@ -46,7 +46,7 @@ const TELEMETRY = JSON.parse(
 };
 
 const PRESETS = CONFIG.console?.window_presets ?? [1, 7, 14, 30, 90];
-const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 30;
+const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 14;
 
 /** The tree the site was built from. The suite builds from the canaries. */
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
@@ -754,13 +754,122 @@ test('the control names the window it is holding, and is inert before a script r
 
 test('one day is one day, in the sentence and to a screen reader', async ({ page }) => {
 	// The one-day preset read "1 days" on its tile and in the sentence under the
-	// band. The tile is the number alone now, but it still says its unit to a
-	// screen reader, and both say it in the singular.
+	// band. The tile shows `1D` now, and still says its unit to a screen reader,
+	// in the singular - and the `D` is hidden from that reader, so it is never
+	// heard as "1D day".
 	await page.goto('/console/');
 	await hydrated(page);
 	const narrowest = Math.min(...PRESETS);
 	expect(narrowest, 'the presets no longer offer a single day, so this proves nothing').toBe(1);
 	await setWindow(page, narrowest);
 	await expect(page.locator('[data-window-status]')).toContainText('showing 1 day.');
-	await expect(page.locator('[data-window-preset="1"] .segment-days')).toHaveText('1 day');
+	await expect(page.locator('[data-window-preset="1"] [aria-hidden="true"]')).toHaveText('1D');
+	await expect(page.getByRole('radio', { name: '1 day', exact: true })).toHaveCount(1);
+	await expect(page.getByRole('radio', { name: '14 days', exact: true })).toHaveCount(1);
 });
+
+/** The control and the strip it stands on, in viewport coordinates. */
+async function controlBox(page: Page) {
+	return page.evaluate(() => {
+		const strip = (document.querySelector('[data-console-strip]') as HTMLElement).getBoundingClientRect();
+		const control = (document.querySelector('[data-window-control]') as HTMLElement).getBoundingClientRect();
+		const tabs = (document.querySelector('[data-console-nav]') as HTMLElement).getBoundingClientRect();
+		return {
+			innerWidth: window.innerWidth,
+			width: Math.round(control.width),
+			height: Math.round(control.height),
+			left: Math.round(control.left),
+			right: Math.round(control.right),
+			top: Math.round(control.top),
+			stripLeft: Math.round(strip.left),
+			stripRight: Math.round(strip.right),
+			tabsBottom: Math.round(tabs.bottom),
+			shown: [...document.querySelectorAll('[data-window-preset] [aria-hidden="true"]')].map(
+				(node) => (node.textContent ?? '').trim()
+			)
+		};
+	});
+}
+
+for (const width of [390, 768, 1440]) {
+	test(`THE ORACLE: the days control is five short tiles, 236 by 44, at ${width}`, async ({
+		page
+	}) => {
+		// Five tiles at the 2.75rem touch floor both ways, 4px apart, and nothing
+		// beside them: no label and no room kept for a price. Below the wide
+		// breakpoint the control starts its own row under the tabs; from it, the
+		// control ends the one-row strip.
+		await page.setViewportSize({ width, height: 900 });
+		await page.goto('/console/');
+		await hydrated(page);
+		const at = await controlBox(page);
+		console.log(
+			`[control] asked ${width} -> innerWidth ${at.innerWidth}, ${at.width}x${at.height} ` +
+				`at ${at.left}-${at.right}, strip ${at.stripLeft}-${at.stripRight}, tabs end ${at.tabsBottom}, ` +
+				`control top ${at.top}`
+		);
+		expect(at.shown).toEqual(PRESETS.map((preset) => `${preset}D`));
+		expect(Math.abs(at.width - 236), `the control is ${at.width}px wide`).toBeLessThanOrEqual(1);
+		expect(Math.abs(at.height - 44), `the control is ${at.height}px tall`).toBeLessThanOrEqual(1);
+		if (width < 1024) {
+			expect(Math.abs(at.left - at.stripLeft), 'the control does not start its row').toBeLessThanOrEqual(1);
+			expect(at.top, 'the control is not on a row of its own under the tabs').toBeGreaterThanOrEqual(
+				at.tabsBottom
+			);
+		} else {
+			expect(Math.abs(at.right - at.stripRight), 'the control left the end of the strip').toBeLessThanOrEqual(1);
+		}
+	});
+}
+
+/** The top of everything between the strip and the first panel, and of that
+ * panel - in page coordinates, so a scroll cannot read as a move. */
+async function belowTheStrip(page: Page): Promise<Record<string, number>> {
+	return page.evaluate(() => {
+		const tops: Record<string, number> = {};
+		for (const selector of [
+			'[data-console-completeness]',
+			'[data-console-band]',
+			'[data-window-status]',
+			'[data-console-panel]'
+		]) {
+			const node = document.querySelector(selector);
+			if (node !== null) tops[selector] = node.getBoundingClientRect().top + window.scrollY;
+		}
+		return tops;
+	});
+}
+
+for (const width of [390, 768, 1440]) {
+	test(`THE ORACLE: picking each preset moves nothing below the strip, at ${width}`, async ({
+		page
+	}) => {
+		// The tiles once kept a second line for a price whether or not one was
+		// due, because a price that landed or cleared moved seven panels. The
+		// price is in the sentence under the band now, and that sentence keeps the
+		// room of its longest form - so this is the property a smaller control
+		// could silently lose. It starts on one day, where every wider preset that
+		// reaches the canary's older month is priced.
+		await page.addInitScript(() => localStorage.setItem('idhazh:console-window', '1'));
+		await page.setViewportSize({ width, height: 900 });
+		await page.goto('/console/');
+		await expect(page.locator('[data-window-preset="1"] input')).toBeEnabled();
+		await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '1');
+		await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
+		// The canary keeps two telemetry months, so the widest presets reach one
+		// the one-day window never fetched. Without a price this proves nothing.
+		await expect(page.locator('[data-window-status]')).toContainText('would fetch');
+		const before = await belowTheStrip(page);
+		expect(Object.keys(before), 'a block below the strip is missing').toHaveLength(4);
+
+		for (const preset of PRESETS.filter((days) => days > 1)) {
+			await setWindow(page, preset);
+			await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
+			const after = await belowTheStrip(page);
+			const moved = Object.keys(before)
+				.filter((name) => Math.abs(after[name] - before[name]) > 1)
+				.map((name) => `${name}: ${Math.round(before[name])} -> ${Math.round(after[name])}`);
+			expect(moved, `picking ${preset} days moved the page at ${width}:\n${moved.join('\n')}`).toEqual([]);
+		}
+	});
+}
