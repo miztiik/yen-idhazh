@@ -53,7 +53,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The span control shrinks and the strip gains a sixth tab | - | A | DONE | p55r1 | - | owner |
+| 1 | The span control shrinks and the strip gains a sixth tab | - | A | DONE | p55r1 | #1196 | owner |
 | 2 | The door answers a written question, on the engine plan 51 shipped | 1 | B | PENDING | - | - | - |
 | 3 | Every declared ledger reaches the site, capped at the widest span | 1 | B | PENDING | - | - | - |
 | 4 | The page: pick the ledgers and the days, write the question, read the table | 1, 2, 3, 7 | D | PENDING | - | - | - |
