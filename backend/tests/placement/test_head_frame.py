@@ -107,10 +107,10 @@ def test_past_the_head_the_order_is_the_scores_untouched() -> None:
 def test_the_frame_yields_before_the_day_shortens() -> None:
     """A day the caps cannot spread publishes whole, in the score's own order.
 
-    Thirty stories on one desk cannot fill a head capped at five. The best
-    story each cap held down takes the slot back rather than the head running
-    short, which on a single-desk day leaves the score's order untouched.
+    One story beyond the head limit cannot be spread to another desk. The
+    frame yields rather than drops it, leaving the score's order untouched.
     """
+    config = frame()
     day = [
         story(
             f"ai-solo-{index:02d}",
@@ -118,15 +118,15 @@ def test_the_frame_yields_before_the_day_shortens() -> None:
             source_id=f"feed-{index}",
             rank_score=100.0 - index,
         )
-        for index in range(30)
+        for index in range(config.head_items + 1)
     ]
-    out = placed(day, config=frame())
+    out = placed(day, config=config)
 
     assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]
 
 
 def test_a_day_shorter_than_the_head_comes_back_whole() -> None:
-    """Twelve stories from one feed on one desk. Every cap is unsatisfiable."""
+    """Two stories from one feed cannot fill the head or its unique-source limit."""
     day = [
         story(
             f"ai-one-feed-{index:02d}",
@@ -134,9 +134,9 @@ def test_a_day_shorter_than_the_head_comes_back_whole() -> None:
             source_id="feed-a",
             rank_score=100.0 - index,
         )
-        for index in range(12)
+        for index in range(2)
     ]
     out = placed(day, config=frame())
 
-    assert len(out) == 12
+    assert len(out) == 2
     assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]

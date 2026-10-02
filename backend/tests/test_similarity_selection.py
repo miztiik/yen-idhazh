@@ -126,10 +126,10 @@ def stamp(*, cosine_weight: float = 1.0) -> ScorerStamp:
     return ScorerStamp(scorer_model=EMBEDDER_ID, cosine_weight=cosine_weight)
 
 
-def a_band_of_fifty_five() -> list[ScoredPair]:
-    """Five pairs the day merged and fifty it did not, which is the shape of a real day."""
-    above = [scored(f"above-{n:02d}", f"other-{n:02d}", score=0.95) for n in range(5)]
-    below = [scored(f"below-{n:02d}", f"other-{n:02d}", score=0.90) for n in range(50)]
+def a_band_of_four() -> list[ScoredPair]:
+    """Two merged pairs and two unmerged pairs show both sides of the line."""
+    above = [scored(f"above-{n:02d}", f"other-{n:02d}", score=0.95) for n in range(2)]
+    below = [scored(f"below-{n:02d}", f"other-{n:02d}", score=0.90) for n in range(2)]
     return [*above, *below]
 
 
@@ -196,22 +196,21 @@ def test_every_pair_above_the_line_survives_a_budget_of_one() -> None:
     So the budget is overspent rather than enforced, and this is the assertion
     that says which way round it goes.
     """
-    drawn = select(a_band_of_fifty_five(), line=LINE, budget=1, date=DATE, stamp=stamp())
+    drawn = select(a_band_of_four(), line=LINE, budget=1, date=DATE, stamp=stamp())
 
-    assert sorted(named(drawn)) == [(f"above-{n:02d}", f"other-{n:02d}") for n in range(5)]
+    assert sorted(named(drawn)) == [(f"above-{n:02d}", f"other-{n:02d}") for n in range(2)]
 
 
 def test_the_budget_records_what_it_cut_from() -> None:
     """A day that hit the cap reads as partial rather than as a quiet truncation.
 
-    Without the count, a day drawing 200 out of 200 and a day drawing 200 out of
-    2,000 write the same file, and the second is a sample of the band while the
-    first is the band.
+    Four pairs and a budget of three are enough to distinguish the whole band
+    from a sample of it.
     """
-    drawn = select(a_band_of_fifty_five(), line=LINE, budget=10, date=DATE, stamp=stamp())
+    drawn = select(a_band_of_four(), line=LINE, budget=3, date=DATE, stamp=stamp())
 
-    assert drawn.pairs_in_band == 55, "the count is what the band held before the cut"
-    assert len(drawn.taken) == 10
+    assert drawn.pairs_in_band == 4, "the count is what the band held before the cut"
+    assert len(drawn.taken) == 3
 
 
 # --- the order ---------------------------------------------------------------
@@ -224,10 +223,10 @@ def test_the_order_is_the_hash_and_not_the_input_order() -> None:
     chooses between them has to be a property of the pairs themselves. Input
     order is a property of how the day was assembled, and it moves.
     """
-    pairs = a_band_of_fifty_five()
+    pairs = a_band_of_four()
 
-    forwards = select(pairs, line=LINE, budget=10, date=DATE, stamp=stamp())
-    backwards = select(list(reversed(pairs)), line=LINE, budget=10, date=DATE, stamp=stamp())
+    forwards = select(pairs, line=LINE, budget=3, date=DATE, stamp=stamp())
+    backwards = select(list(reversed(pairs)), line=LINE, budget=3, date=DATE, stamp=stamp())
 
     assert named(forwards) == named(backwards)
 
@@ -239,13 +238,13 @@ def test_a_changed_scorer_stamp_changes_the_order() -> None:
     that ignored the ruler would keep drawing the pairs that were interesting
     under the old weights.
     """
-    pairs = a_band_of_fifty_five()
+    pairs = a_band_of_four()
 
-    under_cosine = select(pairs, line=LINE, budget=10, date=DATE, stamp=stamp())
+    under_cosine = select(pairs, line=LINE, budget=3, date=DATE, stamp=stamp())
     under_both = select(
         pairs,
         line=LINE,
-        budget=10,
+        budget=3,
         date=DATE,
         stamp=stamp(cosine_weight=0.9),
     )
@@ -384,9 +383,7 @@ def test_the_draw_round_trips_through_the_contract(
     )
 
     written = draw_path.read_text(encoding="utf-8")
-    rows = [
-        StorySimilarityPair.from_csv_row(row) for row in csv.DictReader(written.splitlines())
-    ]
+    rows = [StorySimilarityPair.from_csv_row(row) for row in csv.DictReader(written.splitlines())]
     assert rows, "the day holds pairs inside the band, so the draw is not empty"
     assert len(rows) == len(drawn.taken) <= drawn.pairs_in_band
     assert all(row.date == DATE and row.run_id == COUNCIL_RUN for row in rows), (

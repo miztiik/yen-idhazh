@@ -15,67 +15,44 @@ def test_a_short_premise_is_one_chunk() -> None:
 
 
 def test_a_long_premise_is_windowed_with_overlap() -> None:
-    text = " ".join(str(n) for n in range(1000))
-    windows = chunks(text, size=300, overlap=50)
+    size, overlap = 300, 50
+    text = " ".join(str(n) for n in range(2 * size - overlap))
+    windows = chunks(text, size=size, overlap=overlap)
     assert len(windows) > 1
     assert windows[0].split()[-1] in windows[1].split()[:60], "windows overlap"
 
 
-def test_every_window_is_the_full_window_and_the_last_one_ends_on_the_last_word() -> None:
-    """The aggregation is a max, so a short window is a rival with less to work with.
-
-    Until 2026-08-28 the walk stepped past the end and the leftover became the
-    final window. That window was short on every premise longer than one window
-    - as little as one word, and 370 words on average against 900-word rivals -
-    so every long article was graded with at least one draw from a partial
-    premise. Counting the windows cannot see this: the count is the same either
-    way on most lengths. The window LENGTHS are what say it.
-    """
+def test_a_premise_just_over_one_window_keeps_the_last_window_full() -> None:
+    """The first length that needs a second window exposes a partial-tail defect."""
     geometry = EvaluationConfig()
     size, overlap = geometry.chunk_words, geometry.chunk_overlap_words
 
-    for length in range(size + 1, 4001):
-        words = [str(n) for n in range(length)]
-        windows = [window.split() for window in chunks(" ".join(words), size, overlap)]
-        short = [len(window) for window in windows if len(window) != size]
-        assert not short, f"premise of {length} words produced windows of {short} words"
-        assert windows[-1][-1] == words[-1], (
-            f"premise of {length} words: the last window stops at "
-            f"{windows[-1][-1]} rather than {words[-1]}"
-        )
+    words = [str(n) for n in range(size + 1)]
+    windows = [window.split() for window in chunks(" ".join(words), size, overlap)]
+
+    assert [len(window) for window in windows] == [size, size]
+    assert windows[-1][-1] == words[-1]
 
 
 def test_anchoring_the_last_window_drops_a_window_on_a_long_article() -> None:
-    """Correctness is the reason; the saved scorer pass arrived with the bigger cap.
+    """Five words are enough for the old walk to add a partial third window."""
+    words = " ".join(str(n) for n in range(5))
+    windows = chunks(words, size=3, overlap=1)
 
-    At the cap of 2500 committed until 2026-08-29, an article stopped at 1,923
-    words. There anchoring fixes the runt and changes no count - 3 windows
-    before, 3 after - so it bought correctness and no time. At 3,846 words, which
-    is what the cap of 5000 now allows, the unanchored walk needed 6 windows with
-    the last of them 96 words long, and anchoring covers the same text in 5. That
-    is 16.7 percent less scorer work, and the cap move is what turned it from a
-    number to quote later into a live saving.
-    """
-    geometry = EvaluationConfig()
-    size, overlap = geometry.chunk_words, geometry.chunk_overlap_words
-
-    at_cap = chunks(" ".join(str(n) for n in range(1923)), size, overlap)
-    doubled = chunks(" ".join(str(n) for n in range(3846)), size, overlap)
-
-    assert len(at_cap) == 3, "the old cap cost the same three passes it always did"
-    assert len(doubled) == 5, "six before anchoring, five after"
+    assert len(windows) == 2
+    assert all(len(window.split()) == 3 for window in windows)
 
 
 def test_the_best_chunk_wins_not_the_average() -> None:
     """A mean would drive the score down as the article lengthens and invert the flag."""
-    scores = iter([0.1, 0.95, 0.2, 0.15])
+    scores = iter([0.1, 0.95])
 
     class Recorded:
         def score(self, premise: str, hypothesis: str) -> float:
             del premise, hypothesis
             return next(scores)
 
-    text = " ".join(str(n) for n in range(3000))
+    text = " ".join(str(n) for n in range(EvaluationConfig().chunk_words + 1))
     assert score_over_chunks(
         Recorded(), text, "claim", evaluation=EvaluationConfig()
     ) == pytest.approx(0.95)

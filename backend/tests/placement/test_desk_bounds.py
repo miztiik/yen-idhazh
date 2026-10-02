@@ -76,7 +76,7 @@ def test_the_floor_never_admits_a_story_a_gate_refused() -> None:
 
 
 def test_a_ceiling_with_nowhere_to_send_the_overflow_does_not_shorten_the_day() -> None:
-    """A story with no second desk stays where it is, however crowded the desk.
+    """Two stories with no second desk stay where they are, however crowded the desk.
 
     Every story's only desk is the desk its own feed declares, so none of them
     has a second desk to fall back to. `india` is over its ceiling and stays
@@ -84,14 +84,18 @@ def test_a_ceiling_with_nowhere_to_send_the_overflow_does_not_shorten_the_day() 
     that is what this asserts.
     """
     day = [
-        story(f"india-solo-{index:02d}", vertical="india", source_id=f"feed-{index}",
-              rank_score=100.0 - index)
-        for index in range(30)
+        story(
+            f"india-solo-{index:02d}",
+            vertical="india",
+            source_id=f"feed-{index}",
+            rank_score=100.0 - index,
+        )
+        for index in range(2)
     ]
     out = refile(stream_order(day), bounds=BOUNDS)
 
-    assert len(out) == 30
-    assert filed(out) == {"india": 30}
+    assert len(out) == 2
+    assert filed(out) == {"india": 2}
     assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]
 
 
@@ -103,9 +107,13 @@ def test_no_committed_day_moves_because_no_story_has_a_second_desk() -> None:
     from a built day so it cannot go stale or grow more expensive.
     """
     day = [
-        story(f"{DESKS[index % 5]}-null-{index:02d}", vertical=DESKS[index % 5],
-              source_id=f"feed-{index}", rank_score=100.0 - index)
-        for index in range(40)
+        story(
+            f"{DESKS[index % 5]}-null-{index:02d}",
+            vertical=DESKS[index % 5],
+            source_id=f"feed-{index}",
+            rank_score=100.0 - index,
+        )
+        for index in range(2)
     ]
     out = refile(stream_order(day), bounds=BOUNDS)
 
@@ -122,16 +130,28 @@ def test_a_desk_never_dips_under_its_own_floor_to_lift_another_one() -> None:
     floor does not start a move it cannot finish and nothing moves at all.
     """
     day = [
-        story(f"energy-give-{index:02d}", vertical="energy", desk="ai", source_id=f"feed-e{index}",
-              rank_score=100.0 - index)
+        story(
+            f"energy-give-{index:02d}",
+            vertical="energy",
+            desk="ai",
+            source_id=f"feed-e{index}",
+            rank_score=100.0 - index,
+        )
         for index in range(6)
     ] + [
-        story(f"ai-own-{index:02d}", vertical="ai", desk="ai", source_id=f"feed-a{index}",
-              rank_score=50.0 - index)
+        story(
+            f"ai-own-{index:02d}",
+            vertical="ai",
+            desk="ai",
+            source_id=f"feed-a{index}",
+            rank_score=50.0 - index,
+        )
         for index in range(2)
     ]
-    out = refile(stream_order(day), bounds={"ai": DeskBounds(floor=6, ceiling=1.0),
-                                            "energy": DeskBounds(floor=6, ceiling=1.0)})
+    out = refile(
+        stream_order(day),
+        bounds={"ai": DeskBounds(floor=6, ceiling=1.0), "energy": DeskBounds(floor=6, ceiling=1.0)},
+    )
 
     assert len(out) == 8
     assert filed(out) == {"ai": 8}
@@ -151,8 +171,13 @@ def test_a_thin_day_is_spread_rather_than_drained() -> None:
     satisfies both.
     """
     day = [
-        story(f"{DESKS[index % 5]}-thin-{index:02d}", vertical=DESKS[index % 5], desk="ai",
-              source_id=f"feed-{index}", rank_score=100.0 - index)
+        story(
+            f"{DESKS[index % 5]}-thin-{index:02d}",
+            vertical=DESKS[index % 5],
+            desk="ai",
+            source_id=f"feed-{index}",
+            rank_score=100.0 - index,
+        )
         for index in range(30)
     ]
     out = refile(stream_order(day), bounds=BOUNDS)

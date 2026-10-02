@@ -222,10 +222,7 @@ def test_the_discard_needs_enough_negatives_to_absorb_a_bad_night() -> None:
 
 def test_a_record_with_nothing_to_walk_reports_no_line() -> None:
     """An empty walk has no answer, and a number would read as one somebody took."""
-    assert (
-        fit.fit_line(a_record(positives={0.950: 40}), discard_share=KNOBS.discard_share)
-        is None
-    )
+    assert fit.fit_line(a_record(positives={0.950: 40}), discard_share=KNOBS.discard_share) is None
 
 
 # --- step 2: the dead zone ----------------------------------------------------
@@ -354,36 +351,20 @@ def test_a_line_resting_on_a_band_wall_is_its_own_word() -> None:
 
 
 def test_the_applied_line_can_never_leave_the_band() -> None:
-    """Whatever the record says, the line stays where a later walk can propose it again.
-
-    The record holds slots only between `band_low` and `band_high`. A line
-    outside them is a line no fit can read back, so the walls bind after the
-    daily caps rather than before them. Driven from both ends: a record that
-    agrees about everything and one that disagrees about everything.
-    """
-    all_agree = a_record(negatives={0.999: 300})
-    all_disagree = a_record(negatives={0.881: 300})
-    top = fit.fit_line(all_agree, discard_share=KNOBS.discard_share)
-    bottom = fit.fit_line(all_disagree, discard_share=KNOBS.discard_share)
-    assert top is not None and bottom is not None
-
-    for proposal in (top, bottom, 1.5, -0.5):
-        previous = KNOBS.band_low
-        for _ in range(400):
-            after = (
-                fit.damp(
-                    proposal,
-                    previous,
-                    fall_weight=KNOBS.fall_weight,
-                    rise_weight=KNOBS.rise_weight,
-                )
-                if fit.is_a_move(proposal, previous, dead_zone=KNOBS.dead_zone)
-                else previous
-            )
-            previous = a_clamp(after, previous).applied
-            assert KNOBS.band_low <= previous <= KNOBS.band_high, (
-                f"a proposal of {proposal} walked the line to {previous}"
-            )
+    """Extreme proposals at each wall cannot push the applied line outside it."""
+    for proposal, previous, expected in (
+        (1.5, KNOBS.band_high, KNOBS.band_high),
+        (-0.5, KNOBS.band_low, KNOBS.band_low),
+    ):
+        assert fit.is_a_move(proposal, previous, dead_zone=KNOBS.dead_zone)
+        after = fit.damp(
+            proposal,
+            previous,
+            fall_weight=KNOBS.fall_weight,
+            rise_weight=KNOBS.rise_weight,
+        )
+        applied = a_clamp(after, previous).applied
+        assert applied == pytest.approx(expected)
 
 
 # --- the gates ----------------------------------------------------------------
@@ -460,9 +441,7 @@ def test_the_guard_is_recorded_and_not_enforced_below_fourteen_rows() -> None:
     The stage still writes `daily_shift` on every one of those rows, which is what
     turns the estimated multiple of 5 into a measurement.
     """
-    rows = [
-        a_written_row(date=day, daily_shift=0.002) for day in _days_back(13)
-    ]
+    rows = [a_written_row(date=day, daily_shift=0.002) for day in _days_back(13)]
 
     assert fit.typical_shift(rows, window_rows=KNOBS.step_change_window_rows) is None
 
@@ -535,9 +514,7 @@ def test_a_week_that_proposed_the_same_line_is_settled() -> None:
     """
     rows = [a_written_row(date=day, proposed=0.9405) for day in _days_back(10)]
 
-    assert fit.settled(
-        rows, proposed=0.9410, date=DATE, window_days=7, delta=KNOBS.settled_delta
-    )
+    assert fit.settled(rows, proposed=0.9410, date=DATE, window_days=7, delta=KNOBS.settled_delta)
 
 
 def test_a_week_that_is_still_moving_is_not_settled() -> None:

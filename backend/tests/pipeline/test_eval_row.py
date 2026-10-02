@@ -118,7 +118,9 @@ def test_the_two_source_word_counts_are_one_counter_before_and_after_the_cap() -
     written before this, which is what proved the pair was measuring
     `len(_WORD.findall(t))` against `len(t.split())` on one post-cap string.
     """
-    body = " ".join(f"word{n}" for n in range(4000))
+    extraction = ExtractConfig(truncation_cap_tokens=256)
+    source_word_count = int(extraction.truncation_cap_tokens / extract.TOKENS_PER_WORD) + 1
+    body = " ".join(f"word{n}" for n in range(source_word_count))
     cut = extract.to_article(
         plan().items[0],
         FetchResult(
@@ -126,7 +128,7 @@ def test_the_two_source_word_counts_are_one_counter_before_and_after_the_cap() -
             status=200,
             body=f"<html><body><article><p>{body}</p></article></body></html>".encode(),
         ),
-        config=ExtractConfig(truncation_cap_tokens=256),
+        config=extraction,
         fetched_at="2026-08-21T06:00:00Z",
     )
     assert cut.truncated, "the fixture must actually be cut, or this proves nothing"
@@ -146,7 +148,7 @@ def test_the_two_source_word_counts_are_one_counter_before_and_after_the_cap() -
         scored_at="2026-08-21T06:18:02Z",
     )
 
-    assert built.source_words_before_cap == cut.source_word_count == 4000
+    assert built.source_words_before_cap == cut.source_word_count == source_word_count
     assert built.source_words == cut.word_count
     assert built.source_words < built.source_words_before_cap
     assert built.source_words_before_cap != metrics.word_count(FULL_TEXT), (
@@ -206,7 +208,9 @@ def test_the_work_stage_digests_the_same_text_it_scores() -> None:
             if not isinstance(node, ast.Call):
                 continue
             called = node.func
-            spelled = called.attr if isinstance(called, ast.Attribute) else getattr(called, "id", "")
+            spelled = (
+                called.attr if isinstance(called, ast.Attribute) else getattr(called, "id", "")
+            )
             if spelled != call_name:
                 continue
             for given in node.keywords:
@@ -241,7 +245,9 @@ def test_the_work_stage_scores_against_a_different_text_than_it_showed_the_model
             if not isinstance(node, ast.Call):
                 continue
             called = node.func
-            spelled = called.attr if isinstance(called, ast.Attribute) else getattr(called, "id", "")
+            spelled = (
+                called.attr if isinstance(called, ast.Attribute) else getattr(called, "id", "")
+            )
             if spelled != call_name:
                 continue
             for given in node.keywords:
