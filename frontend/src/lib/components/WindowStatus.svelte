@@ -70,8 +70,8 @@
 		   line the moment a browser hydrates or a price clears, and every panel
 		   below it would jump. Measured 2026-09-09 at 1280 CSS px on an Intel Core
 		   i7-1265U: seven panels moved by one line for a sentence changing. Three
-		   lines on a phone: the longest price, about 111 characters, wraps to
-		   three in the 358px a 390px screen gives 12px text. */
+		   lines on a phone: the longest price, 111 characters, took three lines at
+		   320px and two from 360px (measured 2026-10-02, Chromium on Windows). */
 		min-block-size: calc(3 * var(--leading-xs));
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-xs);
