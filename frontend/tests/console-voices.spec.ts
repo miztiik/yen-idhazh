@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/browser';
 import { reliabilityPublished, type SourceHealthView } from '../src/lib/server/payload';
 
 /** Every source panel is on exactly one route.

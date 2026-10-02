@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/browser';
 
 /**
  * The console is five routes, and this file is why it is routes and not tabs.

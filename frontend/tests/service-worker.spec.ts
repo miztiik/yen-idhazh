@@ -1,8 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import type { Manifest } from 'vite';
+import { queryEngineAssets } from '../scripts/query-engine-assets';
 import {
 	BYTES_HELD,
+	ENGINE_CACHE_PREFIX,
+	SHELL_CACHE_PREFIX,
 	evictions,
 	shellKeeps,
 	type HeldDay,
@@ -471,6 +475,81 @@ test.describe('a day already opened', () => {
 			`the shell cache kept ${published}, which the pipeline publishes and the shell does not need`
 		).toBe(false);
 	});
+});
+
+test('unchanged engine files survive a deploy without a download and remain readable offline', async ({ page, context }) => {
+	const manifest = JSON.parse(readFileSync(resolve('.svelte-kit/output/client/.vite/manifest.json'), 'utf8')) as Manifest;
+	const assets = queryEngineAssets(manifest);
+	const paths = new Set(assets.files.map((file) => `/${file}`));
+	const engineCache = `${ENGINE_CACHE_PREFIX}${assets.version}`;
+	const oldEngineCache = `${ENGINE_CACHE_PREFIX}obsolete`;
+	const workerPaths = [resolve('.svelte-kit/output/client/service-worker.js'), join(BUILD, 'service-worker.js')];
+	const originals = workerPaths.map((file) => ({ file, body: readFileSync(file, 'utf8') }));
+	const buildVersion = String(JSON.parse(readFileSync(join(BUILD, '_app/version.json'), 'utf8')).version);
+	const nextVersion = `${buildVersion.slice(0, -1)}${buildVersion.endsWith('0') ? '1' : '0'}`;
+	const session = await context.newCDPSession(page);
+	await session.send('Network.enable');
+	await session.send('Network.setCacheDisabled', { cacheDisabled: true });
+	const downloaded: string[] = [];
+	context.on('request', (request) => {
+		if (request.serviceWorker() !== null && paths.has(new URL(request.url()).pathname)) downloaded.push(request.url());
+	});
+	await page.goto('/');
+	await controlled(page);
+	expect((await ourCaches(page)).filter((name) => name.startsWith(ENGINE_CACHE_PREFIX))).toEqual([]);
+	const fetchEngine = () => page.evaluate(async (files) => {
+		const lengths: number[] = [];
+		for (const file of files) {
+			const response = await fetch(`/${file}`);
+			if (!response.ok) throw new Error(`Engine asset ${file} returned ${response.status}`);
+			lengths.push((await response.arrayBuffer()).byteLength);
+		}
+		return lengths;
+	}, assets.files);
+	try {
+		const first = await fetchEngine();
+		expect(first.every((bytes) => bytes > 0)).toBe(true);
+		expect(downloaded).toHaveLength(assets.files.length);
+		expect(await ourCaches(page)).toContain(engineCache);
+		await page.evaluate(async (name) => { await caches.open(name); }, oldEngineCache);
+		for (const { file, body } of originals) {
+			const changed = body.replaceAll(buildVersion, nextVersion);
+			expect(changed, 'the generated worker must carry the build version').not.toBe(body);
+			expect(changed.length).toBe(body.length);
+			writeFileSync(file, changed, 'utf8');
+		}
+		await page.evaluate(async () => {
+			const registration = await navigator.serviceWorker.getRegistration();
+			if (!registration) throw new Error('The production service worker is not registered');
+			const changed = new Promise<void>((resolveChanged) => {
+				navigator.serviceWorker.addEventListener('controllerchange', () => resolveChanged(), { once: true });
+			});
+			await registration.update();
+			await changed;
+			const controller = navigator.serviceWorker.controller;
+			if (!controller) throw new Error('The updated worker did not take control');
+			if (controller.state !== 'activated') {
+				await new Promise<void>((resolveActivated) => {
+					controller.addEventListener('statechange', function activated() {
+						if (controller.state !== 'activated') return;
+						controller.removeEventListener('statechange', activated);
+						resolveActivated();
+					});
+				});
+			}
+		});
+		const kept = await ourCaches(page);
+		expect(kept).toContain(engineCache);
+		expect(kept).not.toContain(oldEngineCache);
+		expect(kept).toContain(`${SHELL_CACHE_PREFIX}${nextVersion}`);
+		expect(await fetchEngine()).toEqual(first);
+		expect(downloaded, 'an unchanged engine must not be downloaded after the worker update').toHaveLength(assets.files.length);
+		await context.setOffline(true);
+		expect(await fetchEngine()).toEqual(first);
+	} finally {
+		await context.setOffline(false);
+		for (const { file, body } of originals) writeFileSync(file, body, 'utf8');
+	}
 });
 
 test.describe('the way out', () => {

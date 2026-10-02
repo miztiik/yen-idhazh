@@ -1,6 +1,7 @@
-import { expect, test, type Request } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page, type Request } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import type { Manifest } from 'vite';
 
 /**
  * How many round trips a reader waits through before the console has its rows.
@@ -39,6 +40,13 @@ import { join, resolve } from 'node:path';
  * change at all. A ceiling that answers differently on a fast laptop and a slow
  * runner is not a ceiling. What the ceiling bounds, and what this holds, is how many
  * payload round trips the console may need before it can show a row.
+ *
+ * Hardware has two independent branches after its indexes: whole-file data and
+ * core WASM. Each includes the document, shared prerequisites and the final
+ * add-on request; the larger depth is the budget. Chronological completion of
+ * a tiny file before WASM starts is not a dependency. Two real-response gates
+ * prove that neither branch awaits the other, separately from the unmodified
+ * timing run. Planted serial requests ahead of the indexes count on both paths.
  *
  * **Grouping the requests into waves was tried first and it is wrong.** It laid
  * them out in start order and opened a new wave whenever one began after every
@@ -97,6 +105,124 @@ function longestChain(requests: readonly Timed[]): string[] {
 	const chain: string[] = [];
 	for (let at = deepest; at >= 0; at = cameFrom[at]) chain.unshift(new URL(requests[at].url).pathname);
 	return chain;
+}
+
+async function coldMachine(page: Page, context: BrowserContext, serialWaits: boolean) {
+	const manifest = JSON.parse(readFileSync(resolve('.svelte-kit/output/client/.vite/manifest.json'), 'utf8')) as Manifest;
+	const engineFiles = new Set(Object.entries(manifest)
+		.filter(([source]) => source === 'src/lib/data/engine.ts' || source.includes('@duckdb/duckdb-wasm/'))
+		.flatMap(([, entry]) => [entry.file, ...(entry.assets ?? [])])
+		.map((file) => `/${file}`));
+	const finished: Timed[] = [];
+	const started: { url: string; engine: boolean; index: boolean }[] = [];
+	context.on('request', (request) => {
+		const pathname = new URL(request.url()).pathname;
+		started.push({
+			url: request.url(),
+			engine: engineFiles.has(pathname),
+			index: pathname.includes('/state/compact/host-fingerprint/index/')
+		});
+	});
+	const record = (request: Request) => {
+		const url = new URL(request.url());
+		const relevant = request.resourceType() === 'document'
+			|| url.pathname.includes('/state/compact/host-fingerprint/')
+			|| url.pathname.endsWith('.wasm')
+			|| url.searchParams.has('serial-wait');
+		if (!relevant || !COUNTED.has(request.resourceType())) return;
+		const timing = request.timing();
+		finished.push({
+			url: request.url(),
+			start: timing.startTime,
+			end: timing.responseEnd >= 0 ? timing.startTime + timing.responseEnd : timing.startTime
+		});
+	};
+	context.on('requestfinished', record);
+	context.on('requestfailed', record);
+	if (serialWaits) {
+		await page.addInitScript(() => {
+			const fetchResource = globalThis.fetch.bind(globalThis);
+			let serial: Promise<void> | null = null;
+			globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+				const address = args[0] instanceof Request ? args[0].url : String(args[0]);
+				if (address.includes('/state/compact/host-fingerprint/index/')) {
+					serial ??= (async () => {
+						for (const step of [1, 2]) {
+							const answer = await fetchResource(`/favicon.svg?serial-wait=${step}`);
+							await answer.arrayBuffer();
+						}
+					})();
+					await serial;
+				}
+				return fetchResource(...args);
+			};
+		});
+	}
+	await page.goto('/console/machine/');
+	const panel = page.locator('[data-windowed="machine-fleet"]');
+	await expect(panel).toHaveAttribute('data-fleet-state', 'ready');
+	await expect(panel.locator('[data-fleet-placements]')).toHaveAttribute('data-fleet-placements', /^[1-9]\d*$/);
+	finished.sort((left, right) => left.start - right.start);
+	const firstIndex = started.findIndex((entry) => entry.index);
+	const firstEngine = started.findIndex((entry) => entry.engine);
+	expect(firstIndex, 'the panel must ask for a real ledger index').toBeGreaterThanOrEqual(0);
+	expect(firstEngine, 'the panel must start the real engine after its first index request').toBeGreaterThan(firstIndex);
+	const isWholeFile = (url: string) => /\/state\/compact\/host-fingerprint\/(daily|monthly)\/.+\.parquet/.test(url);
+	const isCore = (url: string) => /\/duckdb-eh\.[^/]+\.wasm$/.test(new URL(url).pathname);
+	expect(finished.some((request) => isCore(request.url)), 'the cold trace must include core wasm').toBe(true);
+	expect(finished.some((request) => request.url.endsWith('/parquet.duckdb_extension.wasm')), 'the cold trace must include the real add-on').toBe(true);
+	const dataChain = longestChain(finished.filter((request) => !isCore(request.url)));
+	const engineChain = longestChain(finished.filter((request) => !isWholeFile(request.url)));
+	const chain = dataChain.length >= engineChain.length ? dataChain : engineChain;
+	await test.info().attach('machine-cold-network', {
+		body: JSON.stringify({ serialWaits, chain, dataChain, engineChain, finished, started }, null, 2),
+		contentType: 'application/json'
+	});
+	return chain;
+}
+
+test('a cold machine load draws rows inside four serial round trips', async ({ page, context }) => {
+	const chain = await coldMachine(page, context, process.env.IDHAZH_COLD_LOAD_SERIAL_WAITS === 'true');
+	expect(chain.length, `Hardware took ${chain.length} serial payload hops: ${chain.join(' -> ')}`).toBeLessThanOrEqual(MAX_HOPS);
+});
+
+test('planted serial waits exceed the cold machine budget', async ({ page, context }) => {
+	const chain = await coldMachine(page, context, true);
+	expect(chain.length, 'the planted real requests must make the same four-hop check fail').toBeGreaterThan(MAX_HOPS);
+});
+
+for (const held of ['data', 'engine'] as const) {
+	test(`data and engine downloads overlap while ${held} responses are held`, async ({ page, context }) => {
+		const dataFile = /\/state\/compact\/host-fingerprint\/(daily|monthly)\/.+\.parquet/;
+		const coreWasm = /\/duckdb-eh\.[^/]+\.wasm$/;
+		let release = () => {};
+		const gate = new Promise<void>((resolveGate) => { release = resolveGate; });
+		let engineStarted = 0;
+		let dataFinished = 0;
+		let heldResponses = 0;
+		context.on('request', (request) => {
+			if (coreWasm.test(request.url())) engineStarted += 1;
+		});
+		context.on('requestfinished', (request) => {
+			if (dataFile.test(request.url())) dataFinished += 1;
+		});
+		await context.route(held === 'data' ? dataFile : coreWasm, async (route) => {
+			const response = await route.fetch();
+			heldResponses += 1;
+			await gate;
+			await route.fulfill({ response });
+		});
+		try {
+			await page.goto('/console/machine/');
+			await expect.poll(() => heldResponses).toBeGreaterThan(0);
+			await expect.poll(() => held === 'data' ? engineStarted : dataFinished,
+				{ message: `the other branch must progress before ${held} responses are released` }).toBeGreaterThan(0);
+			await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'loading');
+		} finally {
+			release();
+		}
+		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
+	});
 }
 
 test('a cold console load settles inside four serial round trips', async ({ page }) => {

@@ -173,25 +173,18 @@
 			{view.heading}{view.resting ? restingNote : ''}
 		</dt>
 		{#each view.entries as entry, index (`${index}:${entry.label}`)}
-			<!-- An entry wider than the strip wraps inside itself, value under label,
-			     rather than pushing the page sideways. The room a value keeps for its
-			     widest reading is capped at the strip's width: on a phone that
-			     reading can be wider than the strip, and a strip that scrolls the
-			     page sideways costs more than one value that reflows. -->
 			<div
-				class="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5"
+				class="readout-entry min-w-0 max-w-full"
 				class:held={entry.held}
 				aria-hidden={entry.held ? 'true' : undefined}
 				data-readout-row={entry.held ? undefined : entry.label}
 				data-readout-held={entry.held ? '' : undefined}
 			>
-				{#if entry.swatch}
-					<span class="size-3 shrink-0 rounded-sm" style="background: {entry.swatch}"></span>
-				{/if}
-				<dd>{entry.label}</dd>
+				<dd class="readout-label">{#if entry.swatch}<span class="readout-swatch size-3 rounded-sm" style="background: {entry.swatch}"></span>{'\u00a0'}{/if}{entry.label}</dd>
 				{#if entry.value !== ''}
+					{'\u00a0'}
 					<dd
-						class="min-w-[min(var(--readout-reserve),100cqi)] tabular-nums text-text-secondary"
+						class="readout-value tabular-nums text-text-secondary"
 						style={entry.reserve > 0 ? `--readout-reserve: ${entry.reserve}ch` : undefined}
 					>
 						{entry.value}
@@ -206,6 +199,26 @@
 {/if}
 
 <style>
+	.readout-entry {
+		overflow-wrap: anywhere;
+	}
+
+	.readout-label {
+		display: inline;
+	}
+
+	.readout-swatch {
+		display: inline-block;
+		vertical-align: middle;
+	}
+
+	.readout-value {
+		display: inline-block;
+		min-inline-size: min(var(--readout-reserve, 0ch), 100cqi);
+		max-inline-size: 100%;
+		vertical-align: baseline;
+	}
+
 	/* Laid out so the strip keeps its height, never seen and never read out. A
 	   rule of its own rather than a utility, so the strip holds its room
 	   wherever it is drawn. */

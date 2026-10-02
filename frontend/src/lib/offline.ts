@@ -25,6 +25,8 @@ export const CACHE_PREFIX = 'idhazh-';
  * deploy never reads the last one's chunks. */
 export const SHELL_CACHE_PREFIX = `${CACHE_PREFIX}shell-`;
 
+export const ENGINE_CACHE_PREFIX = `${CACHE_PREFIX}engine-`;
+
 /** The days a reader has opened. Not keyed on the build: a published day never
  * changes after its last run, so throwing it away on every deploy would spend a
  * reader's data to fetch back what they already had. */

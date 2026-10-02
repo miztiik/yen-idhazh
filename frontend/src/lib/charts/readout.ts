@@ -555,6 +555,58 @@ export function pointerReadout(
 	};
 }
 
+export interface ColumnPickOptions {
+	marks: ReadoutMark[];
+	/** The width the chart drew at, as `pointerReadout` takes it. */
+	width: number;
+	/** The column the strip shows now, which Enter picks. */
+	showing: number | null;
+	onPick: (index: number) => void;
+}
+
+/** Tell a chart which column a click or Enter chose, for a chart that opens
+ * something on a pick - a list of what that column holds.
+ *
+ * Beside `pointerReadout` rather than inside it, because a hover and a step key
+ * only move the strip, and a pick is a deliberate act a reader takes once. A
+ * click picks the column nearest the pointer by the same rule the strip uses;
+ * Enter picks the column the strip is showing.
+ */
+export function columnPick(
+	node: SVGSVGElement | HTMLElement,
+	options: ColumnPickOptions
+): { update: (next: ColumnPickOptions) => void; destroy: () => void } {
+	let current = options;
+	let column = nearestColumn(options.marks);
+
+	const click = (event: MouseEvent) => {
+		const rect = node.getBoundingClientRect();
+		if (rect.width === 0) return;
+		const index = column.at(((event.clientX - rect.left) * current.width) / rect.width);
+		if (index !== null) current.onPick(index);
+	};
+
+	const key = (event: KeyboardEvent) => {
+		if (event.key !== 'Enter' || current.showing === null) return;
+		event.preventDefault();
+		current.onPick(current.showing);
+	};
+
+	const events: EventTarget = node;
+	events.addEventListener('click', click as EventListener);
+	events.addEventListener('keydown', key as EventListener);
+	return {
+		update(next: ColumnPickOptions) {
+			if (next.marks !== current.marks) column = nearestColumn(next.marks);
+			current = next;
+		},
+		destroy() {
+			events.removeEventListener('click', click as EventListener);
+			events.removeEventListener('keydown', key as EventListener);
+		}
+	};
+}
+
 /** Which arrow keys step the marks of a chart drawn as elements.
  *
  * `row` is one line of marks - tiles along a date, bars along a strip - and

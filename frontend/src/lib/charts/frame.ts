@@ -351,6 +351,7 @@ export interface DayAxisOptions {
 	 * `dayColumns` builds it where the days are evenly spaced; a chart whose
 	 * columns are not evenly spaced passes its own. */
 	columns: readonly number[];
+	bounds?: readonly [number, number];
 	fontSize?: number;
 	gap?: number;
 }
@@ -382,14 +383,23 @@ export function dayTicks(dates: readonly string[], options: DayAxisOptions): Day
 	const marks = Array.from({ length: ceiling }, (_, n) =>
 		Math.round((n * (days - 1)) / (ceiling - 1))
 	);
-	// Anchoring is about where a label sits on the plot, not about its rank among
-	// the survivors: the first candidate is on the left edge whether or not the
-	// one after it was dropped.
-	const anchorOf = (at: number) => tickAnchor(at, ceiling);
 	const xs = marks.map((index) => columns[index] ?? 0);
 	// The longest form of every label, so the fit is decided before the year rule
 	// shortens any of them. A shorter label can only ever help.
 	const widest = marks.map((index) => shortDate(dates[index]));
+	const [left, right] = options.bounds ?? [xs[0], xs[xs.length - 1]];
+	const anchorOf = (at: number): TickAnchor => {
+		const width = labelWidth(widest[at], fontSize);
+		if (at === 0) {
+			if (xs[at] - width >= left) return 'end';
+			return xs[at] - width / 2 >= left ? 'middle' : 'start';
+		}
+		if (at === ceiling - 1) {
+			if (xs[at] + width <= right) return 'start';
+			return xs[at] + width / 2 <= right ? 'middle' : 'end';
+		}
+		return 'middle';
+	};
 
 	let kept: number[] = [];
 	for (let count = ceiling; count >= 2; count -= 1) {

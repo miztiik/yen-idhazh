@@ -37,7 +37,7 @@
 		uptimeSentence,
 		type MachineCard
 	} from '$lib/charts/machine-cards';
-	import { isUnrecorded, machineColour } from '$lib/charts/machine-colour';
+	import { isUnrecorded, speedWords } from '$lib/charts/machine-colour';
 
 	/** True where this run's day published articles and the record kept no row.
 	 *
@@ -52,6 +52,8 @@
 	const ALONE = 'Nothing to draw it against: one reading of this kind on this run.';
 
 	const where = $derived(card.where);
+	/** The speed the edge colour stands for, so the colour is never its only carrier. */
+	const speed = $derived(speedWords(card.identity));
 	const placed = $derived(
 		where === null
 			? []
@@ -70,16 +72,17 @@
 	class="card"
 	data-machine-card={card.identity.key}
 	data-machine-name={card.identity.name}
-	data-machine-stop={card.identity.colourStop}
+	data-machine-step={card.identity.step ?? 'none'}
+	data-machine-speed={card.identity.rate ?? 'none'}
 	data-machine-source={card.source}
 	data-machine-unrecorded={isUnrecorded(card.identity) ? 'yes' : null}
-	style="--machine-edge: {machineColour(card.identity.colourStop)}"
+	style="--machine-edge: {card.identity.colour}"
 >
 	<h3 class="name">{card.identity.name}</h3>
 
-	{#if card.identity.folded.length > 0}
-		<p class="note" data-machine-folded={card.identity.folded.length}>
-			Two or more machines share this row: {card.identity.folded.join(', ')}.
+	{#if speed !== null}
+		<p class="part" data-machine-speed-words>
+			{speed === 'no speed reading' ? 'No speed reading.' : `Typical speed ${speed}.`}
 		</p>
 	{/if}
 

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "setup:duckdb": "node scripts/setup-duckdb.ts",
     "build:icons": "node scripts/build-icons.mjs",
     "build": "node scripts/build-icons.mjs && node scripts/build-frame-css.mjs && node scripts/build-worker-switch.mjs && node scripts/copy-visuals.mjs && node scripts/build-state.ts --begin && vite build && node scripts/build-state.ts --complete",
     "preview": "vite preview",

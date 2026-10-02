@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/browser';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -15,6 +15,7 @@ import {
 } from '../src/lib/charts/d3/empty';
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths';
+import { machineRecordState } from './support/machine-record-state';
 import {
 	judgeNothings,
 	judgeSettled,
@@ -144,8 +145,10 @@ test.describe('the witness panel', () => {
 		await compiled('src/lib/charts/d3/EmptyState.svelte', 'EmptyState', [
 			['$lib/components/Reserved.svelte', './Reserved.server.mjs']
 		]);
+		await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
 		await compiled('src/lib/charts/d3/DateSeries.svelte', 'DateSeries', [
-			['./EmptyState.svelte', './EmptyState.server.mjs']
+			['./EmptyState.svelte', './EmptyState.server.mjs'],
+			['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs']
 		]);
 		await compiled('src/lib/components/Panel.svelte', 'Panel', []);
 		const module = await compiled('tests/fixtures/panels/WitnessPanel.svelte', 'WitnessPanel', [
@@ -243,7 +246,14 @@ type Driver = (page: Page) => Promise<void>;
  * `console.judged_panel_ids` with its entry here, in the same pull request -
  * the requests a panel makes are its own, so nothing here can guess them.
  */
-const DRIVERS: Record<string, Record<Nothing, Driver>> = {};
+const DRIVERS: Record<string, Record<Nothing, Driver>> = {
+	'platform-mix': {
+		loading: (page) => machineRecordState(page, 'loading'),
+		missing: (page) => machineRecordState(page, 'missing'),
+		quiet: (page) => machineRecordState(page, 'quiet'),
+		unreachable: (page) => machineRecordState(page, 'unreachable')
+	}
+};
 
 function driverFor(id: string): Record<Nothing, Driver> {
 	const driver = DRIVERS[id];
@@ -308,6 +318,9 @@ test.describe('the judged panels', () => {
 					const panel = page.locator(`[data-console-panel-id="${id}"]`);
 					await expect(panel, `the page draws no panel with the id ${id}`).toHaveCount(1);
 					await panel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+					await expect(panel.locator(state === 'loading'
+						? '[data-panel-state="loading"]'
+						: `[data-empty-state="${state}"]`)).toHaveCount(1);
 					readings[state] = await readPanel(panel);
 				}
 				const verdict = judgeNothings(id, readings);
