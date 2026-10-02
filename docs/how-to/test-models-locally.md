@@ -1,6 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
 fast loop, not a different answer.
@@ -257,10 +257,10 @@ three of twenty within hours. The correct fix is frozen validated Article
 payloads, not a permanent URL list.
 
 `validate` writes one result file per model under `backend/var/validation/`.
-`decide` applies the arithmetic and writes a segment into
-`state/<run.trial_state_dirname>/candidate-models/<YYYY>/<MM>/<DD>/` - or into
-`state/candidate-models/...` when the config names no trial directory, which the
-committed one does not.
+`decide` applies the arithmetic and files the verdict through the ledger door
+into `state/<run.trial_state_dirname>/raw/candidate-models/<YYYY>/<MM>/<DD>/` -
+or into `state/raw/candidate-models/...` when the config names no trial
+directory, which the committed one does not.
 
 The legacy HHEM screen, in full:
 

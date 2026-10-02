@@ -101,11 +101,19 @@ WINDOW_LIVE_WITH_ITS_PACKING: Final = (
 #: The two packing tasks a person turned live.
 PACKED_LIVE: Final = ("compact-host-fingerprint", "compact-item-health")
 
+#: Why a ledger's packing ships live in the change that moves it to the door.
+PACKED_ON_THE_MOVE: Final = (
+    "packing writes every row into a coarser file before it deletes one, and the "
+    "monthly window beside it only reports"
+)
+
 #: Every switch that ships live, keyed by its task and by the key a person edits
 #: to turn it off, each beside the decision that put it there. Every other switch
 #: ships `dry_run: true`: a task earns its first deletion from a person reading
 #: its records, never from the change that added it.
 LIVE_BY_DECISION: Final = {
+    ("compact-candidate-models", "dry_run"): PACKED_ON_THE_MOVE,
+    ("compact-counterfactual-scores", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-host-fingerprint", "dry_run"): PACKED_FOR_THE_CONSOLE,
     ("compact-host-fingerprint", "monthly_window_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
     ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
@@ -114,7 +122,6 @@ LIVE_BY_DECISION: Final = {
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
     ),
-    ("counterfactual-scores", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
     ("feed-health", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
     ("summary-quality-evals-index", "fold.dry_run"): (
         f"{FOLD_ALREADY_RAN_LIVE}; and a person ruled that the eval ledger's ID files stop "
@@ -126,12 +133,7 @@ LIVE_BY_DECISION: Final = {
 
 #: The CSV day trees no task folds, each with why. A tree that joins `DAY_TREES`
 #: is folded by the task that owns it, or it is named here with its reason.
-UNFOLDED_BY_DECISION: Final = {
-    LedgerName.CANDIDATE_MODELS: (
-        "no candidate-models tree is committed under state/: only a qualification's "
-        "trial root holds one, and nothing folds a trial root"
-    ),
-}
+UNFOLDED_BY_DECISION: Final[dict[LedgerName, str]] = {}
 
 
 #: The switch a compaction's monthly window has of its own. It acts only through
@@ -462,11 +464,11 @@ def test_a_file_named_as_owned_is_refused(tmp_path: Path) -> None:
     ("name", "window", "loads"),
     [
         ("seen", {"unit": "days", "value": 30}, False),
+        ("seen", {"unit": "days", "value": 89}, False),
+        ("seen", {"unit": "days", "value": 90}, True),
         ("seen", {"unit": "months", "value": 2}, False),
         ("seen", {"unit": "months", "value": 4}, True),
         ("seen", {"unit": "forever"}, True),
-        ("counterfactual-scores", {"unit": "days", "value": 7}, False),
-        ("counterfactual-scores", {"unit": "days", "value": 30}, True),
     ],
 )
 def test_a_window_a_reader_still_opens_is_not_deleted_under_it(
@@ -509,6 +511,33 @@ def test_a_compaction_keeps_every_day_a_reader_still_opens(
         message = refused(config_dir)
         assert f"compact-{name}.json reaches back" in message
         assert "a reader still opens" in message
+
+
+@pytest.mark.parametrize(
+    ("monthly", "loads"),
+    [({"unit": "months", "value": 1}, False), ({"unit": "months", "value": 2}, True)],
+)
+def test_the_lens_window_is_held_against_the_counterfactual_compaction(
+    tmp_path: Path, monthly: dict[str, Any], loads: bool
+) -> None:
+    """The counterfactual scores' reader floor binds the compaction that governs them.
+
+    The committed 30 days sit under the 59 days the shortest legal compaction
+    reaches, so the floor is raised to 90 here: one month reaches back 73 days
+    and two reach 104.
+    """
+    compaction = a_compaction("counterfactual-scores", monthly_window=monthly)
+    config_dir = a_garden(tmp_path, compact_counterfactual_scores=compaction)
+    app_path = config_dir / "idhazh.json"
+    app: dict[str, Any] = json.loads(app_path.read_text(encoding="utf-8"))
+    app["lens_weights"]["window_days"] = 90
+    app_path.write_text(json.dumps(app), encoding="ascii")
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "compact-counterfactual-scores.json reaches back 73 days" in message
+        assert "lens_weights.window_days reads 90 days back" in message
 
 
 @pytest.mark.parametrize(

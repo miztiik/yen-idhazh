@@ -172,7 +172,7 @@ class TestTheLedger:
         assert ValidationRow.from_json(rows[0].to_json()) == rows[0]
 
     def test_a_row_round_trips_through_its_csv_cells(self) -> None:
-        """The segment ledger writes cells and the compaction reads them back.
+        """The migration reads an old verdict file's cells back before it files them.
 
         A model nobody published a score for carries an empty leaderboard cell,
         and that has to come back as an unknown prior rather than as a zero -

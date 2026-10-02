@@ -170,6 +170,7 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/seen/` | Delete (lookup) | `collect.seen_window_days` | `ledger.load_seen` opens the day files that window names and nothing else, so an older day answers no question anybody asks. The one age here counted in days, so the prune keeps exactly the files the read opens |
 | `state/feed-health/` | Delete (lookup) | 14 months, the window of `config/gardener/feed-health.json` | a per-feed-per-run record, not a total worth keeping. The quarantine reads 31 days and the console reaches 367 inclusive days, a year and a day |
 | `state/raw/host-fingerprint/`, `state/compact/host-fingerprint/` | Delete (lookup) | 14 months, the `monthly_window` of `config/gardener/compact-host-fingerprint.json` | one job's silicon on one run, so a total over an old month names no machine. The gardener loader refuses that compaction when it keeps less than `public_machine_keep_months`, because the published shard is folded from this ledger |
+| `state/raw/counterfactual-scores/`, `state/compact/counterfactual-scores/` | Delete (lookup) | day files for 45 to 76 days, then 1 month file, the `monthly_window` of `config/gardener/compact-counterfactual-scores.json`. That window only reports today | the lens tuning that will read these scores opens `lens_weights.window_days`, 30 days, and the gardener loader refuses a compaction that keeps less |
 | `state/traces/` | Delete (lookup) | 7 days, the window of `config/gardener/traces.json` | a trace is what an operator opens to see one recent run step by step. No committed instance yet |
 | `state/raw/item-health/`, `state/compact/item-health/` | **Fold** -> `state/item-health-summary/` | summarised at 14 months, the `full-grain` series of `config/gardener/telemetry-aggregate.json`; the rows go at 15 months, the `monthly_window` of `config/gardener/compact-item-health.json` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |
 | `state/raw/summary-quality-evals/`, `state/compact/summary-quality-evals/` | Keep | forever, the `monthly_window` of `config/gardener/compact-summary-quality-evals.json`, which may pack a month or a finished year and never drops one | the evidence behind every published quality claim, so every row is kept and a monthly figure is computed from the rows when a chart draws it ([evaluation.md](evaluation.md#design-rationale)) |
@@ -183,7 +184,7 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/raw/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
 | `state/raw/feed-retirements/` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
-| `state/<run.trial_state_dirname>/candidate-models/` | Keep | none of its own | one verdict a dispatch, filed on the day tree. It lands under the trial root because only a qualification writes it, and the gardener's `trials` task already bounds that root |
+| `state/<run.trial_state_dirname>/raw/candidate-models/` | Keep | none of its own | one verdict a dispatch, filed through the ledger door as one raw file. It lands under the trial root because only a qualification writes it, nothing packs a trial root, and the gardener's `trials` task already bounds that root |
 
 ### `corpus/` - the rolling training window
 
@@ -240,8 +241,8 @@ the path came from a hardcoded string joined to the repository root, so no confi
 could move it and a qualification dispatch wrote production state. Nothing read
 it, and the shape had moved on far enough that today's reader could not have
 parsed it: the file carries no `leaderboard_provenance` column. Git is the
-archive (CLAUDE.md section 8). The verdict now goes to the day tree in the row
-above, and the owner ruled the deletion on 2026-09-18.
+archive (CLAUDE.md section 8). The verdict now goes through the ledger door to
+the folder in the row above, and the owner ruled the deletion on 2026-09-18.
 
 ## Design rationale
 

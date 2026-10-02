@@ -108,7 +108,6 @@ def prune_range(
 DAY_PATHS: Final[dict[str, LedgerName]] = {
     "-".join(ledger.entry(name).prefix): name
     for name in (
-        LedgerName.COUNTERFACTUAL_SCORES,
         LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
         LedgerName.FEED_HEALTH,
         LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
