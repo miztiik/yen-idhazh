@@ -22,6 +22,16 @@ Checks for agents using Git and GitHub. Follow the
 ## The `gh` CLI
 
 - Confirm the repository and authenticated account before a write. Never print or export tokens to check an account.
+- **A push still uses the wrong account after `GH_TOKEN` is removed.** The tell
+  is a 403 naming a different account from `gh auth status`. The app can inject
+  URL-specific credential helpers through `GIT_CONFIG_PARAMETERS`; a generic
+  helper does not replace them. After confirming the keyring account has access,
+  use a fresh shell for this push only; leave global credentials unchanged.
+  ```powershell
+  if (Test-Path Env:GH_TOKEN) { Remove-Item Env:GH_TOKEN }
+  if (Test-Path Env:GIT_CONFIG_PARAMETERS) { Remove-Item Env:GIT_CONFIG_PARAMETERS }
+  git -c credential.helper= -c credential.helper='!gh auth git-credential' push
+  ```
 - After an interrupted push or merge, verify remote state before retrying: `git ls-remote` for a branch; `gh pr view <number> --repo <owner/repo> --json state,mergeCommit` for a pull request.
 - Treat `UNKNOWN` and missing checks as unresolved, not success. Check mergeability and workflow triggers before waiting.
 - When the user changes a merge precondition, update the pending command before executing it. Record the authorized exception without extending it, retain the other checks, and use `--match-head-commit` to bind the merge to the verified head.
