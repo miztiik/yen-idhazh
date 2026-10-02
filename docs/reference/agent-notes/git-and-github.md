@@ -36,6 +36,18 @@ Checks for agents using Git and GitHub. Follow the
 - Treat `UNKNOWN` and missing checks as unresolved, not success. Check mergeability and workflow triggers before waiting.
 - When the user changes a merge precondition, update the pending command before executing it. Record the authorized exception without extending it, retain the other checks, and use `--match-head-commit` to bind the merge to the verified head.
 
+**A push returns 403 after adding the correct helper, but Git used an earlier helper.**
+`git -c credential.helper=...` appends to the existing helper list.
+The tell is that `gh api user --jq '.login'` names the intended account while
+the push error names another, and `git config --get-all credential.helper`
+lists an earlier helper. Clear the list for this command before adding `gh`:
+```powershell
+if (Test-Path Env:GH_TOKEN) { Remove-Item Env:GH_TOKEN }
+if (Test-Path Env:GITHUB_TOKEN) { Remove-Item Env:GITHUB_TOKEN }
+git -c credential.helper= -c credential.helper='!gh auth git-credential' push
+```
+Confirm the keyring account first; do not change shared global authentication.
+
 ## Reading a run
 
 - Match checks to the candidate commit and inspect individual jobs. Skipped jobs are not passes, even when the run summary is green.

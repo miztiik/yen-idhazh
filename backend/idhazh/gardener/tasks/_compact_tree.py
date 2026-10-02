@@ -2,8 +2,10 @@
 
 A pass reads the three watermarks, the three period indexes and the names of the
 raw day folders once, then decides period by period what to write and what to
-delete. Each decision is a `Change`, kept here in the order it must happen -
-data first, index next, watermark last - and nothing touches the disk until
+delete. File decisions are `Change` records; indexes and watermarks stay
+pending until `finish` serializes each final value once. The resulting order
+is data, indexes from coarsest to finest, deletions, then watermarks.
+Nothing touches the disk until
 `apply`, which a dry run never calls. So a dry run and a live run make the same
 decisions from the same reads, and the list a dry run reports is the list a
 live run carries out, file for file. A file a monthly window would delete while
@@ -116,6 +118,8 @@ class CompactTree:
     #: Every file a live monthly window would delete that the pass keeps, because
     #: the window only reports. It is not a change, so `apply` never sees it.
     spares: list[Path] = field(default_factory=list)
+    pending_indexes: set[Period] = field(default_factory=set)
+    pending_watermarks: dict[Period, Watermark] = field(default_factory=dict)
 
     @classmethod
     def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
@@ -221,23 +225,20 @@ class CompactTree:
             case _:
                 assert_never(period)
 
-    def write_index(self, period: Period) -> None:
-        """Decide to rewrite one period's index from what the pass holds now.
+    def mark_index(self, period: Period) -> None:
+        """Request one final index write after every stage has decided its entries.
 
         Each other period's index is written with it when the ledger has none yet
-        and this pass has not written it, so a ledger never holds one index
+        so a ledger never holds one index
         without the others. A period with no index has no watermark either -
         `read` refuses that pair - so what the pass holds for it is nothing, and
         the index says so.
         """
-        self._decide_index(period)
-        for other in Period:
-            path = ledger.compact_index_path(self.state_dir, self.ledger, other)
-            if other in self.indexed or any(change.path == path for change in self.changes):
-                continue
-            self._decide_index(other)
+        self.pending_indexes.add(period)
+        self.pending_indexes.update(set(Period) - self.indexed)
 
-    def _decide_index(self, period: Period) -> None:
+    def write_index(self, period: Period) -> None:
+        """Serialize one final index after all stages have decided its entries."""
         held = self.entries(period)
         index = CompactIndex(
             version=CompactIndex.schema_version(),
@@ -251,7 +252,7 @@ class CompactTree:
     def write_watermark(
         self, period: Period, *, through: str, advanced_at: str, run_id: str
     ) -> None:
-        """Decide to move one period's watermark. Called after that period's data, never before."""
+        """Keep the final watermark for one write after indexes and source deletions."""
         mark = Watermark(
             version=Watermark.schema_version(),
             ledger=self.ledger,
@@ -260,8 +261,28 @@ class CompactTree:
             advanced_at=advanced_at,
             run_id=run_id,
         )
-        path = ledger.watermark_path(self.state_dir, self.ledger, period)
-        self.write(path, mark.to_json().encode("ascii"))
+        self.pending_watermarks[period] = mark
+
+    def finish(self) -> None:
+        """Plan data, final indexes, source deletions, then final watermarks, once per pass."""
+        writes = [change for change in self.changes if change.data is not None]
+        deletes = [change for change in self.changes if change.data is None]
+        indexes_start = len(self.changes)
+        for period in (Period.YEARLY, Period.MONTHLY, Period.DAILY):
+            if period in self.pending_indexes:
+                self.write_index(period)
+        watermarks_start = len(self.changes)
+        for period, mark in self.pending_watermarks.items():
+            path = ledger.watermark_path(self.state_dir, self.ledger, period)
+            self.write(path, mark.to_json().encode("ascii"))
+        self.changes = [
+            *writes,
+            *self.changes[indexes_start:watermarks_start],
+            *deletes,
+            *self.changes[watermarks_start:],
+        ]
+        self.pending_indexes.clear()
+        self.pending_watermarks.clear()
 
     def apply(self) -> None:
         """Carry out every change in the order it was decided. A dry run never calls this.
