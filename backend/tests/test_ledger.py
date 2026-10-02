@@ -1810,7 +1810,7 @@ def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_
     the reader keeps the later one.
 
     Both ledgers at once, because the rule is the same for both: they left
-    `keyed_paths` when each writer got a file of its own. Both now store Parquet
+    `keyed_paths` when each writer got a file of its own. Both now write Parquet
     through the ledger writer.
     """
     state = tmp_path / "state"

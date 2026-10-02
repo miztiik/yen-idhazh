@@ -1,8 +1,8 @@
 # Documentation Structure
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 
-Where documentation belongs and what it must contain. Follow [CLAUDE.md](../../CLAUDE.md) section 5. These rules are domain-neutral except for the diagram accents under Project bindings.
+Where documentation belongs and what it must contain. Follow [CLAUDE.md](../../CLAUDE.md) section 5. These rules are domain-neutral.
 
 ## Diataxis tiers
 
@@ -118,52 +118,15 @@ A plan begins with one title, Last Updated line and current Status paragraph. Re
 
 ## Diagrams
 
-Use Mermaid in a fenced `mermaid` block. Set the diagram's theme, surface, text, borders and arrows explicitly so it remains readable in both page themes.
-
-### The opening line, which is not optional
-
-```text
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
-```
-
-### The class vocabulary
-
-Use these meanings consistently. Colour must not be the only signal.
-
-```text
-classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
-classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
-classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
-classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-classDef ext fill:#2a2233,stroke:#6b5480,stroke-width:1px,stroke-dasharray:5 3,color:#e6e9f0;
-```
-
-`stage` means work; `decision` means a branch; `yes` and `no` mean outcomes. `warn` means held or degraded. Use `ledger` for persistence and `ext` for an external dependency. Label every arrow leaving a decision.
-
-### Project bindings
-
-Group nodes in a `subgraph` only when the diagram crosses subsystem boundaries. Name each group for a real subsystem or workflow. Its accent colours the border and title, not the fill.
-
-```text
-classDef sysIngest fill:#1a1e27,stroke:#2e9c8a,stroke-width:1.5px,color:#7fe3d2;
-classDef sysExtract fill:#1a1e27,stroke:#4f7fd6,stroke-width:1.5px,color:#a8c4f5;
-classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
-classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
-classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
-classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
-```
-
-These name ingestion, extraction, models, publication, evaluation and operations respectively.
-
-### Checks before a diagram merges
-
-Check explicit colours, a class on every node, labelled branches, meaningful subsystem groups and readable output in both light and dark page themes.
+Use a fenced `mermaid` block. The palette, print rules, node meanings, metric
+and threshold annotations, and overview/detail examples live in
+[mermaid-diagrams.md](mermaid-diagrams.md). That page answers how to draw a
+diagram; this page answers where documentation belongs.
 
 ## See also
 
 - [repository-layout.md](repository-layout.md) - directory purposes and writers.
+- [mermaid-diagrams.md](mermaid-diagrams.md) - diagram notation for light, dark and print.
 - [../how-to/ship-a-pr.md](../how-to/ship-a-pr.md) - delivery workflow.
 - [../how-to/distill-a-plan.md](../how-to/distill-a-plan.md) - moving durable findings into docs.
 - [../concepts/principles.md](../concepts/principles.md) - project design principles.

@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -133,6 +133,13 @@ timeline remain. An operator inspects a particular item's parent-linked trace
 instead; expired detail is reported as unavailable, never reconstructed from
 settled health or treated as zero. No extra committed aggregate or public
 payload is needed for that question.
+
+On 2026-10-02, miztiik authorized merging this retirement while a content run
+was active, after all CI checks passed. This was a one-time exception to the
+retirement's quiet-window requirement. An older run retains its checkout and
+may still attempt to publish the removed files; new runs neither read nor
+write them. The exception grants no permission to cancel a run or rewrite
+history.
 
 ## See also
 

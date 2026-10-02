@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-02
 
-**Status**: Row 12 and its related public-projection and reader deletions are carried by #1189, pending the owner's merge verification. Row 12 stays COLLAPSED. The remaining rows stay in this plan; this change does not execute them.
+**Status**: Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED. The remaining rows stay in this plan; this change does not execute them.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -45,7 +45,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 1. Status Reckoner
 
-**Eleven remaining pull requests.** Row 12 moved to #1189, pending merge verification. One active row is one pull request. The dispatcher is a running pool: a slot frees when a worker returns, never when a pull request merges. `Depends-on` and `Files touched` are the readiness test; `Parallel-group` is a hint.
+**Eleven remaining pull requests.** Row 12 was completed by #1189. One active row is one pull request. The dispatcher is a running pool: a slot frees when a worker returns, never when a pull request merges. `Depends-on` and `Files touched` are the readiness test; `Parallel-group` is a hint.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -904,7 +904,7 @@ Row 4 owns known defect 40: write one canary job as separate probe and completio
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | **One pull request for the route.** Its page and server load are one surface | Fowler |
-  | 2 | **The run timeline's detailed sub-steps are removed by #1189, pending merge verification.** [The item command](../docs/concepts/telemetry.md#the-committed-traces-briefly) provides retained detail for one item; this row does not remove them again | Susan |
+  | 2 | **The run timeline's detailed sub-steps were removed by #1189.** [The item command](../docs/concepts/telemetry.md#the-committed-traces-briefly) provides retained detail for one item; this row does not remove them again | Susan |
   | 3 | **The items-per-minute figure returns above the run timeline as its lede**, the price of replacing panel 3 | Susan |
 
 - **Rejected alternatives:**
@@ -1049,9 +1049,8 @@ Row 4 owns known defect 40: write one canary job as separate probe and completio
 ### Row #12 - Aggregate retirement carried by #1189
 
 The complete aggregate retirement, its public copy, its Pipelines reader and
-the item command are carried by #1189; completion remains conditional on the
-owner verifying that it merged. This row stays COLLAPSED; do not dispatch
-another deletion here.
+the item command are complete in merged PR #1189. This row stays COLLAPSED;
+do not dispatch another deletion here.
 The current command, retention rule and reason for removing the four figures
 live in [telemetry](../docs/concepts/telemetry.md).
 
@@ -1062,7 +1061,7 @@ live in [telemetry](../docs/concepts/telemetry.md).
 | 1 | Plan 51: four routes draw no panel id | rows 1 (structure), 3 and 6 to 9 (ids) |
 | 2 | Plan 51: `echarts` stays installed while two grammars coexist | row 11 |
 | 3 | Plan 50's row **The three ledgers the console's routes read become parquet**: `backend/utilities/migrate_to_parquet.py` carries "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`" | row 5, its own commit |
-| 4 | Plan 50's collapsed aggregate migration: delete the family rather than migrate it | #1189, pending merge verification; row 12 stays COLLAPSED |
+| 4 | Plan 50's collapsed aggregate migration: delete the family rather than migrate it | completed by #1189; row 12 stays COLLAPSED |
 | 5 | Telemetry-intent N7 and N8 | rows 5 and 10; the band is owner ruling R1 |
 | 6 | The [shared readout rules](../docs/concepts/console-design/the-rules-every-console-chart-obeys.md): remove the house-style components' remaining native tooltips when they gain their readouts | row 2 |
 | 7 | Plan 50's open questions: `similarity-ledger.ts` is a second name | row 3. **`scores` renamed `summary-quality`** stays the owner's call: a directory rename is a data migration |

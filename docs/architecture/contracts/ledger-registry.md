@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -111,7 +111,7 @@ The first row is what the registry is for. The claim used to be a hand-written P
 **Pause or retire a family.** Change its `lifecycle_status`, and nothing else. Nothing is discovered, and nothing is a hand-list somebody can forget. The next write of new rows into it is skipped with one warning, and its old rows are read and aged as before.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
 flowchart TB
   subgraph ONBOARD["Onboarding a family - two edits, no logic"]
     ENTRY["add one family to config/ledgers.json<br/>name, lifecycle_status, description, onboarded<br/>and each ledger: name, grain, prefix, stem, suffix"]
@@ -155,12 +155,12 @@ flowchart TB
   PRUNE -->|"no"| EMPTY
   TREE --> PRUNE
 
-  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
-  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
-  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
-  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
+  classDef decision fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
+  classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#166534;
+  classDef no fill:#fef2f2,stroke:#991b1b,stroke-width:1.5px,color:#991b1b;
+  classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1f2937;
+  classDef sysOps fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#475569;
 
   class ENTRY,MEMBER,READ,PATHS,KEYS,ROWS,SETTLE stage;
   class BIJ,PRUNE decision;
@@ -227,7 +227,7 @@ The config carries where each ledger lives and each family's lifecycle status. I
 
 **The field is `lifecycle_status`, not `state`.** `state` is already the name of the folder every ledger sits in, so `state: paused` in a file that describes `state/` reads as a claim about the folder. `lifecycle_status` says what it is - where in its life the family is - and no key in the file is named `state`. The Python enum is `LedgerLifecycleStatus`, so it cannot be mistaken for the `LifecycleStatus` that `contracts/taxonomy.py` uses for desks, lenses and feeds.
 
-**The eval ledger is `summary-quality-evals`, and its ID folder `summary-quality-evals-index`.** The ledger was `scores`, one of seven ledger names with "score" in them, and the name said neither what was scored nor that each row is a measurement. Each row is an evaluation of how good one summary is, so the name says that. `summary-quality` alone stays free for the fitted quality thresholds, which are a different ledger. The ID folder holds the identity of every measurement the ledger holds, so it takes the ledger's name and `-index`; a task's declaration is paired with its module by name, so its retention task, the rebuild stage and the rebuild command take the folder's name too. **The old name has no alias.** A ledger file names its ledger in its envelope and in every row, and a day listing, a compact index and a watermark name it too, so an alias would be a second registry entry that nothing ever rewrites. Every committed file was rewritten under the new name instead, each keeping its `unit_id`, `file_id`, `written_at_ms` and every row's identity cells, because a reader settles by them. `backend/utilities/eval_ledger_rename.py` did it, and it proves every row reads back before it deletes an old file.
+**The eval ledger is `summary-quality-evals`, and its ID folder `summary-quality-evals-index`.** The ledger was `scores`, one of seven ledger names with "score" in them, and the name said neither what was scored nor that each row is a measurement. Each row is an evaluation of how good one summary is, so the name says that. `summary-quality` alone stays free for the fitted quality thresholds, which are a different ledger. The ID folder holds the identity of every measurement the ledger holds, so it takes the ledger's name and `-index`; a task's declaration is paired with its module by name, so its retention task, the rebuild stage and the rebuild command take the folder's name too. **The old name has no alias.** A ledger file names its ledger in its envelope and in every row, and a day listing, a compact index and a watermark name it too, so an alias would be a second registry entry that nothing ever rewrites. Every committed file was rewritten under the new name instead, each keeping its `unit_id`, `file_id`, `written_at_ms` and every row's identity cells, because a reader settles by them. The one-shot migration proved every row read back before it deleted an old file; its utility and tests were removed after the move completed.
 
 **A family carries no owner field.** Owner decision, 2026-09-27. An owner would say who answers for a family. One identity commits to this repository (CLAUDE.md section 8), so the field would hold the same value on every family and tell a reader nothing. The code that answers for a family is found by a search for its `LedgerName` members, because a module that reads or writes a ledger names it by its member and by nothing else.
 

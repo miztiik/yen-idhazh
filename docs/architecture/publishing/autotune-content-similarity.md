@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -152,7 +152,7 @@ One roof for all of them, named for the room rather than for the one job being
 done in it this month.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
 flowchart TD
   subgraph pub["digest.yml - the assemble stage"]
     day[("The published day")]
@@ -205,25 +205,25 @@ flowchart TD
   shape -- "no" --> fitrow
   clamped --> fitrow
   hold --> fitrow
-  fitrow --> pick
+  fitrow -.->|"Next assemble checks the new fitted row"| pick
   pick -- "yes" --> usefit
   pick -- "no" --> usefloor
   usefit --> day
   usefloor --> day
-  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
-  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
-  classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
-  classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
+  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
+  classDef decision fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
+  classDef warn fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#92400e;
+  classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1f2937;
+  classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
+  classDef sysModel fill:#f1f5f9,stroke:#6b21a8,stroke-width:1.5px,color:#6b21a8;
+  classDef sysEval fill:#f1f5f9,stroke:#92400e,stroke-width:1.5px,color:#92400e;
   class draw,shards,archive,count,walk,damp,clamped,usefit,usefloor stage;
   class pick,agree,reported,inputs,sheet,steady,shape decision;
   class drop,hold warn;
   class day,rows,record,fitrow ledger;
   class pub sysPublish;
   class council sysModel;
-  class foldjob sysEval;
+  class collectjob sysEval;
 ```
 
 **No green and no red anywhere on it, and that is a choice.** Those two colours
