@@ -315,7 +315,6 @@
     "public_machine_keep_months": 22,
     "public_run_days_keep_months": 19,
     "public_run_timeline_keep_months": 5,
-    "public_span_rollup_keep_months": 23,
     "sample_rate": 0.25,
     "telemetry_publish": false,
     "tracing_enabled": true,

@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-01
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -45,7 +45,7 @@ Flat records carry envelope fields and cells at one level. Their item cells use 
 
 ## The span tree
 
-`observability.tracing_enabled` controls tracing. A span records a start instant, duration and parent, so a reader can inspect a slow sub-step rather than only a stage total. Disabling tracing writes neither traces nor rollups and must not change pipeline results.
+`observability.tracing_enabled` controls tracing. A span records a start instant, duration and parent, so a reader can inspect a slow sub-step rather than only a stage total. Disabling tracing writes no traces and must not change pipeline results.
 
 The tree includes item, fetch, robots, extract, tag, summarize, render-prompt, model-call, parse-reply, score and visual-planner work. [telemetry/spans.py](../../backend/idhazh/telemetry/spans.py) owns the exact vocabulary.
 
@@ -65,29 +65,23 @@ This rule applies to telemetry capture, not to the article's authorized model re
 
 Tracing writes a local file that the run commits under `state/traces/`. There is no hosted collector, telemetry SDK, destination environment variable or second export path. A run does not depend on a tracing service being available.
 
-## The committed rollup
-
-[telemetry/rollup.py](../../backend/idhazh/telemetry/rollup.py) derives `SpanRollupRow` from one shard's spans. Each writer owns its output path; ledger helpers decide the path and how repeat attempts settle.
-
-| Span kept in the rollup | Measurement it adds |
-| --- | --- |
-| `item` | Whole-item elapsed time |
-| `robots` | Robots lookup inside fetch |
-| `tag` | Taxonomy matching inside extraction |
-| `render_prompt` | Prompt and schema construction |
-| `parse_reply` | Reply parsing and validation |
-
-Other stages already have timing columns. Do not add a second independent record of the same measurement.
-
-The item row also carries `unattributed_ms`: shard wall time minus time covered by item spans. Keep this residual separate from stage time. Refuse a negative residual rather than hiding it with a clamp. It is absent on other span rows and on older records that did not measure it.
-
-The fold reads one shard, never the accumulated archive. An unopened span produces no row, not a measured zero. Missing measurements and zero-duration measurements must remain distinguishable.
-
 ## The committed traces, briefly
 
-Raw traces retain nesting for recent-run inspection. Their layout is `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl`; each line is one span. The `traces` gardener task removes expired files according to `config/gardener/traces.json`.
+Raw traces retain nesting for recent-run inspection. Their layout is `state/traces/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.jsonl`; each line is one span. The `traces` gardener task removes expired files according to `config/gardener/traces.json`.
 
-Delete expired traces rather than summarising them again: the rollup already contains the durable totals. No publication gate or reader page may depend on a raw trace being present. A gap before tracing was enabled is missing instrumentation, not zero work.
+Delete expired traces rather than summarising them again. Item health keeps the stage measurements the console needs. No publication gate or reader page may depend on a raw trace being present. A gap before tracing was enabled is missing instrumentation, not zero work.
+
+`idhazh telemetry item <item_id> --date YYYY-MM-DD` prints the item's settled
+health rows and each matching trace tree. The date is required and means UTC.
+Health uses the shared ledger reader, including packed days, months and years.
+The command reads trace files from that day alone and applies the current
+retention in `config/gardener/traces.json`, even when expired files remain.
+Missing or expired traces leave health visible with a reason.
+
+Trace groups name the run, attempt, job and shard in deterministic order.
+Older filenames that did not record an attempt or job label those as unknown.
+Settled health is not attributed to an attempt. Parent links preserve nesting;
+two item passes remain separate lines and their elapsed times are never added.
 
 ## The item-level census
 
@@ -130,7 +124,15 @@ The [council contract](../architecture/publishing/llm-council.md) and ledger reg
 
 ## Design rationale
 
-Structured events share names with the data they describe, so logs and records cannot quietly drift into different vocabularies. Spans add timing structure that flat rows cannot express. Rollups retain bounded, queryable totals; short-lived traces retain recent detail. One persistence path controls storage without forcing unrelated populations into one row shape.
+Structured events share names with the data they describe, so logs and records cannot quietly drift into different vocabularies. Spans add timing structure that flat rows cannot express. Item health keeps stage measurements; short-lived traces keep recent detail. One persistence path controls storage without forcing unrelated populations into one row shape.
+
+The Pipelines page does not print robots, tag, prompt-render or reply-parse
+totals. Those timings sit inside stages already shown and lose the item and
+attempt when added across a shard. The eight item-stage fields and the main
+timeline remain. An operator inspects a particular item's parent-linked trace
+instead; expired detail is reported as unavailable, never reconstructed from
+settled health or treated as zero. No extra committed aggregate or public
+payload is needed for that question.
 
 ## See also
 

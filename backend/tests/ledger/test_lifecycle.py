@@ -27,6 +27,7 @@ from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.day_metrics import DayMetrics
+from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import Period, RowIdentity, Tier, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
@@ -34,7 +35,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.council import metrics_sink
@@ -114,12 +114,12 @@ def _persist(state: Path) -> bool:
 
 def _segment(state: Path, *, extend: bool) -> bool:
     writer = ledger.extend_segment if extend else ledger.write_segment
-    row = _first(SpanRollupRow)
+    row = _first(FeedHealthRow)
     return _wrote(
         state,
         lambda: writer(
             state,
-            LedgerName.SPAN_ROLLUP,
+            LedgerName.FEED_HEALTH,
             [row],
             run_id=A_RUN,
             attempt=1,
@@ -159,8 +159,8 @@ def _trace(state: Path) -> bool:
 #: digest fragment are driven through their stages in their own modules' tests.
 ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
     "persist": (LedgerName.VISUAL_PRUNES, 1, _persist),
-    "write_segment": (LedgerName.SPAN_ROLLUP, 1, lambda s: _segment(s, extend=False)),
-    "extend_segment": (LedgerName.SPAN_ROLLUP, 1, lambda s: _segment(s, extend=True)),
+    "write_segment": (LedgerName.FEED_HEALTH, 1, lambda s: _segment(s, extend=False)),
+    "extend_segment": (LedgerName.FEED_HEALTH, 1, lambda s: _segment(s, extend=True)),
     "append_seen": (
         LedgerName.SEEN,
         1,

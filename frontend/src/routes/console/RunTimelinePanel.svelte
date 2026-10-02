@@ -31,12 +31,6 @@
 	 * counted twice. Neither is tinted - nobody has agreed how much overhead is
 	 * too much, so a colour would publish an alarm that does not exist.
 	 *
-	 * **The four sub-steps are figures and never bands.** Measured over the
-	 * committed rollup they draw far under one pixel of the track, and a band that
-	 * small is a legend entry with no mark. They are printed under the bars with
-	 * the step each one runs inside, so nobody reads `tag read` as a step beside
-	 * taking the article out.
-	 *
 	 * Hand-written markup, not a chart: every mark is in the document before a
 	 * script runs and stays there if none ever does.
 	 */
@@ -45,15 +39,12 @@
 	import { seconds } from '$lib/charts/machine';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import type { RunTimelineView, TimelineBar } from '$lib/server/run-timeline';
-	import type { SubStepReadout } from '$lib/server/span-rollup';
 
 	let {
 		view,
-		subSteps,
 		readoutMaxShare
 	}: {
 		view: RunTimelineView;
-		subSteps: SubStepReadout;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
 	} = $props();
@@ -86,7 +77,7 @@
 	/** Signed seconds, so an overrun reads as one rather than as a plain figure. */
 	const signed = (ms: number): string => (ms < 0 ? `-${secs(-ms)}` : secs(ms));
 
-	/** A sub-step figure is milliseconds, and the seconds clock rounds it to zero.
+	/** A short step is milliseconds, and the seconds clock rounds it to zero.
 	 * Eleven milliseconds is a measurement; `0.0 s` is a misprint. */
 	const small = (ms: number): string => (ms < 1000 ? `${Math.round(ms)} ms` : secs(ms));
 
@@ -365,72 +356,6 @@
 		</p>
 	{/if}
 
-	<!-- The four steps inside those steps, printed. They read their own ledger, so
-	     they are often a different run from the bars above and they say which. -->
-	<div
-		class="substeps"
-		data-substeps={subSteps.empty ? 'empty' : subSteps.runId}
-		data-substep-printed={String(subSteps.printed)}
-		data-substep-smallest-px={subSteps.smallestPx.toFixed(3)}
-		data-substep-track-px={subSteps.trackPx}
-		data-substep-named-ms={subSteps.namedMs}
-		data-substep-item-ms={subSteps.itemMs}
-		data-substep-residual-ms={subSteps.residualMs ?? ''}
-		data-substep-wall-ms={subSteps.wallMs}
-	>
-		{#if subSteps.empty}
-			<p class="note" data-substeps-empty>
-				No traced run has folded its spans yet, so the four steps inside the steps are unmeasured.
-				The span record starts <strong>{subSteps.recordStarts}</strong>: before it a run timed its
-				stages but never committed them. That is a record that has not begun, not a run that did
-				no work.
-			</p>
-		{:else}
-			<p class="substep-head">
-				Steps inside those steps - run <strong>{subSteps.runId}</strong> on {subSteps.date},
-				{subSteps.shardCount}
-				{subSteps.shardCount === 1 ? 'shard' : 'shards'}
-			</p>
-			<ul class="figures">
-				{#each subSteps.steps as step (step.name)}
-					<li
-						data-substep={step.name}
-						data-substep-ms={step.ms}
-						data-substep-px={step.px.toFixed(3)}
-					>
-						<span class="figure tabular-nums">{small(step.ms)}</span>
-						<span class="what">{step.label}</span>
-						<span class="inside">{step.inside}</span>
-					</li>
-				{/each}
-			</ul>
-			<p class="note" data-substep-note>
-				{#if subSteps.printed}
-					These are printed rather than drawn. Together they are {small(subSteps.namedMs)} of the
-					run's {secs(subSteps.itemMs)} of item time, and the narrowest would paint
-					{subSteps.smallestPx.toFixed(3)} px of a {subSteps.trackPx} px track - which a browser
-					does not paint at all. A band that small is a legend entry with no mark, and it teaches
-					a reader the step is zero when it is only unmeasurable at this scale.
-				{:else}
-					Together they are {small(subSteps.namedMs)} of the run's {secs(subSteps.itemMs)} of item
-					time, and the narrowest would paint {subSteps.smallestPx.toFixed(3)} px of a
-					{subSteps.trackPx} px track. They are printed rather than drawn anyway, because each is
-					already inside a band the bars draw and a second mark for the same seconds is the same
-					seconds counted twice.
-				{/if}
-				Each runs inside a step already drawn above, so adding one to that step counts it twice.
-				{#if subSteps.residualMs === null}
-					No shard of this run recorded what fell outside its items, so the overhead is a missing
-					reading rather than an overhead of nothing.
-				{:else}
-					{small(subSteps.residualMs)} fell outside every item - model load, file writes,
-					scheduling - which with the item time is the shards' whole clock, {secs(
-						subSteps.wallMs
-					)}.
-				{/if}
-			</p>
-		{/if}
-	</div>
 </div>
 
 <style>
@@ -649,55 +574,6 @@
 
 	.residual-note {
 		font-size: var(--text-xs);
-	}
-
-	/* The sub-steps are a readout, not a plot: they sit under the bars, ruled off,
-	   because they are the same seconds at a grain no track can paint. */
-	.substeps {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		padding-block-start: var(--space-3);
-		border-block-start: 1px solid var(--color-rule);
-	}
-	.substep-head {
-		margin: 0;
-		font-size: var(--text-xs);
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--color-text-tertiary);
-	}
-	.substep-head strong {
-		text-transform: none;
-		letter-spacing: normal;
-		color: var(--color-text-secondary);
-	}
-	.figures {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-		gap: var(--space-2) var(--space-4);
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-	.figures li {
-		display: flex;
-		flex-direction: column;
-	}
-	.figures .figure {
-		font-size: var(--text-lg);
-		line-height: var(--leading-lg);
-		font-weight: 600;
-		color: var(--color-text);
-	}
-	.figures .what {
-		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
-	}
-	.figures .inside {
-		font-size: var(--text-xs);
-		line-height: var(--leading-xs);
-		color: var(--color-text-tertiary);
 	}
 
 	/* One column on a phone: the gutter and the trailing figure both cost width a

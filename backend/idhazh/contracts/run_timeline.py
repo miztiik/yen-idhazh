@@ -11,8 +11,7 @@ than a shape the chart has to migrate (Guardrail #3).
 
 Not one stage and not one span. The chart's y axis is items, so the row's key is
 the item and every column on it is about that one item. A row per stage cannot
-place an item, and a row per span cannot either - `SpanRollupRow` is folded per
-shard and per span name, so it knows how long fetching took and not which
+place an item, and an aggregate per span name cannot either: it loses which
 article was being fetched.
 
 ## The clock is an offset, never a timestamp
@@ -50,8 +49,7 @@ account, filed twice, with the census as the source.
 
 `residual_ms` is the item's total minus the eight named steps. It gets a column
 of its own because a step that absorbed the leftover reads as slower than it was,
-and a reader cannot tell the overhead from the work. `SpanRollupRow` made this
-ruling once already for the shard; this is the same ruling for the item.
+and a reader cannot tell the overhead from the work.
 
 **It is signed, for the reason `ItemHealthRow.stage_gap_ms` is signed.** Two of
 the eight steps genuinely overlap: the visual plan is decoded inside the
@@ -70,7 +68,7 @@ is how a chart and a ledger start reporting different overheads for one item.
 Nothing on this row identifies a page. No address, no `url_key`, no title, no
 fetched text - only an item id the pipeline minted, a clock and a set of
 durations of our own work. So there is nothing to redact and no second
-`public-run-timeline` shape to declare, the way `span-rollup-row`, `day-metrics`
+`public-run-timeline` shape to declare, the way `day-metrics`
 and `machine-shard-row` are published whole
 (`docs/architecture/publishing/console-payloads.md`). Where the rows land - a
 published mirror alone, or a committed ledger projected into one - is decided by

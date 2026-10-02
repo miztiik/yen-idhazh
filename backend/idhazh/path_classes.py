@@ -60,7 +60,6 @@ DERIVED: Final[tuple[str, ...]] = (
     "frontend/public/run-days",
     "frontend/public/day-metrics",
     "frontend/public/machine",
-    "frontend/public/span-rollup",
     "frontend/public/run-timeline",
     "state/day-metrics",
     # A closed day's fold, derived from the writer files it read. It is the one

@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -356,7 +356,7 @@ the extraction census, the throughput figures and the stage-timing panel each
 fall back to a "nothing was measured" sentence on the fixture the browser suite
 runs against. One further column was empty on every canary row without a panel
 behind it - `day-metrics.addresses_considered` - which is a different defect and
-a cheaper one. The `run-days` and `span-rollup` payloads are clean.
+a cheaper one. The `run-days` payload is clean.
 
 ## Design rationale
 

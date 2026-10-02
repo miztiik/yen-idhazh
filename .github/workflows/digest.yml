@@ -727,8 +727,8 @@ jobs:
       # Appending the same row twice is the one thing that would make this worse
       # than the loss it fixes, because `public_telemetry` copies every row into
       # the file the console reads. No file is shared here any more: the item
-      # census, the eval rows, the record of what those rows are and the span
-      # fold each go into their day directory under a name that carries this
+      # census, the eval rows and the record of what those rows are
+      # each go into their day directory under a name that carries this
       # writer's run, attempt, job and shard.
       #
       # Nothing here shares a file with another writer any more, which is why no
@@ -739,14 +739,6 @@ jobs:
       # attempts write two files and the second one replaces the first when the
       # compaction folds them by key.
       #
-      # `state/span-rollup` was staged here from 2026-09-15 because a shard was
-      # the only thing that wrote it. `roll_up_spans` folds the shard's spans and
-      # the fold used to be appended to the month file in this runner's checkout;
-      # until that day no list named the path, so each fold died with the runner
-      # and assemble published a header row over an absent directory. Every span
-      # this project had ever opened was measured, folded and thrown away by one
-      # missing path.
-      #
       # `state` whole is what this stages now, and naming the directory rather
       # than its contents is what makes the step survive a fresh clone: `git add`
       # runs under `set -euo pipefail`, so a path missing from the checkout
@@ -756,7 +748,7 @@ jobs:
       #
       # Every path this shard writes under it carries this writer's run,
       # attempt, job and shard in the file name - the item census, the eval
-      # rows, the record of what those rows are, the span fold, the machine row
+      # rows, the record of what those rows are, the machine row
       # and the committed trace alike. Two shards never write one path and two
       # attempts at one shard never write one path, so no merge driver is needed
       # anywhere below and a lost push race costs a rebase rather than the rows.
@@ -1186,7 +1178,7 @@ jobs:
           frontend/public/digest frontend/public/telemetry frontend/public/assist/index
           frontend/public/source-health.json frontend/public/console
           frontend/public/run-days frontend/public/day-metrics
-          frontend/public/machine frontend/public/span-rollup
+          frontend/public/machine
           frontend/public/run-timeline state corpus
 
       # The commit step above rebases when the push loses a race, and the

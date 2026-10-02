@@ -1,6 +1,6 @@
 # Compressing the telemetry, against re-encoding it
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-10-01
 Two ways to make the committed telemetry smaller, raced against each other on
 the same ledger: gzip against ordinal encoding of its closed-vocabulary columns.
 
@@ -30,9 +30,8 @@ still most of the file where the ordinal is a fifteenth of it, it needs no
 legend shipped beside the data, and `grep failed` over a committed day keeps
 working. An ordinal taken first would be re-encoded when compression lands.
 
-**One published file gets bigger.** `span-rollup/` is 67 bytes and gzips to 77,
-because the header costs more than the payload. Any switch has to leave a file
-alone when compressing it does not pay.
+**Small files can grow under compression.** A compression header can cost more
+than it saves. Leave a file unchanged when compression does not reduce its size.
 
 ## See also
 

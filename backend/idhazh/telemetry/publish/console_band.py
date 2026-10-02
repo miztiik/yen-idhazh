@@ -77,7 +77,6 @@ from idhazh.telemetry.publish import (
     public_telemetry,
     run_days,
     series,
-    span_rollup,
 )
 
 #: The 1 GB Pages ceiling (`CLAUDE.md` Guardrail #2). A constant and not a knob, for
@@ -1395,7 +1394,6 @@ FETCHED_SERIES: Final[tuple[tuple[str, str], ...]] = (
     (run_days.DIRNAME, run_days.SUFFIX),
     (day_metrics.PUBLIC_DIRNAME, day_metrics.PUBLIC_SUFFIX),
     (machine.DIRNAME, machine.SUFFIX),
-    (span_rollup.DIRNAME, span_rollup.SUFFIX),
 )
 
 

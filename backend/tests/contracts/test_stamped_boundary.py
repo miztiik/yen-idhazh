@@ -188,7 +188,7 @@ def test_every_console_read_resolves_to_exactly_one_declared_shape() -> None:
         assert entry.contract in CONTRACTS, f"{stem} is not a registered contract ({entry.reader})"
 
     stems = payloads_by_stem()
-    assert len(stems) == 7, "ten console reads answer off seven shapes"
+    assert len(stems) == 6, "the current console reads answer off six shapes"
     assert set(stems) == {entry.contract.__schema_stem__ for entry in CONSOLE_PAYLOADS}
 
 
@@ -324,7 +324,6 @@ def test_every_published_month_payload_has_a_window_that_ends() -> None:
         "run-days",
         "day-metrics",
         "machine",
-        "span-rollup",
     }
     for root in monthly - {"telemetry"}:
         knob = f"public_{root.replace('-', '_')}_keep_months"

@@ -157,7 +157,7 @@ over the range it is given - so none of them gets slower as the archive grows:
 ```
 python -m idhazh telemetry show   --date 2026-09-15  # which instrument files that day has
 python -m idhazh telemetry census --date 2026-09-15  # how that day's items ended
-python -m idhazh telemetry rollup --date 2026-09-15  # how long that day's spans took
+python -m idhazh telemetry item ai-01 --date 2026-09-15
 ```
 
 `show` lists a CSV day tree's files for the date, a door ledger's raw files for
@@ -165,6 +165,13 @@ that day, and the packed day or month file once a compaction has taken it.
 
 `census` is the fastest way in: it counts the day's items by stage, outcome and
 failure code, which is the same answer as filtering the census shard by hand.
+
+`item` requires the exact item id and a UTC date. It prints settled health and
+each retained trace tree, grouped by run, attempt, job and shard. Missing or
+expired traces leave health visible with a reason. It reads only the requested
+day and never adds the two passes of an item together. The
+[telemetry page](../concepts/telemetry.md#the-committed-traces-briefly) owns
+retention and legacy-identity behavior.
 
 Every planned item has a census row in the item-health ledger. Read it directly
 when you need a column `census` does not fold, because that ledger is committed

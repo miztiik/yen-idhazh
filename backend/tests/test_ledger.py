@@ -21,6 +21,7 @@ from conftest import (
     seed_feed_health,
     seed_host_fingerprint,
     seed_item_health,
+    writer_identity,
 )
 
 from idhazh import config, day_shards, ledger, month_partition
@@ -43,8 +44,8 @@ from idhazh.contracts.item_health import (
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import csv_file
 from idhazh.ledger import rows as ledger_rows
@@ -163,19 +164,6 @@ def test_a_ledger_that_is_not_a_day_tree_is_refused_by_name(tmp_path: Path) -> N
         )
 
     assert not list(tmp_path.rglob("*")), "the refusal wrote nothing"
-
-
-def span_fold_row(*, on: str = DATE, shard: int = 0, total_ms: int = 16) -> SpanRollupRow:
-    """One shard's fold of one span name. `total_ms` is the cell a repeat could double."""
-    return SpanRollupRow(
-        version=SpanRollupRow.schema_version(),
-        date=on,
-        run_id=f"{on}-1",
-        shard=shard,
-        span_name=RollupSpan.TAG,
-        count=20,
-        total_ms=total_ms,
-    )
 
 
 def pair_row(*, on: str = DATE, judged_by_run_id: str | None = None) -> StorySimilarityPair:
@@ -1810,7 +1798,7 @@ def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(
     assert [row.judged_by_run_id for row in kept] == [None, f"{DATE}-7"]
 
 
-def test_a_repeated_fingerprint_and_span_fold_are_settled_when_a_reader_asks(
+def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_asks(
     tmp_path: Path,
 ) -> None:
     """The settlement these two ledgers used to get after a merge, taken at read time.
@@ -1822,31 +1810,37 @@ def test_a_repeated_fingerprint_and_span_fold_are_settled_when_a_reader_asks(
     the reader keeps the later one.
 
     Both ledgers at once, because the rule is the same for both: they left
-    `keyed_paths` together when each writer got a file of its own - the span
-    fold in a CSV day directory, and the machine record through the ledger door.
+    `keyed_paths` when each writer got a file of its own. Both now write Parquet
+    through the ledger writer.
     """
     state = tmp_path / "state"
+    candidate = ValidationRow.model_validate(
+        {
+            "date": DATE, "run_id": RUN_ID, "model_id": "candidate-fixture",
+            "is_incumbent": False, "selected": False, "leaderboard_hhem": 0.8,
+            "measured_hhem": 0.7, "articles": 1, "commit_sha": "aaaaaaa",
+            "runner": "fixture", "verdict": "confirmed", "detail": "recorded evaluation",
+        }
+    )
     for attempt, cpu in enumerate(("first", "second"), start=1):
         assert seed_host_fingerprint(state, [fingerprint_row(cpu=cpu)], attempt=attempt) == 1
-        ledger.write_segment(
+        ledger.persist(
             state,
-            LedgerName.SPAN_ROLLUP,
-            [span_fold_row(total_ms=16 * attempt)],
-            run_id=RUN_ID,
-            attempt=attempt,
-            job=ServerJob.WORK,
-            shard=0,
+            [candidate.model_copy(update={"articles": 16 * attempt})],
+            ledger=LedgerName.CANDIDATE_MODELS,
+            covers=DATE,
+            identity=writer_identity(RUN_ID, attempt=attempt, job=ServerJob.WORK),
         )
 
     machines = ledger.load_days(state, LedgerName.HOST_FINGERPRINT, [DATE], model=HostFingerprintRow)
-    spans = day_shards.settled_day(
-        ledger.tree_root(state, LedgerName.SPAN_ROLLUP), DATE, ledger.SPAN_ROLLUP_KEY, SpanRollupRow
+    candidates = ledger.load_days(
+        state, LedgerName.CANDIDATE_MODELS, [DATE], model=ValidationRow,
     )
 
     assert len(machines) == 1, "one machine, written down twice, is one machine"
     assert machines[0].cpu_model == "second"
-    assert len(spans) == 1, "a second attempt recomputes a fold, it does not add one"
-    assert spans[0]["total_ms"] == "32"
+    assert len(candidates) == 1, "a second attempt replaces a verdict, it does not add one"
+    assert candidates[0].articles == 32
 
 
 # --- One feed, one run, one result ------------------------------------------

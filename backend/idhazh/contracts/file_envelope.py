@@ -222,6 +222,11 @@ class FileEnvelope(Contract):
     __schema_stem__: ClassVar[str] = "file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-01T16:50",
+            change="Remove the retired aggregate from the ledger vocabulary.",
+            why="Only declared families may reach a ledger file; surviving fields are unchanged.",
+        ),
+        ChangelogEntry(
             version="2026-10-01",
             change="ledger may name summary-quality-evals, and scores is refused.",
             why="The eval ledger is named for what it holds; its files were rewritten.",
@@ -238,8 +243,8 @@ class FileEnvelope(Contract):
         ),
         ChangelogEntry(
             version="2026-09-25",
-            change="Initial shape: the keys a raw or compact ledger file carries about itself.",
-            why="A parquet file must say what it holds without its filename being parsed.",
+            change="Earlier changes are in this file's git history.",
+            why="The changelog keeps the four newest changes and one history pointer.",
         ),
     )
 

@@ -127,7 +127,7 @@ def test_a_check_naming_a_ledger_with_no_tree_shape_is_refused() -> None:
 
 def test_a_check_naming_a_day_tree_ledger_passes() -> None:
     """The denominator: a refusal that refused everything would look the same."""
-    validate_registry([a_check("probe", LedgerName.SPAN_ROLLUP)])
+    validate_registry([a_check("probe", LedgerName.FEED_HEALTH)])
     validate_registry([a_check("probe")])
 
 

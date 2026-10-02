@@ -1,8 +1,10 @@
 # Plan 52 - The console's panels ask the ledger when they are looked at, ECharts leaves, and six projections go
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
-**Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries, and row 12 deletes a committed ledger that no revert of code brings back. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5, 10 and 12.**
+**Status**: Row 12 and its related public-projection and reader deletions moved to plan 51 row 11. The remaining rows stay in this plan; this change does not execute them.
+
+**Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by plan 51 row 11.
 
 **Chain** (CLAUDE.md section 0d). **Intent**: [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md) N2, N3, N4, N5, N7 and N8 - a panel asks `state/` for the columns and days it draws, when it is looked at, drawn in d3, and no pre-shaped copy of a ledger survives under `frontend/`. **Contract**: section 2 declares every file, function, query, column, type, knob, field, sentence and deletion the rows need; section 2.7 is Susan's panel verdicts of 2026-09-26 turned into ids, columns, types and words. **Code**: the twelve rows.
 
@@ -43,7 +45,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 1. Status Reckoner
 
-**Twelve pull requests.** One row is one pull request. The dispatcher is a running pool: a slot frees when a worker returns, never when a pull request merges. `Depends-on` and `Files touched` are the readiness test; `Parallel-group` is a hint.
+**Eleven remaining pull requests.** Row 12 moved to plan 51 row 11. One active row is one pull request. The dispatcher is a running pool: a slot frees when a worker returns, never when a pull request merges. `Depends-on` and `Files touched` are the readiness test; `Parallel-group` is a hint.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -51,14 +53,14 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 2 | The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout | 1 | B | PENDING | - | - | - |
 | 3 | Judgement carries its ids and gates, and its readers are named for the judge | 1 | B | PENDING | - | - | - |
 | 4 | Every panel's question is declared before it is drawn, and the door is measured at the console's real volume | 2; plan 50 row 9; plan 51 row 3; plan 51 row 9 | C | PENDING | - | - | - |
-| 5 | The band reads the ledgers and carries the settings changes, and the four projections nothing draws go | 3, 4; plan 50 row 12 | D | PENDING | - | - | - |
+| 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4; plan 50 row 12 | D | PENDING | - | - | - |
 | 6 | Pipelines asks the ledger | 5 | E | PENDING | - | - | - |
 | 7 | Summaries asks the ledger | 5 | E | PENDING | - | - | - |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | PENDING | - | - | - |
 | 9 | Hardware asks the ledger, and its page carries no data | 5; plan 51 row 8 | E | PENDING | - | - | - |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |
-| 12 | The `span-rollup` ledger is deleted, and one item's trace is a command | 11 | H | PENDING | - | - | - |
+| 12 | Moved to plan 51 row 11: the aggregate is deleted and one item's trace is a command | - | H | COLLAPSED | - | - | - |
 
 **The rows outside this plan that the `Depends-on` cells name**, written as `plan N row M` so `backend/utilities/plan_status.py` resolves them; everywhere else a row is cited by its title:
 
@@ -94,7 +96,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Rows 2 and 3, then row 4 | 2, then 1 | row 4 shares files with row 2 and waits on plans 50 and 51 |
 | Rows 5 and 8 | 2 | rows 6, 7 and 9 need row 5 |
 | Rows 6 to 9, then row 10 in row 6's slot | 4 | the pool; row 9 also waits on plan 51 row 8 |
-| Row 11, then row 12 | 1 | row 11 edits shared files; row 12 is the deletion no revert brings back |
+| Row 11 | 1 | row 11 edits shared files; row 12 moved to plan 51 row 11 |
 
 **What a worker runs locally.** The list the shared selector gives for the row's own changes (`npm --prefix frontend run test:changed -- --list`). After row 1 that is the route's own tests and pictures for a route row. **A row that edits a file two routes render runs every spec whose page renders it** - on plan 51 a shared readout change passed its route's specs locally and failed 17 in CI. CI runs the full suite.
 
@@ -847,27 +849,27 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
 
 ---
 
-### Row #5 - The band reads the ledgers and carries the settings changes, and the four projections nothing draws go
+### Row #5 - The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go
 
-- **Scope:** section 2.6 in full. In `backend/idhazh/telemetry/publish/console_band.py`: the machine facts read `state/host-fingerprint/` (the comment naming `machine/` is corrected); the site size is read from `run.json` and the article count from `state/day-metrics/`, never from `digest.json`; the months list names the `telemetry` months only. Then the `machine`, `run-days`, public `day-metrics` and public `span-rollup` projections go with their producers, contracts, knobs, copy-step entries, publication checks and canary calls; `state/day-metrics/` and `state/span-rollup/` stay. **In its own commit, `backend/utilities/migrate_to_parquet.py` and its test go**, gated on `git ls-files state/item-health state/scores state/host-fingerprint` finding no `.csv` - its own declared condition.
+- **Scope:** section 2.6, less the aggregate retirement moved to plan 51 row 11. In `backend/idhazh/telemetry/publish/console_band.py`: the machine facts read `state/host-fingerprint/` (the comment naming `machine/` is corrected); the site size is read from `run.json` and the article count from `state/day-metrics/`, never from `digest.json`; the months list names the `telemetry` months only. Then the `machine`, `run-days` and public `day-metrics` projections go with their producers, contracts, knobs, copy-step entries, publication checks and canary calls; `state/day-metrics/` stays. **In its own commit, `backend/utilities/migrate_to_parquet.py` and its test go**, gated on `git ls-files state/item-health state/scores state/host-fingerprint` finding no `.csv` - its own declared condition.
 - **Files touched:**
-  - `backend/idhazh/telemetry/publish/console_band.py`, `settings_moved.py` (new), `machine.py`, `run_days.py`, `span_rollup.py`, `day_metrics.py` (the public half only), `dispatch.py`, `series.py`
+  - `backend/idhazh/telemetry/publish/console_band.py`, `settings_moved.py` (new), `machine.py`, `run_days.py`, `day_metrics.py` (the public half only), `dispatch.py`, `series.py`
   - `backend/idhazh/contracts/console_band.py`, `backend/idhazh/contracts/fingerprint.py` (read only unless a name moves), `backend/idhazh/contracts/machine_shard.py`, `backend/idhazh/contracts/public_run_day.py`, `backend/idhazh/contracts/console_payloads.py`, `backend/idhazh/contracts/__init__.py`, `backend/idhazh/contracts/knobs/observability.py`, `backend/idhazh/config.py`, `backend/idhazh/path_classes.py`
   - `backend/idhazh/publication_checks/checks/console.py`, `backend/utilities/build_canary_day.py`, `backend/utilities/migrate_to_parquet.py` (deleted), `backend/tests/ledger/test_migrate_to_parquet.py` (deleted)
   - `frontend/src/lib/console/band.ts`, `frontend/src/lib/console/settings-moved.ts`, `frontend/tests/settings-moved.spec.ts`, `frontend/tests/console-band.spec.ts`, `tests/fixtures/settings-moved/five-on-one-day.json`, `tests/fixtures/settings-moved/five-on-one-day.expected.json` (new), `tests/fixtures/contracts/console-band/newest-day.json`
   - `config/idhazh.json`, `frontend/scripts/copy-visuals.mjs`, `.gitignore`, `.github/workflows/digest.yml`
   - `backend/tests/test_console_payloads_producer.py`, `backend/tests/contracts/test_console_band_fields.py` (new, the field-set binding), `backend/tests/telemetry/test_settings_moved.py` (new), `backend/tests/contracts/test_app_config.py`, `backend/tests/contracts/test_gardener_config.py`, `backend/tests/contracts/test_stamped_boundary.py`, `backend/tests/pipeline/test_day_shards.py`, `backend/tests/workflows/_harness.py`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
   - `docs/architecture/publishing/console-payloads.md`, `docs/architecture/publishing/retention.md`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/concepts/config/retention-ages.md`, `docs/concepts/adaptive-pruning.md`, `docs/concepts/growing-reads.md`
-  - **At dispatch the worker re-runs the searches for `machine_shard`, `MachineShard`, `public_machine_keep_months`, `PublicRunDay`, `public_run_day`, `public_run_days_keep_months`, `public_day_metrics_keep_months`, `publish_public`, `public_span_rollup_keep_months` and the literal paths `"machine/"`, `run-days/`, `day-metrics/<YYYY-MM>` and `span-rollup/<YYYY-MM>`, adds every match outside `state/`, `corpus/` and `TODO/` to this list, and says so in the pull request**
+  - **At dispatch the worker re-runs the searches for `machine_shard`, `MachineShard`, `public_machine_keep_months`, `PublicRunDay`, `public_run_day`, `public_run_days_keep_months`, `public_day_metrics_keep_months`, `publish_public` and the literal paths `"machine/"`, `run-days/` and `day-metrics/<YYYY-MM>`, adds every match outside `state/`, `corpus/` and `TODO/` to this list, and says so in the pull request**
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests`, `npm --prefix frontend run test:changed -- --list` then the selected checks; `idhazh check-publication` over the canary tree; the browser smoke on `/console/` and `/console/machine/` (the band). CI runs the full suite. **Merge window.**
-- **Oracle:** **the band says the same as before, plus the two new fields.** Over the canary tree the band before and after is equal field for field except `months` (the telemetry months only), `settings_moved` and `checker_moved`. Both languages return `five-on-one-day.expected.json`. A band without either new key validates to `None`. After the row no path under `build/` starts with `machine/`, `run-days/`, `day-metrics/` or `span-rollup/`. **Once, in the pull request and not as a test**: over the committed record, `settings_moved` names the prompt changes of 14 to 18 and 24 September, and `checker_moved` names 23, 24, 26 and 29 August and 24 September, with `score_moved` true on 26 and 29 August only. It cannot settle whether the lines read well on a chart; the route rows do that.
+- **Oracle:** **the band says the same as before, plus the two new fields.** Over the canary tree the band before and after is equal field for field except `months` (the telemetry months only), `settings_moved` and `checker_moved`. Both languages return `five-on-one-day.expected.json`. A band without either new key validates to `None`. After the row no path under `build/` starts with `machine/`, `run-days/` or `day-metrics/`. **Once, in the pull request and not as a test**: over the committed record, `settings_moved` names the prompt changes of 14 to 18 and 24 September, and `checker_moved` names 23, 24, 26 and 29 August and 24 September, with `score_moved` true on 26 and 29 August only. It cannot settle whether the lines read well on a chart; the route rows do that.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | **The settings line reads the run manifests, through the band** (owner ruling R3, default B1). `item-health` cannot see the prompt, the chat template, the reply shape, the runtime build or the weights' hash: measured 2026-09-28, a rule read from it missed the prompt changes of 14 to 18 and 24 September and drew five false lines | Andre |
   | 2 | **The band never opens `digest.json`**: 2.25 s median a run against 0.28 s through `day-metrics`, measured 2026-09-28 on this machine | Carmack |
-  | 3 | **These four projections go before any panel moves.** The band was the last reader of two, and nothing reads the other two | Fowler |
+  | 3 | **The three remaining projections go before any panel moves.** The aggregate projection and its page reader moved to plan 51 row 11 | Fowler |
   | 4 | **The band's reads are bounded to the span plus one walk-back of the same length**, never the whole ledger (Guardrail #12) | Fowler |
   | 5 | **One rule in two languages, checked against one expected fixture** | Andre |
 
@@ -896,7 +898,7 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | **One pull request for the route.** Its page and server load are one surface | Fowler |
-  | 2 | **The run timeline loses its span sub-steps.** 5,887 ms a day does not earn a column; **the reader loses** `tag`, `render_prompt` and `parse_reply` past seven days, and row 12's command gives them back for one item inside the trace window | Susan |
+  | 2 | **The run timeline's detailed sub-steps were removed by plan 51 row 11.** The item command there provides retained detail for one item; this row does not remove them again | Susan |
   | 3 | **The items-per-minute figure returns above the run timeline as its lede**, the price of replacing panel 3 | Susan |
 
 - **Rejected alternatives:**
@@ -1013,7 +1015,7 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | **`months` is removed with a read-side validator, not left in place.** `ConsoleBand` refuses unknown keys and CI reads the committed band, so without the validator a band written before this row fails the build (CLAUDE.md section 11) | Fowler |
-  | 2 | **These two go after Pipelines moves**, because Pipelines' panels are their last readers, and before `span-rollup`, whose search would otherwise find names this row deletes | Fowler |
+  | 2 | **These two go after Pipelines moves**, because Pipelines' panels are their last readers. The separate aggregate retirement moved to plan 51 row 11 | Fowler |
 
 - **Rejected alternatives:**
 
@@ -1025,7 +1027,7 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
 
 ### Row #11 - ECharts leaves
 
-- **Scope:** `echarts` is uninstalled. Deleted: `frontend/src/lib/charts/Chart.svelte`, `engine.ts`, `core.ts`, `frontend/src/lib/server/chart-render.ts`, and every module under `frontend/src/lib/charts/` whose only purpose was an ECharts option (`chart-flow.ts`, `extraction-trend.ts`, `stacked.ts`, `waterfall.ts`, `fleet.ts` if plan 51's panel row left an option in it); the engine code and `CLOCKS_AGREE_WITHIN_PCT` are removed from `machine.ts`, `glance.ts` and `cost.ts`, which kept components still import. Deleted also: every module under `frontend/src/lib/` whose last importer a route row removed - the build-time readers in `frontend/src/lib/server/` no route calls, `frontend/src/lib/server/span-rollup.ts` and `Viewport.svelte` among them; the month functions in `waiting.ts`; `settingsMoved`, `inputsMoved` and the TypeScript half of the settings test; the branches of `KpiCard` and `FailureList` that serve a caller passing no `rule` or `stages`. `COLUMN_READERS` loses any entry naming a deleted file. Every `console.*` knob no reader reads leaves `config/appearance.json` and `ConsoleConfig` (`console.pan_days`, `console.zoom_factor` and any other the search finds). The cross-route docs stop naming the engine.
+- **Scope:** `echarts` is uninstalled. Deleted: `frontend/src/lib/charts/Chart.svelte`, `engine.ts`, `core.ts`, `frontend/src/lib/server/chart-render.ts`, and every module under `frontend/src/lib/charts/` whose only purpose was an ECharts option (`chart-flow.ts`, `extraction-trend.ts`, `stacked.ts`, `waterfall.ts`, `fleet.ts` if plan 51's panel row left an option in it); the engine code and `CLOCKS_AGREE_WITHIN_PCT` are removed from `machine.ts`, `glance.ts` and `cost.ts`, which kept components still import. Deleted also: every module under `frontend/src/lib/` whose last importer a route row removed - the build-time readers in `frontend/src/lib/server/` no route calls and `Viewport.svelte` among them; the month functions in `waiting.ts`; `settingsMoved`, `inputsMoved` and the TypeScript half of the settings test; the branches of `KpiCard` and `FailureList` that serve a caller passing no `rule` or `stages`. `COLUMN_READERS` loses any entry naming a deleted file. Every `console.*` knob no reader reads leaves `config/appearance.json` and `ConsoleConfig` (`console.pan_days`, `console.zoom_factor` and any other the search finds). The cross-route docs stop naming the engine. The aggregate reader was retired by plan 51 row 11 and is not deleted again here.
 - **Files touched:** the modules above; `frontend/package.json`, `frontend/package-lock.json`; `frontend/scripts/bundle-gate.mjs`; `backend/idhazh/contracts/item_health.py`, `backend/idhazh/contracts/host_fingerprint.py`, `backend/idhazh/contracts/knobs/console.py`, `config/appearance.json`, `frontend/src/lib/server/config.ts`, `frontend/src/lib/server/machine-counters.ts`, `tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`; `frontend/src/lib/console/waiting.ts`, `frontend/src/lib/console/settings-moved.ts`, `frontend/tests/settings-moved.spec.ts`, `frontend/src/lib/components/KpiCard.svelte`, `frontend/src/lib/components/FailureList.svelte`; the seventeen cross-route specs of section 2.2 where they name the engine; `docs/concepts/design-system.md`, `docs/architecture/publishing/console.md`, `frontend.md`, `console-charts.md`, `ui-shell.md`, `which-console-surfaces-follow-the-window-and-which-say-why-not.md`, `what-the-quality-and-source-panels-draw.md`, `docs/how-to/run-the-gates.md`, `docs/concepts/telemetry-intent.md` (N5's column). The worker lists every deleted module in the pull request, from `git grep -l echarts -- frontend` and an importer search per module.
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks, `npm --prefix frontend run check`, `ruff check .`, `mypy backend`, `pytest backend/tests/contracts`; the bundle gate. CI runs the full suite.
 - **Oracle:** **`git grep -n echarts -- frontend/src frontend/package.json` finds nothing**, the build succeeds, every console route draws in the browser smoke, and every byte of one cold visit to `/console/` and to `/console/machine/` - the engine included - is measured before and after and written in the pull request.
@@ -1034,32 +1036,17 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | **`machine.ts`, `glance.ts` and `cost.ts` lose their engine code, not their files.** Kept components import their other helpers | Susan |
-  | 2 | **Shared modules, unread knobs, the month functions, the TypeScript settings port, the compatibility branches and `span-rollup.ts` are deleted here and nowhere earlier**, so no two route rows delete the same file | Fowler |
+  | 2 | **Shared modules, unread knobs, the month functions, the TypeScript settings port and the compatibility branches are deleted here**, so no two route rows delete the same file. The aggregate reader moved to plan 51 row 11 | Fowler |
 
 ---
 
-### Row #12 - The `span-rollup` ledger is deleted, and one item's trace is a command
+### Row #12 - Moved to plan 51 row 11
 
-- **Scope:** the family in one commit: `state/span-rollup/`, `SpanRollupRow`, the `SPAN_ROLLUP` member of `LedgerName`, its `config/ledgers.json` entry, its writer in `backend/idhazh/stages/work.py` and `backend/idhazh/telemetry/rollup.py`, its readers `backend/idhazh/stages/validate_days.py` and `backend/idhazh/telemetry/inventory.py`, and the canary's shard. The measurements in plan 50's collapsed row **`span-rollup` becomes parquet** and Susan's two rulings of 2026-09-26 move into the design rationale of [docs/concepts/telemetry.md](../docs/concepts/telemetry.md); plan 50 is deleted, and its last copy is `git show 7bb8174d3:TODO/20260924-50-idhazh-gardener-plan.md`, section **Row #10**. **The replacement**: `idhazh telemetry item <item_id> --date <YYYY-MM-DD>` prints that item's `item-health` row and, inside `observability.trace_window_days`, its span tree from the one trace file; the two `item` spans of one `trace_id` print as two lines, never summed.
-- **Files touched** (from the search for `span-rollup`, `span_rollup`, `SPAN_ROLLUP` and `SpanRollup` on 2026-09-28, less what rows 5, 10 and 11 already removed; re-run at dispatch):
-  - `state/span-rollup/` (deleted), `config/ledgers.json`, `config/idhazh.json`, `.github/workflows/digest.yml`, `.gitignore`
-  - `backend/idhazh/contracts/span_rollup.py` (deleted), `backend/idhazh/contracts/__init__.py`, `ledger_name.py`, `element.py`, `console_payloads.py`, `knobs/observability.py`
-  - `backend/idhazh/ledger/__init__.py`, `keys.py`, `rows.py`, `settle.py`; `backend/idhazh/path_classes.py`; `backend/idhazh/publication_checks/checks/console.py`
-  - `backend/idhazh/stages/work.py`, `backend/idhazh/stages/validate_days.py`, `backend/idhazh/telemetry/inventory.py`, `prune.py`, `rollup.py`, `cli.py`, `item.py` (new), `publish/console_band.py`, `publish/dispatch.py`, `publish/series.py`
-  - `backend/utilities/build_canary_day.py`, `backend/utilities/migrate_to_day_shards.py`
-  - `frontend/scripts/build-canary.mjs`, `frontend/scripts/copy-visuals.mjs`
-  - `backend/tests/conftest.py`, `backend/tests/contracts/test_app_config.py`, `test_ledger_registry.py`, `test_span_rollup.py` (deleted), `test_stamped_boundary.py`; `backend/tests/gardener/tasks/test_trials_task.py`; `backend/tests/pipeline/test_compact.py`, `test_day_shards.py`, `test_publication_hook.py`, `test_publication_registry.py`, `test_recorded_inputs.py`; `backend/tests/test_console_payloads_producer.py`, `test_ledger.py`, `test_spans.py`, `test_telemetry.py`; `backend/tests/telemetry/test_item_command.py` (new); `backend/tests/workflows/_harness.py`, `test_ledger_staging.py`, `test_pipeline_tests_workflow.py`, `test_telemetry_cli.py`; `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `tests/fixtures/day-shards/writer-files/README.md`
-  - `docs/architecture/contracts/schemas.md`, `docs/architecture/extraction/elements.md`, `docs/architecture/publishing/committing.md`, `console-payloads.md`, `retention.md`, `run-timeline.md`, `what-the-pipelines-route-draws.md`, `docs/concepts/adaptive-pruning.md`, `config/retention-ages.md`, `console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md`, `console-design/the-rules-every-console-chart-obeys.md`, `growing-reads.md`, `partitions.md`, `pipeline-loop.md`, `telemetry-intent.md`, `telemetry.md`, `docs/reference/benchmarks/compressing-the-telemetry-against-re-encoding-it.md`
-  - **The docs half splits by file**, as row 10's does
-- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests`, `npm --prefix frontend run test:changed -- --list` then the selected checks. CI runs the full suite. **Merge window.**
-- **Oracle:** **the family is gone and nothing asks for it.** `git grep -n -e span-rollup -e span_rollup -e SPAN_ROLLUP -e SpanRollup` finds history and nothing else; `config/ledgers.json` loads; a digest run over the canary writes no `span-rollup` path. The command prints the canary item's row and span tree, its two `item` spans as two lines.
-- **Decisions:**
-
-  | # | Decision | Authority |
-  | --- | --- | --- |
-  | 1 | **Deleted, not migrated** | Susan, 2026-09-26 (the evidence in plan 50's collapsed row) |
-  | 2 | **Not retired first.** The data stays in git history for 60 to 90 days either way (CLAUDE.md section 8), which is the reversal | Fowler |
-  | 3 | **Its own pull request, after rows 10 and 11**: it is the one-way change, and its search would otherwise find names those rows delete | Fowler |
+The complete aggregate retirement, its public copy, its Pipelines reader and
+the item command are owned by [plan 51 row 11](20260924-51-console-fetches-and-draws-its-own-data-plan.md).
+Do not dispatch another deletion here. Its status is tracked only in that row.
+The current command, retention rule and reason for removing the four figures
+live in [telemetry](../docs/concepts/telemetry.md).
 
 ## What this plan inherits and must close
 
@@ -1068,7 +1055,7 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
 | 1 | Plan 51: four routes draw no panel id | rows 1 (structure), 3 and 6 to 9 (ids) |
 | 2 | Plan 51: `echarts` stays installed while two grammars coexist | row 11 |
 | 3 | Plan 50's row **The three ledgers the console's routes read become parquet**: `backend/utilities/migrate_to_parquet.py` carries "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`" | row 5, its own commit |
-| 4 | Plan 50's collapsed row **`span-rollup` becomes parquet**: `span-rollup` is deleted, not migrated | row 12 |
+| 4 | Plan 50's collapsed aggregate migration: delete the family rather than migrate it | moved to plan 51 row 11 |
 | 5 | Telemetry-intent N7 and N8 | rows 5 and 10; the band is owner ruling R1 |
 | 6 | Plan 51's readout-strip row (#1143), decision 21: the four house-style components keep their `<title>` until a row puts one on a route | row 2 |
 | 7 | Plan 50's open questions: `similarity-ledger.ts` is a second name | row 3. **`scores` renamed `summary-quality`** stays the owner's call: a directory rename is a data migration |

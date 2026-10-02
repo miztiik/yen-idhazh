@@ -1,8 +1,8 @@
 # Plan 51 - The console fetches and draws its own data
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
-**Status**: Rows 3 and 10 are merged, as is plan 56's fresh-address prerequisite. Row 8's second pass is complete in PR #1171 and awaits the owner's merge. Row 11 is in flight in p51r11. They run in separate worktrees; row 8 merges first, and row 11 then takes main in before its final checks.
+**Status**: Rows 1 through 10 are merged, including row 8 in PR #1171. Row 11's replacement item command, complete summary retirement, current-main integration and selected checks are complete in p51r11. Its PR must pass CI and merge while both writer workflows are quiet; the owner then closes this plan.
 
 **Level**: 5 (CLAUDE.md section 6). Row 3 decides whether `state/` reaches a browser, which is a publishing contract, and sections 2.6 to 2.9 are the design contract the panels are built to. The other rows are Level 2 to Level 3 and carry no contract change beyond one copied settlement key.
 
@@ -57,7 +57,13 @@ last update, rows 1, 2, 4, 5, 6, 7, 9 and 10 had merged. The remaining work is:
     downloads, including a pass-through service worker. Routing disables
     HTTP caching, so do not use that setup to certify cache behavior.
     Report: %TEMP%/p51r8/report-a.md. Probe: %TEMP%/p51c-addon-probe/.
-  row 11  IN-FLIGHT in p51r11, branch p51r11-retire-span-rollup-and-read-item-traces.
+    row 11  Built in p51r11, branch p51r11-retire-span-rollup-and-read-item-traces.
+      The replacement prints labelled run and attempt groups without adding
+      the two item passes together. The retired family has no production
+      reader, writer or published directory. After merging row 8 and the
+      newer packed-ledger work: 24 CLI tests, 27 index/export checks and 25
+      selected browser tests pass; ruff, mypy and Svelte check are clean.
+      Read the PR's final CI before merging in the required quiet window.
 Worktree p51own (branch p51-owner-settles-rows-3-and-8) holds no unmerged work;
 remove it with the others at closure. A row's worker works in worktree p51r<row> and
 keeps its running report in %TEMP%\p51r<row>\report.md. A report under %TEMP% can be
@@ -216,7 +222,7 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9, 10 | D | DONE | p51r8 | #1171 | p51-r8-pass-b |
 | 9 | The door keeps what it fetched for the page's life, and says how far a ledger reaches | 7 | C | DONE | p51r9 | #1157 | p51-r9-worker |
 | 10 | Missing files have names, every packed ledger carries both indexes, and two ledgers are packed daily | 7, 9 | C | DONE | p51r10 | #1177 | p51-r10-worker-2 |
-| 11 | The span-rollup ledger is deleted, and one item's trace is a command | 3 | E | IN-FLIGHT | p51r11 | - | p51-r11-worker |
+| 11 | The span-rollup ledger is deleted, and one item's trace is a command | 3 | E | DONE | p51r11 | - | p51-owner |
 
 **Readiness is the file-disjointness test, not the group letter** (execute-a-plan.md). The letters record which rows the author believed independent; the `Files touched` lists are the fact, and the shared-file notes below are why three depends-on edges exist that the letters do not show.
 

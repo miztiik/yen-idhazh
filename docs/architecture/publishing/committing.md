@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the rebase loop and the clock
@@ -173,16 +173,11 @@ time. `frontend/public/telemetry/` is a full rewrite of a month of the
 item-health ledger, which is why it is regenerated and not unioned: a union of
 two rewrites is a file with every row twice.
 
-**Eight `state/` paths left this list on 2026-09-22 and the reason is the same
-for all of them.** Seven are written once - item-health, host-fingerprint,
-summary-quality-evals, its ID folder, span-rollup, traces and segments, which is gone - so each
-now names its file for the single writer that wrote it, two runs never compute
-different bytes for one path, and there is nothing to hand back.
-`state/published` left beside them for a different reason: it is union-safe, and
-the hand-back was discarding this run's appended rows before the union driver
-could ever fire, leaving the publication record dependent on a rebuild
-succeeding. **What the eight buy is correctness, not time**: against a 5-second
-rebuild in an 11-second step there is no time to win.
+**Do not hand back writer-owned state files.** Item health, host fingerprints,
+summary-quality evaluations, their ID files and traces name one writer per
+file. Two writers do not compute different bytes for the same path, so there
+is nothing to regenerate. Keep appended publication rows too: that ledger's
+union preserves them, while handing them back would discard the run's work.
 
 **`state/day-metrics` is the one that stays**, and it is the reason `hand_back`
 still touches a `state/` path at all. It is one whole-file-per-day JSON that

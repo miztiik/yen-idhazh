@@ -1,6 +1,6 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-10-01
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
@@ -113,8 +113,8 @@ number, so neither a runaway pattern nor two passes together can put more
 elements in an article than the knob names.
 
 **A span here is a character range, not a trace span.**
-[`backend/idhazh/contracts/span_rollup.py`](../../../backend/idhazh/contracts/span_rollup.py)
-uses the word for an execution timing. The two never meet: a rollup span has a
+[`backend/idhazh/telemetry/spans.py`](../../../backend/idhazh/telemetry/spans.py)
+uses the word for an execution timing. The two never meet: a trace span has a
 name and a duration, an element span has two integers and a string.
 
 **The string the offsets index is `Article.text`** - post-sanitize and

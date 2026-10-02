@@ -709,8 +709,8 @@ the files it read. It changes no answer a reader gets
 
 **The retention task that owns each tree folds it**, when its declaration
 carries a `fold` block: `feed-health`,
-`summary-quality-evals-index` (the eval ledger's ID folder) and `span-rollup`, whose window is `forever` so the fold is its
-only live action. Which trees a task folds is read off the folders it walks, so
+and `summary-quality-evals-index` (the eval ledger's ID folder).
+Which trees a task folds is read off the folders it walks, so
 one job writes each tree a wake and no tree is checked out twice. The
 item-health, summary-quality-evals, host-fingerprint, counterfactual-scores and
 candidate-models ledgers are not CSV day trees any more, so no fold reads them:

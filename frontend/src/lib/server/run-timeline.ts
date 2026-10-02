@@ -8,8 +8,7 @@
  * it holds no arithmetic at all.
  *
  * **Read at build time, not fetched.** It sits under `$lib/server/` so SvelteKit
- * refuses to bundle it for a browser, the same place and for the same reason as
- * `span-rollup.ts`. Nothing on the Pipeline route waits on a network for its
+ * refuses to bundle it for a browser. Nothing on the Pipeline route waits on a network for its
  * first frame and this does not change that.
  *
  * **Two grains, one fold.** The view carries a bar per item and a bar per shard,
@@ -138,10 +137,7 @@ function whole(cell: string | undefined): number | null {
 	return Number.isFinite(value) ? value : null;
 }
 
-/** Which run of two is the newer: latest date first, then the higher run ordinal.
- *
- * The same rule `span-rollup.ts` sorts by, so the two panels on this page cannot
- * disagree about which run is the newest one. */
+/** Which run of two is the newer: latest date first, then the higher run ordinal. */
 function ordinalOf(runId: string): number {
 	const tail = Number(runId.split('-').at(-1));
 	return Number.isFinite(tail) ? tail : 0;

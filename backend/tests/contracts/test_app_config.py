@@ -1165,7 +1165,6 @@ def test_every_published_window_outlives_the_shards_a_console_read_selects() -> 
         "public_run_days_keep_months",
         "public_day_metrics_keep_months",
         "public_machine_keep_months",
-        "public_span_rollup_keep_months",
     }
     for name, months in fresh.full_grain_months().items():
         assert months >= shards, f"observability.{name} is shorter than a console read"

@@ -248,7 +248,6 @@
     "public_machine_keep_months": 14,
     "public_run_days_keep_months": 14,
     "public_run_timeline_keep_months": 2,
-    "public_span_rollup_keep_months": 14,
     "sample_rate": 1.0,
     "telemetry_publish": true,
     "tracing_enabled": true,

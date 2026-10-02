@@ -666,12 +666,6 @@ COMMIT_STAGED_PATHS: Final = {
     "plan": [
         "state",
     ],
-    # `state/span-rollup` joined on 2026-09-15 and left on 2026-09-18. A shard is
-    # the only thing that writes the fold, and until the first of those days
-    # nothing staged it, so nine days of folded spans were measured and then
-    # thrown away with the runner. `state/traces` is the raw evidence the fold is
-    # taken from and was missed the same way.
-    #
     # `state` whole since 2026-09-22, where this was `state/traces` and
     # `state/segments` named one at a time. Every tree a shard writes now names
     # its file for the one writer that wrote it, so the shard commits into the
@@ -691,7 +685,6 @@ COMMIT_STAGED_PATHS: Final = {
         "frontend/public/run-days",
         "frontend/public/day-metrics",
         "frontend/public/machine",
-        "frontend/public/span-rollup",
         "frontend/public/run-timeline",
         "state",
         "corpus",

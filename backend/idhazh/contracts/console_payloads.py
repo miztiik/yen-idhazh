@@ -31,7 +31,6 @@ from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.source_health_view import SourceHealthView
-from idhazh.contracts.span_rollup import SpanRollupRow
 
 
 @dataclass(frozen=True)
@@ -135,16 +134,6 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
             "What the hardware did while the model ran, one row a work shard. Nothing "
             "on the row came from the open web: every cell is a fold of our own item "
             "ledger or a counter our own server kept, so the whole row crosses."
-        ),
-    ),
-    ConsolePayload(
-        reader="span-rollup.ts loadSpanRollup()",
-        published_to="frontend/public/span-rollup/<YYYY-MM>.csv",
-        contract=SpanRollupRow,
-        forbidden=frozenset(),
-        why=(
-            "Where a shard's wall clock went. Five span names we chose, a count and "
-            "two durations - no cell can hold anything fetched."
         ),
     ),
     ConsolePayload(

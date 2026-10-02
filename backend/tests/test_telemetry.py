@@ -6,7 +6,6 @@ network and no mocks.
 
 from __future__ import annotations
 
-import csv
 import json
 import logging
 import re
@@ -22,12 +21,11 @@ from conftest import (
     CONFIG_DIR,
     CONTRACT_FIXTURES_DIR,
     REPO_ROOT,
-    fold,
     read_text,
 )
-from pydantic import StringConstraints, TypeAdapter, ValidationError
+from pydantic import StringConstraints, TypeAdapter
 
-from idhazh import config, day_shards, extract, ledger, summarize, telemetry
+from idhazh import config, extract, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import ServerJob, column_bounds, derive_url_key, field_column
 from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost, CallKind
@@ -41,9 +39,7 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
-from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.elements import ExtractionHealth
 from idhazh.fetch import BLOCKED_REASONS, FetchResult, refused
@@ -1285,174 +1281,6 @@ def test_the_concept_page_names_no_event_the_code_cannot_emit() -> None:
     named = set(re.findall(rf"`((?:{prefixes})\.[a-z.]+)`", page))
 
     assert named == {name.value for name in telemetry.EventName}
-
-
-# --- the span rollup ---------------------------------------------------------
-
-
-def a_span(name: telemetry.SpanName, duration_ms: int, *, index: int = 1) -> telemetry.Span:
-    """One finished span, built straight from the dataclass - no tracer, no clock."""
-    return telemetry.Span(
-        trace_id="2026-08-21-1-energy-01",
-        span_id=f"{name.value}-{index:03d}",
-        parent_id=None,
-        name=name,
-        kind=telemetry.SpanKind.SPAN,
-        started_at="2026-08-21T06:00:00Z",
-        duration_ms=duration_ms,
-        attributes={},
-    )
-
-
-def test_the_committed_spans_are_a_named_subset_of_the_tracer_vocabulary() -> None:
-    """The five committed span names must each be a name the tracer opens, so the
-    fold's contract enum cannot name a span that does not exist."""
-    committed = {member.value for member in RollupSpan}
-    assert committed == {"item", "robots", "tag", "render_prompt", "parse_reply"}
-    assert committed <= {name.value for name in telemetry.SpanName}
-
-
-def test_the_fold_keeps_only_the_five_committed_spans() -> None:
-    """Open every span the tracer knows; the fold keeps the five and drops the six
-    a ledger column already times."""
-    spans = [a_span(name, 5) for name in telemetry.SpanName]
-    rows = telemetry.roll_up_spans(
-        spans, date="2026-08-21", run_id="2026-08-21-1", shard=0, wall_clock_ms=1000
-    )
-    assert [row.span_name for row in rows] == list(RollupSpan)
-    dropped = {name.value for name in telemetry.SpanName} - {row.span_name.value for row in rows}
-    assert dropped == {"fetch", "extract", "summarize", "model_call", "score", "visual_planner"}
-
-
-def test_the_fold_counts_the_spans_and_sums_their_durations() -> None:
-    spans = [
-        a_span(telemetry.SpanName.ROBOTS, 10, index=1),
-        a_span(telemetry.SpanName.ROBOTS, 20, index=2),
-        a_span(telemetry.SpanName.ROBOTS, 0, index=3),
-        a_span(telemetry.SpanName.ITEM, 900, index=1),
-    ]
-    rows = telemetry.roll_up_spans(
-        spans, date="2026-08-21", run_id="2026-08-21-1", shard=3, wall_clock_ms=1000
-    )
-    by_name = {row.span_name: row for row in rows}
-    robots = by_name[RollupSpan.ROBOTS]
-    assert (robots.count, robots.total_ms) == (3, 30)
-    assert (robots.date, robots.run_id, robots.shard) == ("2026-08-21", "2026-08-21-1", 3)
-    item = by_name[RollupSpan.ITEM]
-    assert (item.count, item.total_ms) == (1, 900)
-
-
-def test_a_span_the_shard_never_opened_gets_no_row() -> None:
-    """An absent row reads as never opened; a zero row would read as opened and
-    measured nothing, which is a different fact."""
-    rows = telemetry.roll_up_spans(
-        [a_span(telemetry.SpanName.ITEM, 100)],
-        date="2026-08-21",
-        run_id="2026-08-21-1",
-        shard=0,
-        wall_clock_ms=1000,
-    )
-    assert [row.span_name for row in rows] == [RollupSpan.ITEM]
-    assert all(row.count >= 1 for row in rows)
-
-
-def test_the_fold_writes_one_month_shard_and_a_re_run_adds_nothing(tmp_path: Path) -> None:
-    """The shard's fold lands once. A re-run recomputes the same numbers, and the
-    closed-day fold settles them against the grain rather than doubling every count.
-
-    Through the two calls the pipeline makes rather than through a seed, because
-    the claim in the name is now shared between them: the shard writes its fold
-    to a segment named for its own attempt, and the gardener's closed-day fold
-    settles the segments into the day the rows name. A second attempt writes a
-    second segment, so the only thing standing between a re-run and a doubled
-    count is `SPAN_ROLLUP_KEY`.
-    """
-    state = tmp_path / "state"
-    spans = [
-        a_span(telemetry.SpanName.ITEM, 900),
-        a_span(telemetry.SpanName.ROBOTS, 10),
-        a_span(telemetry.SpanName.TAG, 5),
-    ]
-    rows = telemetry.roll_up_spans(
-        spans, date="2026-08-21", run_id="2026-08-21-1", shard=0, wall_clock_ms=1000
-    )
-    for attempt in (1, 2):
-        assert (
-            ledger.write_segment(
-                state,
-                LedgerName.SPAN_ROLLUP,
-                rows,
-                run_id="2026-08-21-1",
-                attempt=attempt,
-                job=ServerJob.WORK,
-                shard=0,
-            )
-            == 3
-        )
-    folded = fold(state, "2026-08-21")
-    assert {day.tree for day in folded.days} == {LedgerName.SPAN_ROLLUP}
-
-    shard = ledger.path(state, LedgerName.SPAN_ROLLUP, "2026-08-21") / day_shards.SETTLED_NAME
-    written = [
-        SpanRollupRow.from_csv_row(raw) for raw in csv.DictReader(shard.read_text().splitlines())
-    ]
-    assert [row.span_name for row in written] == [
-        RollupSpan.ITEM,
-        RollupSpan.ROBOTS,
-        RollupSpan.TAG,
-    ]
-    assert {row.span_name: row.total_ms for row in written} == {
-        RollupSpan.ITEM: 900,
-        RollupSpan.ROBOTS: 10,
-        RollupSpan.TAG: 5,
-    }
-
-
-def test_the_item_row_carries_the_shard_wall_clock_the_spans_do_not_cover() -> None:
-    """Every second of the shard is accounted for: the item spans plus the residual
-    equal the wall clock, and the residual rides on the item row."""
-    spans = [
-        a_span(telemetry.SpanName.ITEM, 700, index=1),
-        a_span(telemetry.SpanName.ITEM, 500, index=2),
-        a_span(telemetry.SpanName.ROBOTS, 40),
-    ]
-    rows = telemetry.roll_up_spans(
-        spans, date="2026-08-21", run_id="2026-08-21-1", shard=0, wall_clock_ms=1500
-    )
-    by_name = {row.span_name: row for row in rows}
-    item = by_name[RollupSpan.ITEM]
-    # 700 + 500 inside the two item spans, 300 of overhead the shard spent outside them.
-    assert item.total_ms == 1200
-    assert item.unattributed_ms == 300
-    assert item.total_ms + item.unattributed_ms == 1500
-    # The residual is the shard's, filed once on the item row, never on a sub-step.
-    assert by_name[RollupSpan.ROBOTS].unattributed_ms is None
-
-
-def test_spans_claiming_more_than_the_shard_ran_do_not_reconcile() -> None:
-    """The residual is never rounded to zero: item spans totalling more than the wall
-    clock mean the timing is wrong, and the fold raises rather than lie."""
-    spans = [a_span(telemetry.SpanName.ITEM, 1200)]
-    with pytest.raises(ValueError, match="claim 1200 ms but the shard ran for 900 ms"):
-        telemetry.roll_up_spans(
-            spans, date="2026-08-21", run_id="2026-08-21-1", shard=0, wall_clock_ms=900
-        )
-
-
-def test_the_residual_may_not_ride_on_a_non_item_row() -> None:
-    """unattributed_ms is the shard residual; a value on any row but the item row would
-    be a smaller thing wearing the shard's number, and the contract refuses it."""
-    with pytest.raises(ValidationError):
-        SpanRollupRow(
-            version=SpanRollupRow.schema_version(),
-            date="2026-08-21",
-            run_id="2026-08-21-1",
-            shard=0,
-            span_name=RollupSpan.ROBOTS,
-            count=1,
-            total_ms=40,
-            unattributed_ms=300,
-        )
 
 
 # --- committed trace paths ---------------------------------------------------

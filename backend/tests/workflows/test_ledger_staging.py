@@ -8,8 +8,6 @@ the run produced.
 
 `state/host-fingerprint` was the first half. It was written from the day the probe
 shipped and staged by nothing, so every row went to the bin with the runner.
-`state/span-rollup` was both halves at once: nine days written and discarded, then
-staged but missing from the settlement registry.
 
 Nothing here names a ledger. Both sides are derived - the ledger side from the
 registry every ledger is declared in, the job side from the CLI's own dispatch and
@@ -361,10 +359,8 @@ def test_every_module_that_writes_a_store_is_reached_by_a_cli_verb() -> None:
 def test_every_store_is_staged_by_the_job_whose_stage_writes_it() -> None:
     """A ledger no job stages is written on a runner and deleted with it.
 
-    `state/host-fingerprint` was written and staged by nobody until 2026-09-16,
-    `state/span-rollup` until 2026-09-15, and `state/traces` beside it. None of them
-    broke a test: the writing side was in Python, the staging side was in YAML, and
-    nothing read both.
+    The writing side is in Python and the staging side is in YAML. A writer
+    that no stage commits must fail this check before a runner discards its output.
 
     A job is credited only for its own commit steps. The assemble job stages `state`
     whole and that is worth nothing to a work shard - the shard runs on its own
@@ -437,7 +433,6 @@ def _rewritten_ledgers() -> set[str]:
 def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None:
     """A keyed ledger outside the registry keeps every row a retried job wrote twice.
 
-    `state/span-rollup` was exactly that: staged from 2026-09-15, settled by nothing.
     The two sides are compared as sets rather than as a subset, so a ledger that
     declares no key must also be absent from the registry - which is what
     `keyed_paths` says about the one ledger it deliberately leaves out.

@@ -31,11 +31,11 @@ from conftest import (
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.telemetry import traces
 from utilities import pipeline_test_ledgers
 
@@ -165,16 +165,17 @@ def test_a_day_shard_and_a_trace_still_pass_beside_the_door_files(tmp_path: Path
     assert _file_machine(root)
     assert ledger.write_segment(
         root,
-        LedgerName.SPAN_ROLLUP,
+        LedgerName.FEED_HEALTH,
         [
-            SpanRollupRow(
-                version=SpanRollupRow.schema_version(),
+            FeedHealthRow(
+                version=FeedHealthRow.schema_version(),
                 date=DAY,
                 run_id=RUN_ID,
-                shard=0,
-                span_name=RollupSpan.ITEM,
-                count=2,
-                total_ms=9000,
+                feed_id="example-feed",
+                checked_at=f"{DAY}T06:00:00Z",
+                outcome=FetchOutcome.OK,
+                status=200,
+                items=2,
             )
         ],
         run_id=RUN_ID,

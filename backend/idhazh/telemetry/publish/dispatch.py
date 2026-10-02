@@ -33,7 +33,6 @@ from idhazh.telemetry.publish import (
     run_timeline,
     series,
     source_health,
-    span_rollup,
 )
 
 
@@ -55,7 +54,6 @@ PROJECTIONS: Final[tuple[Projection, ...]] = (
     Projection("source-health", "source_health"),
     Projection("day-metrics", "day_metrics"),
     Projection("machine", "machine"),
-    Projection("span-rollup", "span_rollup"),
     Projection("run-timeline", "run_timeline"),
     Projection("public-day-metrics", "day_metrics"),
     Projection("run-days", "run_days"),
@@ -144,14 +142,6 @@ def publish_all(
             state_root=state_root,
             digest_root=digest_root,
             keep_months=observability.public_machine_keep_months,
-            today=today,
-            months={month},
-            ensure_month=month,
-        ),
-        "span-rollup": lambda: span_rollup.publish(
-            state_root=state_root,
-            digest_root=digest_root,
-            keep_months=observability.public_span_rollup_keep_months,
             today=today,
             months={month},
             ensure_month=month,

@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-01
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -167,10 +167,6 @@ The three item-grain ledgers followed on 2026-09-18 - `state/item-health/`,
 all record the same day there, which is the same race with more writers in it,
 and the item census is the one where a repeat is visible to a reader: the count
 of rows in a day feeds a feed's share of the day and the day's own metrics.
-
-`state/span-rollup/` and `state/host-fingerprint/` joined them that day. Both
-are written once a job rather than once an item, and both had every work shard
-opening one head.
 
 **A staging directory sat above all of them until 2026-09-22 and is gone.** A
 writer filed into `state/segments/` and a later fold read it into a `<DD>.csv`

@@ -327,7 +327,7 @@ than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turnin
 | --- | --- | --- |
 | `series.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries - except `telemetry`, per the paragraph above |
 | `scores.publish`, `feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
-| `span_rollup.publish` | the state shard for the month named | the month the run's own rows name, which the compaction folded before this read |
+| `telemetry.item.report` | the requested UTC day's item-health rows through `ledger.load_days`, and only that day's trace files | one named day; the trace declaration's retention is enforced before opening files, even when old files remain. Each matching writer's tree is printed separately |
 | `public_telemetry.publish` | the item-health days of the months the caller names, through `ledger.load_days`, or every month `ledger.held_months` names when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
 | `run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
@@ -465,7 +465,6 @@ the last day there was.
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
 | `similarity-holdout.mergeLineHoldoutScore` | through `readDayShards`, over `state/content-similarity-judge/merge-line-holdout-scores/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
-| `span-rollup.loadSpanRollup` | `state/span-rollup/` at both grains: through `readShards` over the month files, and through `readDayShards` over the day tree | the same 5 months for the month files, and the same 91 days for the day tree. Only one of the two shapes is ever on disk, so the sum is what is there |
 | `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the day cover, for all three |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |

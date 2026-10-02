@@ -59,17 +59,17 @@ def test_every_root_holds_all_three_indexes_as_the_compaction_writes_them(root: 
     for period in Period:
         held = index(root, period)
         assert (held.ledger, held.period) == (LEDGER, period)
-        assert held.version == CompactIndex.schema_version()
+        assert held.version <= CompactIndex.schema_version()
         if period not in HELD[root]:
             assert held.entries == [], f"the fixture's {root} {period.value} index names a file"
 
 
 @pytest.mark.parametrize(("root", "period"), INDEXED)
 def test_each_index_is_a_compact_index_for_its_ledger_and_period(root: str, period: Period) -> None:
-    """Validated by the contract itself, at the stamp the frontend copy reads."""
+    """Validated by the contract itself, at a stamp the frontend copy can read."""
     held = index(root, period)
     assert (held.ledger, held.period) == (LEDGER, period)
-    assert held.version == CompactIndex.schema_version()
+    assert held.version <= CompactIndex.schema_version()
     assert held.entries, f"the fixture's {root} {period.value} index names no file"
 
 

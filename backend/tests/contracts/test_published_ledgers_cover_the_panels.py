@@ -155,7 +155,7 @@ def test_a_call_naming_a_ledger_the_site_does_not_publish_is_found() -> None:
 <script lang="ts">
     import { ledgerReach as reachOf, slice, type LedgerName } from '$lib/data/ledger';
     const reach = reachOf("summary-quality-evals");
-    const rows = slice('span-rollup', { columns: ['date'], from: '2026-09-01', to: '2026-09-30' });
+    const rows = slice('feed-health', { columns: ['date'], from: '2026-09-01', to: '2026-09-30' });
     const cut = [1, 2, 3].slice(0, 2);
 </script>
 {#await slice(`item-health`, { columns: ['date'], from, to }) then result}{/await}
@@ -164,10 +164,10 @@ def test_a_call_naming_a_ledger_the_site_does_not_publish_is_found() -> None:
     assert problems == []
     assert sorted(calls) == [
         ("ledgerReach", "summary-quality-evals"),
+        ("slice", "feed-health"),
         ("slice", "item-health"),
-        ("slice", "span-rollup"),
     ]
-    assert unpublished(calls, published_ledgers()) == ["slice('span-rollup')"]
+    assert unpublished(calls, published_ledgers()) == ["slice('feed-health')"]
 
 
 def test_a_call_this_test_cannot_read_is_refused_by_name() -> None:

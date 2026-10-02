@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import seed_feed_health, seed_scores, seed_span_rollup, writer_identity
+from conftest import seed_feed_health, seed_scores, writer_identity
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob, derive_url_key
@@ -46,7 +46,6 @@ from idhazh.contracts.source_health_view import (
     SourceHealthRow,
     SourcePermission,
 )
-from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.gardener import closed_day_fold
 from idhazh.telemetry.publish import (
@@ -56,7 +55,6 @@ from idhazh.telemetry.publish import (
     machine,
     run_days,
     series,
-    span_rollup,
 )
 
 #: These are the published shapes and the committed digest tree, which is what
@@ -134,19 +132,6 @@ def _host_row(month: str, *, shard: int, prompt: int, seconds: float) -> HostFin
         cpu_model="AMD EPYC 7763 64-Core Processor",
         server_prompt_tokens=prompt,
         server_prompt_seconds=seconds,
-    )
-
-
-def _span_row(month: str) -> SpanRollupRow:
-    return SpanRollupRow(
-        version=SpanRollupRow.schema_version(),
-        date=f"{month}-01",
-        run_id=f"{month}-01-1",
-        shard=0,
-        span_name=RollupSpan.ITEM,
-        count=4,
-        total_ms=4000,
-        unattributed_ms=120,
     )
 
 
@@ -287,7 +272,6 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
                 _feed_row(month, feed_id="wire-co", outcome=FetchOutcome.PERMANENT, items=0),
             ],
         )
-        seed_span_rollup(state, stamp, [_span_row(month)])
         # Two work jobs a run, reading 100 and 50 tokens a second, so the band's
         # spread has two hosts to spread between. The manifest above says the
         # plan asked for two, which is the other half of that check. Each shard
@@ -362,9 +346,6 @@ def opened(tmp_path: Path) -> Iterator[list[str]]:
 
 def _publish_all(state: Path, digest: Path, *, months: set[str] | None) -> None:
     machine.publish(
-        state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
-    )
-    span_rollup.publish(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
     day_metrics.publish_public(
@@ -457,7 +438,6 @@ def test_a_missing_target_is_written_even_when_its_month_was_not_named(
     ("dirname", "suffix"),
     [
         (machine.DIRNAME, ".csv"),
-        (span_rollup.DIRNAME, ".csv"),
         (day_metrics.PUBLIC_DIRNAME, ".json"),
         (run_days.DIRNAME, ".json"),
     ],
@@ -493,7 +473,6 @@ def test_a_published_shard_reads_back_as_it_was_written(tree: tuple[Path, Path])
     state, digest = tree
     _publish_all(state, digest, months=None)
 
-    assert len(span_rollup.read_shard(span_rollup.shard_path(digest, NEWEST))) == 1
     assert len(machine.read_shard(machine.shard_path(digest, NEWEST))) == 2
     assert len(run_days.read_shard(run_days.shard_path(digest, NEWEST))) == 1
     assert (

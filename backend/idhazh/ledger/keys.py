@@ -33,7 +33,6 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS as DROPPED_PAIR_CELLS,
 )
@@ -74,15 +73,6 @@ ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
 
 #: One machine a job, so four cells identify the host a job drew.
 HOST_FINGERPRINT_KEY: Final = ("date", "run_id", "job", "shard")
-
-
-#: What makes two span-rollup rows the same record. One shard's fold of one span
-#: name, in one run. The row is derived from the shard's spans, so a re-run of a
-#: failed shard recomputes the same fold and a second row would add a count to
-#: itself rather than record a new fact. The first row wins, which matches
-#: `ITEM_HEALTH_KEY`: a re-run's items are skipped there too, so the two files
-#: stay describing the same attempt.
-SPAN_ROLLUP_KEY: Final = ("date", "run_id", "shard", "span_name")
 
 
 #: What makes two cleanup rows the same record. One cleanup pass per run, so a
@@ -301,7 +291,6 @@ class _TreeShape(NamedTuple):
 #: declared table rather than a rule a reader re-derives: the key is a fact about
 #: the ledger and a second copy of it is how two readers start disagreeing.
 _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
-    LedgerName.SPAN_ROLLUP: _TreeShape(SPAN_ROLLUP_KEY, SpanRollupRow),
     LedgerName.SUMMARY_QUALITY_EVALS_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
     LedgerName.FEED_HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
 }

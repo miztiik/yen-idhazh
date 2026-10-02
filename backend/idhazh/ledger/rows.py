@@ -42,7 +42,6 @@ from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import ledger_files, lifecycle, paths
@@ -59,7 +58,6 @@ from idhazh.ledger.keys import (
     COUNCIL_SHARD_OUTCOME_KEY,
     DATE_CELL,
     FEED_HEALTH_KEY,
-    SPAN_ROLLUP_KEY,
     STORY_SIMILARITY_PAIR_KEY,
     STORY_SIMILARITY_THRESHOLD_KEY,
     _refuse_outside_day_trees,
@@ -246,17 +244,6 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     return ledger_files.load_ledger_rows(
         state_dir, LedgerName.FEED_RETIREMENTS, model=FeedRetirementRow
     )
-
-
-def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
-    """Every (date, run, shard, span) one span-rollup file already carries a fold for.
-
-    A reader and no longer half of a writer. A work shard folds its spans into
-    its own file in the day directory and nothing else opens that path, so the
-    question this answers is what a settled file already holds rather than what
-    an append is about to skip.
-    """
-    return {tuple(row[name] for name in SPAN_ROLLUP_KEY) for row in _read_rows(path)}
 
 
 def append_story_similarity_pairs(
@@ -576,15 +563,6 @@ def extend_segment(
         scratch.replace(path)
         added += len(cells)
     return added
-
-
-def load_span_rollup_shard(path: Path) -> list[SpanRollupRow]:
-    """Every row of one month's span rollup. Empty for a month never written.
-
-    A month rather than a day, because that is the grain the rollup is sharded
-    at. A caller asking about one date filters on `date` after reading.
-    """
-    return [SpanRollupRow.from_csv_row(row) for row in _read_rows(path)]
 
 
 def write_item_health_summary(path: Path, rows: list[ItemHealthSummaryRow]) -> int:

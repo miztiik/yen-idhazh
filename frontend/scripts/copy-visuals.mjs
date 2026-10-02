@@ -227,8 +227,7 @@ const CONSOLE_SERIES = [
 	{ dirname: 'console', keep: (name) => name === 'band.json' },
 	{ dirname: 'run-days', keep: (name) => /^\d{4}-\d{2}\.json$/.test(name) },
 	{ dirname: 'day-metrics', keep: (name) => /^\d{4}-\d{2}\.json$/.test(name) },
-	{ dirname: 'machine', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) },
-	{ dirname: 'span-rollup', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) }
+	{ dirname: 'machine', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) }
 ];
 
 function stageConsolePayloads() {
