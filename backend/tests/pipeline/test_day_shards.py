@@ -32,9 +32,11 @@ from typing import Final
 import pytest
 
 from idhazh import day_shards, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.gardener import closed_day_fold
 
@@ -73,15 +75,45 @@ def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
     tmp_path: Path,
 ) -> None:
     """The oracle. Same bytes, two settlements, one answer, row for row."""
-    root = _root()
+    state = tmp_path / ledger.STATE_DIRNAME
+    observations = [
+        ObservationIndexRow.model_validate(
+            {
+                "version": ObservationIndexRow.schema_version(),
+                "observation_digest": f"{value:064x}",
+            }
+        )
+        for value in range(3)
+    ]
+    for attempt, shard, rows in (
+        (1, 0, observations[:2]),
+        (1, 1, observations[2:]),
+        (2, 0, observations[:1]),
+    ):
+        ledger.write_segment(
+            state,
+            ID_TREE,
+            rows,
+            run_id="2026-09-18-1",
+            attempt=attempt,
+            job=ServerJob.WORK,
+            shard=shard,
+            date="2026-09-18",
+        )
+    root = ledger.tree_root(state, ID_TREE)
+    day = ledger.path(state, ID_TREE, "2026-09-18")
+    assert sorted(path.name for path in day.iterdir()) == list(WRITERS)
+    assert sum(len(_rows_of(path)) for path in day.iterdir()) == 4
+    settled = day_shards.settled_rows(
+        root, ledger.segment_key(ID_TREE), ObservationIndexRow, days=1
+    )
+    assert [row["observation_digest"] for row in settled] == [
+        observation.observation_digest for observation in observations
+    ]
 
-    day = ledger.path(tmp_path / ledger.STATE_DIRNAME, LedgerName.CANDIDATE_MODELS, "2026-09-18")
-    day.mkdir(parents=True)
-    for name in WRITERS:
-        shutil.copy(root / "2026" / "09" / "18" / name, day / name)
     folded = closed_day_fold.fold(
-        tmp_path / ledger.STATE_DIRNAME,
-        [LedgerName.CANDIDATE_MODELS],
+        state,
+        [ID_TREE],
         now=datetime(2026, 9, 30, tzinfo=UTC),
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=False,
@@ -89,15 +121,10 @@ def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
     assert folded.files == len(WRITERS)
     folded_rows = _rows_of(day / day_shards.SETTLED_NAME)
 
-    # `days=1` is the newest recorded day, which is the day directory alone -
-    # the same rows the three writer files above carried.
-    settled = day_shards.settled_rows(root, ledger.VALIDATION_KEY, ValidationRow, days=1)
-
     assert settled == folded_rows
-    assert [row["model_id"] for row in settled] == ["candidate-0", "candidate-extra", "candidate-1"]
-    # The supersede case: attempt 2 corrected the figures attempt 1 wrote.
-    assert settled[0]["articles"] == "14"
-    assert settled[0]["measured_hhem"] == "0.5"
+    assert day_shards.settled_rows(
+        root, ledger.segment_key(ID_TREE), ObservationIndexRow, days=1
+    ) == settled
 
 
 def test_the_walk_reads_every_writer_file_of_a_day_and_nothing_else() -> None:
@@ -108,7 +135,11 @@ def test_the_walk_reads_every_writer_file_of_a_day_and_nothing_else() -> None:
     assert [path.name for path in every] == list(WRITERS)
     assert [day_shards.date_of(path) for path in every] == ["2026-09-18"] * len(WRITERS)
 
-    assert len(day_shards.settled_rows(root, ledger.VALIDATION_KEY, ValidationRow, days=1)) == 3
+    settled = day_shards.settled_rows(root, ledger.VALIDATION_KEY, ValidationRow, days=1)
+    assert len(settled) == 3
+    assert [row["model_id"] for row in settled] == ["candidate-0", "candidate-extra", "candidate-1"]
+    assert settled[0]["articles"] == "14"
+    assert settled[0]["measured_hhem"] == "0.5"
     assert list(day_shards.shard_files(root.parent / "never-written", days=1)) == []
 
 

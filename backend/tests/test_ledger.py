@@ -21,6 +21,7 @@ from conftest import (
     seed_feed_health,
     seed_host_fingerprint,
     seed_item_health,
+    writer_identity,
 )
 
 from idhazh import config, day_shards, ledger, month_partition
@@ -1809,8 +1810,8 @@ def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_
     the reader keeps the later one.
 
     Both ledgers at once, because the rule is the same for both: they left
-    `keyed_paths` when each writer got a file of its own - the candidate verdict
-    in a CSV day directory, and the machine record through the ledger door.
+    `keyed_paths` when each writer got a file of its own. Both now store Parquet
+    through the ledger writer.
     """
     state = tmp_path / "state"
     candidate = ValidationRow.model_validate(
@@ -1823,26 +1824,23 @@ def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_
     )
     for attempt, cpu in enumerate(("first", "second"), start=1):
         assert seed_host_fingerprint(state, [fingerprint_row(cpu=cpu)], attempt=attempt) == 1
-        ledger.write_segment(
+        ledger.persist(
             state,
-            LedgerName.CANDIDATE_MODELS,
             [candidate.model_copy(update={"articles": 16 * attempt})],
-            run_id=RUN_ID,
-            attempt=attempt,
-            job=ServerJob.WORK,
-            shard=0,
+            ledger=LedgerName.CANDIDATE_MODELS,
+            covers=DATE,
+            identity=writer_identity(RUN_ID, attempt=attempt, job=ServerJob.WORK),
         )
 
     machines = ledger.load_days(state, LedgerName.HOST_FINGERPRINT, [DATE], model=HostFingerprintRow)
-    candidates = day_shards.settled_day(
-        ledger.tree_root(state, LedgerName.CANDIDATE_MODELS), DATE, ledger.VALIDATION_KEY,
-        ValidationRow,
+    candidates = ledger.load_days(
+        state, LedgerName.CANDIDATE_MODELS, [DATE], model=ValidationRow,
     )
 
     assert len(machines) == 1, "one machine, written down twice, is one machine"
     assert machines[0].cpu_model == "second"
     assert len(candidates) == 1, "a second attempt replaces a verdict, it does not add one"
-    assert candidates[0]["articles"] == "32"
+    assert candidates[0].articles == 32
 
 
 # --- One feed, one run, one result ------------------------------------------
