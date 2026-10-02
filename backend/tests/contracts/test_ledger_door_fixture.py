@@ -23,7 +23,6 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
 
-import duckdb
 import pyarrow.parquet
 import pytest
 from conftest import REPO_ROOT
@@ -158,6 +157,8 @@ def test_raw_listings_name_files_and_sizes() -> None:
 
 
 def test_answer_fixtures_are_recomputed_with_duckdb() -> None:
+    import duckdb
+
     con = duckdb.connect()
     host = (FIXTURE / "state" / "compact" / "host-fingerprint" / "daily" / "2026" / "09" / "01.parquet").as_posix()
     item = (FIXTURE / "state" / "compact" / "item-health" / "daily" / "2026" / "09" / "01.parquet").as_posix()
