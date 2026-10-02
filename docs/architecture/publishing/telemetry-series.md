@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 
 The console's interactive charts read a published projection of item health. They
 never read the item-health ledger directly.
@@ -297,10 +297,10 @@ wraps the fetch and the parse in one `try`, logs `telemetry <month> could not be
 read; showing a gap`, and the charts draw the gap they already know how to draw.
 
 **A new bundle against an old cached shard is the case this was measured on, and
-today it cannot be reached at all.** The prerendered seed covers
-`console.default_window_days`, which at 30 days reaches back across both
-published months, so `monthsToFetch` returns nothing at every preset and the
-console makes no runtime shard request. Measured 2026-09-05 by serving an
+on the day it was measured it could not be reached at all.** The prerendered seed
+then covered `console.default_window_days`, which at 30 days reached back across
+both published months, so `monthsToFetch` returned nothing at every preset and the
+console made no runtime shard request. Measured 2026-09-05 by serving an
 11-column shard from a route interceptor at the 7, 14, 30 and 90-day presets: the
 interceptor fired **zero** times, which proves the path is unreachable and proves
 nothing about what happens on it. It becomes reachable when a third month is

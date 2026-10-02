@@ -1,7 +1,12 @@
 import { expect, test, type Page } from './support/browser';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { BAND_UNREAD, readBand, stripRoutes } from '../src/lib/console/band';
 
 /**
  * The console is five routes, and this file is why it is routes and not tabs.
+ * A sixth, Records, is declared on the band and drawn only while
+ * `console.data_explorer_tab` is on, because its page does not exist yet.
  *
  * A tab strip that switches with script fails every assertion here: with
  * JavaScript off it shows one panel set and no way to reach the others, and
@@ -259,6 +264,11 @@ async function stripBoxes(page: Page) {
  * and the band is the first thing an operator reads: five rows of chrome would
  * push the verdict off a phone's first screen.
  *
+ * **One row at 768.** From 731 to 871 px five 8rem tabs fit one row and a sixth
+ * does not, so this is the width where the sixth tab, Records, costs a row of
+ * its own - and no strip test checked any width between a phone and 1440 until
+ * that tab was foreseen.
+ *
  * **One row at 1440, since 2026-09-27.** From `frame.breakpoints_px[1]` up the
  * strip is one row at any count of tabs - it sticks there, and a stuck strip
  * that wrapped would cover a second row of every screen - so a tab list too wide
@@ -267,6 +277,7 @@ async function stripBoxes(page: Page) {
  */
 const STRIP_WIDTHS = [
 	{ width: 1440, height: 1000, rows: 1 },
+	{ width: 768, height: 1000, rows: 1 },
 	{ width: 360, height: 780, rows: 3 },
 	{ width: 320, height: 780, rows: 3 }
 ] as const;
@@ -564,4 +575,38 @@ test.describe('the cross-boundary carries', () => {
 			expect(href, `${route.path} points at the wrong route`).toContain(POINTS_AT[route.id]);
 		});
 	}
+});
+
+/** A band written before the sixth route existed. It names five routes, and a
+ * page reading it must still draw a console. */
+const OLD_BAND = resolve(process.cwd(), '..', 'tests', 'fixtures', 'contracts', 'console-band', 'newest-day.json');
+
+test.describe('the sixth tab waits for its page', () => {
+	// Checked without a page, because the flag reaches the strip through each
+	// route's prerendered data and a second build is not a test. What the strip
+	// draws is `stripRoutes()` of the band's routes, so this is the whole rule.
+	test('the strip draws five routes with the flag off and six with it on', () => {
+		const payload = JSON.parse(readFileSync(OLD_BAND, 'utf8')) as { routes: { id: string }[] };
+		expect(
+			payload.routes.map((route) => route.id),
+			'the fixture already names the sixth route, so it is not an old band'
+		).not.toContain('data-explorer');
+		const band = readBand(payload);
+		expect(band.read, 'an old band no longer reads').toBe(true);
+
+		const five = ROUTES.map((entry) => entry.id);
+		expect(stripRoutes(band.routes, false).map((route) => route.id)).toEqual(five);
+		expect(stripRoutes(BAND_UNREAD.routes, false).map((route) => route.id)).toEqual(five);
+
+		const six = stripRoutes(band.routes, true);
+		expect(six.map((route) => route.id)).toEqual([...five, 'data-explorer']);
+		// Filled from the strip's own words, with no worst state: the old band
+		// never named the route, and Records judges nothing either way.
+		expect(six.at(-1)).toMatchObject({
+			label: 'Records',
+			href: '/console/data-explorer/',
+			description: 'What the ledgers hold, and whatever you ask of them.',
+			worst: null
+		});
+	});
 });

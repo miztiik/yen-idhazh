@@ -1,8 +1,8 @@
 /** What every console route carries above its own panels, as the producer wrote it.
  *
- * The console is five routes, and a route is where a metric goes to die unless
+ * The console is six routes, and a route is where a metric goes to die unless
  * something outside it says a metric is there. So two things stand identically
- * on all five: a band that answers "did it work, what is worst, how much room
+ * on every route: a band that answers "did it work, what is worst, how much room
  * is left", and a navigation strip whose every label carries its own worst
  * state.
  *
@@ -21,13 +21,13 @@
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
 
-export type RouteId = 'pipelines' | 'model' | 'machine' | 'judgement' | 'voices';
+export type RouteId = 'pipelines' | 'model' | 'machine' | 'judgement' | 'voices' | 'data-explorer';
 
 /** How loud a route's worst state is.
  *
  * Ranked rather than coloured. The strip never takes the health ramp - green,
  * amber and red on a label would say a route is failing, and a route is a noun -
- * so this ordering exists to pick the one worst thing across five routes, and
+ * so this ordering exists to pick the one worst thing across every route, and
  * never to paint anything. The producer writes the same four numbers.
  */
 export const BROKEN = 3;
@@ -40,7 +40,7 @@ export interface ConsoleRoute {
 	/** The strip's word for the route. `Pipelines` is the owner's own, taken
 	 * verbatim on 2026-08-30; `Summaries` and `Hardware` replaced `Model` and
 	 * `Machine` on 2026-08-31. The id and the href did not move with them.
-	 * `Judgement` and `Voices` joined on 2026-09-12. */
+	 * `Judgement` and `Voices` joined on 2026-09-12, and `Records` on 2026-10-02. */
 	label: string;
 	/** Route-relative and trailing-slashed. A component prefixes `base`. */
 	href: string;
@@ -121,7 +121,7 @@ export interface ConsoleShell {
 	read: boolean;
 }
 
-const ROUTE_IDS: RouteId[] = ['pipelines', 'model', 'machine', 'judgement', 'voices'];
+const ROUTE_IDS: RouteId[] = ['pipelines', 'model', 'machine', 'judgement', 'voices', 'data-explorer'];
 const HEALTHS: Health[] = ['green', 'amber', 'red'];
 
 /** The label, the address and the line under each, in strip order.
@@ -157,6 +157,11 @@ const ROUTE_WORDS: Record<RouteId, { label: string; href: string; description: s
 		label: 'Voices',
 		href: '/console/voices/',
 		description: 'Who supplied the day, and how far each feed is discounted.'
+	},
+	'data-explorer': {
+		label: 'Records',
+		href: '/console/data-explorer/',
+		description: 'What the ledgers hold, and whatever you ask of them.'
 	}
 };
 
@@ -171,7 +176,7 @@ function blankCarries(): Record<RouteId, string> {
  *
  * A named absence, not a blank: an operator who sees no band has to be told
  * whether the day was clean or whether nothing answered. The strip keeps its
- * five routes with no worst state, so the console is still navigable when the
+ * routes with no worst state, so the console is still navigable when the
  * one file it needs first is the one that failed (`CLAUDE.md` section 1a,
  * degrade rather than fail).
  */
@@ -293,4 +298,16 @@ export function readBand(payload: unknown): ConsoleShell {
 		months: Array.isArray(raw.months) ? raw.months.filter((m): m is string => typeof m === 'string') : [],
 		read: true
 	};
+}
+
+/** The routes the strip draws: every route the band carries, less `Records`
+ * while `console.data_explorer_tab` is off.
+ *
+ * The band carries that route whatever the flag says, so a payload written
+ * before the page exists and one written after it read the same way. The flag
+ * decides only whether a tab points at the route, because a tab pointing at a
+ * page that is not there yet is worse than no tab.
+ */
+export function stripRoutes(routes: readonly ConsoleRoute[], dataExplorerTab: boolean): ConsoleRoute[] {
+	return routes.filter((route) => dataExplorerTab || route.id !== 'data-explorer');
 }

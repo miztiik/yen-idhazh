@@ -37,6 +37,7 @@
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import WindowStatus from '$lib/components/WindowStatus.svelte';
+	import { stripRoutes } from '$lib/console/band';
 	import {
 		completenessOf,
 		completenessSentence,
@@ -71,7 +72,6 @@
 		page.data as {
 			console?: ConsoleConfig;
 			panelGroups?: ConsolePanelGroup[];
-			windowPriced?: boolean;
 		}
 	);
 
@@ -79,6 +79,11 @@
 	// the page before any route script runs. A route that failed to load has none,
 	// and then there is no window to hold and no control to draw.
 	const configured = $derived(routeData.console);
+
+	/** The tabs the strip draws. The band carries every route; the Records tab
+	 * waits for `console.data_explorer_tab`, and a route that loaded no knobs
+	 * keeps it hidden. */
+	const strip = $derived(stripRoutes(data.routes, configured?.data_explorer_tab === true));
 	const windowSource = $derived<WindowSource | null>(
 		handed ??
 			(configured === undefined
@@ -140,17 +145,15 @@
 	<div class="strip-edge" aria-hidden="true"></div>
 	<div class="console-strip" data-console-strip use:stickStrip>
 		<div class="strip-tabs">
-			<ConsoleNav routes={data.routes} {active} worst={data.band.worst?.id ?? null} />
+			<ConsoleNav routes={strip} {active} worst={data.band.worst?.id ?? null} />
 		</div>
 		{#if windowSource !== null}
 			<div class="strip-control">
 				<WindowControl
 					days={windowSource.days}
 					presets={windowSource.presets}
-					monthsFor={windowSource.monthsFor}
 					busy={windowSource.busy}
 					ready={windowSource.ready}
-					priceRoom={routeData.windowPriced === true}
 					onChange={windowSource.onChange}
 				/>
 			</div>

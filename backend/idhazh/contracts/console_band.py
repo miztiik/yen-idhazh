@@ -61,12 +61,12 @@ class Health(StrEnum):
 
 
 class RouteId(StrEnum):
-    """The five console routes. The id is the address; the label is the words.
+    """The six console routes. The id is the address; the label is the words.
 
-    `JUDGEMENT` and `VOICES` joined on 2026-09-12. They are declared here before
-    either page draws a panel, because the strip is the console's only
-    navigation and a tab naming a route the band does not carry is a tab the
-    band's own validator refuses.
+    `JUDGEMENT` and `VOICES` joined on 2026-09-12, and `DATA_EXPLORER` on
+    2026-10-02. Each is declared here before its page draws a panel, because
+    the strip is the console's only navigation and a tab naming a route the band
+    does not carry is a tab the band's own validator refuses.
     """
 
     PIPELINES = "pipelines"
@@ -74,6 +74,7 @@ class RouteId(StrEnum):
     MACHINE = "machine"
     JUDGEMENT = "judgement"
     VOICES = "voices"
+    DATA_EXPLORER = "data-explorer"
 
 
 class BandRun(Model):
@@ -180,6 +181,11 @@ class ConsoleBand(Contract):
     __schema_stem__: ClassVar[str] = "console-band"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-02",
+            change="RouteId gains the route id data-explorer.",
+            why="Additive: an older payload names five of the six and validates unchanged.",
+        ),
+        ChangelogEntry(
             version="2026-09-23",
             change="The two lag readings are fixed at 0 and covers_through is the run's own day.",
             why="Every writer files its own day, so no run finds a backlog to fold.",
@@ -196,8 +202,8 @@ class ConsoleBand(Contract):
         ),
         ChangelogEntry(
             version="2026-09-09",
-            change="Initial shape: the verdict, the worst thing, the size, the route strip.",
-            why="The band is derived from six committed ledgers and was inlined in three places.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
