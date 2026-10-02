@@ -312,6 +312,39 @@ def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:
         )
 
 
+def test_every_path_the_work_job_stages_is_in_a_fresh_checkout() -> None:
+    """`git add` on a path that is not there aborts the whole step.
+
+    The commit step runs under `set -euo pipefail` and stages every path in one
+    call, so one absent path takes all the others down with it on a fresh clone.
+
+    Asked of the staged list rather than of a list written again here, so a path
+    added to the commit step without a seed fails this instead of failing a
+    scheduled run - which is how `state/host-fingerprint` would have landed as a
+    directory nothing had ever committed.
+
+    `state/traces` ships a keep-file rather than a sample trace: a trace is
+    evidence with a seven-day window, so a committed sample would be the one file
+    in it the prune could never justify keeping.
+    """
+    staged = COMMIT_STAGED_PATHS["work"]
+    for relative in staged:
+        assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
+
+    committed = subprocess.run(
+        ["git", "ls-files", "--", *staged],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    for relative in staged:
+        carriers = [
+            path for path in committed if path == relative or path.startswith(f"{relative}/")
+        ]
+        assert carriers, f"{relative} must hold at least one committed file"
+
+
 def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     """The index is what the writer reads instead of the rows, so it has to be committed.
 
