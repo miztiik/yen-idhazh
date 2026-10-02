@@ -64,12 +64,12 @@ still needs the Python producer. The launcher honors `IDHAZH_PYTHON` or
 `--python <path>`.
 It clears inherited data-root overrides and `PYTEST_ADDOPTS`. A missing or stale
 canary build is prepared automatically: canary day, canary site, then selected
-browser tests. Build and test share one lock. The logic-only path uses a
-checkout-local lock and does not queue behind another checkout's site build.
-Both paths require the lock. If it cannot be acquired, the launcher exits 75
-without starting the checks. It does not reclaim a live holder's lock based
-only on age. The lock helper's legacy unlocked fallback remains available to
-direct callers that do not pass `--require-lock`.
+browser tests. Each checkout runs one check at a time, because its build and
+reports are shared: logic-only runs queue on `backend/var/checks/logic.lock`,
+everything else on `backend/var/checks/build.lock`. A run that is not
+logic-only then also takes one of the machine-wide seats (see "Running the
+gates when the machine is shared"). Neither lock fails a run: a caller that
+waits out the lock's timeout runs anyway.
 
 Every normal `npm run build` captures its mode, source inputs and build
 environment after staging and before compilation. Starting a build invalidates
@@ -262,8 +262,8 @@ locally - nothing in the gate set imports it.
 Several agents work in their own worktrees on one box, and each starts its own
 gate the moment it is ready. Nothing coordinates them, so the gates fight over
 the same cores - and the loser looks like a broken branch rather than a busy
-machine. Wrap the three gates measured as CPU-bound so one of them runs at a
-time across every worktree:
+machine. Wrap the three gates measured as CPU-bound so at most five of them run
+at once across every worktree:
 
 ```powershell
 python backend/utilities/gate_lock.py -- python -m pytest
@@ -271,12 +271,18 @@ python backend/utilities/gate_lock.py -- npm run build
 python backend/utilities/gate_lock.py -- npm run test:browser
 ```
 
+`--seats N` sets how many may run at once; the default is 5 (owner decision
+2026-10-02). One seat made every agent on the box queue behind every other, and
+that wait cost more than the contention it prevented. Each seat is its own lock
+file; seat 1 keeps the name `yen-idhazh-gate.lock`, so a branch that predates
+seats still contends on it.
+
 `ruff`, `mypy`, `svelte-check` and `bundle-gate` stay unwrapped:
 serialising a gate that finishes in seconds only adds waiting. The tool reads no
 configuration and imports nothing from `idhazh`, so any supported Python runs it
 from a fresh clone. **CI never takes it** - a runner is one job alone on its own
 machine (Guardrail #2), so nothing about a CI run moves. A caller that has to wait
-prints who holds the lock, from which worktree, running what, and for how long,
+prints who holds each seat, from which worktree, running what, and for how long,
 every 30 seconds. And it cannot fail your gate: a lock whose holder died is
 reclaimed, and a caller that waits out `--timeout` runs the gate unlocked rather
 than returning an error. What the lock does not save you from is in
@@ -320,7 +326,7 @@ anywhere has to be repointed.
 
 **`-n 0` is faster for a small subset**, because the worker pool costs
 several seconds to start and that is most of what a small run pays. Time every
-run through `gate_lock.py`, so no sibling gate can land inside a timing.
+run through `gate_lock.py --seats 1`, so no sibling gate can land inside a timing.
 
 **Read the ratio rather than the seconds.** The whole-suite spread is 45.9 s on
 a 155.4 s mean - 30 percent of itself, and that is the shared box rather than

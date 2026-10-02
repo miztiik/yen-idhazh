@@ -1,4 +1,4 @@
-"""Run one heavy gate at a time on a machine that holds many worktrees.
+"""Cap how many heavy gates run at once on a machine that holds many worktrees.
 
 The symptom this exists for. The same 1,675-test backend suite that CI finishes
 in 62.68 s took 630.55 s on a developer box here, and three browser suites
@@ -17,7 +17,13 @@ Wrap the three gates measured as CPU-bound, and nothing else:
 `ruff`, `mypy`, `svelte-check` and `bundle-gate` stay unwrapped.
 Serialising a gate that finishes in seconds only adds waiting.
 
-How it works. One lock file in the user temp directory. The record is written to
+How many at once. `--seats` sets it, default 5. Each seat is its own lock file;
+seat 1 keeps the original file name, so a branch that predates seats still
+contends on it. A caller takes the first free seat and waits only when every
+seat is held. One seat serialised every agent on the box behind every other,
+which turned contention into a queue that cost more than the contention did.
+
+How it works. Each seat is one lock file in the user temp directory. The record is written to
 a private file first and then linked into place, because `os.link` refuses an
 existing destination on both Windows and Linux - so exactly one caller wins, and
 the lock never exists without the record that says who won it. That is the
@@ -74,6 +80,13 @@ LOG: Final = logging.getLogger("gate_lock")
 # One name for the whole machine. Two worktrees are two checkouts of one
 # repository on one set of cores, so they contend on the same file.
 LOCK_FILENAME: Final = "yen-idhazh-gate.lock"
+
+# How many gates may run at once. Owner decision 2026-10-02: one seat queued
+# every agent behind every other; five is the starting point, tuned by `--seats`.
+SEATS: Final = 5
+
+# Seat n > 1 lives beside seat 1 as `<lock>.seat<n>`.
+SEAT_SUFFIX: Final = ".seat"
 
 # The companion file that decides who may delete the lock. It sits beside the
 # lock so both are in one directory and one clean-up.
@@ -191,8 +204,13 @@ class Holder:
 
 
 def default_lock_path() -> Path:
-    """The one lock every worktree on this machine contends on."""
+    """Seat 1 of the lock every worktree on this machine contends on."""
     return Path(tempfile.gettempdir()) / LOCK_FILENAME
+
+
+def seat_paths(path: Path, seats: int) -> list[Path]:
+    """Every seat's lock file. Seat 1 is `path` itself."""
+    return [path, *(path.with_name(f"{path.name}{SEAT_SUFFIX}{n}") for n in range(2, seats + 1))]
 
 
 def running_in_ci(env: Mapping[str, str]) -> bool:
@@ -426,46 +444,60 @@ def acquire(
     path: Path,
     holder: Holder,
     *,
+    seats: int = SEATS,
     poll: float = POLL_SECONDS,
     stale_after: float = STALE_AFTER_SECONDS,
     timeout: float = WAIT_TIMEOUT_SECONDS,
     report_every: float = REPORT_SECONDS,
-) -> Holder | None:
-    """Take the lock and answer the record that went in, or None after `timeout`.
+) -> tuple[Path, Holder] | None:
+    """Take the first free seat and answer it with the record that went in, or None after `timeout`.
 
-    Hand the record that comes back to `release`. It is not the `holder` that
-    went in: its `created_at` is the second the lock was won.
+    Hand both back to `release`. The record is not the `holder` that went in:
+    its `created_at` is the second the seat was won.
     """
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as error:
         LOG.warning("the gate lock has nowhere to live (%s)", error)
         return None
+    seat_files = seat_paths(path, seats)
     started = time.monotonic()
-    # Negative so the first pass through the wait reports the holder at once.
+    # Negative so the first pass through the wait reports the holders at once.
     reported = -report_every
     while True:
-        try:
-            won = _try_create(path, holder)
-        except OSError as error:
-            # The temp directory will not hold a lock at all. Saying so and
-            # running unlocked is the promise; refusing would fail the gate.
-            LOG.warning("no gate lock could be taken (%s)", error)
-            return None
-        if won is not None:
-            return won
-        reason = reclaim_if_free(path, stale_after=stale_after)
-        if reason is not None:
-            LOG.warning("reclaimed the gate lock: %s", reason)
+        reclaimed = False
+        for seat in seat_files:
+            try:
+                won = _try_create(seat, holder)
+            except OSError as error:
+                # The temp directory will not hold a lock at all. Saying so and
+                # running unlocked is the promise; refusing would fail the gate.
+                LOG.warning("no gate lock could be taken (%s)", error)
+                return None
+            if won is not None:
+                return seat, won
+            reason = reclaim_if_free(seat, stale_after=stale_after)
+            if reason is not None:
+                LOG.warning("reclaimed the gate lock: %s", reason)
+                reclaimed = True
+        if reclaimed:
             continue
         waited = time.monotonic() - started
-        if waited >= timeout:
-            return None
         if waited - reported >= report_every:
             reported = waited
-            current = read_holder(path)
-            held_by = "somebody" if current is None else current.describe(time.time())
-            LOG.info("waiting for the gate lock, held by %s (%.0f s so far)", held_by, waited)
+            now = time.time()
+            held_by = "; ".join(
+                "somebody" if current is None else current.describe(now)
+                for current in (read_holder(seat) for seat in seat_files)
+            )
+            LOG.info(
+                "waiting for the gate lock, all %d seats held by %s (%.0f s so far)",
+                seats,
+                held_by,
+                waited,
+            )
+        if waited >= timeout:
+            return None
         time.sleep(poll)
 
 
@@ -520,8 +552,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gate_lock",
         description=(
-            "Hold a machine-wide lock while one heavy gate runs, so two worktrees "
-            "never fight over the same cores. Name the gate after a `--`."
+            "Hold one of a few machine-wide seats while a heavy gate runs, so "
+            "worktrees never pile every gate onto the same cores. Name the gate after a `--`."
         ),
         epilog="example: python backend/utilities/gate_lock.py -- python -m pytest",
     )
@@ -552,20 +584,25 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--require-lock",
-        action="store_true",
-        help="Do not run without the lock or reclaim it from a live holder based on age.",
+        "--seats",
+        type=_at_least_one,
+        default=SEATS,
+        help=f"How many gates may hold the lock at once. Default: {SEATS}.",
     )
     parser.add_argument(
         "--timeout",
         type=float,
         default=WAIT_TIMEOUT_SECONDS,
-        help=(
-            "Seconds to wait before running unlocked, or exiting 75 with --require-lock. "
-            f"Default: {WAIT_TIMEOUT_SECONDS:.0f}."
-        ),
+        help=f"Seconds to wait before running unlocked. Default: {WAIT_TIMEOUT_SECONDS:.0f}.",
     )
     return parser
+
+
+def _at_least_one(raw: str) -> int:
+    value = int(raw)
+    if value < 1:
+        raise argparse.ArgumentTypeError("needs at least one seat")
+    return value
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -592,19 +629,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     won = acquire(
         lock,
         holder,
+        seats=int(args.seats),
         poll=float(args.retry_every),
-        stale_after=float("inf") if args.require_lock else float(args.stale_after),
+        stale_after=float(args.stale_after),
         timeout=float(args.timeout),
     )
     if won is not None:
+        seat, record = won
         try:
             return run_command(command)
         finally:
-            release(lock, won)
-
-    if args.require_lock:
-        LOG.error("no gate lock was acquired; the command did not run (--require-lock)")
-        return 75
+            release(seat, record)
 
     LOG.warning(
         "gave up waiting for the gate lock after %.0f s and ran unlocked; "
