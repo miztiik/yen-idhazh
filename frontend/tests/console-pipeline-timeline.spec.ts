@@ -111,6 +111,10 @@ test('every column the panel reads carries a value on at least one canary row', 
 	}
 });
 
+test('the retired span summary is absent from the built site', () => {
+	expect(existsSync(resolve(process.cwd(), 'build', 'span-rollup'))).toBe(false);
+});
+
 test('every step the panel draws carries a value, and the ones it does not are named', async ({
 	page
 }) => {
@@ -197,8 +201,8 @@ test('the run timeline renders when its published series is gone', async ({ page
 	} else {
 		await expect(board.locator('[data-timeline-residual-note]')).toBeVisible();
 	}
-	// Either way the route itself is whole: the readout under the bars still drew.
-	await expect(page.locator('[data-substeps]')).toBeAttached();
+	await expect(page.locator('main')).toBeVisible();
+	await expect(page.locator('[data-substeps]')).toHaveCount(0);
 });
 
 test.describe('one fold, two grains', () => {
