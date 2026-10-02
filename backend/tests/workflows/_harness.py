@@ -640,16 +640,11 @@ COMMIT_BASE_ENV: Final = frozenset(
 # one. Every other job takes the base three and nothing else: no path under
 # `state/` has two writers now, so those commit steps settle nothing after their
 # rebase.
-#
-# Three of the four name a push deadline. The bench does not: `measure.yml` has no
-# job that reads config before the one that commits, so it takes the script's
-# own value for a caller that names none.
 COMMIT_SCRIPT_ENV: Final = {
-    "plan": COMMIT_BASE_ENV | {"PUSH_DEADLINE_SECONDS"},
-    "work": COMMIT_BASE_ENV | {"PUSH_DEADLINE_SECONDS", "SHARD"},
+    "plan": COMMIT_BASE_ENV,
+    "work": COMMIT_BASE_ENV | {"SHARD"},
     "assemble": COMMIT_BASE_ENV
     | {
-        "PUSH_DEADLINE_SECONDS",
         "REFRESH_PATHS",
         "REGENERATE_COMMAND",
         "DROP_RACED_ASSETS_COMMAND",
@@ -846,21 +841,13 @@ SUBSTITUTED_COUNCIL_RUN: Final = "2026-08-26-35534060762"
 #: the venue never checks it against a list of who may exist.
 SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
-#: What the plan job hands every commit step of the run, read from config by
-#: `backend/utilities/shard_bound.py`. A stand-in for what Actions would expand,
-#: like the date above it - the value config carries is checked where the knob
-#: itself is, not here.
-SUBSTITUTED_PUSH_DEADLINE: Final = "300"
-
 EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
     "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
-    "needs.plan.outputs.push_deadline_seconds": SUBSTITUTED_PUSH_DEADLINE,
     "needs.draw.outputs.date": SUBSTITUTED_DATE,
     "needs.draw.outputs.run_id": SUBSTITUTED_COUNCIL_RUN,
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
-    "steps.bounds.outputs.push_deadline_seconds": SUBSTITUTED_PUSH_DEADLINE,
     # What the `derived` step prints into `$GITHUB_OUTPUT`, computed rather than
     # written out. A second copy of that list is the thing this expression
     # exists to remove.
@@ -2222,13 +2209,17 @@ def _run_commit_script(
 
     `sys.executable` rather than `python`, because the suite's own interpreter is
     the one with a path a test can name. A runner has `python` on PATH, and the
-    program reads no configuration and imports nothing from `idhazh`, so either
+    program imports nothing from `idhazh`, so either
     one runs the same bytes.
     """
+    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
+    retry_file = runner.parent / "push-retry.json"
+    _write(retry_file, json.dumps(config) + "\n")
     return subprocess.run(
         [sys.executable, COMMIT_PROGRAM.as_posix(), *staged_paths],
         cwd=runner,
-        env={**env, **settings},
+        env={**env, "PUSH_RETRY_CONFIG": str(retry_file), **settings},
         capture_output=True,
         text=True,
     )

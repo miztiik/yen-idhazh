@@ -1,0 +1,7 @@
+{
+  "deadline_seconds": 300,
+  "work_deadline_seconds": 120,
+  "base_step_seconds": 1,
+  "ceiling_seconds": 8,
+  "ceiling_after": 4
+}
