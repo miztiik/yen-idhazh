@@ -27,7 +27,14 @@ dependencies = [
     "feedparser>=6.0",
     # Boilerplate removal for the Extract stage. A custom HTML extractor is a
     # maintenance surface with no beneficiary feature.
-    "trafilatura>=1.12",
+    #
+    # Held below 2.3: trafilatura 2.3.0 (released 2026-10-02) changed what it
+    # keeps from link farms, forms and boilerplate widgets, and seven extraction
+    # tests that pass on 2.2.0 fail on it - the contamination signal no longer
+    # fires on the real contaminated page, and the element fixtures carry fewer
+    # quantities. The committed fixtures and thresholds were measured on 2.2.
+    # Lift the ceiling in the change that re-measures them on 2.3.
+    "trafilatura>=1.12,<2.3",
     # The public suffix list, for the one question "which name did somebody
     # register". Already installed as a trafilatura dependency; declared here
     # because build_reference_dataset.py imports it directly, and a transitive
