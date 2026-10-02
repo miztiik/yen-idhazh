@@ -135,7 +135,6 @@ UNMARKED_MODULES: Final = frozenset(
         "test_same_story_window",
         "test_sample_sheet",
         "test_search_index",
-        "test_seen_days",
         "test_session",
         "test_silicon",
         "test_similarity_applied",

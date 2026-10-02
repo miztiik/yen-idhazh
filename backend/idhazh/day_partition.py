@@ -11,9 +11,10 @@ and `state/visual-prunes/` - and they read it through one private helper inside
 here before it was imported from seven places. That is the shape
 `month_partition` was created on 2026-09-08 to end: three directories each
 carrying their own answer to "is this name a month", and one file left alone in
-one ledger and deleted in another. The cleanup record has since moved under
-`state/raw/`, where a day is a folder of writer files that `ledger/raw_files.py`
-walks, so `state/published/` is the reader left.
+one ledger and deleted in another. The cleanup record and the published record
+have since moved under `state/raw/`, where a day is a folder of writer files that
+`ledger/raw_files.py` walks, so the similarity judge's and the council's day
+files are what this walks now.
 
 **Nothing inside a day tree is skipped.** A name this cannot place stops the
 read. A glob answers "what matched" and says nothing about what did not, so a
@@ -123,8 +124,8 @@ def date_of(day_file: Path) -> str:
 
     The peer of `month_of`, and both exist because a boundary is either a month
     or a day. The gardener's `telemetry-aggregate` and `feed-health` tasks compare
-    a month because their windows are months; the `seen` task compares a day,
-    because its window is days and `days_in_window` hands it days. A caller
+    a month because their windows are months; the prune verb compares a day,
+    because an operator names its range in days. A caller
     with a day boundary that spelled this itself would be the second place the
     path layout is written down.
     """

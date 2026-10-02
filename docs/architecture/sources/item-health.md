@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -80,8 +80,8 @@ goes. The month's rows are not this step's to remove: they are the
 when its 15-month `monthly_window` passes.
 
 The 30-day window on this page is a read-side parameter and is unrelated to that
-age. Day files follow `state/published/`, and `state/seen/` and
-`state/feed-health/` followed it too in the days after - owner instruction,
+age. Day files followed the published ledger, and the seen and feed-health
+ledgers followed it too in the days after - owner instruction,
 2026-09-10, and the reason is in
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains).
 What the summary keeps, what it costs and why fourteen is

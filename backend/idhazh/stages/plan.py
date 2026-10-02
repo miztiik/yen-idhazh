@@ -106,8 +106,8 @@ def stage_plan(
     does not ask for it plans exactly what it planned before.
 
     `commit_sha` is the commit this run checked out. Every file this run writes
-    through the ledger door - a retirement, the counterfactual scores - names it,
-    so the file can be traced to the code that decided it.
+    through the ledger door - a retirement, the first sights, the counterfactual
+    scores - names it, so the file can be traced to the code that decided it.
     """
     read_url = fetcher or common.live_fetcher(settings)
     clock = now or assemble.utc_now
@@ -190,7 +190,10 @@ def stage_plan(
 
     first_seen = ledger.load_seen(state, today=date, within_days=collect.seen_window_days)
     landed = ledger.append_seen(
-        state, date, _first_sights(candidates, first_seen, generated_at, run_id)
+        state,
+        date,
+        _first_sights(candidates, first_seen, generated_at, run_id),
+        identity=identity,
     )
     # This job's own file, never a day file two plan jobs would share. A night
     # runs the plan more than once and each run has a verdict on every feed, so
@@ -426,7 +429,7 @@ def stage_plan(
     verticals = [
         summary.model_copy(update={"planned": counts.get(summary.id, 0)}) for summary in verticals
     ]
-    LOG.info("first sights recorded new=%s file=%s", landed, ledger.relpath(LedgerName.SEEN, date))
+    LOG.info("first sights recorded new=%s ledger=%s covers=%s", landed, LedgerName.SEEN, date)
 
     return RunPlan(
         version=RunPlan.schema_version(),

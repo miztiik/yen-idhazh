@@ -530,12 +530,12 @@ def test_the_day_the_console_reads_is_handed_back_and_the_published_rows_are_not
     different bytes. Handing it back and rebuilding it is the answer, and it
     costs milliseconds.
 
-    `state/published` is the opposite case and left the handed-back set on
-    2026-09-22. A row there is one item on one day at one address, so two runs
-    that both append are not in disagreement: the union driver keeps both sides
-    and `ledger.load_published` keeps the earliest date per address, which makes
-    a row that arrives twice cost bytes and move no publication date. Handing it
-    back instead would restore the tip's copy over rows this attempt appended.
+    The published ledger is the opposite case. Its rows are filed through the
+    ledger door, one written-once file named for this run, attempt, job and
+    shard, so two runs of one day are two adds of two paths and there is
+    nothing to settle. Handing that tree back would restore the tip's copy of
+    it and delete this attempt's own file, leaving the guard against publishing
+    one story twice to whatever the producer happens to write again.
 
     The paths are read from the writer's own helpers rather than spelled here,
     so moving either ledger fails this instead of leaving a refresh set naming a
@@ -543,12 +543,12 @@ def test_the_day_the_console_reads_is_handed_back_and_the_published_rows_are_not
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
     rebuilt = day_metrics.day_metrics_relpath(SUBSTITUTED_DATE)
-    unioned = ledger.relpath(LedgerName.PUBLISHED, SUBSTITUTED_DATE)
+    filed = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.PUBLISHED).as_posix()
 
     assert any(_under(rebuilt, path) for path in refreshed), (
         f"{rebuilt} is rewritten whole by this job and no entry of {refreshed} hands it back"
     )
-    assert not any(_under(unioned, path) for path in refreshed), (
-        f"{unioned} is settled by a union driver, so handing it back would restore the "
-        "tip's copy over rows this attempt appended"
+    assert not any(_under(filed, path) for path in refreshed), (
+        f"{filed} holds one written-once file per writer, so handing it back would "
+        "delete this attempt's own file"
     )

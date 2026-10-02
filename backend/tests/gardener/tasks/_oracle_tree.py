@@ -10,12 +10,12 @@ The pass side was recorded once, before the passes were deleted, into
 `tests/fixtures/gardener/prune-oracle/removals.json`; this builder is what that
 record was taken over, so changing a file here changes what the record means.
 
-Since then four ledgers - item-health, scores, host-fingerprint and the
-counterfactual scores - moved off their CSV day trees onto the ledger door, so
-this tree files their rows under `state/raw/`, the way their writers file them
-now. The record's paths under their old trees name files this tree no longer
-holds, and `test_every_task_takes_what_its_pass_took.py` says what that leaves
-each task answering for.
+Since then five ledgers - item-health, scores, host-fingerprint, the
+counterfactual scores and the first sights - moved off CSV onto the ledger door,
+so this tree files their rows under `state/raw/`, the way their writers file
+them now. The record's paths under their old trees name files this tree no
+longer holds, and `test_every_task_takes_what_its_pass_took.py` says what that
+leaves each task answering for.
 """
 
 from __future__ import annotations
@@ -155,6 +155,7 @@ def _seen_day(state: Path, day: str) -> None:
                 first_seen_run=f"{day}-1",
             )
         ],
+        identity=writer_identity(f"{day}-1", job=ServerJob.PLAN, producer=plan.PRODUCER),
     )
 
 
