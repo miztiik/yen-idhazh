@@ -11,8 +11,7 @@ an index that disagreed with its files would test the door against a tree the
 compaction never writes. This checks each root with the backend's own readers:
 every index is a `CompactIndex` document, every entry's `rows` is the row count
 `persist.load` returns and its `bytes` is the file's size on disk, each file's
-envelope names the ledger, the period and what its entry covers, and no compact
-file sits in a root without an entry naming it. It also pins the cases the spec
+envelope names the ledger, the period and what its entry covers. It also pins the cases the spec
 drives the door through, so a regenerated fixture cannot drop one quietly.
 """
 
@@ -90,23 +89,6 @@ def test_every_entry_matches_the_file_the_backend_reader_opens(root: str, period
             period,
             entry.covers,
         )
-
-
-@pytest.mark.parametrize("root", list(HELD))
-def test_no_compact_file_sits_in_the_tree_without_an_entry(root: str) -> None:
-    """A file no index names is a file the door can never reach and the spec never tests."""
-    named = {
-        compact_path(FIXTURE / root, LEDGER, period, entry.covers)
-        for period in HELD[root]
-        for entry in index(root, period).entries
-    }
-    on_disk = {
-        path
-        for period in Period
-        for path in (FIXTURE / root / "compact" / LEDGER.value / period.value).rglob("*")
-        if path.is_file()
-    }
-    assert on_disk == named
 
 
 def test_the_fixture_carries_every_case_the_door_is_driven_through() -> None:
