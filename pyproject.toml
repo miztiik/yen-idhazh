@@ -167,21 +167,47 @@ src = ["backend"]
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle
-    "F",   # pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "A",   # flake8-builtins
-    "C4",  # flake8-comprehensions
-    "PTH", # flake8-use-pathlib
-    "RUF", # ruff-specific
+    "E",      # pycodestyle
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins
+    "C4",     # flake8-comprehensions
+    "PTH",    # flake8-use-pathlib
+    "RUF",    # ruff-specific
+    "TID251", # banned-api - names the one reader allowed past a facade
 ]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# These are the writer-name patterns `idhazh.ledger` keeps off its public
+# facade. `idhazh.path_classes` is the one caller allowed to read them
+# directly (`[tool.ruff.lint.per-file-ignores]` below); anywhere else, this
+# rule fails the build in place of a hand-written AST walk over the whole
+# backend tree (Guardrail #12 - that walk's cost grew with the repository,
+# not with the rule).
+"idhazh.ledger.filenames._SEGMENT_NAME".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
+"idhazh.ledger.filenames._SEGMENT_SUFFIX".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
+"idhazh.ledger.filenames._REPAIR_NAME".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
+"idhazh.ledger.filenames._REPAIR_STAMP".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
+# The parquet engine behind the ledger door. idhazh.ledger.parquet is the one
+# module allowed to import it (per-file-ignores below); anywhere else, this
+# rule fails the build in place of a hand-written AST walk over backend/idhazh
+# and frontend/src (Guardrail #12 - that walk's cost grew with the repository).
+"pyarrow".msg = "Only idhazh.ledger.parquet imports the parquet engine directly."
 
 [tool.ruff.lint.per-file-ignores]
 # Test names read better long, and a fixture literal is not a magic value.
-"backend/tests/*" = ["E501"]
+# TID251: a test fixture reads and writes its own parquet file directly to
+# build or inspect a committed fixture; the engine-swap rule the ban otherwise
+# enforces governs backend/idhazh and frontend/src, never test fixtures (the
+# walk this replaced never covered backend/tests/ either).
+"backend/tests/*" = ["E501", "TID251"]
+# The one caller the pattern constants are for (see banned-api above).
+"backend/idhazh/path_classes.py" = ["TID251"]
+# The one caller the parquet engine ban is for (see banned-api above).
+"backend/idhazh/ledger/parquet.py" = ["TID251"]
 
 [tool.mypy]
 python_version = "3.12"

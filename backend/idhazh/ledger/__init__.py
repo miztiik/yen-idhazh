@@ -25,10 +25,6 @@ from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.filenames import (
     BEFORE_PARTITION_NAME,
     PRE_IDENTITY_TRACE,
-    REPAIR_NAME,
-    REPAIR_STAMP,
-    SEGMENT_NAME,
-    SEGMENT_SUFFIX,
     SegmentName,
     file_id,
     fragment_name,
@@ -231,10 +227,6 @@ __all__ = [  # noqa: RUF022
     # filenames.py: what one writer's file is called.
     "BEFORE_PARTITION_NAME",
     "PRE_IDENTITY_TRACE",
-    "REPAIR_NAME",
-    "REPAIR_STAMP",
-    "SEGMENT_NAME",
-    "SEGMENT_SUFFIX",
     "SegmentName",
     "file_id",
     "fragment_name",
