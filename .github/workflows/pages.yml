@@ -83,7 +83,7 @@ jobs:
           set -euo pipefail
           if [ "${TRIGGER:-}" != "CI" ]; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet HEAD^1 HEAD -- frontend config/idhazh.json state; then
+          elif git diff --quiet HEAD^1 HEAD -- frontend config/idhazh.json config/ledgers.json state; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else
             echo "publish=true" >> "$GITHUB_OUTPUT"

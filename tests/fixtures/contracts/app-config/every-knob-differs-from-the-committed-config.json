@@ -114,6 +114,7 @@
     "completeness_grace_days": 2,
     "context_cut_off_reason": "max_tokens",
     "context_high_percentile": 95.0,
+    "data_explorer_tab": true,
     "default_window_days": 21,
     "doubt_rows": 6,
     "failure_list_max": 10,
@@ -278,6 +279,7 @@
     "train_rows": 1000
   },
   "ledger": {
+    "archive_base_url": "https://raw.githubusercontent.com/miztiik/yen-idhazh/main",
     "compression_compact": "snappy",
     "compression_raw": "zstd",
     "engine_extension_repository": "https://mirror.example/duckdb",
@@ -356,7 +358,6 @@
   },
   "run": {
     "max_parallel": 2,
-    "push_deadline_seconds": 45,
     "qualification_repeats": 5,
     "qualify_on_the_production_path": false,
     "safety_ceiling_per_day": 640,

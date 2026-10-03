@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-10-02
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
@@ -132,6 +132,16 @@ page. A ledger that supplied it shipped on 2026-09-17 and was reverted the same
 day, on the measurement rather than on the risk: over a full run it moved the
 signal zero times. Anything that revives it records hashes rather than lines, so
 nothing in that file can carry an instruction a page tried to give us.
+
+**The extractor is trafilatura 2.2, held below 2.3 in `pyproject.toml`.**
+trafilatura 2.3.0, released 2026-10-02, changed what it keeps from link farms,
+forms and boilerplate widgets. On it the `contaminated` signal stops firing on
+the committed contaminated page and the element fixtures carry fewer
+quantities: seven extraction tests that pass on 2.2.0 failed in CI on 2.3.0. The
+signals, thresholds and fixtures on this page were measured on 2.2, and a new
+extractor release changes what a page yields without moving
+`EXTRACTOR_VERSION`, so the ceiling stays until a change re-measures them on
+2.3 and lifts it. What it costs: the extraction fixes 2.3 carries.
 
 `extract_text` removes embedded-player interface containers through
 Trafilatura's `prune_xpath` hook before its existing sanitization pass. The

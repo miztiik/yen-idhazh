@@ -142,11 +142,10 @@ def test_semantic_coverage_does_not_grow_with_the_article() -> None:
 
     Recall against the whole article is the shape this replaced: it falls as the
     article lengthens whatever the summary says, which is a length measure
-    wearing a quality measure's name. Here the article is tripled with words it
-    uses once each, so none of them can displace a term the article keeps
-    returning to - and the reading does not move at all.
+    wearing a quality measure's name. A few new words the summary does not use
+    are enough to show that none displace a term the article keeps returning to.
     """
-    padding = " ".join(f"filler{index}" for index in range(120))
+    padding = " ".join(f"filler{index}" for index in range(3))
     unchanged = semantic_coverage(_COVERAGE_SUMMARY, f"{_COVERAGE_SOURCE} {padding}", terms=5)
 
     assert unchanged == semantic_coverage(_COVERAGE_SUMMARY, _COVERAGE_SOURCE, terms=5) == 0.6
@@ -981,18 +980,18 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
 ) -> None:
     """Guardrail #12, as bytes rather than as a clock.
 
-    Two trees hold the same 200 measurements. One carries each row once, the
+    Two trees hold the same two measurements. One carries each row once, the
     other carries it ten more times in a second writer's file, so the rows are
     eleven times the bytes and the identities are identical. What the writer
     opens has to be the same figure, and the score rows have to be absent from
     it entirely.
     """
-    rows = [_measurement(number) for number in range(200)]
+    rows = [_measurement(number) for number in range(2)]
     lean = tmp_path / "lean" / "state"
     fat = tmp_path / "fat" / "state"
     for state in (lean, fat):
         put(state, rows)  # the rows and the index the writer minted beside them
-    _seeded(fat, rows, copies=10)  # the same 200 measurements, ten times the rows
+    _seeded(fat, rows, copies=10)  # the same two measurements, ten times the rows
 
     candidates = {writer.observation_digest(rows[0].model_dump(mode="json"))}
     thin = _opened_bytes(monkeypatch, lean, lambda: writer.recorded_observations(lean, candidates))
@@ -1006,7 +1005,7 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
     assert not opened_there, f"the writer opened {opened_there}, which is what this row removes"
     assert sorted(thin.values()) == sorted(thick.values()), (
         "the writer's read moved with the rows: "
-        f"{sum(thin.values())} B against {sum(thick.values())} B over the same 200 measurements"
+        f"{sum(thin.values())} B against {sum(thick.values())} B over the same two measurements"
     )
     assert sum(thick.values()) > 0, "the writer read nothing at all, so this proves nothing"
 

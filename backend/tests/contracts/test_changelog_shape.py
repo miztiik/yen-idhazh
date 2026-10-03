@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 
 import pytest
+from _source_files import source_files
 from conftest import REPO_ROOT
 
 pytestmark = pytest.mark.contract
@@ -34,7 +35,7 @@ def _changelogs() -> list[tuple[str, int, list[ast.Call]]]:
     the archive.
     """
     found: list[tuple[str, int, list[ast.Call]]] = []
-    for path in sorted(CONTRACTS_DIR.rglob("*.py")):
+    for path in source_files(roots=(CONTRACTS_DIR,), suffixes=(".py",)):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):

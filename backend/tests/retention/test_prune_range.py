@@ -402,9 +402,12 @@ def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: st
 
     Refused rather than left out of the vocabulary: a ledger missing from a list
     reads as an oversight, and somebody who typed one of these is holding a real
-    question whose answer is why the answer is no.
+    question whose answer is why the answer is no. The first two are on the
+    ledger door, so each one's compaction declaration gives its reason in
+    `prune_refusal`; the ID folder, which no compaction declares, is in `REFUSED`.
     """
-    assert set(prune.REFUSED) == set(MUST_NOT_FORGET)
+    assert set(prune.REFUSED) == {LedgerName.SUMMARY_QUALITY_EVALS_INDEX}
+    reasons = {**prune.REFUSED, **prune.door_refusals(committed_tasks())}
     state = a_feed_record(tmp_path / "state")
     before = fingerprints(state)
 
@@ -413,7 +416,7 @@ def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: st
 
     message = str(refusal.value)
     assert target in message and "refused" in message
-    assert prune.REFUSED[target] in message, "the refusal did not say why"
+    assert reasons[target] in message, "the refusal did not say why"
     assert fingerprints(state) == before
 
 
@@ -638,7 +641,7 @@ PRUNE_WRITER: Final = WriterIdentity(
 #: filed daily files and the first raw day. The census's first and last filed
 #: days stay, in the year file and in a raw file.
 SINCE: Final = "2025-12-20"
-UNTIL: Final = "2026-03-19"
+UNTIL: Final = RAW_DAYS[0]
 
 
 def the_range() -> list[str]:

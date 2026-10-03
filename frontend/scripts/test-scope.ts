@@ -74,13 +74,18 @@ export type CiAnswer = {
 	code: boolean;
 	console: boolean;
 	panels: boolean;
+	robots: boolean;
 	validateAll: boolean;
 };
+
+/** The module the `robots` job runs on a second interpreter. A change that does
+ * not select it cannot move how two interpreters read a `robots.txt`. */
+const ROBOTS_TESTS = 'backend/tests/test_extract.py';
 
 /** Anything under here IS the archive, so a change to it has to be re-read. */
 const ARCHIVE_TOUCHED = /^frontend\/public\/(digest|telemetry|assist)\//;
 
-/** The five lines the `scope` job writes to `$GITHUB_OUTPUT`.
+/** The six lines the `scope` job writes to `$GITHUB_OUTPUT`.
  *
  * A pure function of the changed paths, so the truth table is checked here at
  * microseconds a case rather than through a temporary git repository and a
@@ -103,6 +108,8 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 		// Whatever buys the console buys its pictures, and so does anything every
 		// panel is drawn from.
 		panels: selection.groups.includes('panels') && (!deferred || panelsAreTheSubject(paths)),
+		// A full backend selection (null) is an unknown change, so it buys the job.
+		robots: selection.backendFiles?.includes(ROBOTS_TESTS) ?? true,
 		// A published day is frozen, so the only thing that can invalidate one is a
 		// change to the shape it is read through - or an edit to the day itself.
 		// Everything else leaves an answer that was settled when the day was
@@ -271,6 +278,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 		console.log(`code=${answer.code}`);
 		console.log(`console=${answer.console}`);
 		console.log(`panels=${answer.panels}`);
+		console.log(`robots=${answer.robots}`);
 		console.log(`validate_all=${answer.validateAll}`);
 	} else {
 		console.log(JSON.stringify(selectPaths(paths), null, 2));

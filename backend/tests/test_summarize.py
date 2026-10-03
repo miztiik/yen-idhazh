@@ -27,6 +27,7 @@ from string import Template
 from typing import Any, Final
 
 import pytest
+from _source_files import source_files
 from conftest import (
     CONFIG_DIR,
     CONTRACT_FIXTURES_DIR,
@@ -669,8 +670,7 @@ def test_the_loopback_host_is_written_in_four_named_places() -> None:
     roots = (REPO_ROOT / "backend" / "idhazh", REPO_ROOT / "backend" / "utilities")
     writing = {
         path.relative_to(REPO_ROOT).as_posix()
-        for root in roots
-        for path in root.rglob("*.py")
+        for path in source_files(roots=roots, suffixes=(".py",))
         if "127.0.0.1" in path.read_text(encoding="utf-8")
     }
 
@@ -1025,7 +1025,10 @@ def test_exactly_one_function_spells_a_llama_server_flag() -> None:
 
     spellers = {
         path.relative_to(REPO_ROOT).as_posix()
-        for path in REPO_ROOT.glob("backend/**/*.py")
+        for path in source_files(
+            roots=(REPO_ROOT / "backend",),
+            suffixes=(".py",),
+        )
         if any(f'"{flag}"' in path.read_text(encoding="utf-8") for flag in written_in_code)
     }
     # The builder, and the test that pins what it builds. A third file is a

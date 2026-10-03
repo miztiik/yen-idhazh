@@ -164,12 +164,22 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
     "append_seen": (
         LedgerName.SEEN,
         1,
-        lambda s: _wrote(s, lambda: ledger.append_seen(s, A_DAY, [_first(SeenRow)])),
+        lambda s: _wrote(
+            s,
+            lambda: ledger.append_seen(
+                s, A_DAY, [_first(SeenRow)], identity=_identity(ServerJob.PLAN)
+            ),
+        ),
     ),
     "append_published": (
         LedgerName.PUBLISHED,
         1,
-        lambda s: _wrote(s, lambda: ledger.append_published(s, A_DAY, [_first(PublishedRow)])),
+        lambda s: _wrote(
+            s,
+            lambda: ledger.append_published(
+                s, A_DAY, [_first(PublishedRow)], identity=_identity(ServerJob.ASSEMBLE)
+            ),
+        ),
     ),
     "file_retirements": (
         LedgerName.FEED_RETIREMENTS,
@@ -281,7 +291,7 @@ def test_the_plan_stage_with_seen_paused_still_lands_feed_health_and_counterfact
         built = plan([LAB, TRADE, COMMUNITY], state=state)
 
     assert built.items, "the stage planned nothing, so this proves nothing"
-    assert not ledger.tree_root(state, LedgerName.SEEN).exists()
+    assert not ledger.raw_root(state, LedgerName.SEEN).exists()
     assert list(ledger.tree_root(state, LedgerName.FEED_HEALTH).rglob("*.csv"))
     assert ledger.list_raw_files(state, LedgerName.COUNTERFACTUAL_SCORES)
     skipped = [r.getMessage() for r in caplog.records if SKIPPED in r.getMessage()]

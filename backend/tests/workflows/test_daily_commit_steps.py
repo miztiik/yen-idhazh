@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import json
 import re
 import shlex
 import sys
@@ -11,12 +10,13 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger, path_classes
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import LedgerName
+from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
 from ._harness import (
     COMMIT_JOBS,
@@ -311,13 +311,10 @@ def test_the_loop_is_bounded_by_a_clock_and_not_by_a_count() -> None:
     assert "for attempt in " not in source, "the retry count is what this row removed"
     assert "deadline" in body, "the loop must stop on a clock"
     assert "_back_off(" in body, "every loser of one race must not refetch in lockstep"
-    # The deadline is a knob, and the one place its standing value is written
-    # down is the config file. The program's own fallback covers a caller with
-    # no config reader on its runner.
-    assert "PUSH_DEADLINE_SECONDS" in source
-    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    defaults = AppConfig.model_validate({})
-    assert committed["run"]["push_deadline_seconds"] == defaults.run.push_deadline_seconds
+    assert "PUSH_RETRY_CONFIG" in source
+    retry = load_retry(REPO_ROOT / DEFAULT_CONFIG)
+    assert retry.deadline_for("assemble") == 300
+    assert retry.deadline_for("bench") == 300
 
 
 def test_the_shard_keeps_a_shorter_deadline_than_the_rest_of_the_run() -> None:
@@ -328,8 +325,9 @@ def test_the_shard_keeps_a_shorter_deadline_than_the_rest_of_the_run() -> None:
     300 s would be a quarter of that reserve. The assemble job has no such
     problem: it used 1.8 of its 20 minutes on run 35701213155.
     """
-    shard = int(_commit_call("work")[1]["PUSH_DEADLINE_SECONDS"])
-    run_wide = int(_commit_call("assemble")[1]["PUSH_DEADLINE_SECONDS"])
+    retry = load_retry(REPO_ROOT / DEFAULT_CONFIG)
+    shard = retry.deadline_for("work")
+    run_wide = retry.deadline_for("assemble")
     reserve_seconds = AppConfig.model_validate({}).run.shard_wrap_up_minutes * 60
 
     assert shard < run_wide, "a shard that spends the run's deadline loses its upload"
@@ -347,12 +345,20 @@ def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
     third-party package would fail the push rather than the install.
     """
     assert COMMIT_PROGRAM.is_file()
+    retry_program = COMMIT_PROGRAM.with_name("push_retry.py")
+    assert retry_program.is_file()
     roots = {
         (node.module or "").split(".")[0]
         if isinstance(node, ast.ImportFrom)
         else node.names[0].name.split(".")[0]
-        for node in ast.walk(ast.parse(read_text(COMMIT_PROGRAM)))
+        for program in (COMMIT_PROGRAM, retry_program)
+        for node in ast.walk(ast.parse(read_text(program)))
         if isinstance(node, ast.Import | ast.ImportFrom)
+        if not (
+            program == COMMIT_PROGRAM
+            and isinstance(node, ast.ImportFrom)
+            and node.module == "utilities.push_retry"
+        )
     }
     assert roots, "no import was read, so this test would pass on nothing"
     outside = roots - set(sys.stdlib_module_names) - {"__future__"}
@@ -442,14 +448,14 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
         for value in (settings["REFRESH_PATHS"], settings["REGENERATE_COMMAND"])
     )
     # The plan job records what it saw and cannot rebuild it, so it resolves a
-    # race by rebasing, and `.gitattributes` unions its ledgers. It commits no
-    # rendered asset either, so it has nothing to drop.
+    # race by rebasing alone. It commits no rendered asset either, so it has
+    # nothing to drop.
     assert "REGENERATE_COMMAND" not in _commit_call("plan")[1]
     assert "DROP_RACED_ASSETS_COMMAND" not in _commit_call("plan")[1]
 
 
 def test_only_the_collections_this_repository_declares_union() -> None:
-    """A union merge keeps both sides, which is right for nine of these and wrong for the rest.
+    """A union merge keeps both sides, which is right for a few of these and wrong for the rest.
 
     Every file under `state/` carried this driver until 2026-09-19. It kept two
     attempts at one row as readily as two independent rows, and a lost push race

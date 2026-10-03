@@ -42,6 +42,7 @@ from ._garden import (
     git,
     on_origin,
     quiet_git,
+    read_origin,
 )
 from ._garden import task_package as a_package
 
@@ -108,12 +109,17 @@ def settled_rows(state: Path, day: str) -> list[dict[str, str]]:
     )
 
 
+@pytest.fixture(scope="module")
+def tree_files(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
+    """The tree's writer files, filed once for the module. Tests only read them."""
+    return the_tree(tmp_path_factory.mktemp("scratch"), (*CLOSED_DAYS, REPORTED_DAY, OPEN_DAY))
+
+
 def a_garden(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, files: dict[str, str]
 ) -> tuple[Path, Path, dict[str, str], GardenerSettings]:
     """The committed declarations over a clone of an origin holding the tree."""
     quiet_git(tmp_path, monkeypatch)
-    files = the_tree(tmp_path / "scratch", (*CLOSED_DAYS, REPORTED_DAY, OPEN_DAY))
     origin, checkout = an_origin(tmp_path, files)
     settings = config.load_gardener(a_config(checkout, CONFIG_DIR / "gardener"))
     return origin, checkout, files, settings
@@ -126,7 +132,7 @@ def only_row(record: Path | None, task: str) -> CollectionPruneRow:
 
 
 def test_a_live_fold_inside_a_dry_task_lands_and_the_window_s_report_stays_a_report(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tree_files: dict[str, str]
 ) -> None:
     """The window is dry and the fold is live, so main gains the fold and nothing else.
 
@@ -134,7 +140,7 @@ def test_a_live_fold_inside_a_dry_task_lands_and_the_window_s_report_stays_a_rep
     writer files settled to, none of those writer files, every file the window
     only reported - untouched and unfolded - and the open day as it was.
     """
-    origin, checkout, files, settings = a_garden(tmp_path, monkeypatch)
+    origin, checkout, files, settings = a_garden(tmp_path, monkeypatch, tree_files)
     policy = settings.tasks[TREE.value]
     assert policy.dry_run is True, "the window has to be the dry half, or this proves less"
     before = {day: settled_rows(checkout / ledger.STATE_DIRNAME, day) for day in CLOSED_DAYS}
@@ -181,7 +187,7 @@ def test_a_live_fold_inside_a_dry_task_lands_and_the_window_s_report_stays_a_rep
 
 
 def test_a_writer_file_that_lands_while_the_fold_runs_survives_beside_the_settled_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tree_files: dict[str, str]
 ) -> None:
     """A re-run's file reaches main between the fold and its push, and its rows are kept.
 
@@ -189,7 +195,7 @@ def test_a_writer_file_that_lands_while_the_fold_runs_survives_beside_the_settle
     new tip. The re-run's file is not one of them, so it stays beside the settled
     file, and the next wake folds it in.
     """
-    origin, checkout, _, settings = a_garden(tmp_path, monkeypatch)
+    origin, checkout, _, settings = a_garden(tmp_path, monkeypatch, tree_files)
     ran = runner.run(
         (TREE.value,),
         settings=settings,
@@ -206,7 +212,8 @@ def test_a_writer_file_that_lands_while_the_fold_runs_survives_beside_the_settle
     )
     assert ran.landing is not None
     day = CLOSED_DAYS[0]
-    seed = tmp_path / "seed"
+    seed = tmp_path / "other-run"
+    git(tmp_path, "clone", "--quiet", str(origin), str(seed))
     late = f"{day}-900000009"
     seed_feed_health(
         seed / ledger.STATE_DIRNAME,
@@ -224,8 +231,7 @@ def test_a_writer_file_that_lands_while_the_fold_runs_survives_beside_the_settle
     )
 
     assert pushed == EXIT_OK, said
-    after = tmp_path / "after"
-    git(tmp_path, "clone", "--quiet", str(origin), str(after))
+    after = read_origin(origin, tmp_path / "after", folder_of(day))
     folder = ledger.path(after / ledger.STATE_DIRNAME, TREE, day)
     names = sorted(path.name for path in folder.iterdir())
     assert day_shards.SETTLED_NAME in names and len(names) == 2, names
@@ -335,8 +341,7 @@ def test_a_settled_month_lands_as_one_file_and_its_days_files_leave_main(
             assert on_origin(origin, relpath) == text, f"{relpath} changed on main"
         else:
             assert on_origin(origin, relpath) is None, f"{relpath} was folded and not deleted"
-    after = tmp_path / "after"
-    git(tmp_path, "clone", "--quiet", str(origin), str(after))
+    after = read_origin(origin, tmp_path / "after", tree)
     landed = ledger.tree_root(after / ledger.STATE_DIRNAME, TREE)
     assert day_shards.settled_rows(landed, key, model, days=UNBOUNDED_WINDOW) == before
 

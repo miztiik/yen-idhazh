@@ -126,8 +126,9 @@ def _argv(
     *,
     poll: float = 0.05,
     timeout: float | None = None,
+    seats: int = 1,
 ) -> list[str]:
-    flags = ["--lock-file", str(lock), "--retry-every", str(poll)]
+    flags = ["--lock-file", str(lock), "--retry-every", str(poll), "--seats", str(seats)]
     if timeout is not None:
         flags += ["--timeout", str(timeout)]
     return [sys.executable, str(GATE_LOCK), *flags, "--", *command]
@@ -186,20 +187,6 @@ def _marks(directory: Path) -> list[tuple[float, float]]:
     for mark in sorted(directory.iterdir()):
         pairs.extend(_intervals(mark))
     return pairs
-
-
-def _a_lock_nobody_is_holding(age: float = 10.0 * gate_lock.STALE_AFTER_SECONDS) -> gate_lock.Holder:
-    """A record past the reclaim line, so every caller that meets it must reclaim.
-
-    The pid is this test's own and is alive, so it is the age that decides and
-    the case is the same on both platforms.
-    """
-    return gate_lock.Holder(
-        pid=os.getpid(),
-        worktree="/a/worktree/that/is/long/gone",
-        command="python -m pytest",
-        created_at=time.time() - age,
-    )
 
 
 def _overlapping(intervals: Sequence[tuple[float, float]]) -> list[tuple[int, int]]:
@@ -308,36 +295,51 @@ def test_the_gates_exit_code_comes_back_and_the_lock_goes(tmp_path: Path) -> Non
     assert not lock.exists()
 
 
-def test_required_lock_never_runs_beside_a_live_holder(tmp_path: Path) -> None:
-    lock = tmp_path / "gate.lock"
+def _most_at_once(intervals: Sequence[tuple[float, float]]) -> int:
+    """The largest number of intervals running at the same instant."""
+    # An end sorts before a start at the same instant, so a hand-over is not an overlap.
+    events = sorted([(start, 1) for start, _ in intervals] + [(end, -1) for _, end in intervals])
+    running = most = 0
+    for _, step in events:
+        running += step
+        most = max(most, running)
+    return most
+
+
+def test_no_more_gates_run_at_once_than_there_are_seats(tmp_path: Path) -> None:
+    seats = 2
     worker = _write(tmp_path / "worker.py", WORKER_SOURCE)
     record = tmp_path / "intervals.txt"
-    for age in (42.0, gate_lock.STALE_AFTER_SECONDS * 10):
-        standing = _a_lock_nobody_is_holding(age)
-        lock.write_text(standing.to_json(), encoding="ascii")
-        arguments = _argv(lock, [sys.executable, str(worker), str(record), "0"], timeout=0)
-        arguments.insert(2, "--require-lock")
-        done = subprocess.run(
-            arguments,
-            cwd=tmp_path,
-            env=_developer_environment(),
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-        assert done.returncode == 75, done.stderr
-        assert "command did not run" in done.stderr
-        assert not record.exists()
-        assert lock.read_text(encoding="ascii") == standing.to_json()
-
-
-def test_required_lock_passes_through_the_command_result(tmp_path: Path) -> None:
     lock = tmp_path / "gate.lock"
-    arguments = _argv(lock, [sys.executable, "-c", "raise SystemExit(3)"])
-    arguments.insert(2, "--require-lock")
+    command = [sys.executable, str(worker), str(record), str(HOLD_SECONDS)]
+
+    results = _run_together(
+        [_argv(lock, command, seats=seats) for _ in range(WORKERS)],
+        cwd=tmp_path,
+        env=_developer_environment(),
+    )
+
+    assert [code for code, _ in results] == [0] * WORKERS, results
+    intervals = _intervals(record)
+    assert len(intervals) == WORKERS
+    assert _most_at_once(intervals) <= seats, intervals
+    assert not any(path.exists() for path in gate_lock.seat_paths(lock, seats))
+
+
+def test_a_held_first_seat_sends_the_caller_to_the_next_one_without_waiting(tmp_path: Path) -> None:
+    lock = tmp_path / "gate.lock"
+    standing = gate_lock.Holder(
+        pid=os.getpid(),
+        worktree="/some/other/worktree",
+        command="npm run test:browser",
+        created_at=time.time(),
+    )
+    lock.write_text(standing.to_json(), encoding="ascii")
+    worker = _write(tmp_path / "worker.py", WORKER_SOURCE)
+    record = tmp_path / "intervals.txt"
+
     done = subprocess.run(
-        arguments,
+        _argv(lock, [sys.executable, str(worker), str(record), "0"], timeout=60, seats=2),
         cwd=tmp_path,
         env=_developer_environment(),
         capture_output=True,
@@ -345,27 +347,36 @@ def test_required_lock_passes_through_the_command_result(tmp_path: Path) -> None
         timeout=120,
         check=False,
     )
-    assert done.returncode == 3, done.stderr
-    assert not lock.exists()
+
+    assert done.returncode == 0, done.stderr
+    assert "waiting" not in done.stderr
+    assert len(_intervals(record)) == 1, "the gate did not run"
+    assert lock.read_text(encoding="ascii") == standing.to_json()
+    assert not gate_lock.seat_paths(lock, 2)[1].exists()
 
 
-def test_required_lock_refuses_a_path_that_cannot_hold_a_lock(tmp_path: Path) -> None:
-    blocked = _write(tmp_path / "not-a-directory", "occupied\n")
-    worker = _write(tmp_path / "worker.py", WORKER_SOURCE)
-    record = tmp_path / "intervals.txt"
-    arguments = _argv(blocked / "gate.lock", [sys.executable, str(worker), str(record), "0"])
-    arguments.insert(2, "--require-lock")
+def test_seat_one_keeps_the_original_lock_name(tmp_path: Path) -> None:
+    lock = tmp_path / gate_lock.LOCK_FILENAME
+
+    assert gate_lock.seat_paths(lock, 3) == [
+        lock,
+        tmp_path / f"{gate_lock.LOCK_FILENAME}.seat2",
+        tmp_path / f"{gate_lock.LOCK_FILENAME}.seat3",
+    ]
+
+
+def test_zero_seats_is_refused() -> None:
     done = subprocess.run(
-        arguments,
-        cwd=tmp_path,
+        [sys.executable, str(GATE_LOCK), "--seats", "0", "--", sys.executable, "-c", "pass"],
         env=_developer_environment(),
         capture_output=True,
         text=True,
         timeout=120,
         check=False,
     )
-    assert done.returncode == 75, done.stderr
-    assert not record.exists()
+
+    assert done.returncode == 2
+    assert "at least one seat" in done.stderr
 
 
 def test_a_lock_with_nowhere_to_live_runs_the_gate_rather_than_failing_it(

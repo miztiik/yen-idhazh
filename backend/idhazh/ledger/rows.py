@@ -10,17 +10,20 @@ a module-scope import here would close a load-time cycle: importing the package
 runs `__init__`, which imports this module, which re-enters a half-built package.
 
 Every writer here that records new rows asks `lifecycle.accepts_new_rows` first,
-and writes nothing into a paused or retired family. `write_item_health_summary`
-does not ask: it folds rows already recorded, and the ageing step reads that
-fold back before it deletes anything.
+and writes nothing into a paused or retired family; `append_seen` and
+`append_published` ask through `persist`, which asks for every pipeline write.
+`write_item_health_summary` does not ask: it folds rows already recorded, and the
+ageing step reads that fold back before it deletes anything.
 
-Four readers here read a ledger that lives under `state/raw/` and
-`state/compact/` rather than in a CSV tree - `load_retirements`,
-`load_visual_prunes`, and the two item-health readers `load_settled_failures`
-and `load_source_counts` - and all four read it through `ledger/ledger_files.py`,
-which reads the monthly files, then the daily files, then the raw days no compact
-index names, each date from exactly one of them. Their writers are not here at
-all: a producer hands those rows to `persist` itself.
+Six readers here read a ledger that lives under `state/raw/` and
+`state/compact/` rather than in a CSV tree - `load_seen`, `load_published`,
+`load_retirements`, `load_visual_prunes`, and the two item-health readers
+`load_settled_failures` and `load_source_counts` - and all six read it through
+`ledger/ledger_files.py`, which reads the yearly files, then the monthly files,
+then the daily files, then the raw days no compact index names, each date from
+exactly one of them. Two of their writers are here, `append_seen` and
+`append_published`, and both file through `persist`; every other producer hands
+its rows to `persist` itself.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
@@ -48,7 +52,6 @@ from idhazh.ledger import ledger_files, lifecycle, paths
 from idhazh.ledger.csv_file import (
     CsvRecord,
     _read_rows,
-    _stream_rows,
     extend_ledger_file,
     render_file,
 )
@@ -62,6 +65,7 @@ from idhazh.ledger.keys import (
     STORY_SIMILARITY_THRESHOLD_KEY,
     _refuse_outside_day_trees,
 )
+from idhazh.ledger.persist import persist
 from idhazh.ledger.settle import drop_repeated_rows
 
 #: How far back a health read looks. Not a policy - just enough history to reach
@@ -70,30 +74,33 @@ from idhazh.ledger.settle import drop_repeated_rows
 HEALTH_WINDOW_DAYS: Final = 31
 
 
-def append_seen(state_dir: Path, date: str, rows: Iterable[SeenRow]) -> int:
-    """Append first sights. Returns how many landed, so a caller can log the count."""
-    recorded = list(rows)
-    if recorded and not lifecycle.accepts_new_rows(LedgerName.SEEN, len(recorded)):
-        return 0
-    return extend_ledger_file(
-        paths.path(state_dir, LedgerName.SEEN, date), SeenRow.csv_columns(), recorded
-    )
+def append_seen(
+    state_dir: Path, date: str, rows: Iterable[SeenRow], *, identity: WriterIdentity
+) -> int:
+    """File first sights under the day the plan stage ran for. Returns how many it filed.
 
-
-def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -> int:
-    """Append what a committed digest actually carried, into that day's own file.
-
-    The caller hands the date, so the caller decides: a date inside a day that
-    has already closed performs a correction to that day, which is the one
-    rewrite the freeze rule permits and the same choice `append_seen` gives its
-    caller. See `docs/concepts/partitions.md`.
+    A first sight carries no date of its own, so `date` is the day its rows are
+    filed under, and the day a reader's window names to find them again.
     """
     recorded = list(rows)
-    if recorded and not lifecycle.accepts_new_rows(LedgerName.PUBLISHED, len(recorded)):
-        return 0
-    return extend_ledger_file(
-        paths.path(state_dir, LedgerName.PUBLISHED, date), PublishedRow.csv_columns(), recorded
+    filed = persist(state_dir, recorded, ledger=LedgerName.SEEN, covers=date, identity=identity)
+    return len(recorded) if filed else 0
+
+
+def append_published(
+    state_dir: Path, date: str, rows: Iterable[PublishedRow], *, identity: WriterIdentity
+) -> int:
+    """File what a committed digest actually carried, under that digest's day.
+
+    The caller hands the date, so the caller decides which day the rows are filed
+    under: a date inside a day that has already closed files a correction to that
+    day (`docs/concepts/partitions.md`). Returns how many rows it filed.
+    """
+    recorded = list(rows)
+    filed = persist(
+        state_dir, recorded, ledger=LedgerName.PUBLISHED, covers=date, identity=identity
     )
+    return len(recorded) if filed else 0
 
 
 def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str]:
@@ -103,18 +110,16 @@ def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str
     because an address first seen four months ago is not evidence about today.
     The earliest sight wins when two days disagree, which is what "first" means.
 
-    `day_partition.days_in_window` names both ends, so a cover of `n` days opens
-    at most `n + 1` files and reads exactly those days - where the month shards
-    it replaced could hold up to 120 days of rows behind a 90-day cover. A day
-    the ledger never recorded has no file, which is not a fault: a run that met
-    no new address that day wrote nothing that day.
+    `day_partition.days_in_window` names both ends, so a cover of `n` days reads
+    exactly `n + 1` days through the door's bounded reader, whatever the ledger
+    holds beside them. A day with no row is not a fault: a run that met no new
+    address that day filed nothing that day.
     """
     first_seen: dict[str, str] = {}
-    for day in day_partition.days_in_window(today, within_days):
-        for row in _read_rows(paths.path(state_dir, LedgerName.SEEN, day)):
-            url_key, at = row["url_key"], row["first_seen_at"]
-            if url_key not in first_seen or at < first_seen[url_key]:
-                first_seen[url_key] = at
+    days = day_partition.days_in_window(today, within_days)
+    for row in ledger_files.load_days(state_dir, LedgerName.SEEN, days, model=SeenRow):
+        if row.url_key not in first_seen or row.first_seen_at < first_seen[row.url_key]:
+            first_seen[row.url_key] = row.first_seen_at
     return first_seen
 
 
@@ -126,47 +131,52 @@ def load_published(state_dir: Path, *, today: str | None, within_days: int) -> d
     published - the guarantee the guard has always given. Two paths, because the
     two questions are not the same question:
 
-    - **Unbounded.** Walk `state/published/`, naming every entry it meets and
-      refusing one it cannot place. `today` is not read on this path, and a
-      caller with no cover passes `None` to say so.
-    - **Finite.** Ask for the dates in range and open those files and no others.
-      A day outside the cover is never opened, so an address only that day holds
-      is forgotten and can be planned again. That is the point of a cover, and
-      it is why `CollectConfig` refuses a value that is not wider than
+    - **Unbounded.** Every month the ledger holds, read one month at a time and
+      folded into the answer before the next month is read. `today` is not read
+      on this path, and a caller with no cover passes `None` to say so.
+    - **Finite.** The days in range and no others. A day outside the cover is
+      never read, so an address only that day holds is forgotten and can be
+      planned again. That is the point of a cover, and it is why
+      `CollectConfig` refuses a value that is not wider than
       `collect.seen_window_days`.
 
-    Neither path globs. The unbounded one has to account for every file it
-    finds, and the bounded one only opens files it named itself. A named day
-    with nothing published has no file, which is not a fault - a run that
-    published nothing that day wrote nothing that day.
-
-    Streamed rather than materialised, because this is the read over the ledger
-    with no natural bound - so its peak would otherwise be the whole tree, and
-    the tree is what grows. Only the day paths are listed, and a day is a file
-    rather than a row.
+    A month at a time, because this is the read over the ledger with no natural
+    bound, and the history is what grows: the peak is one month's rows and the
+    answer, never the whole ledger. The months come from the ledger's indexes
+    and its raw folder names, so no data file is opened to find them. A day with
+    no row is not a fault - a run that published nothing that day filed nothing.
     """
+    published: dict[str, str] = {}
     if within_days == UNBOUNDED_WINDOW:
-        files: Iterable[Path] = day_partition.day_files(
-            paths.tree_root(state_dir, LedgerName.PUBLISHED)
-        )
-    elif today is None:
+        for month in ledger_files.held_months(state_dir, LedgerName.PUBLISHED):
+            _keep_the_earliest(
+                published,
+                ledger_files.load_days(
+                    state_dir,
+                    LedgerName.PUBLISHED,
+                    ledger_files.month_days(month),
+                    model=PublishedRow,
+                ),
+            )
+        return published
+    if today is None:
         raise ValueError(
             f"a published cover of {within_days} days needs the day it is anchored on. "
-            f"Pass today, or {UNBOUNDED_WINDOW} to read every day file."
+            f"Pass today, or {UNBOUNDED_WINDOW} to read every day."
         )
-    else:
-        files = (
-            paths.path(state_dir, LedgerName.PUBLISHED, on)
-            for on in day_partition.days_in_window(today, within_days)
-        )
-
-    published: dict[str, str] = {}
-    for file in files:
-        for row in _stream_rows(file):
-            url_key, on = row["url_key"], row["published_on"]
-            if url_key not in published or on < published[url_key]:
-                published[url_key] = on
+    days = day_partition.days_in_window(today, within_days)
+    _keep_the_earliest(
+        published,
+        ledger_files.load_days(state_dir, LedgerName.PUBLISHED, days, model=PublishedRow),
+    )
     return published
+
+
+def _keep_the_earliest(published: dict[str, str], rows: Iterable[PublishedRow]) -> None:
+    """Fold rows into the answer, keeping each address's earliest digest date."""
+    for row in rows:
+        if row.url_key not in published or row.published_on < published[row.url_key]:
+            published[row.url_key] = row.published_on
 
 
 def load_settled_failures(state_dir: Path, date: str, *, codes: Collection[str]) -> set[str]:

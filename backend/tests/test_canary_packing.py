@@ -28,7 +28,9 @@ def test_the_fixture_ledgers_pack_from_a_state_tree_outside_the_repository_root(
     state = tmp_path / "canary" / ledger.STATE_DIRNAME
     state.mkdir(parents=True)
 
+    build_canary_day.file_published_fixture_rows(state)
     build_canary_day.pack_fixture_ledgers(state, tmp_path)
 
     for which in build_canary_day.PACKED_LEDGERS:
         assert ledger.watermark_path(state, which, Period.DAILY).is_file(), which.value
+        assert (state / "compact" / which.value / "index" / "daily.json").is_file()

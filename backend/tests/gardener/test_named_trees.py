@@ -17,7 +17,7 @@ from typing import Final
 
 import pytest
 
-from idhazh import day_partition, day_shards, ledger, month_partition, retention
+from idhazh import day_shards, ledger, month_partition, retention
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
@@ -87,27 +87,6 @@ def test_the_writer_files_of_a_day_tree_are_the_disk_walks(tmp_path: Path, shape
 
     assert by_name == on_disk
     assert on_disk[1] is (shape != "clean"), "the tree does not exercise what it is named for"
-
-
-DAY_FILE_TREES: Final = {
-    "clean": ["2026/08/31.csv", "2026/09/01.csv", "2025/01/02.csv"],
-    "a one-digit day": ["2026/09/01.csv", "2026/09/1.csv"],
-    "a text day": ["2026/09/01.csv", "2026/09/02.txt"],
-    "a folder where a day belongs": ["2026/09/01.csv", "2026/09/02/x.csv"],
-    "a day that is no day": ["2026/02/30.csv"],
-}
-
-
-@pytest.mark.parametrize("shape", sorted(DAY_FILE_TREES))
-def test_the_day_files_of_a_day_file_tree_are_the_disk_walks(tmp_path: Path, shape: str) -> None:
-    root = plant(tmp_path / "state" / "seen", DAY_FILE_TREES[shape])
-    listing = listing_of(tmp_path, "state/seen")
-
-    on_disk = walked(lambda: day_partition.day_files(root))
-    by_name = walked(lambda: named_trees.day_files(listing, root))
-
-    assert by_name == on_disk
-    assert on_disk[1] is (shape != "clean")
 
 
 PUBLISHED: Final = [

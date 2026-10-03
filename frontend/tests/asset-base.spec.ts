@@ -21,7 +21,14 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { assetBaseUrl, connectSources, encoderOrigins, encoderSource, engineOrigins } from '../asset-base.js';
+import {
+	archiveOrigins,
+	assetBaseUrl,
+	connectSources,
+	encoderOrigins,
+	encoderSource,
+	engineOrigins
+} from '../asset-base.js';
 import { engineExtensionRepository } from '../src/lib/server/config';
 
 const FRONTEND = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,12 +54,13 @@ test.describe('the asset base URL ships shut', () => {
 		// shut, and exactly the origins `config/idhazh.json` names for the encoder.
 		const config = readFileSync(join(FRONTEND, 'svelte.config.js'), 'utf8');
 		expect(config).toContain(
-			"'connect-src': connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins()])"
+			"'connect-src': connectSources(assetBaseUrl(), [\n\t\t\t\t\t...encoderOrigins(),\n\t\t\t\t\t...engineOrigins(),\n\t\t\t\t\t...archiveOrigins()\n\t\t\t\t])"
 		);
-		expect(connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins()])).toEqual([
+		expect(connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins(), ...archiveOrigins()])).toEqual([
 			'self',
 			...encoderOrigins(),
-			...engineOrigins()
+			...engineOrigins(),
+			...archiveOrigins()
 		]);
 	});
 
@@ -62,6 +70,10 @@ test.describe('the asset base URL ships shut', () => {
 		const repository = engineExtensionRepository();
 		expect(repository).toMatch(/^https:\/\//);
 		expect(engineOrigins()).toEqual([new URL(repository).origin]);
+	});
+
+	test('the archive origin ships shut', () => {
+		expect(archiveOrigins()).toEqual([]);
 	});
 
 	test('the encoder origins are the hosts the committed config names', () => {
@@ -81,7 +93,7 @@ test.describe('the asset base URL ships shut', () => {
 		// browser (no `Access-Control-Allow-Origin` on any hop, 15 refusals in 15
 		// attempts, measured 2026-09-09), so admitting one would widen the surface
 		// for a fetch that cannot work.
-		const shipped = connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins()]);
+		const shipped = connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins(), ...archiveOrigins()]);
 		expect(shipped.filter((source) => source.includes('github'))).toEqual([]);
 		for (const source of shipped.slice(1)) {
 			expect(new URL(source).origin).toBe(source);

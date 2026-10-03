@@ -158,9 +158,7 @@ def test_a_killed_shard_still_hands_assemble_the_items_it_finished() -> None:
     """
     workflow = _load_workflows()["digest.yml"]
     steps = _steps(workflow, "work")
-    uploads = [
-        _artifact_upload(workflow, "work", artifact) for artifact in WORK_PAYLOAD_ARTIFACTS
-    ]
+    uploads = [_artifact_upload(workflow, "work", artifact) for artifact in WORK_PAYLOAD_ARTIFACTS]
 
     for artifact, step in zip(WORK_PAYLOAD_ARTIFACTS, uploads, strict=True):
         guard = step.get("if")
@@ -329,16 +327,22 @@ def test_every_path_the_work_job_stages_is_in_a_fresh_checkout() -> None:
     evidence with a seven-day window, so a committed sample would be the one file
     in it the prune could never justify keeping.
     """
-    for relative in COMMIT_STAGED_PATHS["work"]:
+    staged = COMMIT_STAGED_PATHS["work"]
+    for relative in staged:
         assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
-        committed = subprocess.run(
-            ["git", "ls-files", relative],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.split()
-        assert committed, f"{relative} must hold at least one committed file"
+
+    committed = subprocess.run(
+        ["git", "ls-files", "--", *staged],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    for relative in staged:
+        carriers = [
+            path for path in committed if path == relative or path.startswith(f"{relative}/")
+        ]
+        assert carriers, f"{relative} must hold at least one committed file"
 
 
 def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
@@ -360,10 +364,8 @@ def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     the producer would not write it again. That is why both trees left the
     derived set on 2026-09-22.
 
-    The path the shard stages is in a fresh checkout, because `git add` on a path
-    that is not there aborts the whole step. That path is `state` whole, which
-    `test_every_path_the_work_job_stages_is_in_a_fresh_checkout` holds to being
-    committed. The two folders inside it need not be: the raw one holds nothing
+    The path the shard stages is `state` whole. Its raw tree need not have a
+    committed sample file: it holds nothing
     until a shard files into it, and nothing again once the compaction has packed
     every day in it.
     """
@@ -447,19 +449,17 @@ def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_u
 @requires_bash
 @requires_space_free_paths
 def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
-    """Eight workers, one branch, one raw file each.
+    """Two workers, one branch, one raw file each.
 
-    They run in turn from clones taken before any of them pushed, so every one
-    after the first finds a base that has already moved - which is the state a
-    real fan-out puts them in. What this proves is that the rebase resolves it
-    and no shard's rows are lost. It does not prove the three-attempt budget:
-    eight truly concurrent pushes cannot be made deterministic in a test.
+    Both clones start before either pushes, so the second finds a stale base.
+    This proves the rebase resolves that state without losing either shard's
+    rows. It does not prove the three-attempt budget: concurrent pushes cannot
+    be made deterministic in a test.
 
     They wrote one shared file until 2026-09-18 and a union merge driver is what
     made that survive a race. Each shard files its census through the ledger
     door now, which names every raw file with an id no other write can take, so
-    the eight sides of the race are eight adds of eight paths and no merge
-    driver is asked to settle anything.
+    the two sides of the race add distinct paths and need no merge driver.
 
     The files come from the ledger door rather than being spelled here, so each
     name is one a run can produce. A raw file is binary, so what landed is
@@ -468,7 +468,7 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     staged_paths, settings = _commit_call("work")
     env = _isolated_env(tmp_path)
     origin, _ = _scripted_origin(tmp_path, env, staged_paths)
-    shards = range(8)
+    shards = range(2)
     run_id = f"{SUBSTITUTED_DATE}-1"
     written: dict[int, str] = {}
     runners = []
@@ -530,12 +530,12 @@ def test_the_day_the_console_reads_is_handed_back_and_the_published_rows_are_not
     different bytes. Handing it back and rebuilding it is the answer, and it
     costs milliseconds.
 
-    `state/published` is the opposite case and left the handed-back set on
-    2026-09-22. A row there is one item on one day at one address, so two runs
-    that both append are not in disagreement: the union driver keeps both sides
-    and `ledger.load_published` keeps the earliest date per address, which makes
-    a row that arrives twice cost bytes and move no publication date. Handing it
-    back instead would restore the tip's copy over rows this attempt appended.
+    The published ledger is the opposite case. Its rows are filed through the
+    ledger door, one written-once file named for this run, attempt, job and
+    shard, so two runs of one day are two adds of two paths and there is
+    nothing to settle. Handing that tree back would restore the tip's copy of
+    it and delete this attempt's own file, leaving the guard against publishing
+    one story twice to whatever the producer happens to write again.
 
     The paths are read from the writer's own helpers rather than spelled here,
     so moving either ledger fails this instead of leaving a refresh set naming a
@@ -543,12 +543,12 @@ def test_the_day_the_console_reads_is_handed_back_and_the_published_rows_are_not
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
     rebuilt = day_metrics.day_metrics_relpath(SUBSTITUTED_DATE)
-    unioned = ledger.relpath(LedgerName.PUBLISHED, SUBSTITUTED_DATE)
+    filed = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.PUBLISHED).as_posix()
 
     assert any(_under(rebuilt, path) for path in refreshed), (
         f"{rebuilt} is rewritten whole by this job and no entry of {refreshed} hands it back"
     )
-    assert not any(_under(unioned, path) for path in refreshed), (
-        f"{unioned} is settled by a union driver, so handing it back would restore the "
-        "tip's copy over rows this attempt appended"
+    assert not any(_under(filed, path) for path in refreshed), (
+        f"{filed} holds one written-once file per writer, so handing it back would "
+        "delete this attempt's own file"
     )

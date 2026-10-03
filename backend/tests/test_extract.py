@@ -41,6 +41,7 @@ from idhazh.discover import TITLE_MAX_CHARS, clean_title
 from idhazh.extract import (
     EXTRACTOR_VERSION,
     PAGE_TITLE_MAX_CHARS,
+    TOKENS_PER_WORD,
     boilerplate_ratio,
     corroborated_words,
     declares_paywall,
@@ -240,7 +241,9 @@ ROBOTS_CASES = (
 
 def rules_for(fixture: str) -> RobotsRules:
     """Read a committed file the way a run reads a served one."""
-    return robots_rules(FetchResult(FetchOutcome.OK, status=200, body=(ROBOTS / fixture).read_bytes()))
+    return robots_rules(
+        FetchResult(FetchOutcome.OK, status=200, body=(ROBOTS / fixture).read_bytes())
+    )
 
 
 @pytest.mark.parametrize("case", ROBOTS_CASES, ids=lambda case: case.fixture)
@@ -323,9 +326,7 @@ def test_the_whole_corpus_reads_the_same_way_on_every_supported_python() -> None
         ("http://[2606:4700:4700::1111]/a", "http://[2606:4700:4700::1111]"),
     ],
 )
-def test_one_host_is_one_document_however_its_address_is_spelled(
-    url: str, expected: str
-) -> None:
+def test_one_host_is_one_document_however_its_address_is_spelled(url: str, expected: str) -> None:
     """RFC 9309 section 2.3 scopes a robots file to its own authority."""
     assert origin(url) == expected
 
@@ -743,9 +744,7 @@ def test_a_hostile_page_crosses_the_boundary_sanitized() -> None:
 
 def test_a_page_with_no_article_extracts_to_nothing() -> None:
     empty = FetchResult(FetchOutcome.OK, status=200, body=b"<html><body></body></html>")
-    article = to_article(
-        ITEM, empty, config=ExtractConfig(), fetched_at=FETCHED_AT
-    )
+    article = to_article(ITEM, empty, config=ExtractConfig(), fetched_at=FETCHED_AT)
     assert article.status is ArticleStatus.EXTRACT_FAILED
     assert article.failure_detail
     assert article.text is None
@@ -862,16 +861,23 @@ def test_text_inside_the_cap_is_untouched() -> None:
 
 
 def test_text_over_the_cap_is_cut_and_flagged() -> None:
-    long_text = " ".join(["word"] * 5000)
+    allowed_words = int(100 / TOKENS_PER_WORD)
+    long_text = _over_cap_text(100)
     text, truncated, cut = truncate_to_tokens(long_text, 100)
     assert truncated
     assert cut == 100
-    assert len(text.split()) < 5000
+    assert len(text.split()) == allowed_words
 
 
 def test_truncation_is_deterministic() -> None:
-    long_text = " ".join(f"w{n}" for n in range(5000))
+    long_text = _over_cap_text(100)
     assert truncate_to_tokens(long_text, 100) == truncate_to_tokens(long_text, 100)
+
+
+def _over_cap_text(cap_tokens: int) -> str:
+    """The first word count that exceeds this function's token estimate."""
+    words = int(cap_tokens / TOKENS_PER_WORD) + 1
+    return " ".join(f"w{index}" for index in range(words))
 
 
 def test_a_truncated_article_records_where_it_was_cut() -> None:
@@ -1024,9 +1030,7 @@ def test_the_short_floor_never_closes_on_a_feed_declared_as_abstracts() -> None:
 
 def test_the_four_shape_signals_each_have_a_switch_and_they_read_alike() -> None:
     """Two of three had a switch until 2026-09-17. An asymmetry nobody chose is a defect."""
-    switches = {
-        name for name in ExtractConfig.model_fields if name.startswith("reject_")
-    }
+    switches = {name for name in ExtractConfig.model_fields if name.startswith("reject_")}
 
     assert switches == {
         "reject_boilerplate",
@@ -1071,9 +1075,7 @@ def _page_with(
         head += f'<script type="application/ld+json">{json_ld}</script>'
     headed = f"<h1>{heading}</h1>" if heading else ""
     micro = (
-        f'<div itemprop="articleBody">{"word " * microdata_words}</div>'
-        if microdata_words
-        else ""
+        f'<div itemprop="articleBody">{"word " * microdata_words}</div>' if microdata_words else ""
     )
     return (
         f"<html><head>{head}</head><body>"
@@ -1168,8 +1170,10 @@ def test_the_real_contaminated_page_is_flagged_and_still_publishes() -> None:
     it: it is real prose, of the right length, in the right voice.
     """
     article = to_article(
-        fixture_item("heatmap", CANONICAL), ok("contaminated-front-page.html"),
-        config=ExtractConfig(), fetched_at=FETCHED_AT,
+        fixture_item("heatmap", CANONICAL),
+        ok("contaminated-front-page.html"),
+        config=ExtractConfig(),
+        fetched_at=FETCHED_AT,
     )
 
     assert article.status is ArticleStatus.OK, "the default records rather than rejects"
@@ -1187,8 +1191,10 @@ def test_contamination_outranks_the_other_signals_on_the_same_page() -> None:
     """
     loose = ExtractConfig(prose_line_count_min=10_000)
     article = to_article(
-        fixture_item("heatmap", CANONICAL), ok("contaminated-front-page.html"),
-        config=loose, fetched_at=FETCHED_AT,
+        fixture_item("heatmap", CANONICAL),
+        ok("contaminated-front-page.html"),
+        config=loose,
+        fetched_at=FETCHED_AT,
     )
 
     assert article.failure_code is FailureCode.CONTAMINATED
@@ -1196,8 +1202,10 @@ def test_contamination_outranks_the_other_signals_on_the_same_page() -> None:
 
 def test_the_switch_turns_the_signal_into_a_refusal() -> None:
     article = to_article(
-        fixture_item("heatmap", CANONICAL), ok("contaminated-front-page.html"),
-        config=ExtractConfig(reject_contaminated=True), fetched_at=FETCHED_AT,
+        fixture_item("heatmap", CANONICAL),
+        ok("contaminated-front-page.html"),
+        config=ExtractConfig(reject_contaminated=True),
+        fetched_at=FETCHED_AT,
     )
 
     assert article.status is ArticleStatus.EXTRACT_FAILED
@@ -1398,7 +1406,9 @@ def test_the_feed_headline_wins_when_the_feed_carried_one(
         _let_the_loopback_be_dialled(monkeypatch)
         item = planned_at(site.url("/a"), title="Interconnector cleared for 2027")
         article = to_article(
-            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            item,
+            read_over_the_loopback(item.canonical_url),
+            config=ExtractConfig(),
             fetched_at=FETCHED_AT,
         )
 
@@ -1419,7 +1429,9 @@ def test_a_feed_that_named_nothing_publishes_under_the_page_s_own_headline(
         _let_the_loopback_be_dialled(monkeypatch)
         item = planned_at(site.url("/a"), title=None)
         article = to_article(
-            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            item,
+            read_over_the_loopback(item.canonical_url),
+            config=ExtractConfig(),
             fetched_at=FETCHED_AT,
         )
 
@@ -1453,7 +1465,9 @@ def test_an_item_no_one_named_degrades_rather_than_raising(
         _let_the_loopback_be_dialled(monkeypatch)
         item = planned_at(site.url("/a"), title=headline)
         article = to_article(
-            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            item,
+            read_over_the_loopback(item.canonical_url),
+            config=ExtractConfig(),
             fetched_at=FETCHED_AT,
         )
 
@@ -1517,7 +1531,9 @@ def test_a_page_headline_is_cleaned_by_the_rule_a_feed_headline_is_cleaned_by(
         _let_the_loopback_be_dialled(monkeypatch)
         item = planned_at(site.url("/a"), title=None)
         article = to_article(
-            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            item,
+            read_over_the_loopback(item.canonical_url),
+            config=ExtractConfig(),
             fetched_at=FETCHED_AT,
         )
 
@@ -1559,7 +1575,9 @@ def test_a_page_headline_past_its_bound_is_refused_rather_than_cut(
         _let_the_loopback_be_dialled(monkeypatch)
         item = planned_at(site.url("/a"), title=None)
         article = to_article(
-            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            item,
+            read_over_the_loopback(item.canonical_url),
+            config=ExtractConfig(),
             fetched_at=FETCHED_AT,
         )
 
@@ -1586,7 +1604,9 @@ def test_the_same_headline_from_a_feed_still_publishes_whole(
         _let_the_loopback_be_dialled(monkeypatch)
         item = planned_at(site.url("/a"), title=_LONG_HEADLINE)
         article = to_article(
-            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            item,
+            read_over_the_loopback(item.canonical_url),
+            config=ExtractConfig(),
             fetched_at=FETCHED_AT,
         )
 
@@ -1604,7 +1624,9 @@ def test_a_page_whose_headline_is_only_whitespace_is_refused_rather_than_publish
         _let_the_loopback_be_dialled(monkeypatch)
         item = planned_at(site.url("/a"), title=None)
         article = to_article(
-            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            item,
+            read_over_the_loopback(item.canonical_url),
+            config=ExtractConfig(),
             fetched_at=FETCHED_AT,
         )
 

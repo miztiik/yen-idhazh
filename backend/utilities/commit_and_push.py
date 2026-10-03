@@ -33,8 +33,8 @@ rows at exit 0.
 The loop is bounded by a wall clock rather than by a count, and prints what each
 attempt spent, split six ways.
 
-It reads no configuration and imports nothing from `idhazh`, so it runs from a
-checkout whose install step never ran. That matters because this is what commits
+It reads the committed retry configuration and imports nothing from `idhazh`,
+so it runs from a checkout whose install step never ran. This is what commits
 when a producer has already finished or already failed.
 
 Usage: `python backend/utilities/commit_and_push.py <path>...`
@@ -43,7 +43,7 @@ Environment:
   COMMIT_MESSAGE            the commit subject
   NOTHING_STAGED_MESSAGE    printed when the staged paths hold no change
   PUSH_FAILED_MESSAGE       printed to stderr when the deadline is spent
-  PUSH_DEADLINE_SECONDS     optional: how long to keep trying, default 300
+  PUSH_RETRY_CONFIG         optional: retry config file, default config/push-retry.json
   SHARD                     optional: which shard of the job this is. It names
                             the attempt line, and it is the last element of the
                             identity a conflicted filename is matched against.
@@ -84,27 +84,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from utilities.push_retry import DEFAULT_CONFIG, PushRetry, load_retry
+
 #: The one identity this repository commits under (CLAUDE.md section 8). A
 #: machine account in the author field tells a reader nothing the commit message
 #: does not already say.
 COMMITTER_NAME: Final = "miztiik"
 COMMITTER_EMAIL: Final = "miztiik@users.noreply.github.com"
 
-#: What a caller that names no deadline gets. Four of the five committing steps
-#: pass `run.push_deadline_seconds` from config instead; the bench has no job
-#: that reads config before the one that commits, so it takes this.
-DEFAULT_PUSH_DEADLINE_SECONDS: Final = 300
-
 #: A whole number and nothing else. `str.isdigit` is true of a superscript and
-#: of several non-Latin digit sets, so a deadline that parsed one of those would
+#: of several non-Latin digit sets, so a shard that parsed one of those would
 #: be a number no reader of the workflow can see.
 WHOLE_NUMBER: Final = re.compile(r"^[0-9]+$")
-
-#: The longest single wait, and the failure count past which the backoff stops
-#: doubling. `min(2^(k-1), 8)` seconds for k failures so far, so the sleeps run
-#: 1, 2, 4, 8, 8, 8.
-BACKOFF_CEILING_SECONDS: Final = 8
-BACKOFF_CEILING_AFTER: Final = 4
 
 
 def _say(message: str) -> None:
@@ -248,15 +241,15 @@ def _say_what_this_attempt_spent(attempt: int, outcome: str, stamps: Stamps) -> 
         _warn("could not record what this attempt spent")
 
 
-def _back_off(failures: int, attempt: int) -> None:
+def _back_off(failures: int, attempt: int, retry: PushRetry) -> None:
     """Wait before the next attempt, so the losers of one race do not refetch together.
 
-    `min(2^(k-1), 8)` seconds for k failures so far, drawn against U(0.5, 1.5):
+    The configured step for k failures so far, drawn against U(0.5, 1.5):
     the spread widens with the backoff, so collisions fall as more runs contend.
     """
-    step = BACKOFF_CEILING_SECONDS if failures > BACKOFF_CEILING_AFTER else 1 << (failures - 1)
+    step = retry.backoff_seconds(failures)
     jittered_ms = step * (500 + random.randrange(1001))
-    _say(f"waiting {jittered_ms // 1000}.{jittered_ms % 1000:03d}s before attempt {attempt + 1}")
+    _say(f"waiting {jittered_ms / 1000:.3f}s before attempt {attempt + 1}")
     time.sleep(jittered_ms / 1000)
 
 
@@ -543,12 +536,13 @@ def main(argv: Sequence[str]) -> int:
     nothing_staged_message = settings["NOTHING_STAGED_MESSAGE"]
     push_failed_message = settings["PUSH_FAILED_MESSAGE"]
 
-    deadline_seconds = os.environ.get("PUSH_DEADLINE_SECONDS", "")
-    if not deadline_seconds:
-        deadline_seconds = str(DEFAULT_PUSH_DEADLINE_SECONDS)
-    if not WHOLE_NUMBER.match(deadline_seconds) or int(deadline_seconds) == 0:
-        _warn("PUSH_DEADLINE_SECONDS must be a whole number of seconds, 1 or more")
+    try:
+        retry = load_retry(Path(os.environ.get("PUSH_RETRY_CONFIG", str(DEFAULT_CONFIG))))
+    except (OSError, ValueError) as error:
+        reason = error.strerror if isinstance(error, OSError) else str(error)
+        _warn(f"could not load push retry config: {reason}")
         return 2
+    deadline_seconds = retry.deadline_for(os.environ.get("GITHUB_JOB", ""))
 
     staged_paths = list(argv)
     if not staged_paths:
@@ -652,7 +646,7 @@ def main(argv: Sequence[str]) -> int:
     # allowed and what every failure message claimed to have spent.
     #
     # Monotonic, so a clock the runner corrects mid-run cannot move the deadline.
-    deadline = time.monotonic() + int(deadline_seconds)
+    deadline = time.monotonic() + deadline_seconds
     attempt = 0
     failures = 0
     window_opened: float | None = None
@@ -677,7 +671,7 @@ def main(argv: Sequence[str]) -> int:
         failures += 1
         if time.monotonic() >= deadline:
             break
-        _back_off(failures, attempt)
+        _back_off(failures, attempt, retry)
         if not _discard_noise():
             _warn("could not clear the working tree before the rebase")
             break
@@ -791,7 +785,7 @@ def main(argv: Sequence[str]) -> int:
     # which cannot help them.
     _report_rebased(rebased)
     _warn(push_failed_message)
-    _warn(f"the push was given up on attempt {attempt} after {deadline_seconds}s")
+    _warn(f"the push was given up on attempt {attempt} after {deadline_seconds:g}s")
     return 1
 
 

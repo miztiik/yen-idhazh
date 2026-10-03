@@ -1,218 +1,191 @@
-# Mermaid diagrams
+# Native Mermaid documentation theme
 
 **Last Updated**: 2026-10-02
 
-How to draw documentation diagrams that read in GitHub, Copilot and print.
-These rules cover the diagram, not the published site's theme.
+How to draw documentation diagrams for the native Copilot editor, GitHub
+Markdown and print. All three are required. Use native rendering, not an
+external stylesheet, custom renderer, generated image or separate site.
 
-## One palette for both page themes and print
+## Supported design
 
-Use pale fills, dark text and visible borders. Keep the same diagram colours
-on light and dark pages; this is not an automatic dark-theme switch. Do not
-paint a large dark background behind the diagram or a subsystem.
+Use plain labels, standard Mermaid shapes, simple node colours and labelled
+arrows. Request `sans-serif` once for the whole diagram through
+`themeVariables.fontFamily`. The host chooses the installed sans-serif face
+and controls text layout, box sizing and group headers. Do not promise an
+exact typeface, mixed weights within a label, equal box widths or individually
+coloured group headers.
 
-Every diagram is a self-contained fenced `mermaid` block. Use Mermaid's
-`base` theme and explicit colours. Start a flowchart with this configuration:
+Do not put styled HTML in a label. A simple `<br/>` may separate a name from
+its description. Do not add spans, div wrappers, styled bold tags, CSS sizing
+tricks or invisible text padding.
 
-```text
-%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
-```
+The same theme applies to every document. Copy the declarations in the
+[example](#native-example-and-template), change the content and assign roles.
+Each ordinary node gets one role class. Do not add a second width or typography
+class that could replace its colours.
 
-`background` is an input to Mermaid's colour calculation, not a promise that
-the viewer paints a canvas. Node, group and edge-label fills must be explicit.
-Dark edge-label text needs its pale label background on a dark page.
+## Palette and shapes
 
-Use `classDef` for node styles, not a repository stylesheet, `themeCSS`,
-HTML spans or browser theme queries. The two viewers control their own page
-styles and security settings. Keep HTML labels off; `<br/>` may separate
-lines, but do not rely on styled HTML or custom fonts.
+Keep pale fills, dark text and clear borders on light and dark pages. Preserve
+role colours; do not make every node grey. Words and shapes must retain the
+meaning in grayscale. Do not paint a large dark background behind a diagram.
 
-Print must preserve the meaning in grayscale and with background graphics
-disabled. Keep words, shapes and borders; colour is a second signal.
-Do not assume that a printer removes SVG fills: the pale palette limits ink
-even when it keeps them. If the viewer prints its own dark page background,
-switch that page to light mode before printing or saving a PDF.
+**Table A - Native roles**
 
-## Node meanings
+| ID | Role | Colour | Shape or other signal |
+| --- | --- | --- | --- |
+| A1 | Work | Pale neutral | Action in a rectangle |
+| A2 | Decision | Pale cyan | Question in a diamond |
+| A3 | Accepted / yes | Pale green | Explicit positive outcome |
+| A4 | Rejected / no | Pale red | Explicit negative outcome |
+| A5 | Warning / held | Pale amber | Reason in the label |
+| A6 | Saved data | Pale blue | Native storage cylinder |
+| A7 | External system | Pale purple | System name and dashed border |
+| A8 | Metric | White with a visible border | Name and description |
+| A9 | Autotuned metric | Pale purple | Solid-bordered card under an Autotuned Metric heading |
 
-Give each flowchart node a class. Copy only the classes the diagram uses.
-The class names and colours mean the same thing on every page.
+Use one colour for all decision diamonds. A No branch that waits is an amber
+hold, not a red failure.
 
-```text
-classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
-classDef decision fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
-classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#166534;
-classDef no fill:#fef2f2,stroke:#991b1b,stroke-width:1.5px,color:#991b1b;
-classDef warn fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#92400e;
-classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1f2937;
-classDef ext fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:5 3,color:#1f2937;
-classDef metric fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1d4ed8;
-classDef threshold fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#92400e;
-classDef feedback fill:#faf5ff,stroke:#6b21a8,stroke-width:1.5px,color:#6b21a8;
-classDef detail fill:#f8fafc,stroke:#64748b,stroke-width:1px,color:#1f2937;
-```
+Apply purple to the **autotuned metric card itself**. Do not depend on custom
+colouring of the surrounding group header. External systems also use purple,
+but have dashed borders and system names.
 
-- `stage` is work. Name it with a verb.
-- `decision` is a diamond containing a question. Label every outgoing arrow
-  with its answer: `Yes` / `No`, `Possible` / `Not possible`, or a more precise
-  condition.
-- `yes` and `no` identify affirmative and negative outcomes, not the question.
-  A `No` answer that leads to ordinary work does not make that work an error.
-  Keep that work neutral; use the outcome colours for acceptance or refusal.
-- `warn` is held or degraded work. Say why in the label.
-- `ledger` is stored data; use a storage shape as well as the colour.
-- `ext` is an external dependency; its dashed border distinguishes it without
-  colour.
-- `metric`, `threshold` and `detail` are annotation cells, not process steps.
-- `feedback` identifies a step that changes a setting used by later work.
-  Recording a measurement is not such a change.
+Use the native cylinder without custom geometry. Give it the saved-data role;
+do not resize its body or end caps separately.
 
-Other Mermaid diagram types use their own notation and theme variables.
-Do not put flowchart-only `classDef` statements into a sequence diagram.
+## Metrics and grouping
 
-## Metrics, thresholds and two-colour notes
+Use **Metrics** as the outer title. Give each metric its own inner rectangle,
+not separate label/value cells. Its text names the quantity, describes it and
+includes the unit. Distinguish measured values from fixed limits; do not insert
+live readings. Link to the setting's owner instead of copying a limit that can
+become stale.
 
-A **metric** names what a step measures. A **threshold** is the limit used
-by a decision. Show the metric's name and unit, not a live reading. Show the
-comparison and the configured limit separately. Name the configuration key
-or link to its owning page in the surrounding text rather than copying a
-number that can become stale.
+An automatically maintained value goes in a nested group titled
+**Autotuned Metric**, and its inner card uses the purple `autotuned` class.
+Do not add a hanging update box or circular self-arrow just to mark that status.
+A measurement changing between runs is not automatically an autotuned setting.
 
-Use paired note cells for two colours: `Metric` uses the blue `metric` class
-and its quantity uses the charcoal `detail` class. Pair `Threshold` with its
-comparison in the same way, using amber for the label. Node-level styles do
-not colour separate words inside one label. Paired cells avoid depending on
-HTML support that differs between viewers.
+Attach metric groups to the relevant step or decision using a line without an
+arrowhead. Metric cards are notes, not extra processing steps.
 
-Attach the note to its owning step or decision with a line without an
-arrowhead, `---`. Use the same line between a label cell and its detail cell.
-The cells describe work; they do not add an execution order. Omit a note when
-the step does not produce a metric or use a threshold.
+Use a top-to-bottom flow. For large processes, show major phases first and
+put details below, linked with ordinary Markdown. Groups may identify real
+subsystems, phases or metric notes. Let the native layout route the arrows;
+do not modify SVG coordinates to force alignment.
 
-## Overview, detail and feedback
+## Branches
 
-Use `flowchart TD` for a process overview. Give each major phase one box, then
-put its internal steps in a separate detail diagram below. Link to that
-detail with ordinary Markdown, not an interactive Mermaid click handler.
-A small process may fit in one diagram.
+Label every decision branch with Yes/No, Possible/Not possible, or its actual
+condition. Use green arrows for affirmative branches and red for negative
+ones. Keep branch words as plain native text; do not force their colour with
+HTML.
 
-A `subgraph` may name a real subsystem, a workflow phase or an annotation
-group. Keep its fill neutral. Use the group's title to say what its contents
-share; do not create boxes only to colour the page. If nested groups make the
-result too wide or dense to print, split the detail rather than shrink the
-text. Mermaid can ignore a group's local direction when its internal nodes
-connect outside it; do not rely on that direction to explain the order.
+`linkStyle` edge numbers start at zero and include every earlier edge.
+Recheck them when the diagram changes. In the example, edges 3 and 5 are Yes,
+and edges 2 and 4 are No. Accepted and rejected destination boxes also keep
+their green and red role colours.
 
-Use solid arrows, `-->`, for the main path. Use a dashed return arrow,
-`-.->`, only when a later step changes earlier work or a future run.
-Name the change and when it takes effect on that arrow. Draw a review or
-approval step when a person must authorize the change. An annotation line
-has no arrowhead; it is not a feedback path or a retry.
+A dashed return arrow is reserved for genuine feedback. Name what changes
+and when it applies. It is not required merely because a metric is autotuned.
 
-### Example overview
+## Native example and template
 
-This is a notation example, not a claim about a production workflow. A
-candidate is measured against a configured time limit. Eligibility does
-not approve a change; a person still decides whether to apply it.
+Copy this native Mermaid block as a starting point. Keep its theme values
+consistent across documents and include only the role classes a diagram uses.
+These classes are for flowcharts; other Mermaid diagram types use their own
+native notation.
+
+The article-intake flow and metric names below are illustrative, not the
+production pipeline or its configuration.
 
 ```mermaid
-%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TD
-  measure["Measure the candidate"] --> compare["Compare with the configured limit"]
-  compare --> review["Review eligible changes"]
-  review -.->|"An approved change is measured on the next run"| measure
+  SOURCE["Publisher page"] --> EXTRACT["Extract article text"]
+  EXTRACT --> TEXT{"Text available?"}
+  TEXT -->|"No"| HOLD["Hold article<br/>Extraction incomplete"]
+  TEXT -->|"Yes"| FIT{"Meets coverage rules?"}
+  FIT -->|"No"| REJECT["Reject article<br/>Outside coverage"]
+  FIT -->|"Yes"| ACCEPT["Accept article"]
+  ACCEPT --> RECORD[("Saved article record")]
 
-  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
-  class measure,compare,review stage;
-```
-
-The [detail diagram](#example-detail) expands the comparison and review.
-
-### Example detail
-
-```mermaid
-%%{init: {"theme": "base", "htmlLabels": false, "flowchart": {"nodeSpacing": 25, "rankSpacing": 35}, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
-flowchart TD
-  measure["Measure candidate"]
-  subgraph timing["Timing note"]
-    direction LR
-    metricKind["Metric"] --- quantity["Processing<br/>time (s)"]
-    limitKind["Threshold"] --- comparison["Time <= configured<br/>maximum (s)"]
+  subgraph OBSERVED["Metrics"]
+    WORDS["word_count<br/>Extracted words (count)"]
+    DURATION["extract_ms<br/>Extraction time (ms)"]
   end
-  measure --- timing
-  measure --> limit{"Within the<br/>configured maximum?"}
-  limit -->|"Yes"| eligible["Eligible for review"]
-  limit -->|"No"| refused["Not eligible"]
-  eligible --> approval{"Person approves<br/>the change?"}
-  approval -->|"Yes"| change["Write approved<br/>configuration"]
-  approval -->|"No"| keep["Keep current<br/>configuration"]
-  refused --> keep
-  change -.->|"Changed settings apply<br/>on the next run"| measure
+
+  subgraph LIMITS["Metrics"]
+    AGE["max_age_hours<br/>Fixed age limit (hours)"]
+    subgraph AUTO["Autotuned Metric"]
+      RELEVANCE["relevance_floor<br/>Autotuned relevance minimum (score)"]
+    end
+  end
+
+  EXTRACT --- OBSERVED
+  FIT --- LIMITS
 
   classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
-  classDef decision fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
-  classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#166534;
-  classDef no fill:#fef2f2,stroke:#991b1b,stroke-width:1.5px,color:#991b1b;
-  classDef metric fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1d4ed8;
-  classDef threshold fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#92400e;
-  classDef detail fill:#f8fafc,stroke:#64748b,stroke-width:1px,color:#1f2937;
-  classDef feedback fill:#faf5ff,stroke:#6b21a8,stroke-width:1.5px,color:#6b21a8;
-  class measure,keep stage;
-  class limit,approval decision;
-  class eligible yes;
-  class refused no;
-  class metricKind metric;
-  class limitKind threshold;
-  class quantity,comparison detail;
-  class change feedback;
+  classDef decision fill:#ecfeff,stroke:#0e7490,stroke-width:1.5px,color:#164e63;
+  classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#14532d;
+  classDef no fill:#fef2f2,stroke:#991b1b,stroke-width:1.5px,color:#7f1d1d;
+  classDef warn fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#78350f;
+  classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a;
+  classDef ext fill:#faf5ff,stroke:#7e22ce,stroke-width:1.5px,stroke-dasharray:5 3,color:#581c87;
+  classDef metric fill:#ffffff,stroke:#94a3b8,stroke-width:1.25px,color:#334155;
+  classDef autotuned fill:#faf5ff,stroke:#8b5cf6,stroke-width:1.5px,color:#6b21a8;
+
+  class SOURCE ext;
+  class EXTRACT stage;
+  class TEXT,FIT decision;
+  class HOLD warn;
+  class REJECT no;
+  class ACCEPT yes;
+  class RECORD ledger;
+  class WORDS,DURATION,AGE metric;
+  class RELEVANCE autotuned;
+
+  linkStyle 3,5 stroke:#15803d,stroke-width:1.5px;
+  linkStyle 2,4 stroke:#dc2626,stroke-width:1.5px;
 ```
 
-## Project bindings
+The autotuned card is purple; group headers use the native appearance.
+Metric connections have no arrowheads because they are notes.
 
-The following border and title accents identify this project's subsystems.
-They do not change the neutral group fill or replace the node meanings.
+## Native display and print
 
-```text
-classDef sysIngest fill:#f1f5f9,stroke:#0f766e,stroke-width:1.5px,color:#0f766e;
-classDef sysExtract fill:#f1f5f9,stroke:#1d4ed8,stroke-width:1.5px,color:#1d4ed8;
-classDef sysModel fill:#f1f5f9,stroke:#6b21a8,stroke-width:1.5px,color:#6b21a8;
-classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
-classDef sysEval fill:#f1f5f9,stroke:#92400e,stroke-width:1.5px,color:#92400e;
-classDef sysOps fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#475569;
-```
+Check the actual native editor and GitHub rendering, not a different browser
+renderer. Confirm readable labels, role colours, purple autotuned cards and
+correct branch labels. Host fonts and layout may differ.
 
-These name ingestion, extraction, models, publication, evaluation and
-operations respectively. Put field lists and current configuration values
-in the owning page, not in a large overview box.
+Print the rendered diagram, not its source code. Check the host's print
+preview in light mode and grayscale. Keep pale fills and avoid dark page
+backgrounds. Labels, diamonds, storage shapes, dashed borders and arrowheads
+must still convey meaning if fills disappear. Do not depend on a printer
+retaining colour or background fills.
 
-## Checks before delivery
+Keep the diagram within the printable area without clipping or unreadably
+small text. If necessary, split a large flow into an overview and named detail
+diagrams instead of forcing it onto one page. Printability is part of the
+theme, not an optional export feature.
 
-Render the changed diagrams in the target viewers in both page themes.
-Inspect print preview in grayscale with background graphics off. Check text,
-arrowheads, group titles and edge-label backgrounds as well as node fills.
-If a diagram needs shrinking until its labels are hard to read, split it.
-
-Confirm that decisions have labelled branches, annotations have no
-arrowheads, and every feedback arrow names a real change and its timing.
-The example's two note cells must remain distinguishable by their words when
-colour is absent. Do not claim that editing these rules restyled diagrams
-whose Mermaid blocks were not changed.
+If a native viewer does not support a styling property, leave that property
+at its native default. Do not add external rendering machinery or unsupported
+markup to recover it.
 
 ## Design rationale
 
-GitHub and Copilot render Markdown without importing the repository's site
-styles. A fixed pale palette keeps the diagram legible on either page theme
-and avoids large ink-heavy fills in print. Words and shapes carry the meaning
-when colour is unavailable. Paired annotation cells use the same node styling
-as the rest of the diagram, without a separate renderer or export tool.
-
-Diagram notation can be used independently of documentation placement.
-Keeping it here lets the documentation-structure page stay focused on its
-own question while this page holds the complete style and examples.
+Native Markdown viewers own their rendering and do not load the repository's
+site stylesheet. Plain labels and complete role classes keep the diagrams
+editable without a second publishing path. Pale fills preserve meaning on
+screen without ink-heavy print backgrounds; labels and shapes preserve it
+without colour.
 
 ## See also
 
 - [documentation-structure.md](documentation-structure.md#diagrams) - where documentation belongs.
 - [../architecture/overview.md](../architecture/overview.md) - the project's architecture.
-- [Mermaid theme configuration](https://mermaid.js.org/config/theming.html) - theme variables and colour calculation.
-- [GitHub diagrams](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams) - native Markdown rendering and the viewer's Mermaid version.
+- [Mermaid flowcharts](https://mermaid.js.org/syntax/flowchart.html).
+- [Mermaid themes](https://mermaid.js.org/config/theming.html).
+- [GitHub diagram support](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams).

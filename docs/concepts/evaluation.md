@@ -938,7 +938,7 @@ somebody forgets to apply, and a rate quietly multiplied back up reads exactly
 like a rate that was measured.
 
 **Never sampled, each for its own reason:** the item-health census, because it is
-the denominator; `state/seen/` and `state/published/`, because they are what
+the denominator; the seen and published ledgers, because they are what
 stops a repeat; `state/feed-health/`, because quarantine fires at
 `collect.availability_strikes_before_rest` consecutive failures and a missing row
 moves that count; and the canary suite, because a canary that runs sometimes is

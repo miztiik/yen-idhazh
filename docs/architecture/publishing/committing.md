@@ -119,16 +119,14 @@ filters against the file it checked out, and `actions/checkout` pins the job to
 the commit its run was triggered at. A settling pass ran after each rebase to
 take the repeats back out. Both are gone: the union driver is off every head, no
 commit step settles CSV day trees, and a second attempt that really does race its own
-first attempt now stops at the rebase instead of landing a row twice. Of the
-trees a digest run writes, only `state/published/**` and `state/seen/**` keep a
-union driver, and each has one writing job; `path_classes.UNION_SAFE` lists
-every tree that keeps one. `state/visual-prunes/**` lost its driver on
-2026-09-28, when the cleanup record moved under `state/raw/`, where every run
-files a file of its own. `state/seen/` is the one that never moved
-to a segment - it is a whole day file that `plan` appends to, so two runs of one
-day that both met a new address used to conflict at the push over a file neither
-of them disagreed about. `ledger.load_seen` keeps the earliest stamp per
-address, so a row the union brings twice costs bytes and moves no age.
+first attempt now stops at the rebase instead of landing a row twice.
+`path_classes.UNION_SAFE` lists every tree that still keeps a union driver.
+`state/visual-prunes/**` lost its driver on 2026-09-28, and `state/published/**`
+and `state/seen/**` lost theirs when those ledgers moved under `state/raw/`,
+where every run files a file of its own. Two runs of one day that both meet a
+new address now write two files rather than append to one, and
+`ledger.load_seen` keeps the earliest stamp per address, so neither push
+conflicts and no age moves.
 
 A shard's two steps carry `continue-on-error`, so neither can fail the shard. The
 shard owes the run its items artifact, and assemble writes the same census again,
@@ -162,8 +160,7 @@ item-health ledger, which is why it is regenerated and not unioned: a union of
 two rewrites is a file with every row twice.
 
 **Do not hand back unrelated writer-owned state files.** Item health, host
-fingerprints and traces are not evaluation preparation outputs. Keep appended
-publication rows too: that ledger's union preserves them. Evaluation raw rows
+fingerprints, traces and published raw files are not evaluation preparation outputs. Evaluation raw rows
 are the exception: the prepared-path list owns them together with the lookup,
 and immutable input batches let preparation recreate only the accepted rows.
 
@@ -307,14 +304,32 @@ it.
 was the number until 2026-09-22, and under several runs committing together each
 loser spent its three while the tip kept moving. An optimistic rebase-and-push
 converges in expectation at any commit rate; a counter does not. So the loop runs
-until `run.push_deadline_seconds` is gone, waiting `min(2^(k-1), 8)` seconds
-between attempts for k failures so far, drawn against U(0.5, 1.5) - the spread
-widens with the backoff, so collisions fall as more runs contend.
+until the deadline in `config/push-retry.json` is gone. That file declares
+`deadline_seconds`, `base_step_seconds`, `ceiling_seconds` and `ceiling_after`.
+`deadline_seconds` maps `default` to the normal deadline and workflow job ids
+to overrides. The program selects the job's entry, or `default` if none exists.
+A test checks each override against the workflow jobs that run the commit
+program, so a renamed job cannot silently lose its override.
+The program reads the file with the standard
+library before it writes to git; a missing or invalid knob stops the step and
+names the knob. No producer install is needed.
+
+For k rejected pushes, the wait step is `base_step_seconds` multiplied by
+2 to the power of `min(k - 1, ceiling_after)`, capped at `ceiling_seconds`.
+Both the exponent and the wait are bounded. The production steps remain
+1, 2, 4, 8, 8 seconds, each multiplied
+by a random factor from 0.5 to 1.5. The spread widens with the wait, so runs that
+lost the same race do not all fetch together.
+
+`PUSH_RETRY_CONFIG` selects another config file through the same input in a
+workflow or a test. Tests write a real config with millisecond steps, then run
+the real git commands and real sleeps. The deadline-exhaustion test uses a short
+deadline. A failed rebuild stops at its first failure, not at the deadline.
 
 **300 s is 25 percent of the assemble job's 20-minute timeout.** Measured on run
 `35701213155`, that job used 1.8 of its 20 minutes, so 18.2 minutes were spare.
-The work shard is the one caller that overrides it, with 120 s in its own `env:`
-block: the whole of what a shard keeps back for everything after its last item is
+The work shard takes `deadline_seconds.work`, which remains 120 s:
+the whole of what a shard keeps back for everything after its last item is
 `run.shard_wrap_up_minutes`, which is 12 minutes, and 300 s would be 5 of them.
 
 **Each attempt publishes six stamps**, to the job log and to the step summary,
@@ -483,6 +498,7 @@ already landed, and the three checks it runs over what it staged, are
 
 ## See also
 
+- [../../reference/benchmarks/push-retry-tests.md](../../reference/benchmarks/push-retry-tests.md) - the measured test durations and the sleep cost removed.
 - [idhazh-gardener.md](idhazh-gardener.md) - the one program that deletes and rewrites what the repository keeps, and how it lands a shard.
 - [a-losing-push-rebuilds-rather-than-rebases.md](a-losing-push-rebuilds-rather-than-rebases.md) - why the rebase this page describes does no work, what should replace it, and the one guardrail exception that needs.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - which workflows exist, when each runs, and what each does.

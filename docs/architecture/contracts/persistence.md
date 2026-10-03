@@ -26,6 +26,12 @@ Six builders in `backend/idhazh/ledger/paths.py` are the only code that spells t
 
 `.gitattributes` gives every data file, index and watermark under the two roots `-merge`, because each has one writer and a text merge could only splice two writers' bytes into a file neither wrote. `*.parquet` is `binary`.
 
+The path builders resolve each absolute state root once per process. The root's
+location must stay fixed for that process. Candidate paths are still resolved
+on every check, so a cached root never permits `raw/../scores` or a symlink
+that takes a candidate outside the two roots. Error paths use the same cached
+root. The persistence renderer does not resolve paths itself.
+
 ## The door
 
 ```python

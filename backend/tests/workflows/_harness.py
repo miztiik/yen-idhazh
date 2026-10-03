@@ -14,7 +14,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final, cast
@@ -22,6 +21,7 @@ from typing import Any, Final, cast
 import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from origin_template import copy_origin, template
 
 from idhazh import ledger, path_classes
 from idhazh.contracts.base import ServerJob
@@ -640,16 +640,11 @@ COMMIT_BASE_ENV: Final = frozenset(
 # one. Every other job takes the base three and nothing else: no path under
 # `state/` has two writers now, so those commit steps settle nothing after their
 # rebase.
-#
-# Three of the four name a push deadline. The bench does not: `measure.yml` has no
-# job that reads config before the one that commits, so it takes the script's
-# own value for a caller that names none.
 COMMIT_SCRIPT_ENV: Final = {
-    "plan": COMMIT_BASE_ENV | {"PUSH_DEADLINE_SECONDS"},
-    "work": COMMIT_BASE_ENV | {"PUSH_DEADLINE_SECONDS", "SHARD"},
+    "plan": COMMIT_BASE_ENV,
+    "work": COMMIT_BASE_ENV | {"SHARD"},
     "assemble": COMMIT_BASE_ENV
     | {
-        "PUSH_DEADLINE_SECONDS",
         "REFRESH_PATHS",
         "REGENERATE_COMMAND",
         "DROP_RACED_ASSETS_COMMAND",
@@ -850,21 +845,13 @@ SUBSTITUTED_COUNCIL_RUN: Final = "2026-08-26-35534060762"
 #: the venue never checks it against a list of who may exist.
 SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
-#: What the plan job hands every commit step of the run, read from config by
-#: `backend/utilities/shard_bound.py`. A stand-in for what Actions would expand,
-#: like the date above it - the value config carries is checked where the knob
-#: itself is, not here.
-SUBSTITUTED_PUSH_DEADLINE: Final = "300"
-
 EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
     "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
-    "needs.plan.outputs.push_deadline_seconds": SUBSTITUTED_PUSH_DEADLINE,
     "needs.draw.outputs.date": SUBSTITUTED_DATE,
     "needs.draw.outputs.run_id": SUBSTITUTED_COUNCIL_RUN,
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
-    "steps.bounds.outputs.push_deadline_seconds": SUBSTITUTED_PUSH_DEADLINE,
     # What the `derived` step prints into `$GITHUB_OUTPUT`, computed rather than
     # written out. A second copy of that list is the thing this expression
     # exists to remove.
@@ -1954,18 +1941,6 @@ def _git(repo: Path, env: dict[str, str], *args: str) -> str:
     return completed.stdout
 
 
-def _transient(_directory: str, names: list[str]) -> set[str]:
-    """Lock files git's own background maintenance leaves in a template.
-
-    A template is copied once per test and several xdist workers copy the same
-    one at the same time. git maintenance can create and delete
-    objects/maintenance.lock between copytree listing a directory and
-    reading it, which fails the copy with a file that was never part of the
-    template anyway.
-    """
-    return {name for name in names if name.endswith('.lock')}
-
-
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="ascii", newline="\n")
@@ -1980,37 +1955,6 @@ def _seed_ledger(staged: str) -> str:
     stages a named `.json` for the same reason, and it needs the same answer.
     """
     return staged if staged.endswith((".csv", ".json")) else f"{staged}/ledger.csv"
-
-
-#: Where a built origin lives, keyed by what it holds. A template is built once
-#: and copied per test, so the git processes behind the first commit are paid by
-#: the session rather than by every test that starts from the same one.
-_ORIGIN_TEMPLATES: Final[dict[tuple[str, ...], Path]] = {}
-
-
-@pytest.fixture(scope="session", autouse=True)
-
-
-def _discard_origin_templates() -> Iterator[None]:
-    """Delete the built origins once the last test that copies one has run."""
-    yield
-    for root in _ORIGIN_TEMPLATES.values():
-        shutil.rmtree(root, ignore_errors=True)
-    _ORIGIN_TEMPLATES.clear()
-
-
-def _template(key: tuple[str, ...]) -> tuple[Path, bool]:
-    """The directory this template lives in, and whether it still has to be filled.
-
-    Outside any test's `tmp_path`, because one build serves the whole session -
-    and `tmp_path` is removed with the test that owned it.
-    """
-    root = _ORIGIN_TEMPLATES.get(key)
-    if root is not None:
-        return root, False
-    root = Path(tempfile.mkdtemp(prefix="yen-idhazh-origin-"))
-    _ORIGIN_TEMPLATES[key] = root
-    return root, True
 
 
 def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
@@ -2049,11 +1993,11 @@ def _scripted_origin(
     still gets a repository of its own: the copy is the one it pushes to,
     rebases and rewrites, and nothing ever writes to what was copied.
     """
-    root, unbuilt = _template(("scripted", *staged_paths))
+    root, unbuilt = template(("scripted", *staged_paths))
     if unbuilt:
         _seed_scripted_origin(root, staged_paths)
     origin = tmp_path / "origin.git"
-    shutil.copytree(root / "origin.git", origin, ignore=_transient)
+    copy_origin(root, origin)
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
@@ -2167,11 +2111,11 @@ def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path
     a hand-made fixture of what that producer emits. It is written once for the
     session and copied here, for the reason `_scripted_origin` gives.
     """
-    root, unbuilt = _template(("digest", date))
+    root, unbuilt = template(("digest", date))
     if unbuilt:
         _seed_digest_origin(root, date)
     origin = tmp_path / "origin.git"
-    shutil.copytree(root / "origin.git", origin, ignore=_transient)
+    copy_origin(root, origin)
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
@@ -2234,13 +2178,17 @@ def _run_commit_script(
 
     `sys.executable` rather than `python`, because the suite's own interpreter is
     the one with a path a test can name. A runner has `python` on PATH, and the
-    program reads no configuration and imports nothing from `idhazh`, so either
+    program imports nothing from `idhazh`, so either
     one runs the same bytes.
     """
+    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
+    retry_file = runner.parent / "push-retry.json"
+    _write(retry_file, json.dumps(config) + "\n")
     return subprocess.run(
         [sys.executable, COMMIT_PROGRAM.as_posix(), *staged_paths],
         cwd=runner,
-        env={**env, **settings},
+        env={**env, "PUSH_RETRY_CONFIG": str(retry_file), **settings},
         capture_output=True,
         text=True,
     )

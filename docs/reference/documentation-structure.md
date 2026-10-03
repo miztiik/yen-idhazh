@@ -118,8 +118,8 @@ A plan begins with one title, Last Updated line and current Status paragraph. Re
 
 ## Diagrams
 
-Use a fenced `mermaid` block. The palette, print rules, node meanings, metric
-and threshold annotations, and overview/detail examples live in
+Use a fenced `mermaid` block. The native theme, print rules, node meanings,
+Metrics notes and copyable example live in
 [mermaid-diagrams.md](mermaid-diagrams.md). That page answers how to draw a
 diagram; this page answers where documentation belongs.
 

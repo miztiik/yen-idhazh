@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -39,19 +39,22 @@ page names the span and a lie the moment a control does - a page reading 90 days
 while the charts draw 2 cannot be trusted about anything else. Empty calendar
 space is the honest answer to "there is nothing there".
 
-**Widening fetches, and the control prices it first.** A preset that reaches into
-months not already in hand carries a `+2 months` label, and picking it re-uses
-the same month-fetch path a pan uses rather than reloading the page, so rows
-already paid for stay. The control shows a busy state while the files are in the
-air. Narrowing costs nothing.
+**Widening fetches, and the page prices it first.** The sentence under the band
+names each wider preset that reaches into months not already in hand -
+`30D would fetch 1 more month, 90D 3 more.` - and picking one re-uses the same
+month-fetch path a pan uses rather than reloading the page, so rows already paid
+for stay. The price is in that sentence rather than on the tiles because the
+sentence is always drawn and keeps room for its longest form, so a price that
+lands or clears moves nothing below it. The control shows a busy state while the
+files are in the air. Narrowing costs nothing.
 
 **The choice is kept in `localStorage` and read on mount, never during
 prerender.** First paint is therefore always the window the server drew, so the
 prerendered document and the control cannot disagree while the page hydrates.
 
-**Every route hands its own control the same props.** Pipelines prices the month
-files a wider window would fetch; Summaries and Hardware fetch nothing and price
-nothing. All three read the same `idhazh:console-window` key, so a span picked on
+**Every route hands the layout the same props.** Pipelines prices the month
+files a wider window would fetch; the other routes fetch nothing and price
+nothing. All of them read the same `idhazh:console-window` key, so a span picked on
 Pipelines is the span Hardware opens on and the other way round -
 [../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts)
 drives it both ways in one browser session, because a route that writes the key

@@ -214,7 +214,11 @@ THROUGH_THE_DOOR: Final = frozenset(
     member for member in LedgerName if paths.entry(member).grain is Grain.RAW_AND_COMPACT
 )
 #: Every ledger the registry still builds a CSV address for.
-CSV_LEDGERS: Final = [member for member in LedgerName if member not in THROUGH_THE_DOOR]
+CSV_LEDGERS: Final = [
+    member
+    for member in LedgerName
+    if member not in THROUGH_THE_DOOR and paths.entry(member).grain is not Grain.LOOKUP
+]
 
 
 def a_registry(families: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -365,20 +369,24 @@ def test_a_ledger_with_no_folder_is_refused_even_when_it_is_one_file() -> None:
 def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
     """The name rule, proved able to fire by filing one ledger inside another family.
 
-    `seen` moves under the judge's folder, so every other rule still holds and
-    `LedgerName.SEEN` becomes the one name that no longer says where it sits.
+    `day-metrics` moves under the judge's folder, so every other rule still holds
+    and `LedgerName.DAY_METRICS` becomes the one name that no longer says where
+    it sits. It is a ledger the registry still builds a CSV address for: a ledger
+    filed under the two roots is refused first for a prefix that is not its name.
     """
     judge = a_family("content-similarity-judge")
-    seen = a_family(LedgerName.SEEN.value)["ledgers"][0]
-    nested = {**seen, "prefix": ["content-similarity-judge", LedgerName.SEEN.value]}
+    metrics = a_family(LedgerName.DAY_METRICS.value)["ledgers"][0]
+    nested = {**metrics, "prefix": ["content-similarity-judge", LedgerName.DAY_METRICS.value]}
     widened = {**judge, "ledgers": [*judge["ledgers"], nested]}
 
     with pytest.raises(ValidationError) as refusal:
         LedgersConfig.model_validate(
-            a_registry([widened, *without("content-similarity-judge", LedgerName.SEEN.value)])
+            a_registry([widened, *without("content-similarity-judge", LedgerName.DAY_METRICS.value)])
         )
 
-    assert "LedgerName.SEEN should be CONTENT_SIMILARITY_JUDGE_SEEN" in str(refusal.value)
+    assert "LedgerName.DAY_METRICS should be CONTENT_SIMILARITY_JUDGE_DAY_METRICS" in str(
+        refusal.value
+    )
 
 
 @pytest.mark.parametrize("member", CSV_LEDGERS, ids=lambda m: m.value)
@@ -447,6 +455,19 @@ def test_the_two_forms_of_one_address_agree() -> None:
         covers = COVERS[paths.entry(member).grain]
         under = paths.path(root, member, covers).relative_to(root).as_posix()
         assert paths.relpath(member, covers) == f"{paths.STATE_DIRNAME}/{under}"
+
+
+def test_an_exact_lookup_has_an_undated_root_and_refuses_a_period() -> None:
+    member = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
+    assert paths.entry(member).grain is Grain.LOOKUP
+    assert paths.path(STATE, member) == paths.tree_root(STATE, member) == STATE / member.value
+    assert paths.relpath(member) == paths.tree_relpath(member) == (
+        f"{paths.STATE_DIRNAME}/{member.value}"
+    )
+    with pytest.raises(ValueError, match="exact lookup, not a dated partition"):
+        paths.path(STATE, member, A_DAY)
+    with pytest.raises(ValueError, match="exact lookup, not a dated partition"):
+        paths.relpath(member, A_DAY)
 
 
 @pytest.mark.parametrize("member", sorted(DAY_TREES), ids=lambda m: m.value)
@@ -525,8 +546,8 @@ def test_the_three_owners_build_the_paths_they_built_before() -> None:
 
 
 def test_every_entry_carries_the_fields_its_grain_needs() -> None:
-    """A flat file names itself; a day directory and a ledger under the two roots have no extension."""
-    unsuffixed = {Grain.DAY_TREE, Grain.RAW_AND_COMPACT}
+    """Directory-backed ledgers have no extension; only a flat file needs a stem."""
+    unsuffixed = {Grain.DAY_TREE, Grain.RAW_AND_COMPACT, Grain.LOOKUP}
     for member in LedgerName:
         held = paths.entry(member)
         assert (held.stem is not None) == (held.grain is Grain.FLAT)

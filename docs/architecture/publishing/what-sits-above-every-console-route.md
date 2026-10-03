@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-02
 
 Three surfaces stand on every console route: the strip - the route tabs and the
 days control on one row - the sentence under it that says how complete the
@@ -42,28 +42,39 @@ breakpoint three other components already use, the tabs are one row: each is as
 wide as the longer of its label and its worst state, and the per-tab description
 is shown under both.
 
-Measured 2026-09-27 off the real built page in headless Chromium, 900px tall,
-with `window.innerWidth` read inside the page and equal to the asked width at
-every row. The strip is the tabs and the days control together, at the top of
-the page; the Pipelines control is taller on a phone because its tiles carry
-prices:
+Measured 2026-10-02 off the real built page in headless Chromium on Windows,
+900px tall, with `window.innerWidth` read inside the page and equal to the asked
+width at every row. The strip is the tabs and the days control together, at the
+top of the page. It is the same height on Pipelines and Hardware at every width,
+because no tile carries a price any more:
 
-| Width | Tab rows | First tab | Strip, Pipelines | Strip, Hardware | Description |
-| ---: | ---: | ---: | ---: | ---: | --- |
-| 320 | 3 | 140px | 396px | 339px | hidden |
-| 360 | 3 | 160px | 348px | 267px | hidden |
-| 390 | 3 | 175px | 348px | 267px | hidden |
-| 414 | 3 | 186px | 348px | 267px | hidden |
-| 480 | 2 | 142px | 267px | 238px | hidden |
-| 640 | 2 | 141px | 211px | 206px | hidden |
-| 768 | 1 | 135px | 158px | 154px | hidden |
-| 900 | 1 | 161px | 158px | 154px | hidden |
-| 1024 | 1 | 148px | 152px | 152px | shown |
-| 1280 | 1 | 148px | 152px | 120px | shown |
-| 1440 | 1 | 157px | 120px | 120px | shown |
+| Width | Tab rows | First tab | Strip | Description |
+| ---: | ---: | ---: | ---: | --- |
+| 320 | 3 | 140px | 315px | hidden |
+| 360 | 3 | 160px | 291px | hidden |
+| 390 | 3 | 175px | 267px | hidden |
+| 414 | 3 | 186px | 267px | hidden |
+| 480 | 2 | 142px | 238px | hidden |
+| 640 | 2 | 141px | 206px | hidden |
+| 768 | 1 | 135px | 154px | hidden |
+| 900 | 1 | 161px | 154px | hidden |
+| 1024 | 1 | 148px | 152px | shown |
+| 1280 | 1 | 185px | 120px | shown |
+| 1440 | 1 | 218px | 104px | shown |
 
-Stuck, the strip is 70px on both routes at every width measured from 1024 to
-1920.
+Stuck, the strip is 70px at every width measured from 1024 to 1920. On
+2026-09-27 the Pipelines strip was 348px at 390, because its tiles kept room for
+a price; the shorter control took 81px off it there and 16px off every route at
+1440.
+
+**What a sixth tab does to the strip**, measured the same day on a local build
+with `console.data_explorer_tab` on. It adds a row of tabs only from 731 to
+871px, where five tabs fit one row and six do not, so Records stands alone on a
+second row. Below 435px six tabs stand two to a row in the same three rows five
+did, and from 435 to 730px in the same two - **but the strip still grows**, by
+56px at 390, because Voices then shares its row with Records and its worst state
+wraps inside the narrower tab. From 1024px the row scrolls, and every route opens
+with its own tab whole.
 
 **What moving the days control onto the strip cost a phone, and what it gave
 back.** Before, the control stood under the band. Measured the same way off the
@@ -94,9 +105,9 @@ The description is not lost below the breakpoint: it is still the anchor's
 the one-line summary a reader gets before choosing - which is why every label is
 one word.
 [../../../frontend/tests/console-nav.spec.ts](../../../frontend/tests/console-nav.spec.ts)
-measures the tab boxes off the built page at 1440, 360 and 320, prints the width
-the page really had beside every figure, and fails on a row too many or on any
-two boxes that overlap.
+measures the tab boxes off the built page at 1440, 768, 360 and 320, prints the
+width the page really had beside every figure, and fails on a row too many or on
+any two boxes that overlap.
 
 **The strip never takes the health ramp.** The one thing that differs between
 routes is a 3px rule under the active label, from the categorical ramp. Green,
@@ -130,12 +141,20 @@ under the active route sits on one line whichever route it is. Adding a route is
 change, and `console-shell.spec.ts` holds the row with one tab more than the
 console has, and again with as many more as it takes to make the list scroll.
 
-**The days control is on the strip at every width.** It is one number per
-`console.window_presets` value, with the months that preset would fetch under
-it; the words `Days shown` stand once beside the tiles, and each tile still says
-`30 days` to a screen reader. Below the breakpoint it takes its own row under the
-tabs and does not stick. The sentence about what the span is showing stays under
-the band, above the panels it describes - on the strip it would make two rows.
+**The days control is on the strip at every width.** It is five short tiles,
+`1D 7D 14D 30D 90D` - one per `console.window_presets` value - at the 2.75rem
+touch floor both ways and 4px apart, so 236 by 44 CSS px at every width, with
+nothing beside them. The `D` is the unit: each tile hides it from a screen
+reader and says the whole word instead, so `14D` is heard as `14 days`, and the
+group's name, `Days shown`, is a legend only a screen reader hears. Below the
+breakpoint the control takes its own row under the tabs, at the start of it,
+and does not stick. The sentence about what the span is showing stays under the
+band, above the panels it describes - on the strip it would make two rows - and
+**it carries the price**: on a route whose window fetches month files it names
+each wider preset that would fetch more, `Every windowed section below is showing
+14 days. 30D would fetch 1 more month, 90D 3 more.` It keeps room for its longest
+form - three lines of `--leading-xs` below `frame.breakpoints_px[0]` and two from
+it - so a price that lands or clears moves nothing below it.
 
 **While stuck, the tab descriptions leave.** Each is still its tab's `title`, and
 they return when the strip is back in its place. Two things follow, and
@@ -156,8 +175,12 @@ it or to keep a jump link clear of it, so it stays in the flow like the title.
 **The band's worst route says so on its own tab**, in a word: `Worst:` before the
 fragment the tab already carries, in the main text colour and never a verdict
 colour, at the top of the page as well as when stuck, so nothing reflows when the
-strip sticks. When the tab list scrolls, it opens with that tab in view. That is
-the one fact on the strip the band cannot give once the band has scrolled away.
+strip sticks. When the tab list scrolls, it opens with the reader's own tab
+whole, and with the worst route's tab in view too wherever both fit. The worst
+route is the one fact on the strip the band cannot give once the band has
+scrolled away; but a page that opened with its own tab cut off would not say
+which route it is, and where the two do not both fit the band under the strip
+still names the worst route.
 
 **The strip's surface is the page ground with a rule under it**, the same hairline
 that edges a reading-page item: the stronger rule on the dark ground and the
@@ -381,27 +404,51 @@ Drawing two copies and hiding one per width was rejected: it is two radio groups
 to hold in step, and every check that finds the control by its attribute would
 find two. Putting the band above the strip was rejected: the completeness
 sentence could no longer sit both under the strip and above the band. **What
-it costs:** on a phone the band starts one control row lower, and the tiles
-carry the number alone - the word `days` is said once, beside them.
+it costs:** on a phone the band starts one control row lower.
+
+**The tiles read `1D 7D 14D 30D 90D`, with no label and no price.** The `D`
+says in one character what `Days shown` said in ten, and the legend still names
+the group to a screen reader, so the control is 236 px wide at every width and
+leaves the strip its room for a sixth tab. A forked, smaller control for one page
+was rejected: two controls would be two windows a reader cannot compare. Keeping
+the label and dropping only the price room was rejected: it saves the height and
+not the width, and the width is what a sixth tab needs. Dropping the price
+entirely was rejected: a reader would meet what a wide span costs only after
+choosing it.
+
+**The price of a wider span lives in the sentence under the band.** A price that
+appeared and disappeared on a tile moved seven panels by 15 px when it landed or
+cleared (measured 2026-09-09), so every tile kept a second line for it whether
+or not one was due. The sentence is always drawn and keeps room for its longest
+form, so the price holds still and the tiles hold one line. **What it costs:** on
+a phone the price stands a band's height below the control, about 300 px, and
+from `frame.breakpoints_px[1]` up, while the strip is stuck to the top of the
+screen, the price is off screen - so a reader far down Pipelines sees what a
+wider span fetches only after choosing it. **And below
+`frame.breakpoints_px[0]` the room is three lines.** The longest form - one day
+chosen and every wider preset priced, 111 characters - took three lines at 320px
+and two from 360px (measured 2026-10-02, Chromium on Windows), and 640px is the
+nearest width a knob names. So on the four routes that never price a span, the
+panels start 16px lower from 360 to 639px than they did before the change, for a
+third line only Pipelines can fill.
 
 **The worst route is marked on its own tab rather than repeated in a pinned
 line.** The tab already carries the fragment, so a pinned `Worst now:` line would
 print the same words twice in one row and take about 200px from the tabs, and
 hiding the other routes' fragments while stuck to make room would shorten the
 labels the one-row rule protects. **What it costs:** when the tab list scrolls,
-the worst tab can be scrolled out of view - the list opens with it in view.
+the worst tab can be scrolled out of view - the list opens with it in view
+wherever the reader's own tab stays whole beside it.
 
 **A tab's worst state stands under its label from the breakpoint up.** Side by
-side, a tab is as wide as both together, and on Pipelines - whose days control is
-the widest, because its tiles carry prices - four of five tabs were whole at
-every width from 1366 to 1920, the fifth 5px short at the widest. Stacked, a tab
-is as wide as its longer line: all five are whole from 1366 on Pipelines and from
-1280 on Hardware, and three and four of them at 1024. Taking the prices off the
-tiles while stuck was rejected: it hides what a choice downloads at the moment a
-reader deep in a route makes it, which is why a dropdown was refused, and the
-tabs would slide sideways as the strip sticks. **What it costs:** one line of
-every tab's height - the stuck strip is 70px where one line made it 46 to 50px -
-and below 1366 on Pipelines one or two tabs still need a sideways scroll.
+side, a tab is as wide as both together, and on Pipelines - whose days control
+was then the widest, because its tiles carried prices - four of five tabs were
+whole at every width from 1366 to 1920, the fifth 5px short at the widest.
+Stacked, a tab is as wide as its longer line: all five are whole from 1366 on
+Pipelines and from 1280 on Hardware, and three and four of them at 1024. **What
+it costs:** one line of every tab's height - the stuck strip is 70px where one
+line made it 46 to 50px - and at the narrowest one-row widths a tab or two still
+needs a sideways scroll.
 
 **`The latest run on this page finished at`, never `Complete to`, and never
 `today`.** The console's subject is the pipeline's own record, and the last run
@@ -417,10 +464,9 @@ to the shell, and the window - span, fetches, the price per preset - belongs to
 the route, so the route hands it up through
 [window-slot.ts](../../../frontend/src/lib/console/window-slot.ts). The shell is
 written before the route's script runs, so the prerendered control holds the
-configured window and no price; it is disabled then in any case. A route that
-prices its presets says so in its data (`windowPriced`), so every tile holds the
-room of its price from the first paint and nothing moves when the prices land or
-clear.
+configured window and no price; it is disabled then in any case. The price is
+said in the sentence under the band, which keeps its room on every route from
+the first paint, so no route has to declare that it prices its presets.
 
 **A media query cannot read the knob.** The stylesheets repeat
 `frame.breakpoints_px[1]` as a literal, the one duplication a media query forces,

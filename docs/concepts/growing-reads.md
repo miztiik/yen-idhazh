@@ -66,9 +66,10 @@ opens one or two month files instead of every month the project has written.
 
 **The worked example is the one that ships open.** `ledger.load_published`
 answers *have we published this address before*, and it takes `today` and
-`within_days`. Given a finite cover it asks for the dates in range and opens
-those day files and no others. Given `-1` it walks `state/published/`, naming
-every entry it meets and refusing one it cannot place. The committed
+`within_days`. Given a finite cover it asks `ledger.load_days` for the dates in
+range and reads those days and no others. Given `-1` it lists the months the
+ledger holds with `held_months` and reads them one month at a time through
+`load_days`, so it holds one month's rows and the answer at once. The committed
 `collect.published_window_days` is **`-1`**, so today's answer is every address
 ever published - the guarantee the guard has always given. The machinery landed;
 turning it down is a later decision on evidence, and
@@ -198,14 +199,14 @@ reads are here and not how many. These are `backend/`'s;
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `ledger.load_seen` | day files of `state/seen/` | `collect.seen_window_days`, committed at 90 |
+| `ledger.load_seen` | the days it is handed, through `ledger.load_days`: the compact indexes of `state/compact/seen/`, the compact file that serves each day, and the raw files under `state/raw/seen/` of only the days no index names | `collect.seen_window_days`, committed at 90 |
 | `ledger.load_health` | day files of `state/feed-health/` | `ledger.HEALTH_WINDOW_DAYS`, 31 |
 | `ledger.load_days` | the compact indexes of one door ledger, the one compact file that serves each day it is handed, and the raw files of only the days no index names. A day of a packed year opens that year's whole file, once however many of its days are asked | the days its caller names. Every reader of `item-health`, `summary-quality-evals` and `host-fingerprint` that asks about a window or a date calls it: the drift review, `console_band.publish`'s machine rows, `machine.publish`, `run_timeline.publish`, `public_telemetry.publish`, `day_metrics`, `source_health._recent_item_health`, `reconcile_prefill.py` and the `telemetry-aggregate` task among them |
 | `ledger.load_fitted_thresholds` | day files of `state/content-similarity-judge/fitted-thresholds/` | the caller's `within_days`, and the fit asks for `max(settled_window_days, step_change_window_rows * 2)` - 28 days on the committed knobs. **The cover is in days and the guard's median is in rows, which is why it is twice the row count rather than equal to it.** One missed run leaves 13 rows inside a 14-day cover, the median returns nothing, and a guard that silently never fires is worse than one that fires too readily. A bound set by two knobs, never by what the archive holds |
 | `similarity.applied.applied_line` | the same day files, through `load_fitted_thresholds` | `assemble.same_story.adaptive_dedup_threshold.applied_lookback_days`, committed at 7. It runs on every publish, so the bound is the one that matters most on this page: 8 file opens on the thousandth day and on the third. A gap longer than the lookback means the judge has been down that long, and the committed config floor is the honest answer - so the cover is also the policy |
 | the window refusal count | the item-health days, through `ledger.load_days` since the ledger moved to the door | 30 days ending at the run date. **It took no new read.** The question - how many items the two-call sequence would not fit the window - is about the recent tail, and an answer over a longer span is dominated by shapes the pipeline no longer sends. The 30 dates are named by date arithmetic, never by a directory walk, so the cost is 30 days whatever the archive holds. Read once on 2026-09-13 and written up in [the throughput page](../architecture/summarize/throughput.md); it is a verb a person types, off the daily path |
 | `telemetry.source_health.reliability` | the feed-health day files in range | `collect.reliability_window_days` |
-| `ledger.load_published` | day files of `state/published/` | `collect.published_window_days`, **committed at `-1`** |
+| `ledger.load_published` | the days in range through `ledger.load_days`, or with `-1` every month `held_months` lists, one month at a time: the compact indexes of `state/compact/published/`, the compact file that serves each day, and the raw files under `state/raw/published/` of only the days no index names. Once a year is packed - 2027-04-04 at the earliest - each of its months opens that year's whole file, so the read then holds a year's rows at its peak and opens the file twelve times | `collect.published_window_days`, **committed at `-1`** |
 | `evals.retrieval.load_corpus` | day directories of `frontend/public/digest/` | `assist.eval_corpus_through`, a pinned day rather than a rolling count. The day is read off the path and a later one is never opened, which is the whole saving: the gate was loading 32 days to score 6. A rolling count would be the wrong cover here - the pin holds the competitor set still for a frozen label set, so a cover that moved with the calendar would put the gate back where it was. `None` reads every day and is what the operator surface asks for |
 | `evals.retrieval.load_index_corpus`, pinned | one month shard of `frontend/public/assist/index/` | `assist.eval_corpus_through` again, matched against the shard **stem** before the file is opened, then the rows narrowed to the day. A month shard is coarser than a pin, so the second step is what makes the read exact - and it is cheap only because the first already refused every later shard |
 | `evals.retrieval.load_index_corpus`, live | the newest shards of the same directory | `assist.search_months` and `assist.search_min_days`, the two knobs `readScope` in `search.ts` reads. Newest-first, so it is at most `months + 1` shards whatever the archive holds |

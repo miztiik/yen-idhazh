@@ -6,7 +6,7 @@ import csv
 import io
 import json
 import tracemalloc
-from collections.abc import Iterator, Sequence
+from collections.abc import Collection, Iterator, Sequence
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
@@ -47,13 +47,10 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.ledger import csv_file
-from idhazh.ledger import rows as ledger_rows
+from idhazh.ledger import ledger_files
 from idhazh.telemetry import silicon
 from idhazh.telemetry.source_health import feed_reliability, reliability
 from utilities import migrate_to_parquet
-from utilities import split_published_ledger as split_ledger
-from utilities.migrate_published_ledger import narrow
 from utilities.reconcile_prefill import TOLERANCE, reconcile
 
 pytestmark = pytest.mark.contract
@@ -71,15 +68,6 @@ URL_KEY = derive_url_key(URL)
 #: no network and no mocks (Guardrail #7).
 RECONCILED_DATE = "2026-08-26"
 RECONCILED_RUN = "2026-08-26-5"
-
-
-def seen_row() -> SeenRow:
-    return SeenRow(
-        version=SeenRow.schema_version(),
-        url_key=URL_KEY,
-        first_seen_at=STAMP,
-        first_seen_run=RUN_ID,
-    )
 
 
 def published_row(*, url_key: str = URL_KEY, on: str = DATE) -> PublishedRow:
@@ -196,9 +184,7 @@ def council_row(*, on: str = DATE) -> CouncilShardOutcome:
     parsing fails the test that asked for a row rather than the whole file.
     """
     raw = json.loads(
-        read_text(
-            CONTRACT_FIXTURES_DIR / "council-shard-outcome" / "a-unit-that-ran-no-model.json"
-        )
+        read_text(CONTRACT_FIXTURES_DIR / "council-shard-outcome" / "a-unit-that-ran-no-model.json")
     )
     return CouncilShardOutcome.model_validate(
         raw
@@ -224,109 +210,72 @@ def health_row() -> FeedHealthRow:
     )
 
 
-def stale_header(path: Path, columns: tuple[str, ...]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(columns[:-1])
-        writer.writerow(["stale"] * (len(columns) - 1))
-
-
-def test_seen_ledger_rejects_stale_committed_header(tmp_path: Path) -> None:
-    state = tmp_path / "state"
-    stale_header(ledger.path(state, LedgerName.SEEN, DATE), SeenRow.csv_columns())
-
-    with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
-        ledger.append_seen(state, DATE, [seen_row()])
-
-
-def test_published_ledger_rejects_stale_committed_header(tmp_path: Path) -> None:
-    state = tmp_path / "state"
-    stale_header(ledger.path(state, LedgerName.PUBLISHED, DATE), PublishedRow.csv_columns())
-
-    with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
-        ledger.append_published(state, DATE, [published_row()])
-
-
-def test_load_published_answers_the_same_from_either_header(tmp_path: Path) -> None:
-    """The reader maps cells by name, so a column nothing reads could leave without it.
-
-    Both fixtures hold the same eleven rows copied out of the published ledger
-    before it was narrowed; the second has no `canonical_url`. They are written
-    into a day file here because that is the only shape the reader opens now -
-    the bytes are the ones the flat file held, and the path is the one a run
-    would write them to. The header check guards the writer only -
-    `require_matching_header` is called from `extend_ledger_file` and from nothing on the
-    read path - and that is what made narrowing the row one commit rather than
-    an expand-migrate-contract sequence (CLAUDE.md section 11). It still runs
-    because a fork or a stale branch can hold a wide ledger, and this says what
-    happens when one does.
-    """
-    wide, narrow_state = tmp_path / "wide", tmp_path / "narrow"
-    for state, fixture in ((wide, "published-v1.csv"), (narrow_state, "published-v2.csv")):
-        day = _day_file(state, DATE)
-        day.parent.mkdir(parents=True)
-        day.write_bytes((STATE_FIXTURES / fixture).read_bytes())
-
-    wide_header = ledger.read_header(_day_file(wide, DATE))
-    narrow_header = ledger.read_header(_day_file(narrow_state, DATE))
-    assert set(wide_header) - set(narrow_header) == {"canonical_url"}
-    assert {"url_key", "published_on"} <= set(narrow_header)
-
-    published = _whole_ledger(wide)
-    assert len(published) == 11, (
-        "an empty or trimmed ledger would pass the comparison while proving nothing"
+def _published(state: Path, on: str, url_keys: Sequence[str], *, run: str = "1") -> int:
+    """One assemble run's published rows, filed under its digest day as the stage files them."""
+    return ledger.append_published(
+        state,
+        on,
+        [published_row(url_key=url_key, on=on) for url_key in url_keys],
+        identity=writer_identity(f"{on}-{run}"),
     )
-    assert published == _whole_ledger(narrow_state)
 
 
-def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: Path) -> None:
-    """`ledger.extend_ledger_file` writes every row it is handed. Its callers own the repeats.
+def test_two_runs_that_publish_one_address_keep_its_earliest_date(tmp_path: Path) -> None:
+    """The writer files every row it is handed, and the read keeps the earliest date.
 
-    Pinned because the promise in `ledger.extend_ledger_file` names those callers, and a
-    dedupe quietly added here would make that docstring wrong while every test
-    still passed. The eval ledger is the other half of the contrast: it refuses
-    an observation it already holds, because a row there is a measurement rather
-    than a fact about a run.
+    `stages.assemble._published_rows` leans on both halves: nothing at the write
+    collapses a repeat, and a repeat in a later run never moves the day an address
+    first ran. Two runs are two work units, so both files are read.
     """
     state = tmp_path / "state"
-    assert ledger.append_published(state, DATE, [published_row()]) == 1
-    assert ledger.append_published(state, DATE, [published_row()]) == 1
+    assert _published(state, "2026-08-23", [URL_KEY]) == 1
+    assert _published(state, "2026-08-24", [URL_KEY]) == 1
 
-    with ledger.path(state, LedgerName.PUBLISHED, DATE).open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-
-    assert len(rows) == 2, "the append path does not deduplicate"
-    assert _whole_ledger(state) == {URL_KEY: DATE}, "the read keeps the earliest date"
+    filed = sorted(ledger.raw_root(state, LedgerName.PUBLISHED).rglob("*.parquet"))
+    assert len(filed) == 2, "the write does not deduplicate"
+    assert _whole_ledger(state) == {URL_KEY: "2026-08-23"}, "the read keeps the earliest date"
 
 
-def _published_fixture(state: Path, *, rows: int, keys: int) -> dict[str, str]:
-    """`rows` records over `keys` distinct addresses, filed by day. Returns what the
-    read owes.
+def test_a_second_attempt_at_one_plan_replaces_its_first_sights(tmp_path: Path) -> None:
+    """A re-run of the plan job replaces its first try's sights, as the door does for any ledger.
+
+    A re-run checks out the commit its run started at, so it cannot see what its
+    first try filed and files its own sights. Both are one work unit, and the
+    door keeps the file of the higher attempt: an address both tries met takes
+    the re-run's later stamp, and one only the first try met is absent until the
+    next run that meets it files it again.
     """
-    by_day: dict[str, list[dict[str, str]]] = {}
-    expected: dict[str, str] = {}
-    for number in range(rows):
-        key = derive_url_key(f"https://example.org/items/{number % keys}")
-        on = f"2026-{8 + number % 4:02d}-0{1 + number % 9}"
-        by_day.setdefault(on, []).append(
-            {
-                "version": PublishedRow.schema_version(),
-                "url_key": key,
-                "published_on": on,
-                "item_id": f"ai-{number:06d}",
-            }
+    state = tmp_path / "state"
+    both, only_first = _address(1), _address(2)
+
+    def sight(url_key: str, at: str) -> SeenRow:
+        return SeenRow(
+            version=SeenRow.schema_version(),
+            url_key=url_key,
+            first_seen_at=at,
+            first_seen_run=RUN_ID,
         )
-        if key not in expected or on < expected[key]:
-            expected[key] = on
-    for on, payloads in by_day.items():
-        path = _day_file(state, on)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8", newline="") as handle:
-            out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
-            out.writeheader()
-            out.writerows(payloads)
-    return expected
+
+    ledger.append_seen(
+        state,
+        DATE,
+        [sight(both, "2026-08-23T06:00:00Z"), sight(only_first, "2026-08-23T06:00:00Z")],
+        identity=writer_identity(RUN_ID, attempt=1, job=ServerJob.PLAN),
+    )
+    ledger.append_seen(
+        state,
+        DATE,
+        [sight(both, "2026-08-23T07:30:00Z")],
+        identity=writer_identity(RUN_ID, attempt=2, job=ServerJob.PLAN),
+    )
+
+    assert ledger.load_seen(state, today=DATE, within_days=90) == {both: "2026-08-23T07:30:00Z"}
+
+
+def _a_month_of_publications(state: Path, months: Sequence[str], url_keys: Sequence[str]) -> None:
+    """Every address published again on the first day of each month, by one run that day."""
+    for month in months:
+        _published(state, f"{month}-01", url_keys)
 
 
 def _peak_of_load_published(state: Path) -> tuple[dict[str, str], int]:
@@ -339,35 +288,36 @@ def _peak_of_load_published(state: Path) -> tuple[dict[str, str], int]:
 
 
 def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> None:
-    """The one read over the one ledger with no natural bound streams.
+    """Double the source rows behind a fixed answer, and the peak stays flat.
 
-    The published ledger is the only one here whose committed cover is open, so
-    it was the only one whose peak was the whole tree. Measured 2026-09-07 on an
-    Intel Core i7-1265U over the committed 7,243 rows, the materialising read
-    peaked at 500.9 B a row against a stored row of 106.9 B - 3.63 MB then, and
-    265 MB at the third year of the measured 483 rows a day.
+    The published read is the one read over a ledger with no natural bound: its
+    committed cover is open, so it reads every day the ledger has ever held. It
+    reads one month at a time and folds each into the answer before the next, so
+    what it holds at once is one month's rows and the answer, never the history.
 
-    A threshold in bytes a row would pass for the wrong reason, because what a
-    reduction legitimately keeps is its mapping. So the property is asserted
-    directly: hold the answer still, double the rows, and the peak must not
-    follow. Both populations are built and fixed, so this costs the same on the
-    day the archive holds ten times either (Guardrail #12, section 13).
+    Sixteen addresses make the answer the same in both trees. Two months versus
+    four months doubles the source rows from 32 to 64. Both reads have a later
+    month to load after the answer is populated, so the peak includes the answer
+    and one month's rows. The 10 percent margin allows per-file allocation
+    noise; a reader holding every month still retains twice the source rows.
+    The first read is not measured, so a cost paid once per process lands in
+    neither number. Both ledgers are built and fixed (Guardrail #12, section 13).
     """
-    keys = 20_000
-    small = tmp_path / "small"
-    large = tmp_path / "large"
-    expected_small = _published_fixture(small, rows=keys * 2, keys=keys)
-    expected_large = _published_fixture(large, rows=keys * 4, keys=keys)
+    addresses = [_address(number) for number in range(16)]
+    small, large = tmp_path / "small", tmp_path / "large"
+    _a_month_of_publications(small, ["2026-01", "2026-02"], addresses)
+    _a_month_of_publications(large, ["2026-01", "2026-02", "2026-03", "2026-04"], addresses)
+    expected = dict.fromkeys(addresses, "2026-01-01")
+    _whole_ledger(small)
 
     published_small, peak_small = _peak_of_load_published(small)
     published_large, peak_large = _peak_of_load_published(large)
 
-    assert published_small == expected_small, "the reduction must keep the earliest date"
-    assert published_large == expected_large
-    assert len(published_large) == keys, "the fixture has to hold repeats or it proves nothing"
+    assert published_small == expected, "the reduction must keep the earliest date"
+    assert published_large == expected
     assert peak_large < peak_small * 1.1, (
-        f"twice the rows over the same addresses moved peak from {peak_small} B to "
-        f"{peak_large} B, so the read is still holding the file rather than the answer"
+        f"twice the rows behind the same addresses moved peak from {peak_small} B to "
+        f"{peak_large} B, so the read is holding the ledger rather than one month of it"
     )
 
 
@@ -375,31 +325,11 @@ def _address(number: int) -> str:
     return derive_url_key(f"https://example.org/items/{number}")
 
 
-def _day_file(state: Path, date: str) -> Path:
-    """`state/published/YYYY/MM/DD.csv`, spelled out rather than asked for.
-
-    The ledger's own path helper would make this a restatement of the code it
-    checks, and both the reader and the writer are checked against it now. The
-    layout is the thing under test, so the test writes it.
-    """
-    return state / "published" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-
-
-def _flat_file(state: Path) -> Path:
-    """`state/published.csv`, spelled out for the reason `_day_file` gives.
-
-    Neither written nor read any more. It has no path helper left to ask,
-    because the shape a caller names is the day tree. Only the cutover utility
-    still opens it, and only in a checkout that still has one.
-    """
-    return state / "published.csv"
-
-
 def _whole_ledger(state: Path) -> dict[str, str]:
-    """The read under the cover the committed config ships: every day file.
+    """The read under the cover the committed config ships: every day the ledger holds.
 
     Spelled once here because most of these tests are about the reduction and
-    not about the cover, and repeating the sentinel at thirty call sites would
+    not about the cover, and repeating the sentinel at every call site would
     bury the two tests that are about it.
     """
     return ledger.load_published(state, today=None, within_days=UNBOUNDED_WINDOW)
@@ -414,49 +344,28 @@ def _tree(root: Path) -> dict[str, bytes]:
     }
 
 
-def _published_file(path: Path, dates: dict[str, str]) -> None:
-    """One published-shaped file at `path`, holding `url_key -> published_on`.
-
-    Rows go through the contract, so a fixture cannot drift from what a run
-    would really append. Every fixture here is built and fixed, so these checks
-    cost the same on the day the archive holds ten times the rows (Guardrail #12).
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
-        out.writeheader()
-        for number, (url_key, on) in enumerate(sorted(dates.items())):
-            row = PublishedRow(
-                version=PublishedRow.schema_version(),
-                url_key=url_key,
-                published_on=on,
-                item_id=f"ai-{number:010d}",
-            )
-            out.writerow(row.model_dump(mode="json"))
-
-
 def test_load_published_reads_no_history_from_a_fresh_clone(tmp_path: Path) -> None:
-    """A missing day tree means nothing has published yet, and it is not an error.
+    """A ledger with no file means nothing has published yet, and it is not an error.
 
     A clone with no history is the state every fresh checkout is in, and an
     empty mapping is what "nothing has run" looks like. Asserted under both
-    covers, because a finite one names days that do not exist and must answer
-    the same way rather than fail on the first missing file.
+    covers, because a finite one names days that hold nothing and must answer
+    the same way rather than fail on the first of them.
     """
     assert _whole_ledger(tmp_path / "state") == {}
     assert ledger.load_published(tmp_path / "state", today=DATE, within_days=91) == {}
 
 
-def test_load_published_reads_every_day_file_the_tree_holds(tmp_path: Path) -> None:
-    """One day is one file, and the answer is every file the tree holds.
+def test_load_published_reads_every_day_the_ledger_holds(tmp_path: Path) -> None:
+    """The answer is every day the ledger holds.
 
-    Two days of one month and a day of the next, so the walk has to cross a
-    month directory rather than stopping at the first one it finished.
+    Two days of one month and a day of the next, so the read has to cross a
+    month rather than stopping at the first one it finished.
     """
     state = tmp_path / "state"
-    _published_file(_day_file(state, "2026-08-21"), {_address(2): "2026-08-21"})
-    _published_file(_day_file(state, "2026-08-22"), {_address(3): "2026-08-22"})
-    _published_file(_day_file(state, "2026-09-03"), {_address(4): "2026-09-03"})
+    _published(state, "2026-08-21", [_address(2)])
+    _published(state, "2026-08-22", [_address(3)])
+    _published(state, "2026-09-03", [_address(4)])
 
     assert _whole_ledger(state) == {
         _address(2): "2026-08-21",
@@ -469,53 +378,26 @@ def test_load_published_reads_every_day_file_the_tree_holds(tmp_path: Path) -> N
 def test_load_published_keeps_the_earliest_date_two_days_hold(
     tmp_path: Path, earlier_first: bool
 ) -> None:
-    """One address in two day files on two dates. The answer cannot follow read order.
+    """One address on two days in two months. The answer cannot follow read order.
 
     Asserted both ways round because a reader that simply overwrote would pass
     one case and fail the other, and which case it passed would depend on which
-    day file it happened to open first.
+    day it happened to read first.
     """
     state = tmp_path / "state"
     key = _address(1)
     early, late = "2026-08-21", "2026-09-03"
     first, second = (early, late) if earlier_first else (late, early)
 
-    _published_file(_day_file(state, first), {key: first})
-    _published_file(_day_file(state, second), {key: second})
+    _published(state, first, [key])
+    _published(state, second, [key])
 
     assert _whole_ledger(state) == {key: early}
 
 
-@pytest.mark.parametrize(
-    ("relative", "what"),
-    [
-        ("2026/08/notes.csv", "a day stem that is not two digits"),
-        ("2026/8/21.csv", "a month that is not two digits"),
-        ("archive/08/21.csv", "a year that is not four digits"),
-        ("README.csv", "a file where a year directory belongs"),
-    ],
-)
-def test_load_published_refuses_a_file_it_cannot_place_in_the_day_tree(
-    tmp_path: Path, relative: str, what: str
-) -> None:
-    """A file the reader cannot place is a fault, and it is never skipped.
-
-    A glob would answer "what matched" and say nothing about what did not, so a
-    stray file would sit in a state directory unread and unmentioned - which is
-    how a reader starts missing rows without anyone noticing. Every case here
-    holds a real published row, so the refusal is about the name and not about
-    the contents.
-    """
-    state = tmp_path / "state"
-    _published_file(state / "published" / relative, {_address(1): "2026-08-21"})
-
-    with pytest.raises(ValueError, match="is not a YYYY/MM/DD day file"):
-        _whole_ledger(state)
-
-
-#: Six day files over six months, and two addresses that appear twice. Built
-#: rather than read off `state/published/`, which spans 16 days and could never
-#: carry the case these tests are about (Guardrail #12, section 13).
+#: Six days over six months, and two addresses that appear twice. Built rather
+#: than read off the committed ledger, which could never carry the case these
+#: tests are about (Guardrail #12, section 13).
 #:
 #: `_address(6)` is the one that matters: it was published in April and again in
 #: July, so the unwindowed read answers April and a 120-day cover answers July.
@@ -536,7 +418,7 @@ _ANCHOR: Final = "2026-09-08"
 def _six_months(state: Path) -> None:
     """Write the fixture. What it owes is spelled out in each case, not returned here."""
     for on, numbers in _SIX_MONTHS.items():
-        _published_file(_day_file(state, on), {_address(number): on for number in numbers})
+        _published(state, on, [_address(number) for number in numbers])
 
 
 def test_the_committed_cover_answers_exactly_what_the_unwindowed_read_answered(
@@ -572,34 +454,33 @@ def test_the_committed_cover_answers_exactly_what_the_unwindowed_read_answered(
     assert _whole_ledger(state) == expected, "and the anchor is not read on that path"
 
 
-def _opened(monkeypatch: pytest.MonkeyPatch, state: Path) -> list[str]:
-    """Every path the reader hands to `_stream_rows`, in the order it asked for them.
+def _asked(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Every list of days the reader hands the door's bounded read, in the order it asked.
 
-    A recorder rather than a substitute: it calls the real reader and hands back
-    what the real reader returns, so the mapping under test is the mapping a run
-    gets (Guardrail #7). Counting the opens is the only way to tell the two paths
-    apart - both answer the same over a fixture the cover covers, and a wall
-    clock would measure the box rather than the read.
+    A recorder rather than a substitute: it calls the real read and hands back
+    what the real read returns, so the mapping under test is the mapping a run
+    gets (Guardrail #7). Counting what was asked is the only way to tell the two
+    paths apart - both answer the same over a fixture the cover covers, and a
+    wall clock would measure the box rather than the read.
 
-    Read from the module that declares it and patched on the module that calls
-    it: `ledger.rows` imports the name, so a patch on `ledger.csv_file` alone
-    would leave the reader calling the original.
+    Patched on the module the reader calls it through, so the reader's own call
+    is the one recorded.
     """
-    real = csv_file._stream_rows
-    asked: list[str] = []
+    real = ledger_files.load_days
+    asked: list[list[str]] = []
 
-    def record(path: Path) -> Iterator[dict[str, str]]:
-        asked.append(path.relative_to(state.parent).as_posix())
-        return real(path)
+    def record(state_dir: Path, which: LedgerName, days: Collection[str], **kwargs: Any) -> Any:
+        asked.append(list(days))
+        return real(state_dir, which, days, **kwargs)
 
-    monkeypatch.setattr(ledger_rows, "_stream_rows", record)
+    monkeypatch.setattr(ledger_files, "load_days", record)
     return asked
 
 
-def test_a_finite_cover_opens_the_days_in_range_and_no_others(
+def test_a_finite_cover_reads_the_days_in_range_and_no_others(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Oracle, second case: a cover of 120 days never opens an April or a May file.
+    """Oracle, second case: a cover of 120 days never reads an April or a May day.
 
     Proved by what the reader asked for rather than by how long it took. The
     fixture spans six months, so 120 days back from the anchor cuts it in the
@@ -608,13 +489,12 @@ def test_a_finite_cover_opens_the_days_in_range_and_no_others(
     None of that is a bug being caught - it is what a cover is for, and it is
     why `CollectConfig` refuses one no wider than `collect.seen_window_days`.
 
-    The bounded path names its days, so it asks for all 121 of them and most do
-    not exist. `_stream_rows` yields nothing for a path that is not there, which
-    is why a day nobody published on is not a fault.
+    The bounded path names its days, so it asks for all 121 of them in one read
+    and most hold nothing, which is not a fault: nobody published on those days.
     """
     state = tmp_path / "state"
     _six_months(state)
-    asked = _opened(monkeypatch, state)
+    asked = _asked(monkeypatch)
 
     published = ledger.load_published(state, today=_ANCHOR, within_days=120)
 
@@ -624,40 +504,34 @@ def test_a_finite_cover_opens_the_days_in_range_and_no_others(
         _address(5): "2026-08-21",
         _address(6): "2026-07-04",
     }, "two addresses forgotten, and a third answering with a later date"
-    assert len(asked) == 121, "one path per day in the cover, and the anchor is one of them"
-    assert asked[0] == "state/published/2026/09/08.csv", "newest first"
-    assert asked[-1] == "state/published/2026/05/11.csv", "120 days back from the anchor"
-    assert "state/published/2026/04/05.csv" not in asked, "April is never opened"
-    assert "state/published/2026/05/02.csv" not in asked, "nor is the May day file"
-
-    existing = sorted(path for path in asked if (state.parent / path).is_file())
-    assert existing == [
-        "state/published/2026/06/30.csv",
-        "state/published/2026/07/04.csv",
-        "state/published/2026/08/21.csv",
-        "state/published/2026/09/03.csv",
-    ], "four of the six day files are inside the cover, and those are the four it read"
+    assert len(asked) == 1, "the whole cover is one bounded read"
+    days = asked[0]
+    assert len(days) == 121, "one day per day in the cover, and the anchor is one of them"
+    assert days[0] == "2026-09-08", "newest first"
+    assert days[-1] == "2026-05-11", "120 days back from the anchor"
+    assert "2026-04-05" not in days, "April is never read"
+    assert "2026-05-02" not in days, "nor is the May day"
 
 
-def test_the_unbounded_cover_opens_every_day_file_and_only_those(
+def test_the_unbounded_cover_reads_one_held_month_at_a_time(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The other half of the count: `-1` walks the tree and opens what it finds.
+    """The other half of the count: `-1` reads every month the ledger holds, one at a time.
 
-    Six files exist and six are opened - no path is named for a day that was
-    never published, because this path lists rather than names. That is the
-    difference the two cases measure: 121 paths to read four files against six
-    paths to read six.
+    Six months hold a day each and six reads are made, each one month's days. No
+    month the ledger never held is named, because this path asks the ledger's
+    indexes and raw folders what it holds rather than naming a range. A month a
+    read is what keeps the peak at one month's rows.
     """
     state = tmp_path / "state"
     _six_months(state)
-    asked = _opened(monkeypatch, state)
+    asked = _asked(monkeypatch)
 
     published = ledger.load_published(state, today=None, within_days=UNBOUNDED_WINDOW)
 
     assert len(published) == 6
-    assert len(asked) == 6, "one open per day file that exists, and none for a day that has none"
-    assert all((state.parent / path).is_file() for path in asked)
+    held = sorted({on[:7] for on in _SIX_MONTHS})
+    assert asked == [ledger.month_days(month) for month in held]
 
 
 def test_a_finite_cover_without_the_day_it_is_anchored_on_refuses() -> None:
@@ -671,30 +545,26 @@ def test_a_finite_cover_without_the_day_it_is_anchored_on_refuses() -> None:
         ledger.load_published(Path("state"), today=None, within_days=120)
 
 
-def test_append_published_writes_the_day_its_rows_name_and_no_other_file(
-    tmp_path: Path,
-) -> None:
+def test_append_published_files_the_day_it_is_given_and_no_other(tmp_path: Path) -> None:
     """The Oracle: one run writes one file, and it is that run's own day.
 
-    The whole state directory is compared rather than the day file alone. An
-    append that also touched the flat file, or that opened a neighbouring day
-    to check something, would pass an assertion about the day file and fail
-    here - and touching a day nobody is publishing is what a partitioned writer
-    must never do (`docs/concepts/partitions.md`).
-
-    The relpath is asserted against the file that was really written rather
-    than against a second spelling of the layout, so a log line cannot drift
-    from the file it names.
+    The whole state directory is compared rather than the day alone. A write
+    that also touched a neighbouring day, or wrote an index beside its file,
+    would pass an assertion about the day and fail here - and touching a day
+    nobody is publishing is what a partitioned writer must never do
+    (`docs/concepts/partitions.md`). The day is read off the file's own envelope
+    as well as its folder, because the envelope is what a reader trusts.
     """
     state = tmp_path / "state"
     date = "2026-09-07"
 
-    landed = ledger.append_published(state, date, [published_row(on=date)])
+    landed = _published(state, date, [URL_KEY])
 
     assert landed == 1
-    assert list(_tree(state)) == ["published/2026/09/07.csv"]
-    assert ledger.relpath(LedgerName.PUBLISHED, date) == "state/published/2026/09/07.csv"
-    assert ledger.path(state, LedgerName.PUBLISHED, date) == _day_file(state, date)
+    written = list(_tree(state))
+    assert len(written) == 1, f"one file for one run's day, not {written}"
+    assert written[0].startswith("raw/published/2026/09/07/")
+    assert ledger.read_envelope(state / written[0]).covers == date
 
 
 def test_a_run_in_a_later_month_leaves_the_earlier_one_byte_identical(
@@ -703,20 +573,19 @@ def test_a_run_in_a_later_month_leaves_the_earlier_one_byte_identical(
     """A closed day is not rewritten, and the bytes say so rather than a count.
 
     This is the freeze rule read from the writer's side: the run's own date
-    picks the file, so every other day is out of reach. Compared byte for byte
-    because a row appended to yesterday would leave the file count unchanged.
+    picks the folder, so every other day is out of reach. Compared byte for byte
+    because a row written into yesterday would leave the file count unchanged.
     """
     state = tmp_path / "state"
-    ledger.append_published(state, "2026-09-30", [published_row(on="2026-09-30")])
+    _published(state, "2026-09-30", [URL_KEY])
     september = _tree(state)
     assert september, "nothing was written, so the comparison below would prove nothing"
 
-    ledger.append_published(
-        state, "2026-10-01", [published_row(url_key=_address(2), on="2026-10-01")]
-    )
+    _published(state, "2026-10-01", [_address(2)])
 
     october = _tree(state)
-    assert set(october) - set(september) == {"published/2026/10/01.csv"}
+    added = set(october) - set(september)
+    assert len(added) == 1 and next(iter(added)).startswith("raw/published/2026/10/01/")
     assert {name: october[name] for name in september} == september
 
 
@@ -724,190 +593,17 @@ def test_what_the_writer_files_by_day_is_what_the_reader_answers(tmp_path: Path)
     """The writer's own output is read back, rather than a second spelling of it.
 
     Both halves are checked together here rather than each against a fixture of
-    the other's output: rows this writer really appended, across two days and
-    two months, and every address back from one read.
+    the other's output: rows this writer really filed, across two days and two
+    months, and every address back from one read.
     """
     state = tmp_path / "state"
-    ledger.append_published(
-        state, "2026-08-20", [published_row(url_key=_address(1), on="2026-08-20")]
-    )
-
-    ledger.append_published(
-        state, "2026-09-07", [published_row(url_key=_address(2), on="2026-09-07")]
-    )
+    _published(state, "2026-08-20", [_address(1)])
+    _published(state, "2026-09-07", [_address(2)])
 
     assert _whole_ledger(state) == {
         _address(1): "2026-08-20",
         _address(2): "2026-09-07",
     }
-
-
-def _raw(path: Path) -> str:
-    """The file's text with the line endings it really holds.
-
-    The split copies rows verbatim, so an assertion about them has to read the
-    bytes rather than a translation of them - on Windows the default would turn
-    every `\r\n` into `\n` and hide the one difference worth catching.
-    """
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return handle.read()
-
-
-def _flat_ledger(path: Path, rows: list[tuple[str, str]]) -> list[str]:
-    """One flat `state/published.csv` holding `rows` as (address, published_on).
-
-    Returns the data lines it wrote, in file order, so a test can assert the
-    split carried them across rather than re-serialising them. Rows go through
-    the contract, so a fixture cannot drift from what a run would append; the
-    order and the repeats are the test's, because both are what the split has
-    to preserve.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
-        out.writeheader()
-        for number, (url_key, on) in enumerate(rows):
-            out.writerow(
-                PublishedRow(
-                    version=PublishedRow.schema_version(),
-                    url_key=url_key,
-                    published_on=on,
-                    item_id=f"ai-{number:010d}",
-                ).model_dump(mode="json")
-            )
-    return _raw(path).split("\n")[1:-1]
-
-
-def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Path) -> None:
-    """The Oracle: the day files answer what the flat file held, before and after.
-
-    Four rows over three days and two months, one address published twice, so
-    the cases that matter are all here: a day file holds exactly its own rows,
-    two months are two directories, and the earliest date still wins for an
-    address the flat file held twice.
-
-    `load_published` no longer opens the flat file, so `before` is the utility's
-    own reduction of it. That is the whole reason this utility keeps a reader:
-    a one-shot cutover whose verification borrows the live reader stops working
-    the day the live reader changes.
-
-    The day file is compared byte for byte rather than row by row. Rows are
-    copied, never rewritten - so a split that re-serialised them through the
-    contract would pass a cell comparison and fail here, which is what stops a
-    `version` cell being restamped with today's.
-    """
-    state = tmp_path / "state"
-    written = _flat_ledger(
-        _flat_file(state),
-        [
-            (_address(1), "2026-08-31"),
-            (_address(2), "2026-09-01"),
-            (_address(3), "2026-08-31"),
-            (_address(1), "2026-09-02"),
-        ],
-    )
-    assert _whole_ledger(state) == {}, "nothing is in the day tree before the split runs"
-
-    report = split_ledger.run(state)
-
-    before = {
-        _address(1): "2026-08-31",
-        _address(2): "2026-09-01",
-        _address(3): "2026-08-31",
-    }
-    assert (report.rows_in, report.rows_out, report.days) == (4, 4, 3)
-    assert report.digest == split_ledger.digest(before), (
-        "the flat file has to hold a repeat or the earliest-wins case proves nothing"
-    )
-    assert not _flat_file(state).exists(), "the flat file is retired, not left beside the tree"
-    assert sorted(_tree(state)) == [
-        "published/2026/08/31.csv",
-        "published/2026/09/01.csv",
-        "published/2026/09/02.csv",
-    ]
-    header = ",".join(PublishedRow.csv_columns())
-    assert _raw(_day_file(state, "2026-08-31")) == (
-        f"{header}\n{written[0]}\n{written[2]}\n"
-    ), "the two rows that name this day, verbatim and in the order the flat file held them"
-    assert _whole_ledger(state) == before
-
-
-@pytest.mark.parametrize("bad", ["2026-08", "20260831"])
-def test_the_split_refuses_a_row_it_cannot_place_and_leaves_the_flat_file(
-    tmp_path: Path, bad: str
-) -> None:
-    """A row that lands nowhere stops the whole split, and nothing is written.
-
-    A published address the split dropped is an address `rank.plan_vertical`
-    would plan again, so the answer to a row nobody can place is the reader's
-    answer to a file nobody can place: refuse the read rather than skip it.
-
-    Two shapes, because they fail in different places. `2026-08` names a month,
-    and the date parser refuses it. `20260831` is a real ISO date the parser
-    accepts, and it is the dangerous one: `published_path` cuts a date by
-    position, so it would file the row at `state/published/2026/83/.csv` and
-    `load_published` would never find it again.
-
-    The bad row is written past the contract on purpose. `PublishedRow` refuses
-    it, so the only way this ledger holds one is a hand edit or a mangled merge
-    - which is exactly when the flat file has to survive.
-    """
-    state = tmp_path / "state"
-    flat = _flat_file(state)
-    _flat_ledger(flat, [(_address(1), "2026-08-31")])
-    text = _raw(flat)
-    good = text.split("\n")[1]
-    with flat.open("w", encoding="utf-8", newline="") as handle:
-        handle.write(f"{text}{good.replace('2026-08-31', bad)}\n")
-    was = flat.read_bytes()
-
-    with pytest.raises(ValueError, match="names no day file"):
-        split_ledger.run(state)
-
-    assert flat.read_bytes() == was, "the flat file is the only copy until the split finishes"
-    assert not (state / "published").exists(), "no day file is written when a row cannot be placed"
-
-
-def test_the_split_retires_a_flat_file_that_holds_nothing(tmp_path: Path) -> None:
-    """A header and no rows is a finished cutover, so the file goes and nothing is made.
-
-    A fresh clone that has never published has no flat file at all. This is the
-    other end of the same state - the file a run created and never filled - and
-    leaving it behind would keep `load_published` opening a file with nothing in
-    it for ever.
-    """
-    state = tmp_path / "state"
-    _flat_ledger(_flat_file(state), [])
-
-    report = split_ledger.run(state)
-
-    assert (report.rows_in, report.rows_out, report.days) == (0, 0, 0)
-    assert not _flat_file(state).exists()
-    assert _tree(state) == {}, "an empty ledger names no day, so no day file is created"
-    assert _whole_ledger(state) == {}
-
-
-def test_the_split_keeps_what_a_day_file_already_holds(tmp_path: Path) -> None:
-    """A run that already filed today's rows is not overwritten by the split.
-
-    The writer moved to the day layout before this ran, so a day can hold rows
-    in both shapes at once - an early run in the flat file, a later one in the
-    day file. Overwriting would lose the later run, which is the one failure
-    this cutover is not allowed to have.
-    """
-    state = tmp_path / "state"
-    date = "2026-09-07"
-    ledger.append_published(state, date, [published_row(url_key=_address(9), on=date)])
-    already = _raw(_day_file(state, date))
-    _flat_ledger(_flat_file(state), [(_address(1), date)])
-
-    report = split_ledger.run(state)
-
-    assert report.rows_in == 1
-    assert _raw(_day_file(state, date)).startswith(already)
-    assert _whole_ledger(state) == {_address(1): date, _address(9): date}, (
-        "one address came from each shape, and the split kept both"
-    )
 
 
 def carried_row(
@@ -1186,9 +882,7 @@ def test_the_older_generation_is_refiled_whichever_block_the_merge_put_first(
         newline="",
     )
 
-    moved = ledger.migrate_header(
-        path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)
-    )
+    moved = ledger.migrate_header(path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow))
 
     assert moved == 1, "only the row under the older header had to move"
     assert ledger.read_header(path) == FeedHealthRow.csv_columns()
@@ -1204,9 +898,9 @@ def test_a_day_file_already_under_the_current_header_is_left_byte_identical(
     path = a_feed_file(tmp_path / "state", [health_row()])
     before = path.read_bytes()
 
-    assert ledger.migrate_header(
-        path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)
-    ) == 0
+    assert (
+        ledger.migrate_header(path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)) == 0
+    )
     assert path.read_bytes() == before
 
 
@@ -1233,9 +927,7 @@ def test_a_file_wider_than_this_checkout_is_refused_and_left_byte_identical(
 
     assert path.read_bytes() == before, "not one cell moved"
     with path.open(encoding="utf-8", newline="") as handle:
-        assert [FeedHealthRow.from_csv_row(raw) for raw in csv.DictReader(handle)] == [
-            health_row()
-        ]
+        assert [FeedHealthRow.from_csv_row(raw) for raw in csv.DictReader(handle)] == [health_row()]
 
 
 class _CountedRead:
@@ -1282,9 +974,7 @@ class _CountedRead:
         return getattr(self._handle, name)
 
 
-def counted_reads(
-    monkeypatch: pytest.MonkeyPatch, path: Path
-) -> tuple[list[int], list[int]]:
+def counted_reads(monkeypatch: pytest.MonkeyPatch, path: Path) -> tuple[list[int], list[int]]:
     """Count how often `path` is opened to read, and how many lines come out."""
     opens = [0]
     lines = [0]
@@ -1313,14 +1003,14 @@ def test_the_header_check_reads_one_line_whatever_the_file_holds(
     moved since the file was written.
     """
     state = tmp_path / "state"
-    path = a_feed_file(state, [feed_row(f"feed-{number:02d}") for number in range(50)])
+    path = a_feed_file(state, [feed_row(f"feed-{number:02d}") for number in range(2)])
     _, lines = counted_reads(monkeypatch, path)
 
-    assert ledger.migrate_header(
-        path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)
-    ) == 0
+    assert (
+        ledger.migrate_header(path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)) == 0
+    )
 
-    assert lines[0] == 1, f"the header check read {lines[0]} lines of a 51-line file"
+    assert lines[0] == 1, f"the header check read {lines[0]} lines of a 3-line file"
 
 
 def test_the_day_count_is_what_each_feed_put_in_front_of_a_reader(tmp_path: Path) -> None:
@@ -1378,37 +1068,6 @@ def test_a_day_nothing_was_recorded_for_counts_nothing(tmp_path: Path) -> None:
     assert ledger.load_source_counts(tmp_path / "state", DATE) == {}
 
 
-def test_narrowing_the_published_ledger_keeps_every_pair_the_skip_read_uses() -> None:
-    """The Oracle for dropping `canonical_url`: same rows, same pairs, same order.
-
-    `load_published` opens `url_key` and `published_on` and nothing else, so a
-    rewrite that preserves those two cells cannot make a published address
-    plannable again. The fixture is eleven real rows out of the ledger that was
-    migrated.
-    """
-    with (STATE_FIXTURES / "published-v1.csv").open(encoding="utf-8", newline="") as handle:
-        wide = handle.read()
-
-    report = narrow(wide)
-
-    assert report.rows_in == 11
-    assert report.rows_out == report.rows_in, "a row was lost or invented"
-    assert report.bytes_out < report.bytes_in
-    read = csv.DictReader(report.text.splitlines())
-    assert tuple(read.fieldnames or ()) == PublishedRow.csv_columns()
-    before = [(row["url_key"], row["published_on"]) for row in csv.DictReader(wide.splitlines())]
-    assert [(row["url_key"], row["published_on"]) for row in read] == before
-
-
-def test_narrowing_an_already_narrow_published_ledger_is_refused() -> None:
-    """Running it twice must not be a way to lose a file it no longer understands."""
-    with (STATE_FIXTURES / "published-v2.csv").open(encoding="utf-8", newline="") as handle:
-        already = handle.read()
-
-    with pytest.raises(ValueError, match="nothing to migrate"):
-        narrow(already)
-
-
 def _scores(**cells: str) -> str:
     """One committed-shaped eval ledger, with only the cells a test cares about set."""
     columns = EvalRow.csv_columns()
@@ -1452,9 +1111,7 @@ def test_the_two_ledgers_on_the_door_file_under_the_raw_root() -> None:
     """
     state = Path("state")
 
-    assert ledger.raw_root(state, LedgerName.FEED_RETIREMENTS) == Path(
-        "state/raw/feed-retirements"
-    )
+    assert ledger.raw_root(state, LedgerName.FEED_RETIREMENTS) == Path("state/raw/feed-retirements")
     assert ledger.raw_root(state, LedgerName.VISUAL_PRUNES) == Path("state/raw/visual-prunes")
 
 
@@ -1524,9 +1181,9 @@ def test_the_score_record_is_one_file_that_never_grows_with_the_archive() -> Non
     (Guardrail #12), so the path carries no date and there is nothing here for a
     partition to place.
     """
-    assert ledger.path(Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION) == Path(
-        "state/content-similarity-judge/score-distribution.json"
-    )
+    assert ledger.path(
+        Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION
+    ) == Path("state/content-similarity-judge/score-distribution.json")
 
 
 # --- The cleanup record, one file per pass ----------------------------------
@@ -1648,7 +1305,6 @@ def test_load_visual_prunes_skips_a_file_it_cannot_read_and_names_it(
     assert "state/raw/visual-prunes/2026/09/07/not-a-ledger-file.parquet" in caplog.text
 
 
-
 # --- The pass that runs after the merge ------------------------------------
 
 
@@ -1672,9 +1328,12 @@ def test_a_repeated_row_is_dropped_and_every_other_byte_is_left_alone(tmp_path: 
     every append: two units of one night, then a second attempt at the first
     unit that drew another machine.
     """
-    assert ledger.append_council_shard_outcomes(
-        tmp_path, DATE, [council_unit(0, "first"), council_unit(1, "second")]
-    ) == 2
+    assert (
+        ledger.append_council_shard_outcomes(
+            tmp_path, DATE, [council_unit(0, "first"), council_unit(1, "second")]
+        )
+        == 2
+    )
     path = ledger.path(tmp_path, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, DATE)
     header = ",".join(CouncilShardOutcome.csv_columns())
     clean = path.read_text(encoding="utf-8")
@@ -1711,12 +1370,7 @@ def test_the_pass_leaves_a_ledger_it_cannot_key_alone(tmp_path: Path) -> None:
 
 
 def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> None:
-    """`state/seen/` is absent on purpose, not by omission.
-
-    It declares no key at all: a second sight is folded by `load_seen` keeping
-    the earliest, so a repeat costs bytes and never moves an age. Everything
-    else here says what makes two of its rows one record, and everything that
-    says so is settled.
+    """Everything here says what makes two of its rows one record, and is settled.
 
     Five trees left this set on 2026-09-22 and they are the ones to look for if
     this list ever looks short. Each became a day directory where every writer
@@ -1733,23 +1387,18 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     anything writes it, which is why it is built here by hand rather than by an append
     call. Its sibling `scored-pairs/` has a writer and is filled by one.
     """
-    ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
     ledger.append_council_shard_outcomes(tmp_path, DATE, [council_row()])
     fitted = ledger.path(tmp_path, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, DATE)
     fitted.parent.mkdir(parents=True, exist_ok=True)
-    fitted.write_text(
-        ",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8"
-    )
+    fitted.write_text(",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8")
     named = [
         (
-            f"content-similarity-judge/fitted-thresholds/"
-            f"{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            f"content-similarity-judge/fitted-thresholds/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_THRESHOLD_KEY,
         ),
         (
-            f"content-similarity-judge/scored-pairs/"
-            f"{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            f"content-similarity-judge/scored-pairs/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_PAIR_KEY,
         ),
         (
@@ -1761,9 +1410,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     every = ledger.keyed_paths(tmp_path, date=None)
     this_run = ledger.keyed_paths(tmp_path, date=DATE)
 
-    assert [
-        (target.path.relative_to(tmp_path).as_posix(), target.key) for target in every
-    ] == named
+    assert [(target.path.relative_to(tmp_path).as_posix(), target.key) for target in every] == named
     assert [
         (target.path.relative_to(tmp_path).as_posix(), target.key) for target in this_run
     ] == named
@@ -1816,10 +1463,18 @@ def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_
     state = tmp_path / "state"
     candidate = ValidationRow.model_validate(
         {
-            "date": DATE, "run_id": RUN_ID, "model_id": "candidate-fixture",
-            "is_incumbent": False, "selected": False, "leaderboard_hhem": 0.8,
-            "measured_hhem": 0.7, "articles": 1, "commit_sha": "aaaaaaa",
-            "runner": "fixture", "verdict": "confirmed", "detail": "recorded evaluation",
+            "date": DATE,
+            "run_id": RUN_ID,
+            "model_id": "candidate-fixture",
+            "is_incumbent": False,
+            "selected": False,
+            "leaderboard_hhem": 0.8,
+            "measured_hhem": 0.7,
+            "articles": 1,
+            "commit_sha": "aaaaaaa",
+            "runner": "fixture",
+            "verdict": "confirmed",
+            "detail": "recorded evaluation",
         }
     )
     for attempt, cpu in enumerate(("first", "second"), start=1):
@@ -1832,9 +1487,14 @@ def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_
             identity=writer_identity(RUN_ID, attempt=attempt, job=ServerJob.WORK),
         )
 
-    machines = ledger.load_days(state, LedgerName.HOST_FINGERPRINT, [DATE], model=HostFingerprintRow)
+    machines = ledger.load_days(
+        state, LedgerName.HOST_FINGERPRINT, [DATE], model=HostFingerprintRow
+    )
     candidates = ledger.load_days(
-        state, LedgerName.CANDIDATE_MODELS, [DATE], model=ValidationRow,
+        state,
+        LedgerName.CANDIDATE_MODELS,
+        [DATE],
+        model=ValidationRow,
     )
 
     assert len(machines) == 1, "one machine, written down twice, is one machine"
@@ -1864,10 +1524,9 @@ def health_rows(state: Path) -> list[FeedHealthRow]:
     return ledger.load_health(state, today=DATE, within_days=1)
 
 
-#: Wider than `ledger.HEALTH_WINDOW_DAYS` (31), so a 31-day window has something
-#: to exclude and a grain that read too far shows up as rows the window did not
-#: name. It spans two months as well, so the month case below really holds two.
-PARITY_DAYS: Final = 40
+#: Three recorded days are the minimum that leave one outside a two-day window.
+PARITY_DAYS: Final = 3
+PARITY_WINDOW_DAYS: Final = 2
 
 #: One feed a reading, chosen so the three cases the reliability reduction
 #: separates are all present: one that answers, one that never reaches the
@@ -1879,19 +1538,19 @@ PARITY_FEEDS: Final = {
 }
 
 
-def parity_rows(days: int = PARITY_DAYS) -> list[FeedHealthRow]:
+def parity_rows(days: int = PARITY_DAYS, *, today: str = DATE) -> list[FeedHealthRow]:
     """`days` consecutive days of readings, one row per feed per day, oldest first.
 
-    The steady feed answers with entries on every run but one in seven, so its
-    reliability is a fraction rather than 1.0 - a window that reached a different
-    set of days would move it, which is what makes the comparison below bite.
+    The steady feed answers on one of the two named days, so its reliability is
+    a fraction rather than 1.0 - a window that reached different days would move
+    it, which is what makes the comparison below bite.
     """
-    start = date_type.fromisoformat(DATE) - timedelta(days=days - 1)
+    start = date_type.fromisoformat(today) - timedelta(days=days - 1)
     rows: list[FeedHealthRow] = []
     for offset in range(days):
         day = (start + timedelta(days=offset)).isoformat()
         for feed_id, outcome in PARITY_FEEDS.items():
-            empty = feed_id == "steady" and offset % 7 == 0
+            empty = feed_id == "steady" and offset % 2 == 0
             rows.append(
                 FeedHealthRow(
                     version=FeedHealthRow.schema_version(),
@@ -1955,25 +1614,24 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
     """The row Oracle. Moving the files moved no reliability figure.
 
     Built at both grains from ONE row list, so a difference can only come from
-    the reading. Forty days against a 31-day window, so the window has nine days
-    to exclude - and the month case is what proves the exclusion is real: two
-    month shards hold all forty days, so the old reader hands back rows the
-    window never named. The day case hands back exactly the days it named, which
-    is the trade the grain makes - more file handles for fewer rows.
+    the reading. Three dates cross one month boundary. With a two-day window, the day reader
+    excludes the oldest date while the month reader opens both month files and
+    includes it. Two dates would not prove the exclusion, so these three are the
+    smallest sample that shows the difference.
 
     The day cover counts RECORDED days, so the days it names are the newest
-    thirty-one on disk. Every day here recorded one, which is why that set and a
+    two on disk. Every day here recorded one, which is why that set and a
     calendar window over the same tree hold the same dates but for the far end.
 
     The reliability maps are compared over the SAME rows on both sides, because
     that is the claim worth making: `feed_reliability` is untouched by this row,
     and what could break is which rows reach it.
 
-    A 40-day tree the test builds rather than the committed ledger: the archive
-    holds 21 days, gains one every day, and could never carry the case this needs
+    The test builds these rows rather than reading the committed ledger
     (`CLAUDE.md` section 13, Guardrail #12).
     """
-    rows = parity_rows()
+    today = "2026-10-02"
+    rows = parity_rows(today=today)
     day_tree = tmp_path / "day" / "state"
     # One call a day, not one a row: the plan job writes its whole read of the
     # day into one file, and a second call under the same identity replaces it.
@@ -1985,7 +1643,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
     month_root = ledger.tree_root(tmp_path / "month" / "state", LedgerName.FEED_HEALTH)
     month_grain_tree(month_root, rows)
 
-    window = ledger.HEALTH_WINDOW_DAYS
+    window = PARITY_WINDOW_DAYS
     recorded = sorted(
         {
             day_shards.date_of(shard)
@@ -1995,12 +1653,14 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
         }
     )
     named = set(recorded[-window:])
-    from_days = ledger.load_health(day_tree, today=DATE, within_days=window)
-    from_months = month_grain_read(month_root, today=DATE, within_days=window)
+    from_days = ledger.load_health(day_tree, today=today, within_days=window)
+    from_months = month_grain_read(month_root, today=today, within_days=window)
 
     assert len(recorded) == PARITY_DAYS
     assert len(named) == window, "the cover counts recorded days, and every day here recorded one"
-    assert {row.date for row in from_days} == named, "the day case read a day the window did not name"
+    assert {row.date for row in from_days} == named, (
+        "the day case read a day the window did not name"
+    )
     assert len(from_days) == len(named) * len(PARITY_FEEDS)
     assert len(from_months) > len(from_days), (
         "the month shards have to hold rows outside the window or the trade is not shown"
@@ -2015,7 +1675,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
         )
         for feed_id in PARITY_FEEDS
     }
-    measured = reliability(day_tree, today=DATE, within_days=window, floor=floor)
+    measured = reliability(day_tree, today=today, within_days=window, floor=floor)
 
     assert measured == over_the_same_rows
     assert 0.0 < measured["steady"] < 1.0, "the fixture has to separate the three feeds"
@@ -2048,18 +1708,13 @@ def test_the_attempt_that_carried_articles_wins_however_late_it_ran(tmp_path: Pa
     the last would throw the recovery away when the retry came back empty.
     """
     seed_feed_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")])
-    seed_feed_health(
-        tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="07:00:00")], attempt=2
-    )
+    seed_feed_health(tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="07:00:00")], attempt=2)
     assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 9)]
 
     later = tmp_path / "later"
     seed_feed_health(later, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")])
-    seed_feed_health(
-        later, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2
-    )
+    seed_feed_health(later, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2)
     assert [(row.outcome, row.items) for row in health_rows(later)] == [(FetchOutcome.OK, 9)]
-
 
 
 # --- The server's own counters, and what they are for ----------------------

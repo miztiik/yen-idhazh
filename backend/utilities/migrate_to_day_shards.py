@@ -42,13 +42,10 @@ directory is therefore already unreadable by the pipeline, and the repair is
 `git checkout` on the ledger rather than a second pass over it - a second pass
 cannot know which rows the first one had already moved.
 
-**Which cell names a day, and why `state/seen/` files by `first_seen_run`.** The
-day is the first ten characters, and the cell is either exactly those ten or
-continues with `-`. A run id is `<date>-<n>`, so filing by `first_seen_run`
-reproduces `ledger.append_seen`'s own filing exactly. A wall-clock stamp is
-`<date>T<time>Z`, and the `T` is refused here - `first_seen_at` crosses midnight
-independently of the run the row belongs to, so a tree filed by it would
-disagree with the writer that built it.
+**Which cell names a day.** The cell is exactly ten characters, `YYYY-MM-DD`. A
+wall-clock stamp is `<date>T<time>Z` and is refused here: a stamp crosses
+midnight independently of the day its writer filed the row under, so a tree
+filed by one would disagree with the writer that built it.
 
 **Run it when no scheduled digest is in flight.** A migration moves every line of
 every file it touches, so a run that appends while this is in review leaves the
@@ -96,7 +93,7 @@ from idhazh.day_partition import day_files
 from idhazh.ledger import BEFORE_PARTITION_NAME
 from idhazh.telemetry.traces import TRACE_SUFFIX, trace_date
 
-#: `YYYY-MM-DD`. A cell is exactly this wide, or this wide and then a `-`.
+#: `YYYY-MM-DD`. A cell is exactly this wide.
 DAY_WIDTH: Final = 10
 
 #: Every ledger this moves is a CSV. Spelled once, used by both walks.
@@ -106,16 +103,15 @@ SUFFIX: Final = ".csv"
 def day_of(cell: str) -> str:
     """The day this cell names, or a `ValueError` saying why it names none.
 
-    Every clause refuses something the others let through. The suffix clause
-    refuses a wall-clock stamp, whose eleventh character is `T`, and accepts a
-    run id, whose eleventh character is `-`. The round-trip refuses `20260907`
-    and `2026-W01-1`, which `date.fromisoformat` accepts and which name no
-    `<YYYY>/<MM>/<DD>` path. An empty cell reaches the parser and is refused
-    there.
+    Every clause refuses something the others let through. The width clause
+    refuses a wall-clock stamp and anything else longer than a day. The
+    round-trip refuses `20260907` and `2026-W01-1`, which `date.fromisoformat`
+    accepts and which name no `<YYYY>/<MM>/<DD>` path. An empty cell reaches the
+    parser and is refused there.
     """
-    if len(cell) > DAY_WIDTH and cell[DAY_WIDTH] != "-":
-        raise ValueError(f"is dated {cell!r}, which is a stamp rather than a day")
-    day = cell[:DAY_WIDTH]
+    if len(cell) > DAY_WIDTH:
+        raise ValueError(f"is dated {cell!r}, which is longer than a day")
+    day = cell
     try:
         parsed = date_type.fromisoformat(day)
     except ValueError as error:

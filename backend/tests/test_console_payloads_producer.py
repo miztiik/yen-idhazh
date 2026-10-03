@@ -3,8 +3,8 @@
 Every fixture here is **built**, never read out of the committed tree: the
 archive offers a handful of distinct cases however far it grows, and a test that
 walks it costs more every time a run appends (`CLAUDE.md` Guardrail #12, section 13).
-Building it is also the only way to get the awkward shapes - a month of twenty,
-a run whose shards disagree, a day that published nothing.
+Building it also creates the shapes these tests need - one month beyond the
+retention limit, a run whose shards disagree, and a day that published nothing.
 """
 
 from __future__ import annotations
@@ -63,11 +63,11 @@ from idhazh.telemetry.publish import (
 #: what those selectors mean and belongs in its own commit.
 pytestmark = pytest.mark.contract
 
-#: Twenty months of everything, which is more than any retention knob keeps and
-#: enough that a producer reading them all is obvious in a handle count.
+#: Fifteen months prove that a fourteen-month cap drops the oldest one.
 MONTHS: Final[tuple[str, ...]] = tuple(
-    f"{2025 + (index + 4) // 12:04d}-{(index + 4) % 12 + 1:02d}" for index in range(20)
+    f"{2025 + (index + 4) // 12:04d}-{(index + 4) % 12 + 1:02d}" for index in range(15)
 )
+THREE_MONTHS: Final = MONTHS[-3:]
 #: The newest month the fixture holds, which is what a daily run would name.
 NEWEST: Final = MONTHS[-1]
 NEWEST_DAY: Final = f"{NEWEST}-01"
@@ -152,7 +152,7 @@ def _item(item_id: str, *, charted: bool) -> DigestItem:
             "source_id": "grid-news",
             "source_name": "Grid News",
             "summary": "A short summary of one grid story.",
-                "band": ConfidenceBand.HIGH,
+            "band": ConfidenceBand.HIGH,
             "band_reason": None,
             "truncated": False,
             "visual": visual,
@@ -185,7 +185,9 @@ def _day(stamp: str, *, items: int, charts: int) -> DigestDay:
     )
 
 
-def _manifest(stamp: str, *, planned: int, succeeded: int, failed: int, site_bytes: int) -> RunManifest:
+def _manifest(
+    stamp: str, *, planned: int, succeeded: int, failed: int, site_bytes: int
+) -> RunManifest:
     return RunManifest(
         version=RunManifest.schema_version(),
         date=stamp,
@@ -257,10 +259,20 @@ def _record(stamp: str) -> DayMetrics:
 
 @pytest.fixture
 def tree(tmp_path: Path) -> tuple[Path, Path]:
-    """Twenty months of state and twenty published days, one a month."""
+    """The minimum fifteen months that can prove a fourteen-month retention cap."""
+    return _seed_tree(tmp_path, MONTHS)
+
+
+@pytest.fixture
+def three_month_tree(tmp_path: Path) -> tuple[Path, Path]:
+    """Three months prove a named-month read and a two-shard spread."""
+    return _seed_tree(tmp_path, THREE_MONTHS)
+
+
+def _seed_tree(tmp_path: Path, months: tuple[str, ...]) -> tuple[Path, Path]:
     state = tmp_path / "state"
     digest = tmp_path / "frontend" / "public" / "digest"
-    for index, month in enumerate(MONTHS):
+    for index, month in enumerate(months):
         stamp = f"{month}-01"
         run_id = f"{stamp}-1"
         seed_scores(state, [_eval_row(month)], run_id=run_id)
@@ -321,10 +333,10 @@ def _handles(root: Path) -> Iterator[list[str]]:
     """Every path opened inside `root` while the block runs.
 
     An audit hook rather than a stopwatch, because a stopwatch on this box
-    cannot tell one month from twenty: a sibling row measured 16.6 percent
-    run-to-run variance on identical work, which is more than nineteen months of
-    fixture could ever cost. What the reads open is arithmetic and has no spread
-    at all (Guardrail #10).
+    cannot tell one month from three: a sibling row measured 16.6 percent
+    run-to-run variance on identical work, more than two months of fixture could
+    ever cost. What the reads open is arithmetic and has no spread at all
+    (Guardrail #10).
     """
     global _WATCHING
     seen: list[str] = []
@@ -351,9 +363,7 @@ def _publish_all(state: Path, digest: Path, *, months: set[str] | None) -> None:
     day_metrics.publish_public(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
-    run_days.publish(
-        digest_root=digest, keep_months=14, today=TODAY, months=months
-    )
+    run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months=months)
 
 
 def _month_read(path: str) -> str | None:
@@ -373,16 +383,16 @@ def _month_read(path: str) -> str | None:
     return None
 
 
-def test_the_second_run_opens_one_month_not_twenty(
-    tree: tuple[Path, Path], opened: list[str]
+def test_the_second_run_opens_only_its_named_month(
+    three_month_tree: tuple[Path, Path], opened: list[str]
 ) -> None:
-    """The second run opens one month, asserted on file handles.
+    """The second run opens one of three months, asserted on file handles.
 
     The first run backfills - every month's target is missing, so every month is
     read. The second names the one month it appended to and reads that one,
     because the run knows which month it just wrote.
     """
-    state, digest = tree
+    state, digest = three_month_tree
     _publish_all(state, digest, months=None)
     _OPENED.clear()
 
@@ -394,41 +404,58 @@ def test_the_second_run_opens_one_month_not_twenty(
 
 
 def test_the_first_run_reads_every_month_and_the_second_writes_nothing(
-    tree: tuple[Path, Path],
+    three_month_tree: tuple[Path, Path],
 ) -> None:
     """Byte equality, not a timestamp: a re-derived month is not rewritten."""
-    state, digest = tree
+    state, digest = three_month_tree
     first = machine.publish(
-        state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
+        state_root=state,
+        digest_root=digest,
+        keep_months=len(THREE_MONTHS),
+        today=TODAY,
+        months=None,
     )
-    assert len(first) == len(MONTHS)
+    assert len(first) == len(THREE_MONTHS)
 
     again = machine.publish(
-        state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
+        state_root=state,
+        digest_root=digest,
+        keep_months=len(THREE_MONTHS),
+        today=TODAY,
+        months=None,
     )
 
     assert again == []
 
 
 def test_a_missing_target_is_written_even_when_its_month_was_not_named(
-    tree: tuple[Path, Path],
+    three_month_tree: tuple[Path, Path],
 ) -> None:
     """A fresh clone, a deleted file and a first backfill all land.
 
     Without this a month outside the named set would be skipped for ever, and a
     console asking for it would get a 404 it cannot tell from a broken deploy.
     """
-    state, digest = tree
+    state, digest = three_month_tree
     machine.publish(
-        state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
+        state_root=state,
+        digest_root=digest,
+        keep_months=len(THREE_MONTHS),
+        today=TODAY,
+        months=None,
     )
-    machine.shard_path(digest, MONTHS[0]).unlink()
+    first_month = THREE_MONTHS[0]
+    machine.shard_path(digest, first_month).unlink()
 
     written = machine.publish(
-        state_root=state, digest_root=digest, keep_months=20, today=TODAY, months={NEWEST}
+        state_root=state,
+        digest_root=digest,
+        keep_months=len(THREE_MONTHS),
+        today=TODAY,
+        months={NEWEST},
     )
 
-    assert [path.stem for path in written] == [MONTHS[0]]
+    assert [path.stem for path in written] == [first_month]
 
 
 # --- retention ---------------------------------------------------------------
@@ -475,10 +502,7 @@ def test_a_published_shard_reads_back_as_it_was_written(tree: tuple[Path, Path])
 
     assert len(machine.read_shard(machine.shard_path(digest, NEWEST))) == 2
     assert len(run_days.read_shard(run_days.shard_path(digest, NEWEST))) == 1
-    assert (
-        len(day_metrics.read_public_shard(day_metrics.public_shard_path(digest, NEWEST)))
-        == 1
-    )
+    assert len(day_metrics.read_public_shard(day_metrics.public_shard_path(digest, NEWEST))) == 1
 
 
 # --- the run-day reduction ---------------------------------------------------
@@ -719,9 +743,9 @@ def test_an_editorial_fault_never_takes_the_band_from_a_failed_run() -> None:
     assert [c.severity for c in capped] == [console_band.EDITORIAL_CAP]
     assert capped[0].text == loud.text and capped[0].sentence == loud.sentence
     assert console_band.EDITORIAL_CAP < console_band.BROKEN
-    assert [
-        c.severity for c in console_band.dead_gate_candidates({"desk": 1.0})
-    ] == [console_band.BROKEN]
+    assert [c.severity for c in console_band.dead_gate_candidates({"desk": 1.0})] == [
+        console_band.BROKEN
+    ]
 
 
 def test_a_box_with_no_swap_is_not_a_box_that_has_run_out_of_swap() -> None:
@@ -815,13 +839,15 @@ def test_a_source_too_thin_to_judge_carries_its_denominator_and_is_ranked_lower(
     assert found[0].severity < console_band.WORTH_A_LOOK
 
 
-def test_the_strip_carries_five_routes_and_every_one_answers_at_its_own_address(
+def test_the_strip_carries_six_routes_and_every_one_answers_at_its_own_address(
     tree: tuple[Path, Path],
 ) -> None:
     """A tab in a strip whose page does not exist is a strip that lies.
 
     The ids, the addresses and the order are what a browser resolves, so they
-    are asserted here rather than left to the component that draws them.
+    are asserted here rather than left to the component that draws them. The
+    band carries `Records` before its page exists; the strip draws that tab only
+    while `console.data_explorer_tab` is on, which is what keeps the strip true.
     """
     state, digest = tree
 
@@ -833,6 +859,7 @@ def test_the_strip_carries_five_routes_and_every_one_answers_at_its_own_address(
         RouteId.MACHINE,
         RouteId.JUDGEMENT,
         RouteId.VOICES,
+        RouteId.DATA_EXPLORER,
     ]
     assert [route.href for route in band.routes] == [
         "/console/",
@@ -840,6 +867,7 @@ def test_the_strip_carries_five_routes_and_every_one_answers_at_its_own_address(
         "/console/machine/",
         "/console/judgement/",
         "/console/voices/",
+        "/console/data-explorer/",
     ]
     assert [route.label for route in band.routes] == [
         "Pipelines",
@@ -847,12 +875,17 @@ def test_the_strip_carries_five_routes_and_every_one_answers_at_its_own_address(
         "Hardware",
         "Judgement",
         "Voices",
+        "Records",
     ]
-    # Every route points at a panel another route owns, the two new ones
+    # Every route points at a panel another route owns, the newest ones
     # included: a route carrying nothing is a route that hides the page which
     # explains it.
     for route in band.routes:
         assert len(route.carries) > 20, route.id
+    # Records judges nothing, so it never carries a worst state of its own.
+    records = next(route for route in band.routes if route.id is RouteId.DATA_EXPLORER)
+    assert records.worst is None
+    assert records.severity == console_band.CLEAR
 
 
 def test_the_band_prints_the_size_against_the_cap_with_the_days_it_measured(
@@ -863,7 +896,7 @@ def test_the_band_prints_the_size_against_the_cap_with_the_days_it_measured(
 
     band = _band(state, digest)
 
-    assert band.size.bytes == 1_000_000 + 19 * 30_000
+    assert band.size.bytes == 1_000_000 + (len(MONTHS) - 1) * 30_000
     # Three published days fall inside the 90-day span the widest preset offers,
     # and the oldest of them has no day before it to difference against.
     assert band.size.measured_days == 2
@@ -943,7 +976,7 @@ def test_more_hosts_than_the_plan_asked_for_refuses_the_run(tree: tuple[Path, Pa
 
 
 def test_the_spread_is_read_off_the_cells_the_server_itself_counted(
-    tree: tuple[Path, Path],
+    three_month_tree: tuple[Path, Path],
 ) -> None:
     """One shard read 100 tokens a second and the other 50, so they read 2x apart.
 
@@ -954,7 +987,7 @@ def test_the_spread_is_read_off_the_cells_the_server_itself_counted(
     **The line carries the count it was taken over.** A bare ratio on the strip
     reads as a fleet figure, and this one is two shards of one run.
     """
-    state, digest = tree
+    state, digest = three_month_tree
 
     band = _band(state, digest)
 
@@ -973,9 +1006,7 @@ def test_a_shard_that_filed_no_host_row_is_counted_against_the_plan(
     state, digest = tree
     (silent,) = [
         held.path
-        for held in ledger.list_raw_files(
-            state, LedgerName.HOST_FINGERPRINT, days={NEWEST_DAY}
-        )
+        for held in ledger.list_raw_files(state, LedgerName.HOST_FINGERPRINT, days={NEWEST_DAY})
         if held.envelope.identity.shard == 1
     ]
     silent.unlink()
@@ -1069,14 +1100,13 @@ def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
     state, digest = tree
     _publish_all(state, digest, months=None)
 
-    payload = json.loads(
-        run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8")
-    )
+    payload = json.loads(run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8"))
 
     assert isinstance(payload, list)
     assert {row["version"] for row in payload} == {
-        __import__("idhazh.contracts.public_run_day", fromlist=["PublicRunDay"])
-        .PublicRunDay.schema_version()
+        __import__(
+            "idhazh.contracts.public_run_day", fromlist=["PublicRunDay"]
+        ).PublicRunDay.schema_version()
     }
 
 
