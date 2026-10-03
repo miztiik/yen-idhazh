@@ -33,8 +33,6 @@ A test reads a bounded fixture under `tmp_path`, not the growing production stat
 
 The code pull request does not contain migrated production data. Merge the code first. The owner then makes the data commit last, after checking that no run of `digest.yml`, `idhazh-gardener.yml`, `idhazh-pipeline-tests.yaml`, `validate.yml` or `measure.yml` is queued or running. Check again just before the merge. If a run is active, wait for it and repeat the migration against the final code.
 
-**Owner-approved exception, 2026-10-03:** `feed-health` may merge while `digest.yml` is active. That run uses the CSV writer. Let it finish, run `--check`, and migrate any CSV it committed under the same row and run id. The next digest after the merge uses the door writer.
-
 Run the migrator from the checked-out code commit. Name the roots and UTC months to migrate. `--state-dir`, `--ledger` and the required `--month YYYY-MM` all repeat. The run id is the UTC date of the migration commit followed by `-1`; the SHA is the full commit id of the code being run.
 
 ```text
