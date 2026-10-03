@@ -8,6 +8,7 @@ import { readoutOf } from '../src/lib/charts/readout';
 import { clocksChart } from '../src/lib/charts/machine';
 import { stacked } from '../src/lib/charts/stacked';
 import { serverCompiler } from './support/server-render';
+import { chartsReady } from './support/charts-ready';
 
 /**
  * Every console chart says whether it has a column to hover, and says it in
@@ -259,8 +260,7 @@ async function open(page: Page, route: string, size = DESKTOP): Promise<void> {
 	if (route === '/console/machine/') {
 		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
 	}
-	// The engine charts hydrate after mount and swap their prerendered SVG out.
-	await page.waitForTimeout(900);
+	await chartsReady(page);
 }
 
 /** The strip's heading, which is the column it is printing. */
@@ -397,7 +397,6 @@ test.describe('the readout is the default', () => {
 						const box = await mark.boundingBox();
 						if (box === null) continue;
 						await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-						await page.waitForTimeout(60);
 						const name = (await mark.getAttribute('aria-label')) ?? '';
 						const strip = (await owner.locator('[data-readout]').first().innerText()).toLowerCase();
 						const missing = significant(name).filter((word) => !strip.includes(word));
@@ -446,17 +445,14 @@ test.describe('the readout is the default', () => {
 				const resting = await heading.innerText();
 
 				await focusable.focus();
-				await page.waitForTimeout(150);
 				const opened = await heading.innerText();
 				// A list steps on Down, a row on Right, and a grid on both.
 				await page.keyboard.press('ArrowRight');
 				await page.keyboard.press('ArrowDown');
-				await page.waitForTimeout(150);
-				expect(await heading.innerText(), `${name}: no arrow key moved the strip`).not.toBe(opened);
+				await expect(heading, `${name}: no arrow key moved the strip`).not.toHaveText(opened);
 
 				await page.keyboard.press('Escape');
-				await page.waitForTimeout(150);
-				expect(await heading.innerText(), `${name}: Escape did not return to rest`).toBe(resting);
+				await expect(heading, `${name}: Escape did not return to rest`).toHaveText(resting);
 				driven += 1;
 			}
 			expect(driven, `${route}: no record chart could be driven from the keyboard`).toBeGreaterThan(0);
@@ -511,14 +507,12 @@ test.describe('the readout is the default', () => {
 
 				const middle = box.y + box.height / 2;
 				await page.mouse.move(box.x + 4, middle);
-				await page.waitForTimeout(150);
+				await expect(dayOf(owner), `${name}: the first column printed nothing`).not.toHaveText('');
 				const first = await dayOf(owner).innerText();
 				await page.mouse.move(box.x + box.width - 4, middle);
-				await page.waitForTimeout(150);
-				const last = await dayOf(owner).innerText();
-
-				expect(first, `${name}: the first column printed nothing`).not.toBe('');
-				expect(last, `${name}: the two ends of the plot print one column`).not.toBe(first);
+				await expect(dayOf(owner), `${name}: the two ends of the plot print one column`).not.toHaveText(
+					first
+				);
 				compared += 1;
 			}
 			expect(compared, `${route}: no chart had two columns to compare`).toBeGreaterThan(0);
@@ -544,23 +538,16 @@ test.describe('the readout is the default', () => {
 				const resting = await dayOf(owner).innerText();
 
 				await focusable.focus();
-				await page.waitForTimeout(150);
 				const opened = await dayOf(owner).innerText();
 
 				await page.keyboard.press('ArrowRight');
-				await page.waitForTimeout(150);
-				const stepped = await dayOf(owner).innerText();
-				expect(stepped, `${name}: Right did not move the readout`).not.toBe(opened);
+				await expect(dayOf(owner), `${name}: Right did not move the readout`).not.toHaveText(opened);
 
 				await page.keyboard.press('ArrowLeft');
-				await page.waitForTimeout(150);
-				expect(await dayOf(owner).innerText(), `${name}: Left did not step back`).toBe(opened);
+				await expect(dayOf(owner), `${name}: Left did not step back`).toHaveText(opened);
 
 				await page.keyboard.press('Escape');
-				await page.waitForTimeout(150);
-				expect(await dayOf(owner).innerText(), `${name}: Escape did not return to rest`).toBe(
-					resting
-				);
+				await expect(dayOf(owner), `${name}: Escape did not return to rest`).toHaveText(resting);
 				driven += 1;
 			}
 			expect(driven, `${route}: no chart could be driven from the keyboard`).toBeGreaterThan(0);
@@ -614,9 +601,7 @@ test.describe('the readout is the default', () => {
 				await page.mouse.move(box.x + 4, box.y + box.height / 2);
 				await page.mouse.down();
 				await page.mouse.up();
-				await page.waitForTimeout(150);
-				const picked = await dayOf(owner).innerText();
-				expect(picked, 'a tap at the oldest column selected nothing').not.toBe(resting);
+				await expect(dayOf(owner), 'a tap at the oldest column selected nothing').not.toHaveText(resting);
 				tapped += 1;
 				break;
 			}
@@ -689,8 +674,13 @@ test.describe('the readout is the default', () => {
 			return route.abort();
 		});
 		await page.goto('/console/');
-		await page.waitForTimeout(1200);
-		expect(blocked, 'no month shard was requested, so the block proved nothing').toBeGreaterThan(0);
+		await expect
+			.poll(() => blocked, { message: 'no month shard was requested, so the block proved nothing' })
+			.toBeGreaterThan(0);
+		await expect(page.locator('[data-console-standing]')).toHaveAttribute(
+			'data-console-standing',
+			'unreachable'
+		);
 
 		const absent = page.locator('[data-readout-fetched] [data-readout-day]');
 		expect(await absent.count(), 'a strip printed a column with no rows behind it').toBe(0);
@@ -699,17 +689,12 @@ test.describe('the readout is the default', () => {
 		// the sentence above the panels names the month that did not arrive.
 		await expect(page.locator('[data-mix-empty]')).toHaveCount(0);
 		await expect(page.locator('[data-reserved="failure-mix"]')).toHaveCount(1);
-		await expect(page.locator('[data-console-standing]')).toHaveAttribute(
-			'data-console-standing',
-			'unreachable'
-		);
 
 		await page.unroute('**/telemetry/*.csv');
 		await page.goto('/console/');
-		await page.waitForTimeout(1200);
 		const strip = page.locator('[data-readout-fetched] [data-readout-day]').first();
 		await expect(strip).toHaveCount(1);
-		expect((await strip.innerText()).trim().length, 'the strip arrived empty').toBeGreaterThan(0);
+		await expect(strip, 'the strip arrived empty').not.toHaveText(/^\s*$/);
 	});
 });
 
