@@ -116,10 +116,13 @@ second thing to keep correct. `ciAnswer` in `test-scope.ts` is the one place
 that decides, and the truth table is in
 `frontend/scripts/tests/test-scope.test.mjs`.
 
-`ciAnswer` returns five answers. **`code` says whether the change carries
-anything but documentation, and `gates`, `robots` and `site` skip when it does
+`ciAnswer` returns six answers. **`code` says whether the change carries
+anything but documentation, and `gates` and `site` skip when it does
 not** - a changed sentence cannot break an application check, on a branch or on
-a merge. That branch is a closed list of prefixes rather than a guess, so a path
+a merge. **`robots` says whether the change selects
+`backend/tests/test_extract.py`**, the one module the `robots` job runs on the
+newest supported interpreter; an unknown change and every `main` push carrying
+code select it. That branch is a closed list of prefixes rather than a guess, so a path
 nobody classified falls to full coverage instead; and a document that a test
 reads is that test's input rather than documentation, which is why an edit to
 the page ruling the console's model labels buys the console specs. Such a page
@@ -190,7 +193,7 @@ selector: `-m contract`, `-m visual`, `-m workflow` or `-m "not slow"`, priced
 [below](#run-only-the-tests-a-change-can-break).
 
 **Read the jobs, not the run's conclusion.** The `scope` job selects which of
-`gates`, `site`, `browser`, `robots` and `whole-day` run, so a commit that
+`gates`, `site`, `browser` and `robots` run, so a commit that
 touched no matching path produces a run marked success with most of them
 skipped. That is correct for the commit and worthless as a statement about the
 branch: a suite can be fatally broken while every run on `main` reads green,
@@ -669,42 +672,16 @@ npm run test:whole-day
 
 **A few minutes end to end**, dominated by the build rather than the spec. The
 spec is 7 tests: three read the day off disk in milliseconds, and four are
-browser cases. The spread between two runs of one tree is the shared box rather
-than the widths, which is why the build figure can nearly double. Which day it
-looks at is derived and never written down: the committed day staging the most
-drawings. Run it before `build:canary`, which overwrites the same
-`build/` directory.
+browser cases. Which day it looks at is derived and never written down: the
+committed day staging the most drawings. Run it before `build:canary`, which
+overwrites the same `build/` directory.
 
-**It runs in CI, in a job of its own, and the numbers say why it is not part of
-the `browser` job.** Developer-box figures run three to five times the runner's,
-which is the usual shape and is why a local number may not stand in for a runner
-one (Guardrail #10).
-
-Appending the build and the spec to the `browser` job would not threaten its
-timeout - that job uses well under half of what it is allowed, even on its worst
-run. **The wall clock is the problem, not the timeout**: those seconds land on
-the critical path of every pull request that buys the browser half, because
-nothing else in the run is waiting.
-
-A separate job costs nothing there. It is far shorter than the `browser` job,
-it runs at the same time, and the workflow
-finishes at the moment it finished before. Actions minutes are free and
-unmetered on a public repository (Guardrail #2), so the 183 seconds are spent rather
-than paid, and 20 concurrent jobs are available against the six this workflow
-already starts.
-
-It is also the safer shape, and that would have decided it on its own. The
-`browser` job does build the real site once - the model-absent gate needs one -
-but it builds it with `static/assist` moved out of the way, and then overwrites
-the whole tree with the canary. Running this spec beside either of those is
-running it against exactly the tree it was written to refuse. Its own job has
-its own `frontend/build` and races nothing. `backend/tests/workflows/`
-holds the job to that: the canary build may not appear in it, and the real build
-has to come before the spec.
-
-The job is bought by the same allow-list as the browser half, because it is the
-same question about the same page. Run it by hand as well when a reading-page
-change is still local - the CI answer arrives after the push.
+**It does not run in CI.** It reads committed days rather than a fixture, so a
+pipeline run alone can change its answer, which makes it a data check rather
+than a code check (`CLAUDE.md` section 13). It also skipped all 7 of its tests
+on every run while no committed day publishes a chart, so its CI job spent a
+build to report nothing. Run it by hand when a reading-page change needs the
+day-scale picture.
 
 **A component with no call site proves itself here too.** A shared component
 lands before the sections that render it, so the build tree-shakes it away and

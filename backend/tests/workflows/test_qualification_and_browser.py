@@ -108,43 +108,6 @@ def test_both_qualification_pages_survive_the_run_that_needed_them() -> None:
     )
 
 
-def test_the_whole_day_check_gets_its_own_build_and_never_the_canary() -> None:
-    """`frontend/build` is one directory, and two builds write it.
-
-    `whole-day.spec.ts` refuses to load against a tree that is not the published
-    site, which is the guard that makes it worth running at all. Sharing a job
-    with the canary build would mean either running it against the thing it was
-    written to catch, or ordering two builds inside one job and hoping nobody
-    reorders them. Its own job cannot be got wrong that way.
-    """
-    workflow = _load_workflows()["ci.yml"]
-    steps = _steps(workflow, "whole-day")
-    scripts = [
-        _script(step, "ci.yml/whole-day") for step in steps if isinstance(step.get("run"), str)
-    ]
-    joined = "\n".join(scripts)
-
-    assert "build:canary" not in joined, "the canary must never reach this job's build directory"
-    assert "build_canary_day" not in joined
-    builds = [index for index, text in enumerate(scripts) if "npm run build" in text]
-    checks = [index for index, text in enumerate(scripts) if "test:whole-day" in text]
-    assert builds and checks, "the job builds the real site and then looks at it"
-    assert max(builds) < min(checks), "the build has to land before the spec opens the tree"
-
-
-def test_the_whole_day_check_is_bought_by_the_same_change_the_browser_half_is() -> None:
-    """One allow-list, because it is one question about the published page.
-
-    A second list would drift from the first, and the drift is silent: the
-    change that needed this check is exactly the change that needed the browser
-    half, and a job nobody buys is a check that stopped existing.
-    """
-    workflow = _load_workflows()["ci.yml"]
-
-    assert _job(workflow, "whole-day")["if"] == _job(workflow, "browser")["if"]
-    assert _job(workflow, "whole-day")["needs"] == "scope"
-
-
 def _browser_install_jobs(
     workflows: Mapping[str, dict[str, object]],
 ) -> dict[tuple[str, str], list[dict[str, object]]]:
@@ -167,19 +130,16 @@ def _browser_install_jobs(
 
 
 def test_every_job_that_installs_a_browser_restores_it_from_one_shared_key() -> None:
-    """The browser bytes are restored, and the two jobs share one entry.
+    """The browser bytes are restored, and every job that installs one shares one entry.
 
     Measured on run 34678620051, 2026-09-12: the download is 184.3 MB of
     Chromium, 114.7 MB of headless shell and 2.3 MB of FFmpeg, about 9 s of a
-    23 s step, paid twice a run because `browser` and `whole-day` each need a
-    browser. The other 14 s is the `--with-deps` apt-get, which a cache cannot
+    23 s step. The other 14 s is the `--with-deps` apt-get, which a cache cannot
     hold - so the install step stays, and stays unconditional.
 
     Two keys would be the quiet failure rather than a loud one. The repository
     cache ceiling is 10 GB (Guardrail #2) and the two weights entries held 7.5 GB of
-    it on 2026-09-12, so a second browser entry is not headroom this has. One
-    key is also the only way either job can hit: they start together, so
-    neither can ever warm the other.
+    it on 2026-09-12, so a second browser entry is not headroom this has.
     """
     workflows = _load_workflows()
     jobs = _browser_install_jobs(workflows)

@@ -56,6 +56,7 @@ jobs:
       code: ${{ steps.decide.outputs.code }}
       console: ${{ steps.decide.outputs.console }}
       panels: ${{ steps.decide.outputs.panels }}
+      robots: ${{ steps.decide.outputs.robots }}
       validate_all: ${{ steps.decide.outputs.validate_all }}
       playwright: ${{ steps.browsers.outputs.playwright }}
     steps:
@@ -91,57 +92,6 @@ jobs:
             exit 1
           fi
           echo "playwright=$version" >> "$GITHUB_OUTPUT"
-
-  # A documentation change prints the rows for the pages it touched into the run
-  # summary, so the numbers reach the person reviewing rather than only the
-  # person who went looking for them. The standard's rule is that the page you
-  # add to pays first, and a rule nobody can see the input to is a rule nobody
-  # runs.
-  #
-  # It gates nothing and it can fail nothing. `doc_load.py` sets no threshold,
-  # this job asserts none, and a range it cannot resolve answers "no pages".
-  # That is deliberate: a line limit is met by starting a second file, so the
-  # only thing worth automating here is putting the number in front of a person.
-  docs:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - id: changed
-        env:
-          # The same two the selector reads: a pull request names its range and
-          # a push names its own.
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        # The runner's own python, because the step that pins one runs below and
-        # only for a change that touched a page. So this module imports the
-        # standard library and nothing this repository ships.
-        run: python3 backend/utilities/changed_docs.py >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-python@v7
-        if: steps.changed.outputs.any == 'true'
-        with:
-          python-version: '3.12'
-
-      - name: What the pages this change touched now cost a reader
-        if: steps.changed.outputs.any == 'true'
-        env:
-          # Through the environment rather than into the script body: a branch
-          # names its own files, and a filename is not trusted enough to become
-          # shell (CLAUDE.md Guardrail #11).
-          PATHS: ${{ steps.changed.outputs.paths }}
-        run: |
-          set -euo pipefail
-          {
-            echo '### Documentation load'
-            echo
-            echo '```text'
-            python backend/utilities/doc_load.py --changed $PATHS
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
 
   gates:
     needs: scope
@@ -221,11 +171,11 @@ jobs:
   # The whole file, not a selection: the address rules and the RFC 9309 status
   # reading sit beside the fixture matrix and are the same kind of decision.
   #
-  # Measured on run 33669915697, 2026-09-02: 41 s on 3.12 and 36 s on 3.14,
-  # both alongside `gates` at 1 m 22 s, so the run's wall clock does not move.
+  # Only when the answer can have moved: a change to the extraction code, its
+  # tests, or the interpreter range. Every push to `main` still runs it.
   robots:
     needs: scope
-    if: needs.scope.outputs.code == 'true'
+    if: needs.scope.outputs.robots == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -318,9 +268,31 @@ jobs:
         working-directory: frontend
         run: python -m idhazh site-weight --site-tree build
 
-  # Everything that needs a second and third build of the site, plus a browser.
-  # It answers for the published surface only, so it is skipped when nothing a
-  # published page reads has moved.
+      # The oracle for the assist row: delete the whole model directory, build,
+      # and the digest must be untouched. If it degrades at all, the feature is
+      # on the critical path and the row has failed. Last in this job, because
+      # it overwrites the tree the two gates above measured, and here rather
+      # than in `browser`, because this job finishes minutes before that one.
+      #
+      # `build/index` is the other half, and it is why the month index is staged
+      # outside `static/assist/`. Browsing the archive is not a model feature, so
+      # the data the story list fetches has to survive the parking that proves
+      # the model is optional.
+      - name: Model-absent gate - the digest does not depend on any of it
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          mv static/assist ../assist-parked
+          npm run build
+          test -s build/archive/index.html
+          test ! -d build/assist
+          test -d build/index
+          grep -q 'Archive' build/archive/index.html
+          mv ../assist-parked static/assist
+          echo "the digest renders complete with no model directory."
+
+  # The canary build plus a browser. It answers for the published surface only,
+  # so it is skipped when nothing a published page reads has moved.
   browser:
     needs: scope
     if: needs.scope.outputs.browser == 'true'
@@ -352,27 +324,6 @@ jobs:
         run: pip install -e .
 
       - uses: ./.github/actions/prepare-duckdb
-
-      # The oracle for the assist row: delete the whole model directory, build,
-      # and the digest must be untouched. If it degrades at all, the feature is
-      # on the critical path and the row has failed.
-      #
-      # `build/index` is the other half, and it is why the month index is staged
-      # outside `static/assist/`. Browsing the archive is not a model feature, so
-      # the data the story list fetches has to survive the parking that proves
-      # the model is optional.
-      - name: Model-absent gate - the digest does not depend on any of it
-        working-directory: frontend
-        run: |
-          set -euo pipefail
-          mv static/assist ../assist-parked
-          npm run build
-          test -s build/archive/index.html
-          test ! -d build/assist
-          test -d build/index
-          grep -q 'Archive' build/archive/index.html
-          mv ../assist-parked static/assist
-          echo "the digest renders complete with no model directory."
 
       - name: Restore the browser binaries
         uses: actions/cache@v6
@@ -442,80 +393,5 @@ jobs:
           path: |
             frontend/test-results/
             !frontend/test-results/panels/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  # The day-scale reading check, which cannot share the `browser` job.
-  #
-  # `frontend/build` is one directory. The `browser` job builds the real site
-  # once, for the model-absent gate, but it builds it with `static/assist`
-  # moved out of the way and then overwrites the whole tree with the canary.
-  # `whole-day.spec.ts` exists to refuse a tree that is not the published site,
-  # so running it beside either of those would be running it against the thing
-  # it was written to catch. Its own job gets its own build and races nothing.
-  #
-  # Separate rather than appended for a second reason, and it is the deciding
-  # one. Measured on `ubuntu-latest`, 2026-09-05: the build takes 24 s and the
-  # spec 85 s, so appending them to `browser` costs 109 s of wall clock on
-  # every pull request that buys the browser half. This whole job is 183 s and
-  # it runs concurrently, against a `browser` job that measured 460, 482, 494,
-  # 514, 542 and 554 s over its last six green runs on main - so the run
-  # finishes at the same moment it does now. Actions minutes are free and
-  # unmetered on a public repository (Guardrail #2), and 20 concurrent jobs are
-  # available against the six this workflow already starts.
-  whole-day:
-    needs: scope
-    if: needs.scope.outputs.browser == 'true'
-    runs-on: ubuntu-latest
-    # Sized from the worst case, not the blended figure (Guardrail #10). The job
-    # measured 183 s; the spec's own per-test timeout is 600 s, and a browser
-    # that crashes rather than finishing has to be allowed to report as a crash.
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install
-        working-directory: frontend
-        run: npm ci
-
-      - uses: ./.github/actions/prepare-duckdb
-
-      # The same key the `browser` job uses, so the two jobs of one run share
-      # one entry rather than filling two. Neither warms the other - they start
-      # together - so the hit always comes from an earlier run on `main`.
-      - name: Restore the browser binaries
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ needs.scope.outputs.playwright }}
-
-      - name: Install Chromium
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
-
-      # The real site, never the canary. `npm run build:canary` must not appear
-      # anywhere in this job.
-      - name: Build the published site
-        working-directory: frontend
-        run: npm run build
-
-      # Every story of the heaviest committed day, every drawing, at 390 and
-      # 1440 CSS px, in both themes. The module refuses to load unless the tree
-      # under test serves exactly the days this repository has committed.
-      - name: The whole day, end to end
-        working-directory: frontend
-        run: npm run test:whole-day
-
-      - uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: playwright-traces-whole-day
-          path: frontend/test-results/
           retention-days: 7
           if-no-files-found: ignore
