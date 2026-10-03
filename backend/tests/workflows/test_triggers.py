@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Final, cast
 
 import pytest
-from conftest import CONFIG_DIR
 
 from ._harness import (
     CONTENT_REFRESH_UTC_HOURS,
@@ -390,8 +389,8 @@ def test_two_candidates_dispatched_together_are_two_qualifications_and_not_one()
     last, and cancelled every case between them - no error anywhere, only a
     cancelled run.
 
-    The candidate list is read off `config/models/`, so a model added later is
-    covered without anybody remembering this test.
+    Two distinct dispatch values and the empty value cover the grouping rule.
+    Model declarations are not inputs to concurrency expression rendering.
     """
     concurrency = _mapping(_load_workflows()["validate.yml"]["concurrency"], "validate.yml")
     assert str(concurrency["cancel-in-progress"]) != "true", (
@@ -399,8 +398,7 @@ def test_two_candidates_dispatched_together_are_two_qualifications_and_not_one()
     )
     group = str(concurrency["group"])
 
-    candidates = [f"models/{path.name}" for path in sorted(CONFIG_DIR.glob("models/*.json"))]
-    assert candidates, "config/models is where a candidate is written down"
+    candidates = ["models/first-candidate.json", "models/second-candidate.json"]
     # The empty field is the incumbent, which is a candidate like any other.
     dispatched = [*candidates, ""]
     groups = {

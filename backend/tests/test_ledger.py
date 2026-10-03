@@ -278,13 +278,25 @@ def _a_month_of_publications(state: Path, months: Sequence[str], url_keys: Seque
         _published(state, f"{month}-01", url_keys)
 
 
+#: How many times each tree is read before its peak is taken. One read's peak
+#: moves by a few kilobytes between runs with what the allocator happens to
+#: reuse, about a tenth of this fixture's peak; the highest of several reads is
+#: the stable figure, taken the same way for both trees.
+PEAK_READS: Final = 3
+
+
 def _peak_of_load_published(state: Path) -> tuple[dict[str, str], int]:
-    tracemalloc.start()
-    try:
-        published = _whole_ledger(state)
-        return published, tracemalloc.get_traced_memory()[1]
-    finally:
-        tracemalloc.stop()
+    """The answer, and the highest traced peak over `PEAK_READS` reads of this tree."""
+    peaks: list[int] = []
+    published: dict[str, str] = {}
+    for _ in range(PEAK_READS):
+        tracemalloc.start()
+        try:
+            published = _whole_ledger(state)
+            peaks.append(tracemalloc.get_traced_memory()[1])
+        finally:
+            tracemalloc.stop()
+    return published, max(peaks)
 
 
 def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> None:
@@ -298,8 +310,10 @@ def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> Non
     Sixteen addresses make the answer the same in both trees. Two months versus
     four months doubles the source rows from 32 to 64. Both reads have a later
     month to load after the answer is populated, so the peak includes the answer
-    and one month's rows. The 10 percent margin allows per-file allocation
-    noise; a reader holding every month still retains twice the source rows.
+    and one month's rows. Each peak is the highest of several reads, so the
+    allocator's wobble between runs cannot land on one tree only. The 10 percent
+    margin then allows per-file allocation noise; a reader holding every month
+    still retains twice the source rows.
     The first read is not measured, so a cost paid once per process lands in
     neither number. Both ledgers are built and fixed (Guardrail #12, section 13).
     """
@@ -1745,7 +1759,12 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters(tmp_path:
     """
     state = tmp_path / "state"
     machines = []
-    for path in sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom")):
+    for path in (
+        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-0.prom",
+        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-1.prom",
+        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-2.prom",
+        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom",
+    ):
         tokens, seconds = silicon.server_prompt_totals(path.read_text(encoding="utf-8"))
         machines.append(
             HostFingerprintRow(

@@ -251,7 +251,7 @@ def _a_day(*, planted_in: str | None = None) -> DigestDay:
     and every vertical's, so dropping an item is a payload the contract refuses.
     """
     day = DigestDay.from_json(
-        read_text(next((CONTRACT_FIXTURES_DIR / "digest-day").glob("*.json")))
+        read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json")
     )
     if planted_in is None:
         return day

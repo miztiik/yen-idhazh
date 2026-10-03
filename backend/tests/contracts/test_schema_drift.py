@@ -24,6 +24,7 @@ from idhazh.contracts.base import Contract
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_manifest import RunManifest
 
+from . import _fixtures
 from ._fixtures import (
     BY_STEM,
     committed_models_raw,
@@ -53,6 +54,21 @@ def test_fixture_round_trips_byte_identically(path: Path) -> None:
 def test_every_contract_has_at_least_one_fixture() -> None:
     covered = {path.parent.name for path in fixture_paths()}
     assert covered == set(BY_STEM), "a contract without a fixture has never been proven to load"
+
+
+def test_named_fixture_inputs_do_not_discover_added_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(_fixtures, "CONTRACT_FIXTURES_DIR", tmp_path)
+    extra = tmp_path / "unregistered"
+    extra.mkdir()
+    (extra / "extra.json").write_text("{}", encoding="utf-8", newline="\n")
+
+    selected = fixture_paths()
+
+    assert selected == [tmp_path / name for name in _fixtures.FIXTURE_FILES]
+    assert extra / "extra.json" not in selected
+    assert len(selected) == len(set(selected)), "a fixture must not be read twice"
 
 
 @pytest.mark.parametrize("contract", CONTRACTS, ids=lambda c: c.__schema_stem__)

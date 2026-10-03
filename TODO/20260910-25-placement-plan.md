@@ -1040,7 +1040,7 @@ Named here so they are not mistaken for work this plan is doing.
 - [`../docs/architecture/publishing/console.md`](../docs/architecture/publishing/console.md) - the three routes this plan takes to five, the strip, the band and the severity ranking.
 - [`../docs/concepts/console-design.md`](../docs/concepts/console-design.md) - how a console figure is worded, coloured, ranked and drawn, and the rules rows #11 to #14 work inside.
 - [`../docs/architecture/sources/freshness.md`](../docs/architecture/sources/freshness.md) - `ledger.reliability`, its window, its floor, and why it can only ever reduce a score.
-- [`../docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - what a read over a growing collection must declare.
+- [`CLAUDE.md`](../CLAUDE.md) - what a read over a growing collection must declare.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the shape every row above is written in.
 - [`../docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) - the commands behind every gate set in section 0.1a.

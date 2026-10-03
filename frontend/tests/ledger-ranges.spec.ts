@@ -1,7 +1,6 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { copyFileSync, cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
@@ -12,7 +11,7 @@ import type { SliceOptions, SliceResult } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository } from '../src/lib/server/config';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import type { MeasuredSlice, RangeChoice, TimedSlice } from './support/door-page/door';
-import { startRangeHost, type HostRequest, type RangeHost, type Throttle } from './support/range-host';
+import { addonCache, startRangeHost, type HostRequest, type RangeHost, type Throttle } from './support/range-host';
 
 /**
  * A browser reads a packed year out of its year file by byte range, and this
@@ -61,14 +60,6 @@ const locate = (specifier: string): string => resolver.resolve(specifier);
 
 /** The `max-age` Pages sends with every file. */
 const PAGES_MAX_AGE = 600;
-
-/** Where the Node engine keeps the add-ons it downloaded from `repository`: a
- *  folder named for the address's last part, holding `<version>/<platform>/`. */
-function addonCache(repository: string): string {
-	const address = new URL(repository);
-	const last = `${address.host}${address.pathname}`.split('/').filter((part) => part !== '').at(-1) ?? address.host;
-	return path.join(os.homedir(), '.duckdb', 'extensions', last);
-}
 
 /** The door's page, built from `support/door-page/` the way Vite builds the site. */
 async function buildDoorPage(): Promise<void> {

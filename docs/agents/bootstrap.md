@@ -18,6 +18,7 @@ Then read the one page that owns the thing you are changing.
 | What you are changing | What owns it |
 | --- | --- |
 | A persisted shape - a payload, a ledger, a config, a schema | `CLAUDE.md` section 11, then the model under `backend/idhazh/contracts/` |
+| The query door running an operator-written ledger question | [`../architecture/publishing/how-the-query-door-answers-a-written-question.md`](../architecture/publishing/how-the-query-door-answers-a-written-question.md) |
 | A published page | [`../concepts/design-system.md`](../concepts/design-system.md), and the surface's own code |
 | Whether two items are the same story, or why one ran twice | [`../architecture/publishing/autotune-content-similarity.md`](../architecture/publishing/autotune-content-similarity.md) - the flowchart near the top is the whole rule |
 | A prompt, or anything fetched text reaches | `CLAUDE.md` Guardrail #11, then `docs/architecture/summarize/` |
@@ -27,7 +28,7 @@ Then read the one page that owns the thing you are changing.
 | Swapping the summarizer, or putting the old one back | [`../how-to/evaluate-new-summarizer-model.md`](../how-to/evaluate-new-summarizer-model.md) - the swap is one line in `config/idhazh.json` and the revert is the same line back |
 | A workflow, a gate, or what CI runs | [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) |
 | What refuses a day before it is committed, or adding a rule that does | [`../architecture/publishing/what-stops-a-broken-day-being-published.md`](../architecture/publishing/what-stops-a-broken-day-being-published.md) |
-| Anything whose cost grows as the repository grows | [`../concepts/growing-reads.md`](../concepts/growing-reads.md) |
+| A read whose input may grow with the repository | [`../../CLAUDE.md`](../../CLAUDE.md), Guardrail #12 |
 | A rough item on a to-do list that is not a plan yet | [`../how-to/take-an-item-to-plan.md`](../how-to/take-an-item-to-plan.md) - intent, then the way, then the contracts, then the sequence |
 | A word you do not recognise | [`../concepts/glossary.md`](../concepts/glossary.md) for a machinery word, [`../concepts/taxonomy.md`](../concepts/taxonomy.md) for a word put on a story |
 | Anything you cannot place | [`../reference/documentation-structure.md`](../reference/documentation-structure.md) says who owns what |
