@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -388,7 +388,9 @@ grows with every published day rather than with the code it checks (Guardrail #1
 `CLAUDE.md` section 13). That covers the committed days, the telemetry and state
 shards, the search index, the corpus, and anything added later. Drive a per-item
 rule from the canary day instead; ask a whole-tree question once and assert on
-the total. **This one is caught by review rather than by a check.** A guard that
+the total. For the search index, `frontend/tests/support/month-shard.ts` builds
+a month in memory with the published shape, so a search spec needs no
+committed shard. **This one is caught by review rather than by a check.** A guard that
 lists the paths cannot do it: such a list only ever holds the collections
 somebody remembered, and its own upkeep grows with the rest. The
 question to ask in review is the rule's own: does a run that changed no code

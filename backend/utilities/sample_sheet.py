@@ -42,7 +42,6 @@ from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.base import derive_url_key
-from idhazh.council.session import SELECTION_DIRNAME
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 LOG: Final = logging.getLogger("idhazh")
@@ -209,8 +208,8 @@ def articles(day: dict[str, object], date: str) -> dict[str, Article]:
     return found
 
 
-def index(digest_root: Path) -> dict[str, Article]:
-    """Every published article, keyed by url key, across every committed day.
+def index(digest_root: Path, days: Sequence[str]) -> dict[str, Article]:
+    """Articles in named UTC days, keyed by url key.
 
     **One index, not one day.** A drawn pair's two items are not always on the
     draw's own date: the same story stays one story for 36 hours, so a pair can
@@ -222,8 +221,10 @@ def index(digest_root: Path) -> dict[str, Article]:
     a second day is the same article, and the newer payload is the one a reader
     would open.
     """
+    from utilities.named_inputs import day_files
+
     found: dict[str, Article] = {}
-    for path in sorted(digest_root.rglob("digest.json")):
+    for path in day_files(digest_root, days):
         date = "-".join(path.parts[-4:-1])
         loaded = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(loaded, dict):
@@ -244,7 +245,7 @@ def _load_day(digest_root: Path, date: str) -> dict[str, object]:
     return loaded if isinstance(loaded, dict) else {}
 
 
-def _drawn_rows(draw_root: Path) -> Iterator[dict[str, str]]:
+def _drawn_rows(draw_root: Path, names: Sequence[str]) -> Iterator[dict[str, str]]:
     """Every drawn pair under this root, and nothing a judging unit wrote.
 
     Scoped to the venue's selection slot rather than every CSV below the root: a
@@ -252,13 +253,21 @@ def _drawn_rows(draw_root: Path) -> Iterator[dict[str, str]]:
     carry no `composite_score`, so a wider read would quietly refuse them one by
     one and shrink the sheet.
     """
-    for path in sorted(draw_root.rglob(f"{SELECTION_DIRNAME}/*/*.csv")):
+    from utilities.named_inputs import named_files
+
+    for path in named_files(draw_root, names):
         with path.open(encoding="utf-8", newline="") as handle:
             yield from csv.DictReader(handle)
 
 
 def resolve(
-    draw_root: Path, digest_root: Path, *, line: float, corridor: float
+    draw_root: Path,
+    digest_root: Path,
+    *,
+    line: float,
+    corridor: float,
+    days: Sequence[str],
+    draws: Sequence[str],
 ) -> tuple[list[Pair], dict[str, int]]:
     """Every drawn pair whose two articles are both still on the published day.
 
@@ -273,9 +282,9 @@ def resolve(
     refused = {"no-article": 0, "no-score": 0, "already-drawn": 0}
     resolved: list[Pair] = []
     seen: set[str] = set()
-    by_key = index(digest_root)
+    by_key = index(digest_root, days)
 
-    for row in _drawn_rows(draw_root):
+    for row in _drawn_rows(draw_root, draws):
         date = row.get("date") or ""
         key = row.get("pair_key") or ""
         if key in seen:
@@ -436,9 +445,13 @@ def write(
     line: float,
     corridor: float,
     total: int,
+    days: Sequence[str],
+    draws: Sequence[str],
 ) -> int:
     _refuse_a_published_tree(out_root)
-    pairs, refused = resolve(draw_root, digest_root, line=line, corridor=corridor)
+    pairs, refused = resolve(
+        draw_root, digest_root, line=line, corridor=corridor, days=days, draws=draws
+    )
     chosen = select(pairs, line=line, total=total)
     out_root.mkdir(parents=True, exist_ok=True)
     (out_root / "pairs.json").write_text(
@@ -464,10 +477,13 @@ def harvest(
     *,
     labeller: str,
     labelled_on: str,
+    batches: Sequence[str],
 ) -> int:
     """Turn every label made so far into the holdout file the console panel reads."""
     labels: dict[str, bool] = {}
-    for batch in sorted(sheet_root.glob("labels-batch-*.json")):
+    from utilities.named_inputs import named_files
+
+    for batch in named_files(sheet_root, batches):
         loaded = json.loads(batch.read_text(encoding="utf-8"))
         labels.update(loaded["by_pair_key"])
     rows = as_holdout_rows(pairs, labels, labelled_on=labelled_on, labeller=labeller)
@@ -496,6 +512,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--corridor", type=float, default=DEFAULT_CORRIDOR)
     parser.add_argument("--total", type=int, default=200)
     parser.add_argument(
+        "--day", action="append", required=True, help="Published UTC day. Repeatable."
+    )
+    parser.add_argument(
+        "--draw", action="append", required=True, help="Named CSV relative to --draw-root."
+    )
+    parser.add_argument("--labels", action="append", help="Named JSON batch relative to --out.")
+    parser.add_argument(
         "--harvest",
         type=Path,
         help="read the labels beside --out and write holdout rows to this path",
@@ -507,10 +530,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.draw_root is None or args.line is None:
         parser.error("--draw-root and --line are always required")
     if args.harvest is not None:
-        if not args.labeller or not args.labelled_on:
-            parser.error("--harvest needs --labeller and --labelled-on")
+        if not args.labeller or not args.labelled_on or not args.labels:
+            parser.error("--harvest needs --labeller, --labelled-on and --labels")
         pairs, _ = resolve(
-            args.draw_root, args.digest_root, line=args.line, corridor=args.corridor
+            args.draw_root,
+            args.digest_root,
+            line=args.line,
+            corridor=args.corridor,
+            days=args.day,
+            draws=args.draw,
         )
         harvest(
             args.out,
@@ -518,6 +546,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             pairs,
             labeller=args.labeller,
             labelled_on=args.labelled_on,
+            batches=args.labels,
         )
         return 0
     write(
@@ -527,6 +556,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         line=args.line,
         corridor=args.corridor,
         total=args.total,
+        days=args.day,
+        draws=args.draw,
     )
     return 0
 

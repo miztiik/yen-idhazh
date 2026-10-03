@@ -5,11 +5,12 @@ holds every route's body to those bytes minus the keys a change is allowed to
 move. The bodies are built from the committed entries rather than from a
 literal, so a knob that reaches a request reaches the golden file too.
 
-    python backend/utilities/capture_request_bodies.py
+    python backend/utilities/capture_request_bodies.py config/models/<name>.json
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,6 @@ from idhazh.llm.server import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MODELS_DIR = REPO_ROOT / "config" / "models"
 GOLDEN_DIR = REPO_ROOT / "tests" / "fixtures" / "request-bodies"
 #: The renderings each model's own template made, recorded once. A golden body
 #: carries a prompt and a prompt is built from markers the server derives, so
@@ -111,9 +111,12 @@ def bodies(config: ModelsConfig, *, markers: TurnMarkers) -> dict[str, Any]:
     return captured
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("models", nargs="+", type=Path, help="Named model config files.")
+    args = parser.parse_args(argv)
     GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
-    for path in sorted(MODELS_DIR.glob("*.json")):
+    for path in sorted(set(args.models)):
         config = ModelsConfig.model_validate_json(path.read_text(encoding="utf-8"))
         written = GOLDEN_DIR / path.name
         written.write_text(

@@ -72,8 +72,14 @@ if (copy.refused.length > 0) {
 	throw new Error(`Published ledger is incomplete:\n${copy.refused.join('\n')}`);
 }
 for (const file of copy.missing) {
-	console.warn(`published ledgers: ${stateLabel}/${file} is missing; re-pack its day.`);
+	const [, ledger] = file.split('/');
+	console.log(
+		`::warning title=A published ledger file is missing::file-missing ${ledger} ${stateLabel}/${file}: ` +
+			'an index names it and it is not in the tree. The site is built without it, and the ' +
+			'console shows the days it covers as unreachable. Re-pack that day.'
+	);
 }
+for (const line of copy.logs ?? []) console.log(line);
 if (!servedElsewhere) {
 	for (const file of copy.files) {
 		const bytes = copy.indexes[file] === undefined

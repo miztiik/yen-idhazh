@@ -9,6 +9,7 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Inspect `npm --prefix frontend run test:changed -- --list`, then run the selected checks. Keep full-suite checks in CI unless local full coverage is needed.
 - Read the first failure and which later checks did not run. A missing tool, interrupted process, cached failure or skipped test is not a pass.
 - Inspect an existing run before starting another. Use the launcher's `--status`; use `--fresh` only when an unchanged run must be repeated.
+- `node scripts/build-state.ts --complete` took 112.5 s on the shared Windows machine on 2026-10-03, so wait for it rather than calling it hung.
 
 ## Running the gates
 
@@ -33,6 +34,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   the worktree and temp folders from the Windows antivirus scanner is the
   person's own machine choice; an agent does not change machine settings to
   fix this.
+
+- **A logic spec fails with `ERR_MODULE_NOT_FOUND` in a fresh worktree; the
+  spec is fine, the worktree has no `node_modules`.** `npx playwright` then
+  loads a cached global copy that cannot import the config. The tell is an
+  `npm-cache\_npx` path in the stack. The logic group needs no build, so link
+  a sibling checkout's install with the same lockfile instead of running
+  `npm ci`. A junction needs an absolute target. Remove it with `rmdir`:
+  `Remove-Item -Recurse` follows the link and deletes the sibling's install.
+  ```powershell
+  New-Item -ItemType Junction -Path frontend\node_modules -Target (Resolve-Path <sibling>\frontend\node_modules).Path
+  cmd /c rmdir frontend\node_modules
+  ```
 
 ## Two heavy gates on one box
 

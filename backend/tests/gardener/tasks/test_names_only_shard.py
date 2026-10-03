@@ -35,7 +35,6 @@ from idhazh.gardener.outcome import EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
 from .._garden import (
-    COMMITTED_DECLARATIONS,
     OriginTrees,
     a_config,
     a_partial_clone,
@@ -66,8 +65,12 @@ def a_live_garden(root: Path, **changed: dict[str, Any]) -> GardenerSettings:
 
     `changed` replaces fields of one declaration, by its name.
     """
-    config_dir = a_config(root)
-    for source in (CONFIG_DIR / "gardener" / name for name in COMMITTED_DECLARATIONS):
+    config_dir = a_config(root, CONFIG_DIR / "gardener")
+    names = json.loads((config_dir / "idhazh_gardener.json").read_text(encoding="utf-8"))[
+        "task_names"
+    ]
+    for name in names:
+        source = config_dir / "gardener" / f"{name}.json"
         declared = json.loads(source.read_text(encoding="utf-8"))
         declared["dry_run"] = False
         if isinstance(declared.get("fold"), dict):

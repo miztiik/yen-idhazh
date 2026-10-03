@@ -206,23 +206,21 @@ def _reader_for(root: Path, state_dir: Path) -> tuple[type[CsvContract], frozens
 
 
 def widen(
-    target: str, *, state_dir: Path = DEFAULT_STATE_DIR, write: bool = False
+    target: str, *, names: list[str], state_dir: Path = DEFAULT_STATE_DIR, write: bool = False
 ) -> list[Refiled]:
-    """Every day file of one ledger, oldest first, and what re-filing each one moved.
-
-    A ledger with no file yet reports nothing and raises nothing. There is no
-    header on disk to disagree with the contract, so there is nothing to re-file
-    - and every ledger in the vocabulary is named before its first writer lands.
-    """
+    """Re-file only the named CSV files of one ledger, and report what each moved."""
     if target not in LEDGERS:
         raise ValueError(
             f"this re-files a ledger, and {target!r} is not the name of one. A path is "
             f"never a name here. It knows {', '.join(LEDGERS)}"
         )
+    state_dir = state_dir.resolve()
     root = state_dir / LEDGERS[target]
-    paths = sorted(root.rglob("*.csv"))
-    if not paths:
-        return []
+    from utilities.named_inputs import named_files
+
+    paths = named_files(root, names)
+    if any(path.suffix != ".csv" for path in paths):
+        raise ValueError("name CSV files relative to the target ledger root")
     model, carried = _reader_for(root, state_dir)
     report: list[Refiled] = []
     for path in paths:
@@ -244,12 +242,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Which ledger to re-file. One of " + ", ".join(LEDGERS) + ".",
     )
     parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE_DIR)
+    parser.add_argument(
+        "--file", action="append", required=True, help="CSV path relative to the ledger root."
+    )
     parser.add_argument("--dry-run", action="store_true", default=True)
     parser.add_argument("--no-dry-run", dest="dry_run", action="store_false")
     args = parser.parse_args(argv)
 
     try:
-        report = widen(args.target, state_dir=args.state_dir, write=not args.dry_run)
+        report = widen(
+            args.target, names=args.file, state_dir=args.state_dir, write=not args.dry_run
+        )
     except ValueError as refusal:
         print(f"refused: {refusal}")
         return 1

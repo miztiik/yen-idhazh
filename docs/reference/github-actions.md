@@ -73,7 +73,8 @@ or comparative speed across different runner machines.
 
 Give each case its own trial state root to prevent filename collisions. Only the
 commit job has write permission; validate downloaded rows and config-derived paths
-before staging them. Never write reader-facing payloads. Use
+before staging them. Gather only the plan's named UTC day from each declared ledger,
+not a trial root's accumulated history. Never write reader-facing payloads. Use
 [model evaluation](../how-to/evaluate-new-summarizer-model.md) for adoption decisions.
 
 ## Vector backfill

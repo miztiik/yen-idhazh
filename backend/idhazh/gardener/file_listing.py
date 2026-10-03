@@ -6,7 +6,9 @@ shard builds once, and each task is handed the part of it that covers the
 folders its declaration owns or reads. A task never walks the disk to learn
 what is there.
 
-**Two builders make the same listing.** `from_commit` takes what
+**Three builders make the same listing.** `from_paths` weighs only supplied
+files and never discovers siblings. The migration uses it for named months.
+`from_commit` takes what
 `git ls-tree -r -l` printed for the commit the shard checked out. A file's size
 is git's own where the clone holds the file, and GitHub's trees API's where the
 clone never downloaded it: a blob id is a hash of the blob's size and bytes, so
@@ -146,6 +148,24 @@ class FileListing:
     checkout: _Checkout
 
     @classmethod
+    def from_paths(
+        cls, repo_root: Path, paths: Iterable[Path], *, folders: Iterable[str]
+    ) -> FileListing:
+        """Weigh only supplied files under the declared folders, without discovering siblings."""
+        chosen = tuple(sorted({_folder(folder) for folder in folders}))
+        sizes: dict[str, int] = {}
+        for path in sorted(set(paths)):
+            name = path.relative_to(repo_root).as_posix()
+            if not any(_inside(name, folder) for folder in chosen):
+                raise ValueError(f"{name} is outside the listing's declared folders")
+            sizes[name] = path.stat().st_size
+        return cls(
+            folders=chosen,
+            sizes=sizes,
+            checkout=_Checkout(repo_root=repo_root, widen=None, folders=chosen),
+        )
+
+    @classmethod
     def from_disk(cls, repo_root: Path, folders: Iterable[str]) -> FileListing:
         """Every file under these folders as the checkout holds them, weighed on disk."""
         chosen = tuple(sorted({_folder(folder) for folder in folders}))
@@ -260,9 +280,7 @@ class FileListing:
             above.add(parent)
             parent = _parent(parent)
         return [
-            path
-            for path in self.sizes
-            if path.startswith(f"{entry}/") or _parent(path) in above
+            path for path in self.sizes if path.startswith(f"{entry}/") or _parent(path) in above
         ]
 
     def fetch(

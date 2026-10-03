@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
 
@@ -45,8 +45,7 @@ function aWholeLedger(ledger: string): Record<string, string> {
 		[`compact/${ledger}/monthly/2026/08.parquet`]: 'PAR1',
 		[`compact/${ledger}/yearly/2025/2025.parquet`]: 'PAR1',
 		[`compact/${ledger}/daily/watermark.json`]: '{}\n',
-		[`compact/${ledger}/daily/2026/09/03.parquet`]: 'PAR1',
-		[`raw/${ledger}/2026/09/03/2026-09-03-1-work-00.parquet`]: 'PAR1'
+		[`compact/${ledger}/daily/2026/09/03.parquet`]: 'PAR1'
 	};
 }
 
@@ -182,7 +181,9 @@ test('an index that is not this ledger\'s, or names a path rather than a day, st
 	tree['compact/summary-quality-evals/index/yearly.json'] = anIndex('summary-quality-evals', 'yearly', ['../../escape']);
 	const copy = ledgerCopy(aStateTree(tree), ['summary-quality-evals']);
 	expect(copy.refused).toEqual([
-		'summary-quality-evals: state/compact/summary-quality-evals/index/daily.json describes item-health daily, not summary-quality-evals daily'
+		'summary-quality-evals: state/compact/summary-quality-evals/index/daily.json describes item-health daily, not summary-quality-evals daily',
+		'summary-quality-evals: state/compact/summary-quality-evals/index/monthly.json names "../../../escape", which is not a UTC month',
+		'summary-quality-evals: state/compact/summary-quality-evals/index/yearly.json names "../../escape", which is not a UTC year'
 	]);
 	expect(copy.files).toEqual([]);
 });
@@ -192,7 +193,7 @@ test('a state root that is not there stops the build when a ledger is published,
 	expect(ledgerCopy(gone, ['summary-quality-evals']).refused).toEqual([
 		'the state root state/ is not there, and ledger.published names summary-quality-evals'
 	]);
-	expect(ledgerCopy(gone, [])).toEqual({ files: [], indexes: {}, refused: [], missing: [] });
+	expect(ledgerCopy(gone, [])).toEqual({ files: [], indexes: {}, refused: [], missing: [], logs: [] });
 });
 
 test('a refusal names the state root the way the build was told to, never by its absolute path', () => {
@@ -218,4 +219,122 @@ test('the published list is read from the config, and a name that is not a ledge
 	expect(publishedLedgers(config)).toEqual([]);
 	writeFileSync(config, JSON.stringify({ ledger: { published: ['../summary-quality-evals'] } }));
 	expect(() => publishedLedgers(config)).toThrow('which is not a ledger name');
+});
+
+test('raw days after the newest packed day are listed through the newest raw day, with sizes', () => {
+	const first = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
+	const second = '01a0fca4-b1cd-8c8b-a2ea-b2f6f3a7e52e.parquet';
+	const copy = ledgerCopy(
+		aStateTree({
+			'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2026-09-01']),
+			'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
+			'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', []),
+			'compact/item-health/daily/2026/09/01.parquet': 'PAR1',
+			[`raw/item-health/2026/09/02/${second}`]: 'PAR1',
+			[`raw/item-health/2026/09/02/${first}`]: 'PAR12345',
+			[`raw/item-health/2026/09/04/${first}`]: 'PAR12'
+		}),
+		['item-health']
+	);
+	const listed = JSON.parse(copy.indexes['raw/item-health/index/2026-09-02.json']);
+	expect(copy.refused).toEqual([]);
+	expect(copy.files).toContain(`raw/item-health/2026/09/02/${first}`);
+	expect(copy.files).toContain(`raw/item-health/2026/09/02/${second}`);
+	expect(copy.files).toContain('raw/item-health/index/2026-09-03.json');
+	expect(copy.files).toContain('raw/item-health/index/2026-09-04.json');
+	expect(listed).toMatchObject({
+		ledger: 'item-health',
+		date: '2026-09-02',
+		files: [first, second],
+		bytes: [8, 4]
+	});
+	expect(listed).not.toHaveProperty('version');
+	expect(listed.listed_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+	expect(JSON.parse(copy.indexes['raw/item-health/index/2026-09-03.json']).files).toEqual([]);
+	expect(JSON.parse(copy.indexes['raw/item-health/index/2026-09-04.json']).bytes).toEqual([5]);
+});
+
+test('the build listing keeps the compaction listing digest and adds file sizes', () => {
+	const fixtureRoot = join(process.cwd(), '..', 'tests', 'fixtures', 'raw-day-listing', 'state', 'raw', 'item-health');
+	const fixtureDay = join(fixtureRoot, '2026', '09', '02');
+	const root = aStateTree({
+		'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2026-09-01']),
+		'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
+		'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', []),
+		'compact/item-health/daily/2026/09/01.parquet': 'PAR1'
+	});
+	const targetDay = join(root, 'raw', 'item-health', '2026', '09', '02');
+	mkdirSync(targetDay, { recursive: true });
+	for (const name of ['01a0fbc4-1707-8428-b765-119571d6249f.parquet', '01a0fca4-b1cd-8c8b-a2ea-b2f6f3a7e52e.parquet']) {
+		cpSync(join(fixtureDay, name), join(targetDay, name));
+	}
+
+	const copy = ledgerCopy(root, ['item-health']);
+	const staged = JSON.parse(copy.indexes['raw/item-health/index/2026-09-02.json']);
+	const fixture = JSON.parse(readFileSync(join(fixtureRoot, 'index', '2026-09-02.json'), 'utf8'));
+	expect(staged).toMatchObject({
+		ledger: fixture.ledger,
+		date: fixture.date,
+		files: fixture.files,
+		content_sha256: fixture.content_sha256,
+		bytes: fixture.files.map((name: string) => statSync(join(fixtureDay, name)).size)
+	});
+	expect(staged).not.toHaveProperty('version');
+});
+
+test('a raw day holding a non-parquet writer file is left unlisted and named in the build log', () => {
+	const parquet = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
+	const json = '01a0fbc4-1707-8428-b765-119571d6249f.json';
+	const copy = ledgerCopy(
+		aStateTree({
+			'compact/seen/index/daily.json': anIndex('seen', 'daily', ['2026-09-01']),
+			'compact/seen/index/monthly.json': anIndex('seen', 'monthly', []),
+			'compact/seen/index/yearly.json': anIndex('seen', 'yearly', []),
+			'compact/seen/daily/2026/09/01.parquet': 'PAR1',
+			[`raw/seen/2026/09/02/${parquet}`]: 'PAR1',
+			[`raw/seen/2026/09/02/${json}`]: '{}\n'
+		}),
+		['seen']
+	);
+	expect(copy.files).not.toContain('raw/seen/index/2026-09-02.json');
+	expect(copy.files).not.toContain(`raw/seen/2026/09/02/${parquet}`);
+	expect(copy.logs).toEqual([
+		'published ledgers: state/raw/seen/2026/09/02/01a0fbc4-1707-8428-b765-119571d6249f.json is not parquet; 2026-09-02 is left unlisted.'
+	]);
+});
+
+test('a ledger with no packed day stages no raw listings and logs the skipped walk', () => {
+	const copy = ledgerCopy(
+		aStateTree({
+			'compact/candidate-models/index/daily.json': anIndex('candidate-models', 'daily', []),
+			'compact/candidate-models/index/monthly.json': anIndex('candidate-models', 'monthly', []),
+			'compact/candidate-models/index/yearly.json': anIndex('candidate-models', 'yearly', []),
+			'raw/candidate-models/2026/09/02/01a0fbc4-1707-8428-b765-119571d6249f.parquet': 'PAR1'
+		}),
+		['candidate-models']
+	);
+	expect(copy.files).toEqual([
+		'compact/candidate-models/index/daily.json',
+		'compact/candidate-models/index/monthly.json',
+		'compact/candidate-models/index/yearly.json'
+	]);
+	expect(copy.logs).toEqual([
+		'published ledgers: candidate-models has no packed day; raw-day walk skipped.'
+	]);
+});
+
+test('a raw directory inside the widest window is listed even when its date is after today', () => {
+	const file = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
+	const copy = ledgerCopy(
+		aStateTree({
+			'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2099-01-01']),
+			'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
+			'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', []),
+			'compact/item-health/daily/2099/01/01.parquet': 'PAR1',
+			[`raw/item-health/2099/01/02/${file}`]: 'PAR1'
+		}),
+		['item-health']
+	);
+	expect(copy.files).toContain('raw/item-health/index/2099-01-02.json');
+	expect(copy.files).toContain(`raw/item-health/2099/01/02/${file}`);
 });

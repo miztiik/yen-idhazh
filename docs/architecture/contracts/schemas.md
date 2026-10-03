@@ -328,7 +328,7 @@ The rewrite is small enough to be reviewed as a diff rather than run as a utilit
 
 ### Design rationale: one widener for every ledger, rather than one per widening
 
-`backend/utilities/widen_ledger_header.py` is the operator's door onto `ledger.migrate_header`. Until 2026-09-21 nothing in the repository could widen a header from a command line: `migrate_header` was reached only from the compaction verb, which folds a segment into a head and takes no ledger argument. So every widening before it shipped its own utility - one for the feed-health header, another for the item-health header - each one a new file doing what the engine already did. Both are deleted; this door is what re-files a CSV ledger now. The item-health ledger has since moved to the ledger door, where a file keeps the shape it was written under and nothing re-files it.
+`backend/utilities/widen_ledger_header.py` is the operator's door onto `ledger.migrate_header`. It requires `--target <ledger>` and one or more `--file <CSV-path>` arguments relative to that ledger's root. It re-files those files only; it never searches the ledger tree. The default is a dry run. `--no-dry-run` writes each changed file atomically. The item-health ledger uses the ledger door, where a file keeps the shape it was written under and nothing re-files it.
 
 One utility is possible because the two things it needs are already registered elsewhere. The ledger comes from the prune vocabulary, so a word means the same ledger in every command an operator types. The contract that reads a row comes from whichever of the two reader registries holds that ledger: `ledger.keys._TREE_SHAPES` through `segment_contract` and `segment_carried` for a day tree, and `ledger.keyed_paths` for a ledger the post-merge settlement covers. No list is restated in the utility, so none can drift from it, and a ledger that ships before its writer reports nothing rather than failing.
 
@@ -516,7 +516,14 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 | Keep the generator for the six names the frontend uses | A generator that runs over one contract is a generator, with its command, its gate and its regenerated diff. Six names are a copy and three tests. | Fowler |
 | Delete only the 61 schemas nothing imports | The count is a fact about one day. The next contract adds a sixty-seventh and the generator still runs in full. | Fowler |
 
-`RawDayIndex` also has a frontend hand copy in `frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so older compaction listings still validate; the frontend copy requires it because the site build fills it before a browser can price writer files.
+`RawDayIndex` also has a frontend hand copy in
+`frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so
+older compaction listings still validate; the frontend copy requires it because
+the site build fills it before a browser can price writer files. The build is
+now a second writer of the shape for staged-site listings only:
+`backend/tests/contracts/test_raw_day_listing_fixture.py` holds the compaction
+fixture, and `frontend/tests/ledger-copy.spec.ts` holds the build's listing,
+sizes and non-parquet refusal.
 
 ## See also
 
