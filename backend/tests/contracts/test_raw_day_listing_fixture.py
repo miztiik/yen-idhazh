@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from idhazh.contracts.ledger_index import RawDayIndex
+
+pytestmark = pytest.mark.contract
 
 FIXTURE = Path("tests/fixtures/raw-day-listing/state/raw/item-health")
 
