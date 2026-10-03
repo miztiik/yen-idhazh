@@ -1,22 +1,18 @@
-"""The retrieval eval: does archive search find the right thing, and how sure are we?
+"""The retrieval eval: proving the arithmetic, never measuring the archive.
 
-Two kinds of test live here and they answer different questions.
+Every test here fixes behaviour: the ranking order, the capped denominator, the
+split between a miss and an absence, and which exact days or month shards a
+named read opens. Vectors are built by hand and archives are built under
+`tmp_path`, so every test here says the same thing on any corpus and on any
+day - none of them opens the committed archive, and none of them runs the
+real encoder.
 
-The pure-function tests fix the arithmetic: the ranking order, the capped
-denominator, the split between a miss and an absence. They use vectors built by
-hand, so they say the same thing on any corpus and on any day.
-
-The measurement runs the real encoder over the committed archive and reports a
-number with its spread. It is a gate on the ranking - `assist.recall_min` - and
-a report on everything else. Nothing here touches the network: the encoder is
-committed under `frontend/static/` and the archive is committed under
-`frontend/public/` (Guardrail #7).
-
-**Every read here carries a cover.** The gate reads the days through
-`assist.eval_corpus_through`, because nothing it asks can be answered by a day
-the pin excludes. The index comparison reads the shard that pin names. The knob
-check builds its own shards. The one question none of them fits - does the
-index name every published item - is `backend/utilities/measure_retrieval.py`.
+**Whether archive search is actually any GOOD never lands here.** That is a
+quality measurement on published data, not a behaviour this code can get
+wrong on its own (CLAUDE.md section 13 rule 2), so it is an operator's job,
+run by hand with `backend/utilities/measure_retrieval.py`, and it is never
+gated in a test run. The Playwright suite's own five-query fixture stays the
+wiring check it always was.
 """
 
 from __future__ import annotations
@@ -27,15 +23,11 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh.contracts.app_config import AppConfig
-from idhazh.embed import Embedder
 from idhazh.evals import retrieval
 from idhazh.evals.retrieval import (
     Corpus,
     CorpusItem,
-    LabelledQuery,
     QueryOutcome,
     RetrievalReport,
 )
@@ -48,11 +40,6 @@ def unit(*values: float) -> tuple[float, ...]:
 
 def item(date: str, item_id: str, vector: tuple[float, ...] | None) -> CorpusItem:
     return CorpusItem(date=date, item_id=item_id, entities=(), vector=vector)
-
-
-@pytest.fixture(scope="session")
-def config() -> AppConfig:
-    return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
 
 
 # --------------------------------------------------------------------------
@@ -96,8 +83,7 @@ def test_ties_break_by_newest_day_then_by_item_id() -> None:
 def test_the_limit_cuts_the_list_after_the_sort_not_before() -> None:
     corpus = Corpus(
         items=tuple(
-            item("2026-08-21", f"ai-{index:02d}", unit(1.0, index / 100))
-            for index in range(1, 21)
+            item("2026-08-21", f"ai-{index:02d}", unit(1.0, index / 100)) for index in range(1, 21)
         )
     )
     hits = retrieval.rank(corpus, list(unit(1.0, 0.0)), limit=3, floor=0.0)
@@ -215,6 +201,27 @@ def test_the_unjudged_share_is_counted_over_filled_slots_not_over_slots() -> Non
     assert report.unlabelled_share == 0.5
 
 
+def test_evaluate_counts_a_found_answer_and_an_unjudged_slot() -> None:
+    corpus = Corpus(
+        items=(
+            item("2026-08-21", "ai-01", unit(1.0, 0.0)),
+            item("2026-08-21", "ai-02", unit(0.9, 0.1)),
+            item("2026-08-21", "ai-03", None),
+        )
+    )
+    query = retrieval.LabelledQuery(
+        id="q",
+        query="q",
+        intent="q",
+        relevant=(("2026-08-21", "ai-02"), ("2026-08-21", "ai-03")),
+    )
+    report = retrieval.evaluate(corpus, (query,), [list(unit(1.0, 0.0))], limit=10, floor=0.0)
+    (outcome,) = report.outcomes
+    assert (outcome.gold, outcome.gold_with_vector, outcome.found) == (2, 1, 1)
+    assert outcome.reciprocal_rank == 0.5
+    assert outcome.unlabelled == 1
+
+
 def test_the_entity_tier_needs_a_slug_on_enough_items() -> None:
     corpus = Corpus(
         items=(
@@ -240,7 +247,7 @@ def test_a_day_written_by_another_encoder_contributes_no_vectors(tmp_path: Path)
         '"dimensions": 384, "vectors": {"ai-01": "AAA="}}}',
         encoding="utf-8",
     )
-    corpus = retrieval.load_corpus(tmp_path)
+    corpus = retrieval.load_corpus(tmp_path, days=["2026-08-21"])
     assert len(corpus.items) == 1
     assert corpus.searchable == ()
     assert corpus.coverage == 0.0
@@ -257,34 +264,34 @@ def day_payload(date: str) -> str:
     return f'{{"date": "{date}", "items": [{{"item_id": "ai-01", "entities": []}}]}}'
 
 
-def test_the_pin_cuts_the_read_rather_than_the_rows_it_returns(tmp_path: Path) -> None:
-    """The bound has to hold when a later day lands, and cost nothing when it does.
+def test_load_corpus_reads_exactly_the_named_days_and_no_other(tmp_path: Path) -> None:
+    """Three days on disk; only the named ones are read, and an unnamed one is never opened.
 
-    Three days, one of them past the pin. The pinned read returns two and the
-    unpinned read returns three, so the filter is doing the work rather than the
-    fixture happening to be small. Then the later day is replaced by bytes no
-    JSON parser accepts: the pinned read still returns two, which it could only
-    do by never opening that file, and the unpinned read fails on it.
+    The unnamed day's `digest.json` is replaced by bytes no JSON parser accepts.
+    Naming it would raise; leaving it unnamed must not - the only way to prove
+    the loader never opened the file rather than merely ignoring its content. A
+    named day with no file at all is skipped the same quiet way: an evaluation
+    set can outlive the day it names.
     """
     for date in ("2026-08-25", "2026-08-26", "2026-08-27"):
         write_day(tmp_path, date, day_payload(date))
 
-    assert len(retrieval.load_corpus(tmp_path, through="2026-08-26").items) == 2
-    assert len(retrieval.load_corpus(tmp_path).items) == 3
+    assert len(retrieval.load_corpus(tmp_path, days=["2026-08-25", "2026-08-26"]).items) == 2
+    assert len(retrieval.load_corpus(tmp_path, days=["2026-08-25", "2099-01-01"]).items) == 1
 
     later = tmp_path / "frontend/public/digest/2026/08/27/digest.json"
     later.write_text("not json at all", encoding="utf-8")
-    assert len(retrieval.load_corpus(tmp_path, through="2026-08-26").items) == 2
+    assert len(retrieval.load_corpus(tmp_path, days=["2026-08-25", "2026-08-26"]).items) == 2
     with pytest.raises(json.JSONDecodeError):
-        retrieval.load_corpus(tmp_path)
+        retrieval.load_corpus(tmp_path, days=["2026-08-27"])
 
 
-def test_the_pin_drops_a_month_shard_before_the_shard_is_opened(tmp_path: Path) -> None:
-    """The index bound, proved the same way, and then narrowed to the day.
+def test_load_index_corpus_reads_exactly_the_named_months_and_no_other(tmp_path: Path) -> None:
+    """Two shards on disk; only the named month is read, and the other is never opened.
 
-    A month shard is coarser than the pin, so the stem test alone keeps days the
-    pin excludes. The rows are narrowed afterwards - which is only cheap because
-    the stem test already refused every later shard.
+    The unnamed shard is bytes no JSON parser accepts, so reading it would
+    raise. A named month with no committed shard is skipped the same way a
+    missing day is in `load_corpus`.
     """
     directory = tmp_path / retrieval.INDEX_RELDIR
     directory.mkdir(parents=True)
@@ -295,392 +302,35 @@ def test_the_pin_drops_a_month_shard_before_the_shard_is_opened(tmp_path: Path) 
     )
     (directory / "2026-09.json").write_text("not json at all", encoding="utf-8")
 
-    pinned = retrieval.load_index_corpus(tmp_path, through="2026-08-26")
-    assert [row.item_id for row in pinned.items] == ["ai-01"]
+    named = retrieval.load_index_corpus(tmp_path, months=["2026-08"])
+    assert [row.item_id for row in named.items] == ["ai-01", "ai-02"]
+    assert retrieval.load_index_corpus(tmp_path, months=["2026-07"]).items == ()
     with pytest.raises(json.JSONDecodeError):
-        retrieval.load_index_corpus(tmp_path)
-
-
-def test_the_months_on_file_are_read_off_their_own_names(tmp_path: Path) -> None:
-    """Which months exist is a listing. Opening one to find out would be the cost."""
-    assert retrieval.index_months(tmp_path) == ()
-    directory = tmp_path / retrieval.INDEX_RELDIR
-    directory.mkdir(parents=True)
-    for stem in ("2026-09", "2026-08"):
-        (directory / f"{stem}.json").write_text("not json at all", encoding="utf-8")
-    assert retrieval.index_months(tmp_path) == ("2026-08", "2026-09")
+        retrieval.load_index_corpus(tmp_path, months=["2026-09"])
 
 
 # --------------------------------------------------------------------------
-# The query set
+# The entity tier
 # --------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="session")
-def corpus(config: AppConfig) -> Corpus:
-    """The scored set, cut by the pin rather than filtered after the read.
+def test_the_entity_tier_builds_one_query_per_slug_that_clears_the_floor() -> None:
+    """One query per entity slug carried by enough items, built generically.
 
-    Cover: `assist.eval_corpus_through`. Nothing here asks a question a day past
-    the pin can answer - the gate is pinned, the labels close on the same day,
-    and the floor is measured against the set the gate scores - so opening the
-    rest of the archive would cost more every week and change no number.
+    The real archive's entity counts shift with every publish, so the property
+    asserted here is the one that has to hold regardless of which slugs clear
+    the floor on any given day: built from a hand-made corpus rather than the
+    committed archive, it says the same thing on any corpus.
     """
-    return retrieval.load_corpus(REPO_ROOT, through=config.assist.eval_corpus_through)
-
-
-@pytest.fixture(scope="session")
-def queries() -> tuple[LabelledQuery, ...]:
-    return retrieval.load_queries(REPO_ROOT)
-
-
-def test_the_query_set_is_an_instrument_rather_than_a_wiring_check(
-    queries: tuple[LabelledQuery, ...],
-) -> None:
-    """At least fifty queries, or the bar cannot see a ten-point regression.
-
-    At n=50 the standard error at recall 0.8 is 0.057. At n=5 it is 0.18, which
-    is why the five-query Playwright fixture is a wiring check and stays one.
-    """
-    assert len(queries) >= 50
-    assert len({query.id for query in queries}) == len(queries)
-
-
-def test_every_query_has_more_than_one_right_answer(
-    queries: tuple[LabelledQuery, ...],
-) -> None:
-    """Single-gold labelling makes a working system read as broken on a topic."""
-    single = [query.id for query in queries if len(query.relevant) < 2]
-    assert single == []
-
-
-def test_every_labelled_answer_is_still_in_the_archive(
-    corpus: Corpus, queries: tuple[LabelledQuery, ...]
-) -> None:
-    """A vanished gold item is its own failure, not a slow drop in recall.
-
-    Published days are meant to be immutable. If one is not, the recall number
-    falls for a reason that has nothing to do with retrieval, so this asks the
-    question separately and answers it by name.
-    """
-    published = {item.address for item in corpus.items}
-    missing = sorted(
-        f"{query.id}: {date}/{item_id}"
-        for query in queries
-        for (date, item_id) in query.relevant
-        if (date, item_id) not in published
-    )
-    assert missing == []
-
-
-def test_the_frozen_answer_key_sits_inside_the_pin_the_gate_scores(
-    queries: tuple[LabelledQuery, ...], config: AppConfig
-) -> None:
-    """Every judged answer sits on or before `assist.eval_corpus_through`.
-
-    The pin bounds the corpus the gate scores. Move the pin earlier and the
-    judged answers past it stop being scorable, so the gate quietly measures a
-    smaller key against an unchanged bar. The membership test above goes red on
-    the same edit, but it names a vanished gold item, which is the wrong cause.
-    This one names the pin. It opens the query fixture and the config, nothing
-    else.
-    """
-    judged = [(query.id, date, item_id) for query in queries for (date, item_id) in query.relevant]
-
-    pin = config.assist.eval_corpus_through
-    if pin is None:
-        pytest.skip("the gate reads every published day, so no answer can fall outside it")
-    outside = sorted(
-        f"{query_id}: {date}/{item_id}" for (query_id, date, item_id) in judged if date > pin
-    )
-    assert outside == [], (
-        f"assist.eval_corpus_through is {pin} and {len(outside)} of {len(judged)} judged "
-        "answers are published after it, so the gate cannot score them: " + ", ".join(outside[:5])
-    )
-
-
-def test_the_pin_holds_the_competitor_set_still() -> None:
-    """`through` drops what was published later and keeps the boundary day."""
     corpus = Corpus(
         items=(
-            item("2026-08-25", "a", unit(1.0, 0.0)),
-            item("2026-08-26", "b", unit(1.0, 0.0)),
-            item("2026-08-27", "c", unit(1.0, 0.0)),
+            CorpusItem("2026-08-21", "ai-01", ("acme", "beta"), unit(1.0, 0.0)),
+            CorpusItem("2026-08-21", "ai-02", ("acme",), unit(1.0, 0.1)),
+            CorpusItem("2026-08-22", "ai-03", ("acme", "beta"), unit(1.0, 0.2)),
+            CorpusItem("2026-08-22", "ai-04", ("beta",), unit(1.0, 0.3)),
+            CorpusItem("2026-08-23", "ai-05", ("gamma",), unit(1.0, 0.4)),
         )
     )
-    assert [row.item_id for row in corpus.through("2026-08-26").items] == ["a", "b"]
-    assert corpus.through(None) is corpus
-
-
-# --------------------------------------------------------------------------
-# The measurement
-# --------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def embedded(queries: tuple[LabelledQuery, ...]) -> list[list[float]]:
-    """One forward pass per query, shared by every measurement below."""
-    return retrieval.embed_queries(REPO_ROOT, queries)
-
-
-@pytest.fixture(scope="session")
-def report(
-    corpus: Corpus,
-    queries: tuple[LabelledQuery, ...],
-    embedded: list[list[float]],
-    config: AppConfig,
-) -> RetrievalReport:
-    """The gated measurement, scored against the corpus the labellers saw."""
-    return retrieval.evaluate(
-        corpus,
-        queries,
-        embedded,
-        limit=config.assist.result_limit,
-        floor=config.assist.similarity_floor,
-    )
-
-
-def test_the_ranking_clears_its_bar(report: RetrievalReport, config: AppConfig) -> None:
-    """recall@10 over the answers that carry a vector. The single gate metric.
-
-    Coverage is deliberately out of it. An item the pipeline never embedded is
-    invisible at every threshold, so counting it here would fail this gate for a
-    defect that belongs to the embedding stage. The reader-facing number, which
-    does count it, is printed beside this one on every run.
-
-    The corpus is pinned to `assist.eval_corpus_through`. Unpinned, this gate
-    scores the ranking and the publishing rate at once, and the second term is
-    unbounded - see the field description.
-    """
-    print("\ngated  " + report.summary())
-    assert report.recall_reachable >= config.assist.recall_min, (
-        f"reachable recall@{report.result_limit} is {report.recall_reachable:.3f} "
-        f"+/- {report.standard_error_reachable:.3f} over {len(report.answerable)} answerable "
-        f"queries, below the {config.assist.recall_min} bar, measured over the "
-        f"{report.corpus_items} items published through "
-        f"{config.assist.eval_corpus_through}. Weakest: "
-        + ", ".join(
-            f"{row.query_id} {row.recall_reachable:.2f}"
-            for row in sorted(report.answerable, key=lambda row: row.recall_reachable)[:5]
-        )
-    )
-
-
-def test_the_measurement_is_precise_enough_to_see_a_regression(
-    report: RetrievalReport,
-) -> None:
-    """An instrument whose spread is wider than the effect cannot see the effect."""
-    assert report.n >= 50
-    assert report.standard_error <= 0.08
-
-
-def test_the_reader_facing_number_is_reported_with_its_coverage(
-    report: RetrievalReport,
-) -> None:
-    """No assertion on the level - this measures it, and moving it is a separate job.
-
-    What is asserted is that the two failures stay separable. If every gold item
-    were reachable the distinction would collapse and the instrument would stop
-    being able to say which failure it is looking at.
-    """
-    assert 0.0 <= report.recall <= report.recall_reachable
-    assert report.gold_coverage <= 1.0
-    assert report.unanswerable + len(report.answerable) == report.n
-
-
-# --------------------------------------------------------------------------
-# The index is what a reader actually searches
-# --------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def index_corpus(config: AppConfig) -> Corpus:
-    """The pinned set again, read the way a reader's tab reads it.
-
-    Cover: `assist.eval_corpus_through`, matched against the shard stem, so the
-    comparison below opens the month the pin names and no later one.
-    """
-    return retrieval.load_index_corpus(REPO_ROOT, through=config.assist.eval_corpus_through)
-
-
-@pytest.fixture(scope="session")
-def index_report(
-    index_corpus: Corpus,
-    queries: tuple[LabelledQuery, ...],
-    embedded: list[list[float]],
-    config: AppConfig,
-) -> RetrievalReport:
-    """Pinned to the same day as `report`, because this case is a comparison.
-
-    The question is what moving to the index cost, so the corpus has to be held
-    still on both sides. Pin one case and the gap reads as an index defect when
-    it is only the days between the pin and today.
-    """
-    return retrieval.evaluate(
-        index_corpus,
-        queries,
-        embedded,
-        limit=config.assist.result_limit,
-        floor=config.assist.similarity_floor,
-    )
-
-
-def test_moving_search_to_the_index_cost_no_recall(
-    report: RetrievalReport, index_report: RetrievalReport
-) -> None:
-    """The load-bearing half of this row's Oracle.
-
-    A page that got lighter while search got worse is a regression, and the only
-    thing that can tell the difference is this number. Both cases use the same
-    queries, the same labels, the same ranking and the same embedded queries -
-    the only difference is whether the vectors came out of the day payloads the
-    page used to inline or out of the month shard it now fetches.
-
-    One standard error is the band, because that is the precision the instrument
-    has at n=60. Anything tighter would fail on arithmetic noise; anything wider
-    would miss the effect it is here to catch.
-    """
-    if not index_report.outcomes or index_report.corpus_items == 0:
-        pytest.skip("no committed month index in this checkout")
-
-    print("\nday payloads: " + report.summary())
-    print("month index:  " + index_report.summary())
-
-    drift = abs(index_report.recall - report.recall)
-    assert drift <= report.standard_error, (
-        f"the index lost information the day payloads carried: recall@"
-        f"{report.result_limit} is {index_report.recall:.3f} off the index against "
-        f"{report.recall:.3f} off the payloads, a gap of {drift:.3f} against one "
-        f"standard error of {report.standard_error:.3f}"
-    )
-
-
-def test_a_reader_only_searches_the_months_the_knob_names(tmp_path: Path) -> None:
-    """`assist.search_months` and `assist.search_min_days` are what a tab reads.
-
-    The scope buys download seconds rather than compute seconds, so the knobs
-    are what stands between a reader and a long wait at three months. The floor
-    is the other half: a calendar shard is not a window, so on the first of a
-    month `search_months` alone reaches one day. Below the floor the tab reads
-    one more shard, and one only.
-
-    Built here rather than read off the committed shards: which months those
-    hold moves with every publish, and the rule does not.
-    """
-    directory = tmp_path / retrieval.INDEX_RELDIR
-    directory.mkdir(parents=True)
-    shards: dict[str, list[tuple[str, int | None]]] = {
-        "2026-07": [("2026-07-01", 0)],
-        "2026-08": [("2026-08-01", 0), ("2026-08-02", 0)],
-        # A day with no vector is a day a reader cannot search, so it does not
-        # count toward the floor.
-        "2026-09": [("2026-09-01", 0), ("2026-09-02", None)],
-    }
-    for stem, entries in shards.items():
-        rows = [{"date": date, "item_id": "ai-01", "vector": offset} for date, offset in entries]
-        (directory / f"{stem}.json").write_text(json.dumps({"entries": rows}), encoding="utf-8")
-
-    def months_read(months: int, min_days: int) -> set[str]:
-        scoped = retrieval.load_index_corpus(tmp_path, months=months, min_days=min_days)
-        return {item.date[:7] for item in scoped.items}
-
-    assert months_read(1, 1) == {"2026-09"}
-    assert months_read(2, 0) == {"2026-09", "2026-08"}
-    # The newest month holds one searchable day, so a floor of two buys August.
-    assert months_read(1, 2) == {"2026-09", "2026-08"}
-    # However far short the floor falls, the extra shard is one, never two.
-    assert months_read(1, 50) == {"2026-09", "2026-08"}
-
-
-def test_the_floor_lets_the_empty_state_fire(corpus: Corpus, config: AppConfig) -> None:
-    """A question the archive cannot answer must return nothing.
-
-    'Nothing in the archive is close to that' is a promise, and a floor below the
-    same-domain noise makes it one the selector cannot keep. At the floor this
-    replaced, 0.20, every one of these returned a full list.
-
-    A probe is only a probe while it stays off-domain, and the corpus decides
-    that, not the person who wrote it. 'restoring a 1960s mechanical wristwatch
-    movement' was one of these until 2026-08-26, when the vector backfill made
-    the archive's smartwatch items reachable; it then matched a Pebble Time 2
-    review at 0.413 and a Garmin deal at 0.360, which are wristwatches and not
-    noise. It is retired here rather than deleted quietly, and replaced by a
-    probe with more room: the four below scored 0.235, 0.295, 0.258 and 0.194
-    against this corpus on 2026-08-26, so the tightest has 0.055 of margin.
-    """
-    probes = [
-        "recipe for sourdough starter using rye flour",
-        "baroque counterpoint in the fugues of Buxtehude",
-        "grammar of the Basque ergative case",
-        "hand-stitching a leather saddle",
-    ]
-    embedder = Embedder(REPO_ROOT)
-    if not embedder.available:
-        pytest.skip("the committed encoder is not present")
-    embedder.load()
-    answered = {
-        text: retrieval.rank(
-            corpus,
-            vector,
-            limit=config.assist.result_limit,
-            floor=config.assist.similarity_floor,
-        )
-        for text, vector in zip(probes, embedder.encode(probes), strict=True)
-    }
-    noisy = {text: len(hits) for text, hits in answered.items() if hits}
-    assert noisy == {}, f"the floor {config.assist.similarity_floor} let noise through: {noisy}"
-
-
-def test_the_floor_sits_above_the_measured_noise(
-    corpus: Corpus, queries: tuple[LabelledQuery, ...], config: AppConfig
-) -> None:
-    """The floor's real justification, asserted on the corpus rather than argued.
-
-    The probe test above can be weakened by choosing gentle probes. This one
-    cannot: it scores every real question against every real item that does not
-    answer it, and requires the floor to clear the 95th percentile of that.
-    Measured 2026-08-26 over 126,843 pairs the p95 is 0.2716, so 0.35 has room;
-    if the archive ever grows noisier than the selector, this says so first.
-    """
-    embedded = retrieval.embed_queries(REPO_ROOT, queries)
-    noise = retrieval.null_scores(corpus, queries, embedded)
-    assert len(noise) > 10_000
-    p95 = retrieval.quantile(noise, 0.95)
-    assert config.assist.similarity_floor >= p95, (
-        f"the floor {config.assist.similarity_floor} is under the p95 of same-domain "
-        f"noise ({p95:.4f} over {len(noise)} pairs), so the empty state cannot fire"
-    )
-
-
-def test_the_report_says_how_much_of_the_list_nobody_judged(
-    report: RetrievalReport,
-) -> None:
-    """The gate metric is a lower bound, and this is the size of the gap.
-
-    Every slot held by an unjudged item counts as a wrong answer. Some of them
-    are right answers: the labels were pooled from an index that could see 44.5
-    percent of the corpus, and 55.5 percent of the unlabelled slot-holders were
-    unembedded on labelling day (2026-08-26). No bar is set on this number - it
-    is printed so that nobody reads the recall figure as the truth, and it falls
-    when the labels are completed.
-    """
-    print(f"\nunjudged slot share {report.unlabelled_share:.1%}")
-    assert 0.0 <= report.unlabelled_share <= 1.0
-    assert report.unlabelled_share > 0.0, (
-        "every filled slot is now a labelled answer - the label set has caught up "
-        "with the corpus and the lower-bound caveat can come out of the docs"
-    )
-
-
-def test_the_entity_tier_builds_one_query_per_slug_that_clears_the_floor(corpus: Corpus) -> None:
-    """Tier one: one query per entity slug carried by enough items, no labeller.
-
-    Until 2026-08-26 this asserted the tier's own **emptiness**, because nothing
-    wrote `entities` and the free tier had no slugs to work from. A
-    deterministic tagger writes them now. No committed payload was rewritten, so
-    the count climbs as new days land - which is exactly why this can no longer
-    assert a number. It asserts the behaviour instead, and holds whether the
-    corpus carries no slug or a hundred.
-    """
     counts = Counter(slug for item in corpus.items for slug in item.entities)
     expected = sorted(slug for slug, carried in counts.items() if carried >= 3)
     queries = retrieval.entity_queries(corpus, min_items=3)
