@@ -357,7 +357,7 @@ def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
 
 
 def test_task_names_must_be_unique() -> None:
-    with pytest.raises(ValidationError, match="task_names must not contain duplicates"):
+    with pytest.raises(ValidationError, match="task_names repeats a task"):
         GardenerConfig(
             version="2026-09-27", task_names=("seen", "seen"), attempts=6, shards=5
         )
