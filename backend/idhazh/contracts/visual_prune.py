@@ -158,7 +158,11 @@ class VisualPruneRow(Contract):
             raise ValueError("a switched-off policy has no cutoff, and a live one has one")
         if (self.window_start is None) != (self.window_end is None):
             raise ValueError("the candidate window has both endpoints or neither")
-        if self.window_start is not None and self.window_start > self.window_end:
+        if (
+            self.window_start is not None
+            and self.window_end is not None
+            and self.window_start > self.window_end
+        ):
             raise ValueError("the candidate window starts after it ends")
         if self.payload_bytes_after > self.payload_bytes_before:
             raise ValueError("a cleanup cannot grow the tree it walks")
