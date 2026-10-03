@@ -25,6 +25,13 @@ from ._harness import (
 pytestmark = pytest.mark.workflow
 
 
+def _checks_publication(step: dict[str, object]) -> bool:
+    return any(
+        tuple(shlex.split(line)[:4]) == CHECK_PUBLICATION_CALL
+        for line in str(step.get("run", "")).splitlines()
+    )
+
+
 def test_a_day_is_assembled_only_when_the_plan_it_is_built_from_succeeded() -> None:
     """A failed worker still publishes. A failed plan has nothing to publish.
 
@@ -78,11 +85,7 @@ def test_every_committed_day_is_validated_where_the_build_stopped_doing_it(
     `--site-tree` a default here cannot name the wrong one.
     """
     steps = _steps(_load_workflows()[filename], job_name)
-    calls = [
-        index
-        for index, step in enumerate(steps)
-        if tuple(shlex.split(str(step.get("run", "")))[:4]) == CHECK_PUBLICATION_CALL
-    ]
+    calls = [index for index, step in enumerate(steps) if _checks_publication(step)]
     assert calls, f"{filename}/{job_name} never validates the committed days"
     assert "continue-on-error" not in steps[calls[0]], (
         "a day that fails its contract is a day no reader can read; the step still fails"
@@ -103,9 +106,7 @@ def test_the_daily_publish_validates_the_day_it_wrote_and_not_every_other_one() 
     """
     steps = _steps(_load_workflows()["digest.yml"], "assemble")
     call = next(
-        shlex.split(str(step.get("run", "")))
-        for step in steps
-        if tuple(shlex.split(str(step.get("run", "")))[:4]) == CHECK_PUBLICATION_CALL
+        shlex.split(str(step.get("run", ""))) for step in steps if _checks_publication(step)
     )
     assert "--day" in call, "the daily publish still opens every committed day"
     named = call[call.index("--day") + 1]
@@ -132,11 +133,7 @@ def test_the_whole_tree_is_re_read_only_when_the_shape_it_is_read_through_moves(
     assert isinstance(outputs, dict) and "validate_all" in outputs, (
         "the selector's answer is not published for another job to read"
     )
-    step = next(
-        step
-        for step in _steps(workflow, "gates")
-        if tuple(shlex.split(str(step.get("run", "")))[:4]) == CHECK_PUBLICATION_CALL
-    )
+    step = next(step for step in _steps(workflow, "gates") if _checks_publication(step))
     assert "validate_all" in str(step.get("if", "")), (
         "the full pass over the archive runs on every change, whatever moved"
     )
@@ -153,11 +150,7 @@ def test_the_day_is_validated_before_it_is_published(
     """
     steps = _steps(_load_workflows()[filename], job_name)
     names = [step.get("name") for step in steps]
-    validated = next(
-        index
-        for index, step in enumerate(steps)
-        if tuple(shlex.split(str(step.get("run", "")))[:4]) == CHECK_PUBLICATION_CALL
-    )
+    validated = next(index for index, step in enumerate(steps) if _checks_publication(step))
     assert validated < names.index(commit_step), (
         "a day the contract refuses must never reach a reader"
     )
@@ -201,9 +194,9 @@ def test_the_build_gates_the_publish_and_the_weight_gate_runs_after_it(
     assert any(
         str(step.get("uses", "")).startswith("actions/setup-node@") for step in before_build
     ), "node must be set up before the site is built"
-    assert any(
-        "npm ci" in str(step.get("run", "")) for step in before_build
-    ), "the site must be installed before it is built"
+    assert any("npm ci" in str(step.get("run", "")) for step in before_build), (
+        "the site must be installed before it is built"
+    )
     assert built < commit, "a route that cannot render must never reach a reader"
     assert commit < gate, "a page over its ceiling loses the ceiling, not the day"
     assert "continue-on-error" not in steps[gate], "the gate publishes the day; it still fails"
@@ -414,8 +407,7 @@ def test_a_newer_build_supersedes_an_older_one_and_a_deploy_is_never_cancelled()
         "deploys, so finishing it buys nothing"
     )
     assert str(deploy["cancel-in-progress"]) == "false", (
-        "a deploy in flight always completes: a half-replaced site is worse "
-        "than an old one"
+        "a deploy in flight always completes: a half-replaced site is worse than an old one"
     )
     assert build["group"] != deploy["group"], (
         "sharing one group would let the build's cancellation reach a deploy "

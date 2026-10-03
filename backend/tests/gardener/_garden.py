@@ -39,7 +39,12 @@ COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.jso
 
 #: Who the seed commits are by. Not the repository's identity, on purpose: a
 #: commit the gardener made is told from the seed by its author.
-SEED_IDENTITY: Final = ("-c", "user.name=Scripted Origin", "-c", "user.email=origin@example.invalid")
+SEED_IDENTITY: Final = (
+    "-c",
+    "user.name=Scripted Origin",
+    "-c",
+    "user.email=origin@example.invalid",
+)
 
 #: One download a partial clone starts for itself, as a `GIT_TRACE` log records
 #: it: a fetch handed the ids of the files it lacks on its input.
@@ -59,9 +64,15 @@ def a_config(root: Path, *declarations: Path) -> Path:
     (config_dir / "gardener").mkdir(parents=True, exist_ok=True)
     for name in COMMITTED_FILES:
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
+    names: set[str] = set()
     for given in declarations:
         for source in sorted(given.glob("*.json")) if given.is_dir() else [given]:
             shutil.copyfile(source, config_dir / "gardener" / source.name)
+            names.add(source.stem)
+    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
+    knobs["task_names"] = sorted(names)
+    knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
     return config_dir
 
 

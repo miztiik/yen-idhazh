@@ -73,12 +73,14 @@ or comparative speed across different runner machines.
 
 Give each case its own trial state root to prevent filename collisions. Only the
 commit job has write permission; validate downloaded rows and config-derived paths
-before staging them. Never write reader-facing payloads. Use
+before staging them. Gather only the plan's named UTC day from each declared ledger,
+not a trial root's accumulated history. Never write reader-facing payloads. Use
 [model evaluation](../how-to/evaluate-new-summarizer-model.md) for adoption decisions.
 
 ## Vector backfill
 
-Dispatch without `commit` first. Repair only closed UTC days, and re-encode a wrong
+Supply the explicit `days` list and dispatch without `commit` first.
+Repair only those closed UTC days, and re-encode a wrong
 day in full so old and new vector arithmetic cannot mix. Validate payloads and build
 before committing. The weight check follows the commit: excess weight must not
 discard a valid repair. See the [publication checks](../architecture/publishing/what-stops-a-broken-day-being-published.md)

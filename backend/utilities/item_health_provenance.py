@@ -1,17 +1,12 @@
 """Where each item-health column comes from, and which ones anything fills.
 
-**An operator script, never a test.** It reads every row the item-health
-ledger holds to say which columns carry a value, and that read
-costs more as the archive grows (CLAUDE.md Guardrail #12) - which section 13
-forbids a test to do, and which would put a fuse on the answer besides: a test
-asserting a column empty goes red on the day the column first fills, which is a
-date on the calendar rather than a change anybody made. So it lives here, where
-pytest does not run it. Read its output on demand rather than pasting a snapshot
-into architecture docs; usage is in `docs/architecture/sources/item-health.md`.
+It reads only named source and ledger files. A blank cell means no value in
+that input, not that no run ever wrote the column. Read its output on demand
+rather than pasting a snapshot into architecture docs.
 
 Run it from the repository root:
 
-    python backend/utilities/item_health_provenance.py
+    python backend/utilities/item_health_provenance.py --source <file> --ledger <file>
 
 **What it settles.** Every column of `ItemHealthRow.csv_columns()` is printed
 exactly once, under exactly one of the eight groups below, and the run exits 1
@@ -36,7 +31,6 @@ from typing import Annotated, Final, NamedTuple, get_args, get_origin
 
 from idhazh import ledger
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry.record import ItemRecorder
 
 #: The tree a column's value can be computed in. `backend/utilities/` is not on
@@ -74,8 +68,7 @@ class Group(NamedTuple):
 GROUPS: Final[tuple[Group, ...]] = (
     Group(
         "Identity",
-        "Which item, at which address, from which feed, on which run, and on "
-        "whose machine.",
+        "Which item, at which address, from which feed, on which run, and on whose machine.",
         (
             "version",
             "date",
@@ -498,7 +491,9 @@ class Reading(NamedTuple):
     days: int
 
 
-def scan(root: Path, columns: frozenset[str]) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+def scan(
+    root: Path, columns: frozenset[str], names: Sequence[str]
+) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     """Which modules bind each column, and which of them land it in the row.
 
     Landing is the narrower question and the one worth asking: a column can be
@@ -507,9 +502,12 @@ def scan(root: Path, columns: frozenset[str]) -> tuple[dict[str, set[str]], dict
     `ItemHealthRow(...)` call rather than by naming a writer here, so a second
     construction site would appear on its own.
     """
+    from utilities.named_inputs import named_files
+
+    root = root.resolve()
     trees = {
         path.relative_to(root).as_posix(): ast.parse(path.read_text(encoding="utf-8"))
-        for path in sorted((root / SOURCE_ROOT).rglob("*.py"))
+        for path in named_files(root, names)
     }
     sequences = sequence_constants(trees.values())
 
@@ -528,24 +526,18 @@ def scan(root: Path, columns: frozenset[str]) -> tuple[dict[str, set[str]], dict
     return computed, lands
 
 
-def archive_columns(root: Path, columns: frozenset[str]) -> tuple[frozenset[str], int, int]:
-    """Which columns carry a cell somewhere in the committed ledger, over how many rows and days.
+def archive_columns(
+    root: Path, columns: frozenset[str], names: Sequence[str]
+) -> tuple[frozenset[str], int, int]:
+    """Which columns carry cells in the explicitly named ledger files."""
+    from idhazh.ledger.persist import load
+    from utilities.named_inputs import named_files
 
-    **This is the growing read.** It reads every row the item-health ledger
-    holds, so it costs more on a five-year archive than on a
-    fresh clone (Guardrail #12). A bounded input cannot answer it: the question
-    is whether ANY run has ever written the column, and a window answers only
-    for the days inside it - so it would report a column retired last year as
-    one nothing was ever wired to write.
-
-    Every row is read through the ledger door into today's contract, so it
-    carries today's column names and no retired heading.
-    """
     seen: set[str] = set()
     days: set[str] = set()
     rows = 0
     state_dir = root / ledger.STATE_DIRNAME
-    for row in ledger.load_ledger_rows(state_dir, LedgerName.ITEM_HEALTH, model=ItemHealthRow):
+    for row in load(named_files(state_dir, names), model=ItemHealthRow):
         cells = row.csv_row()
         rows += 1
         days.add(cells["date"])
@@ -553,12 +545,12 @@ def archive_columns(root: Path, columns: frozenset[str]) -> tuple[frozenset[str]
     return frozenset(seen) & columns, rows, len(days)
 
 
-def read(root: Path) -> Reading:
+def read(root: Path, sources: Sequence[str], ledgers: Sequence[str]) -> Reading:
     """One record per column, in the contract's own order."""
     columns = ItemHealthRow.csv_columns()
     named = frozenset(columns)
-    computed, lands = scan(root, named)
-    filled, rows, days = archive_columns(root, named)
+    computed, lands = scan(root, named, sources)
+    filled, rows, days = archive_columns(root, named, ledgers)
     fields = ItemHealthRow.model_fields
     return Reading(
         records=tuple(
@@ -580,7 +572,7 @@ def _modules(paths: Sequence[str]) -> str:
     return ", ".join(f"`{path}`" for path in paths) if paths else "-"
 
 
-def report(root: Path) -> int:
+def report(root: Path, sources: Sequence[str], ledgers: Sequence[str]) -> int:
     """Print the tables the doc pastes. Non-zero when the grouping is wrong."""
     columns = ItemHealthRow.csv_columns()
     fault = partition_fault(GROUPS, columns)
@@ -588,15 +580,15 @@ def report(root: Path) -> int:
         print(f"the eight groups do not cover the contract: {fault}", file=sys.stderr)
         return 1
 
-    reading = read(root)
+    reading = read(root, sources, ledgers)
     records = {record.column: record for record in reading.records}
     filled = sum(1 for record in reading.records if record.in_archive)
     today = datetime.now(UTC).date().isoformat()
 
     print(f"Generated by `python backend/utilities/{Path(__file__).name}` on {today}.")
     print(
-        f"{filled} of {len(columns)} columns carry a value somewhere in the committed "
-        f"ledger - {reading.rows:,} rows over {reading.days} days.\n"
+        f"{filled} of {len(columns)} columns carry a value in the named "
+        f"ledger files - {reading.rows:,} rows over {reading.days} UTC days.\n"
     )
     print("| Group | Columns | The question it answers |")
     print("| --- | --- | --- |")
@@ -606,7 +598,7 @@ def report(root: Path) -> int:
     for group in GROUPS:
         print(f"\n### {group.title}\n")
         print(f"{group.question}\n")
-        print("| Column | Type | Computed in | Reaches the row | In the archive |")
+        print("| Column | Type | Computed in | Reaches the row | In named files |")
         print("| --- | --- | --- | --- | --- |")
         for name in group.columns:
             record = records[name]
@@ -617,8 +609,18 @@ def report(root: Path) -> int:
     return 0
 
 
-def main() -> int:
-    return report(Path.cwd())
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source", action="append", required=True, help="Named Python source path."
+    )
+    parser.add_argument(
+        "--ledger", action="append", required=True, help="Named ledger file relative to state/."
+    )
+    args = parser.parse_args(argv)
+    return report(Path.cwd(), args.source, args.ledger)
 
 
 if __name__ == "__main__":

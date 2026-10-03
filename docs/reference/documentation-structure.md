@@ -85,8 +85,8 @@ Start with pages routinely loaded by contributors and agents. At similar read fr
 Run before and after a documentation pass:
 
 ```text
-python backend/utilities/doc_load.py
-python backend/utilities/doc_load.py --changed docs/concepts/config.md
+python backend/utilities/doc_load.py docs/concepts/config.md
+python backend/utilities/doc_load.py docs/concepts/config.md docs/concepts/evaluation.md
 ```
 
 The token count estimates one token per four characters; it is not a tokenizer measurement. Use it to compare revisions, not as a length limit.
@@ -95,10 +95,10 @@ The token count estimates one token per four characters; it is not a tokenizer m
 | --- | --- |
 | `~tok` | How much context the page takes before work begins |
 | `top h2` | Whether one section contains several independent questions |
-| `from` | Whether readers can reach the page and whether it belongs elsewhere |
+| `from` | Links between the named pages only; this does not count the whole repository |
 | `super` | Whether corrections have accumulated instead of replacing old answers |
 
-The tool also reports missing required elements and broken paths or anchors. It reports rather than gates. Inspect the findings even when the command exits successfully. CI includes the changed-page report in its documentation summary.
+Name every page to measure. There is no whole-tree default or repository-wide rank. The tool also checks direct link targets for broken paths or anchors, without following their links. It reports rather than gates. Inspect the findings even when the command exits successfully. CI includes the changed-page report in its documentation summary.
 
 ### `docs/` is the memory
 
