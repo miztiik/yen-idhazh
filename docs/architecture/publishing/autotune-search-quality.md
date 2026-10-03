@@ -1,6 +1,6 @@
 # Autotuning search quality
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-03
 
 **This page is research, not a description of what runs.** Nothing here is built.
 It records what search does today, what was measured about it, what was found
@@ -157,8 +157,8 @@ stories that do not answer the question costs the reader the time to read them
 and costs the digest its credibility. The two failures are not symmetric.
 
 So **precision at the filled slots becomes the gated number, and recall becomes
-reported-only.** Today it is the reverse: `assist.recall_min` is 0.68 and
-nothing gates precision. Precision here means: of the slots the search filled,
+reported-only.** Today nothing gates either: since 2026-10-03 an operator
+reads recall from `measure_retrieval.py --quality` and nothing measures precision. Precision here means: of the slots the search filled,
 how many held a story that actually answers.
 
 The floor is the right knob for an autotuner to move, for one structural reason.
@@ -195,8 +195,8 @@ says the vocabulary moved; it does not say the number moved *because* it moved.
 | B3 | `queries_added`, `queries_dropped` | How the set moved between runs |
 | B4 | `score_on_common` | **The answer.** The metric over the questions present in both runs, which holds the denominator still while the vocabulary grows |
 
-B4 is the same move `assist.eval_corpus_through` already makes for the stories:
-pin the comparison, report the live figure beside it.
+B4 is the move the deleted `assist.eval_corpus_through` pin made for the stories:
+hold the comparison still, report the live figure beside it.
 
 **A moving vocabulary also leaves the index itself behind, and that is a second
 problem wearing the same coat.** The metric above survives a vocabulary change
@@ -298,12 +298,12 @@ shapes already exist.
 | D2 | [autotune-content-similarity.md](autotune-content-similarity.md) | Damping, dead zone, step cap, band walls, and a judge that is already a council tenant |
 | D3 | [llm-council.md](llm-council.md) | The venue, three verbs, tenancy protocol, the 6 h arithmetic |
 | D4 | `backend/idhazh/ledger/filenames.py` | `SEGMENT_NAME`, the one-writer-per-path filename; `idhazh.path_classes` checks it |
-| D5 | `backend/tests/test_retrieval_eval.py` | Noise 95th percentile **0.2716** over **126,843** pairs, 2026-08-26; off-domain probes at 0.235, 0.295, 0.258, 0.194 |
-| D6 | `backend/idhazh/contracts/knobs/assist.py` | Floor 0.35, `recall_min` 0.68, limit 10, months 1, min days 7, and the pin `eval_corpus_through` |
+| D5 | `backend/utilities/measure_retrieval.py --quality` | Noise 95th percentile **0.2716** over **126,843** pairs, 2026-08-26; off-domain probes at 0.235, 0.295, 0.258, 0.194 |
+| D6 | `backend/idhazh/contracts/knobs/assist.py` | Floor 0.35, limit 10, months 1, min days 7 |
 | D7 | `tests/fixtures/search/retrieval-queries.json` | The 60 questions and 297 judgements, and their six-day span |
-| D8 | `backend/utilities/measure_retrieval.py` | The index-coverage read: does the index name every published story |
+| D8 | `backend/utilities/measure_retrieval.py` | Over named days and months: does the index name every published story, and with `--quality` recall and null scores |
 | D9 | `frontend/src/lib/assist/search.ts` | `readScope` and `searchable`, the two rules the Python twin must match |
-| D10 | [search-quality.md](../../concepts/search-quality.md) | The baseline, the bar, the pooling bias, and why recall@10 is a lower bound |
+| D10 | [search-quality.md](../../concepts/search-quality.md) | The baseline, the retired bar, the pooling bias, and why recall@10 is a lower bound |
 
 Measured figures worth not re-taking: the one-month window holds **7,044
 stories and zero judged answers**; the self-hydrating key covers **2,874 of

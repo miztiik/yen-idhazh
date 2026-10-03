@@ -1,6 +1,5 @@
 {
   "assist": {
-    "eval_corpus_through": "2026-08-26",
     "max_tokens": 256,
     "min_readable_letter_share": 0.5,
     "model_base_url": "https://huggingface.co/Xenova/all-MiniLM-L6-v2",
@@ -16,7 +15,6 @@
     },
     "model_fetch_deadline_ms": 120000,
     "model_revision": "751bff37182d3f1213fa05d7196b954e230abad9",
-    "recall_min": 0.61,
     "result_limit": 10,
     "search_min_days": 7,
     "search_months": 1,
