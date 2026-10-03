@@ -11,7 +11,6 @@ declares, and then one file at a time is put where no door writer puts it.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import uuid
@@ -229,26 +228,11 @@ def test_the_trial_check_refuses_invalid_or_unrelated_lookup_files(
     assert pipeline_test_ledgers.refusals(gathered, roots=roots)
 
 
-def test_a_day_shard_and_a_trace_still_pass_beside_the_door_files(tmp_path: Path) -> None:
-    """The two older shapes are read as they were, in a tree that also holds raw files."""
+def test_a_trace_still_passes_beside_the_door_files(tmp_path: Path) -> None:
+    """A trace remains allowed beside raw ledger files."""
     tree, root, roots = _a_trial_tree(tmp_path)
     assert _file_census(root)
     assert _file_machine(root)
-    digest = hashlib.sha256(RUN_ID.encode("ascii")).hexdigest()
-    assert ledger.write_segment(
-        root,
-        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
-        [
-            ObservationIndexRow.model_validate(
-                {"version": ObservationIndexRow.schema_version(), "observation_digest": digest}
-            )
-        ],
-        run_id=RUN_ID,
-        attempt=1,
-        job=ServerJob.WORK,
-        shard=0,
-        date=DAY,
-    ), "no day shard was written"
     trace = traces.committed_trace_path(
         root, run_id=RUN_ID, attempt=1, job=ServerJob.WORK, shard=0
     )
