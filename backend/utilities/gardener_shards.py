@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -51,13 +52,23 @@ def _key(declaration: dict[str, Any], key: str, name: str) -> Any:
 
 
 def declarations(config_root: Path) -> dict[str, dict[str, Any]]:
-    """Every declaration by task name, in sorted order. No folder is no tasks."""
+    """Only declarations named by the gardener config."""
     folder = config_root / TASKS_DIR
-    if not folder.is_dir():
-        return {}
+    knobs = json.loads((config_root / GARDENER_FILE).read_text(encoding="utf-8"))
+    names = knobs["task_names"]
+    if not isinstance(names, list) or any(
+        not isinstance(name, str) or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) is None
+        for name in names
+    ):
+        raise ValueError("config/idhazh_gardener.json task_names must be a list of task slugs")
+    if len(names) != len(set(names)):
+        raise ValueError("config/idhazh_gardener.json task_names repeats a task")
+    for name in names:
+        if not (folder / f"{name}{DECLARATION_SUFFIX}").is_file():
+            raise ValueError(f"config/{TASKS_DIR}/{name}{DECLARATION_SUFFIX} is missing")
     return {
-        path.stem: json.loads(path.read_text(encoding="utf-8"))
-        for path in sorted(folder.glob(f"*{DECLARATION_SUFFIX}"))
+        name: json.loads((folder / f"{name}{DECLARATION_SUFFIX}").read_text(encoding="utf-8"))
+        for name in sorted(names)
     }
 
 

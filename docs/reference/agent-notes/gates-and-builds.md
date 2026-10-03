@@ -35,6 +35,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   person's own machine choice; an agent does not change machine settings to
   fix this.
 
+- **A logic spec fails with `ERR_MODULE_NOT_FOUND` in a fresh worktree; the
+  spec is fine, the worktree has no `node_modules`.** `npx playwright` then
+  loads a cached global copy that cannot import the config. The tell is an
+  `npm-cache\_npx` path in the stack. The logic group needs no build, so link
+  a sibling checkout's install with the same lockfile instead of running
+  `npm ci`. A junction needs an absolute target. Remove it with `rmdir`:
+  `Remove-Item -Recurse` follows the link and deletes the sibling's install.
+  ```powershell
+  New-Item -ItemType Junction -Path frontend\node_modules -Target (Resolve-Path <sibling>\frontend\node_modules).Path
+  cmd /c rmdir frontend\node_modules
+  ```
+
 ## Two heavy gates on one box
 
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.

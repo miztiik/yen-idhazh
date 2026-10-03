@@ -3,8 +3,8 @@
 The cap was set to the number the encoder was trained at and never checked
 against real text. A character-count proxy said "about 18 percent of items run
 over", which is an estimate and may not justify a change on its own (Guardrail #10).
-This tool counts the tokens the encoder itself produces, over every day the
-repository has published, and reports the distribution the cap has to answer to.
+This tool counts the tokens the encoder itself produces over named UTC days,
+and reports the distribution for that input.
 
 It also measures what the encoder cannot read. The committed weights carry an
 English uncased vocabulary, so an item written in another script still produces
@@ -65,8 +65,10 @@ def raw_tokenizer(root: Path) -> Any:
     return tokenizer
 
 
-def digest_paths(root: Path) -> list[Path]:
-    return sorted((root / DIGEST_RELDIR).glob("*/*/*/digest.json"))
+def digest_paths(root: Path, days: list[str]) -> list[Path]:
+    from utilities.named_inputs import day_files
+
+    return day_files(root / DIGEST_RELDIR, days)
 
 
 def percentile(values: list[int], fraction: float) -> int:
@@ -154,6 +156,9 @@ def hardware() -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--day", action="append", required=True, help="UTC day, YYYY-MM-DD. Repeatable."
+    )
+    parser.add_argument(
         "--root",
         type=Path,
         default=REPO_ROOT,
@@ -184,7 +189,7 @@ def main() -> int:
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
-    paths = digest_paths(root)
+    paths = digest_paths(root, args.day)
     if not paths:
         parser.error(f"no committed days under {DIGEST_RELDIR}")
     tokenizer = raw_tokenizer(root)

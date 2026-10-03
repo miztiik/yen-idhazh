@@ -56,7 +56,9 @@ def a_state_tree(state: Path, files: tuple[str, ...]) -> Path:
 
 def test_each_family_prints_its_status_its_day_and_what_it_holds(tmp_path: Path) -> None:
     """The four facts a family carries, one block per family, in the registry's order."""
-    lines = ledger_families.listing(a_registry(tmp_path / "config"), tmp_path / "state")
+    lines = ledger_families.listing(
+        a_registry(tmp_path / "config"), tmp_path / "state", ["day-metrics/absent.json"]
+    )
 
     first = lines.index(f"day-metrics: paused, onboarded {AN_ONBOARDING} UTC")
     assert lines[first + 1] == f"  {A_DESCRIPTION}"
@@ -82,7 +84,17 @@ def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> N
         ),
     )
 
-    lines = ledger_families.listing(a_registry(tmp_path / "config"), state)
+    lines = ledger_families.listing(
+        a_registry(tmp_path / "config"),
+        state,
+        [
+            "day-metrics/2026/09/18.json",
+            "day-metrics/2026/09/19.json",
+            "content-similarity-judge/holdout-pairs.csv",
+            "content-similarity-judge/scored-pairs/2026/09/18.csv",
+            "traces/.gitkeep",
+        ],
+    )
 
     assert "  - day-metrics: 2 files" in lines
     assert "  - holdout-pairs: 1 file" in lines
@@ -103,7 +115,16 @@ def test_a_ledger_under_the_two_roots_counts_each_root_on_its_own_line(tmp_path:
         ),
     )
 
-    lines = ledger_families.listing(a_registry(tmp_path / "config"), state)
+    lines = ledger_families.listing(
+        a_registry(tmp_path / "config"),
+        state,
+        [
+            "raw/gardener/2026/09/27/01a0d03c-2e00-8461-98e0-a67898e9a802.parquet",
+            "raw/gardener/2026/09/28/01a0d03c-2e00-8461-98e0-a67898e9a803.parquet",
+            "raw/gardener/index/2026-09-27.json",
+            "compact/gardener/daily/2026/09/27.parquet",
+        ],
+    )
 
     assert "  - gardener under raw/: 3 files" in lines
     assert "  - gardener under compact/: 1 file" in lines
