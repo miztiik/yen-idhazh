@@ -1,6 +1,6 @@
 # Test Selection
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-03
 
 Why a pull request runs only some of the tests, what that choice gives up, and
 what was rejected on the way to it. The commands, the groups and the current
@@ -19,6 +19,13 @@ coverage stays the same, so nobody watches the bill arrive and no diff shows it
 growing. It became [CLAUDE.md](../../CLAUDE.md) Guardrail #12 and section 13,
 and it is why a per-item rule is driven from a fixture rather than from a loop
 over whatever the archive happens to hold.
+
+**A fixed fixture can still do needless work.** Per-item pipeline record and
+run-metadata tests limit the recorded plan to one item. Continuing after a
+failure, ordering and sibling totals need two. The
+timeout test keeps a real socket timeout of 60 ms; the stopwatch test keeps a
+real server wait of 50 ms. Both exercise the production path without changing
+production timeouts. Longer waits and unrelated items add cost, not coverage.
 
 **The second one was the larger cost, and selection would not have touched it.**
 The browser job is the critical path and the backend suite is small beside it

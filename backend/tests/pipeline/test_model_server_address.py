@@ -42,7 +42,7 @@ def test_a_stage_nobody_gave_an_address_posts_where_the_config_says(
     What is asserted is that the requests arrived at all - they cannot have,
     unless the address travelled from `config/` through the stage to the wire.
     """
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     isolate_ledgers(tmp_path, monkeypatch)
 
     with RecordedEndpoint(503, REFUSED_COMPLETION.read_bytes()) as server:
@@ -72,7 +72,7 @@ def test_moving_the_address_moves_where_the_stage_posts(
     happened to match. This one changes the value and nothing else, and the
     second server sees the traffic the first one did not.
     """
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     isolate_ledgers(tmp_path, monkeypatch)
 
     with RecordedEndpoint(503, REFUSED_COMPLETION.read_bytes()) as named:

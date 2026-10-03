@@ -51,8 +51,15 @@ def summary() -> Summary:
     return Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
 
 
-def plan() -> RunPlan:
-    return RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
+def plan(*, item_count: int | None = None) -> RunPlan:
+    """The recorded day, optionally limited to the items a test needs."""
+    recorded = RunPlan.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")
+    )
+    if item_count is None:
+        return recorded
+    assert 0 < item_count <= len(recorded.items), "the fixture must supply every requested item"
+    return recorded.model_copy(update={"items": recorded.items[:item_count]})
 
 
 def row(**overrides: object) -> EvalRow:

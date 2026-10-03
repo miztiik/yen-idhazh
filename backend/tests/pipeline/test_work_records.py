@@ -6,8 +6,8 @@ that passed. These tests read the stage's own log, over a real run of the work
 stage against captured pages and recorded replies - no network and nothing
 mocked (Guardrail #7).
 
-The day that run is driven from is the fixture plan's, so the volume is four
-items and the cost does not move when the archive grows (Guardrail #12).
+Runs use one fixture item, or two when ordering and shard totals need siblings.
+Their cost does not move when the archive grows (Guardrail #12).
 """
 
 from __future__ import annotations
@@ -24,11 +24,10 @@ from pytest import LogCaptureFixture, MonkeyPatch
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.fetch import FetchResult, FetchTimings
 
-from ._builders import _work_stage, captured_article_fetch
+from ._builders import _work_stage, captured_article_fetch, plan
 
-#: The fixture plan's size. Named once rather than repeated, so a sixth item
-#: added to the plan moves one line here instead of three assertions.
-PLANNED_ITEMS: Final = 5
+#: Two items prove ordering and totals across siblings.
+PLANNED_ITEMS: Final = 2
 
 LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
 
@@ -43,9 +42,8 @@ CUT_IN_THE_PLAN_REPLY: Final = (
 )
 
 #: How long the recorded server is held before it answers a request. Long enough
-#: that a millisecond clock cannot round it away, short enough that ten held
-#: requests cost two seconds.
-HELD_S: Final = 0.2
+#: that a millisecond clock cannot round it away.
+HELD_S: Final = 0.05
 
 
 def records(caplog: LogCaptureFixture) -> list[dict[str, Any]]:
@@ -70,7 +68,11 @@ def named(caplog: LogCaptureFixture, name: str) -> list[dict[str, Any]]:
 
 
 def run_a_shard(
-    tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    caplog: LogCaptureFixture,
+    *,
+    item_count: int = 1,
 ) -> None:
     """One real work stage, with its log captured."""
     caplog.set_level(logging.INFO, logger="idhazh")
@@ -81,6 +83,7 @@ def run_a_shard(
             LABEL_REPLY.read_bytes(),
             SUMMARIZE_AND_PLAN_REPLY.read_bytes(),
         ),
+        run_plan=plan(item_count=item_count),
     )
 
 
@@ -88,7 +91,7 @@ def test_every_item_says_it_started_before_anything_can_kill_it(
     tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
 ) -> None:
     """A shard killed on its timeout names the item it died on."""
-    run_a_shard(tmp_path, monkeypatch, caplog)
+    run_a_shard(tmp_path, monkeypatch, caplog, item_count=PLANNED_ITEMS)
 
     started = named(caplog, "item.start")
 
@@ -162,7 +165,7 @@ def test_the_shard_record_totals_the_run_and_names_its_slowest_item(
     tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
 ) -> None:
     """One line at the end, which is what a person reads first on a bad day."""
-    run_a_shard(tmp_path, monkeypatch, caplog)
+    run_a_shard(tmp_path, monkeypatch, caplog, item_count=PLANNED_ITEMS)
 
     shard = named(caplog, "shard.done")
 
@@ -241,6 +244,7 @@ def test_the_fetch_split_the_socket_measured_reaches_the_record(
         monkeypatch,
         replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
         fetcher=reader,
+        run_plan=plan(item_count=1),
     )
 
     done = named(caplog, "item.done")
@@ -295,6 +299,7 @@ def test_a_reply_that_named_no_reason_leaves_the_column_empty_and_a_cut_one_says
         tmp_path,
         monkeypatch,
         replies=(json.dumps(unreported).encode("utf-8"), CUT_IN_THE_PLAN_REPLY.read_bytes()),
+        run_plan=plan(item_count=1),
     )
 
     for record in served_calls(caplog):
@@ -320,6 +325,7 @@ def test_a_call_that_waited_is_clocked_at_more_than_the_server_claimed(
         monkeypatch,
         replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
         hold_s=HELD_S,
+        run_plan=plan(item_count=1),
     )
 
     for record in served_calls(caplog):
