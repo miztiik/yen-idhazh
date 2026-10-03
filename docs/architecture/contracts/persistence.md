@@ -112,7 +112,7 @@ The paths come back ascending by the day each file covers, never by path string.
 
 **A hole is served and reported.** From the first day the compact periods cover to the newest day they reach, every day must be named. A day that is not is a hole: its rows went somewhere no reader finds them. It is logged by name, and any raw files it still has are read. An index this build cannot read is read as absent, with a warning, so the reader serves the raw files it can still find rather than nothing.
 
-`ledger.load_retirements` and `ledger.load_visual_prunes` read this way and keep their signatures. Both ask about their ledger's whole history, so a window would answer a different question, and [growing-reads.md](../../concepts/growing-reads.md) lists both. A reader of item-health, summary-quality-evals or host-fingerprint names its days and calls `load_days`; one that calls `load_ledger_rows` is asking about the whole history, and growing-reads.md lists it too.
+`ledger.load_retirements` and `ledger.load_visual_prunes` read this way and keep their signatures. Both ask about their ledger's whole history, which violates the fixed-size input rule in [CLAUDE.md](../../../CLAUDE.md) Guardrail #12. A reader of item-health, summary-quality-evals or host-fingerprint names its days and calls `load_days`; one that calls `load_ledger_rows` is asking about the whole history and must use a fixed-size input.
 
 ## The envelope inside the file
 

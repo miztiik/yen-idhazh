@@ -1013,7 +1013,7 @@ The writer does not read the score rows to answer *do we already hold this
 measurement*. It reads `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/`, which keeps one
 fixed-width digest a measurement beside the day file it describes - a read an order
 of magnitude smaller than the rows, exact, with nothing forgotten
-([growing-reads.md](growing-reads.md)). Once a month is closed, the gardener
+(Guardrail #12). Once a month is closed, the gardener
 settles its days into one `<YYYY>/<MM>/settled.csv`, which the dedupe reads as
 it reads a day. **It files by the ledger's own day since
 2026-09-13**, because the fill below takes a partition with no index and the rows
@@ -1094,7 +1094,7 @@ new again, and a count over the ledger would stop being a count of items. The
 `forever` and takes nothing; its one live action is its fold, which settles
 each closed month into one file and each closed day of the open month into one
 file. The read grows by one file a closed month, plus the open month's days,
-and it is declared in [growing-reads.md](growing-reads.md).
+which violates the fixed-size input rule in Guardrail #12.
 
 **Every utility that needs an item-level row reaches every month.**
 `label_queue.py`, `reband_scores.py`, `data_wrangler.py refill` and
@@ -1118,7 +1118,7 @@ reading that list.
 - [pipeline-loop.md](pipeline-loop.md) - where the Evaluate stage sits.
 - [digest.md](digest.md) - how a confidence band reaches a reader.
 - [config/summary-length.md](config/summary-length.md) - the band thresholds and retry budget.
-- [growing-reads.md](growing-reads.md) - what the observation index costs, and the cover every read over a growing collection declares.
+- [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [partitions.md](partitions.md) - what a partition file is called, and what a name the rule does not recognise does.
 - [principles.md](principles.md) - principle 6, the belief this page implements.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the prompt asks for, including the hedges these metrics check.

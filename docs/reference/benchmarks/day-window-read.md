@@ -88,4 +88,4 @@ rows of reading on this box.
 
 - [`../pipeline-cost.md`](../pipeline-cost.md) - the instrument log, which carries the figure now in force and links here.
 - [`../../concepts/partitions.md`](../../concepts/partitions.md) - what a partition is at either grain.
-- [`../../concepts/growing-reads.md`](../../concepts/growing-reads.md) - what a read over a growing collection declares.
+- [`../../../CLAUDE.md`](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.

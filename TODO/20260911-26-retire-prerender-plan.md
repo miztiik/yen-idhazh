@@ -99,7 +99,7 @@ npm run test:browser
 **`GATE-DOCS`** - every row that writes a page under `docs/`, `README.md` or a plan-doc. From the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe backend\utilities\doc_load.py
+.\.venv\Scripts\python.exe backend\utilities\doc_load.py docs\reference\benchmarks\prerender-on-and-off.md docs\reference\site-weight.md
 ```
 
 **Not a gate, in this plan or anywhere in this repository: `ruff format`.** It rewrites dozens of files nobody in this plan authored. Format the files you wrote, or leave formatting alone.
@@ -199,7 +199,7 @@ Build the site twice from one tree - once as it stands, once with the seven `pre
 ### Acceptance gates
 
 ```powershell
-.\.venv\Scripts\python.exe backend\utilities\doc_load.py
+.\.venv\Scripts\python.exe backend\utilities\doc_load.py TODO\20260911-26-retire-prerender-plan.md
 git status --porcelain frontend/src
 ```
 
@@ -330,7 +330,7 @@ Correct four sentences on four files. Each is false against the tree, and each i
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/workflows/
-.\.venv\Scripts\python.exe backend\utilities\doc_load.py
+.\.venv\Scripts\python.exe backend\utilities\doc_load.py docs\reference\benchmarks\prerender-on-and-off.md docs\reference\site-weight.md docs\architecture\publishing\frontend.md docs\architecture\overview.md docs\how-to\run-the-gates.md
 ```
 
 `GATE-PY` and `GATE-DOCS`, plus: **`git diff --stat backend/tests/workflows/` shows a docstring change and no assertion change**, and the test still passes for the reason it was written - two severities, one of which may cost a reader the day.
@@ -386,7 +386,7 @@ What lands in `docs/architecture/publishing/frontend.md`:
 ### Acceptance gates
 
 ```powershell
-.\.venv\Scripts\python.exe backend\utilities\doc_load.py
+.\.venv\Scripts\python.exe backend\utilities\doc_load.py docs\architecture\publishing\frontend.md
 ```
 
 `GATE-DOCS`, plus all three of:
@@ -483,7 +483,7 @@ Named here so they are not mistaken for work this plan is doing.
 - [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) - the living doc that owns the six routes, the 2026-09-09 split and the 2026-09-10 seam, and the page row #4 writes the ruling into.
 - [`../docs/concepts/ui-shell.md`](../docs/concepts/ui-shell.md) - the four surfaces the site publishes, and the page "the UI shell plan" was probably a memory of.
 - [`../docs/reference/agent-notes/gates-and-builds.md`](../docs/reference/agent-notes/gates-and-builds.md) - why `BUILD_VERSION` is pinned across both of row #1's setups, and what an unpinned pair costs.
-- [`../docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - what a read over a growing collection must declare, which row #1's measurement does.
+- [`CLAUDE.md`](../CLAUDE.md) - what a read over a growing collection must declare, which row #1's measurement does.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the shape every row above is written in.
 - [`../docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) - the commands behind every gate set in section 0.1a.

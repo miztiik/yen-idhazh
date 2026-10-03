@@ -10,8 +10,8 @@ answer and are not.
 built now is in the doc that owns each subsystem.
 [CLAUDE.md](../../CLAUDE.md) Guardrail #12 refuses a cost that rises because the
 repository accumulated more data;
-[growing-reads.md](../concepts/growing-reads.md) gives that refusal an address on
-the reader's side and [partitions.md](../concepts/partitions.md) gives it one on
+[CLAUDE.md](../../CLAUDE.md) Guardrail #12 sets the fixed-size input rule, and
+[partitions.md](../concepts/partitions.md) gives it one on
 the writer's. This page is what the refusal means once a design has to satisfy
 it.
 
@@ -118,7 +118,7 @@ Each row is a fence: the alternative named, and what taking it would cost.
 ## See also
 
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #12, which this page serves, Guardrail #10 on what a measurement owes, and section 6 on correction levels.
-- [../concepts/growing-reads.md](../concepts/growing-reads.md) - the reader's side: the cover a growing read declares, and the reads that still grow.
+- [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../concepts/partitions.md](../concepts/partitions.md) - the writer's side: what a partitioned layout obliges, and the freeze rule.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the persisted and served outputs these rules apply to.

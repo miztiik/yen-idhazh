@@ -302,7 +302,7 @@ Restore from the commit, never from the working tree, and put both numbers in th
 - Local: `ruff check backend`, `ruff format --check backend`, `mypy backend` clean.
 - Local: `pytest backend/tests/test_search_quality.py backend/tests/test_retrieval_eval.py -q`, by path, because both modules are marked slow.
 - Local: `git grep -n 'yields nothing today' -- backend docs` returns nothing.
-- Local: `python backend/utilities/doc_load.py` before and after, and the two doc pages still pass their own tests.
+- Local: `python backend/utilities/doc_load.py docs/concepts/search-quality.md docs/architecture/publishing/autotune-search-quality.md` before and after, and the two doc pages still pass their own tests.
 - **No test walks a growing collection.** Every case below is driven from a fixture tree the test builds, fixed in size (CLAUDE.md section 13).
 - CI: the full suite.
 
@@ -420,7 +420,7 @@ H6 to H9 repeat on every row of one run. That is what `item-health` already does
 - Local: `pytest backend/tests/test_search_quality.py backend/tests/contracts backend/tests/test_ledger.py backend/tests/workflows/test_worker_ledgers.py backend/tests/workflows/test_ledger_staging.py -q`.
 - Local: no generated layer to regenerate - `schemas/` and `frontend/src/contracts/` went on 2026-09-23, and `Contract.json_schema()` computes a schema on demand. `backend/tests/contracts/test_frontend_field_set.py`, `test_frontend_vocabularies.py`, `test_frontend_console_lists.py` and `test_no_generated_layer.py` are what holds the frontend's hand copies in step, and `backend/tests/contracts` above already runs all four.
 - Local: a round trip - a row through `csv_row` and back through `from_csv_row` is the same row, float cells included.
-- Local: `python backend/utilities/doc_load.py` before and after.
+- Local: `python backend/utilities/doc_load.py docs/concepts/search-quality.md docs/architecture/publishing/autotune-search-quality.md` before and after.
 - **The run id in every fixture is production-shaped**, `<YYYY-MM-DD>-<execution>`, and matches `RUN_ID_PATTERN`. A made-up id passes a test against a filename production never writes.
 - CI: the full suite.
 

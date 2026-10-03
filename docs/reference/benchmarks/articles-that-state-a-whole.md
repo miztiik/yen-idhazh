@@ -205,8 +205,8 @@ and the twelve-example reading with its label.**
 ## The read, and what it cost
 
 This opens `corpus/corpus.jsonl`, which a run appends to, so it is a growing read
-under [`../../concepts/growing-reads.md`](../../concepts/growing-reads.md) and it
-is taken under Guardrail #12's escape hatch. It opens **one file, 1,444 rows,
+that violates the fixed-size input rule in Guardrail #12. It opens
+**one file, 1,444 rows,
 14,544,738 bytes**, reads every one of them, and its cost rises with every
 harvest. A bounded input cannot answer it: the question is the rate over the
 whole window, so a sample would answer a different question and carry a spread
@@ -227,5 +227,5 @@ thing a person runs while waiting, not a thing that needs a job.
 
 - [`../pipeline-cost.md`](../pipeline-cost.md) - the instrument log, which carries the figure now in force and links here.
 - [`../../architecture/publishing/where-every-drawn-figure-came-from.md`](../../architecture/publishing/where-every-drawn-figure-came-from.md) - the declared-whole rule this count sizes, and `share_of_declared_whole`.
-- [`../../concepts/growing-reads.md`](../../concepts/growing-reads.md) - what a read over a growing collection declares.
+- [`../../../CLAUDE.md`](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [`../../../TODO/20260905-16-composition-vocabulary-plan.md`](../../../TODO/20260905-16-composition-vocabulary-plan.md) - the plan this row belongs to, and the owner decision that `pie` ships either way.

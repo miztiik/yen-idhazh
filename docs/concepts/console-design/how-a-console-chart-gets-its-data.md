@@ -128,5 +128,5 @@ panel guarantees a second reader arrives with the first large one. Owner ruling,
 - [../console-design.md](../console-design.md) - what a figure may say in words.
 - [the-rules-every-console-chart-obeys.md](the-rules-every-console-chart-obeys.md) - what a drawing may do.
 - [../telemetry-intent.md](../telemetry-intent.md) - what must be true of telemetry when the workstream is done.
-- [../growing-reads.md](../growing-reads.md) - what a read over a growing collection has to declare.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../../architecture/publishing/console-payloads.md](../../architecture/publishing/console-payloads.md) - what the console reads today and where each payload comes from.

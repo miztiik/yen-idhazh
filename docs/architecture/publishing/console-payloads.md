@@ -561,7 +561,7 @@ decision 2's cold-load ceiling. Measured 2026-09-09.
  existed, and how its shards are frozen.
 - [../../concepts/partitions.md](../../concepts/partitions.md) - what
  closes a month, and what a late arrival does to a closed one.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - the
- property behind every window on this page.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have
+ a fixed-size input.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #11 for the trust boundary,
  Guardrail #12 for the ages, section 11 for the stamps.

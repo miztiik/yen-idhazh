@@ -175,4 +175,4 @@ The owner has already ruled on these, so do not reopen them: the published mirro
 - [`../docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) - which page owns what.
 - [`../docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) - the environment and every gate command.
 - [`../docs/architecture/sources/item-health.md`](../docs/architecture/sources/item-health.md) - the ledger this plan widened.
-- [`../docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - what a read over a growing collection has to declare.
+- [`CLAUDE.md`](../CLAUDE.md) - what a read over a growing collection has to declare.

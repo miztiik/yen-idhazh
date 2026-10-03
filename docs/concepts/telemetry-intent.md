@@ -41,7 +41,7 @@ It is not a measurement either. Every figure that prices one of these - what a P
 - [vision.md](vision.md) - what the project is and is not.
 - [telemetry.md](telemetry.md) - the instrument as it stands: the event vocabulary, the span tree, and where each record lands.
 - [partitions.md](partitions.md) - what a layout obliges a writer to do, and the grains in force today.
-- [growing-reads.md](growing-reads.md) - what a read over a growing collection has to declare.
+- [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../architecture/publishing/console-payloads.md](../architecture/publishing/console-payloads.md) - what the console reads today and where each payload comes from.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - the published series N7 and N8 retire.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - how a persisted shape is declared, stamped and migrated.

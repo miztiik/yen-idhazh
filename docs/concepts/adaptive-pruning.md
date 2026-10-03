@@ -12,8 +12,8 @@ age that is right for one artefact is wrong for the next. This page says what th
 four policies are, which one governs a given artefact, and what the register does
 not name.
 
-[growing-reads.md](growing-reads.md) is the companion, not a duplicate. It asks
-what a **read** may open, and its answer is a **cover** - the bound a reader
+[CLAUDE.md](../../CLAUDE.md) Guardrail #12 sets the read rule. Each read has a
+fixed-size input, such as one day or one shard, rather than a growing collection.
 declares out loud, such as "the last 90 days" or "only the files this run wrote".
 This page asks what a **write** is allowed to keep. A cover makes a shard cheap
 to read; a policy is what stops the shards piling up behind it.
@@ -131,8 +131,8 @@ either to the register would teach the next reader that a directory under
 below reads committed trees, which is what its own verification command says.
 
 Reach for a clock last. Which cover is honest, and why a clock is usually the
-wrong one, is
-[growing-reads.md](growing-reads.md#deciding-it-for-a-collection-this-page-does-not-list).
+wrong one, is governed by
+[CLAUDE.md](../../CLAUDE.md) Guardrail #12: every read must have a fixed-size input.
 
 ## The register, 2026-09-12
 
@@ -405,8 +405,8 @@ measurement, and evidence does not expire.
 
 - [config/retention-ages.md](config/retention-ages.md#every-tree-names-its-own-cleanup-age) - where every age
   in the register is set, and the argument for each number.
-- [growing-reads.md](growing-reads.md) - the companion question: what a read may
-  open, where this page is what a write may keep.
+- [CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size
+  input.
 - [partitions.md](partitions.md) - the layout that makes a fold one atomic file
   operation.
 - [telemetry.md](telemetry.md) and [evaluation.md](evaluation.md) - the two

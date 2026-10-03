@@ -78,7 +78,7 @@ Callers pass the state directory and never the file name. The layout is one fact
 - [schemas.md](schemas.md) - the shape of a row, and the rule that decides whether a ledger partitions.
 - [../../concepts/partitions.md](../../concepts/partitions.md) - what counts as a day file and a month name, and how a collection changes grain.
 - [../../concepts/adaptive-pruning.md](../../concepts/adaptive-pruning.md) - what happens to these rows as they age.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over one of these ledgers costs as it grows.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../publishing/retention.md](../publishing/retention.md) - the windows that empty them again.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - where a measured number carries its hardware and date.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #1, Guardrail #12, section 2.

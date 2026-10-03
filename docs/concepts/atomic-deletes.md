@@ -93,5 +93,5 @@ it was.
 
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each committed tree, and the named prune over a ledger's day files.
 - [../how-to/prune-a-collection.md](../how-to/prune-a-collection.md) - the steps for running one.
-- [growing-reads.md](growing-reads.md) - why a read whose cost grows with the archive needs a window.
+- [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [config/retention-ages.md](config/retention-ages.md) - where the `prune` knobs live.

@@ -135,8 +135,8 @@ had drifted from the archive. That is answerable from the month file names plus
 the key's own dates, at fixed cost, without running the ranker over the whole
 archive.
 
-**It is deleted, along with the declared growing read that covered it in
-[growing-reads.md](../../concepts/growing-reads.md).** What the project gives up
+**It is deleted, along with the growing read that violates the fixed-size input
+rule in Guardrail #12.** What the project gives up
 is the whole-archive number as a watchable level - 0.602 on 2026-09-04, falling
 at 0.0000479 per story published, which is about 0.031 a day. Nobody acted on
 it, because the gate is pinned and the decline is a fitted line rather than a
@@ -343,6 +343,6 @@ story published**.
 - [autotune-content-similarity.md](autotune-content-similarity.md) - the working precedent: a judged line that fits itself nightly.
 - [autotune-desk-assignment.md](autotune-desk-assignment.md) - who rebuilds the index and the label vectors when the vocabulary moves, and why neither is rebuilt today.
 - [../../concepts/search-quality.md](../../concepts/search-quality.md) - the measured baseline, the bar, and why the number is a lower bound.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [retention.md](retention.md) - why a reading not taken on the day cannot be recomputed.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10 (measure to decide), #12 (growth is not recurring work), section 1a (what a model verdict may decide).

@@ -109,7 +109,7 @@ Measured on a real build, a developer machine, 2026-09-09, `BUILD_VERSION` pinne
 
 **The reader pays for it on a cold dated load, and only there.** A dated URL is now the fallback, the bundle, and then the day payload - which runs to 1.9 MB on the heaviest committed day - where it used to be one document of about 30 gzipped KB. In-app navigation never asks the host for a dated address, so only a typed link, a bookmark or a shared link takes that path (owner decision, 2026-09-09). What the page does not do is wait for the day: the fetch is started by the page component rather than awaited in its `load`, so the chrome and the date are on screen while the payload comes down, and past `ui.payload_slow_ms` one sentence says so. Awaiting it in the `load` was the simpler code and a blank page.
 
-**Two entries left [../../concepts/growing-reads.md](../../concepts/growing-reads.md) and nothing replaced them.** Both dated routes' `entries` carried a `-1` because a cover on the list of pages a build writes stops writing them past it. There is no list of pages now, so the uncovered read did not move somewhere cheaper - it stopped existing, which is the only way one of those entries is meant to leave that page.
+**Two entries were left without a replacement.** Both dated routes' `entries` carried a `-1` because a cover on the list of pages a build writes stops writing them past it. There is no list of pages now, so the uncovered read did not move somewhere cheaper - it stopped existing, which is the only way one of those entries is meant to leave that page.
 
 ## The topic routes spend it
 
