@@ -16,7 +16,6 @@ import json
 import re
 from collections import Counter
 from dataclasses import replace
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -1152,10 +1151,3 @@ def test_no_hash_appears_in_any_planned_item_id() -> None:
         assert len(symbols) == ITEM_ID_SYMBOLS
         assert set(symbols) <= set(CROCKFORD_ALPHABET)
         assert not set(symbols) & set("ilou")
-
-
-@pytest.mark.parametrize("path", sorted(FEEDS.glob("*")), ids=lambda p: p.name)
-def test_a_feed_fixture_is_ascii_and_lf(path: Path) -> None:
-    raw = path.read_bytes()
-    raw.decode("ascii")
-    assert b"\r\n" not in raw

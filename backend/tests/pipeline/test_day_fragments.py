@@ -22,8 +22,15 @@ FRAGMENTS_DIR = FIXTURES_DIR / "digest-fragments"
 DATE = "2026-08-21"
 
 
+FRAGMENT_NAMES = (
+    "2026-08-21-1000000001.json",
+    "2026-08-21-1000000002.json",
+    "2026-08-21-1000000003.json",
+)
+
+
 def _blocks() -> list[Path]:
-    return sorted(FRAGMENTS_DIR.glob("*.json"))
+    return [FRAGMENTS_DIR / name for name in FRAGMENT_NAMES]
 
 
 def _day_from(order: tuple[Path, ...], root: Path) -> DigestDay:

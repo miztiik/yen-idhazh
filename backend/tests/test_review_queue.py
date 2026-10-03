@@ -144,7 +144,9 @@ def build_a_day(
     """
     digest_root = root / "public" / "digest"
     run_root = root / "run"
-    day = DigestDay.from_json(read_text(next((CONTRACT_FIXTURES_DIR / "digest-day").glob("*.json"))))
+    day = DigestDay.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json")
+    )
     named = titles or {}
 
     items = [
