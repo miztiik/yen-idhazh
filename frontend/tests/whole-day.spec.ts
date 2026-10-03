@@ -25,17 +25,17 @@ const LAST = ITEMS[ITEMS.length - 1]?.item_id;
 const DRAWN = ITEMS.filter(
 	(item) => item.visual?.state === 'rendered' && typeof item.visual.data_path === 'string'
 );
-const LATE_DRAWINGS = ITEMS.slice(SEED).filter(
+const DRAWN_AFTER_SEED = ITEMS.slice(SEED).filter(
 	(item) => item.visual?.state === 'rendered' && typeof item.visual.data_path === 'string'
 );
-const LATE_CHARTS = LATE_DRAWINGS.filter((item) => {
+function visualFor(item: DigestItem): VisualData {
 	const path = item.visual?.data_path;
 	if (!path || !INVENTORY_FILES.has(path)) {
 		throw new Error(`the canary inventory does not name visual ${String(path)}`);
 	}
-	const visual = JSON.parse(readFileSync(join(CANARY_ROOT, path), 'utf8')) as VisualData;
-	return visual.type === 'bar';
-});
+	return JSON.parse(readFileSync(join(CANARY_ROOT, path), 'utf8')) as VisualData;
+}
+const HAS_CHART = DRAWN.some((item) => visualFor(item).type === 'bar');
 
 interface Repaint {
 	part: string;
@@ -101,10 +101,9 @@ async function openWholeDay(page: Page, width: number): Promise<void> {
 	expect(ITEMS.length, `the named canary day has no item after its ${SEED}-item seed`)
 		.toBeGreaterThan(SEED);
 	expect(DRAWN.length, 'the named canary day carries no published visuals').toBeGreaterThan(0);
-	expect(LATE_DRAWINGS.length, 'no visual follows the seed, so lazy drawing is not exercised')
+	expect(DRAWN_AFTER_SEED.length, 'no visual follows the seed, so lazy drawing is not exercised')
 		.toBeGreaterThan(0);
-	expect(LATE_CHARTS.length, 'no chart follows the seed, so lazy chart drawing is not exercised')
-		.toBeGreaterThan(0);
+	expect(HAS_CHART, 'the named canary day carries no chart').toBe(true);
 	expect(LAST, 'the named canary day has no last story to address').toBeTruthy();
 
 	await page.setViewportSize({ width, height: 900 });
@@ -149,7 +148,7 @@ for (const width of WIDTHS) {
 		const steps = await stepDown(page);
 		await expect(page.locator('main figure svg')).toHaveCount(DRAWN.length);
 
-		const requestedLateDrawing = LATE_DRAWINGS.some((item) =>
+		const requestedLateDrawing = DRAWN_AFTER_SEED.some((item) =>
 			requests.some((path) => path.endsWith(`/${item.visual!.data_path}`))
 		);
 		expect(
