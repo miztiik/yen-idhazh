@@ -304,6 +304,11 @@
       "bytes": 22735,
       "covers": "2026-09-30",
       "rows": 347
+    },
+    {
+      "bytes": 20849,
+      "covers": "2026-10-01",
+      "rows": 311
     }
   ],
   "ledger": "published",
