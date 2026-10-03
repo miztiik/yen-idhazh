@@ -38,7 +38,7 @@ from typing import Final
 from idhazh import ledger
 from idhazh.assemble import TaxonomyVectors, nearest_label_cosines
 from idhazh.atomic_write import write_atomic
-from idhazh.contracts.base import canonical_json
+from idhazh.contracts.base import records_json
 from idhazh.contracts.day_metrics import (
     INSTRUMENT_COLUMNS,
     DayBands,
@@ -776,7 +776,10 @@ def publish_public(
 
     def encode(month: str) -> bytes:
         rows = records_in_month(state_root, month)
-        return canonical_json([row.model_dump(mode="json") for row in rows]).encode("utf-8")
+        return records_json(
+            [row.model_dump(mode="json") for row in rows],
+            record_lists=frozenset({"sources", "instruments", "stage_timing"}),
+        ).encode("utf-8")
 
     return series.publish_series(
         digest_root=digest_root,

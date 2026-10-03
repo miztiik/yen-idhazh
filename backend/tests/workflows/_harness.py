@@ -134,6 +134,7 @@ DISPATCH_BOOLEAN: Final = "boolean"
 DISPATCH_READ_BY_NAME: Final = "read by name"
 
 DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
+    ("ci.yml", "panel_captures"): DISPATCH_BOOLEAN,
     ("backfill.yml", "commit"): DISPATCH_BOOLEAN,
     ("backfill.yml", "days"): DISPATCH_READ_BY_NAME,
     # The one that decides a published address. See the two tests that run the
