@@ -3,7 +3,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { newestPackedDay, publishedLedgers } from '../scripts/published-ledgers.mjs';
 import { COMPACT_PERIODS, readIndex } from '../src/lib/data/compact-index';
-import { dataPath, indexPath } from '../src/lib/data/slice-reader';
+import { readRawDayIndex } from '../src/lib/data/raw-day-index';
+import { dataPath, indexPath, rawDataPath, rawIndexPath } from '../src/lib/data/slice-reader';
 import type { LedgerName } from '../src/lib/data/slice-shapes';
 
 /**
@@ -86,9 +87,40 @@ function addressed(): { sizes: Map<string, number | null>; problems: string[] } 
 	return { sizes, problems };
 }
 
+/** What the published raw-day listings send the door to, and each writer file's listed size. */
+function rawAddressed(): { sizes: Map<string, number | null>; problems: string[] } {
+	const sizes = new Map<string, number | null>();
+	const problems: string[] = [];
+	for (const ledger of publishedLedgers() as LedgerName[]) {
+		const indexRoot = join(STATE, 'raw', ledger, 'index');
+		if (!existsSync(indexRoot)) continue;
+		for (const name of readdirSync(indexRoot).sort()) {
+			if (!/^\d{4}-\d{2}-\d{2}\.json$/.test(name)) {
+				problems.push(`state/raw/${ledger}/index/${name} is not a raw day listing name`);
+				continue;
+			}
+			const day = name.slice(0, -5);
+			const path = rawIndexPath(ledger, day);
+			sizes.set(path, null);
+			const reading = readRawDayIndex(JSON.parse(readFileSync(at(path), 'utf8')), ledger, day);
+			if ('refused' in reading) {
+				problems.push(`state/${path} is one the door will not act on: ${JSON.stringify(reading.refused)}`);
+				continue;
+			}
+			for (const [index, file] of reading.index.files.entries()) {
+				sizes.set(rawDataPath(ledger, day, file), reading.index.bytes[index]);
+			}
+		}
+	}
+	return { sizes, problems };
+}
+
 test('THE ORACLE: every address a published index names is in the build, at the size it names', () => {
 	expect(publishedLedgers().length, 'config/idhazh.json publishes no ledger').toBeGreaterThan(0);
 	const { sizes, problems } = addressed();
+	const raw = rawAddressed();
+	for (const problem of raw.problems) problems.push(problem);
+	for (const [path, bytes] of raw.sizes) sizes.set(path, bytes);
 	for (const [path, bytes] of sizes) {
 		// An index has no size to check, and `addressed` has already read it.
 		if (bytes === null) continue;
@@ -108,14 +140,12 @@ test('THE ORACLE: every address a published index names is in the build, at the 
 
 test('nothing else of state/ reaches the site: no raw day, no watermark, no other ledger', () => {
 	const { sizes } = addressed();
+	const raw = rawAddressed();
+	for (const [path, bytes] of raw.sizes) sizes.set(path, bytes);
 	const built = filesUnder(STATE);
 	expect(
-		built.filter((path) => !path.startsWith('compact/')),
-		'the raw tier, or anything outside the compact tier, is in the build'
-	).toEqual([]);
-	expect(
 		built.filter((path) => !sizes.has(path)),
-		'a file no published index names is in the build'
+		'a file no published compact index or raw day listing names is in the build'
 	).toEqual([]);
 });
 
