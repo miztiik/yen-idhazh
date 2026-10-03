@@ -24,7 +24,6 @@ from itertools import count
 from pathlib import Path
 from typing import Any, Final
 
-import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 from pytest import LogCaptureFixture, MonkeyPatch
 
@@ -44,8 +43,6 @@ from ._builders import (
     plan,
 )
 from .test_degrade import headless_page_fetch, headless_plan
-
-pytestmark = pytest.mark.slow
 
 #: The fixture plan's size. Named once so a sixth item moves one line.
 PLANNED_ITEMS: Final = 5

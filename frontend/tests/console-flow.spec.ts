@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { chartsReady } from './support/charts-ready';
 import { chartFlow, type FlowDay } from '../src/lib/charts/chart-flow';
 
 /**
@@ -241,7 +242,7 @@ for (const size of [PHONE, NARROW]) {
 	}) => {
 		await page.setViewportSize(size);
 		await page.goto('/console/');
-		await page.waitForTimeout(800);
+		await chartsReady(page);
 
 		const list = page.locator('[data-flow-steps]');
 		await expect(list).toBeVisible();
@@ -293,7 +294,7 @@ test('the diagram comes back above the breakpoint', async ({ page }) => {
 	// screen is two answers to one question.
 	await page.setViewportSize({ width: BREAKPOINT + 2, height: 900 });
 	await page.goto('/console/');
-	await page.waitForTimeout(800);
+	await chartsReady(page);
 
 	await expect(page.locator('[data-flow="chart"]')).toBeVisible();
 	await expect(page.locator('[data-flow-steps]')).toBeHidden();

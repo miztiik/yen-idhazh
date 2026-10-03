@@ -16,6 +16,7 @@ import {
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths';
 import { machineRecordState } from './support/machine-record-state';
+import { viewsOf } from './support/views';
 import {
 	judgeNothings,
 	judgeSettled,
@@ -185,15 +186,13 @@ test.describe('the witness panel', () => {
 		return readPanel(page.locator('[data-console-panel-id="witness"]'));
 	}
 
-	/** Every decidable gate over one witness: the settled panel at every width
-	 * in both themes, and its four nothings at the narrowest width in both. */
+	/** Every decidable gate over one witness: the settled panel at every view
+	 * `viewsOf` names, and its four nothings at the narrowest width in both themes. */
 	async function judged(page: Page, input: Witness, floor: number): Promise<Verdict[]> {
 		const verdicts: Verdict[] = [];
-		for (const width of CONSOLE_WIDTHS) {
-			for (const theme of THEMES) {
-				const reading = await mounted(page, { ...input.props, empty: input.nothings.quiet }, width, theme, input.flatPage);
-				verdicts.push(...judgeSettled(reading, floor));
-			}
+		for (const { width, theme } of viewsOf(CONSOLE_WIDTHS, THEMES)) {
+			const reading = await mounted(page, { ...input.props, empty: input.nothings.quiet }, width, theme, input.flatPage);
+			verdicts.push(...judgeSettled(reading, floor));
 		}
 		for (const theme of THEMES) {
 			const readings = {} as Record<Nothing, PanelReading>;
@@ -214,7 +213,7 @@ test.describe('the witness panel', () => {
 	const failed = (verdicts: Verdict[]): GateNumber[] =>
 		[...new Set(verdicts.filter((verdict) => !verdict.pass).map((verdict) => verdict.gate))].sort((a, b) => a - b);
 
-	test('the good witness clears every decidable gate at every width in both themes', async ({ page }) => {
+	test('the good witness clears every decidable gate at every view', async ({ page }) => {
 		const verdicts = await judged(page, GOOD, consolePanels().fillFloor);
 		for (const verdict of verdicts) console.log(`gate ${verdict.gate}: ${verdict.says}`);
 		expect(
@@ -286,19 +285,17 @@ async function settled(page: Page, id: string) {
 }
 
 test.describe('the judged panels', () => {
-	test('every judged panel clears gates 1, 2, 3, 5 and 6 at every width in both themes', async ({ page }) => {
+	test('every judged panel clears gates 1, 2, 3, 5 and 6 at every view', async ({ page }) => {
 		const { judged, routeOf, fillFloor } = consolePanels();
 		test.info().annotations.push({ type: 'judged panels', description: `${judged.length}: ${judged.join(', ') || 'none yet'}` });
 		for (const id of judged) {
 			const address = CONSOLE_ROUTE_PATHS[routeOf.get(id) ?? ''];
-			for (const width of CONSOLE_WIDTHS) {
-				for (const theme of THEMES) {
-					await opened(page, address, width, theme);
-					const reading = await readPanel(await settled(page, id));
-					for (const verdict of judgeSettled(reading, fillFloor)) {
-						console.log(`${width} ${theme} gate ${verdict.gate}: ${verdict.says}`);
-						expect.soft(verdict.pass, `${width} ${theme} gate ${verdict.gate}: ${verdict.says}`).toBe(true);
-					}
+			for (const { width, theme } of viewsOf(CONSOLE_WIDTHS, THEMES)) {
+				await opened(page, address, width, theme);
+				const reading = await readPanel(await settled(page, id));
+				for (const verdict of judgeSettled(reading, fillFloor)) {
+					console.log(`${width} ${theme} gate ${verdict.gate}: ${verdict.says}`);
+					expect.soft(verdict.pass, `${width} ${theme} gate ${verdict.gate}: ${verdict.says}`).toBe(true);
 				}
 			}
 		}

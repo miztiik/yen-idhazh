@@ -30,7 +30,7 @@ from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.evals.observation_batches import preparation_path
 from idhazh.ledger import filenames, paths
 
-pytestmark = pytest.mark.contract
+pytestmark = [pytest.mark.contract, pytest.mark.slow]
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 BACKEND: Final = REPO_ROOT / "backend"

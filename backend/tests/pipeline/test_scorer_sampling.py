@@ -29,8 +29,6 @@ from ._builders import (
     work_then_assemble,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def synthetic_run_ids(count: int = 1000) -> list[str]:
     """Distinct ids in the shape the pipeline mints them: `<date>-<n>`."""

@@ -17,15 +17,14 @@
  *    relative-luminance formula over the tokens the live document resolves,
  *    because a hairline that reads 1.36:1 on the dark ground is not an edge.
  *
- * The overflow assertions have moved to `layout-overflow.spec.ts`. They were
- * repeated inline here while that file did not exist,
- * because giving the item a border, a radius and padding on both axes is
- * exactly the change that pushes a page sideways. The shared file
- * covers strictly more: every reader-facing route rather than the two this file
- * reaches, at the same three widths in the same two themes.
+ * The overflow assertions live in `reading-page.spec.ts`, because giving the
+ * item a border, a radius and padding on both axes is exactly the change that
+ * pushes a page sideways. That file covers strictly more: every reader-facing
+ * route rather than the two this file reaches.
  */
 
 import { expect, test, type Page } from '@playwright/test';
+import { viewsOf } from './support/views';
 
 const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
@@ -273,49 +272,47 @@ test.describe('the item is a low-chrome card', () => {
 		});
 	}
 
-	for (const theme of THEMES) {
-		for (const width of [360, 390, 1280, 1536]) {
-			test(`${theme} at ${width}: article type keeps its readable hierarchy`, async ({ page }) => {
-				await open(page, theme, '/', width);
-				const sizes = await page.locator('article.item').first().evaluate((card) => {
-					const read = (selector: string) => {
-						const element = card.querySelector(selector);
-						if (!element) throw new Error(`no ${selector} on the card to measure`);
-						const style = getComputedStyle(element);
-						return {
-							size: parseFloat(style.fontSize),
-							leading: parseFloat(style.lineHeight),
-							colour: style.color,
-							weight: style.fontWeight
-						};
-					};
-					const root = getComputedStyle(document.documentElement);
-					const rem = parseFloat(root.fontSize);
-					const step = (token: string) => parseFloat(root.getPropertyValue(token)) * rem;
+	for (const { width, theme } of viewsOf([360, 390, 1280, 1536], THEMES)) {
+		test(`${theme} at ${width}: article type keeps its readable hierarchy`, async ({ page }) => {
+			await open(page, theme, '/', width);
+			const sizes = await page.locator('article.item').first().evaluate((card) => {
+				const read = (selector: string) => {
+					const element = card.querySelector(selector);
+					if (!element) throw new Error(`no ${selector} on the card to measure`);
+					const style = getComputedStyle(element);
 					return {
-						title: read('h2, h3'),
-						summary: read('[data-item-summary]'),
-						eyebrow: read('[data-item-eyebrow]'),
-						when: read('[data-item-time]'),
-						titleSize: step('--text-2xl'),
-						titleLeading: step('--leading-2xl'),
-						summarySize: step('--text-lg'),
-						summaryLeading: step('--leading-lg'),
-						metaSize: step('--text-xs')
+						size: parseFloat(style.fontSize),
+						leading: parseFloat(style.lineHeight),
+						colour: style.color,
+						weight: style.fontWeight
 					};
-				});
-				expect(sizes.title.size, 'the title keeps its display step').toBeCloseTo(sizes.titleSize, 1);
-				expect(sizes.title.leading).toBeCloseTo(sizes.titleLeading, 1);
-				expect(sizes.summary.size, 'narrow screens do not shrink the prose').toBeCloseTo(sizes.summarySize, 1);
-				expect(sizes.summary.leading).toBeCloseTo(sizes.summaryLeading, 1);
-				expect(sizes.eyebrow.size).toBeCloseTo(sizes.metaSize, 1);
-				expect(sizes.title.size).toBeGreaterThan(sizes.summary.size);
-				expect(sizes.summary.size).toBeGreaterThan(sizes.eyebrow.size);
-				expect(sizes.when.size).toBeCloseTo(sizes.eyebrow.size, 1);
-				expect(sizes.when.colour).toBe(sizes.eyebrow.colour);
-				expect(sizes.when.weight).toBe(sizes.eyebrow.weight);
+				};
+				const root = getComputedStyle(document.documentElement);
+				const rem = parseFloat(root.fontSize);
+				const step = (token: string) => parseFloat(root.getPropertyValue(token)) * rem;
+				return {
+					title: read('h2, h3'),
+					summary: read('[data-item-summary]'),
+					eyebrow: read('[data-item-eyebrow]'),
+					when: read('[data-item-time]'),
+					titleSize: step('--text-2xl'),
+					titleLeading: step('--leading-2xl'),
+					summarySize: step('--text-lg'),
+					summaryLeading: step('--leading-lg'),
+					metaSize: step('--text-xs')
+				};
 			});
-		}
+			expect(sizes.title.size, 'the title keeps its display step').toBeCloseTo(sizes.titleSize, 1);
+			expect(sizes.title.leading).toBeCloseTo(sizes.titleLeading, 1);
+			expect(sizes.summary.size, 'narrow screens do not shrink the prose').toBeCloseTo(sizes.summarySize, 1);
+			expect(sizes.summary.leading).toBeCloseTo(sizes.summaryLeading, 1);
+			expect(sizes.eyebrow.size).toBeCloseTo(sizes.metaSize, 1);
+			expect(sizes.title.size).toBeGreaterThan(sizes.summary.size);
+			expect(sizes.summary.size).toBeGreaterThan(sizes.eyebrow.size);
+			expect(sizes.when.size).toBeCloseTo(sizes.eyebrow.size, 1);
+			expect(sizes.when.colour).toBe(sizes.eyebrow.colour);
+			expect(sizes.when.weight).toBe(sizes.eyebrow.weight);
+		});
 	}
 
 	test('a summary with a paragraph break is drawn as two paragraphs', async ({ page }) => {

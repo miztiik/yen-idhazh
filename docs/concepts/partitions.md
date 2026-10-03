@@ -191,8 +191,8 @@ is what a closed-day fold leaves behind, and it reads at attempt 0 - a writer's
 attempt is the run's own `GITHUB_RUN_ATTEMPT`, which starts at 1, so 0 is a
 place no writer can take. It is also the right place: its rows have already won
 a settlement, and a straggler beside it is later. The fold is what stops one
-file per writer per day becoming unbounded growth, and what it costs is
-[in growing-reads.md](growing-reads.md#the-closed-day-fold-is-guardrail-12-applied-to-a-write-2026-09-22).
+file per writer per day becoming unbounded growth, and what it costs is covered
+by the fixed-size input rule in [CLAUDE.md](../../CLAUDE.md) Guardrail #12.
 A tree whose task settles months holds one more: a closed month's `settled.csv`
 in the month's own folder, the one file a month folder may hold. It reads at
 attempt 0 too, so a file a re-run adds to that month later is settled after it.
@@ -283,7 +283,7 @@ a daily pipeline is the first run of the next month.
 
 The rule binds writes to time partitions, not reads. A closed partition is
 still opened when `day_partition.days_in_window` names it. What bounds reads is
-[growing-reads.md](growing-reads.md), not whether a partition is closed.
+[CLAUDE.md](../../CLAUDE.md) Guardrail #12, not whether a partition is closed.
 The [observation lookup](../architecture/contracts/observation-lookup.md) instead
 routes by exact keys. It has no calendar partition to close and reads only the
 routes and leaves selected by incoming IDs.
@@ -470,7 +470,7 @@ Authority: `CLAUDE.md` section 5, 2026-09-11.
 
 ## See also
 
-- [growing-reads.md](growing-reads.md) - the other half of this page: what a growing collection obliges a reader to declare, and why `-1` is an answer.
+- [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md#published-shards) - the published projection of item health, one file a month.
 - [../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md](../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md#the-month-search-index) - the month search index, its ceilings, and what an unpublish owes each grain.

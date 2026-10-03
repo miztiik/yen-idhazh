@@ -24,6 +24,7 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
+import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -52,7 +53,7 @@ function knobs(): { applied: number; maxDownStep: number; bandLow: number; bandH
 async function open(page: Page, width = 1440): Promise<void> {
 	await page.setViewportSize({ width, height: 1400 });
 	await page.goto(ROUTE);
-	await page.waitForTimeout(700);
+	await chartsReady(page);
 }
 
 async function boxOf(page: Page): Promise<{ width: number; height: number }> {

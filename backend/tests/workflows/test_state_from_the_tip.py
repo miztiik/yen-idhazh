@@ -26,7 +26,7 @@ from ._harness import (
     _write,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 #: One waiting segment and the day head its rows name. A segment is named for
 #: one shard of one run, which is why a rebase never has to settle one - and why

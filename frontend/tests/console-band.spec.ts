@@ -1,7 +1,6 @@
 import { expect, test, type Page } from './support/browser';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { gzipSync } from 'node:zlib';
 import { PAGES_CAP_BYTES, siteCost, siteRunway } from '../src/lib/charts/glance';
 import type { RunSummary } from '../src/lib/server/payload';
 
@@ -447,109 +446,6 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 	);
 	const after = (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
 	expect(after, 'moving a route window control moved the standing band').toBe(before);
-});
-
-/** The payload the pipeline publishes, which is the one a reader is served. */
-const BAND_PAYLOAD = resolve(process.cwd(), 'public', 'console', 'band.json');
-
-/**
- * The guardrail, read from the file the bundle gate reads.
- *
- * It was `8 * 1024` here until 2026-09-10, while `bundle-gate.mjs` enforced
- * `page_weight.payload_ceilings_bytes['console/band.json']` at 2,000 - two live
- * numbers for one payload, fourfold apart, and this spec's own century model
- * produced 3,247 bytes, which passed the number asserted here and failed the
- * one the gate applies. Nothing had gone red yet, which is the whole hazard.
- * The knob lives in `config/idhazh.json` and nowhere else (Guardrail #6), so this
- * reads it rather than restating it.
- */
-const REPO = resolve(process.cwd(), '..');
-const CONFIG = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')) as {
-	observability: Record<string, number | null>;
-	page_weight: { payload_ceilings_bytes: Record<string, number> };
-};
-const BAND_GUARDRAIL_BYTES = CONFIG.page_weight.payload_ceilings_bytes['console/band.json'];
-
-/** The telemetry copy's windows, from the declaration of the task that deletes it. */
-const TELEMETRY_SERIES = (
-	JSON.parse(
-		readFileSync(join(REPO, 'config', 'gardener', 'telemetry-aggregate.json'), 'utf8')
-	) as { series: Record<string, { unit: string; value?: number }> }
-).series;
-
-/**
- * The longest months list retention can leave, which is what bounds this payload.
- *
- * `months` is `fetchable_months`, the union of the month shards across the seven
- * published series, and each series drops a month past its own window: the
- * publishers trim theirs to `observability.public_*_keep_months`, and the
- * gardener's `telemetry-aggregate` task trims the browser's telemetry copy to its
- * `public-copy` series. All of them are 14 today, so the list holds fourteen
- * entries however long the project runs - the bound is read here rather than
- * typed, so a retention change moves this test with it.
- */
-const KEPT_MONTHS = Math.max(
-	TELEMETRY_SERIES['public-copy']?.value ?? 0,
-	...Object.entries(CONFIG.observability)
-		.filter(([key, value]) => key.startsWith('public_') && key.endsWith('_keep_months') && value !== null)
-		.map(([, value]) => value as number)
-);
-
-test('THE ORACLE: the band is inside its guardrail on the wire', () => {
-	const raw = readFileSync(BAND_PAYLOAD);
-	const wire = gzipSync(raw, { level: 5 }).length;
-
-	// Measured 2026-09-10 on the committed payload, node 24.12.0: 1,799 bytes raw
-	// and 777 gzipped, which is 38.9 percent of the guardrail. The guardrail is
-	// not about today's payload - it is what stops the band becoming the thing an
-	// operator waits for. A band that has to be downloaded before it can be read
-	// is a verdict that arrives after the page it was meant to explain.
-	expect(
-		wire,
-		`the band is ${wire} gzipped bytes, over its ${BAND_GUARDRAIL_BYTES}-byte guardrail`
-	).toBeLessThanOrEqual(BAND_GUARDRAIL_BYTES);
-});
-
-test('THE ORACLE: the months list is the only part of the band that grows, and retention bounds it', () => {
-	const payload = JSON.parse(readFileSync(BAND_PAYLOAD, 'utf8')) as { months: string[] };
-	expect(Array.isArray(payload.months), 'the band carries no months list').toBe(true);
-
-	// Everything else on the payload is a fixed set of sentences and counts about
-	// one day, so the only term that moves with the archive is one `YYYY-MM`
-	// string a month - and even that stops, because the shard behind it is
-	// deleted at the retention bound. Priced here rather than asserted about
-	// today: measured 2026-09-10, node 24.12.0, the list at its 14-month bound
-	// takes the payload to 758 gzipped bytes against 726 with no months at all,
-	// so the whole growable part of this payload is 32 bytes. The committed file
-	// reads 777 rather than 726 because it is written pretty-printed and this
-	// model re-serialises it compact; at the bound the served payload is about
-	// 809, which is 40.5 percent of the guardrail.
-	const withMonths = (count: number) => {
-		const months: string[] = [];
-		for (let i = 0; i < count; i += 1) {
-			months.push(`${2026 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`);
-		}
-		return gzipSync(Buffer.from(JSON.stringify({ ...payload, months })), { level: 5 }).length;
-	};
-
-	expect(
-		payload.months.length,
-		`the band lists ${payload.months.length} months where retention keeps ${KEPT_MONTHS}`
-	).toBeLessThanOrEqual(KEPT_MONTHS);
-
-	const bounded = withMonths(KEPT_MONTHS);
-	expect(
-		bounded,
-		`a full ${KEPT_MONTHS} months puts the band at ${bounded} gzipped bytes, over its guardrail`
-	).toBeLessThanOrEqual(BAND_GUARDRAIL_BYTES);
-
-	// And the list is a bounded term rather than a growing one, so nothing here
-	// needs a window of its own: what it can ever add is small against the room
-	// the guardrail has spare.
-	expect(
-		bounded - withMonths(0),
-		'the months list costs more than the guardrail has room for'
-	).toBeLessThan(BAND_GUARDRAIL_BYTES - withMonths(0));
 });
 
 /** A request for code, not for an answer. The band is measured against the

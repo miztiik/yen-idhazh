@@ -69,6 +69,7 @@ RUNS_MAY_OVERLAP: Final = frozenset({"digest.yml"})
 EXPECTED_WORKFLOWS: Final = {
     "backfill.yml": ("Vector backfill", frozenset({"workflow_dispatch"})),
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
+    "compaction-profile.yml": ("Compaction profile", frozenset({"workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
@@ -81,6 +82,37 @@ EXPECTED_WORKFLOWS: Final = {
     "idhazh-gardener.yml": ("Idhazh Gardener", frozenset({"schedule", "workflow_dispatch"})),
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
+
+# Named inputs keep workflow checks independent of new files in the checkout.
+# The addon workflow has no application routing contract in EXPECTED_WORKFLOWS.
+WORKFLOW_FILES: Final = (*EXPECTED_WORKFLOWS, "duckdb-addon.yml")
+WORKFLOW_PATHS: Final = tuple(WORKFLOWS_DIR / name for name in WORKFLOW_FILES)
+
+
+def _copy_config(target: Path, *, models_file: str | None = None) -> None:
+    """Copy the named inputs these workflow drivers consume, not the config tree."""
+    pointer = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
+    names = (
+        "idhazh.json",
+        "sources.json",
+        "taxonomy.json",
+        "watchlist.json",
+        "appearance.json",
+        "pipeline-tests.json",
+        "push-retry.json",
+        "llama-cpp-pin.json",
+        "ledgers.json",
+        pointer,
+    )
+    for name in names:
+        destination = target / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(CONFIG_DIR / name, destination)
+    if models_file is not None and models_file != pointer:
+        destination = target / models_file
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(CONFIG_DIR / pointer, destination)
+
 
 CONTENT_REFRESH_UTC_HOURS: Final = (2, 6, 10, 14, 18)
 
@@ -725,17 +757,6 @@ REVIEW_ARTIFACT: Final = "review"
 # exist yet fails that call and costs the ledgers staged beside it.
 CORPUS_SEED: Final = ("corpus/corpus.jsonl", "corpus/corpus.meta.json", "corpus/holdout.txt")
 
-# One committed file per console payload root, read off the working tree rather
-# than listed here: the roots are named in `series` and every one of
-# them ships with whatever its producer wrote, so a second list would be a
-# second thing to keep in step. Seven directory listings, once a session.
-CONSOLE_SEED: Final = tuple(
-    f"frontend/public/{dirname}/{path.name}"
-    for dirname in series.PUBLISHED_ROOTS
-    for path in sorted((REPO_ROOT / "frontend" / "public" / dirname).glob("*"))
-    if path.is_file()
-)
-
 # The step that scrapes llama-server's own counters and copies the kernel's
 # memory peak out for the operator. It has to run before `JOB_CLOCK_STEP`,
 # which reads the file it writes.
@@ -815,7 +836,7 @@ COMMIT_IDENTITY: Final = "miztiik <miztiik@users.noreply.github.com>"
 #: job that commits runs a program that sets its own, and a test runs each of
 #: those programs or holds its two values to the commit program's. A workflow
 #: that goes back to setting one inline is held to the same name here.
-GIT_IDENTITY_SOURCES: Final = tuple(sorted(WORKFLOWS_DIR.glob("*.yml")))
+GIT_IDENTITY_SOURCES: Final = WORKFLOW_PATHS
 
 # What a `${{ }}` expression stands in for when a test runs the real call site
 # outside Actions. `day_dir` is the digest date as a path, which is what lets the
@@ -889,24 +910,13 @@ _PARSED_WORKFLOWS: dict[str, dict[str, object]] | None = None
 
 
 def _parsed_workflows() -> dict[str, dict[str, object]]:
-    """Every workflow in the repository, read and parsed once for the whole session.
-
-    152,564 bytes of YAML through PyYAML's pure-Python loader, and this file
-    asks for it 104 times a run - 64.0 s of a 351.1 s run, measured 2026-08-30
-    on Windows 11, 12 logical CPUs. Nothing rewrites a workflow while the suite
-    is running, so no two of those parses can disagree.
-    """
+    """The named workflow inputs, parsed once and copied for each caller."""
     global _PARSED_WORKFLOWS
     if _PARSED_WORKFLOWS is not None:
         return _PARSED_WORKFLOWS
 
-    paths = sorted((*WORKFLOWS_DIR.glob("*.yml"), *WORKFLOWS_DIR.glob("*.yaml")))
-    # Discovered, not compared against a list. A new workflow used to fail every
-    # test in this directory here, before reaching the one that was about it.
-    assert paths, f"{WORKFLOWS_DIR} ships no workflow, so nothing below reads anything"
-
     workflows: dict[str, dict[str, object]] = {}
-    for path in paths:
+    for path in WORKFLOW_PATHS:
         document = yaml.load(read_text(path), Loader=yaml.BaseLoader)
         assert isinstance(document, dict), f"{path.name} must contain a YAML mapping"
         workflows[path.name] = cast(dict[str, object], document)
@@ -2100,15 +2110,11 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     for relative in (".gitignore", "backend/utilities/prepare_evaluation_publication.py"):
         _write(seed / relative, read_text(REPO_ROOT / relative))
     _write(seed / "docs" / "unrelated.md", "seed\n")
-    # The corpus seed, exactly as a real checkout carries it. Without it
-    # `git add corpus` aborts the commit step and takes the day's ledgers with it.
+    # Empty files suffice: the commit loop does not interpret corpus contents.
     for relative in CORPUS_SEED:
-        _write(seed / relative, read_text(REPO_ROOT / relative))
-    # The console payload roots, for the same reason and copied the same way.
-    # They are named in the commit step and in the refresh set, so a clone
-    # without them fails at `git add` rather than at the payload.
-    for relative in CONSOLE_SEED:
-        _write(seed / relative, read_text(REPO_ROOT / relative))
+        _write(seed / relative, "")
+    for dirname in series.PUBLISHED_ROOTS:
+        _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
     _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
     _git(
         seed, env, "add", ".gitattributes", ".gitignore",

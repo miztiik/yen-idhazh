@@ -128,4 +128,4 @@ writing never scans history as a fallback.
 - [../../how-to/migrate-observation-lookup.md](../../how-to/migrate-observation-lookup.md) - approved cutover and named pending-batch recovery.
 - [persistence.md](persistence.md) - evaluation rows and their storage owner.
 - [../publishing/committing.md](../publishing/committing.md) - commit and push retries.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - fixed-input work and explicit historical reads.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - fixed-size inputs for repository reads.

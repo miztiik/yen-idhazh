@@ -1032,7 +1032,7 @@ the [design rationale](#design-rationale) above.
 **The index the dedupe reads keeps every ID for the same reason.** An
 observation key carries no date, so an ID dropped would make its measurement
 new again. The lookup has no age-deletion task or day/month fold. Membership
-work is bounded by the supplied IDs, as recorded in [growing-reads.md](growing-reads.md).
+work is bounded by the supplied IDs.
 
 **Every utility that needs an item-level row reaches every month.**
 `label_queue.py`, `reband_scores.py`, `data_wrangler.py refill` and
@@ -1056,7 +1056,7 @@ reading that list.
 - [pipeline-loop.md](pipeline-loop.md) - where the Evaluate stage sits.
 - [digest.md](digest.md) - how a confidence band reaches a reader.
 - [config/summary-length.md](config/summary-length.md) - the band thresholds and retry budget.
-- [growing-reads.md](growing-reads.md) - what the observation index costs, and the cover every read over a growing collection declares.
+- [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [partitions.md](partitions.md) - what a partition file is called, and what a name the rule does not recognise does.
 - [principles.md](principles.md) - principle 6, the belief this page implements.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the prompt asks for, including the hedges these metrics check.

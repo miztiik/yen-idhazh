@@ -85,8 +85,8 @@ Start with pages routinely loaded by contributors and agents. At similar read fr
 Run before and after a documentation pass:
 
 ```text
-python backend/utilities/doc_load.py
-python backend/utilities/doc_load.py --changed docs/concepts/config.md
+python backend/utilities/doc_load.py docs/concepts/config.md
+python backend/utilities/doc_load.py docs/concepts/config.md docs/concepts/evaluation.md
 ```
 
 The token count estimates one token per four characters; it is not a tokenizer measurement. Use it to compare revisions, not as a length limit.

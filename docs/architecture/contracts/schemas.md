@@ -282,8 +282,8 @@ by day. `state/feed-retirements.csv` was the last, and it pays the walk on
 purpose: it moved through the ledger door, which gives every writer a file of
 its own under the day it covers ([persistence.md](persistence.md)). What that
 bought is one writer per file and no merge driver; the walk grows with the
-retirements rather than with the archive
-([../../concepts/growing-reads.md](../../concepts/growing-reads.md)).
+retirements rather than with the archive, as required by
+[../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12.
 
 **A collection can file by day for a reason that is not the read**, and
 `state/raw/visual-prunes/` is the worked case: its question is the whole series,
@@ -303,8 +303,8 @@ deletion, a late arrival and a row whose date changes are in
 is also defined once.** A window is one of three shapes a cover can take, and the
 column above is only ever true of the reads whose question has a time bound in
 it. Which reads carry which shape, why `-1` is a declaration rather than an
-omission, and how to decide it for a collection this table does not list are in
-[../../concepts/growing-reads.md](../../concepts/growing-reads.md).
+omission, and how to keep the read input fixed, are covered by
+[../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12.
 
 Authority: Carmack (cache and shard economics), 2026-08-25.
 
@@ -526,6 +526,8 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 | Keep the generator for the six names the frontend uses | A generator that runs over one contract is a generator, with its command, its gate and its regenerated diff. Six names are a copy and three tests. | Fowler |
 | Delete only the 61 schemas nothing imports | The count is a fact about one day. The next contract adds a sixty-seventh and the generator still runs in full. | Fowler |
 
+`RawDayIndex` also has a frontend hand copy in `frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so older compaction listings still validate; the frontend copy requires it because the site build fills it before a browser can price writer files.
+
 ## See also
 
 - [determinism.md](determinism.md) - what a run records about its own inputs, and the one alarm built on it.
@@ -533,7 +535,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [../sources/freshness.md](../sources/freshness.md) - why the published ledger files by day, and what its cover buys.
 - [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.
 - [../../concepts/partitions.md](../../concepts/partitions.md) - the month partition as a pattern: the freeze rule, and the four cases an append-only writer gets wrong.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection declares, and the three shapes a cover can take.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the ledger sizes the shard rule is argued from.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.

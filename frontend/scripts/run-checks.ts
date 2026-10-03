@@ -46,8 +46,8 @@ export function options(args: string[]): Options {
 	if (specs.includes('whole-day.spec.ts') && (values.mode !== 'real' || specs.length !== 1)) {
 		throw new Error('The whole-day spec must run alone with --mode real.');
 	}
-	if (values.mode === 'real' && (!specs.length || specs.some((name) => !/^(reading-page|layout-overflow|whole-day|item-visual)\.spec\.ts$/.test(name)))) {
-		throw new Error('A real-build run requires --spec for reading-page, layout-overflow, whole-day or item-visual.');
+	if (values.mode === 'real' && (!specs.length || specs.some((name) => !/^(reading-page|whole-day|item-visual)\.spec\.ts$/.test(name)))) {
+		throw new Error('A real-build run requires --spec for reading-page, whole-day or item-visual.');
 	}
 	return { base: values.base, groups: values.group, specs, mode: values.mode as BuildMode,
 		list: values.list, fresh: values.fresh, status: values.status, inside: values['inside-lock'],

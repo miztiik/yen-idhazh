@@ -101,4 +101,4 @@ commit identity; do not supply a new batch identity through environment values.
 
 - [../architecture/contracts/observation-lookup.md](../architecture/contracts/observation-lookup.md) - identity, bounds and publication guarantees.
 - [../architecture/publishing/committing.md](../architecture/publishing/committing.md) - preparation pairs and push failure handling.
-- [../concepts/growing-reads.md](../concepts/growing-reads.md) - why this explicit migration reads all history.
+- [../../CLAUDE.md](../../CLAUDE.md) - limits on repository reads.

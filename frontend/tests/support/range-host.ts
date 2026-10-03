@@ -24,6 +24,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 
 /** How a slowed data root answers: a wait before each response, then a body rate. */
@@ -85,6 +86,13 @@ const TYPES: Record<string, string> = {
 };
 
 const typeOf = (file: string): string => TYPES[path.extname(file)] ?? 'application/octet-stream';
+
+/** Where the Node engine keeps downloaded DuckDB add-ons from one repository. */
+export function addonCache(repository: string): string {
+	const address = new URL(repository);
+	const last = `${address.host}${address.pathname}`.split('/').filter((part) => part !== '').at(-1) ?? address.host;
+	return path.join(os.homedir(), '.duckdb', 'extensions', last);
+}
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 

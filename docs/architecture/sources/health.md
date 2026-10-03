@@ -665,5 +665,5 @@ The self-lifting rest is there because the alternative was tested by imagination
 - [trust-boundary.md](trust-boundary.md) - what happens to the bytes a healthy feed returns.
 - [../publishing/frontend.md](../publishing/frontend.md) - the console that renders this record.
 - [../../concepts/config/source-lifecycle.md](../../concepts/config/source-lifecycle.md) - where `availability_strikes_before_rest` and the five knobs beside it live.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - why a read over a collection a run appends to has to name its cover.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - degrade rather than fail, which is why a dead feed never fails a run.
