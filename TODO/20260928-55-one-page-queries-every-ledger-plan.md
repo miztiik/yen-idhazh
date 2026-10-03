@@ -59,7 +59,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 4 | The page: pick the ledgers and the days, write the question, read the table | 1, 2, 3, 7 | D | PENDING | - | - | - |
 | 5 | The answer gets a shape, and a question is kept, found again and shared | 4 | E | PENDING | - | - | - |
 | 6 | Reach past the cap, the glyphs, the gates, the pictures and the how-to | 4, 5 | F | PENDING | - | - | - |
-| 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | - | p55-r7-worker |
+| 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | #1229 | p55-r7-worker |
 
 **Seven rows, seven pull requests.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. No row waits for an owner's answer (section 0, "Decided 2026-10-02").
 
