@@ -155,23 +155,22 @@ digest because a feed's reliability is an observation about the run and not a
 product surface.
 ### The three rules
 
-**One month per run.** The run knows which month it appended to, so the daily
-caller names that one and every other month is skipped without being read
-(Guardrail #12). A month whose published file is **missing** is read anyway, which is
-what makes a fresh clone, a deleted file and a first backfill all land.
+**Only caller-named months are read.** The run knows which month it appended
+to, so the daily caller names that one and every other month is skipped without
+being read (Guardrail #12). A missing published file is rebuilt only when its
+month is named; a fresh clone or historical repair must name the months to
+publish.
 
 **Only on a byte difference.** A re-derived month whose bytes match what is on
 disk is not rewritten. Content, never a timestamp: a rebuild can carry identical
 bytes and a new mtime, and a fresh checkout can carry a new mtime and identical
 bytes, so a timestamp answers wrongly in both directions.
 
-**Nothing outlives its knob**, and the two rules above have to agree about the
-boundary. A month below `oldest_month_kept` is not resurrected by the
-missing-file rule - without that clause the prune deletes a month, the next run
-finds it missing and writes it, and the prune deletes it again, every run, for a
-month no console window can reach. The oracle for this row caught exactly that:
-six months of a twenty-month fixture were rewritten and re-deleted on the second
-pass.
+**Nothing outlives its knob**, and the named month list has to agree about the
+boundary. A month below `oldest_month_kept` is not named - otherwise the next
+run would write a month the console window can no longer reach. The oracle for
+this row caught exactly that: six months of a twenty-month fixture were
+rewritten and re-deleted on the second pass.
 
 ### The band is a reduction of the payloads beside it
 

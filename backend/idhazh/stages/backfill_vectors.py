@@ -6,6 +6,7 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from pathlib import Path
 
 from idhazh import (
@@ -14,7 +15,7 @@ from idhazh import (
 )
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
-from idhazh.stages.common import LOG, published_days
+from idhazh.stages.common import LOG, canonical_dates, published_days_on_dates
 
 
 def is_closed(date: str, *, today: str) -> bool:
@@ -58,9 +59,14 @@ def needs_backfill(day: DigestDay, embedder: Embedder) -> bool:
 
 
 def stage_backfill_vectors(
-    *, root: Path, index_root: Path, today: str, embedder: Embedder
+    *,
+    root: Path,
+    index_root: Path,
+    today: str,
+    dates: Collection[str],
+    embedder: Embedder,
 ) -> int:
-    """Re-encode every closed day whose vectors are not the set its items earned.
+    """Re-encode wrong vectors only on caller-named closed days.
 
     `build_day` replaced a day's embeddings block instead of merging it, so a
     day that ran five times kept the last run's vectors alone. That is fixed
@@ -98,13 +104,21 @@ def stage_backfill_vectors(
     publishes; here there is no digest at risk and the vectors are the entire
     point, so a silent no-op would report success for work that did not happen.
     """
+    selected = canonical_dates(dates)
+    current = canonical_dates([today])[0]
+    future = [day for day in selected if day > current]
+    if future:
+        raise ValueError(f"backfill day is after today: {future[0]} > {today}")
+    if not selected:
+        LOG.info("backfill complete days_rewritten=0")
+        return 0
     if not embedder.available:
         LOG.error("no encoder at %s - nothing to backfill with", ONNX_RELPATH)
         return 1
 
     repaired = 0
     months: set[str] = set()
-    for path in published_days(root):
+    for path in published_days_on_dates(root, selected):
         day = DigestDay.from_json(path.read_text(encoding="utf-8"))
         if not is_closed(day.date, today=today):
             LOG.info("skipped date=%s reason=open items=%s", day.date, len(day.items))

@@ -107,6 +107,11 @@ def canary(request: pytest.FixtureRequest) -> Canary:
     return load_canary(request.param)
 
 
+def test_live_gate_names_every_committed_canary() -> None:
+    configured = set(config.load(CONFIG_DIR).app.evaluation.canary_files)
+    assert configured == REQUIRED_ATTACKS
+
+
 def payload_of(canary: Canary) -> dict[str, object]:
     """The fixture as `_canary_article` reads it: a plain decoded document."""
     payload: dict[str, object] = json.loads(read_text(CANARY_DIR / f"{canary.name}.json"))

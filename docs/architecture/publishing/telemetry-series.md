@@ -16,26 +16,24 @@ shards on demand as the operator pans the viewport.
 They take their grain from different things - the ledger from what a run writes
 and what a removal takes away, the mirror from what a browser fetches - and
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains)
-owns both rules. This module is the bridge: `ledger.held_months` names the months
-the ledger holds, and a month is projected whole from its days, each settled on
-its own. What it cost, stated rather than implied: the unbounded case opens about
-thirty times as many file handles for the same rows, and the count is asserted in
-`backend/tests/test_publish_telemetry.py` rather than described here.
+owns both rules. This module is the bridge: the caller names the months to
+project, and a month is read whole from its days, each settled on its own. The
+daily caller names only the month it changed. An empty month list does no
+historical work.
 
 **This is a month partition, and it now honours the freeze rule.** The pattern -
 what closes a partition, and what a correction, a deletion or a late arrival does
 to a closed one - is
 [../../concepts/partitions.md](../../concepts/partitions.md). Two
-freezes compose. `publish` writes only the months a caller names as changed - a
-month outside that set is skipped without being read, unless its shard is missing
-on a fresh checkout - and `_write_if_changed` then writes a named month only when
-its projected bytes differ from the committed shard. So a re-run with no new data
-writes no shard, and a run that adds one day rewrites that day's month and no
-other. Row 19 of the constant-cost-reads plan closed it in #484; before that,
-`publish` globbed `state/item-health/` and rewrote every month it found on every
-run, so an ordinary run paid for every month the project had ever published. The shard is
-still a full rewrite of the source month, never an append - a stacked pair of
-rewrites is a file with every row twice.
+freezes compose. `publish` writes only the months a caller names as changed -
+an unnamed month is skipped even if its public file is missing - and
+`_write_if_changed` writes a named month only when its projected bytes differ
+from the committed shard. So a re-run with no new data writes no shard, and a
+run that adds one day rewrites that day's month and no other. A fresh checkout
+or a historical repair uses an explicit month range; daily publication does
+not search the ledger for old months with missing copies. The shard is still a
+full rewrite of the source month, never an append - a stacked pair of rewrites
+is a file with every row twice.
 
 The published columns are exactly:
 
@@ -101,8 +99,9 @@ Two consequences worth stating plainly:
  is a prefix, so one more name at position zero would shift every position the
  console reads. `PublicTelemetryRow` is where the stamp lives.
 - **A published shard has to load, not merely parse.** `public_telemetry
- --migrate` reads every committed shard back through the contract and rewrites
- it, and a test runs the same round trip on a copy of the committed files. Run
+ --migrate --from-month YYYY-MM --through-month YYYY-MM` reads each named shard
+ back through the contract and rewrites it, and a test runs the same round trip
+ on a copy of the committed files. Run
  2026-09-05 on this checkout, after the eight timing and token columns landed:
  `2026-08.csv` 5,227 rows and `2026-09.csv` 2,982 rows, 614,613 and 400,160
  bytes, unchanged to the byte either side. Unchanged is the result the migration

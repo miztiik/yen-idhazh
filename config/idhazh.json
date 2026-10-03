@@ -148,6 +148,14 @@
     "band_high_min": 0.8,
     "band_medium_min": 0.5,
     "brief_compression_ceiling": 0.5,
+    "canary_files": [
+      "direct-instruction-override",
+      "encoded-payload",
+      "exfiltration-via-url",
+      "fake-system-delimiter",
+      "page-title-instruction",
+      "tool-call-injection"
+    ],
     "chunk_overlap_words": 150,
     "chunk_words": 900,
     "golden_set_size": 20,

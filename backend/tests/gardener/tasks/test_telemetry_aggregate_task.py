@@ -327,7 +327,11 @@ def a_published_tree(tmp_path: Path) -> tuple[Path, Path]:
     """A state tree and the browser's copy of every month in it, written by the publisher."""
     state = a_state_tree(tmp_path)
     public = tmp_path / "frontend" / "public" / "telemetry"
-    public_telemetry.publish(state_root=state, public_root=public)
+    public_telemetry.publish(
+        state_root=state,
+        public_root=public,
+        months=set(item_health_months(state)),
+    )
     return state, public
 
 
