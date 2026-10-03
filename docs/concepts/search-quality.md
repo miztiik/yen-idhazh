@@ -1,13 +1,13 @@
 # Search Quality
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-03
 Whether the archive's on-device search finds the right story: the metric, the
 label set, the bar it has to clear, and what it costs to keep that bar honest as
 the archive grows.
 
 **This is a different instrument from [evaluation.md](evaluation.md)**, which
 asks whether a published summary is faithful to its article. The two share no
-data, no metric and no config: this page backs `assist.recall_min` and the
+data, no metric and no config: this page backs the retrieval measurement and the
 similarity floor, where that one backs the confidence bands. A person arrives
 holding one question or the other and never both.
 
@@ -20,9 +20,13 @@ so it cannot see a ten-point regression. It stays exactly what it is and its bar
 is never raised.
 
 The instrument is [`backend/idhazh/evals/retrieval.py`](../../backend/idhazh/evals/retrieval.py),
-run by the backend test suite. It is not a browser test. The quality question
-has nothing to do with a browser, and the browser path pays the whole encoder
-download on every run.
+run by [`backend/utilities/measure_retrieval.py`](../../backend/utilities/measure_retrieval.py)
+against named published days and index months. It is not a browser test. The
+quality question has nothing to do with a browser, and the browser path pays the
+whole encoder download on every run. **It is also not a pytest gate (2026-10-03,
+see Design rationale)**: the backend suite never globs the published archive or
+loads the real encoder, so this measurement is run by hand or by a scheduled
+workflow, never by CI.
 
 ## Two tiers, and only one of them exists today
 
@@ -76,11 +80,11 @@ model with itself - which `CLAUDE.md` section 1a now permits and this eval still
 refuses, because a query set that shares the retriever's blind spots cannot find
 them.
 
-## recall@10 is the gate; reciprocal rank is a diagnostic
+## recall@10 is the primary measurement; reciprocal rank is a diagnostic
 
 The surface is a flat capped list with no rank cue. Rewarding first place would
-measure a claim the product does not make, so mean reciprocal rank is computed,
-reported, and never gated on.
+measure a claim the product does not make, so mean reciprocal rank is computed
+and reported, never used to decide anything.
 
 **The denominator is capped at the ten slots that exist.** A topic query has more
 right answers than a ten-item list can hold, so `found / len(gold)` would report
@@ -92,9 +96,10 @@ you have, how many did you show. The uncapped figure is reported beside it.
 **A miss and an absence are different failures, and conflating them makes the
 instrument lie.** An item with no vector cannot be retrieved at any threshold.
 Every result therefore carries two numbers: the reader-facing one over all
-labelled answers, and the ranking one over the answers that carry a vector. Only
-the second is gated (`assist.recall_min`), because failing this gate for a gap in
-the embedding stage would point at the wrong code.
+labelled answers, and the ranking one over the answers that carry a vector.
+Before 2026-10-03 only the second was gated by `assist.recall_min`; the knob and
+the CI gate are both gone now (see Design rationale), and both numbers are
+reported by `measure_retrieval.py` for a person to read.
 
 ## The baseline, 2026-08-26
 
@@ -183,10 +188,10 @@ labeller judged, up from 65.6 percent. 0.756 is 0.3 standard errors under the
 baseline and 0.066 above the `assist.recall_min` bar of that day, which was
 0.69. The bar has since moved to 0.61 for the reason the next section gives.
 
-`backend/tests/test_retrieval_eval.py` holds the comparison rather than this
-page: it fails when the two cases disagree by more than one standard error, so
-the day the index starts losing something, a gate says so instead of a byte
-count looking like a win.
+`backend/tests/test_retrieval_eval.py` held this comparison through 2026-10-03,
+gated on the whole published archive and the real encoder; it was removed the
+same day the CI gate went (see Design rationale), and the comparison now runs
+only through `measure_retrieval.py` against named days.
 
 ## The archive grew into the bar, 2026-08-31
 
@@ -223,12 +228,16 @@ item can displace a labelled answer without reducing search quality. Compare
 the same labelled population and separate coverage from competition before
 treating a lower recall as a regression.
 
-## The bar, and what it is worth
+## The bar, and what it was worth
 
-`assist.recall_min` is **0.68**, two standard errors below the pinned baseline of
+**Through 2026-10-03 this bar was a pytest gate; it is gone now (see Design
+rationale), and the measurement history below is kept because the mechanism it
+found still applies to any bar built the same way.**
+
+`assist.recall_min` was **0.68**, two standard errors below the pinned baseline of
 0.756 +/- 0.037 (n=60) over the 2,237 items published through 2026-08-26, of
 which 2,235 carry a vector: `0.756 - 2 x 0.037 = 0.682`, rounded to two places
-the way 0.69 and 0.61 were. It catches what a bar is for: a ranking change that
+the way 0.69 and 0.61 were. It caught what a bar is for: a ranking change that
 costs more than about eight points fires it.
 
 **The bar no longer has an expiry date, and that is the whole point.** Three
@@ -249,9 +258,9 @@ gate exists to catch, and three days exceeded it with no code change.** No
 constant bar survives that, which is why the gate failed twice in five days -
 the second time on a commit that changed one markdown file.
 
-**`assist.eval_corpus_through` is the fix.** The gate scores against the corpus
-as it stood on the labelling day, so both inputs are fixed and `recall_min`
-measures ranking alone. The live whole-archive number is printed beside the
+**`assist.eval_corpus_through` was the fix.** The gate scored against the corpus
+as it stood on the labelling day, so both inputs were fixed and `recall_min`
+measured ranking alone. The live whole-archive number was printed beside the
 gated one on every run, because that is what a reader actually gets: 0.602 +/-
 0.046 over 6,326 items on 2026-09-04. Completing the labels now *raises* the
 gated number instead of chasing an eroding one.
@@ -428,6 +437,21 @@ and re-fitting recovers it. The full picture is in
 [../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md).
 Authority: owner, `CLAUDE.md` section 13.
 
+**The CI gate was removed outright, and `load_corpus`/`load_index_corpus` now
+take only named inputs (2026-10-03).** `backend/tests/test_retrieval_eval.py`
+globbed the published `frontend/public` archive and loaded the real on-device
+encoder, so a pytest run cost grew with the archive and a merge candidate's
+tests touched production data it never wrote (`CLAUDE.md` section 13.2: a
+pipeline run alone, publishing a new day, could make a test fail). Search
+quality is measured, not gated: the suite now asserts only pure logic in
+`backend/idhazh/evals/retrieval.py` against committed fixtures, and
+`backend/utilities/measure_retrieval.py` is the one place that reads real
+published days and the real encoder, run by hand or by a scheduled workflow.
+`assist.recall_min` and `assist.eval_corpus_through` are refused by name
+(`SUPERSEDED_ASSIST_NAMES` in `backend/idhazh/contracts/knobs/assist.py`): the
+bar and the pin they carried belonged to the removed gate alone. Authority:
+Fowler, `CLAUDE.md` section 13.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -456,7 +480,8 @@ Authority: owner, `CLAUDE.md` section 13.
 
 - [evaluation.md](evaluation.md) - the other instrument: whether a summary is faithful to its article.
 - [digest.md](digest.md) - what a reader is searching over.
-- [config/appearance.md](config/appearance.md) - `assist.recall_min` and the similarity floor.
+- [config/appearance.md](config/appearance.md) - the similarity floor and the
+  rest of the `assist` block.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the search control and what it downloads.
 - [../reference/site-weight.md](../reference/site-weight.md#bounded-loading) - the transfer cost of search metadata and vectors.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (measured, not estimated).

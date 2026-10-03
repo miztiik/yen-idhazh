@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -39,13 +39,13 @@ Six keys were settled that way, and the rule is the same each time: **the file t
 | --- | --- | --- | --- |
 | `console.chart_height` | 180 here, 220 there | `config/appearance.json` | Every reader is a console page. Nothing under `backend/idhazh/` reads it |
 | `console.chart_width` | 600 here, 760 there | `config/appearance.json` | Same |
-| `assist.recall_min` | 0.68 here, 0.61 there | `config/idhazh.json` | The one reader is the retrieval gate. The frontend's `AssistConfig` does not declare the field |
+| `assist.recall_min` | 0.68 here, 0.61 there | `config/idhazh.json` through 2026-10-03, then removed | The one reader was the retrieval gate, itself removed (see Design rationale). The frontend's `AssistConfig` never declared the field |
 | `assist.max_tokens` | 256 in both | `config/idhazh.json` | The one reader is the encoder. The keep-list stopped the page receiving it, which left the appearance copy with no reader at all |
 | `assist.min_readable_letter_share` | 0.5 in both | `config/idhazh.json` | Same |
 
 Two contract defaults moved with them: `console.chart_height` 180 -> 220 and `console.chart_width` 600 -> 760. Those are the numbers `chart.height_px` and `chart.width_px` already carried - the pair was raised when the frame widened - so a fresh clone with no `config/` had been drawing a console chart at a size no console page uses. Every value legal before is legal now, so no read-side migration is owed, and a `config/idhazh.json` written before today still declares the two sizes and still wins over the new defaults through the middle merge layer.
 
-`assist` went the other way because the block holds two kinds of knob. Four of them - `similarity_floor`, `result_limit`, `search_months`, `search_min_days` - are read in the browser, and the appearance file declares those. Two - `recall_min` and `eval_corpus_through` - are the retrieval gate's inputs, read by `backend/tests/test_retrieval_eval.py` and drawn by nothing, so the pipeline file declares those and the appearance file declares neither. The 0.61 that sat here had no reader at all: it was the bar's value before it was re-derived against the pinned corpus on 2026-09-04 ([../evaluation.md](../evaluation.md)), 0.07 below the live 0.68, which is 10.3 percent of the bar - worth nothing while nothing read it, and a wrong gate the day something did.
+`assist` went the other way because the block holds two kinds of knob. Four of them - `similarity_floor`, `result_limit`, `search_months`, `search_min_days` - are read in the browser, and the appearance file declares those. Two more - `recall_min` and `eval_corpus_through` - were the retrieval gate's inputs through 2026-10-03, read by `backend/tests/test_retrieval_eval.py` and drawn by nothing; the pipeline file declared those and the appearance file declared neither. The 0.61 that sat here had no reader at all: it was the bar's value before it was re-derived against the pinned corpus on 2026-09-04 ([../evaluation.md](../evaluation.md)), 0.07 below the live 0.68, which is 10.3 percent of the bar - worth nothing while nothing read it, and a wrong gate the day something did. Both knobs, and the gate that read them, are gone now (see Design rationale).
 
 **Two more of the block are the pipeline's, and only the pipeline file declares them now.** `max_tokens` and `min_readable_letter_share` are the encoder's, read by `backend/idhazh/embed.py`. They sat in the appearance file as well as the pipeline one, with the same values, which the gate below tolerates - and the tolerance was correct while the page received them, because the appearance file was the last merge layer. It stopped being correct the moment the keep-list landed: from then on the browser was handed neither, so the appearance copies were read by nothing, which is where `assist.recall_min` had been an hour earlier. Both were deleted on 2026-09-05 for that reason. Until that keep-list all four of the pipeline's knobs were merged straight into the prerendered `/archive/` document, because `assistConfig` returned the raw merge. It now keeps exactly what `AssistConfig` declares. A keep-list rather than a strip-list: a strip-list has to be extended every time a knob lands in the block and ships it to readers in silence when somebody forgets, while a keep-list's own failure - a browser knob added to the file and not to the interface - is refused by the compiler at the component that reads it. Measured on a real build, 2026-09-05: `frontend/build/archive/index.html` went from 18,659 to 18,567 bytes, so the four knobs were 92 bytes on every load of that page.
 
@@ -400,6 +400,17 @@ disagree. None of them reaches the prerendered `/archive/` document.
  where our origin gzips them to 16.22 MB (measured 2026-09-08 on a laptop
  against CloudFront AMS58-P3, n=3, spread 0), about 18 seconds on a 10 Mbit line
  and about 100 on a 2 Mbit one.
+
+## Design rationale
+
+**`assist.recall_min` and `assist.eval_corpus_through` are removed, not
+re-homed (2026-10-03).** Both were the retrieval CI gate's own inputs, and the
+gate itself - `backend/tests/test_retrieval_eval.py` globbing the published
+archive and loading the real encoder - was removed the same day
+([search-quality.md](../search-quality.md)). A knob with no reader left is a
+number somebody still has to believe; `SUPERSEDED_ASSIST_NAMES` in
+`backend/idhazh/contracts/knobs/assist.py` refuses both names by name rather
+than letting them silently resolve to nothing. Authority: Fowler.
 
 ## See also
 

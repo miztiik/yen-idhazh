@@ -7,11 +7,14 @@ only place a dropped item can hide. That read costs more each time a run
 publishes (CLAUDE.md Guardrail #12), and section 13 forbids a test to carry it.
 So it lives here, where pytest does not collect it.
 
-It was `test_the_index_names_every_published_item` until 2026-09-22. Everything
-else that test module asks is bounded - the gate is pinned to
-`assist.eval_corpus_through`, and the knob check reads the trailing window
-`assist.search_months` names - so this was the one question that had to move
-rather than take a cover.
+It was `test_the_index_names_every_published_item` until 2026-09-22. Every other
+question that test module asked was pure arithmetic on hand-built fixtures; this
+one alone needed the live archive, so it moved here rather than take a bound it
+could not answer honestly. As of 2026-10-03 the whole module only asks bounded
+questions - `assist.recall_min` and the pin that fed it are gone, and the
+trailing-window knob check moved to `frontend/tests/archive-scope.spec.ts`, the
+one place that logic now lives (CLAUDE.md DRY) - so this script is the only
+reader left that reads every committed day and every committed month shard.
 
 Run it from the repository root:
 
@@ -23,8 +26,12 @@ item and a lost vector are different failures and only one of them shows up in
 recall as a small number. It exits 1 when they disagree and names the addresses
 on each side.
 
-**What it does not settle.** Whether the ranking is any good. That is
-`backend/tests/test_retrieval_eval.py`, which is gated and stays gated.
+**What it does not settle.** Whether the ranking is any good. `load_corpus` and
+`load_index_corpus` take only a named set of days and months (CLAUDE.md
+Guardrail #12); this script is what names "every committed one", and pays that
+cost because membership is a question about the whole archive by its nature.
+Ranking quality is a judgement an operator forms by hand over the two reports,
+not a number pytest gates.
 """
 
 from __future__ import annotations
@@ -38,8 +45,10 @@ from idhazh.evals import retrieval
 
 def report(root: Path) -> tuple[str, int]:
     """The membership lines, and the exit code they add up to."""
-    corpus = retrieval.load_corpus(root)
-    index = retrieval.load_index_corpus(root)
+    days = retrieval.digest_days(root)
+    months = retrieval.index_months(root)
+    corpus = retrieval.load_corpus(root, days=days)
+    index = retrieval.load_index_corpus(root, months=months)
 
     published = {item.address for item in corpus.items}
     indexed = {item.address for item in index.items}
@@ -47,8 +56,8 @@ def report(root: Path) -> tuple[str, int]:
     unpublished = sorted(indexed - published)
 
     lines = [
-        f"{'published days':<15} {len({item.date for item in corpus.items})}",
-        f"{'month shards':<15} {len(retrieval.index_months(root))}",
+        f"{'published days':<15} {len(days)}",
+        f"{'month shards':<15} {len(months)}",
         f"{'published items':<15} {len(published)}, {len(corpus.searchable)} carry a vector",
         f"{'indexed items':<15} {len(indexed)}, {len(index.searchable)} carry a vector",
     ]

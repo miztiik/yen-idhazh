@@ -1,11 +1,29 @@
-"""Measure whether archive search finds the right thing, and how sure we are.
+"""The arithmetic of archive search: ranking, recall, and what a corpus means.
 
 The published surface ranks with `frontend/src/lib/assist/search.ts`. This
 module is its twin: the same floor, the same slot count, the same tie-break,
-all three read from `config/idhazh.json`. It lives in the backend suite because
-the quality question has nothing to do with a browser, and because the browser
-path pays the encoder download on every run. The Playwright test stays as the
+all three read from `config/idhazh.json`.
+
+**This module is read by two different callers with two different jobs.**
+`backend/tests/test_retrieval_eval.py` proves the arithmetic on hand-built
+vectors and `tmp_path` fixtures - ranking order, the capped denominator, a miss
+versus an absence - and never opens the committed archive or runs the real
+encoder. Whether the archive's search is actually any GOOD is a quality
+measurement on published data, not code behaviour (CLAUDE.md section 13 rule
+2), so it is an operator's job, run by hand with `backend/utilities/measure_retrieval.py`
+and never gated in a test run. The five-query Playwright fixture stays the
 wiring check it always was.
+
+**Every loader here takes the set it reads by name.** `load_corpus` takes the
+exact days to open; `load_index_corpus` takes the exact month shards. Neither
+lists a directory or globs a tree, and neither is ever handed "the whole
+archive" - an evaluation set is a value named once (by a caller, or by a
+test's own fixture), and the cost of reading it is the size of that name,
+never the size of the published archive (CLAUDE.md Guardrail #12). The one
+caller that genuinely needs every committed day and every committed month
+shard - `measure_retrieval.py`'s membership check - names them itself with one
+directory listing apiece, and pays that cost because that is the question it
+was built to answer.
 
 **recall at the slot count is the number.** Reciprocal rank is computed and
 reported and is a diagnostic only: the surface is a flat capped list with no
@@ -39,14 +57,16 @@ import json
 import math
 import statistics
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, dequantise
 
-#: Where the pipeline writes the days the published site reads.
-DIGEST_GLOB: Final = "frontend/public/digest/*/*/*/digest.json"
+#: Where the pipeline writes the days the published site reads, one day's
+#: directory built straight from its own `YYYY-MM-DD`, never a glob.
+DIGEST_RELDIR: Final = "frontend/public/digest"
 #: Where the pipeline writes the month shards a reader's tab actually searches.
 INDEX_RELDIR: Final = "frontend/public/assist/index"
 #: One month shard, `YYYY-MM.json`, beside its `.bin` of vectors.
@@ -87,22 +107,6 @@ class Corpus:
         if not self.items:
             return 0.0
         return len(self.searchable) / len(self.items)
-
-    def through(self, date: str | None) -> Corpus:
-        """The same corpus as it stood on `date`. `None` is the whole archive.
-
-        A gate scored against the live archive measures two things at once: the
-        ranking, and how many stories have been published since the labels were
-        written. Only the first is something a merge candidate can change. The
-        second is unbounded and monotone - every new item that outranks a gold
-        item evicts it from a fixed slot count - so no constant bar survives it.
-        Pin the gate here.
-
-        Dates are `YYYY-MM-DD`, so the comparison is the ordering.
-        """
-        if date is None:
-            return self
-        return Corpus(items=tuple(item for item in self.items if item.date <= date))
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,21 +273,16 @@ class RetrievalReport:
         )
 
 
-def _day_of(path: Path) -> str:
-    """The day a `digest.json` belongs to, read off its own path. Opens nothing."""
-    year, month, day = path.parent.parts[-3:]
-    return f"{year}-{month}-{day}"
+def load_corpus(root: Path, days: Sequence[str]) -> Corpus:
+    """Exactly the named days, decoded the way the browser decodes it.
 
-
-def load_corpus(root: Path, through: str | None = None) -> Corpus:
-    """Every committed day through `through`, decoded the way the browser decodes it.
-
-    Cover: `through`, a `YYYY-MM-DD` day matched against the day directory in
-    the path, so a later day is never opened. Narrowing the rows afterwards
-    answers the same question and costs the whole archive to do it, which is the
-    cost Guardrail #12 refuses. `None` reads every committed day, which is what
-    an operator asking about the whole archive needs. Either way the day
-    directories are listed, and that listing is the residue.
+    `days` is `YYYY-MM-DD` strings; each becomes one path under
+    `DIGEST_RELDIR`, built directly from the name rather than found by listing
+    a directory. A day with no published `digest.json` is skipped rather than
+    raised: an evaluation set named ahead of time can outlive a day that was
+    pruned or never published, and that is the caller's question to answer, not
+    this loader's. The cost of this read is `len(days)`, named once by the
+    caller, never the size of the published archive (CLAUDE.md Guardrail #12).
 
     A day whose embedding block names another encoder, another width or another
     dtype contributes no vectors. That is `searchable()` in `search.ts`: a
@@ -291,8 +290,10 @@ def load_corpus(root: Path, through: str | None = None) -> Corpus:
     so every score it produces still looks like a score and means nothing.
     """
     items: list[CorpusItem] = []
-    for path in sorted(root.glob(DIGEST_GLOB)):
-        if through is not None and _day_of(path) > through:
+    for day in days:
+        year, month, day_of_month = day.split("-")
+        path = root / DIGEST_RELDIR / year / month / day_of_month / "digest.json"
+        if not path.is_file():
             continue
         payload = json.loads(path.read_text(encoding="utf-8"))
         block = payload.get("embeddings") or {}
@@ -319,22 +320,6 @@ def load_corpus(root: Path, through: str | None = None) -> Corpus:
     return Corpus(items=tuple(items))
 
 
-def _days_in(shards: list[Path]) -> set[str]:
-    """The days those shards can answer for. An entry with no vector is not one.
-
-    `searchedDays` in `frontend/src/lib/assist/search.ts` counts the same way:
-    an item that browses but was never embedded cannot be retrieved, so a day
-    made only of those is not a day a search reaches.
-    """
-    days: set[str] = set()
-    for path in shards:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        for entry in payload["entries"]:
-            if entry.get("vector") is not None:
-                days.add(entry["date"])
-    return days
-
-
 def index_months(root: Path) -> tuple[str, ...]:
     """The month stems the archive has committed, oldest first.
 
@@ -347,12 +332,28 @@ def index_months(root: Path) -> tuple[str, ...]:
     return tuple(sorted(path.stem for path in directory.glob(INDEX_SHARD_GLOB)))
 
 
-def load_index_corpus(
-    root: Path,
-    months: int | None = None,
-    min_days: int = 0,
-    through: str | None = None,
-) -> Corpus:
+def digest_days(root: Path) -> tuple[str, ...]:
+    """The `YYYY-MM-DD` days the archive has committed, oldest first.
+
+    One directory listing - the day names, read off the path a digest already
+    sits at - and no `digest.json` is opened. This is `load_corpus`'s one
+    accepted "name everything" cost (CLAUDE.md Guardrail #12): a caller that
+    genuinely needs every published day, such as `measure_retrieval.py`'s
+    membership check, lists the names once here and hands them to `load_corpus`
+    explicitly, rather than `load_corpus` globbing the tree itself.
+    """
+    directory = root / DIGEST_RELDIR
+    if not directory.is_dir():
+        return ()
+    return tuple(
+        sorted(
+            f"{path.parent.parent.parent.name}-{path.parent.parent.name}-{path.parent.name}"
+            for path in directory.glob("*/*/*/digest.json")
+        )
+    )
+
+
+def load_index_corpus(root: Path, months: Sequence[str]) -> Corpus:
     """The same corpus, read the way a reader's tab now reads it.
 
     `load_corpus` above reads the day payloads. The published archive stopped
@@ -361,22 +362,15 @@ def load_index_corpus(
     can be asked with everything else held still - did moving to the index cost
     any recall - and the answer is a comparison rather than an argument.
 
-    `months` is `assist.search_months`: how many shards, newest first, a tab
-    always reads. `min_days` is `assist.search_min_days`: below that many days
-    of published stories the tab reads ONE more shard, and one more only, so a
-    search on the first of a month does not collapse to a single day. `None`
-    reads every committed month, which is what the page did before the scope
-    became a knob. The rule is `readScope` in `frontend/src/lib/assist/search.ts`
-    and this is the copy that measures it, so the two have to move together.
-
-    **`through` and `months` are two covers for two questions, and a caller
-    takes the one that fits.** `months` is the trailing window a reader gets
-    today; it counts newest first, so it can never reach a pin that sits in the
-    oldest month. `through` is that pin: the shard stem is compared against the
-    pin's own month before the file is opened, and the rows are narrowed to the
-    day afterwards because a month shard is coarser than a day. That second step
-    is cheap precisely because the first one already refused the later shards.
-    They compose, and `None` for both reads everything.
+    `months` is the exact `YYYY-MM` stems to read, named by the caller rather
+    than found by listing a directory or selected by a trailing-window knob.
+    That selection - how many shards a reader's tab reads, and the one extra
+    shard a thin month earns - is `readScope` in
+    `frontend/src/lib/assist/search.ts`, fully covered there and in
+    `frontend/tests/archive-scope.spec.ts`; duplicating it here would be a
+    second copy of a rule with one home. A month with no committed shard is
+    skipped rather than raised, for the same reason a missing day is skipped in
+    `load_corpus`.
 
     A shard whose header names another encoder, another width or another dtype
     contributes no vectors, exactly as a day payload does above. The header's
@@ -385,21 +379,11 @@ def load_index_corpus(
     re-quantised shard as plausible nonsense.
     """
     directory = root / INDEX_RELDIR
-    if not directory.is_dir():
-        return Corpus(items=())
-
-    shards = sorted(directory.glob(INDEX_SHARD_GLOB), reverse=True)
-    if through is not None:
-        shards = [path for path in shards if path.stem <= through[:7]]
-    if months is not None:
-        wanted = max(months, 1)
-        taken = shards[:wanted]
-        if len(_days_in(taken)) < min_days:
-            taken = shards[: wanted + 1]
-        shards = taken
-
     items: list[CorpusItem] = []
-    for path in sorted(shards):
+    for month in months:
+        path = directory / f"{month}.json"
+        if not path.is_file():
+            continue
         payload = json.loads(path.read_text(encoding="utf-8"))
         usable = (
             payload.get("model_id") == EMBEDDER_ID
@@ -423,7 +407,7 @@ def load_index_corpus(
                     vector=vector,
                 )
             )
-    return Corpus(items=tuple(items)).through(through)
+    return Corpus(items=tuple(items))
 
 
 def _scaled(raw: bytes, scale: float) -> list[float]:

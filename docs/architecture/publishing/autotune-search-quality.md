@@ -1,6 +1,6 @@
 # Autotuning search quality
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-03
 
 **This page is research, not a description of what runs.** Nothing here is built.
 It records what search does today, what was measured about it, what was found
@@ -9,6 +9,15 @@ plan that implements it starts from measurements rather than from a fresh
 investigation. **It needs a plan-doc, and the design below needs further
 refinement before any of it ships.** The open questions are listed at the end
 and none of them is settled.
+
+**The CI gate this page's "today" describes is gone (2026-10-03).**
+`assist.recall_min`, `assist.eval_corpus_through` and
+`backend/tests/test_retrieval_eval.py`'s archive/encoder-dependent tests were
+removed; see [search-quality.md](../../concepts/search-quality.md)'s Design
+rationale. Where this page says a number "is gated" or "nothing gates
+precision", read that as the baseline the research below measured against, not
+as a description of the suite as it runs now. The ranker, the window rule and
+the floor this page reasons about are all unchanged.
 
 The same ranker serves the front page search box and the archive search, so
 this page owns both. It does not own the grouping line that decides two items
@@ -299,7 +308,7 @@ shapes already exist.
 | D3 | [llm-council.md](llm-council.md) | The venue, three verbs, tenancy protocol, the 6 h arithmetic |
 | D4 | `backend/idhazh/ledger/filenames.py` | `SEGMENT_NAME`, the one-writer-per-path filename; `idhazh.path_classes` checks it |
 | D5 | `backend/tests/test_retrieval_eval.py` | Noise 95th percentile **0.2716** over **126,843** pairs, 2026-08-26; off-domain probes at 0.235, 0.295, 0.258, 0.194 |
-| D6 | `backend/idhazh/contracts/knobs/assist.py` | Floor 0.35, `recall_min` 0.68, limit 10, months 1, min days 7, and the pin `eval_corpus_through` |
+| D6 | `backend/idhazh/contracts/knobs/assist.py` | Floor 0.35, limit 10, months 1, min days 7. `recall_min` and `eval_corpus_through` were removed 2026-10-03; see [search-quality.md](../../concepts/search-quality.md) |
 | D7 | `tests/fixtures/search/retrieval-queries.json` | The 60 questions and 297 judgements, and their six-day span |
 | D8 | `backend/utilities/measure_retrieval.py` | The index-coverage read: does the index name every published story |
 | D9 | `frontend/src/lib/assist/search.ts` | `readScope` and `searchable`, the two rules the Python twin must match |

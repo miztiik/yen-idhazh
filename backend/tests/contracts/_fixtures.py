@@ -36,18 +36,15 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 MOVED_BLOCKS = (("ui", "digest"), ("console", "console"), ("assist", "assist"))
 
 #: Keys `config/idhazh.json` owns although they sit on a moved model, with the
-#: reason each one is not the appearance file's to declare. All four are on
-#: `AssistConfig` and none is drawn, so the frontend's own `AssistConfig`
-#: interface declares none of them. `recall_min` and `eval_corpus_through` are
-#: the retrieval gate's inputs, read by `backend/tests/test_retrieval_eval.py`.
-#: `max_tokens` and `min_readable_letter_share` are the encoder's, read by
-#: `backend/idhazh/embed.py`; the appearance file carried a copy of each with
-#: the same value, which was the middle merge layer doing its job until the
-#: keep-list stopped the page receiving either - and a copy nothing reads is
-#: where `recall_min` was an hour earlier, so both were deleted (2026-09-05).
+#: reason each one is not the appearance file's to declare. Both are on
+#: `AssistConfig` and neither is drawn, so the frontend's own `AssistConfig`
+#: interface declares neither. `max_tokens` and `min_readable_letter_share` are
+#: the encoder's, read by `backend/idhazh/embed.py`; the appearance file carried
+#: a copy of each with the same value, which was the middle merge layer doing
+#: its job until the keep-list stopped the page receiving either - and a copy
+#: nothing reads is where `recall_min` and `eval_corpus_through` sat until both
+#: knobs, and their gate, were removed entirely (2026-10-03).
 PIPELINE_OWNED = {
-    "recall_min",
-    "eval_corpus_through",
     "max_tokens",
     "min_readable_letter_share",
     # Build-owned rather than pipeline-owned, and on this list for the same

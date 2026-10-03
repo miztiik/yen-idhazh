@@ -110,6 +110,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-03",
+            change="assist.recall_min and assist.eval_corpus_through removed.",
+            why="The retrieval gate moved out of CI; quality is measured, never gated.",
+        ),
+        ChangelogEntry(
             version="2026-10-02",
             change="console.default_window_days 30 to 14; console.data_explorer_tab added.",
             why="One opening span on every route, and the sixth tab waits for its page.",
@@ -126,11 +131,6 @@ class AppConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-27T22:00",
-            change="console.completeness_grace_days, additive, default 1.",
-            why="The console says its record has stopped once a whole UTC day has none.",
-        ),
-        ChangelogEntry(
-            version="2026-09-27",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),
