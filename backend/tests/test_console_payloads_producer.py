@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import seed_feed_health, seed_scores, writer_identity
+from conftest import seed_feed_health, seed_publication_inventory, seed_scores, writer_identity
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob, derive_url_key
@@ -274,6 +274,7 @@ def three_month_tree(tmp_path: Path) -> tuple[Path, Path]:
 def _seed_tree(tmp_path: Path, months: tuple[str, ...]) -> tuple[Path, Path]:
     state = tmp_path / "state"
     digest = tmp_path / "frontend" / "public" / "digest"
+    seed_publication_inventory(digest.parent)
     for index, month in enumerate(months):
         stamp = f"{month}-01"
         run_id = f"{stamp}-1"

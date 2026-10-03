@@ -393,7 +393,6 @@ def test_trials_owns_only_its_configured_roots(tmp_path: Path) -> None:
     named = {
         name: tuple(policy.owns)
         for name, policy in settings.tasks.items()
-        if policy.owns is not None
     }
     folders = [(name, folder) for name, owned in named.items() for folder in owned]
     for index, (first, one) in enumerate(folders):

@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what a day is once five runs have added to it. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -8,11 +8,12 @@ What happens to any of it afterwards is the other half, and it is [retention.md]
 
 ## Where each part is written up
 
-Six pages, one question each. Arrive at the one holding your question and stop.
+Seven pages, one question each. Arrive at the one holding your question and stop.
 
 | Page | The question it answers |
 | --- | --- |
 | this one | Where a file goes, what a reader's address is, and what a day is once five runs have added to it |
+| [publication-inventory.md](publication-inventory.md) | How a static build obtains named days and files without walking the archive |
 | [what-a-published-item-says-about-itself.md](what-a-published-item-says-about-itself.md) | Why is this story here, whose clock is that time, and what does an absent field mean |
 | [how-a-day-is-ordered-and-what-each-desk-published.md](how-a-day-is-ordered-and-what-each-desk-published.md) | What order the page comes in, what chooses the leading block, and why a desk ran what it ran |
 | [what-a-month-shard-holds-and-how-it-reaches-a-browser.md](what-a-month-shard-holds-and-how-it-reaches-a-browser.md) | What one month of the search index holds, what it costs, and how it is staged |
@@ -37,9 +38,14 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json  optional visual, drawn i
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
 state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice, kept for ever
-state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/ the identity of every measurement that day holds, 76 bytes each
-state/summary-quality-evals-index/<YYYY>/<MM>/settled.csv the same, for every day of a closed month, in one file
+state/summary-quality-evals-index/lookup/root.json the current exact-ID lookup generation
+state/summary-quality-evals-index/lookup/nodes/<prefix>/<digest>.json bounded routing page
+state/summary-quality-evals-index/lookup/nodes/<prefix>/<digest>.sqlite capped membership leaf
+state/summary-quality-evals-index/incoming/<batch-id>.json durable pending evaluation input
 ```
+
+The [observation lookup](../contracts/observation-lookup.md) owns these index
+paths and their publication protocol; they are not reader-facing URLs.
 
 ```
 / the newest published day, rendered inline moving
@@ -53,13 +59,16 @@ state/summary-quality-evals-index/<YYYY>/<MM>/settled.csv the same, for every da
 
 **One day directory is the deletion atom.** Nothing outside it points into its interior except the append-only ledger, which is what makes pruning a single operation with no second edit.
 
-**No hash appears in any path, filename or URL.** A day carries two reader-facing addresses and both are the item's own id: the anchor `#<item id>` and the visual's marks, `ai-wfyypy5sgvnwcxd3.json`. The id is derived from the article's address, so a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)), and it is not a digest of anything - a digest here is 32 or 64 hex characters, and an item id is neither of those widths. The sha256 `url_key` that identity for dedupe actually rests on stays a field on the payload and never becomes a path segment. Paths are for humans and for globs; a hash is for the contract.
+**Reader-facing item paths use the item's ID, not a raw hash.** A day carries two reader-facing addresses and both are the item's own id: the anchor `#<item id>` and the visual's marks, `ai-wfyypy5sgvnwcxd3.json`. The id is derived from the article's address, so a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)), and it is not a digest of anything - a digest here is 32 or 64 hex characters, and an item id is neither of those widths. The sha256 `url_key` stays a payload field, not a reader-facing path segment. Internal lookup nodes instead use checked content digests for their filenames.
 
 **Two id shapes are live, and the pattern that accepts them never contracts.** Every day published before 2026-09-12 carries `<vertical>-<ten decimal digits>`; a published day is frozen, so not one of those ids moved. A run writes `<vertical>-<sixteen Crockford base32 symbols>` from 2026-09-12 - the 32-symbol alphabet without `i`, `l`, `o` and `u`, so no id can be misread aloud, and a subset of the slug alphabet, so the id is still a slug. **Nothing sorts ids across days**, because the two shapes do not order against each other.
 
 **The asset name was `<vertical>-<NN>` until 2026-08-27, and both shapes are live in committed data.** The ordinal came from a counter, a counter has to be seeded from something a process can observe, and two runs of one day observed different things - which cost a finished day ([one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md)). Naming the file after the item makes the path a function of the item, so no two runs and no two shards can pick one path for two stories. **No old address broke and none had to be migrated**: `assemble` copies `VisualDecision.data_path` into the day payload verbatim, the page fetches that stored string, and the build stages by the same item-shaped name - so a name is data the day carries, never a rule the reader re-derives. That is the same property that makes the two contracts at the top of this page separable, applied one level down.
 
-**`latest` and `archive` are derived at build time** from the directory listing, never committed. A committed pointer is exactly the file that goes stale after a prune or a raced deploy.
+**`latest` and `archive` are derived at build time** from the named
+[publication inventory](publication-inventory.md), not a directory listing.
+Its day writer records its own entry, and initialization requires an explicit
+named seed so an absent inventory cannot hide older published days.
 
 **A visual is one file named for its item, and nothing recomputes the name.** From 2026-09-13 a published visual is `<item_id>.json` - its marks - and the day payload points at it with `DigestVisual.data_path` ([where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). It replaced `<item_id>.svg`, which was the drawing the pipeline used to render; `DigestVisual.path` retired with it, and the 24 committed days that still carry the key are read through a named pop rather than by widening the model. `digest.json` and `run.json` sit in the same directory and belong to the day rather than to a story; neither can collide, because an item id ends in a hyphen and a run of digits or sixteen base32 symbols, so no item is called `digest` or `run`. That is also the rule the retention prune and the bundle staging read, rather than a file extension - a `.json` suffix no longer tells a visual apart from the record that a day happened.
 

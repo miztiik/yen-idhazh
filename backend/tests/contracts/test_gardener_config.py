@@ -137,11 +137,6 @@ LIVE_BY_DECISION: Final = {
         "section 8), so its declaration transcribes a live squash rather than starting one"
     ),
     ("feed-health", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
-    ("summary-quality-evals-index", "fold.dry_run"): (
-        f"{FOLD_ALREADY_RAN_LIVE}; and a person ruled that the eval ledger's ID files stop "
-        "growing by a file a day with no summary, so the same switch settles each closed "
-        "month of them into one file"
-    ),
 }
 
 #: The CSV day trees no task folds, each with why. A tree that joins `DAY_TREES`
@@ -654,7 +649,7 @@ def _thirteen_months(name: str) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize(
-    "name", ["feed-health", "summary-quality-evals-index", "telemetry-aggregate"]
+    "name", ["feed-health", "telemetry-aggregate"]
 )
 def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: str) -> None:
     """A 366-day read reaches fourteen month shards, and thirteen is one short of it.

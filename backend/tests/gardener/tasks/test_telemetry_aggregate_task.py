@@ -73,7 +73,7 @@ def pruned(
 ) -> Folded:
     """One pass of the shipped task over the checkout `state` sits in."""
     full: dict[str, str | int] = {"unit": "months", "value": full_grain_months()}
-    aggregate = (
+    aggregate: dict[str, str | int] = (
         {"unit": "forever"}
         if aggregate_months is None
         else {"unit": "months", "value": aggregate_months}

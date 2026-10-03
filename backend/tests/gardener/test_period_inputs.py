@@ -21,7 +21,7 @@ def _compaction_policy() -> CompactionPolicy:
 
 
 def _monthly_fold_policy() -> RetentionPolicy:
-    path = CONFIG_DIR / "gardener" / "summary-quality-evals-index.json"
+    path = CONFIG_DIR / "gardener" / "feed-health.json"
     return RetentionPolicy.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
@@ -41,8 +41,12 @@ def test_compaction_range_uses_its_configured_month_lookback() -> None:
 
 def test_monthly_fold_also_lists_its_fixed_closed_day_window(tmp_path: Path) -> None:
     policy = _monthly_fold_policy()
+    assert policy.fold is not None
+    policy = policy.model_copy(
+        update={"fold": policy.fold.model_copy(update={"settles_months": True})}
+    )
     today = date(2026, 10, 1)
-    period_range = scheduled_range("summary-quality-evals-index", policy, today)
+    period_range = scheduled_range("feed-health", policy, today)
 
     assert period_range is not None
     months = month_partition.months_between(*period_range)
@@ -50,12 +54,12 @@ def test_monthly_fold_also_lists_its_fixed_closed_day_window(tmp_path: Path) -> 
 
     paths = paths_for_task(
         tmp_path,
-        "summary-quality-evals-index",
+        "feed-health",
         policy,
         period_range,
         today=today,
     )
-    root = tmp_path / "state" / "summary-quality-evals-index"
+    root = tmp_path / "state" / "feed-health"
     assert root / "2026" / "08" in paths
     assert root / "2026" / "09" / "29" in paths
     assert root / "2026" / "09" / "21" not in paths

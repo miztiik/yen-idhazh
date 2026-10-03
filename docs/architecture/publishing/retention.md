@@ -70,7 +70,7 @@ that constrain them belong to
 | Published identities | Preserve the information that prevents duplicate publication. The manual prune refuses this ledger. |
 | Item health | Write and validate the required day-and-stage summary before deleting an aged source month and its published copy. |
 | Feed health | Delete expired records when no reader needs them; do not invent an unused aggregate. Feed retirements have a separate policy so cleanup does not revive retired sources. |
-| Summary-quality evals and their ID folder | Keep every row and every ID. Nothing summarises a month and nothing deletes an eval row: the `compact-summary-quality-evals` compaction may pack a month or a finished year and never drops one, the ID folder's fold settles each closed month into one file and drops no ID, and an ID dropped would make its measurement new again. |
+| Summary-quality evals and their lookup | Keep every row and every ID. `compact-summary-quality-evals` may pack rows but never drops a period. The [exact-ID lookup](../contracts/observation-lookup.md) has no day/month fold or age deletion; forgetting an ID would make an old measurement new again. |
 | Raw and compact ledgers | Follow the ledger's compaction declaration. A legacy task's retirement must not silently shorten the period retained. |
 | Trial records and other task-owned data | Follow the owning declaration, not a blanket cleanup of `state/`. |
 
@@ -84,8 +84,10 @@ Every eval row is kept for ever, and so is every ID in the ID folder, so an
 old measurement is never counted as new because its rows aged out, and a monthly
 figure is computed from the rows when a chart draws it
 ([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).
-A stale index can be rebuilt with `idhazh rebuild-summary-quality-evals-index --month <YYYY-MM>`;
-a closed month the gardener settled into one file is compared as one month.
+The lookup is independent of the rows' day and month layout. Legacy IDs move
+through the [explicit migration](../../how-to/migrate-observation-lookup.md);
+interrupted publication uses [named batch recovery](../../how-to/migrate-observation-lookup.md#recover-a-named-pending-batch).
+Neither is a retention pass.
 
 ## A named prune: one ledger, one range of days
 
@@ -105,7 +107,7 @@ idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-D
 - `published` and `seen` are refused because forgetting their records permits repeat publication or discovery.
 - A ledger the door files (`raw-and-compact` in `config/ledgers.json`) is a target unless its compaction declaration's `prune_refusal` gives a reason, which the command prints as its refusal. A pass deletes the days' raw files and listings and rebuilds each daily, monthly or yearly file that holds them without their rows; a file left with no row stays as an empty file. A live pass also takes `--run-id` and `--commit`, which each rebuilt file names as its writer.
 - `summary-quality-evals` is refused by its declaration: every eval row is kept for ever.
-- `summary-quality-evals-index` is refused too. An ID taken out of it makes its measurement count as new at the next run, and no ID is ever deleted. A closed month of it is one file besides, which no range of days can take part of.
+- `summary-quality-evals-index` is not a prune target. Its IDs are lifelong, and its digest-routed lookup has no day or month partition to prune.
 - Do not point the command at unsupported raw trees or file layouts. Their owning tasks decide retention.
 
 The procedure and failure handling are in

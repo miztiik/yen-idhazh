@@ -73,6 +73,18 @@ def test_every_published_item_is_scored() -> None:
     assert {row.date for row in rows} == {build_canary_day.DATE}
 
 
+def test_the_eight_item_day_has_a_rendered_chart_after_the_canary_seed(tmp_path: Path) -> None:
+    settings = config.load()
+    day = build_canary_day.build(tmp_path / "digest", settings.app.evaluation, settings.app.visuals)
+    assert len(day.items) == 8
+    item = next(item for item in day.items if item.item_id == "ai-04")
+    assert item.visual is not None
+    assert item.visual.kind == "chart"
+    assert item.visual.state == "rendered"
+    assert item.visual.data_path == "digest/2026/08/20/ai-04.json"
+    assert (tmp_path / item.visual.data_path).is_file()
+
+
 def test_the_published_band_and_the_ledger_band_agree() -> None:
     """Two files, one judgement. The console and the digest page read different ones."""
     assert [row.band for row in scored()] == [item.band for item in published()]
@@ -220,9 +232,10 @@ def test_the_scores_are_filed_by_the_pipelines_writer(tmp_path: Path) -> None:
     assert build_canary_day.file_scores(tmp_path, published(), evaluation()) == len(rows)
 
     assert filed_rows(tmp_path) == rows
-    assert writer.indexed_observations(tmp_path) == {
+    candidates = {
         writer.observation_digest(row.model_dump(mode="json")) for row in rows
     }
+    assert writer.recorded_observations(tmp_path, candidates) == candidates
 
 
 def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:

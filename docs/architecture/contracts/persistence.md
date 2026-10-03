@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -133,6 +133,11 @@ The paths come back ascending by the day each file covers, never by path string.
 | Compression | `ledger.compression_raw` (snappy) or `ledger.compression_compact` (zstd) | `none` - it is plain text |
 | For | every ledger by default | a payload a person reads in a pull request |
 
+`parquet.read` closes its file reader and in-memory byte source before returning
+the materialized rows. A short-lived process must not leave native reader
+resources for interpreter shutdown to collect; the process-exit regression reads
+a committed fixture in a fresh interpreter.
+
 The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller than snappy at a thousand rows, in [what a parquet file costs](../../reference/benchmarks/what-a-parquet-file-costs.md)), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` names the three console ledgers**, `host-fingerprint`, `item-health` and `summary-quality-evals`: the site build copies each one's indexes and compact files into the site for the browser's query door ([../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)). The four console routes still read the same packed files while the site is built, from `state/` on disk, until a panel moves onto the door.
 
 ### The column types
@@ -173,7 +178,7 @@ Five ledgers have moved, producer and reader together. Two moved on 2026-09-28: 
 | feed retirements | `telemetry.source_health.file_retirements`, the one writer, called by the plan stage (`410 Gone`) and the assemble stage (low yield) | `ledger.load_retirements` | the day each address was retired, because the row has no `date` field |
 | visual cleanup record | the gardener's `visual-prune` task, through `ledger.persist` | `ledger.load_visual_prunes` | the day its `date` names |
 | item-health, the census | `stages.record` in each work shard as its items settle, and `stages.assemble` for the whole day afterwards, both through `ledger.persist` | `ledger.load_days` for named days, and `ledger.load_ledger_rows` where the question is the whole history | the day its `date` names |
-| summary-quality-evals, the eval ledger | `evals.writer.file_measurements`, called by the same two stages. It files a measurement only once, and writes the `state/summary-quality-evals-index/` CSV day tree beside it | the same two | the day its `date` names |
+| summary-quality-evals, the eval ledger | `evals.writer.file_measurements`, called by the same two stages; [batch publication](observation-lookup.md#publication-across-jobs) commits accepted rows with their exact-ID lookup | the same two | the day its `date` names |
 | host-fingerprint, the machine record | `telemetry.silicon`: `idhazh fingerprint` files the job's row when the job starts, and `idhazh job-clock` files it again with the job-end cells under the same writer, so the later file replaces the first | the same two | the day its `date` names |
 
 Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. `backend/tests/workflows/test_ledger_door_jobs.py` holds that for every step that runs an `idhazh` command. No job has to ask for the parquet engine to reach these ledgers, because pyarrow is part of the base install ([What it costs to install](#what-it-costs-to-install)).
@@ -186,7 +191,7 @@ Each writer names the commit its run checked out, which is why `idhazh plan`, `r
 
 Running it again is safe. Every raw file carries `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_to_parquet`, so the same run id replaces its earlier write. A late CSV file in a named month is folded onto the rows the door already holds and is proven again. `--check` exits 1 while a CSV file of a named ledger remains in any supplied root and month. **The table, program and tests are deleted when no ledger is left on CSV**: every entry in `config/ledgers.json` is `raw-and-compact`, and the owner's named-month checks find no remaining CSV.
 
-**The eval ledger moved as `scores` and was renamed `summary-quality-evals` afterwards** ([ledger-registry.md](ledger-registry.md#design-rationale)). The one-shot migration moved `state/raw/scores/`, `state/compact/scores/` and `state/score-index/` to their new names. It read every old file, wrote every new one, read each back through this build's own readers, and only then deleted the old files. It proved that ledger rows, settled days and recorded measurements stayed equal. The migration is complete, and its utility and tests were removed on 2026-10-02. If a rerun of an older workflow files under an old name before 2026-10-30, restore `backend/utilities/eval_ledger_rename.py` from git history and run it again.
+**The eval ledger moved as `scores` and was renamed `summary-quality-evals` afterwards** ([ledger-registry.md](ledger-registry.md#design-rationale)). The one-shot migration moved `state/raw/scores/`, `state/compact/scores/` and `state/score-index/` to their new names. It read every old file, wrote every new one, read each back through this build's own readers, and only then deleted the old files. It proved that ledger rows, settled days and recorded measurements stayed equal. The migration is complete, and its utility and tests were removed on 2026-10-02. The [lookup cutover](../../how-to/migrate-observation-lookup.md#approve-the-live-cutover-first) requires older CSV writers and their replays to remain excluded afterward.
 
 **Git moves a file added under an old folder into the new one.** A merge or a rebase that meets the rename treats the folder as renamed, so a file another branch added under `state/raw/scores/` lands under `state/raw/summary-quality-evals/` still naming the old ledger, marked as a conflict. A person merging `main` into a branch that predates the rename runs `git -c merge.directoryRenames=false merge`, which leaves the file where it was filed for the program to move; a file merged any other way is found by its envelope and rewritten where it lies. The pipeline's commit step cannot do either: a run that started before the rename and pushes after it stops at that conflict, because the moved path is not one its own name lets it keep, so nothing it wrote lands. That is why the rename merges while no run is queued or running.
 
