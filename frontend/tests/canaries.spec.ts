@@ -2,6 +2,7 @@ import { expect, test, type Page, type Request } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { dayReady } from './support/day-ready';
+import { revealDayDrawings } from './support/day-drawings';
 
 /**
  * The injection canaries, asserted where a reader actually meets them.
@@ -231,6 +232,7 @@ test.describe('the visual path', () => {
 		});
 		await page.goto('/2026-08-20/', { waitUntil: 'networkidle' });
 		await dayReady(page);
+		await revealDayDrawings(page);
 
 		const figures = page.locator('main figure svg');
 		await expect(figures).toHaveCount(2);
@@ -254,6 +256,7 @@ test.describe('the visual path', () => {
 		// the day's business and not this file's.
 		await page.goto('/2026-08-20/');
 		await dayReady(page);
+		await revealDayDrawings(page);
 		const alts = await page
 			.locator('main figure[role="img"]')
 			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
@@ -269,6 +272,7 @@ test.describe('the visual path', () => {
 		// zero-height box under the summary.
 		await page.goto('/2026-08-20/', { waitUntil: 'networkidle' });
 		await dayReady(page);
+		await revealDayDrawings(page);
 		const boxes = await page.locator('main figure svg').evaluateAll((nodes) =>
 			nodes.map((node) => {
 				const box = node.getBoundingClientRect();

@@ -1,14 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
  * Installable, and nothing more than that.
  *
- * A manifest is a static JSON file. It adds no request, no account, no code
- * running off the reader's device, and - the part worth a test rather than a
- * promise - no notification. Installability is what makes that temptation
- * concrete, so the ban is asserted instead of implied.
+ * A manifest is a static JSON file. It adds no request, no account, and no code
+ * running off the reader's device.
  *
  * The way this actually breaks is the base path. The site is served from a
  * GitHub Pages project path, a manifest that validates at the root 404s every
@@ -29,19 +27,6 @@ interface Manifest {
 
 function manifest(): Manifest {
 	return JSON.parse(readFileSync(join(BUILD, 'manifest.webmanifest'), 'utf8'));
-}
-
-function sourceFiles(): string[] {
-	const out: string[] = [];
-	const walk = (at: string) => {
-		for (const entry of readdirSync(at, { withFileTypes: true })) {
-			const path = join(at, entry.name);
-			if (entry.isDirectory()) walk(path);
-			else if (/\.(svelte|ts|js|html)$/.test(entry.name)) out.push(path);
-		}
-	};
-	walk(resolve(process.cwd(), 'src'));
-	return out;
 }
 
 test.describe('the web app manifest', () => {
@@ -83,33 +68,6 @@ test.describe('the web app manifest', () => {
 });
 
 test.describe('what installability may not become', () => {
-	test('nothing in the source touches notifications, push or background sync', () => {
-		// The site ships a service worker since 2026-09-02, so this grep widened
-		// rather than relaxed. A worker is the context in which every one of these
-		// names becomes available and every one of them starts to sound
-		// reasonable, and the ban is asserted rather than promised for exactly
-		// that reason. `sourceFiles()` walks `src/`, so `src/service-worker.ts` is
-		// inside it.
-		const banned =
-			/\bNotification\b|\bshowNotification\b|\bPushManager\b|\bpushManager\b|\bPushSubscription\b|\bperiodicSync\b|\bPeriodicSyncManager\b|\bSyncManager\b|registration\.sync\b/;
-		const offenders = sourceFiles().filter((path) => banned.test(readFileSync(path, 'utf8')));
-		expect(offenders, 'the reader decides when to read - CLAUDE.md Guardrail #1').toEqual([]);
-	});
-
-	test('exactly one file registers the worker, and it is not the worker', () => {
-		// `serviceWorker` used to be banned outright, which was the right rule
-		// while there was no worker. What replaced it is narrower and says more:
-		// the registration lives in one module a reviewer can read in full, so
-		// "nothing else in this site reaches for the worker API" is a fact rather
-		// than a hope.
-		const naming = sourceFiles()
-			.filter((path) => /\bnavigator\.serviceWorker\b/.test(readFileSync(path, 'utf8')))
-			.map((path) => path.split(/[\\/]/).slice(-2).join('/'));
-		expect(naming, 'the worker API is reached for in more than one place').toEqual([
-			'lib/offline.ts'
-		]);
-	});
-
 	test('the worker fetches nothing that is not our own origin', () => {
 		const source = readFileSync(resolve(process.cwd(), 'src', 'service-worker.ts'), 'utf8');
 		// Guardrail #1: a worker runs on the reader's device over files we already

@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -513,16 +513,13 @@ more days before the newest published day (`recordNotes` in
 packed file or a packed day is missing says which, because each has its own fix
 ([the four faults](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)).
 
-**The settlement is per day, never over the whole cover, and that is the part
-that carries the weight.** `OBSERVATION_KEY` carries no date. It is the article,
-the words that came out, and the version of the instrument that read them - so
-two days holding one key can be two real measurements, and collapsing the cover
-would delete the second. Measured 2026-09-23 over the committed ledger: of
-12,463 keys, exactly one spans two days, and a cover-wide settlement would have
-dropped it. So the packing settles a day on its own and joins a month's days as
-they are, never across them: a repeat inside a day is one record written twice
-and a repeat across days is not. The scope costs nothing for a key that already
-carries `date`.
+**Packing settles rows per day, not over the whole requested window.** This
+scope preserves historical rows; it does not define measurement identity.
+The [observation key](../contracts/observation-lookup.md#measurement-identity)
+has no date, so the same key on two days is the same measurement. New
+publication admits it only once across jobs and days. The lookup migration
+does not rewrite evaluation bytes or change the console's per-day settlement
+of existing history.
 
 **A key with no preference keeps the first row it saw.** That is what the
 backend does with a key `ledger.preference_for` has no rule for, and the ledger

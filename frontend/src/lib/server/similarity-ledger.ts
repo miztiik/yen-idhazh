@@ -94,7 +94,7 @@ export function fittedLines(
 	days: number = LEDGER_WINDOW_DAYS,
 	root: string = STATE_ROOT
 ): FittedLine[] {
-	const table = readDayShards(join(root, 'content-similarity-judge', 'fitted-thresholds'), days);
+	const table = readDayShards(join(root, 'content-similarity-judge', 'fitted-thresholds'), days, root);
 	const newest = new Map<string, FittedLine>();
 	for (const row of table.rows) {
 		const date = text(row.date);

@@ -203,8 +203,8 @@ The retired check compared the old age times 30 against `max_window_days` - `390
 month is not thirty days. The check now compares against the shards, and
 `backend/tests/contracts/` sweeps every end date in one 400-year
 Gregorian cycle to prove it. The gardener loader makes the same comparison for
-every declaration whose files a console read opens - the `feed-health` and
-`summary-quality-evals-index` windows, the `full-grain` series of `telemetry-aggregate`, and the
+every declaration whose files a console read opens - the `feed-health`
+window, the `full-grain` series of `telemetry-aggregate`, and the
 `public-copy` series - and refuses a window under fourteen months by naming the
 file. Measured 2026-09-02 over all **146,097** anchor
 dates - arithmetic over the calendar, so the spread is zero by construction:
@@ -297,9 +297,8 @@ stands, and the measurement only strengthens it.
 **Each of these ages is one task's own window, and that task spends it.** The
 `telemetry-aggregate` task summarises an item-health month past its `full-grain`
 series and unlinks the browser's copy of that month past its `public-copy`
-series; the `feed-health` task deletes `state/feed-health/` past its window; and
-the `summary-quality-evals-index` task keeps every `state/summary-quality-evals-index/` day, because its window is
-`forever`. The item-health and host-fingerprint rows are deleted by each ledger's
+series; the `feed-health` task deletes `state/feed-health/` past its window.
+The item-health and host-fingerprint rows are deleted by each ledger's
 compaction past its `monthly_window`, and the eval rows' compaction keeps every
 month.
 
@@ -309,9 +308,9 @@ and a chart that wants a monthly figure computes it from the rows when it draws
 ([../evaluation.md](../evaluation.md#design-rationale)). The `monthly_window` of
 `config/gardener/compact-summary-quality-evals.json` is `forever`, so its compaction may pack a
 month and never drops one, and its `monthly_keep_days` packs a finished year's
-months into one year file. The index a run dedupes against keeps every day for
-its own reason: an observation key carries no date, so a dropped day would make
-every measurement in it new again.
+months into one year file. The [observation lookup](../../architecture/contracts/observation-lookup.md)
+keeps every measurement ID independently of these periods. It has no retention
+task, time window or day/month fold.
 
 **Feed health is deleted and never summarised.** Its rows are per-feed-per-run
 evidence, the quarantine reads 31 days, and the console reaches at most 366 - so

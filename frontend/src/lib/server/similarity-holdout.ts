@@ -208,7 +208,8 @@ export function mergeLineHoldoutScore(
 ): MergeLineHoldoutScore | null {
 	const table = readDayShards(
 		join(root, 'content-similarity-judge', 'merge-line-holdout-scores'),
-		days
+		days,
+		root
 	);
 	let newest: MergeLineHoldoutScore | null = null;
 	for (const row of table.rows) {

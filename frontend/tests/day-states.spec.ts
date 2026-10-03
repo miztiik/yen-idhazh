@@ -6,11 +6,13 @@ import {
 	readdirSync,
 	readFileSync,
 	rmSync,
+	statSync,
 	writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { loadDay, publishedDates } from '../src/lib/server/payload';
+import type { PublicationInventory } from '../src/lib/server/publication';
 import { viewsOf } from './support/views';
 
 /**
@@ -43,6 +45,14 @@ const WIDTHS = [360, 801, 1536];
 
 const ROOT = resolve(process.cwd(), '..');
 const CANARY = resolve(ROOT, 'backend', 'var', 'canary', 'digest');
+const PUBLISHED_INVENTORY_FIXTURE = resolve(
+	ROOT,
+	'tests',
+	'fixtures',
+	'contracts',
+	'publication-inventory',
+	'published.json'
+);
 
 function dirs(at: string): string[] {
 	return readdirSync(at, { withFileTypes: true })
@@ -76,6 +86,26 @@ function quietDay(): string {
 	const quiet = canaryDays().filter((day) => day.items === 0);
 	expect(quiet.length, 'the canary tree publishes no day with zero items').toBeGreaterThan(0);
 	return quiet[quiet.length - 1].date;
+}
+
+function writeNamedInventory(root: string, paths: string[], dates: string[]): void {
+	const template = JSON.parse(
+		readFileSync(PUBLISHED_INVENTORY_FIXTURE, 'utf8')
+	) as PublicationInventory;
+	const entries = paths.map((path) => ({
+		root: 'public' as const,
+		path,
+		bytes: statSync(join(root, ...path.split('/'))).size,
+		items: 0
+	}));
+	const inventory: PublicationInventory = {
+		...template,
+		dates,
+		entries,
+		total_bytes: entries.reduce((sum, entry) => sum + entry.bytes, 0),
+		total_items: 0
+	};
+	writeFileSync(join(root, 'publication.json'), `${JSON.stringify(inventory)}\n`);
 }
 
 /** A date the canary never published, so its payload file is absent. */
@@ -307,8 +337,9 @@ test.describe('a day whose payload cannot be read', () => {
 	test('an unreadable payload drops its day instead of taking the build down', () => {
 		const root = mkdtempSync(join(tmpdir(), 'r14-day-'));
 		try {
-			const readable = join(root, '2026', '01', '02');
-			const corrupt = join(root, '2026', '01', '03');
+			const digestRoot = join(root, 'digest');
+			const readable = join(digestRoot, '2026', '01', '02');
+			const corrupt = join(digestRoot, '2026', '01', '03');
 			mkdirSync(readable, { recursive: true });
 			mkdirSync(corrupt, { recursive: true });
 			writeFileSync(
@@ -317,12 +348,17 @@ test.describe('a day whose payload cannot be read', () => {
 			);
 			// Truncated mid-object, which is what an interrupted write leaves.
 			writeFileSync(join(corrupt, 'digest.json'), '{"date": "2026-01-03", "items": [');
+			writeNamedInventory(
+				root,
+				['digest/2026/01/02/digest.json', 'digest/2026/01/03/digest.json'],
+				['2026-01-03', '2026-01-02']
+			);
 
-			expect(loadDay('2026-01-02', root)?.date, 'the control day did not load').toBe('2026-01-02');
-			expect(loadDay('2026-01-03', root), 'an unreadable payload still throws').toBeNull();
+			expect(loadDay('2026-01-02', digestRoot)?.date, 'the control day did not load').toBe('2026-01-02');
+			expect(loadDay('2026-01-03', digestRoot), 'an unreadable payload still throws').toBeNull();
 			// It is still a published date, because the file is there. That is what
 			// makes the day reachable and the screen necessary.
-			expect(publishedDates(root)).toContain('2026-01-03');
+			expect(publishedDates(digestRoot)).toContain('2026-01-03');
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}

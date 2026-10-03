@@ -1,6 +1,6 @@
 # How a story chart is drawn, and what refuses one
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-03
 
 A story that carries a chart carries a pointer at its marks, and the reader's
 browser is what turns those marks into a picture. This page holds that path: who
@@ -41,13 +41,21 @@ A day has published 621 stories, the committed drawings averaged 12.7 KB, and a 
 
 **A story that leaves the page takes its request with it.** Unmount drops the watch and aborts the fetch, so a reader who pages away is not still paying for a chart nothing will show, and a response that lands after the story is gone is discarded rather than written into a component that no longer exists. An aborted fetch is silent: it is the reader's own move, not a fault, and logging it would fill the console on every page change.
 
+Route navigation pauses new chart requests and aborts pending ones before the
+old story unmounts. The old page cannot start a late chart fetch ahead of the
+destination's first payload. A story that remains after navigation can resume
+an interrupted request; a completed request is not repeated.
+
 **Marks that do not arrive leave the story shorter, and nothing else.** No broken-image glyph, no grey box, no skeleton - which is the shape two stories in three already have, and the reason the placeholder was refused in the first place: a grey rectangle makes "this story needed no picture" look identical to "the picture failed". The element that waits for the fetch is a zero-height `div` with no border and no background, so a story that never gets its chart is exactly as tall as a story that never had one.
 
 ## Inlining moves the trust boundary, and the check is at the move
 
 Inside an `img` an SVG is inert whatever it holds. In the document it is markup in our own origin, and a chart's labels are written by a model that read a stranger's page (Guardrail #11). So a drawing is refused if it does not open on an `<svg>` element or if it carries a script, an inline handler, embedded HTML, a link out, or a fetched image - and its path is matched against the shape `visual_planner.py` writes before that path is joined onto a directory or onto `base`, because it is about to become an address. [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) holds both checks and imports nothing, which is what lets the build and the browser run the same code: `node:fs` in that graph would put the build's file reader in a browser bundle, and a `$lib` alias would put a Vite alias in a plain `node` process. **The browser's copy is the one that matters**, because that is the path a stranger's bytes travel with nobody watching; two copies of one refusal is how the two drift. A refused drawing is logged by name and not drawn, which is a degrade rather than a failure: the story is shorter. [frontend/tests/item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) plants each of those six shapes in a copy of the canary tree, asserts the markup never reaches the story and that the same markup would be refused on the fetch path too, with a control that the ordinary drawing does inline - without it every refusal case would pass on a build that inlined nothing.
 
-**No browser check can reach the fetch, and that is a property of the fixture.** The canary day is eight stories against a seed of fifteen, so every story on it is seeded and nothing on that build asks for a drawing. What the canary suite does hold is the page-wide count: zero `<img>` under `main`, which fails the moment a story is left on the old carrier. The fetch itself is checked against the real build, on a committed day longer than the seed.
+The fixed canary has eight stories and seeds three through its fixture config.
+Its second chart sorts last and loads after the initial shell. Browser tests
+reveal the named fixture's drawings before checking their marks, labels and
+reload stability. They never open a longer committed day for this check.
 
 **The same boundary applies one step earlier, now that the data travels.** From 2026-09-13 a rendered visual also publishes its data - the marks, their values and their provenance, and the encoding that says which marks fill which channel ([where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). `refusedVisualData` in [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) sits beside `refusedDrawing` and answers the questions a shape can answer: this page knows the `renderer_version` the document names, it knows the `type`, every channel names marks the document carries, and the channels of a `bar` pair into bars. **It refuses rather than guesses, and refusing is free** - a degrade path that draws something approximate is how a wrong chart reaches a reader, and a story with no visual is simply shorter, which is already the shape 94.7 percent of stories have. So there is no placeholder to design and no layout to hold open. Nothing here re-decides whether three bars are worth the space: that is an editorial floor, the pipeline holds it, and a second opinion in the drawing code is one nobody could reconcile with the first.
 

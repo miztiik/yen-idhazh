@@ -117,8 +117,11 @@ def _envelope_of(metadata: Mapping[bytes, bytes] | None) -> dict[bytes, bytes]:
 
 def read(data: bytes) -> tuple[dict[bytes, bytes], list[dict[str, Any]]]:
     """A whole parquet file back as its envelope and its rows, in file order."""
-    opened = pyarrow.parquet.ParquetFile(pyarrow.BufferReader(data))
-    return _envelope_of(opened.metadata.metadata), list(opened.read().to_pylist())
+    with (
+        pyarrow.BufferReader(data) as source,
+        pyarrow.parquet.ParquetFile(source) as opened,
+    ):
+        return _envelope_of(opened.metadata.metadata), list(opened.read().to_pylist())
 
 
 def read_envelope(path: Path) -> dict[bytes, bytes]:
