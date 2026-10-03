@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './support/browser';
+import { chartsReady } from './support/charts-ready';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths';
 
 /**
@@ -101,7 +102,7 @@ async function load(page: Page, route: string, width: number): Promise<void> {
 	await page.goto(route);
 	// The server draws at `chart.width_px` and the client redraws once it has
 	// measured the column. Reading before that measures the wrong axis.
-	await page.waitForTimeout(700);
+	await chartsReady(page);
 }
 
 for (const width of CONSOLE_WIDTHS) {

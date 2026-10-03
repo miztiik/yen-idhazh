@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -21,6 +21,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - For a structural contract move, compare its on-demand schema before and after, then run import and type checks. Preserve class docstrings: Pydantic includes them in schema descriptions.
 - Use the complete project build command. For byte comparisons, use one fixed `BUILD_VERSION` across both builds so generated identifiers do not change. Never measure output from a failed build.
 - Compare CI's actual candidate and failure with your local tree before attributing a regression. A conflict-free merge does not prove that the combined changes work.
+- **A compaction test or profile reads as a code regression; it is a slow
+  Windows machine.** On a shared Windows box, every small-file open or atomic
+  rename the compaction code performs can cost around 30 ms, almost
+  certainly from antivirus scanning the worktree and the system temp folder.
+  The same profile on a stock GitHub `ubuntu-latest` runner took the same
+  file operations well under a millisecond each - see "Where the remaining
+  time goes" in
+  [what-a-compaction-pass-costs.md](../benchmarks/what-a-compaction-pass-costs.md).
+  Before suspecting the code, compare against that Linux reading. Excluding
+  the worktree and temp folders from the Windows antivirus scanner is the
+  person's own machine choice; an agent does not change machine settings to
+  fix this.
 
 ## Two heavy gates on one box
 

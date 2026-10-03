@@ -427,7 +427,7 @@ npm run test:browser
 ```
 
 The suite includes injection canaries on the published surface, the visual path
-and a hand-labelled retrieval bar. Read the runner's reported count; do not copy
+and one hand-labelled search query. Read the runner's reported count; do not copy
 a historical number into a gate.
 
 To prove the digest does not depend on it at all:
