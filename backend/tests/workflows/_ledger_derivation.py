@@ -31,6 +31,8 @@ from idhazh.contracts.ledgers import Grain
 from idhazh.gardener import registry as gardener_registry
 from idhazh.gardener import runner as gardener_runner
 from idhazh.ledger import paths
+from idhazh.publication_checks import registry as publication_registry
+from idhazh.publication_checks import runner as publication_runner
 from idhazh.telemetry import sinks, traces
 
 from ._harness import SUBSTITUTED_DATE, _steps, _strings
@@ -471,12 +473,20 @@ def _sinks_opened_by(module: ModuleType) -> set[str]:
     return set(SINK_CALL.findall(inspect.getsource(module)))
 
 
+def _declared_check_ledgers() -> set[LedgerName]:
+    """The ledgers publication checks declare, which the check runner files their rows into."""
+    return {check.ledger for check in publication_registry.discover() if check.ledger is not None}
+
+
 def _persisted_in(source: str, where: str) -> set[str]:
     """The ledgers one module's source hands to `ledger.persist`, as the paths a job stages.
 
     Read from each call's own `ledger=` argument, because the door fills
     whichever ledger its caller names. A call that names none is refused by
     name: a write this cannot follow is a ledger no job can be charged with.
+    The publication-check runner is the one exception: it files each check's
+    rows into the ledger that check declares, so its ledgers are read from the
+    check registry.
     """
     ledgers = _ledgers()
     found: set[str] = set()
@@ -495,6 +505,9 @@ def _persisted_in(source: str, where: str) -> set[str]:
             if keyword.arg == "ledger"
             for member in _ledgers_named_in(keyword.value)
         }
+        if not named and where == publication_runner.__name__:
+            found |= {ledgers[member.value] for member in _declared_check_ledgers()}
+            continue
         assert named, (
             f"{where} calls {LEDGER_ALIAS}.{PERSIST} on line {call.lineno} and names no "
             "LedgerName in its ledger= argument, so this test cannot say which ledger it "
