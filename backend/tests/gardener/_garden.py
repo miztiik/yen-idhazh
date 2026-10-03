@@ -169,7 +169,6 @@ def named_task_package(root: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleTyp
         "__init__",
         "_compact_tree",
         "_daily_period",
-        "_index_day",
         "_monthly_period",
         "_yearly_period",
         *TASK_MODULES,

@@ -439,7 +439,7 @@ flowchart TB
     ABSORB["4. plan month files:<br/>indexes and deletes wait for the end of the pass"]
     DDUE{"compact_after_days whole days<br/>since the day ended?"}
     DHOLD["the day waits: a run may still be writing"]
-    TAKE["5. plan day listings and files:<br/>write all data, each final index once,<br/>delete sources, each watermark once last"]
+    TAKE["5. plan day files:<br/>write all data, each final index once,<br/>delete sources, each watermark once last"]
     DRY{"dry_run?"}
     REPORT["report every path, land the record only<br/>four of the six compactions, today"]
     LAND["land every write and delete<br/>in the shard's one commit"]
@@ -507,7 +507,7 @@ tree, in [the closed-day fold](#the-closed-day-fold) below.
 | Step | What it does |
 | --- | --- |
 | 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
-| 2 | Drops each raw listing older than `raw_index_keep_days` whose day is compacted and whose raw folder is empty, and every raw day in a month the window no longer keeps. While the window only reports, the listings still go, and those raw days are named and kept |
+| 2 | Drops every raw listing an earlier build left under `state/raw/<ledger>/index/`, and every raw day in a month the window no longer keeps. While the window only reports, the listings still go, and those raw days are named and kept |
 | 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
 | 4 | Absorbs every month that is done into its month file |
 | 5 | Takes every raw day that is due into its day file |
@@ -530,8 +530,7 @@ ended.** At one, a wake on the 25th takes the days up to the 23rd.
 Days go in order, each on its own, at most `max_periods_per_run` a pass. For each
 one the pass reads every raw file of the day and settles the rows: one file's
 rows per work unit - the last file of its highest attempt - then the first row
-of each key. It writes the day's listing,
-`state/raw/<ledger>/index/<YYYY-MM-DD>.json`, then its day file.
+of each key. It writes the day's day file and no raw listing.
 After all stages decide their files, the pass writes each final index once,
 in yearly, monthly, daily order; deletes source files; then writes each changed
 watermark once, last. Monthly absorption and new days share one final daily
@@ -702,7 +701,7 @@ it `true`, steps 1 and 2 name every month file past the window and every raw
 file of a day in a month past it, and keep them; steps 3 to 5 then pack those
 days and months like any other, as if the window kept every month, so a first
 pass does not start at the oldest month the window keeps. The raw listings of
-step 2 still go, because their days' rows are in day files. `dry_run` still
+step 2 still go, because they hold no row. `dry_run` still
 decides whether anything lands, so a dry run with the window reporting names
 what that live pass would do. With it `false`, a pass drops what the window no
 longer keeps, as above.
@@ -825,11 +824,15 @@ then absorbs the month that holds it - writing a day file and deleting it in one
 pass - which would stall every later wake. The order costs a month one more wake
 after its last day is taken (Carmack).
 
-**2026-09-28: a day's listing is written when the day is taken, not at every
-wake.** A listing of a day not yet taken would be rewritten on the day it is.
-A pass lists the raw day folders once, by name, and opens only the days it
-takes, so what one pass reads is bounded by its budget rather than by the
-backlog (Carmack).
+**2026-10-03: the compaction writes no raw listing.** It used to write
+`state/raw/<ledger>/index/<YYYY-MM-DD>.json` for each day it took and keep it
+90 days. Nothing read it: a browser reads the daily index for a packed day, and
+the site build stages its own listing, with sizes, for a day not packed yet. A
+re-run is rebuilt from the day file and the new raw files, never the listing.
+So every pass now deletes each listing it finds, and the setting that kept them
+is gone. A pass lists the raw day folders once, by name, and opens only the
+days it takes, so what one pass reads is bounded by its budget rather than by
+the backlog (Fowler, Carmack).
 
 **2026-09-28: the monthly window counts from the month's absorption.** A month
 file goes when the month `monthly_window` later is absorbed, so the period holds

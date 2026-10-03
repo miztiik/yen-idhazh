@@ -6,7 +6,7 @@ one declaration and no Python. A pass runs five steps in one process, and the
 shard lands all of them in one commit:
 
 1. the month files the monthly window no longer keeps are dropped;
-2. the raw listings past `raw_index_keep_days`, and raw days past the monthly
+2. every raw listing an earlier build left, and raw days past the monthly
    window, are dropped;
 3. every year that is done is packed into its year file, where the declaration
    sets `monthly_keep_days`;
@@ -18,8 +18,8 @@ whose rows they have just written into a coarser file; the window's drops in
 steps 1 and 2 delete rows. So while `monthly_window_dry_run` is true, steps 1 and
 2 name the month files and raw days the window would drop and keep them, and
 the packing steps take those periods like any other, as if the window kept
-every month. The raw listings of step 2 still go: their days' rows are in daily
-files. `dry_run` still decides whether anything at all lands.
+every month. The raw listings of step 2 still go: they hold no row.
+`dry_run` still decides whether anything at all lands.
 
 **Drops first and days last, because no pass may write a path it deletes.** The
 shard that lands a pass refuses a path it both wrote and deleted, and a pass
@@ -96,7 +96,7 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     reports = policy.monthly_window_dry_run
     stops = (
         *(_monthly_period.spare if reports else _monthly_period.drop)(tree, first_kept=first_kept),
-        *_daily_period.drop_listings(tree, policy, now=now),
+        *_daily_period.drop_listings(tree),
         *(_daily_period.spare if reports else _daily_period.drop)(tree, first_kept=first_kept),
         *_yearly_period.absorb(tree, policy, now=now, stamp=stamp, identity=identity),
         *_monthly_period.absorb(tree, policy, now=now, stamp=stamp, identity=identity),

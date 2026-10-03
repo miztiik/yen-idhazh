@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -530,9 +530,9 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 `frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so
 older compaction listings still validate; the frontend copy requires it because
 the site build fills it before a browser can price writer files. The build is
-now a second writer of the shape for staged-site listings only:
-`backend/tests/contracts/test_raw_day_listing_fixture.py` holds the compaction
-fixture, and `frontend/tests/ledger-copy.spec.ts` holds the build's listing,
+now the only writer of the shape, for staged-site listings; the compaction no
+longer writes one. `backend/tests/contracts/test_raw_day_listing_fixture.py`
+holds an older compaction listing to the shape and its digest rule, and `frontend/tests/ledger-copy.spec.ts` holds the build's listing,
 sizes and non-parquet refusal.
 
 ## See also

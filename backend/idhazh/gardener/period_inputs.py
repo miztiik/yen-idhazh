@@ -218,7 +218,7 @@ def _ledger_paths(
     *,
     monthly: bool,
 ) -> set[Path]:
-    """Named raw and compact ledger periods plus its fixed index and watermark files."""
+    """Named ledger periods plus compact indexes and watermarks."""
     paths: set[Path] = set()
     state_dir = repo_root / ledger.STATE_DIRNAME
     root = repo_root / folder
@@ -230,8 +230,6 @@ def _ledger_paths(
             for day in days:
                 stamp = day.isoformat()
                 paths.add(root / f"{day:%Y}" / f"{day:%m}" / f"{day:%d}")
-        for day in days:
-            paths.add(ledger.raw_index_path(state_dir, which, day.isoformat()))
         return paths
 
     if monthly:

@@ -456,13 +456,6 @@ class CompactionPolicy(_Declared):
             "that just expired. Defaults to two months."
         ),
     )
-    raw_index_keep_days: int = Field(
-        ge=1,
-        description=(
-            "How many days after a UTC day ends its raw listing survives. Never shorter "
-            "than daily_keep_days, or a daily file loses the index it would be rebuilt from."
-        ),
-    )
     daily_keep_days: int = Field(
         ge=GITHUB_RERUN_DAYS + 1,
         description=(
