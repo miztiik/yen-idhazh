@@ -12,13 +12,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from idhazh import ledger
 from idhazh.contracts.file_envelope import Period
 from utilities import build_canary_day
-
-pytestmark = pytest.mark.slow
 
 
 def test_the_fixture_ledgers_pack_from_a_state_tree_outside_the_repository_root(

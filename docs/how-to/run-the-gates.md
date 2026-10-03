@@ -339,6 +339,19 @@ fastest whole-suite run - is still six times. The two selectors that save least
 say why by themselves: `-m workflow` picks the slowest file in the repository,
 and `-m slow` picks the slow modules on purpose.
 
+**Re-check `slow` from a real run rather than guessing.** The gates job
+uploads its JUnit report as the `pytest-junit` artifact (7-day retention).
+After a run, `gh run download <run-id> -n pytest-junit -D <dir>`, then run
+`python -m utilities.slow_mark_audit <dir>/pytest-junit.xml` from `backend/`.
+It reads the threshold from `config/test-marks.json`, averages each module's
+test times from the XML, and prints every module where the measured average
+disagrees with whether it carries `pytest.mark.slow` - both directions, each
+with its average. Add or remove the mark to match, and update
+`UNMARKED_MODULES` in `backend/tests/test_marks.py` for any module that lost
+its only mark. A local run is not a substitute: this repository's local
+timings run far slower than the CI box for subprocess-heavy tests, so only a
+CI-sourced report gives a reading worth acting on.
+
 **CI runs everything, and always will.** A mark is a shortcut for the person
 writing the change, never the thing that decides what a merge is checked
 against - so a test marked wrong costs a re-run rather than a missed regression.

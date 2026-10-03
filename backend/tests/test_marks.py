@@ -42,7 +42,6 @@ from __future__ import annotations
 import tomllib
 from typing import Final
 
-import pytest
 from conftest import REPO_ROOT, read_text
 
 from utilities.mark_census import (
@@ -54,8 +53,6 @@ from utilities.mark_census import (
 )
 from utilities.slow_mark_audit import slow_threshold_seconds, threshold_phrase
 
-pytestmark = pytest.mark.slow
-
 #: Every test module that no mark selects, by stem. A module lands here because
 #: a developer changing that area has no shorter thing to run than the module
 #: itself, which is already the fast answer. It is a list rather than a rule so
@@ -63,14 +60,19 @@ pytestmark = pytest.mark.slow
 UNMARKED_MODULES: Final = frozenset(
     {
         "test_assemble_embeddings",
+        "test_assembly",
         "test_backfill_vectors",
+        "test_banding",
         "test_canary_day",
+        "test_canary_packing",
         "test_candidate_pointer",
         "test_capture_root",
+        "test_chunking",
         "test_classify",
         "test_console_payload_gate",
         "test_corpus",
         "test_corpus_harvest",
+        "test_corpus_history",
         "test_council_matrix",
         "test_council_runs_without_a_judge",
         "test_cross_filing",
@@ -79,23 +81,28 @@ UNMARKED_MODULES: Final = frozenset(
         "test_day_partition",
         "test_deadline",
         "test_decode_split",
+        "test_degrade",
         "test_desk_bounds",
         "test_desk_field",
         "test_desk_knobs",
         "test_discover",
         "test_doc_load",
+        "test_download_ceiling",
         "test_elements",
         "test_embed",
         "test_embedding_metrics",
         "test_eval_ledger",
         "test_eval_row",
         "test_evals",
+        "test_every_task_takes_what_its_pass_took",
         "test_evidence",
         "test_extract",
         "test_extraction_health",
+        "test_fold_lands",
         "test_frame_knobs",
         "test_freshness_curve",
         "test_gate_lock",
+        "test_github_trees",
         "test_grader_length_bias",
         "test_head_frame",
         "test_host_readings",
@@ -103,6 +110,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_item_records",
         "test_labels",
         "test_leading_stories",
+        "test_marks",
         "test_measure_budgets",
         "test_measure_judge_call",
         "test_measure_ledgers",
@@ -113,6 +121,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_metrics_sink",
         "test_migrate_to_day_shards",
         "test_model_runtime",
+        "test_model_server_address",
         "test_night_plan",
         "test_notebooks",
         "test_order_of_the_day",
@@ -123,20 +132,26 @@ UNMARKED_MODULES: Final = frozenset(
         "test_prompt_loop",
         "test_publication_hook",
         "test_publication_registry",
+        "test_publish",
         "test_publish_source_health",
         "test_publish_telemetry",
+        "test_publish_window",
         "test_qualify",
         "test_qualify_call_path",
         "test_rank",
         "test_reband_scores",
+        "test_recorded_inputs",
         "test_reference_dataset",
         "test_reference_set",
         "test_registry",
+        "test_retrieval_eval",
         "test_run_identity",
         "test_run_timeline_producer",
+        "test_runner",
         "test_same_story",
         "test_same_story_window",
         "test_sample_sheet",
+        "test_scorer_sampling",
         "test_search_index",
         "test_session",
         "test_silicon",
@@ -153,6 +168,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_source_dwell",
         "test_source_health",
         "test_spans",
+        "test_sparse_shard",
         "test_stream_order",
         "test_summarise_bench",
         "test_summarize",
@@ -160,12 +176,16 @@ UNMARKED_MODULES: Final = frozenset(
         "test_sweep_worktrees",
         "test_tag",
         "test_telemetry",
+        "test_telemetry_aggregate_task",
         "test_thin_corpus",
+        "test_two_calls",
         "test_two_runs",
         "test_validation",
         "test_visual_pruning",
         "test_widen_ledger_header",
+        "test_work_health_payload",
         "test_work_order",
+        "test_work_records",
     }
 )
 

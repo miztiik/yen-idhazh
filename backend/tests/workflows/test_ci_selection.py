@@ -25,7 +25,7 @@ from ._harness import (
     _write,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 #: The selector is a TypeScript file node runs directly, so a host without node cannot
 #: answer for it. `ci.yml` installs one in both jobs that read it.

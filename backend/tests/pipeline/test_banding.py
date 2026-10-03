@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals.score import band, verdict
-
-pytestmark = pytest.mark.slow
 
 
 def test_the_bands_come_from_config() -> None:
