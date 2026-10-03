@@ -9,7 +9,7 @@ export type FrontendGroup = (typeof FRONTEND_GROUPS)[number];
 
 const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	logic: [
-		'appearance-config', 'archive-scope', 'asset-base', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
+		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
@@ -38,7 +38,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	archive: ['archive', 'archive-calendar'],
 	'model-search': ['search'],
 	publishing: [
-		'assist-guard', 'canaries', 'charts', 'day-seam', 'empty-day', 'icons',
+		'canaries', 'charts', 'day-seam', 'empty-day', 'icons',
 		'ledger-ranges', 'malformed-day', 'payload-weight', 'published-ledgers', 'served-day', 'staged-day'
 	]
 };

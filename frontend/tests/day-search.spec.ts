@@ -1,8 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { ENCODER_DIMENSIONS } from '../src/lib/assist/encoder';
-import { indexOf, monthsBackFrom, type MonthIndex } from '../src/lib/assist/month';
+import { monthsBackFrom } from '../src/lib/assist/month';
 import { decodeVectorAt } from '../src/lib/assist/search';
 import {
 	costNote,
@@ -14,6 +12,7 @@ import {
 	type SearchScope
 } from '../src/lib/assist/session';
 import { markParts } from '../src/lib/day-shape';
+import { monthShard } from './support/month-shard';
 
 /**
  * Row #5's oracle: one field, two tiers, and the second one never gates the first.
@@ -29,24 +28,18 @@ import { markParts } from '../src/lib/day-shape';
  * canary build publishes one month and eight stories, so a scope that reaches
  * two months, a browser that cannot run the encoder, and a month whose vectors
  * are absent are three states the fixture has no way to reach - and the fourth,
- * a real ranked answer, costs a 43 MB download to ask once. The committed
- * `2026-08` shard is the corpus here for the same reason `archive-scope.spec.ts`
- * uses it: real entries, real vectors, real byte offsets, and one item's own
- * vector as the question, so retrieval is checked with no encoder at all.
+ * a real ranked answer, costs a 43 MB download to ask once. A generated
+ * `2026-08` shard (`support/month-shard.ts`) is the corpus here, as it is in
+ * `archive-scope.spec.ts`: one item's own vector is the question, so retrieval
+ * is checked with no encoder at all.
  *
  * The browser half of the row is in `filter-bar.spec.ts`, beside the panel the
  * field belongs to.
  */
 
-const INDEX = resolve(process.cwd(), 'public', 'assist', 'index');
-
-/** The committed month, header and entries, exactly as a browser would read it. */
-function committed(): { index: MonthIndex; vectors: Int8Array } {
-	const payload = JSON.parse(readFileSync(resolve(INDEX, '2026-08.json'), 'utf8'));
-	const index = indexOf(payload);
-	if (index === null) throw new Error('the committed 2026-08 shard did not parse');
-	const bytes = readFileSync(resolve(INDEX, '2026-08.bin'));
-	return { index, vectors: new Int8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) };
+/** Eleven days of three stories, parsed the way a browser parses a shard. */
+function august() {
+	return monthShard('2026-08', 11, 3);
 }
 
 const SETTINGS = {
@@ -60,7 +53,7 @@ const COST = { here: 43, elsewhere: 50 };
 
 /** Everything a session cannot do for itself, with nothing real behind it. */
 function parts(over: Partial<Parameters<typeof newSearch>[0]> = {}) {
-	const { index, vectors } = committed();
+	const { index, vectors } = august();
 	return {
 		supported: () => true,
 		loadIndex: async (month: string) => (month === index.month ? index : null),
@@ -86,11 +79,11 @@ function watcher() {
 
 test.describe('what a question comes back with', () => {
 	test('a story is found by its own vector, from the month the day sits in', async () => {
-		const { index, vectors } = committed();
+		const { index, vectors } = august();
 		// One story, and its own vector as the question. It scores 1.0 against
 		// itself, so a miss can only be a session that never read that month.
 		const target = index.entries.find((entry) => entry.vector !== null);
-		expect(target, 'no entry in the committed shard carries a vector').toBeDefined();
+		expect(target, 'no entry in the shard carries a vector').toBeDefined();
 		const query = decodeVectorAt(vectors, target!.vector!, ENCODER_DIMENSIONS, index.scale);
 		expect(query, 'the target vector did not decode').not.toBeNull();
 
@@ -110,7 +103,7 @@ test.describe('what a question comes back with', () => {
 	});
 
 	test('the answer is dropped when the reader stopped waiting for it', async () => {
-		const { index, vectors } = committed();
+		const { index, vectors } = august();
 		const query = decodeVectorAt(
 			vectors,
 			index.entries.find((entry) => entry.vector !== null)!.vector!,

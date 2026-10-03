@@ -1,10 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { ENCODER_DIMENSIONS } from '../src/lib/assist/encoder';
-import { indexOf, monthsInWindow, type MonthIndex, windowStart } from '../src/lib/assist/month';
+import { monthsInWindow, type MonthIndex, windowStart } from '../src/lib/assist/month';
 import { decodeVectorAt, rank, readScope, searchedDays } from '../src/lib/assist/search';
 import { plural } from '../src/lib/format';
+import { monthShard } from './support/month-shard';
 
 /**
  * How far back does a search actually reach?
@@ -20,28 +19,22 @@ import { plural } from '../src/lib/format';
  * the same reason `frontend/src/lib/day-shape.ts` is unit-tested here
  * (`docs/how-to/run-the-gates.md`).
  *
- * The corpus is the committed `2026-08` shard, re-dated rather than invented:
- * its newest day becomes a one-day September shard and everything before it
- * stays as August. Real entries, real vectors, real byte offsets - and the
- * query is one item's own vector, so retrieval is checked without an encoder.
+ * The corpus is a generated `2026-08` shard (`support/month-shard.ts`), split
+ * in two: its newest day becomes a one-day September shard and everything
+ * before it stays as August. The query is one item's own vector, so retrieval
+ * is checked without an encoder.
  */
 
-const INDEX = resolve(process.cwd(), 'public', 'assist', 'index');
-
-/** The committed month, header and entries, exactly as a browser would read it. */
-function committed(): { index: MonthIndex; vectors: Int8Array } {
-	const payload = JSON.parse(readFileSync(resolve(INDEX, '2026-08.json'), 'utf8'));
-	const index = indexOf(payload);
-	if (index === null) throw new Error('the committed 2026-08 shard did not parse');
-	const bytes = readFileSync(resolve(INDEX, '2026-08.bin'));
-	return { index, vectors: new Int8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) };
+/** Eleven days of three stories, parsed the way a browser parses a shard. */
+function august() {
+	return monthShard('2026-08', 11, 3);
 }
 
 /** Two shards whose newest holds exactly one day. The shape 1 September has. */
 function twoMonths(): { newest: MonthIndex; previous: MonthIndex; vectors: Int8Array } {
-	const { index, vectors } = committed();
+	const { index, vectors } = august();
 	const dates = [...new Set(index.entries.map((entry) => entry.date))].sort().reverse();
-	expect(dates.length, 'the committed shard holds one day, so it cannot be split').toBeGreaterThan(
+	expect(dates.length, 'the shard holds one day, so it cannot be split').toBeGreaterThan(
 		1
 	);
 
@@ -121,14 +114,14 @@ test('the scope stops at one extra shard, so a search costs at most one more fet
 });
 
 test('a month that already covers the floor is read on its own', async () => {
-	const { index, vectors } = committed();
+	const { index, vectors } = august();
 	const asked: string[] = [];
 	const load = async (month: string): Promise<MonthIndex | null> => {
 		asked.push(month);
 		return month === '2026-08' ? index : null;
 	};
 
-	// The committed shard's own day count is the floor this has to clear.
+	// The shard's own day count is the floor this has to clear.
 	const days = searchedDays([index]).length;
 	const read = await readScope(['2026-08', '2026-07'], { months: 1, minDays: days }, load);
 
