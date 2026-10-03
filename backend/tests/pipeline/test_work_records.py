@@ -18,7 +18,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
-import pytest
 from conftest import FIXTURES_DIR
 from pytest import LogCaptureFixture, MonkeyPatch
 
@@ -26,8 +25,6 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.fetch import FetchResult, FetchTimings
 
 from ._builders import _work_stage, captured_article_fetch
-
-pytestmark = pytest.mark.slow
 
 #: The fixture plan's size. Named once rather than repeated, so a sixth item
 #: added to the plan moves one line here instead of three assertions.

@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from typing import Any, Final
 
-import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, committed_markers, read_text
 from pytest import MonkeyPatch
 
@@ -35,9 +34,6 @@ from ._builders import (
     drawable_article_fetch,
     worked,
 )
-
-pytestmark = pytest.mark.slow
-
 
 #: What a `Summary` carries that is a clock rather than a decision. Two runs of
 #: one recorded reply agree on everything else, and these five are why "the same

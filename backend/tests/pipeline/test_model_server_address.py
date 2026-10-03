@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from conftest import RecordedEndpoint
 from pytest import MonkeyPatch
 
@@ -27,8 +26,6 @@ from ._builders import (
     isolate_ledgers,
     plan,
 )
-
-pytestmark = pytest.mark.slow
 
 
 def test_a_stage_nobody_gave_an_address_posts_where_the_config_says(

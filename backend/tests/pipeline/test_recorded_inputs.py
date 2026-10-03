@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from conftest import CONFIG_DIR, read_text
 from pydantic import TypeAdapter
 from pytest import MonkeyPatch
@@ -27,8 +26,6 @@ from ._builders import (
     score_one_item,
     work_then_assemble,
 )
-
-pytestmark = pytest.mark.slow
 
 
 def test_the_work_stage_leaves_its_inputs_where_assemble_can_reach_them(

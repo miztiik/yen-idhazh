@@ -80,7 +80,7 @@ from ._ledger_derivation import (
     _writers_called_by,
 )
 
-pytestmark = pytest.mark.workflow
+pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
 # Every workflow that commits, except the trial one. `measure.yml` writes under
 # the trial state root, throws away most of what it writes, and holds its own

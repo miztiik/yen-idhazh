@@ -18,7 +18,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
-import pytest
 from conftest import FIXTURES_DIR, read_text
 from pytest import MonkeyPatch
 
@@ -28,8 +27,6 @@ from idhazh.contracts.run_plan import RunPlan
 from idhazh.fetch import FetchResult
 
 from ._builders import _work_stage, captured_article_fetch, plan
-
-pytestmark = pytest.mark.slow
 
 LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
 

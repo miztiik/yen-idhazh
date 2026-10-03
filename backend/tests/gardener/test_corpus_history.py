@@ -26,8 +26,6 @@ from utilities import commit_and_push, corpus_history
 
 from ._garden import SEED_IDENTITY, a_config, quiet_git, write
 
-pytestmark = pytest.mark.slow
-
 #: The one identity the repository commits as, read from the commit program so a
 #: squash that drifted to another name is caught on the commits it made.
 THE_REPOSITORY: Final = f"{commit_and_push.COMMITTER_NAME} <{commit_and_push.COMMITTER_EMAIL}>"

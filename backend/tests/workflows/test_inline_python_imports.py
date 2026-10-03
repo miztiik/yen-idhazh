@@ -24,7 +24,7 @@ import pytest
 
 from ._harness import _inline_programs, _load_workflows, _run_bodies
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 #: Stdlib names common enough as ordinary variables that treating them as a

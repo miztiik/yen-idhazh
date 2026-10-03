@@ -51,7 +51,7 @@ from ._harness import (
     _write,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 #: A `git rebase` call, however many `-c <setting>` overrides sit between the two
 #: words. Matched rather than compared as text, because the settings are what

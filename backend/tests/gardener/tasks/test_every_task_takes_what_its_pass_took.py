@@ -38,8 +38,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from ._oracle_tree import build, files_under
 from ._task import declared, oracle, run_task
 
-pytestmark = pytest.mark.slow
-
 #: A file the ledger door names by a fresh id, spelled the way the record wrote it.
 _FILE_ID: Final = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 

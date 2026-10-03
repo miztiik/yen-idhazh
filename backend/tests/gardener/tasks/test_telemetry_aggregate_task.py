@@ -42,8 +42,6 @@ from idhazh.telemetry.publish import public_telemetry
 
 from ._task import declared, run_task
 
-pytestmark = pytest.mark.slow
-
 NAME: Final = "telemetry-aggregate"
 
 

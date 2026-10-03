@@ -137,7 +137,21 @@ jobs:
 
       - name: Tests, including the five injection canaries
         if: needs.scope.outputs.code == 'true'
-        run: pytest
+        run: pytest --junitxml=test-results/backend/pytest-junit.xml
+
+      # Per-module timing for `docs/how-to/run-the-gates.md`'s "re-check the
+      # slow marks" step. `pytest --durations` already names the 25 slowest
+      # tests in the log; this is the report `backend/utilities/
+      # slow_mark_audit.py` reads to answer the same question for every
+      # module, not just the slowest few. The suite writes it whether the run
+      # passes or fails, so a red run is still auditable.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && needs.scope.outputs.code == 'true' }}
+        with:
+          name: pytest-junit
+          path: test-results/backend/pytest-junit.xml
+          retention-days: 7
+          if-no-files-found: error
 
       # What prerendering used to give free. Until the reading routes were split
       # on 2026-09-01 every story was serialised into a document at build time,

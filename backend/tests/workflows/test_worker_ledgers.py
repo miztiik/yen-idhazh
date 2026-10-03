@@ -55,7 +55,7 @@ from ._harness import (
     requires_space_free_paths,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def _under(relpath: str, named: str) -> bool:

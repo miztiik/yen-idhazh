@@ -35,7 +35,7 @@ from ._harness import (
     _write,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 #: What the prune's boundary collapses. A tree with `corpus/` in it, because the
 #: rows the squash exists to bound are the ones under that path.

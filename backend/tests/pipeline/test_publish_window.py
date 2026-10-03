@@ -54,8 +54,6 @@ from ._builders import (
     summary,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     tmp_path: Path, monkeypatch: MonkeyPatch

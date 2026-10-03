@@ -39,8 +39,6 @@ from ._garden import (
 )
 from ._garden import task_package as a_package
 
-pytestmark = pytest.mark.slow
-
 WAKE = datetime(2026, 9, 27, 0, 40, tzinfo=UTC)
 RUN_ID = "2026-09-27-18012345678"
 #: A day the three-day window has aged out, and one it has not.
