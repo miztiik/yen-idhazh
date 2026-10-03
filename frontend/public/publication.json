@@ -97,19 +97,19 @@
       "root": "public"
     },
     {
-      "bytes": 253824,
+      "bytes": 281856,
       "items": 0,
       "path": "assist/index/2026-10.bin",
       "root": "public"
     },
     {
-      "bytes": 111800,
+      "bytes": 124193,
       "items": 0,
       "path": "assist/index/2026-10.json",
       "root": "public"
     },
     {
-      "bytes": 2821,
+      "bytes": 2894,
       "items": 0,
       "path": "console/band.json",
       "root": "public"
@@ -127,7 +127,7 @@
       "root": "public"
     },
     {
-      "bytes": 43471,
+      "bytes": 44062,
       "items": 0,
       "path": "day-metrics/2026-10.json",
       "root": "public"
@@ -637,13 +637,13 @@
       "root": "public"
     },
     {
-      "bytes": 150297,
-      "items": 69,
+      "bytes": 306326,
+      "items": 142,
       "path": "digest/2026/10/03/digest.json",
       "root": "public"
     },
     {
-      "bytes": 6431,
+      "bytes": 12790,
       "items": 0,
       "path": "digest/2026/10/03/run.json",
       "root": "public"
@@ -661,7 +661,7 @@
       "root": "public"
     },
     {
-      "bytes": 8734,
+      "bytes": 9514,
       "items": 0,
       "path": "machine/2026-10.csv",
       "root": "public"
@@ -679,7 +679,7 @@
       "root": "public"
     },
     {
-      "bytes": 4932,
+      "bytes": 5316,
       "items": 0,
       "path": "run-days/2026-10.json",
       "root": "public"
@@ -691,13 +691,13 @@
       "root": "public"
     },
     {
-      "bytes": 104265,
+      "bytes": 113751,
       "items": 0,
       "path": "run-timeline/2026-10.csv",
       "root": "public"
     },
     {
-      "bytes": 384268,
+      "bytes": 384258,
       "items": 0,
       "path": "source-health.json",
       "root": "public"
@@ -715,7 +715,7 @@
       "root": "public"
     },
     {
-      "bytes": 284535,
+      "bytes": 310797,
       "items": 0,
       "path": "telemetry/2026-10.csv",
       "root": "public"
@@ -1091,9 +1091,15 @@
       "items": 0,
       "path": "feed-health/2026/10/03/2026-10-03-37120581652-1-plan-00.csv",
       "root": "state"
+    },
+    {
+      "bytes": 28207,
+      "items": 0,
+      "path": "feed-health/2026/10/03/2026-10-03-37130643074-1-plan-00.csv",
+      "root": "state"
     }
   ],
-  "total_bytes": 51373342,
-  "total_items": 14508,
+  "total_bytes": 51613721,
+  "total_items": 14581,
   "version": "2026-10-03T13:33"
 }
