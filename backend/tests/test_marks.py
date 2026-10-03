@@ -123,6 +123,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_migrate_to_day_shards",
         "test_model_runtime",
         "test_model_server_address",
+        "test_month_partition",
         "test_night_plan",
         "test_notebooks",
         "test_order_of_the_day",

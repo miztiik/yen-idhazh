@@ -222,6 +222,7 @@
     "band_high_min": 0.85,
     "band_medium_min": 0.55,
     "brief_compression_ceiling": 0.5,
+    "canary_files": [],
     "chunk_overlap_words": 120,
     "chunk_words": 800,
     "golden_set_size": 40,

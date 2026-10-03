@@ -1191,13 +1191,21 @@ python([
 	'--state',
 	STATE
 ]);
+
+const canaryYear = newestDirectory(ROOT);
+const canaryMonth = newestDirectory(join(ROOT, canaryYear));
+const telemetryMonth = `${canaryYear}-${canaryMonth}`;
 python([
 	'-m',
 	'idhazh.telemetry.publish.public_telemetry',
 	'--state',
 	STATE,
 	'--public',
-	join(STATE, 'telemetry')
+	join(STATE, 'telemetry'),
+	'--from-month',
+	telemetryMonth,
+	'--through-month',
+	telemetryMonth
 ]);
 
 // The payloads the console fetches, written here and not in `build_canary_day.py`

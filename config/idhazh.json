@@ -150,8 +150,6 @@
     "band_high_min": 0.8,
     "band_medium_min": 0.5,
     "brief_compression_ceiling": 0.5,
-    "chunk_overlap_words": 150,
-    "chunk_words": 900,
     "canary_files": [
       "direct-instruction-override",
       "encoded-payload",
@@ -160,6 +158,8 @@
       "page-title-instruction",
       "tool-call-injection"
     ],
+    "chunk_overlap_words": 150,
+    "chunk_words": 900,
     "golden_set_size": 20,
     "label_draw_per_decile": 6,
     "label_min_run_days": 10,
