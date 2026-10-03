@@ -79,6 +79,7 @@ TASK_MODULES: Final = (
 FIXTURE_DECLARATIONS: Final = {
     "garden": (
         "compact-gardener.json",
+        "compact-feed-health.json",
         "day-validations.json",
         "history.json",
         "host-fingerprint.json",
