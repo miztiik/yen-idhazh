@@ -399,6 +399,7 @@ jobs:
         run: >-
           python backend/utilities/commit_and_push.py
           state
+          frontend/public/publication.json
 
       # `error` rather than the default: `assemble` downloads this by name and
       # cannot be built without it, so a plan job that finishes having written no

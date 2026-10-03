@@ -29,6 +29,7 @@ from conftest import (
     read_text,
     seed_feed_health,
     seed_item_health,
+    seed_publication_inventory,
     writer_identity,
 )
 
@@ -705,6 +706,7 @@ def test_the_cap_flag_reaches_the_plan_stage(
         encoding="utf-8",
     )
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+    seed_publication_inventory(tmp_path / "public")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
     monkeypatch.setattr(

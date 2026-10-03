@@ -19,6 +19,7 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
+from idhazh import publication
 from idhazh.assemble import TaxonomyVectors
 from idhazh.config import Settings
 from idhazh.contracts.digest_day import DigestDay
@@ -188,4 +189,5 @@ def publish_all(
     for projection in PROJECTIONS:
         writers[projection.name]()
         dispatched.append(projection.name)
+    publication.record_month(series.console_root(digest_root), month)
     return Published(dispatched=tuple(dispatched), sources=folded[0])

@@ -24,7 +24,14 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    REPO_ROOT,
+    read_text,
+    seed_publication_inventory,
+)
 from pytest import MonkeyPatch
 
 from idhazh import assemble, config, embed
@@ -126,6 +133,7 @@ class TestTheStageAssembledTwice:
             pytest.skip("the encoder is not committed in this checkout")
         settings = config.load(CONFIG_DIR)
         monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+        seed_publication_inventory(tmp_path / "public")
         monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
         monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
         items_dir = tmp_path / "run" / full_plan().date / "items"
@@ -156,6 +164,7 @@ class TestTheStageAssembledTwice:
             pytest.skip("the encoder is not committed in this checkout")
         settings = config.load(CONFIG_DIR)
         monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+        seed_publication_inventory(tmp_path / "public")
         monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
         monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
         items_dir = tmp_path / "run" / full_plan().date / "items"
@@ -187,6 +196,7 @@ class TestTheStageAssembledTwice:
             pytest.skip("the encoder is not committed in this checkout")
         settings = config.load(CONFIG_DIR)
         monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+        seed_publication_inventory(tmp_path / "public")
         monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
         monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
         items_dir = tmp_path / "run" / full_plan().date / "items"

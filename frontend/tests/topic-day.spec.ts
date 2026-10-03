@@ -15,7 +15,7 @@ import { dayReady } from './support/day-ready';
  * comparison. A count that matches with a different set is a story nobody can
  * reach, wearing a passing test.
  *
- * The set the page must hold is taken from the committed canary payload, which
+ * The set the page must hold is taken from the canary fixture payload, which
  * is what the build-time loader reads and what the previous build inlined:
  * `day.items` filtered to the route's vertical, in published order. Nothing
  * here re-derives that rule - it applies the same one line the removed
@@ -60,27 +60,27 @@ function dirsIn(at: string): string[] {
 }
 
 /** The day the pipeline committed for that date, read the way the build reads it. */
-function committedDay(date: string): { items: DigestItem[] } | null {
+function fixtureDay(date: string): { items: DigestItem[] } | null {
 	const [year, month, day] = date.split('-');
 	const path = join(CANARY, year, month, day, 'digest.json');
 	if (!existsSync(path)) return null;
 	return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-/** Every topic route the preview server can answer.
+/** Every topic route the canary fixture can answer.
  *
- * **Enumerated from the committed day rather than from the built tree**, and
- * since 2026-09-09 that is the only source there is: one document answers every
+ * **Enumerated from the named canary fixture rather than from the built tree**:
+ * one document answers every
  * dated address, so `build/` holds no `<date>/<topic>/` directory to list. The
  * day's own `verticals` is where that list always lived - it is what the page
  * draws its pills from and what decides whether a topic ran at all.
  */
 function topicRoutes(): TopicRoute[] {
 	const found: TopicRoute[] = [];
-	for (const date of publishedDates(CANARY)) {
-		const day = committedDay(date);
+	for (const date of publishedDates()) {
+		const day = fixtureDay(date);
 		if (day === null) continue;
-		for (const vertical of topicsOf(date, CANARY)) {
+		for (const vertical of topicsOf(date)) {
 			const own = day.items.filter((item) => deskOf(item) === vertical);
 			found.push({
 				date,

@@ -1,0 +1,73 @@
+{
+  "changelog": [
+    {
+      "change": "Use root-qualified entries as the only file list.",
+      "version": "2026-10-03T13:33",
+      "why": "Readers filter one list instead of keeping duplicate path lists in step."
+    },
+    {
+      "change": "Include state-prefixed discovery paths in the shared files list.",
+      "version": "2026-10-03T13:24",
+      "why": "The static reader uses one list to discover public and feed-health files."
+    },
+    {
+      "change": "Distinguish public files from named state files.",
+      "version": "2026-10-03T13:18",
+      "why": "Feed-health day files need named discovery without mixing the two data roots."
+    },
+    {
+      "change": "Record bytes and items per file, with running publication totals.",
+      "version": "2026-10-03T13:10",
+      "why": "Weight and item counters read one named inventory instead of historical payloads."
+    },
+    {
+      "change": "Declare published UTC days and public-root-relative file names.",
+      "version": "2026-10-03",
+      "why": "Static builds read a named inventory instead of walking an archive."
+    }
+  ],
+  "dates": [
+    "2026-08-20"
+  ],
+  "entries": [
+    {
+      "bytes": 2,
+      "items": 0,
+      "path": "assist/index/2026-08.bin",
+      "root": "public"
+    },
+    {
+      "bytes": 2,
+      "items": 0,
+      "path": "assist/index/2026-08.json",
+      "root": "public"
+    },
+    {
+      "bytes": 2,
+      "items": 3,
+      "path": "digest/2026/08/20/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 2,
+      "items": 0,
+      "path": "digest/2026/08/20/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 2,
+      "items": 0,
+      "path": "machine/2026-08.csv",
+      "root": "public"
+    },
+    {
+      "bytes": 2,
+      "items": 0,
+      "path": "telemetry/2026-08.csv",
+      "root": "public"
+    }
+  ],
+  "total_bytes": 12,
+  "total_items": 3,
+  "version": "2026-10-03T13:33"
+}

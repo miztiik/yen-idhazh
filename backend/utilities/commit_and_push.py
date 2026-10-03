@@ -33,9 +33,10 @@ rows at exit 0.
 The loop is bounded by a wall clock rather than by a count, and prints what each
 attempt spent, split six ways.
 
-It reads the committed retry configuration and imports nothing from `idhazh`,
-so it runs from a checkout whose install step never ran. This is what commits
-when a producer has already finished or already failed.
+It reads the committed retry configuration. Its ordinary retry path does not
+need `idhazh`; a push retry for a commit that changed publication inventory
+loads the existing writer to capture the named changes for possible replay.
+This is what commits when a producer has already finished or already failed.
 
 Usage: `python backend/utilities/commit_and_push.py <path>...`
 
@@ -82,11 +83,14 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from utilities.push_retry import DEFAULT_CONFIG, PushRetry, load_retry
+
+if TYPE_CHECKING:
+    from utilities.publication_conflict import PublicationDelta
 
 #: The one identity this repository commits under (CLAUDE.md section 8). A
 #: machine account in the author field tells a reader nothing the commit message
@@ -98,6 +102,9 @@ COMMITTER_EMAIL: Final = "miztiik@users.noreply.github.com"
 #: of several non-Latin digit sets, so a shard that parsed one of those would
 #: be a number no reader of the workflow can see.
 WHOLE_NUMBER: Final = re.compile(r"^[0-9]+$")
+
+# The published inventory's fixed repository path.
+PUBLICATION_INVENTORY_PATH: Final = "frontend/public/publication.json"
 
 
 def _say(message: str) -> None:
@@ -350,7 +357,62 @@ def _keep_what_origin_has(tip: str, path: str) -> bool:
     return _git("--literal-pathspecs", "checkout", tip, "--", path).returncode == 0
 
 
-def _resolve_what_this_job_owns(tip: str, identity: str) -> bool:
+def _capture_publication_delta() -> PublicationDelta | None:
+    """Capture this commit's named inventory changes before a rebase can replace it."""
+    changed = _git(
+        "diff-tree",
+        "--no-commit-id",
+        "--name-only",
+        "-r",
+        "HEAD",
+        "--",
+        PUBLICATION_INVENTORY_PATH,
+        capture=True,
+    )
+    if changed.returncode != 0:
+        raise RuntimeError("git could not check whether this commit changed publication.json")
+    if PUBLICATION_INVENTORY_PATH not in _lines(changed):
+        return None
+    from utilities.publication_conflict import capture_publication_delta
+
+    previous = _git("show", f"HEAD^:{PUBLICATION_INVENTORY_PATH}", capture=True)
+    current = _git("show", f"HEAD:{PUBLICATION_INVENTORY_PATH}", capture=True)
+    if previous.returncode != 0 or current.returncode != 0:
+        raise RuntimeError("this commit or its parent has no readable publication.json")
+    return capture_publication_delta(previous.stdout, current.stdout)
+
+
+def _replay_publication_inventory(
+    tip: str, delta: PublicationDelta | None
+) -> bool:
+    """Restore the tip's inventory, then remeasure only this run's named files."""
+    if delta is None:
+        _warn("publication.json conflicted without a captured named inventory update")
+        return False
+    if not _keep_what_origin_has(tip, PUBLICATION_INVENTORY_PATH):
+        _warn("could not restore origin's publication.json before updating it")
+        return False
+    try:
+        from utilities.publication_conflict import replay_publication_delta
+
+        replay_publication_delta(
+            Path.cwd() / "frontend" / "public",
+            Path.cwd() / "state",
+            delta,
+        )
+    except (ImportError, OSError, ValueError) as error:
+        _warn(f"could not replay this run's named publication changes: {error}")
+        return False
+    if _git("add", "--", PUBLICATION_INVENTORY_PATH).returncode != 0:
+        _warn("could not stage the rebuilt publication.json")
+        return False
+    _say("rebuilt publication.json from origin and this run's named files")
+    return True
+
+
+def _resolve_what_this_job_owns(
+    tip: str, identity: str, publication_delta: PublicationDelta | None
+) -> bool:
     """Settle every conflicted path this job wrote, and stop the push on every other one.
 
     A conflicted filename that carries this job's identity is this job's own
@@ -378,6 +440,10 @@ def _resolve_what_this_job_owns(tip: str, identity: str) -> bool:
         _warn("the rebase stopped with no conflicted path to settle")
         return False
     for path in conflicted:
+        if path == PUBLICATION_INVENTORY_PATH:
+            if not _replay_publication_inventory(tip, publication_delta):
+                return False
+            continue
         if not _this_job_wrote(path, identity):
             _warn("a conflicted path this job did not write stops the push:")
             _warn(f"  path: {path}")
@@ -609,6 +675,8 @@ def main(argv: Sequence[str]) -> int:
     _say(f"this job's files are named for {identity}")
 
     rebased = False
+    publication_delta: PublicationDelta | None = None
+    publication_delta_captured = False
     prepared_paths = _prepare_outputs(prepare, prepared_paths_file)
     # `all` over a generator stops at the first failure, which is what `set -e`
     # did for these three. A `git add` that failed and was not read would reach
@@ -663,6 +731,13 @@ def main(argv: Sequence[str]) -> int:
             return 0
         _say_what_this_attempt_spent(attempt, "rejected", stamps)
         _say(f"push rejected, rebasing (attempt {attempt})")
+        if not publication_delta_captured:
+            try:
+                publication_delta = _capture_publication_delta()
+            except (ImportError, OSError, RuntimeError, ValueError) as error:
+                _warn(f"could not capture this run's publication changes: {error}")
+                break
+            publication_delta_captured = True
         # Set before the rebase rather than after it. Every path out of here has
         # either rewritten the checkout or is about to, and a later step that
         # skipped its rebuild on a maybe is the failure this output exists to
@@ -730,7 +805,9 @@ def main(argv: Sequence[str]) -> int:
         # off, losing nothing.
         replayed = _git("-c", "merge.directoryRenames=false", "rebase", "FETCH_HEAD")
         if replayed.returncode != 0:
-            settled = _resolve_what_this_job_owns("FETCH_HEAD", identity) and (
+            settled = _resolve_what_this_job_owns(
+                "FETCH_HEAD", identity, publication_delta
+            ) and (
                 _git(
                     "-c",
                     "merge.directoryRenames=false",

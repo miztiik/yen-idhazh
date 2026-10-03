@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import re
 import shlex
+import subprocess
 import sys
 from pathlib import Path
 from typing import Final
@@ -347,6 +348,23 @@ def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
     assert COMMIT_PROGRAM.is_file()
     retry_program = COMMIT_PROGRAM.with_name("push_retry.py")
     assert retry_program.is_file()
+    source_tree = ast.parse(read_text(COMMIT_PROGRAM))
+    inventory_imports = [
+        node for node in ast.walk(source_tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "utilities.publication_conflict"
+    ]
+    allowed_scopes = [
+        node for node in source_tree.body
+        if (isinstance(node, ast.FunctionDef) and node.name in {
+            "_capture_publication_delta", "_replay_publication_inventory"
+        }) or (isinstance(node, ast.If) and isinstance(node.test, ast.Name)
+               and node.test.id == "TYPE_CHECKING")
+    ]
+    assert inventory_imports
+    assert all(
+        any(node in ast.walk(scope) for scope in allowed_scopes)
+        for node in inventory_imports
+    ), "inventory dependencies must load only for inventory replay or type checking"
     roots = {
         (node.module or "").split(".")[0]
         if isinstance(node, ast.ImportFrom)
@@ -357,12 +375,18 @@ def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
         if not (
             program == COMMIT_PROGRAM
             and isinstance(node, ast.ImportFrom)
-            and node.module == "utilities.push_retry"
+            and node.module in {"utilities.push_retry", "utilities.publication_conflict"}
         )
     }
     assert roots, "no import was read, so this test would pass on nothing"
     outside = roots - set(sys.stdlib_module_names) - {"__future__"}
     assert not outside, f"the commit program must run on a bare checkout, but imports {outside}"
+    bare = subprocess.run(
+        [sys.executable, "-S", str(COMMIT_PROGRAM)],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+    )
+    assert bare.returncode == 2, bare.stderr
+    assert "ModuleNotFoundError" not in bare.stderr, bare.stderr
 
     for job_name in COMMIT_STEPS:
         staged_paths, settings = _commit_call(job_name)

@@ -14,7 +14,7 @@
     "build:canary": "node scripts/build-canary.mjs",
     "test:logic": "playwright test --config playwright.logic.config.ts",
     "check:tooling": "tsc --noEmit --strict --skipLibCheck --target es2022 --module nodenext --allowImportingTsExtensions --types node scripts/run-checks.ts scripts/verified-preview.ts",
-    "test:tooling": "npm run check:tooling && node --test scripts/tests/*.test.mjs",
+    "test:tooling": "npm run check:tooling && node --test scripts/tests/build-state.test.mjs scripts/tests/canary-inventory.test.mjs scripts/tests/duckdb-addon.test.mjs scripts/tests/query-engine-assets.test.mjs scripts/tests/run-checks.test.mjs scripts/tests/test-results.test.mjs scripts/tests/test-scope.test.mjs",
     "test:changed": "node scripts/run-checks.ts",
     "test:browser": "playwright test",
     "test:whole-day": "playwright test --config playwright.whole-day.config.ts"
