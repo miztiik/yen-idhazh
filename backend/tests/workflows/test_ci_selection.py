@@ -114,7 +114,9 @@ def test_the_selector_tests_use_the_same_node_as_the_ci_selector() -> None:
         assert isinstance(settings, dict)
         versions[job] = settings.get("node-version")
         if job == "gates":
-            test_step = next(step for step in steps if step.get("run") == "pytest")
+            test_step = _step(
+                workflow, "gates", "name", "Tests, including the five injection canaries"
+            )
             assert steps.index(node_steps[0]) < steps.index(test_step)
     assert versions["scope"] is not None
     assert versions["gates"] == versions["scope"]
