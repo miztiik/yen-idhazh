@@ -67,9 +67,14 @@ def _after(year: str) -> str:
 def _ready(tree: CompactTree, year: str, *, now: datetime, after_days: int) -> bool:
     """Whether a year is done: old enough, and every month of it absorbed."""
     return (
-        schedule.is_year_eligible(year, now=now, after_days=after_days)
+        (tree.months is None or set(months_of(year)).issubset(tree.months))
+        and schedule.is_year_eligible(year, now=now, after_days=after_days)
         and tree.monthly_through is not None
-        and tree.monthly_through > f"{year}-12"
+        and (
+            tree.monthly_through >= f"{year}-12"
+            if tree.months is not None
+            else tree.monthly_through > f"{year}-12"
+        )
     )
 
 
@@ -195,6 +200,37 @@ def absorb(
         year = first[:4]
     else:
         return ()
+    if tree.months is not None:
+        candidates = [
+            named
+            for named in sorted({month[:4] for month in tree.months})
+            if set(months_of(named)).issubset(tree.months)
+            and (
+                tree.yearly_through is None
+                or named > tree.yearly_through
+                or any(month.startswith(f"{named}-") for month in tree.monthly)
+            )
+        ]
+        if not candidates:
+            return ()
+        year = candidates[0]
+        pending = sorted(
+            {
+                month[:4]
+                for month in tree.monthly
+                if month[:4] < year
+                and month[:4] not in tree.yearly
+                and (tree.yearly_through is None or month[:4] > tree.yearly_through)
+            }
+        )
+        if pending:
+            return _refused(
+                tree,
+                year,
+                f"name all months of pending years before advancing the watermark: {pending}",
+            )
+        held = sorted(month for month in tree.monthly if month.startswith(f"{year}-"))
+        first = held[0] if held else None
     ready: list[str] = []
     ahead = year
     while len(ready) < policy.max_periods_per_run and _ready(
@@ -215,8 +251,10 @@ def absorb(
             stops = _pack(tree, year, months_of(year, first=first), identity=identity)
         if stops:
             return stops
-        tree.yearly_through = year
-        tree.write_watermark(Period.YEARLY, through=year, advanced_at=stamp, run_id=identity.run_id)
+        tree.yearly_through = max(year, tree.yearly_through or year)
+        tree.write_watermark(
+            Period.YEARLY, through=tree.yearly_through, advanced_at=stamp, run_id=identity.run_id
+        )
         taken += 1
         year, first = _after(year), None
     return ()

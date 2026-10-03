@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Final
 from xml.etree import ElementTree
 
-from utilities.mark_census import REPO_ROOT, module_marks, modules
+from utilities.mark_census import REPO_ROOT, module_marks
 
 CONFIG_PATH: Final = REPO_ROOT / "config" / "test-marks.json"
 
@@ -72,6 +72,24 @@ def _module_for_classname(classname: str, dotted_to_stem: dict[str, str]) -> str
     return None
 
 
+def report_modules(junit_path: Path, *, repo_root: Path = REPO_ROOT) -> list[Path]:
+    """Name source files from one report, without discovering neighbouring tests."""
+    found: set[Path] = set()
+    for testcase in ElementTree.parse(junit_path).getroot().iter("testcase"):
+        parts = testcase.get("classname", "").split(".")
+        positions = [index for index, part in enumerate(parts) if part.startswith("test_")]
+        if not positions:
+            continue
+        # Class names follow the module. Only a test_* component names its file.
+        end = positions[-1]
+        if any(not part.isidentifier() for part in parts[: end + 1]):
+            raise ValueError("JUnit classname contains an invalid module name")
+        found.add(repo_root.joinpath(*parts[: end + 1]).with_suffix(".py"))
+    if not found:
+        raise ValueError("JUnit report names no test modules")
+    return sorted(found)
+
+
 def average_seconds_by_module(
     junit_path: Path,
     *,
@@ -85,11 +103,13 @@ def average_seconds_by_module(
     this JUnit report never ran (because the run was scoped, or the module
     collects nothing) is simply absent from the result - this never guesses.
 
-    `known_modules` defaults to a fresh walk of `backend/tests`; a test passes
-    a small fixed list instead, so it never depends on the repository's own
-    test tree to stay a fixed size.
+    `known_modules` defaults to source paths named in this JUnit report.
     """
-    known = known_modules if known_modules is not None else modules()
+    known = (
+        known_modules
+        if known_modules is not None
+        else report_modules(junit_path, repo_root=repo_root)
+    )
     dotted_to_stem = {_dotted_module_path(path, repo_root): path.stem for path in known}
 
     totals: dict[str, float] = defaultdict(float)
@@ -108,13 +128,13 @@ def average_seconds_by_module(
     return {stem: totals[stem] / counts[stem] for stem in counts}
 
 
-def slow_marked_module_stems() -> frozenset[str]:
-    """Every test module stem whose `pytestmark` carries `slow` today."""
-    return frozenset(path.stem for path in modules() if "slow" in module_marks(path))
+def slow_marked_module_stems(named: list[Path]) -> frozenset[str]:
+    """Only reported test modules whose source carries `slow`."""
+    return frozenset(path.stem for path in named if "slow" in module_marks(path))
 
 
 def disagreements(
-    averages: dict[str, float], threshold: float, *, marked: frozenset[str] | None = None
+    averages: dict[str, float], threshold: float, *, marked: frozenset[str]
 ) -> tuple[list[tuple[str, float]], list[tuple[str, float]]]:
     """Modules the mark and the measurement disagree about, both ways.
 
@@ -123,10 +143,8 @@ def disagreements(
     measured at or under it. Both lists are sorted by stem and only cover
     modules this report actually measured.
 
-    `marked` defaults to a fresh read of `backend/tests`; a test passes a
-    small fixed set instead.
+    `marked` is the set found in the report's named source files.
     """
-    marked = marked if marked is not None else slow_marked_module_stems()
     should_be_marked = sorted(
         (stem, avg) for stem, avg in averages.items() if avg > threshold and stem not in marked
     )
@@ -160,8 +178,11 @@ def main(argv: list[str] | None = None) -> int:
 
     threshold = slow_threshold_seconds(args.config)
     averages = average_seconds_by_module(args.junit_xml)
-    unmeasured = {path.stem for path in modules()} - averages.keys()
-    should_be_marked, should_not_be_marked = disagreements(averages, threshold)
+    named = report_modules(args.junit_xml)
+    unmeasured = {path.stem for path in named} - averages.keys()
+    should_be_marked, should_not_be_marked = disagreements(
+        averages, threshold, marked=slow_marked_module_stems(named)
+    )
 
     print(f"threshold: {threshold:g}s (from {args.config.as_posix()})")
     print(_format_section("measured over the threshold but not marked slow", should_be_marked))
