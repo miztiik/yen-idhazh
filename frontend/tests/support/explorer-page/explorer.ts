@@ -11,7 +11,7 @@ declare global {
 
 const keeper = pageKeeper(
 	fetchedBytes(__ASSET_BASE_URL__, (url, init) => fetch(url, init)),
-	() => import('../../../src/lib/data/engine').then((engine) => engine.browserEngine(__ENGINE_EXTENSION_REPOSITORY__))
+	() => import('../../../src/lib/data/engine').then((engine) => engine.browserEngine(new URL('/ext', location.href).href))
 );
 
 window.explorerAsk = (options) => readAsk(keeper, options, {});

@@ -70,8 +70,9 @@ def _first_descent(values: list[str]) -> tuple[str, str] | None:
 class RawDayIndex(Contract):
     """Which raw files exist for one day of one ledger.
 
-    Written when the compaction takes that day, and again only if a re-run's
-    raw files make it take the day again.
+    Written when the compaction takes that day, and staged by the site build for
+    days not packed yet. A compaction listing may omit `bytes`; a staged listing
+    carries it so the browser can price the files before it fetches them.
     """
 
     __schema_stem__: ClassVar[str] = "raw-day-index"
@@ -128,8 +129,8 @@ class RawDayIndex(Contract):
     )
     listed_at: Timestamp = Field(
         description=(
-            "When the compaction task last listed the day's directory, UTC, to the whole "
-            "second: the moment this index last agreed with the tree."
+            "When the compaction task or site build last listed the day's directory, UTC, "
+            "to the whole second: the moment this index last agreed with the tree."
         )
     )
 

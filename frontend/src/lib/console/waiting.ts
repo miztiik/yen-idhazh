@@ -22,6 +22,7 @@
  */
 import { MONTHS } from '$lib/format';
 import { megabytes } from '$lib/assist/session';
+import type { AskRefusal } from '$lib/data/slice-shapes';
 import { grouped } from '$lib/charts/series';
 import { monthsInWindow, type TimeWindow } from '$lib/charts/viewport';
 
@@ -37,12 +38,6 @@ export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachabl
  */
 export type ChartState = PanelState | 'too-few';
 
-type AskRefusal =
-	| { kind: 'statements'; count: number }
-	| { kind: 'not-read-only'; word: string }
-	| { kind: 'too-long'; chars: number; max: number }
-	| { kind: 'over-ceiling'; bytes: number; files: number; max: number }
-	| { kind: 'engine-error'; message: string };
 
 /** What became of one month file the open window reaches into. */
 export type MonthState = 'held' | 'loading' | 'missing' | 'unreachable';

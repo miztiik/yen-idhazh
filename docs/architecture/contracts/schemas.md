@@ -516,6 +516,8 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 | Keep the generator for the six names the frontend uses | A generator that runs over one contract is a generator, with its command, its gate and its regenerated diff. Six names are a copy and three tests. | Fowler |
 | Delete only the 61 schemas nothing imports | The count is a fact about one day. The next contract adds a sixty-seventh and the generator still runs in full. | Fowler |
 
+`RawDayIndex` also has a frontend hand copy in `frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so older compaction listings still validate; the frontend copy requires it because the site build fills it before a browser can price writer files.
+
 ## See also
 
 - [determinism.md](determinism.md) - what a run records about its own inputs, and the one alarm built on it.
@@ -530,5 +532,3 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, which is deliberately not one of these shapes.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - the eval ledger row.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3, section 1a, section 4, section 11.
-
-`RawDayIndex` also has a frontend hand copy in `frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so older compaction listings still validate; the frontend copy requires it because the site build fills it before a browser can price writer files.

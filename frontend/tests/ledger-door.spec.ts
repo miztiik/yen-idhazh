@@ -13,7 +13,7 @@ import { readReach } from '../src/lib/data/ledger-reach';
 import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper, type WantedFile } from '../src/lib/data/page-keeper';
 import { daysBetween, filesFor, newestNamed } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
-import { dataPath, indexPath, readSlice } from '../src/lib/data/slice-reader';
+import { dataPath, indexPath, rawIndexPath, readSlice } from '../src/lib/data/slice-reader';
 import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository } from '../src/lib/server/config';
 import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
@@ -1269,6 +1269,38 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		const [one, two] = await Promise.all([readAsk(page, opts, {}), readAsk(page, opts, {})]);
 		expect(one.state).toBe('ok');
 		expect(two.state).toBe('ok');
+	});
+
+
+	test('empty published ledger is missing, and broken coarser indexes are unreachable', async () => {
+		const empty = { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'daily', entries: [] };
+		const missing = await readAsk(freshPage(recorded({
+			[DAILY_INDEX]: { status: 200, body: encoded(empty) },
+			[MONTHLY_INDEX]: { status: 200, body: encoded({ ...empty, period: 'monthly' }) },
+			[YEARLY_INDEX]: { status: 200, body: encoded({ ...empty, period: 'yearly' }) }
+		}).fetcher), { ...opts, ledgers: ['host-fingerprint', 'item-health'] }, {});
+		expect(missing).toEqual({ state: 'missing', ledger: 'host-fingerprint' });
+
+		const absent = await readAsk(freshPage(recorded({ [MONTHLY_INDEX]: { status: 404 } }).fetcher), opts, {});
+		expect(absent).toMatchObject({ state: 'unreachable', ledger: 'host-fingerprint', at: '2026-09-01', fault: 'index-missing' });
+		const refused = await readAsk(freshPage(recorded({ [MONTHLY_INDEX]: reshaped({ version: '2099-01-01' }) }).fetcher), opts, {});
+		expect(refused).toMatchObject({ state: 'unreachable', ledger: 'host-fingerprint', at: '2026-09-01', fault: 'index-missing' });
+	});
+
+	test('a raw listing naming a non-parquet file is unreachable at its day', async () => {
+		const listing = decoded(readFileSync(path.join(STATE, 'raw', 'item-health', 'index', '2026-09-06.json')));
+		const bad: Record<string, unknown> = { ...listing, files: ['00000000-0000-8000-8000-000000000001.json'] };
+		bad.content_sha256 = '0'.repeat(64);
+		const answer = await readAsk(freshPage(recorded({ [rawIndexPath('item-health', '2026-09-06')]: { status: 200, body: encoded(bad) } }).fetcher), {
+			ledgers: ['item-health'],
+			from: '2026-09-06',
+			to: '2026-09-06',
+			sql: 'SELECT count(*) AS rows FROM "item-health"',
+			maxChars: 100,
+			maxRows: 10,
+			maxFetchBytes: 100_000_000
+		}, { 'item-health': '2026-09-06' });
+		expect(answer).toEqual({ state: 'unreachable', ledger: 'item-health', at: '2026-09-06', fault: 'index-missing' });
 	});
 
 	test('a bad statement is refused before the engine starts', async () => {

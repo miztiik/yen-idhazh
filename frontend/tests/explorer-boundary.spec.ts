@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
 import svelteConfig from '../svelte.config.js';
 import { engineExtensionRepository } from '../src/lib/server/config';
-import { startRangeHost, type RangeHost } from './support/range-host';
+import { addonCache, startRangeHost, type RangeHost } from './support/range-host';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '..', '..');
@@ -48,7 +48,6 @@ async function buildPage(): Promise<void> {
 		resolve: { alias: { '$app/paths': path.join(pageSource, 'paths.ts') } },
 		define: {
 			__ASSET_BASE_URL__: JSON.stringify('/root'),
-			__ENGINE_EXTENSION_REPOSITORY__: JSON.stringify(engineExtensionRepository()),
 			__RAW_LISTED_THROUGH__: JSON.stringify({})
 		},
 		build: { outDir: pageBuild, emptyOutDir: true, target: 'es2022', assetsInlineLimit: 0, reportCompressedSize: false }
@@ -108,7 +107,7 @@ test.describe('explorer boundary', () => {
 	test.beforeAll(async () => {
 		rmSync(work, { recursive: true, force: true });
 		await buildPage();
-		host = await startRangeHost({ site: pageBuild, plain: {}, data: { root: { dir: fixture } }, maxAge: 600 });
+		host = await startRangeHost({ site: pageBuild, plain: { ext: addonCache(engineExtensionRepository()) }, data: { root: { dir: fixture } }, maxAge: 600 });
 	});
 
 	test.afterAll(async () => {
@@ -130,10 +129,9 @@ test.describe('explorer boundary', () => {
 			maxRows: 10,
 			maxFetchBytes: 100000000
 		}));
-		await page.waitForTimeout(200);
 		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
+		await expect.poll(() => workerLog.join('\n')).toContain('connect-src');
 		const text = workerLog.join('\n');
-		expect(text).toContain('connect-src');
 		expect(text).toContain('https://example.invalid/x.csv');
 		expect(external.length).toBeGreaterThan(0);
 		expect(external.every((request) => request.failed === 'csp')).toBe(true);

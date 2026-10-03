@@ -235,6 +235,8 @@ CLAUDE.md section 11 does not apply to this file. It is a config file this proje
 
 **`Grain` is transitional and its declaring line says so.** [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) requires every tree under `state/` to reach one pattern, and `raw-and-compact` is that pattern, so the other five grains describe the mess that page exists to remove. They are recorded because all five really are on disk: the registry is an honest map of today, and it is the seam a migration edits one entry at a time.
 
+`test_every_ledger_the_door_may_query_is_a_ledger` holds `LEDGER_NAMES` in `frontend/src/lib/data/slice-shapes.ts` equal to this registry, so a new registry member joins the browser door vocabulary in the same change.
+
 ## See also
 
 - [state-ledgers.md](state-ledgers.md) - what each ledger answers, and why it files at the grain it does.
@@ -245,5 +247,3 @@ CLAUDE.md section 11 does not apply to this file. It is a config file this proje
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection costs, which is why no walk over `state/` decides which ledgers exist.
 - [../../concepts/glossary.md](../../concepts/glossary.md) - family and ledger, each in one line.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #12, sections 2, 4, 8 and 11.
-
-A new `LedgerName` member also joins `LEDGER_NAMES` in `frontend/src/lib/data/slice-shapes.ts`; `test_every_ledger_the_door_may_query_is_a_ledger` holds the two sets equal.

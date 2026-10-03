@@ -9,6 +9,8 @@ import {
 	dataVersion,
 	rawDataPath,
 	rawIndexPath,
+	explainRefusal,
+	faultLine,
 	readIndexFrom,
 	RANGED_PERIODS
 } from './slice-reader';
@@ -29,7 +31,7 @@ import {
 export type RawListedThrough = Readonly<Partial<Record<LedgerName, DateStamp>>>;
 
 type Indexes = { daily: CompactEntry[]; monthly: CompactEntry[]; yearly: CompactEntry[] };
-type FileMeta = { ledger: LedgerName; day: DateStamp | null; countsInSpan: boolean };
+type FileMeta = { ledger: LedgerName; day: DateStamp | null };
 type LedgerPlan = {
 	ledger: LedgerName;
 	through: DateStamp | null;
@@ -94,6 +96,9 @@ async function rawListing(
 	}
 	const read = readRawDayIndex(parsed, ledger, day);
 	if ('refused' in read) return { state: 'unreachable', ledger, at: day, fault: 'index-missing' };
+	if (read.index.files.some((file) => !file.endsWith('.parquet'))) {
+		return { state: 'unreachable', ledger, at: day, fault: 'index-missing' };
+	}
 
 	return {
 		files: read.index.files.map((file, at) => ({
@@ -102,21 +107,36 @@ async function rawListing(
 			bytes: read.index.bytes[at] ?? 0,
 			byRange: false
 		})),
-		metas: read.index.files.map(() => ({ ledger, day, countsInSpan: true }))
+		metas: read.index.files.map(() => ({ ledger, day }))
 	};
 }
 
 async function compactIndexes(keeper: PageKeeper, ledger: LedgerName, from: DateStamp): Promise<Indexes | AskResult> {
 	const daily = await readIndexFrom(keeper, ledger, 'daily');
 	if (daily === null) return { state: 'missing', ledger };
-	if ('refused' in daily) return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+	if ('refused' in daily) {
+		keeper.warn(`${faultLine(ledger, { fault: 'index-missing', period: 'monthly' }).replace('monthly.json', 'daily.json')} ${explainRefusal('daily', daily.refused)}`);
+		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+	}
 	const monthly = await readIndexFrom(keeper, ledger, 'monthly');
+	if (monthly === null) {
+		keeper.warn(faultLine(ledger, { fault: 'index-missing', period: 'monthly' }));
+		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+	}
+	if ('refused' in monthly) {
+		keeper.warn(`${faultLine(ledger, { fault: 'index-missing', period: 'monthly' })} ${explainRefusal('monthly', monthly.refused)}`);
+		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+	}
 	const yearly = await readIndexFrom(keeper, ledger, 'yearly');
-	return {
-		daily: daily.index.entries,
-		monthly: monthly !== null && 'index' in monthly ? monthly.index.entries : [],
-		yearly: yearly !== null && 'index' in yearly ? yearly.index.entries : []
-	};
+	if (yearly === null) {
+		keeper.warn(faultLine(ledger, { fault: 'index-missing', period: 'yearly' }));
+		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+	}
+	if ('refused' in yearly) {
+		keeper.warn(`${faultLine(ledger, { fault: 'index-missing', period: 'yearly' })} ${explainRefusal('yearly', yearly.refused)}`);
+		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+	}
+	return { daily: daily.index.entries, monthly: monthly.index.entries, yearly: yearly.index.entries };
 }
 
 function compactSelection(
@@ -138,7 +158,7 @@ function compactSelection(
 		files: selection.files.filter((file) => file.entry.rows > 0).map((file) => wanted(file.period, ledger, file)),
 		metas: selection.files
 			.filter((file) => file.entry.rows > 0)
-			.map((file) => ({ ledger, day: file.firstDay, countsInSpan: true }))
+			.map((file) => ({ ledger, day: file.firstDay }))
 	};
 }
 
@@ -151,11 +171,11 @@ async function filesForDay(
 ): Promise<{ files: WantedFile[]; metas: FileMeta[] }> {
 	if ((rawListed[ledger] ?? '') >= day) {
 		const raw = await rawListing(keeper, ledger, day);
-		if (!('state' in raw)) return { files: raw.files, metas: raw.metas.map((one) => ({ ...one, countsInSpan: false })) };
+		if (!('state' in raw)) return { files: raw.files, metas: raw.metas.map((one) => ({ ...one })) };
 	}
 	const compact = compactSelection(ledger, day, day, indexes);
 	if ('state' in compact) return { files: [], metas: [] };
-	return { files: compact.files, metas: compact.metas.map((one) => ({ ...one, countsInSpan: false })) };
+	return { files: compact.files, metas: compact.metas.map((one) => ({ ...one })) };
 }
 
 async function planLedger(
@@ -228,6 +248,8 @@ async function plan(
 	const ledgersPlanned = await Promise.all(chosen.map((ledger) => planLedger(keeper, ledger, from, to, rawListed)));
 	const failed = ledgersPlanned.find((one) => one.unreachable !== null);
 	if (failed?.unreachable) return failed.unreachable;
+	const noDays = ledgersPlanned.find((one) => one.through === null);
+	if (noDays) return { state: 'missing', ledger: noDays.ledger };
 	const files = ledgersPlanned.flatMap((one) => one.files);
 	const metas = ledgersPlanned.flatMap((one) => one.metas);
 	return {

@@ -18,7 +18,7 @@ A move is complete only when every applicable part below holds.
 | Door table | `backend/idhazh/ledger/keys.py` declares the ledger, and neither legacy tree table names it. | The registry and door-shape tests in `backend/tests/ledger/` |
 | Writers | Every writer uses `ledger.persist` with its writer identity. Each workflow command that writes passes `--commit`. | `backend/tests/workflows/test_ledger_door_jobs.py` |
 | Backend readers | Each reader uses the door and keeps its existing answer. | The ledger's row tests |
-| Console readers | If a page reads the ledger, it uses the packed data and lists the ledger in `LEDGER_NAMES`. | `backend/tests/contracts/test_frontend_index_shapes.py` |
+| Console readers | Every declared ledger is already in `LEDGER_NAMES`; a page may read one once `ledger.published` names it. | `backend/tests/contracts/test_frontend_index_shapes.py` |
 | Compaction | `config/gardener/compact-<ledger>.json` declares the ledger's periods and windows. | `config.load_gardener()` and the compaction tests |
 | Migration | Every CSV day in `state/` and each named trial root reads back cell for cell before any CSV is deleted. | `backend/tests/ledger/test_migrate_to_parquet.py` and `--check` |
 | Retention | The old retention declaration, task and tests are removed when they no longer have a reader. | The retention and contract tests |
@@ -55,5 +55,3 @@ After the merge, run `--check` again over `state/` and every trial root in the n
 - [Ship a pull request](ship-a-pr.md) - branch, commit and review steps.
 - [Documentation structure](../reference/documentation-structure.md) - where current rules belong.
 - [CLAUDE.md](../../CLAUDE.md) - sections 2, 8, 9, 11 and 13.
-
-Every ledger `config/ledgers.json` declares is already in `LEDGER_NAMES`; a page may read one once `ledger.published` names it.
