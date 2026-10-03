@@ -13,12 +13,12 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-chart-lifetime', 'console-chart-pending', 'console-charts-rule',
 		'console-chrome', 'console-cold-load', 'console-compression', 'console-coverage',
 		'console-disk-reads', 'console-doubt', 'console-extraction', 'console-failure',
-		'console-failures', 'console-flow', 'console-frame', 'console-host-spans',
+		'console-failures', 'console-flow', 'console-frame',
 		'console-item-cost', 'console-judgement-agreement', 'console-judgement-holdout',
 		'console-judgement-line', 'console-judgement-merges', 'console-judgement-verdict',
-		'console-machine-cards', 'console-machine-data', 'console-machine-page',
-		'console-machine-panels', 'console-machine-reuse', 'console-machine-split',
-		'console-machine', 'console-mark-parity', 'console-memory-board',
+		'console-machine-data', 'console-machine-page',
+		'console-machine-panels', 'console-machine-reuse',
+		'console-mark-parity', 'console-memory-board',
 		'console-memory-held', 'console-model-instruments', 'console-model-panels',
 		'console-model-reasons', 'console-model-rule', 'console-model', 'console-nav',
 		'console-pipeline-timeline', 'console-polarity', 'console-processor-lost',
@@ -30,7 +30,8 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-voices-sources', 'console-voices', 'console-window-claims', 'console-window'
 	],
 	logic: [
-		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
+		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
+		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
 		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
@@ -41,14 +42,14 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'run-axis', 'run-yield',
 		'settings-moved', 'statement', 'raw-listed-through',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',
-		'verdict-split', 'vocabulary',
+		'tokens', 'verdict-split', 'vocabulary',
 		'weights'
 	],
 	reader: [
 		'dated-day', 'day-states', 'filter-bar', 'footer-facts', 'item-card', 'item-meta',
 		'item-time', 'item-visual', 'item-zones', 'layout', 'leading-stories',
 		'lenses', 'manifest', 'payload-state', 'reading-page', 'readstate', 'source-mark',
-		'theme', 'tokens', 'topic-day', 'topics', 'whole-day'
+		'theme', 'topic-day', 'topics', 'whole-day'
 	],
 	// Alone, because it rewrites the kill switch the whole served site shares and
 	// `reading-page` installs the worker that reads it. See `playwright.config.ts`.
@@ -67,10 +68,10 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 
 export function groupForSpec(filename: string): FrontendGroup | undefined {
 	const name = basename(filename).replace(/\.spec\.ts$/, '');
-	if (/^console(?:-|$)/.test(name)) return 'console';
 	for (const [group, names] of Object.entries(FILES)) {
 		if (names.includes(name)) return group as FrontendGroup;
 	}
+	if (/^console(?:-|$)/.test(name)) return 'console';
 	return undefined;
 }
 
