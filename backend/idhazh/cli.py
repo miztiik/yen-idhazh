@@ -464,6 +464,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--day",
+        dest="backfill_days",
+        action="append",
+        default=[],
+        help="One YYYY-MM-DD UTC day to inspect; repeat to name more days.",
+    )
+    parser.add_argument(
         "--digest-root",
         type=Path,
         default=common.PUBLIC_ROOT,
@@ -718,13 +725,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return qualify_canaries.stage_qualify_canaries(settings=settings, date=date)
 
     if args.stage == "backfill-vectors":
-        # `--date` names the day this treats as still open, and it is clamped to
-        # today so a future date cannot bring the live day into scope. The live
-        # day is the one the scheduled pipeline is appending to.
         return backfill_vectors.stage_backfill_vectors(
             root=common.PUBLIC_ROOT,
             index_root=assemble_stage._index_root(),
             today=min(date, _today()),
+            dates=args.backfill_days,
             embedder=Embedder(config.REPO_ROOT, settings.app.assist),
         )
 

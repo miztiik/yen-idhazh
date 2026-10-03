@@ -357,13 +357,14 @@ def opened(tmp_path: Path) -> Iterator[list[str]]:
 
 
 def _publish_all(state: Path, digest: Path, *, months: set[str] | None) -> None:
+    selected = set(MONTHS) if months is None else months
     machine.publish(
-        state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
+        state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=selected
     )
     day_metrics.publish_public(
-        state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
+        state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=selected
     )
-    run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months=months)
+    run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months=selected)
 
 
 def _month_read(path: str) -> str | None:
