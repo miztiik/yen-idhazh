@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { PAGES_CAP_BYTES, siteCost, siteRunway } from '../src/lib/charts/glance';
 import type { RunSummary } from '../src/lib/server/payload';
+import { dayReady } from './support/day-ready';
 
 /**
  * The band's remaining-room figure, and the unit it is allowed to be in.
@@ -470,14 +471,27 @@ test('THE ORACLE: the band is the first payload the console asks for', async ({ 
 	// is the entry this measures.
 	await page.goto('/');
 	await expect(page.locator('body')).toBeVisible();
+	await dayReady(page);
 	issued.length = 0;
+
+	// Keep the old reader visible while the destination's real response waits.
+	// Scrolling then must not start a chart ahead of the console band.
+	await page.route(`**${ROUTE_DATA}*`, async (route) => {
+		await page.evaluate(async () => {
+			window.scrollTo(0, document.documentElement.scrollHeight);
+			await new Promise<void>((done) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => done()))
+			);
+		});
+		await route.continue();
+	});
 
 	await page.evaluate(() => {
 		const link = document.createElement('a');
 		link.href = '/console/';
 		link.id = 'oracle-console-entry';
 		link.textContent = 'console';
-		document.body.append(link);
+		document.body.prepend(link);
 	});
 	await page.click('#oracle-console-entry');
 	await hydrated(page);
