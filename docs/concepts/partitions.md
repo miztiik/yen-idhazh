@@ -218,59 +218,14 @@ Authority: Fowler, 2026-09-22.
 
 ## How a collection changes grain
 
-**One utility moves a ledger to a finer grain, and it refuses to write a tree it
-cannot read back.** `backend/utilities/migrate_to_day_shards.py` takes
-`--directory`, the ledger, `--shape`, the move, and `--date-column`, the cell
-that says which day a row belongs to. Each ledger's own change runs it once on
-its own directory; committing the utility migrates nothing.
+Move only named files or periods. Build their new layout in a temporary run
+directory, read it through the production reader, and compare every row by its
+UTC day before replacing the source. An invalid date stops the move. A failed
+read-back leaves the source intact. Delete a completed one-off utility and its
+tests when no current operation needs it; git keeps the cutover code.
 
-**Four shapes, because a ledger arrives at the day directory from four places.**
-`month-to-day` splits `<YYYY-MM>.csv` into `<YYYY>/<MM>/<DD>.csv`.
-`day-to-directory` turns each of those day files into a `<DD>/` directory
-holding one `before-partition.csv`. `flat-to-day-directory` does both at once
-for a ledger that was one file for the whole archive, and it names the ledger the
-file becomes, so `--directory state/x` reads
-`state/x.csv`. `traces` splits a day prefix off a trace filename
-and leaves the rest of the name alone, because a trace carries no date cell to
-file by.
-
-It builds the whole new tree in a temporary directory beside the ledger, walks it
-with the pipeline's own reader rather than a second opinion - `day_files` for a
-day-file tree, `day_shards.shard_files` for a day-directory tree,
-`telemetry.trace_date` for a trace - and compares it **row for row, keyed by
-day**, against what came out of the old heads. Keyed rather than pooled: a
-partition that filed every row under one day would pass a check over the lines
-alone. Only then does it rename the year directories into place and unlink the
-source. **A migration that writes an empty tree and unlinks its source is a
-delete with exit 0**, so the read-back is the point and the ordering is the
-guarantee. On any fault the parked years are renamed back.
-
-**A row it cannot place stops the run before a byte is written.** An empty date cell and
-a date cell that is not a date are what a real ledger eventually holds - a run
-interrupted mid-append, a header migration half applied - and a skipped row is a
-measurement that stops having happened.
-
-**A ledger holding a month shard and anything else is refused**, and that is not
-tidiness. `day_files` refuses a name it cannot place, so a month shard sitting beside a
-year directory stops every read of that ledger: a half-migrated ledger is already
-unreadable by the pipeline. A flat ledger sitting beside its own directory is
-refused for the same reason. The repair is a restore from the trunk rather than a second
-pass, because a second pass cannot know which rows the first one had already moved.
-
-**Which cell names the day.** The cell is exactly ten characters, `YYYY-MM-DD`.
-A wall-clock stamp is `<date>T<time>Z` and is refused: a stamp crosses midnight
-independently of the day its writer filed the row under, so a tree filed by one
-would disagree with the writer that built it. A run id, `<date>-<n>`, was read
-as its date while `state/seen/` was filed by `first_seen_run`; that ledger has
-moved under `state/raw/`, and a run id is refused now. One
-clause makes that choice mechanical instead of leaving it to a comment.
-
-Changing grain is a different operation from [a correction](#a-correction-to-a-closed-month),
-which rewrites one partition and leaves the layout alone. Both ship as a committed
-one-shot utility under `backend/utilities/` for the same reason: a fork or a stale
-branch can then reproduce the exact cutover this repository ran.
-
-Authority: Guardrail #5, 2026-09-13.
+Changing grain is different from [a correction](#a-correction-to-a-closed-month),
+which rewrites one partition and leaves the layout alone.
 
 ## The freeze rule
 
@@ -281,14 +236,12 @@ A partition is **closed** when the writer's own date no longer falls in it. Not
 "old" and not "past retention" - closed the moment the calendar moves on, which for
 a daily pipeline is the first run of the next month.
 
-The rule binds writes, not reads. A closed partition is still opened:
-`day_partition.days_in_window` opens every date a reader's window names, and
-`evals.writer.recorded_observations` reads every index partition there is. This
-read violates [CLAUDE.md](../../CLAUDE.md) Guardrail #12, which requires a fixed-size
-input. **The eval ledger's own writer was the example
-here until 2026-09-13** and is not one any more: it checked the header of every
-committed shard before writing, and at day grain that would have cost one more
-open a day for ever, so its cover is now the one or two days it writes.
+The rule binds writes to time partitions, not reads. A closed partition is
+still opened when `day_partition.days_in_window` names it. What bounds reads is
+[CLAUDE.md](../../CLAUDE.md) Guardrail #12, not whether a partition is closed.
+The [observation lookup](../architecture/contracts/observation-lookup.md) instead
+routes by exact keys. It has no calendar partition to close and reads only the
+routes and leaves selected by incoming IDs.
 
 Authority: owner, 2026-09-06.
 
@@ -297,7 +250,7 @@ Authority: owner, 2026-09-06.
 | Collection | Path pattern | Writer | What makes a partition closed |
 | --- | --- | --- | --- |
 | Eval ledger | `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, packed under `state/compact/summary-quality-evals/` | `evals.writer.file_measurements`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. Every write is a file of its own, so two runs never collide on one, and a packing task makes each finished day one file. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
-| Eval ledger ID folder | `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/`, and `<YYYY>/<MM>/settled.csv` once a month closes | `evals.writer.file_measurements` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22, and it files by the ledger's day rather than a grain of its own: two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-summary-quality-evals-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. Once a month is closed, the gardener settles every file of it into one `settled.csv` in the month's folder, so the folder gains a file a month rather than a file a day. |
+| Eval measurement lookup | `state/summary-quality-evals-index/lookup/`, with pending batches under `incoming/` | `evals.observation_batches`, through the publication hook | Not time-partitioned. Exact keys route to capped leaves; updates replace touched nodes and the root. The [lookup contract](../architecture/contracts/observation-lookup.md) owns routing and publication. |
 | Item health | `state/raw/item-health/<YYYY>/<MM>/<DD>/`, packed under `state/compact/item-health/` | `ledger.persist`, from `stages.record` and `stages.assemble` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. Each write files its own rows under the day those rows name, as a file of its own, so two runs never collide on one. Closed once the run's date leaves the day. |
 | Feed health | `state/feed-health/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. The same one-date write, settled against `FEED_HEALTH_KEY` at read time. Closed once the run's date leaves the day. The day grain buys it what it bought the published ledger's day files: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Seen addresses | `state/raw/seen/<YYYY>/<MM>/<DD>/`, packed under `state/compact/seen/` | `ledger.append_seen`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. The plan job files under the run's own digest date and nothing else, as a file of its own, so two runs never collide on one, and a second attempt at one plan job replaces its first attempt's file. Closed once the run's date leaves the day. Its compaction makes each finished day one file, and the loader refuses one that keeps fewer days than `collect.seen_window_days`. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
@@ -393,22 +346,18 @@ half-done. Until 2026-09-19 `.gitattributes` set a union merge driver on
 worse: the removal silently did not happen. And a shard's header is checked
 against the contract
 before any append, so a rewrite that changes the shape has to move every month at once.
-A correction therefore ships as a committed one-shot utility under `backend/utilities/`,
-not as an ad-hoc script; `migrate_to_day_shards.py` is the worked example. A
-utility whose input layout no longer exists is deleted with the layout:
-`migrate_feed_health.py` and `migrate_score_ledger.py` both went that way
-in September 2026, the item-health widener followed them once `widen_ledger_header.py`
-could re-file any ledger from a command line, and `migrate_published_ledger.py`
-and `split_published_ledger.py` went when the published ledger moved to the
-ledger door.
+A correction therefore ships as a committed one-shot utility under
+`backend/utilities/`, not as an ad-hoc script. It takes named input files.
+A utility whose input layout no longer exists is deleted with the layout.
 
 ### A deletion
 
 Two kinds, and they are not the same operation.
 
 **A whole partition ages out.** The gardener's `seen` and `feed-health` tasks
-unlink a day file, `telemetry-aggregate` and `summary-quality-evals-index` unlink a published copy, an
-index day or a summary, and a compaction unlinks a door ledger's month file. The partition is the unit, nothing
+unlink a day file, `telemetry-aggregate` removes an expired published copy,
+and a compaction unlinks a door ledger's month file. Evaluation IDs never age
+out. The partition is the unit, nothing
 is edited, and the freeze rule has no opinion because there is no month left to
 rewrite. What bounds each collection is
 [the state-tree section](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree)

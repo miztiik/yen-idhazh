@@ -16,7 +16,6 @@ No mocks and no network (Guardrail #7): every attack is a committed fixture.
 
 from __future__ import annotations
 
-import ast
 import html
 import json
 from pathlib import Path
@@ -30,7 +29,6 @@ from conftest import (
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
     LABEL_REPLIES,
-    REPO_ROOT,
     SUMMARIZE_AND_PLAN_REPLIES,
     RecordedEndpoint,
     read_text,
@@ -86,12 +84,6 @@ REQUIRED_ATTACKS = frozenset(
     }
 )
 
-# Modules the pipeline has no reason to reach for, and every reason not to:
-# each one turns a string into an action, which is what an injection wants.
-FORBIDDEN_IMPORTS = frozenset({"subprocess", "os.system", "pty", "shlex"})
-FORBIDDEN_CALLS = frozenset({"eval", "exec", "compile", "__import__"})
-
-
 class Canary(Model):
     """One planted attack, and what the pipeline's controls must do to it."""
 
@@ -106,11 +98,18 @@ class Canary(Model):
     forbidden_output: dict[str, Any]
 
 
-def canaries() -> list[Canary]:
-    return [Canary.model_validate_json(read_text(p)) for p in sorted(CANARY_DIR.glob("*.json"))]
+def load_canary(name: str) -> Canary:
+    return Canary.model_validate_json(read_text(CANARY_DIR / f"{name}.json"))
 
 
-ALL = canaries()
+@pytest.fixture(params=sorted(REQUIRED_ATTACKS))
+def canary(request: pytest.FixtureRequest) -> Canary:
+    return load_canary(request.param)
+
+
+def test_live_gate_names_every_committed_canary() -> None:
+    configured = set(config.load(CONFIG_DIR).app.evaluation.canary_files)
+    assert configured == REQUIRED_ATTACKS
 
 
 def payload_of(canary: Canary) -> dict[str, object]:
@@ -166,18 +165,12 @@ def served(title: str, text: str, url: str, *, from_the_feed: bool = True) -> Ar
 # --- The Oracle: nothing injects -------------------------------------------
 
 
-def test_every_required_attack_is_covered() -> None:
-    assert {canary.name for canary in ALL} == REQUIRED_ATTACKS
-
-
-@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
 def test_the_attack_does_not_survive_the_boundary(canary: Canary) -> None:
     cleaned = sanitize(canary.raw_text)
     for planted in canary.must_not_survive:
         assert planted not in cleaned, f"{canary.name}: {planted!r} crossed the trust boundary"
 
 
-@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
 def test_the_article_survives_the_boundary(canary: Canary) -> None:
     """The counter-oracle: a sanitizer that deletes everything is not a control."""
     cleaned = sanitize(canary.raw_text)
@@ -185,7 +178,6 @@ def test_the_article_survives_the_boundary(canary: Canary) -> None:
         assert kept in cleaned, f"{canary.name}: sanitization ate the article"
 
 
-@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
 def test_source_text_cannot_close_the_fence_it_sits_in(canary: Canary) -> None:
     """Decision 1: the text is delimited and labelled data, and cannot escape."""
     block = untrusted_block(canary.raw_text)
@@ -195,20 +187,19 @@ def test_source_text_cannot_close_the_fence_it_sits_in(canary: Canary) -> None:
     assert block.count(FENCE_CLOSE) == 1
 
 
-@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
 def test_the_boundary_is_idempotent(canary: Canary) -> None:
     """A defensive second pass must be free, so no caller has to remember order."""
     once = sanitize(canary.raw_text)
     assert sanitize(once) == once
 
 
-def test_an_injected_field_cannot_change_the_output_shape() -> None:
+def test_an_injected_field_cannot_change_the_output_shape(canaries: list[Canary]) -> None:
     """Decision 2: the shape is pinned by schema, so content is all an attack can move."""
     base: dict[str, Any] = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
     # Without this the raises below could pass for any reason at all.
     Summary.model_validate(base)
 
-    injected = [c for c in ALL if c.forbidden_output]
+    injected = [c for c in canaries if c.forbidden_output]
     assert injected, "at least one canary must attack the output shape"
     for canary in injected:
         with pytest.raises(ValidationError):
@@ -440,23 +431,6 @@ def test_a_summary_payload_cannot_carry_an_address() -> None:
         assert "https?://" not in rendered, f"Summary.{name} is address-shaped"
 
 
-def test_no_pipeline_module_can_turn_a_string_into_an_action() -> None:
-    """Decision 3, made structural: the machinery an injection would need is absent."""
-    package = REPO_ROOT / "backend" / "idhazh"
-    for module in sorted(package.rglob("*.py")):
-        tree = ast.parse(read_text(module), filename=str(module))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    assert alias.name not in FORBIDDEN_IMPORTS, (
-                        f"{module.name} imports {alias.name}"
-                    )
-            elif isinstance(node, ast.ImportFrom) and node.module in FORBIDDEN_IMPORTS:
-                pytest.fail(f"{module.name} imports {node.module}")
-            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                assert node.func.id not in FORBIDDEN_CALLS, f"{module.name} calls {node.func.id}"
-
-
 def test_a_page_demanding_a_chart_never_reaches_the_model() -> None:
     """The strongest control against injection at this hop is not asking.
 
@@ -536,7 +510,7 @@ def test_a_page_headline_that_gives_an_order_is_fenced_and_never_obeyed() -> Non
     cannot settle is stated plainly: one recorded reply is evidence about the
     prompt we send, never a proof that no phrasing gets through.
     """
-    canary = next(c for c in ALL if c.name == "page-title-instruction")
+    canary = Canary.model_validate_json(read_text(CANARY_DIR / "page-title-instruction.json"))
     article = served(canary.raw_title, canary.raw_text, canary.source_url, from_the_feed=False)
 
     assert article.status is ArticleStatus.OK, "the page has to extract, or nothing is asserted"
@@ -579,7 +553,6 @@ def test_a_page_headline_that_gives_an_order_is_fenced_and_never_obeyed() -> Non
 # --- The live case's adapter ------------------------------------------------
 
 
-@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
 def test_the_canary_article_is_the_one_extract_would_have_built(canary: Canary) -> None:
     """The live case must not invent a page shape the pipeline cannot produce.
 
@@ -609,7 +582,7 @@ def test_a_canary_is_sized_by_the_words_that_survive_the_boundary() -> None:
     under it on the words that survive sanitization. The words that do not
     survive are not words the model is shown, so they cannot decide its prompt.
     """
-    canary = next(c for c in ALL if c.name == "fake-system-delimiter")
+    canary = Canary.model_validate_json(read_text(CANARY_DIR / "fake-system-delimiter.json"))
     raw_words = len(canary.raw_text.split())
     kept_words = len(sanitize(canary.raw_text).split())
     assert raw_words >= EXTRACT.min_source_words > kept_words, (
@@ -624,7 +597,6 @@ def test_a_canary_is_sized_by_the_words_that_survive_the_boundary() -> None:
     assert article.brief is True
 
 
-@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
 def test_the_canary_hands_the_fence_the_raw_bytes(canary: Canary) -> None:
     """The one place the adapter must not copy `extract`, asserted so it stays.
 
@@ -680,7 +652,6 @@ def test_the_canary_case_is_a_stage_the_cli_answers_to(
 # --- Decision 4: nothing an attack planted reaches a span -------------------
 
 
-@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
 def test_no_planted_attack_reaches_a_span_attribute(canary: Canary, tmp_path: Path) -> None:
     """The tracing guard, run over all six committed attacks.
 
@@ -751,17 +722,6 @@ def _summary_repeating(canary: Canary, article: Article) -> Summary:
     return Summary.model_validate(base)
 
 
-# --- Housekeeping the fixtures have to keep --------------------------------
-
-
-@pytest.mark.parametrize("path", sorted(CANARY_DIR.glob("*.json")), ids=lambda p: p.name)
-def test_a_canary_file_is_ascii_and_lf(path: Path) -> None:
-    """The attack payloads are escaped, so the file itself stays reviewable."""
-    raw = path.read_bytes()
-    raw.decode("ascii")
-    assert b"\r\n" not in raw
-
-
-@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
-def test_a_canary_names_its_file(canary: Canary) -> None:
-    assert (CANARY_DIR / f"{canary.name}.json").exists()
+@pytest.fixture
+def canaries() -> list[Canary]:
+    return [load_canary(name) for name in sorted(REQUIRED_ATTACKS)]

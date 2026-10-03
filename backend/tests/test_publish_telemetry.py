@@ -97,7 +97,7 @@ def test_publish_telemetry_drops_url_keys_urls_and_detail(tmp_path: Path) -> Non
         ],
     )
 
-    written = publish(state_root=state, public_root=public)
+    written = publish(state_root=state, public_root=public, months={"2026-08"})
 
     assert [path.name for path in written] == ["2026-08.csv"]
     with written[0].open("r", encoding="utf-8", newline="") as handle:
@@ -182,7 +182,7 @@ def test_the_writer_and_the_deleter_name_one_file(tmp_path: Path) -> None:
     public = tmp_path / "telemetry"
     _write_item_health(state, [_row()])
 
-    written = publish(state_root=state, public_root=public)
+    written = publish(state_root=state, public_root=public, months={"2026-08"})
 
     assert written == [shard_path(public, "2026-08")]
     assert retention.month_shards(public) == written
@@ -205,7 +205,7 @@ def test_publish_telemetry_carries_both_word_counts(tmp_path: Path) -> None:
         state, [_row(source_words=1923, source_words_before_cap=2610), _row(item_id="ai-02")]
     )
 
-    written = publish(state_root=state, public_root=public)
+    written = publish(state_root=state, public_root=public, months={"2026-08"})
 
     with written[0].open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -239,7 +239,7 @@ def test_publish_telemetry_carries_the_stage_timings_and_the_token_counts(tmp_pa
         ],
     )
 
-    written = publish(state_root=state, public_root=public)
+    written = publish(state_root=state, public_root=public, months={"2026-08"})
 
     with written[0].open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -303,7 +303,7 @@ def test_a_published_shard_is_lf_whatever_wrote_it(tmp_path: Path) -> None:
     public = tmp_path / "telemetry"
     _write_item_health(state, [_row(date="2026-08-23", run_id="2026-08-23-1", item_id="ai-01")])
 
-    publish(state_root=state, public_root=public)
+    publish(state_root=state, public_root=public, months={"2026-08"})
 
     raw = (public / "2026-08.csv").read_bytes()
     assert raw, "the month published nothing, so this proved nothing"
@@ -329,13 +329,18 @@ def test_migrating_a_published_projection_changes_no_byte(tmp_path: Path) -> Non
             _row(date="2026-08-24", run_id="2026-08-24-1", item_id="ai-02"),
         ],
     )
-    publish(state_root=state, public_root=public, ensure_month="2026-09")
+    publish(
+        state_root=state,
+        public_root=public,
+        months={"2026-07", "2026-08"},
+        ensure_month="2026-09",
+    )
     names = sorted(path.name for path in public.glob("*.csv"))
     assert names == ["2026-07.csv", "2026-08.csv", "2026-09.csv"]
     assert read_shard(public / "2026-09.csv") == [], "the empty month is the case built for"
     before = {path.name: path.read_bytes() for path in sorted(public.glob("*.csv"))}
 
-    results = migrate(public)
+    results = migrate(public, months={"2026-07", "2026-08", "2026-09"})
 
     assert [path.name for path, _, _ in results] == names
     assert [rows for _, rows, _ in results] == [1, 2, 0]
@@ -403,7 +408,7 @@ def test_publish_telemetry_carries_the_split_the_rates_and_the_machine(tmp_path:
         ],
     )
 
-    written = publish(state_root=state, public_root=public)
+    written = publish(state_root=state, public_root=public, months={"2026-08"})
 
     with written[0].open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -634,26 +639,8 @@ def _partitions_opened(source_dir: Path) -> Iterator[list[str]]:
         _OPENED.clear()
 
 
-def test_the_cover_is_the_months_the_caller_names(tmp_path: Path) -> None:
-    """The two cases of the cover, counted in files opened rather than timed.
-
-    The daily caller passes the one month it appended to, so the ordinary pass
-    opens that month's files and nothing else - one day's file here, out of
-    twelve months of them. `months=None` opens all twelve, which is the
-    unbounded case the module's own docstring declares, and it is unbounded on
-    purpose: a fresh clone has to rebuild a mirror it never published.
-
-    **This is the count the day grain moves**, and the test states it rather than
-    hiding it: a month is a folder of days and a day a folder of its writers'
-    files, so the backfill's handle count is the ledger's FILE count where it
-    used to be its month count. The fixture gives each month one day and each
-    day one writer so the two numbers can still be compared; the committed
-    ledger gives a month about thirty days of several writers each.
-
-    The backfill has to run first, because a month whose mirror is missing is
-    read whatever the caller asked for. That is the same escape the fresh clone
-    depends on, so the count here is the count after it has been satisfied.
-    """
+def test_only_caller_named_months_are_read(tmp_path: Path) -> None:
+    """No selection does no work; a named month opens only its own day files."""
     state = tmp_path / "state"
     public = tmp_path / "public"
     months = [f"2026-{month:02d}" for month in range(1, 13)]
@@ -670,7 +657,7 @@ def test_the_cover_is_the_months_the_caller_names(tmp_path: Path) -> None:
     assert [name.rsplit("/", 1)[0] for name in held] == [
         f"2026/{month:02d}/05" for month in range(1, 13)
     ], "one writer's file a month, or the counts below compare nothing"
-    assert backfill == held
+    assert backfill == []
     assert daily == [name for name in held if name.startswith("2026/09/")]
 
 
@@ -692,7 +679,7 @@ def test_a_frozen_month_is_not_rebuilt_once_it_has_been_published(tmp_path: Path
     _month_shard(state, "2026-08", [_row()])
     _month_shard(state, "2026-09", [_row(date="2026-09-02", run_id="2026-09-02-1")])
 
-    publish(state_root=state, public_root=public)
+    publish(state_root=state, public_root=public, months={"2026-08", "2026-09"})
     august = public / "2026-08.csv"
     september = public / "2026-09.csv"
     mtimes = {path.name: path.stat().st_mtime_ns for path in (august, september)}
@@ -705,15 +692,8 @@ def test_a_frozen_month_is_not_rebuilt_once_it_has_been_published(tmp_path: Path
     assert {path.name: path.read_bytes() for path in (august, september)} == payloads
 
 
-def test_a_month_that_was_never_published_is_written_whatever_was_asked_for(
-    tmp_path: Path,
-) -> None:
-    """The skip is an optimisation, so a missing shard overrides it.
-
-    A fresh clone, a deleted file and a month the run did not touch all land
-    here. Without this the projection would be permanently short of a month that
-    no later run ever names again.
-    """
+def test_an_unrequested_missing_month_is_not_discovered(tmp_path: Path) -> None:
+    """A missing historical copy is rebuilt only when its month is named."""
     state = tmp_path / "state"
     public = tmp_path / "public"
     _month_shard(state, "2026-08", [_row()])
@@ -721,8 +701,8 @@ def test_a_month_that_was_never_published_is_written_whatever_was_asked_for(
 
     written = publish(state_root=state, public_root=public, months={"2026-09"})
 
-    assert [path.name for path in written] == ["2026-08.csv", "2026-09.csv"]
-    assert (public / "2026-08.csv").exists()
+    assert [path.name for path in written] == ["2026-09.csv"]
+    assert not (public / "2026-08.csv").exists()
 
 
 def test_seeding_an_empty_month_never_blanks_a_shard_that_holds_rows(tmp_path: Path) -> None:
@@ -737,7 +717,7 @@ def test_seeding_an_empty_month_never_blanks_a_shard_that_holds_rows(tmp_path: P
     public = tmp_path / "public"
     _month_shard(state, "2026-08", [_row()])
 
-    publish(state_root=state, public_root=public)
+    publish(state_root=state, public_root=public, months={"2026-08"})
     full = (public / "2026-08.csv").read_text(encoding="utf-8")
     assert full.count("\n") == 2, "the fixture month should hold one row"
 
@@ -749,18 +729,17 @@ def test_seeding_an_empty_month_never_blanks_a_shard_that_holds_rows(tmp_path: P
 def test_a_rerun_with_no_new_data_writes_no_shard(tmp_path: Path) -> None:
     """The oracle for finding 11: a no-op run must publish nothing.
 
-    A full rebuild (`months=None`) and a caller-hinted run (`months={...}`) both
-    re-derive the current month, and both leave it alone when the bytes already
-    on disk are the bytes they would write. The comparison is the shard's own
-    bytes; the mtime check is a witness that the file was never opened for
-    writing.
+    An unnamed call does no historical work. A caller-named month is re-derived
+    and left alone when the bytes already on disk are the bytes it would write.
+    The comparison is the shard's own bytes; the mtime check is a witness that
+    the file was never opened for writing.
     """
     state = tmp_path / "state"
     public = tmp_path / "public"
     _month_shard(state, "2026-08", [_row()])
     _month_shard(state, "2026-09", [_row(date="2026-09-02", run_id="2026-09-02-1")])
 
-    publish(state_root=state, public_root=public)
+    publish(state_root=state, public_root=public, months={"2026-08", "2026-09"})
     shards = sorted(public.glob("*.csv"))
     payloads = {path.name: path.read_bytes() for path in shards}
     mtimes = {path.name: path.stat().st_mtime_ns for path in shards}
@@ -785,7 +764,7 @@ def test_adding_a_day_rewrites_only_that_month(tmp_path: Path) -> None:
     _month_shard(state, "2026-08", [_row()])
     _month_shard(state, "2026-09", [_row(date="2026-09-02", run_id="2026-09-02-1")])
 
-    publish(state_root=state, public_root=public)
+    publish(state_root=state, public_root=public, months={"2026-08", "2026-09"})
     august = public / "2026-08.csv"
     september = public / "2026-09.csv"
     august_bytes = august.read_bytes()
@@ -820,7 +799,7 @@ def test_a_correction_to_a_closed_month_rewrites_only_that_month(tmp_path: Path)
     _month_shard(state, "2026-08", [_row(summary_words=65)])
     _month_shard(state, "2026-09", [_row(date="2026-09-02", run_id="2026-09-02-1")])
 
-    publish(state_root=state, public_root=public)
+    publish(state_root=state, public_root=public, months={"2026-08", "2026-09"})
     august = public / "2026-08.csv"
     september = public / "2026-09.csv"
     september_bytes = september.read_bytes()

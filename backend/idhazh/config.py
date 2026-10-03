@@ -52,6 +52,7 @@ from idhazh.contracts.knobs.gardener import (
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.observation_lookup import ObservationLookupSettings
 from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
@@ -60,6 +61,15 @@ from idhazh.llm.server import SETTING_KEYS, refuse_a_sampling_key_a_route_sets
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR: Final = REPO_ROOT / "config"
+
+
+@cache
+def load_observation_lookup(config_dir: Path = DEFAULT_CONFIG_DIR) -> ObservationLookupSettings:
+    """Read the declared limits for exact evaluation-ID lookup partitions."""
+    return ObservationLookupSettings.model_validate_json(
+        (config_dir / "observation-lookup.json").read_text(encoding="utf-8")
+    )
+
 
 _FILES: Final[tuple[str, ...]] = ("idhazh.json", "sources.json", "taxonomy.json", "watchlist.json")
 #: Read for validation and not digested. It owns the console window every
@@ -252,7 +262,6 @@ _SUMMARY_SERIES: Final[Mapping[str, str]] = MappingProxyType({"telemetry-aggrega
 #: governs it keeps every month file the widest read can select.
 _CONSOLE_READ_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.FEED_HEALTH,
-    LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
 )
 
 #: Each task series whose files a console read can still open, held the same way.
@@ -295,7 +304,7 @@ def load_gardener(config_dir: Path = DEFAULT_CONFIG_DIR) -> GardenerSettings:
     declaration, or with a knob in `config/idhazh.json` it has to outlive.
     """
     gardener = _gardener_config(config_dir)
-    tasks = _declarations(config_dir)
+    tasks = _declarations(config_dir, gardener.task_names)
     app = AppConfig.from_json((config_dir / _FILES[0]).read_text(encoding="utf-8"))
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
@@ -314,14 +323,15 @@ def _gardener_config(config_dir: Path) -> GardenerConfig:
         raise ValueError(f"config/{GARDENER_FILE} is refused: {error}") from error
 
 
-def _declarations(config_dir: Path) -> dict[str, TaskPolicy]:
-    """Every declaration, by name, in sorted order. No folder is no tasks, not a fault."""
+def _declarations(config_dir: Path, names: tuple[str, ...]) -> dict[str, TaskPolicy]:
+    """Only declarations named in the gardener config, in sorted order."""
     folder = config_dir / GARDENER_TASKS_DIR
-    if not folder.is_dir():
-        return {}
     found: dict[str, TaskPolicy] = {}
-    for path in sorted(folder.glob(f"*{DECLARATION_SUFFIX}")):
+    for name in sorted(names):
+        path = folder / f"{name}{DECLARATION_SUFFIX}"
         where = f"config/{GARDENER_TASKS_DIR}/{path.name}"
+        if not path.is_file():
+            raise ValueError(f"{where} is missing; config/{GARDENER_FILE} names it in task_names")
         if not _A_TASK_NAME.fullmatch(path.stem):
             raise ValueError(
                 f"{where} is refused: a task is named by its file, and {path.stem!r} is "
@@ -831,12 +841,6 @@ def _refuse_a_compaction_that_cuts_its_ledger(
         raise ValueError(
             f"{where} compacts {ledger.value}, and a compaction is named for its ledger: "
             f"call it compact-{ledger.value}.json"
-        )
-    if policy.raw_index_keep_days < policy.daily_keep_days:
-        raise ValueError(
-            f"{where} keeps raw_index_keep_days {policy.raw_index_keep_days} and "
-            f"daily_keep_days {policy.daily_keep_days}. The raw index must outlive the "
-            "daily period, which may still need it to rebuild a daily file"
         )
     reach = _reach(policy)
     if ledger in app.ledger.published:

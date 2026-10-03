@@ -5,8 +5,12 @@ from __future__ import annotations
 import ast
 import json
 import re
+import sqlite3
+import sys
 from collections.abc import Iterator, Sequence
+from contextlib import closing
 from pathlib import Path
+from textwrap import dedent
 from typing import Final
 
 import pytest
@@ -55,6 +59,20 @@ from ._harness import (
 )
 
 pytestmark = pytest.mark.workflow
+
+
+def test_the_daily_fixture_ignores_the_production_prepared_manifest(tmp_path: Path) -> None:
+    environment = _isolated_env(tmp_path)
+    _, runner = _digest_origin(tmp_path, environment, SUBSTITUTED_DATE)
+    manifest = _commit_call("assemble")[1]["PREPARED_PATHS_FILE"]
+    _write(runner / manifest, "[]\n")
+
+    assert _git(runner, environment, "check-ignore", "--verbose", "--", manifest).startswith(
+        ".gitignore:"
+    )
+    assert not _git(runner, environment, "ls-files", "--", manifest).strip()
+    assert "GIT_CONFIG_COUNT" not in environment
+    assert not any(name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")) for name in environment)
 
 
 def test_the_production_backoff_grows_and_caps() -> None:
@@ -280,6 +298,444 @@ def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) 
     assert settings["NOTHING_STAGED_MESSAGE"] in result.stdout
     assert _git(origin, env, "rev-parse", "main").strip() == before
     assert _git(runner, env, "rev-parse", "HEAD").strip() == before
+
+
+@requires_space_free_paths
+def test_preparation_runs_before_initial_staging(tmp_path: Path) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _write(runner / ".git/info/exclude", "prepare.py\nprepared-paths.json\n")
+    _write(
+        runner / "prepare.py",
+        "import json\n"
+        "from pathlib import Path\n"
+        "Path('accepted.txt').write_text('prepared\\n', encoding='ascii')\n"
+        "Path('prepared-paths.json').write_text(\n"
+        "    json.dumps(['accepted.txt']), encoding='ascii')\n",
+    )
+    settings = {
+        **settings,
+        "PREPARE_COMMAND": f"{sys.executable} prepare.py",
+        "PREPARED_PATHS_FILE": "prepared-paths.json",
+    }
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert _tracked(origin, env, "accepted.txt"), result.stdout
+    assert _git(origin, env, "show", "main:accepted.txt") == "prepared\n"
+    assert _git(runner, env, "status", "--porcelain").strip() == ""
+
+
+def _prepare_sqlite_batch(runner: Path, name: str, rows: dict[str, str]) -> dict[str, str]:
+    """Write an immutable batch and a real SQLite producer with an attempt-local path list."""
+    _write(runner / ".git/info/exclude", ".prepare/\n")
+    _write(runner / ".prepare/batch.json", json.dumps({"name": name, "rows": rows}))
+    _write(
+        runner / ".prepare/run.py",
+        dedent("""\
+            import json
+            import sqlite3
+            from contextlib import closing
+            from pathlib import Path
+
+            batch = json.loads(Path('.prepare/batch.json').read_text(encoding='ascii'))
+            index = Path('derived/index.sqlite')
+            previous = {}
+            if index.exists():
+                with closing(sqlite3.connect(index)) as stored:
+                    previous = dict(stored.execute('SELECT key, value FROM entries'))
+            accepted = {key: value for key, value in batch['rows'].items() if key not in previous}
+            if accepted or not index.exists():
+                with closing(sqlite3.connect(':memory:')) as rebuilt:
+                    rebuilt.execute('CREATE TABLE entries (key TEXT PRIMARY KEY, value TEXT)')
+                    rebuilt.executemany('INSERT INTO entries VALUES (?, ?)',
+                                        sorted({**previous, **accepted}.items()))
+                    rebuilt.commit()
+                    index.parent.mkdir(parents=True, exist_ok=True)
+                    index.write_bytes(rebuilt.serialize())
+            payload = Path(f"accepted/{batch['name']}-{len(accepted)}.json")
+            if accepted:
+                payload.parent.mkdir(parents=True, exist_ok=True)
+                payload.write_text(json.dumps(accepted), encoding='ascii', newline='\\n')
+            paths = [index.as_posix(), payload.as_posix()]
+            with Path('.prepare/calls.jsonl').open('a', encoding='ascii', newline='\\n') as calls:
+                calls.write(json.dumps({'before': previous, 'accepted': accepted, 'paths': paths}) + '\\n')
+            Path('.prepare/paths.json').write_text(json.dumps(paths), encoding='ascii', newline='\\n')
+            """),
+    )
+    return {
+        "PREPARE_COMMAND": f"{sys.executable} .prepare/run.py",
+        "PREPARED_PATHS_FILE": ".prepare/paths.json",
+    }
+
+
+@requires_space_free_paths
+def test_preparation_replays_overlapping_sqlite_keys_and_changed_paths(tmp_path: Path) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    other = tmp_path / "other"
+    _git(tmp_path, env, "clone", str(origin), str(other))
+    winning = _prepare_sqlite_batch(other, "winner", {"shared": "winner", "first": "kept"})
+    losing = _prepare_sqlite_batch(runner, "loser", {"shared": "loser", "second": "kept"})
+    original_batch = (runner / ".prepare/batch.json").read_bytes()
+
+    first = _run_commit_script(other, env, staged_paths, {**settings, **winning})
+    assert first.returncode == 0, first.stderr
+    result = _run_commit_script(runner, env, staged_paths, {**settings, **losing})
+
+    assert result.returncode == 0, result.stderr
+    assert "CONFLICT" not in result.stdout + result.stderr
+    calls = [json.loads(line) for line in (runner / ".prepare/calls.jsonl").read_text().splitlines()]
+    assert [call["before"] for call in calls] == [{}, {"shared": "winner", "first": "kept"}]
+    assert [call["accepted"] for call in calls] == [
+        {"shared": "loser", "second": "kept"},
+        {"second": "kept"},
+    ]
+    assert calls[0]["paths"] != calls[1]["paths"]
+    with closing(sqlite3.connect(runner / "derived/index.sqlite")) as stored:
+        assert dict(stored.execute("SELECT key, value FROM entries")) == {
+            "shared": "winner", "first": "kept", "second": "kept",
+        }
+    assert json.loads(_git(origin, env, "show", "main:accepted/loser-1.json")) == {"second": "kept"}
+    assert json.loads(_git(origin, env, "show", "main:accepted/winner-2.json")) == {
+        "shared": "winner", "first": "kept",
+    }
+    assert not _tracked(origin, env, "accepted/loser-2.json")
+    assert not (runner / "accepted/loser-2.json").exists()
+    assert (runner / ".prepare/batch.json").read_bytes() == original_batch
+    assert _git(runner, env, "status", "--porcelain").strip() == ""
+    assert not _mid_rebase(runner)
+
+
+@requires_space_free_paths
+def test_preparation_retries_without_conflicts_or_prepared_paths(tmp_path: Path) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
+    _write(runner / ".git/info/exclude", ".prepare/\n")
+    _write(
+        runner / ".prepare/run.py",
+        "from pathlib import Path\n"
+        "with Path('.prepare/calls').open('a', encoding='ascii') as calls:\n"
+        "    calls.write('called\\n')\n"
+        "Path('.prepare/paths.json').write_text('[]', encoding='ascii')\n",
+    )
+    _reject_the_first_pushes(origin, 1)
+    settings = {
+        **settings,
+        "PREPARE_COMMAND": f"{sys.executable} .prepare/run.py",
+        "PREPARED_PATHS_FILE": ".prepare/paths.json",
+    }
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert (runner / ".prepare/calls").read_text().splitlines() == ["called", "called"]
+    assert "fresh" in _git(origin, env, "show", f"main:{_seed_ledger(staged_paths[0])}")
+    assert not _mid_rebase(runner)
+
+
+@requires_space_free_paths
+def test_preparation_follows_regeneration_on_retry(tmp_path: Path) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _write(runner / ".git/info/exclude", ".prepare/\n")
+    _write(
+        runner / ".prepare/regenerate.py",
+        "from pathlib import Path\n"
+        "with Path('.prepare/order').open('a', encoding='ascii') as order:\n"
+        "    order.write('regenerate\\n')\n"
+        "Path('derived.json').write_text('rebuilt', encoding='ascii')\n",
+    )
+    _write(
+        runner / ".prepare/run.py",
+        "from pathlib import Path\n"
+        "with Path('.prepare/order').open('a', encoding='ascii') as order:\n"
+        "    order.write('prepare\\n')\n"
+        "source = Path('derived.json')\n"
+        "Path('accepted.txt').write_text(\n"
+        "    source.read_text() if source.exists() else 'initial', encoding='ascii')\n"
+        "Path('.prepare/paths.json').write_text('[\"accepted.txt\"]', encoding='ascii')\n",
+    )
+    _write(runner / "derived.json", "initial\n")
+    _race(tmp_path, env, "derived.json", "winning\n")
+    settings = {
+        **settings,
+        "REFRESH_PATHS": "derived.json",
+        "REGENERATE_COMMAND": f"{sys.executable} .prepare/regenerate.py",
+        "PREPARE_COMMAND": f"{sys.executable} .prepare/run.py",
+        "PREPARED_PATHS_FILE": ".prepare/paths.json",
+    }
+
+    result = _run_commit_script(runner, env, [*staged_paths, "derived.json"], settings)
+
+    assert result.returncode == 0, result.stderr
+    assert (runner / ".prepare/order").read_text().splitlines() == [
+        "prepare", "regenerate", "prepare",
+    ]
+    assert _git(origin, env, "show", "main:accepted.txt") == "rebuilt"
+    assert _git(origin, env, "show", "main:derived.json") == "rebuilt"
+
+
+@requires_space_free_paths
+def test_a_path_the_tip_retired_does_not_stop_the_retry(tmp_path: Path) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _write(runner / "retired/summary.json", "this run's copy\n")
+    _race(tmp_path, env, "unrelated.txt", "winning")
+    settings = {
+        **settings,
+        "REFRESH_PATHS": "retired/summary.json",
+        "REGENERATE_COMMAND": f"{sys.executable} -c pass",
+    }
+
+    result = _run_commit_script(runner, env, [*staged_paths, "retired"], settings)
+
+    assert result.returncode == 0, result.stderr
+    assert "did not match any files" not in result.stderr
+    assert not _tracked(origin, env, "retired/summary.json")
+    assert _git(origin, env, "show", "main:unrelated.txt") == "winning"
+
+
+@requires_space_free_paths
+def test_preparation_restores_replacements_deletions_and_literal_names(tmp_path: Path) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    for name in ("replaced.json", "deleted.json", "chunk1.json"):
+        _write(runner / "derived" / name, "base\n")
+    _git(runner, env, "add", "derived")
+    _git(runner, env, "commit", "-m", "seed derived files")
+    _git(runner, env, "push")
+    other = tmp_path / "other"
+    _git(tmp_path, env, "clone", str(origin), str(other))
+    for name in ("replaced.json", "deleted.json", "chunk1.json"):
+        _write(other / "derived" / name, "winning\n")
+    _git(other, env, "add", "derived")
+    _git(other, env, "commit", "-m", "replace derived files")
+    _git(other, env, "push")
+    _write(runner / ".git/info/exclude", ".prepare/\n")
+    _write(
+        runner / ".prepare/run.py",
+        dedent("""\
+            import json
+            from pathlib import Path
+
+            names = ['derived/replaced.json', 'derived/deleted.json', 'derived/chunk[1].json']
+            before = {name: Path(name).read_text() if Path(name).exists() else None for name in names}
+            with Path('.prepare/calls.jsonl').open('a', encoding='ascii', newline='\\n') as calls:
+                calls.write(json.dumps(before) + '\\n')
+            Path(names[0]).write_text('prepared:' + before[names[0]], encoding='ascii', newline='\\n')
+            Path(names[1]).unlink()
+            Path(names[2]).write_text('new chunk\\n', encoding='ascii', newline='\\n')
+            Path('.prepare/paths.json').write_text(json.dumps(names), encoding='ascii', newline='\\n')
+            """),
+    )
+    settings = {
+        **settings,
+        "PREPARE_COMMAND": f"{sys.executable} .prepare/run.py",
+        "PREPARED_PATHS_FILE": ".prepare/paths.json",
+    }
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    calls = [json.loads(line) for line in (runner / ".prepare/calls.jsonl").read_text().splitlines()]
+    assert calls == [
+        {"derived/replaced.json": "base\n", "derived/deleted.json": "base\n", "derived/chunk[1].json": None},
+        {"derived/replaced.json": "winning\n", "derived/deleted.json": "winning\n", "derived/chunk[1].json": None},
+    ]
+    assert _git(origin, env, "show", "main:derived/replaced.json") == "prepared:winning\n"
+    assert not _tracked(origin, env, "derived/deleted.json")
+    assert _git(origin, env, "show", "main:derived/chunk[1].json") == "new chunk\n"
+    assert _git(origin, env, "show", "main:derived/chunk1.json") == "winning\n"
+    assert _git(runner, env, "status", "--porcelain").strip() == ""
+
+
+@requires_space_free_paths
+def test_preparation_replays_a_lost_successful_push_response_without_another_commit(
+    tmp_path: Path,
+) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    settings = {**settings, **_prepare_sqlite_batch(runner, "batch", {"shared": "accepted"})}
+    settings["PREPARED_PATHS_FILE"] = str(runner / ".prepare/paths.json")
+    before = int(_git(origin, env, "rev-list", "--count", "main"))
+    receiver = runner / ".prepare/receive-pack.sh"
+    _write(
+        receiver,
+        "#!/bin/sh\n"
+        'git receive-pack "$@"\n'
+        "status=$?\n"
+        'if [ "$status" -ne 0 ]; then exit "$status"; fi\n'
+        "exit 1\n",
+    )
+    _git(runner, env, "config", "remote.origin.receivepack", f"sh {receiver.as_posix()}")
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert [attempt["outcome"] for attempt in _push_attempts(result.stdout)] == ["rejected"]
+    assert settings["NOTHING_STAGED_MESSAGE"] in result.stdout
+    assert int(_git(origin, env, "rev-list", "--count", "main")) == before + 1
+    assert _git(runner, env, "rev-parse", "HEAD") == _git(origin, env, "rev-parse", "main")
+    calls = [json.loads(line) for line in (runner / ".prepare/calls.jsonl").read_text().splitlines()]
+    assert [call["accepted"] for call in calls] == [{"shared": "accepted"}, {}]
+    assert _tracked(origin, env, "accepted/batch-1.json")
+    assert not _tracked(origin, env, "accepted/batch-0.json")
+    assert _git(runner, env, "status", "--porcelain").strip() == ""
+
+
+@requires_space_free_paths
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        "{",
+        "{}",
+        "[null]",
+        '[""]',
+        '["../escape"]',
+        '["/absolute"]',
+        '["C:/outside"]',
+        '["folder\\\\file"]',
+        '[".git/config"]',
+        '["folder/.GIT/config"]',
+        '["docs"]',
+        '["folder//file"]',
+        '["file\\nname"]',
+    ],
+    ids=[
+        "malformed", "object", "non-string", "empty", "parent", "absolute", "drive",
+        "backslash", "metadata", "nested-metadata", "directory", "noncanonical", "control",
+    ],
+)
+def test_preparation_refuses_invalid_manifests_without_pushing(tmp_path: Path, manifest: str) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    before = _git(origin, env, "rev-parse", "main")
+    _write(runner / ".git/info/exclude", ".prepare/\n")
+    _write(
+        runner / ".prepare/run.py",
+        "from pathlib import Path\n"
+        "Path('accepted.txt').write_text('partial', encoding='ascii')\n"
+        f"Path('.prepare/paths.json').write_text({manifest!r}, encoding='ascii')\n",
+    )
+    settings = {
+        **settings,
+        "PREPARE_COMMAND": f"{sys.executable} .prepare/run.py",
+        "PREPARED_PATHS_FILE": ".prepare/paths.json",
+    }
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 1, result.stdout
+    assert "could not prepare the committed paths" in result.stderr
+    assert _git(origin, env, "rev-parse", "main") == before
+    assert _git(runner, env, "rev-parse", "HEAD") == before
+
+
+@requires_space_free_paths
+@pytest.mark.parametrize("failure", ["command", "missing-manifest"])
+def test_preparation_failure_does_not_reuse_an_old_manifest(tmp_path: Path, failure: str) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    before = _git(origin, env, "rev-parse", "main")
+    _write(runner / ".git/info/exclude", ".prepare/\n")
+    _write(runner / ".prepare/paths.json", '["accepted.txt"]')
+    _write(
+        runner / ".prepare/run.py",
+        "from pathlib import Path\n"
+        "Path('accepted.txt').write_text('partial', encoding='ascii')\n"
+        + ("raise SystemExit(7)\n" if failure == "command" else ""),
+    )
+    settings = {
+        **settings,
+        "PREPARE_COMMAND": f"{sys.executable} .prepare/run.py",
+        "PREPARED_PATHS_FILE": ".prepare/paths.json",
+    }
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 1, result.stdout
+    assert _git(origin, env, "rev-parse", "main") == before
+    assert _git(runner, env, "rev-parse", "HEAD") == before
+    assert not (runner / ".prepare/paths.json").exists()
+
+
+@requires_space_free_paths
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "raise SystemExit(7)",
+        "Path('.prepare/paths.json').write_text('[\".git/config\"]', encoding='ascii')",
+        "Path('.prepare/paths.json').unlink()",
+    ],
+    ids=["command", "invalid-manifest", "missing-manifest"],
+)
+def test_preparation_failure_after_refresh_does_not_push_partial_outputs(
+    tmp_path: Path, failure: str,
+) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    settings = {**settings, **_prepare_sqlite_batch(runner, "batch", {"key": "value"})}
+    producer = runner / ".prepare/run.py"
+    _write(
+        producer,
+        producer.read_text(encoding="ascii")
+        + "if len(Path('.prepare/calls.jsonl').read_text().splitlines()) > 1:\n"
+        + f"    {failure}\n",
+    )
+    _race(tmp_path, env, "docs/unrelated.md", "winning\n")
+    winner = _git(origin, env, "rev-parse", "main")
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 1, result.stdout
+    assert _git(origin, env, "rev-parse", "main") == winner
+    assert not _tracked(origin, env, "derived/index.sqlite")
+    assert not _tracked(origin, env, "accepted/batch-1.json")
+    assert len((runner / ".prepare/calls.jsonl").read_text().splitlines()) == 2
+    assert not _mid_rebase(runner)
+
+
+@pytest.mark.parametrize(
+    "hooks",
+    [
+        {"PREPARE_COMMAND": "unused"},
+        {"PREPARED_PATHS_FILE": ".prepare/paths.json"},
+        {"REFRESH_PATHS": "derived.json"},
+        {"REGENERATE_COMMAND": "unused"},
+        {"DROP_RACED_ASSETS_COMMAND": "unused"},
+    ],
+    ids=["missing-file", "missing-command", "missing-regenerate", "missing-refresh", "drop-only"],
+)
+def test_preparation_keeps_the_hook_pair_requirements(tmp_path: Path, hooks: dict[str, str]) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    before = _git(origin, env, "rev-parse", "main")
+    if "PREPARE_COMMAND" not in hooks and "PREPARED_PATHS_FILE" not in hooks:
+        hooks = {
+            "PREPARE_COMMAND": "unused",
+            "PREPARED_PATHS_FILE": ".prepare/paths.json",
+            **hooks,
+        }
+
+    result = _run_commit_script(runner, env, staged_paths, {**settings, **hooks})
+
+    assert result.returncode == 2, result.stdout
+    assert _git(origin, env, "rev-parse", "main") == before
+    assert _git(runner, env, "rev-parse", "HEAD") == before
 
 
 def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:

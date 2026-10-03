@@ -20,6 +20,7 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Final
 
 import pytest
@@ -33,7 +34,14 @@ from idhazh.gardener import shards
 from idhazh.gardener.outcome import EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
-from .._garden import OriginTrees, a_config, a_partial_clone, git, quiet_git
+from .._garden import (
+    OriginTrees,
+    a_config,
+    a_partial_clone,
+    git,
+    named_task_package,
+    quiet_git,
+)
 from ._oracle_tree import RUN_ID, build
 
 pytestmark = pytest.mark.slow
@@ -53,12 +61,16 @@ _OWN_TO_THE_RUN: Final = {"downloaded_bytes", "duration_ms"}
 
 
 def a_live_garden(root: Path, **changed: dict[str, Any]) -> GardenerSettings:
-    """Every committed declaration with its deletions and its fold turned on.
+    """The named committed declarations with their deletions and fold turned on.
 
     `changed` replaces fields of one declaration, by its name.
     """
-    config_dir = a_config(root)
-    for source in sorted((CONFIG_DIR / "gardener").glob("*.json")):
+    config_dir = a_config(root, CONFIG_DIR / "gardener")
+    names = json.loads((config_dir / "idhazh_gardener.json").read_text(encoding="utf-8"))[
+        "task_names"
+    ]
+    for name in names:
+        source = config_dir / "gardener" / f"{name}.json"
         declared = json.loads(source.read_text(encoding="utf-8"))
         declared["dry_run"] = False
         if isinstance(declared.get("fold"), dict):
@@ -109,7 +121,11 @@ def a_full_clone(root: Path, origin: Path) -> Path:
 
 
 def landed(
-    names: tuple[str, ...], settings: GardenerSettings, checkout: Path, origin: Path
+    names: tuple[str, ...],
+    settings: GardenerSettings,
+    checkout: Path,
+    origin: Path,
+    package: ModuleType,
 ) -> tuple[Outcome, dict[str, CollectionPruneRow], list[str]]:
     said: list[str] = []
     outcome = gardener_publish.run_and_land(
@@ -120,6 +136,7 @@ def landed(
         attempt=1,
         shard=0,
         trees=OriginTrees(origin),
+        package=package,
         clock=lambda: WAKE,
         say=said.append,
     )
@@ -148,9 +165,10 @@ def test_a_shard_that_checks_out_only_code_lands_what_a_full_checkout_lands(
     names = in_the_repository(settings)
     full = a_full_clone(tmp_path, full_origin)
     only_code = a_partial_clone(tmp_path, names_origin, "config", name="only-code")
+    package = named_task_package(tmp_path, monkeypatch)
 
-    whole, whole_rows, whole_said = landed(names, settings, full, full_origin)
-    lean, lean_rows, lean_said = landed(names, settings, only_code, names_origin)
+    whole, whole_rows, whole_said = landed(names, settings, full, full_origin, package)
+    lean, lean_rows, lean_said = landed(names, settings, only_code, names_origin, package)
 
     assert lean.exit_code == whole.exit_code, (whole_said, lean_said)
     assert comparable(lean_rows) == comparable(whole_rows)
@@ -179,9 +197,10 @@ def test_the_census_summary_in_a_shard_of_its_own_reads_the_census_or_fails(
     assert SUMMARY in in_the_repository(settings)
     full = a_full_clone(tmp_path, full_origin)
     only_code = a_partial_clone(tmp_path, names_origin, "config", name="only-code")
+    package = named_task_package(tmp_path, monkeypatch)
 
-    _, whole_rows, _ = landed((SUMMARY,), settings, full, full_origin)
-    _, lean_rows, said = landed((SUMMARY,), settings, only_code, names_origin)
+    _, whole_rows, _ = landed((SUMMARY,), settings, full, full_origin, package)
+    _, lean_rows, said = landed((SUMMARY,), settings, only_code, names_origin, package)
 
     assert lean_rows[SUMMARY].stopped_because is not StopReason.FAILED, said
     assert comparable(lean_rows) == comparable(whole_rows)
@@ -194,7 +213,7 @@ def test_the_census_summary_in_a_shard_of_its_own_reads_the_census_or_fails(
 
     blind = a_live_garden(tmp_path / "blind-garden", telemetry_aggregate={"reads": []})
     shard = a_partial_clone(tmp_path, blind_origin, "config", name="blind")
-    outcome, blind_rows, _ = landed((SUMMARY,), blind, shard, blind_origin)
+    outcome, blind_rows, _ = landed((SUMMARY,), blind, shard, blind_origin, package)
 
     assert outcome.exit_code == EXIT_TASK_FAILED
     assert blind_rows[SUMMARY].stopped_because is StopReason.FAILED

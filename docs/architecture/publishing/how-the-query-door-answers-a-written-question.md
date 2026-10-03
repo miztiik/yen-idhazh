@@ -32,7 +32,10 @@ A date is read through exactly one tier. Packed files win first: year, month, th
 
 The listing must carry `bytes`, one size per file. `askCost()` uses those sizes before a data file is fetched. `ask()` refuses a span above the byte ceiling before a data file is fetched. The page keeper checks the same size when the file arrives.
 
-Until row 7 stages listings, `__RAW_LISTED_THROUGH__` names no day. In that state `ask()` reads packed files only.
+The site build stages those listings for raw days after each ledger's newest
+packed day, up to the widest console preset. A day whose raw directory holds a
+non-parquet writer file is left unlisted and the build log names that file. A
+listing that is absent inside the listed range is a file gap, not an empty day.
 
 ## Reach and cost
 

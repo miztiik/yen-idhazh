@@ -10,38 +10,31 @@ No mocks and no network (Guardrail #7). The text here is written for the test.
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
-import shutil
-from collections.abc import Callable, Iterator, Sequence
-from datetime import UTC, datetime
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from _source_files import source_files
 from conftest import (
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
-    REPO_ROOT,
     read_text,
     seed_scores,
     writer_identity,
 )
 from pydantic import ValidationError
 
-from idhazh import cli, day_shards, ledger
+from idhazh import cli, ledger
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import ServerJob, derive_url_key
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.extract import ExtractConfig
-from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
@@ -67,22 +60,13 @@ from idhazh.evals.metrics import (
 from idhazh.evals.score import band, to_eval_row
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
-from idhazh.gardener import closed_day_fold
-from idhazh.stages.rebuild_summary_quality_evals_index import (
-    stage_rebuild_summary_quality_evals_index,
-)
 
 
 #: The writer every case below files as. `assemble` is the job that scores a
 #: whole day and it runs one shard, so this is what a finished run leaves. A
 #: case that needs a second writer names its own.
 def a_scoring_run(date: str) -> str:
-    """The run that scored one day.
-
-    A run scores the day it is assembling, so its id opens with that day. The
-    index rows carry no date cell of their own and are filed under the run's
-    day, which is only the day beside the rows while that holds.
-    """
+    """The run that scored one UTC day."""
     return f"{date}-1"
 
 
@@ -831,86 +815,28 @@ def test_an_observation_digest_cannot_be_forged_by_moving_a_separator() -> None:
     assert writer.observation_digest(observed("a;b", "c")) == left, "the digest is not stable"
 
 
-def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Path) -> None:
-    """The oracle this row rests on: the same measurements, at both grains.
-
-    `recorded_observations` is what stops one measurement being counted twice. A
-    grain change that dropped digests would turn a count over the ledger into a
-    count of times the pipeline looked, which is the one thing the ledger
-    promises it is not - and it would do it silently, because a shorter set reads
-    as a fresh clone.
-
-    So one row list is written twice: once through the writer, which files by day
-    through the ledger door, and once into the month layout this row retired,
-    spelled out here as plain CSV files because it is not in the tree any more and
-    a parity claim needs both sides present at once. The set is compared, not the
-    count: one observation is re-taken under a different scorer version, so a
-    comparison that only counted rows would pass on a tree that had lost the
-    re-take and gained a repeat.
-    """
+def test_the_lookup_keeps_every_filed_day_and_scorer(tmp_path: Path) -> None:
+    """Distinct scorer identities survive filing, including rows from different months."""
     january = [_measurement(number) for number in range(6)]
     february = [
         row.model_copy(update={"date": "2026-02-03", "run_id": "2026-02-03-1"})
         for row in (_measurement(80), _measurement(81))
     ]
-    #: The same article, the same words, read by a later instrument. A new
-    #: measurement, and the digest set has to hold both.
     retaken = january[0].model_copy(update={"scorer_version": "hhem-2.2-open@cccccccc;metrics-4"})
     rows = [*january, retaken, *february]
+    state = tmp_path / "state"
+    expected = {writer.observation_digest(row.model_dump(mode="json")) for row in rows}
 
-    day_grain = tmp_path / "day" / "state"
-    assert put(day_grain, rows) == len(rows)
+    assert len(expected) == len(rows), "the fixture repeated an observation"
+    assert put(state, rows) == len(rows)
 
-    month_grain = tmp_path / "month"
-    month_grain.mkdir(parents=True)
-    by_month: dict[str, list[EvalRow]] = {}
-    for row in rows:
-        by_month.setdefault(row.date[:7], []).append(row)
-    for month, month_rows in by_month.items():
-        _write_shard(month_grain / f"{month}.csv", month_rows)
-
-    # Both cases are read back off their own files, so neither can agree with the
-    # code that wrote it by being computed from the row list twice.
-    at_month = {
-        writer.observation_digest(record)
-        for shard in sorted(month_grain.glob("*.csv"))
-        for record in csv.DictReader(shard.open("r", encoding="utf-8", newline=""))
-    }
-    at_day = writer.recorded_observations(day_grain)
-
-    assert len(at_month) == len(rows), "the fixture repeated an observation, so this proves nothing"
-    assert at_day == at_month, (
-        f"{len(at_month - at_day)} measurements the month grain held are missing at day grain, "
-        f"and {len(at_day - at_month)} appeared that it did not hold"
-    )
-    produced = {writer.observation_digest(record) for record in writer.records(day_grain)}
-    indexed = {digest for path in writer.index_days(day_grain) for digest in _digests_of(path)}
-    assert not produced - indexed, (
-        f"the index lacks {len(produced - indexed)} digests the rows produce"
-    )
-    assert not indexed - produced, (
-        f"the index holds {len(indexed - produced)} the rows cannot produce"
-    )
-    assert len(ledger.held_days(day_grain, LedgerName.SUMMARY_QUALITY_EVALS)) == 2, (
-        "the two days were not written separately"
-    )
-
-
-def _digests_of(path: Path) -> set[str]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return {record["observation_digest"] for record in csv.DictReader(handle)}
-
-
-# --- The observation index -------------------------------------------------
-#
-# The writer used to answer "have we measured this already?" by reading every
-# score row it had ever written - 800 bytes a row, and every run paid it again.
-# The identity is four fields wide and the answer only needs the digest, so the
-# ledger keeps a second, fixed-width record of the same identities and the rows
-# are not read at all.
-#
-# Every fixture here is built in the test (Guardrail #12, CLAUDE.md section 13). None
-# of it reads the committed `state/` tree.
+    produced = {writer.observation_digest(record) for record in writer.records(state)}
+    assert produced == expected
+    assert writer.recorded_observations(state, expected) == expected
+    assert ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS) == [
+        "2026-01-09",
+        "2026-02-03",
+    ]
 
 
 def _opened_bytes(
@@ -945,12 +871,7 @@ def _opened_bytes(
 
 
 def _measurement(number: int) -> EvalRow:
-    """One eval row, unique in every identity field and legal at any count.
-
-    `_scored_row` walks its faithfulness score up the band and runs out of
-    range past ten rows. Nothing here is about the scores, so this one moves
-    only the four fields `OBSERVATION_KEY` reads.
-    """
+    """One fixture-backed eval row with distinct item and measurement identities."""
     return _scored_row(0).model_copy(
         update={
             "item_id": f"ai-{number:05d}",
@@ -958,31 +879,6 @@ def _measurement(number: int) -> EvalRow:
             "output_digest": hashlib.sha256(f"index-out-{number}".encode("ascii")).hexdigest(),
         }
     )
-
-
-def _an_index_file(state: Path, date: str) -> Path:
-    """Where this section's one writer files a day of digests.
-
-    A day of the index is a directory of writer-owned files, so a test that
-    builds one by hand names the file inside it. Every case here files as the
-    run that scored that day.
-    """
-    return ledger.day_shard_path(
-        state,
-        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
-        date=date,
-        run_id=a_scoring_run(date),
-        attempt=1,
-        job=ServerJob.ASSEMBLE,
-        shard=0,
-    )
-
-
-def _cells_in(day: list[Path]) -> Iterator[dict[str, str]]:
-    """Every row of every file one day holds, in reading order."""
-    for path in day:
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            yield from csv.DictReader(handle)
 
 
 #: Who files the rows `_seeded` lays down: a writer of its own, so its file is
@@ -1009,12 +905,6 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
     )
 
 
-def _indexed(state: Path, date: str) -> set[str]:
-    """The digests one day's index holds, read from that day rather than the union."""
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
-    return {record["observation_digest"] for record in _cells_in(day)}
-
-
 def _day_digests(state: Path, date: str) -> set[str]:
     """The distinct observations one day's rows hold, derived from the rows.
 
@@ -1025,18 +915,6 @@ def _day_digests(state: Path, date: str) -> set[str]:
         writer.observation_digest(row.model_dump(mode="json"))
         for row in ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, [date], model=EvalRow)
     }
-
-
-def _index_bytes(state: Path, date: str) -> bytes:
-    """Every byte one day's index holds, oldest file first."""
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
-    return b"".join(path.read_bytes() for path in day)
-
-
-def _index_size(state: Path, date: str) -> int:
-    """What one day's index costs on disk, across every file in it."""
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
-    return sum(path.stat().st_size for path in day)
 
 
 def test_a_repeat_is_still_refused_when_the_index_is_the_only_thing_read(tmp_path: Path) -> None:
@@ -1052,6 +930,49 @@ def test_a_repeat_is_still_refused_when_the_index_is_the_only_thing_read(tmp_pat
     assert put(state, rows) == 4
     assert put(state, rows) == 0, "a measurement already held came back as new"
     assert put(state, [_measurement(9)]) == 1, "a new measurement was refused"
+
+    expected = {
+        writer.observation_digest(row.model_dump(mode="json"))
+        for row in [*rows, _measurement(9)]
+    }
+    assert {writer.observation_digest(record) for record in writer.records(state)} == expected
+    assert writer.recorded_observations(state, expected) == expected
+
+
+def test_a_repeat_across_months_is_not_a_new_measurement(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    original = _measurement(0)
+    later = original.model_copy(update={"date": "2026-02-03", "run_id": "2026-02-03-1"})
+
+    assert put(state, [original]) == 1
+    assert put(state, [later]) == 0
+    assert list(writer.records(state)) == [original.csv_row()]
+
+
+def test_two_copies_in_one_batch_are_filed_once(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    row = _measurement(0)
+
+    assert put(state, [row, row]) == 1
+    assert list(writer.records(state)) == [row.csv_row()]
+
+
+def test_candidate_lookup_returns_only_requested_recorded_ids(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    rows = [_measurement(number) for number in range(3)]
+    assert put(state, rows) == 3
+    held = writer.observation_digest(rows[0].model_dump(mode="json"))
+    absent = writer.observation_digest(_measurement(9).model_dump(mode="json"))
+
+    assert writer.recorded_observations(state, iter([held, absent, held])) == {held}
+    assert writer.recorded_observations(state, []) == set()
+
+
+def test_candidate_lookup_refuses_a_missing_index(tmp_path: Path) -> None:
+    candidate = writer.observation_digest(_measurement(0).model_dump(mode="json"))
+
+    with pytest.raises(FileNotFoundError):
+        writer.recorded_observations(tmp_path / "state", [candidate])
 
 
 def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
@@ -1072,8 +993,9 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
         put(state, rows)  # the rows and the index the writer minted beside them
     _seeded(fat, rows, copies=10)  # the same two measurements, ten times the rows
 
-    thin = _opened_bytes(monkeypatch, lean, lambda: writer.recorded_observations(lean))
-    thick = _opened_bytes(monkeypatch, fat, lambda: writer.recorded_observations(fat))
+    candidates = {writer.observation_digest(rows[0].model_dump(mode="json"))}
+    thin = _opened_bytes(monkeypatch, lean, lambda: writer.recorded_observations(lean, candidates))
+    thick = _opened_bytes(monkeypatch, fat, lambda: writer.recorded_observations(fat, candidates))
 
     rows_live_under = [
         f"{tier}/{LedgerName.SUMMARY_QUALITY_EVALS.value}/"
@@ -1081,56 +1003,28 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
     ]
     opened_there = [name for name in thick if name.startswith(tuple(rows_live_under))]
     assert not opened_there, f"the writer opened {opened_there}, which is what this row removes"
-    assert thin == thick, (
+    assert sorted(thin.values()) == sorted(thick.values()), (
         "the writer's read moved with the rows: "
         f"{sum(thin.values())} B against {sum(thick.values())} B over the same two measurements"
     )
     assert sum(thick.values()) > 0, "the writer read nothing at all, so this proves nothing"
 
 
-def test_a_tree_with_rows_and_no_index_answers_the_same_as_one_with_an_index(
-    tmp_path: Path,
-) -> None:
-    """The migration for a day written before the index existed, as an equality.
-
-    Nothing on the write path fills a day that has rows and no index - filling
-    it means reading the rows, which is the bill the index exists to remove - so
-    `rebuild_index` is the one thing that does, and an operator runs it over the
-    days it names. After it, the two trees have to refuse the same measurements
-    and hold the same digests.
-    """
+def test_a_tree_with_rows_and_no_index_requires_explicit_migration(tmp_path: Path) -> None:
+    """Unindexed history must not silently admit measurements it already holds."""
     rows = [_measurement(number) for number in range(5)]
-    fresh = tmp_path / "fresh" / "state"
-    carried = tmp_path / "carried" / "state"
-    _seeded(fresh, rows)
-    put(carried, rows)  # this one was written through the writer, index and all
+    state = tmp_path / "state"
+    _seeded(state, rows)
+    before = list(writer.records(state))
 
-    assert not writer.index_days(fresh), "the fresh tree was not the un-migrated one"
-    assert put(fresh, rows) == 5, "a tree with no index refused a measurement it cannot see"
+    with pytest.raises(FileNotFoundError, match="explicit observation lookup migration"):
+        put(state, rows)
 
-    writer.rebuild_index(fresh, [rows[0].date])
-
-    assert writer.recorded_observations(fresh) == writer.recorded_observations(carried)
-    assert put(fresh, rows) == 0, "the repaired tree let a held measurement back in"
-    assert _indexed(fresh, rows[0].date) == _indexed(carried, rows[0].date)
+    assert list(writer.records(state)) == before
 
 
-def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
-    tmp_path: Path,
-) -> None:
-    """The invariant the pair rests on, asserted over the files rather than a return value.
-
-    Nothing on the read path compares an index against the rows beside it, so
-    keeping the two in step is the writer's job: it files the rows and the
-    digests it minted in one call, and every writer of the eval ledger in this
-    repository goes through it.
-
-    Held over the files after several calls and two days in different months,
-    because the two ways to break it are silent. A row filed under one day whose
-    digest lands under another, or a row written with no digest at all, both
-    leave a green return value and surface weeks later as a measurement counted
-    twice.
-    """
+def test_an_append_keeps_every_filed_days_observations_recorded(tmp_path: Path) -> None:
+    """Every persisted row remains findable after several batches across months."""
     state = tmp_path / "state"
     january = [_measurement(number) for number in range(4)]
     february = [
@@ -1145,416 +1039,34 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
     days = ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS)
     assert days == ["2026-01-09", "2026-02-03"], f"both days were not written: {days}"
     for date in days:
-        assert _indexed(state, date) == _day_digests(state, date), (
-            f"{ledger.relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX, date)} does not hold what the rows "
-            "beside it hold"
-        )
+        candidates = _day_digests(state, date)
+        assert writer.recorded_observations(state, candidates) == candidates
 
 
-def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Path) -> None:
-    """The one gap the pair cannot close by itself, its cost, and what closes it.
-
-    A day can gain rows behind the index's back - rows filed by something that
-    never knew the index existed, which is what a long-lived branch meets when
-    it merges a `main` older than the index. Nothing detects it, because
-    detecting it means reading the rows every run, which is the bill the index
-    removes.
-
-    So the writer under-reports, and this pins both halves of that. The repeat
-    lands, the day settles against `OBSERVATION_KEY`, and the ledger is left
-    counting the measurement once - which is the promise the ledger makes.
-    Under-reporting is the safe direction precisely because it has a repair;
-    over-reporting would leave a digest whose row nothing ever wrote.
-
-    The repair for the index itself is `rebuild_index`, which adds the digests
-    the rows produce and the index does not hold. The second tree is the same
-    defect with that repair applied. The repeat is filed by a later run of the
-    day, because a later attempt of the first run would replace that run's rows
-    rather than sit beside them.
-    """
-    held = [_measurement(number) for number in range(4)]
-    behind = [_measurement(70), _measurement(71)]
-    date = held[0].date
-    a_later_run = f"{date}-2"
-
-    stale = tmp_path / "stale" / "state"
-    assert put(stale, held) == 4
-    _seeded(stale, behind)
-
-    assert put(stale, behind, run_id=a_later_run) == 2, (
-        "an index behind its rows refused a measurement it has never seen, "
-        "so this tree was not the stale one"
-    )
-    on_disk = ledger.load(
-        [filed.path for filed in ledger.list_raw_files(stale, LedgerName.SUMMARY_QUALITY_EVALS)],
-        model=EvalRow,
-    )
-    settled = ledger.load_days(stale, LedgerName.SUMMARY_QUALITY_EVALS, [date], model=EvalRow)
-    assert len(on_disk) == 8, f"the repeat did not land: {len(on_disk)} rows on disk"
-    assert len(settled) == len(_day_digests(stale, date)) == 6, (
-        f"the settled day holds {len(settled)} rows for "
-        f"{len(_day_digests(stale, date))} measurements"
-    )
-
-    repaired = tmp_path / "repaired" / "state"
-    assert put(repaired, held) == 4
-    _seeded(repaired, behind)
-    writer.rebuild_index(repaired, [date])
-
-    assert put(repaired, behind, run_id=a_later_run) == 0, (
-        "the repaired index let a held measurement back in"
-    )
-    assert _indexed(repaired, date) == _day_digests(repaired, date)
-
-
-def test_the_index_costs_a_fixed_number_of_bytes_an_observation(tmp_path: Path) -> None:
-    """The measured price of the cover this row declares, held to arithmetic.
-
-    A stamp, a comma, sixty-four hex characters and a newline. It is fixed by
-    construction rather than by a corpus, which is why a count is an assertion
-    here and not a measurement that drifts.
-    """
-    state = tmp_path / "state"
-    rows = [_measurement(number) for number in range(10)]
-    put(state, rows)
-
-    header = ",".join(ObservationIndexRow.csv_columns()) + "\n"
-    a_row = len(ObservationIndexRow.schema_version()) + 1 + 64 + 1
-
-    assert ObservationIndexRow.csv_columns() == ("version", "observation_digest")
-    assert _index_size(state, rows[0].date) == len(header) + 10 * a_row
-    assert a_row == 76
-
-
-# --- Rebuilding the observation index --------------------------------------
-#
-# `refresh_index` fills a day with NO index and never compares one that
-# exists against the rows beside it, because comparing means reading the rows
-# and reading the rows is the bill the index removes. So an index that drifted
-# has no repair and no check, and the next dedupe silently admits a measurement
-# the ledger already holds. `rebuild_index` is the repair; the fixture below is
-# the check.
-#
-# The rows are committed and the disagreement is built on top of them. A
-# committed index cannot say what it means for long: its digests are minted over
-# `OBSERVATION_KEY`, so the day that key moves every one of them stops matching
-# the rows beside it, both faults below turn into the same fault, and every
-# assertion here passes on a fixture that no longer holds the shape it names.
-# Rebuilding the index and then spoiling it in one direction per day costs two
-# file writes and says what it means on any key. The rows are the fixture's two
-# committed day files and nothing appends to them, so the tree is fixed in size
-# (Guardrail #12).
-
-INDEX_REBUILD: Final = FIXTURES_DIR / "evals" / "index-rebuild"
-REBUILD_DAYS: Final = ("2026-01-09", "2026-02-11")
-
-#: A digest no row can produce - a run of one character rather than a hash of
-#: anything, which makes it impossible rather than merely unlikely.
-ROLLED_BACK: Final = "f" * 64
-
-
-def _index_rows(state: Path, date: str) -> list[dict[str, str]]:
-    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date)
-    return sorted(_cells_in(day), key=lambda row: row["observation_digest"])
-
-
-def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None:
-    """One day's whole index, written to a file rather than through the writer.
-
-    The writer can only mint a digest its own rows produce, and a digest the rows
-    cannot produce is half of what this section is about. Whatever the day held
-    goes first, because these rows are the day's index and not an addition to it.
-    """
-    for path in day_shards.one_day(
-        ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX), date
-    ):
-        path.unlink()
-    target = _an_index_file(state, date)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=writer.index_columns(), lineterminator="\n")
-        out.writeheader()
-        out.writerows(rows)
-
-
-def _committed_rows(date: str) -> list[EvalRow]:
-    """One fixture day's rows, read off the CSV day file they were committed as."""
-    folder = INDEX_REBUILD / "summary-quality-evals" / date[:4] / date[5:7] / date[8:10]
-    return [EvalRow.from_csv_row(cells) for cells in _cells_in(sorted(folder.glob("*.csv")))]
-
-
-def _drifted_tree(tmp_path: Path) -> Path:
-    """The committed rows, with each day's index spoilt in one direction.
-
-    The rows were committed as CSV day files, so they are filed through the
-    ledger door here with no digest minted, as rows a run left; the index beside
-    them is still a CSV day tree and is copied as committed.
-
-    `2026-01-09` gains a digest no row of that day can produce, which is what a
-    restore that rolled a row back leaves behind. `2026-02-11` loses one its rows
-    do produce, which is what a fill a crash cut short leaves behind. Two faults
-    on opposite sides of the answer, so a one-directional check cannot pass.
-    """
-    state = tmp_path / "state"
-    shutil.copytree(
-        INDEX_REBUILD / "summary-quality-evals-index",
-        ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX),
-    )
-    for date in REBUILD_DAYS:
-        _seeded(state, _committed_rows(date))
-    writer.rebuild_index(state, REBUILD_DAYS)
-
-    grown = _index_rows(state, "2026-01-09")
-    _write_index(state, "2026-01-09", [*grown, {**grown[0], "observation_digest": ROLLED_BACK}])
-    _write_index(state, "2026-02-11", _index_rows(state, "2026-02-11")[1:])
-    return state
-
-
-def _rows_produce(state: Path, days: Sequence[str]) -> set[str]:
-    """The digests the ledger's rows produce, read from the rows.
-
-    The oracle's own arithmetic. The index is compared against this and never
-    against another read of itself, which is the only comparison that can catch
-    a digest the rows cannot produce.
-    """
-    return {
-        writer.observation_digest(row.model_dump(mode="json"))
-        for row in ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, days, model=EvalRow)
-    }
-
-
-def test_a_rebuilt_index_holds_every_digest_the_rows_produce_and_keeps_the_rest(
-    tmp_path: Path,
+@pytest.mark.parametrize("options", [[], ["--month", "2026-02"], ["--every-shard"]])
+def test_the_retired_rebuild_command_is_refused(
+    options: list[str], capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Both directions are asked and only one is repaired, which is the trade.
+    """A global identity lookup cannot report extra identities for one day."""
+    with pytest.raises(SystemExit) as retired:
+        cli.main(["rebuild-summary-quality-evals-index", *options])
 
-    Two partitions, each spoilt in one direction, and both defects are real:
-    `2026-01-09`'s index carries a digest no row of that day can produce, which
-    is what a restore that rolled a row back leaves behind, and `2026-02-11`'s is
-    missing one its rows do produce, which is what a fill a crash cut short
-    leaves behind.
-
-    **A one-directional assertion passes on an index that only ever grows**, and
-    an index that only grows is what a repeated dedupe over a re-scored item
-    looks like. So the fixture is checked as wrong both ways before the rebuild.
-
-    The repair adds and never rewrites, because taking a row out of a committed
-    day is a rebase git cannot apply and the removal would stop the push. So the
-    extra digest survives, and what it costs is one measurement that is never
-    taken again - which is what the day's rows already say happened.
-    """
-    state = _drifted_tree(tmp_path)
-    produced = _rows_produce(state, REBUILD_DAYS)
-    before = {digest for date in REBUILD_DAYS for digest in _indexed(state, date)}
-
-    assert before - produced, "the fixture held nothing the rows cannot produce"
-    assert produced - before, "the fixture was missing nothing the rows do produce"
-
-    writer.rebuild_index(state, REBUILD_DAYS)
-
-    after = {digest for date in REBUILD_DAYS for digest in _indexed(state, date)}
-    assert not produced - after, (
-        f"the rebuilt index lacks {len(produced - after)} digests the rows do produce"
-    )
-    assert after == produced | (before - produced)
+    assert retired.value.code == 2
+    assert "invalid choice" in capsys.readouterr().err
+    assert "rebuild-summary-quality-evals-index" not in cli.STAGES
 
 
-def test_the_rebuild_names_what_each_day_had_wrong(tmp_path: Path) -> None:
-    """A repair that reported nothing would hide the drift it exists to reveal.
-
-    One digest too many in one partition and one too few in the other, each on
-    its own side of the answer - so an operator reading the log can tell an
-    index that grew from one that was cut short, which are different faults with
-    different causes.
-    """
-    state = _drifted_tree(tmp_path)
-    produced = _rows_produce(state, REBUILD_DAYS)
-
-    found = writer.rebuild_index(state, REBUILD_DAYS)
-
-    assert len(found["2026-01-09"].extra) == 1 and not found["2026-01-09"].missing
-    assert len(found["2026-02-11"].missing) == 1 and not found["2026-02-11"].extra
-    assert found["2026-01-09"].extra.isdisjoint(produced), (
-        "the extra digest was one the rows produce"
-    )
-    assert found["2026-02-11"].missing < produced, "the missing digest was not one the rows produce"
-
-
-def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_the_retired_rebuild_options_are_not_advertised(
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The cover is the days the caller names, and nothing else is read.
+    with pytest.raises(SystemExit) as help_requested:
+        cli.main(["--help"])
 
-    A rebuild reads every score row of the days it is given, which is the read
-    the index exists to avoid (Guardrail #12). That is affordable because a person
-    names the cover; it stops being affordable the moment naming one day
-    opens the archive.
-    """
-    state = _drifted_tree(tmp_path)
-    untouched = _index_bytes(state, "2026-01-09")
-    rows_of = f"{ledger.paths.RAW_DIRNAME}/{LedgerName.SUMMARY_QUALITY_EVALS.value}"
-
-    opened = _opened_bytes(monkeypatch, state, lambda: writer.rebuild_index(state, ["2026-02-11"]))
-
-    assert not [name for name in opened if name.startswith(f"{rows_of}/2026/01/09/")], (
-        f"a day nobody named was read: {sorted(opened)}"
-    )
-    assert [name for name in opened if name.startswith(f"{rows_of}/2026/02/11/")], (
-        "the rows of the named day were never read"
-    )
-    assert _index_bytes(state, "2026-01-09") == untouched
-    assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
-
-
-#: A wake at which both fixture months have closed, so the ID folder's fold
-#: settles each of them whole.
-BOTH_MONTHS_CLOSED: Final = datetime(2026, 3, 5, tzinfo=UTC)
-
-
-def _settle_months(state: Path) -> None:
-    """Fold the index the way its gardener task does: every closed month into one file."""
-    closed_day_fold.fold(
-        state,
-        [LedgerName.SUMMARY_QUALITY_EVALS_INDEX],
-        now=BOTH_MONTHS_CLOSED,
-        after_days=DEFAULT_CLOSED_AFTER_DAYS,
-        dry_run=False,
-        settles_months=True,
-    )
-
-
-def _month_files(state: Path, month: str) -> list[Path]:
-    root = ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
-    return day_shards.one_month(root, month)
-
-
-def test_a_settled_month_is_compared_whole_and_one_that_holds_the_truth_gains_no_file(
-    tmp_path: Path,
-) -> None:
-    """An index row names no day, so a month settled into one file is answered for the month.
-
-    Compared day by day, a settled month's days would hold no digest at all,
-    every row would read as missing, and the repair would write the month's whole
-    index again into its days. Compared whole, each month is keyed by itself:
-    the one that holds an extra digest names it, and neither gains a file.
-    """
-    state = _drifted_tree(tmp_path)
-    writer.rebuild_index(state, ["2026-02-11"])
-    _settle_months(state)
-    for month in ("2026-01", "2026-02"):
-        assert [path.name for path in _month_files(state, month)] == [day_shards.SETTLED_NAME], (
-            f"{month} was not settled whole, so this compares nothing"
-        )
-    before = {month: _month_files(state, month)[0].read_bytes() for month in ("2026-01", "2026-02")}
-
-    found = writer.rebuild_index(state, REBUILD_DAYS)
-
-    assert sorted(found) == ["2026-01", "2026-02"]
-    assert found["2026-01"].extra == {ROLLED_BACK} and not found["2026-01"].missing
-    assert not found["2026-02"].extra and not found["2026-02"].missing
-    after = {month: [path.read_bytes() for path in _month_files(state, month)] for month in before}
-    assert after == {month: [held] for month, held in before.items()}, "the repair wrote a file"
-
-
-def test_a_digest_a_settled_month_lacks_is_added_to_the_day_whose_rows_produce_it(
-    tmp_path: Path,
-) -> None:
-    """The repair cannot split a month's file, so it adds to the day the row sits in.
-
-    The dedupe sees the digest the moment the repair lands, and the next fold
-    settles that day back into the month's one file.
-    """
-    state = _drifted_tree(tmp_path)
-    writer.rebuild_index(state, ["2026-02-11"])
-    _settle_months(state)
-    month_file = _month_files(state, "2026-02")[0]
-    with month_file.open("r", encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    lost = rows[0]["observation_digest"]
-    with month_file.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=writer.index_columns(), lineterminator="\n")
-        out.writeheader()
-        out.writerows(rows[1:])
-    assert lost not in writer.recorded_observations(state)
-
-    found = writer.rebuild_index(state, ["2026-02-11"])
-
-    assert found["2026-02"].missing == {lost} and not found["2026-02"].extra
-    root = ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)
-    assert [ledger.is_repair(path.name) for path in day_shards.one_day(root, "2026-02-11")] == [
-        True
-    ]
-    assert lost in writer.recorded_observations(state)
-    _settle_months(state)
-    assert [path.name for path in _month_files(state, "2026-02")] == [day_shards.SETTLED_NAME]
-    assert lost in writer.recorded_observations(state)
-
-
-def test_a_day_with_no_committed_rows_is_refused_by_name(tmp_path: Path) -> None:
-    """A typo must not read as a clean pass over nothing.
-
-    The rule `check-publication` and `site-weight` already hold, on the ledger where
-    getting it wrong is quietest: a rebuild that skipped an unknown day would
-    print the same line as one that rewrote every day asked for. The refusal
-    comes before any file is touched, so the days named beside the typo keep
-    the index they had.
-    """
-    state = _drifted_tree(tmp_path)
-    before = _index_bytes(state, "2026-02-11")
-
-    with pytest.raises(FileNotFoundError, match="2026-03-01"):
-        writer.rebuild_index(state, ["2026-02-11", "2026-03-01"])
-    with pytest.raises(ValueError, match="no day"):
-        writer.rebuild_index(state, [])
-
-    assert _index_bytes(state, "2026-02-11") == before, "a refused rebuild rewrote a day anyway"
-
-
-def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
-    tmp_path: Path,
-) -> None:
-    """Reachable by hand, refused without a stated cover, and scheduled nowhere.
-
-    An index that repaired itself on a schedule would hide the drift it exists
-    to reveal, and the full pass reads every score row on record - which is a
-    decision somebody takes out loud (Guardrail #12). So the verb appears in no
-    workflow and no shell script, and the mechanism is called from one module.
-    """
-    state = _drifted_tree(tmp_path)
-    assert stage_rebuild_summary_quality_evals_index(months=["2026-02"], state_dir=state) == 0
-    assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
-    assert stage_rebuild_summary_quality_evals_index(months=None, state_dir=state) == 0
-    assert stage_rebuild_summary_quality_evals_index(months=["2026-03"], state_dir=state) == 1
-
-    with pytest.raises(SystemExit) as unsaid:
-        cli.main(["rebuild-summary-quality-evals-index"])
-    assert unsaid.value.code == 2
-    with pytest.raises(SystemExit) as both:
-        cli.main(["rebuild-summary-quality-evals-index", "--month", "2026-02", "--every-shard"])
-    assert both.value.code == 2
-
-    automated = sorted(
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in (
-            *(REPO_ROOT / ".github" / "workflows").glob("*.y*ml"),
-            *(REPO_ROOT / ".github" / "scripts").glob("*.sh"),
-        )
-        if "rebuild-summary-quality-evals-index" in read_text(path)
-    )
-    assert not automated, f"the rebuild is a step of {automated}"
-
-    callers = sorted(
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in source_files(
-            roots=(REPO_ROOT / "backend" / "idhazh",),
-            suffixes=(".py",),
-        )
-        if "rebuild_index(" in read_text(path)
-    )
-    assert callers == [
-        "backend/idhazh/evals/writer.py",
-        "backend/idhazh/stages/rebuild_summary_quality_evals_index.py",
-    ], f"the rebuild is reached from {callers}"
+    assert help_requested.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "rebuild-summary-quality-evals-index" not in help_text
+    assert "--month" not in help_text
+    assert "--every-shard" not in help_text
 
 
 def _scored_row(number: int) -> EvalRow:
@@ -1578,13 +1090,3 @@ def _scored_row(number: int) -> EvalRow:
             "scored_at": "2026-01-09T06:18:02Z",
         }
     )
-
-
-def _write_shard(path: Path, rows: list[EvalRow]) -> None:
-    names = EvalRow.csv_columns()
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=names, lineterminator="\n")
-        out.writeheader()
-        for row in rows:
-            payload = row.model_dump(mode="json")
-            out.writerow({name: "" if payload[name] is None else payload[name] for name in names})

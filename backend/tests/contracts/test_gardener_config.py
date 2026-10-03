@@ -49,6 +49,17 @@ def a_garden(tmp_path: Path, **declarations: dict[str, Any] | None) -> Path:
             path.unlink()
         else:
             path.write_text(json.dumps(declared), encoding="ascii")
+    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
+    names = set(knobs["task_names"])
+    for name, declared in declarations.items():
+        slug = name.replace("_", "-")
+        if declared is None:
+            names.discard(slug)
+        else:
+            names.add(slug)
+    knobs["task_names"] = sorted(names)
+    knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
     return config_dir
 
 
@@ -69,11 +80,14 @@ def a_retention(owns: list[str], window: dict[str, Any], status: str = "active")
 
 
 def a_compaction(ledger: str, **changes: Any) -> dict[str, Any]:
-    return fixture(
-        "compact-gardener",
-        ledger=ledger,
-        owns=[f"state/raw/{ledger}", f"state/compact/{ledger}"],
-    ) | changes
+    return (
+        fixture(
+            "compact-gardener",
+            ledger=ledger,
+            owns=[f"state/raw/{ledger}", f"state/compact/{ledger}"],
+        )
+        | changes
+    )
 
 
 MONTHS = {"unit": "months", "value": 14}
@@ -125,11 +139,6 @@ LIVE_BY_DECISION: Final = {
         "section 8), so its declaration transcribes a live squash rather than starting one"
     ),
     ("feed-health", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
-    ("summary-quality-evals-index", "fold.dry_run"): (
-        f"{FOLD_ALREADY_RAN_LIVE}; and a person ruled that the eval ledger's ID files stop "
-        "growing by a file a day with no summary, so the same switch settles each closed "
-        "month of them into one file"
-    ),
 }
 
 #: The CSV day trees no task folds, each with why. A tree that joins `DAY_TREES`
@@ -345,9 +354,9 @@ def test_a_month_settles_only_beside_a_window_that_keeps_whole_months(
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
-    GardenerConfig(version="2026-09-27", attempts=6, shards=5)
+    GardenerConfig(version="2026-09-27", attempts=6, shards=5, task_names=())
     with pytest.raises(ValidationError, match="attempts is 5 and shards is 5"):
-        GardenerConfig(version="2026-09-27", attempts=5, shards=5)
+        GardenerConfig(version="2026-09-27", attempts=5, shards=5, task_names=())
 
 
 def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -> None:
@@ -357,7 +366,7 @@ def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -
     assert isinstance(tasks["history"], HistoryPolicy)
     compaction = tasks["compact-gardener"]
     assert isinstance(compaction, CompactionPolicy)
-    assert (compaction.daily_keep_days, compaction.raw_index_keep_days) == (45, 90)
+    assert compaction.daily_keep_days == 45
 
 
 def test_a_key_that_belongs_to_another_member_is_refused_by_name(tmp_path: Path) -> None:
@@ -477,7 +486,9 @@ def test_a_window_a_reader_still_opens_is_not_deleted_under_it(
 ) -> None:
     """Days against months are compared at the fewest days the months can hold."""
     owns = [f"state/{name}"]
-    config_dir = a_garden(tmp_path, **{name.replace("-", "_"): fixture("seen", owns=owns, window=window)})
+    config_dir = a_garden(
+        tmp_path, **{name.replace("-", "_"): fixture("seen", owns=owns, window=window)}
+    )
     if loads:
         config.load_gardener(config_dir)
     else:
@@ -624,7 +635,7 @@ def _thirteen_months(name: str) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize(
-    "name", ["feed-health", "summary-quality-evals-index", "telemetry-aggregate"]
+    "name", ["feed-health", "telemetry-aggregate"]
 )
 def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: str) -> None:
     """A 366-day read reaches fourteen month shards, and thirteen is one short of it.
@@ -757,13 +768,6 @@ def test_a_collection_outside_the_vocabulary_is_refused(tmp_path: Path) -> None:
     assert "config/gardener/workflow-artifacts.json is refused" in refused(
         a_garden(tmp_path, workflow_artifacts=declared)
     )
-
-
-def test_a_compaction_keeps_its_raw_listings_as_long_as_its_daily_period(tmp_path: Path) -> None:
-    config_dir = a_garden(
-        tmp_path, compact_gardener=a_compaction("gardener", raw_index_keep_days=30)
-    )
-    assert "raw index must outlive the daily period" in refused(config_dir)
 
 
 @pytest.mark.parametrize(

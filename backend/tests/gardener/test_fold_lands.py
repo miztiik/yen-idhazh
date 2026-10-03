@@ -7,8 +7,8 @@ committed declarations, whose window reports and whose fold is live, over a
 tree its own writer files: three closed days, one day the window ages out and
 one open day, each holding the files of two runs. What reached origin is read
 back from origin, so a settled file written and never staged, or a writer file
-deleted and never staged, fails here. The last test does the same for the eval
-ledger's ID folder, whose task settles a closed month into one file.
+deleted and never staged, fails here. The last test asks the same ledger to
+settle a closed month into one file.
 
 The clock is handed in rather than read, so the wake is one written out below,
 in UTC.
@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, seed_feed_health
+from conftest import CONFIG_DIR, seed_feed_health
 
 from idhazh import config, day_shards, ledger
 from idhazh.config import GardenerSettings
@@ -40,6 +40,7 @@ from ._garden import (
     an_origin,
     commits_on,
     git,
+    named_task_package,
     on_origin,
     quiet_git,
     read_origin,
@@ -148,6 +149,7 @@ def test_a_live_fold_inside_a_dry_task_lands_and_the_window_s_report_stays_a_rep
         (TREE.value,),
         settings=settings,
         repo_root=checkout,
+        package=named_task_package(tmp_path, monkeypatch),
         run_id=RUN_ID,
         attempt=1,
         shard=0,
@@ -198,6 +200,7 @@ def test_a_writer_file_that_lands_while_the_fold_runs_survives_beside_the_settle
         (TREE.value,),
         settings=settings,
         repo_root=checkout,
+        package=named_task_package(tmp_path, monkeypatch),
         run_id=RUN_ID,
         attempt=1,
         shard=0,
@@ -287,8 +290,6 @@ def test_a_window_that_fails_leaves_the_fold_for_the_next_wake(
     assert outcome.landing.deleted_paths == frozenset()
 
 
-#: The eval ledger's ID folder, whose task settles each closed month whole.
-ID_TREE: Final = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
 #: A wake on the first of October: August closed a month ago, the 29th of
 #: September closed a day ago, and the 30th ended at this wake's own day.
 MONTH_WAKE: Final = datetime(2026, 10, 1, 0, 40, tzinfo=UTC)
@@ -297,31 +298,35 @@ MONTH_WAKE: Final = datetime(2026, 10, 1, 0, 40, tzinfo=UTC)
 def test_a_settled_month_lands_as_one_file_and_its_days_files_leave_main(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The ID folder's task settles its closed month on main, under the committed declaration.
+    """The real feed-health task lands its fold when configured to settle whole months.
 
     After the push, main holds August's one `settled.csv` with every ID its days
     held and none of the files it replaced, the closed day of September settled
     in its own folder, and the open day as it was.
     """
     quiet_git(tmp_path, monkeypatch)
-    source = FIXTURES_DIR / "day-shards" / "id-months" / ID_TREE.value
-    assert source.is_dir(), f"the id-months fixture is missing at {source}"
-    tree = f"{ledger.STATE_DIRNAME}/{ID_TREE.value}"
-    files = {
-        f"{tree}/{path.relative_to(source).as_posix()}": path.read_text(encoding="utf-8")
-        for path in sorted(source.rglob("*.csv"))
-    }
+    files = the_tree(
+        tmp_path / "scratch",
+        ("2026-08-03", "2026-08-17", "2026-08-31", "2026-09-29", "2026-09-30"),
+    )
+    tree = ledger.tree_relpath(TREE)
     origin, checkout = an_origin(tmp_path, files)
-    settings = config.load_gardener(a_config(checkout, CONFIG_DIR / "gardener"))
-    key, model = ledger.segment_key(ID_TREE), ledger.segment_contract(ID_TREE)
-    root = ledger.tree_root(checkout / ledger.STATE_DIRNAME, ID_TREE)
+    config_dir = a_config(checkout, CONFIG_DIR / "gardener")
+    declaration = config_dir / "gardener" / f"{TREE.value}.json"
+    policy = json.loads(declaration.read_text(encoding="utf-8"))
+    policy["fold"]["settles_months"] = True
+    declaration.write_text(json.dumps(policy) + "\n", encoding="utf-8", newline="\n")
+    settings = config.load_gardener(config_dir)
+    key, model = ledger.segment_key(TREE), ledger.segment_contract(TREE)
+    root = ledger.tree_root(checkout / ledger.STATE_DIRNAME, TREE)
     before = day_shards.settled_rows(root, key, model, days=UNBOUNDED_WINDOW)
     said: list[str] = []
 
     outcome = gardener_publish.run_and_land(
-        (ID_TREE.value,),
+        (TREE.value,),
         settings=settings,
         repo_root=checkout,
+        package=named_task_package(tmp_path, monkeypatch),
         run_id=RUN_ID,
         attempt=1,
         shard=0,
@@ -339,10 +344,10 @@ def test_a_settled_month_lands_as_one_file_and_its_days_files_leave_main(
         else:
             assert on_origin(origin, relpath) is None, f"{relpath} was folded and not deleted"
     after = read_origin(origin, tmp_path / "after", tree)
-    landed = ledger.tree_root(after / ledger.STATE_DIRNAME, ID_TREE)
+    landed = ledger.tree_root(after / ledger.STATE_DIRNAME, TREE)
     assert day_shards.settled_rows(landed, key, model, days=UNBOUNDED_WINDOW) == before
 
-    row = only_row(outcome.record, ID_TREE.value)
+    row = only_row(outcome.record, TREE.value)
     assert (row.fold_dry_run, row.folded_months, row.folded_days) == (False, 1, 1)
-    assert row.folded_files == 6, "five files of August and one of the 29th"
-    assert row.deleted == 0, "the window keeps every month and takes nothing"
+    assert row.folded_files == 8, "six August files and two files of the 29th"
+    assert row.deleted == 0, "the window keeps these fixture months and takes nothing"

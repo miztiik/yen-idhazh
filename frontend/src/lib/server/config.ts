@@ -865,6 +865,13 @@ export function uiConfig(): UiConfig {
 const SHELL_SEED_ITEMS = 15;
 
 export function shellSeedItems(): number {
+	if (process.env.CANARY_BUILD === '1') {
+		const value = readJson<{ shell_seed_items?: unknown }>('config', 'canary.json')?.shell_seed_items;
+		if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+			throw new Error('config/canary.json shell_seed_items must be a positive integer.');
+		}
+		return value;
+	}
 	return appearance().digest?.shell_seed_items ?? raw().ui?.shell_seed_items ?? SHELL_SEED_ITEMS;
 }
 

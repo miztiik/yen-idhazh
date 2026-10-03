@@ -110,6 +110,7 @@ class CompactTree:
     raw_days: list[str]
     #: How many raw day folders the pass listed, before any step set a day aside.
     listed: int = 0
+    months: frozenset[str] | None = None
     #: The periods whose index the pass found on disk.
     indexed: frozenset[Period] = frozenset()
     changes: list[Change] = field(default_factory=list)
@@ -122,7 +123,14 @@ class CompactTree:
     pending_watermarks: dict[Period, Watermark] = field(default_factory=dict)
 
     @classmethod
-    def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
+    def read(
+        cls,
+        state_dir: Path,
+        ledger_name: LedgerName,
+        listing: FileListing,
+        *,
+        months: frozenset[str] | None = None,
+    ) -> CompactTree:
         """The three watermarks, the three indexes and the raw day folder names, read once.
 
         The indexes' folder and each watermark's own folder are fetched first,
@@ -142,9 +150,7 @@ class CompactTree:
         for period in Period:
             mark = marks[period]
             through[period] = (
-                _read(Watermark, mark, ledger_name, period).through
-                if listing.holds(mark)
-                else None
+                _read(Watermark, mark, ledger_name, period).through if listing.holds(mark) else None
             )
             index = indexes[period]
             present = listing.holds(index)
@@ -165,6 +171,7 @@ class CompactTree:
             state_dir=state_dir,
             ledger=ledger_name,
             listing=listing,
+            months=months,
             daily_through=through[Period.DAILY],
             monthly_through=through[Period.MONTHLY],
             yearly_through=through[Period.YEARLY],
@@ -289,7 +296,7 @@ class CompactTree:
 
         A deleted file takes any date folder it leaves empty with it, so the next
         listing of the raw tree does not meet a day that holds nothing. A file
-        deleted by its name alone - a raw listing past its keep - may never have
+        deleted by its name alone - a raw listing an earlier build left - may never have
         been downloaded, and its deletion lands from the name.
         """
         for change in self.changes:

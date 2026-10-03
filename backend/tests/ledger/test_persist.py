@@ -14,12 +14,15 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import ClassVar, Final
 
 import pyarrow.parquet
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from conftest import FIXTURES_DIR, REPO_ROOT
 from pydantic import Field
 
 from idhazh import ledger
@@ -40,6 +43,8 @@ from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import filenames, json_lines, parquet
+
+from ._fixtures import fixture_rows
 
 pytestmark = pytest.mark.contract
 
@@ -121,9 +126,8 @@ def _every_column_rows() -> list[Contract]:
 
 
 def _fixture_rows(model: type[Contract]) -> list[Contract]:
-    """Every committed contract fixture of this model, as rows."""
-    directory = CONTRACT_FIXTURES_DIR / model.__schema_stem__
-    return [model.from_json(read_text(path)) for path in sorted(directory.glob("*.json"))]
+    """The named recorded examples of this model, as rows."""
+    return list(fixture_rows(model))
 
 
 def _identity(*, attempt: int = 1, job: ServerJob = ServerJob.ASSEMBLE) -> WriterIdentity:
@@ -145,6 +149,29 @@ def _stored(path: Path) -> list[dict[str, object]]:
 
 
 # --- the round trip ------------------------------------------------------------
+
+
+def test_a_short_lived_parquet_reader_exits_cleanly() -> None:
+    fixture = FIXTURES_DIR / "parquet" / "visual-prunes-raw-2026-09-06.parquet"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys\n"
+            "from pathlib import Path\n"
+            "from idhazh.ledger import parquet\n"
+            "metadata, rows = parquet.read(Path(sys.argv[1]).read_bytes())\n"
+            "print(len(rows))\n",
+            str(fixture),
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == str(len(_fixture_rows(VisualPruneRow)))
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])

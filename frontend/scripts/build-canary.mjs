@@ -14,8 +14,9 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { canaryFiles } from './canary-inventory.mjs';
 
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 const ROOT = resolve(CANARY, 'digest');
@@ -990,6 +991,7 @@ function writeItemHealthCanary() {
 	for (const writer of byWriter.values()) {
 		writeDayShard(dir, writer.day, writer.runId, COLUMNS, writer.rows);
 	}
+	return [date, longAgo];
 }
 
 /** The machines the canary's jobs drew, so the machine panels have cards to draw.
@@ -1179,7 +1181,7 @@ function writeHostFingerprintCanary() {
 	}
 }
 
-writeItemHealthCanary();
+const canaryDays = writeItemHealthCanary();
 writeHostFingerprintCanary();
 // The two ledgers above go through the ledger door, and then every fixture day of
 // the console's three door ledgers is packed: the console reads them from packed
@@ -1191,13 +1193,21 @@ python([
 	'--state',
 	STATE
 ]);
+
+const telemetryMonths = canaryDays.map((day) => day.slice(0, 7)).sort();
+const telemetryFromMonth = telemetryMonths[0];
+const telemetryThroughMonth = telemetryMonths[telemetryMonths.length - 1];
 python([
 	'-m',
 	'idhazh.telemetry.publish.public_telemetry',
 	'--state',
 	STATE,
 	'--public',
-	join(STATE, 'telemetry')
+	join(STATE, 'telemetry'),
+	'--from-month',
+	telemetryFromMonth,
+	'--through-month',
+	telemetryThroughMonth
 ]);
 
 // The payloads the console fetches, written here and not in `build_canary_day.py`
@@ -1215,9 +1225,30 @@ python([
 	STATE
 ]);
 
+// This inventory describes one generated fixture run, not the archive. The
+// original eight-item producer remains the only writer of its stories.
+const publicTelemetry = join(CANARY, 'telemetry');
+rmSync(publicTelemetry, { recursive: true, force: true });
+cpSync(join(STATE, 'telemetry'), publicTelemetry, { recursive: true });
+const inventoryNames = canaryFiles(CANARY, STATE);
+const publicNames = join(CANARY, 'public-files.txt');
+const stateNames = join(CANARY, 'state-files.txt');
+writeFileSync(publicNames, `${inventoryNames.publicFiles.join('\n')}\n`);
+writeFileSync(stateNames, `${inventoryNames.stateFiles.join('\n')}\n`);
+rmSync(join(CANARY, 'publication.json'), { force: true });
+python([
+	'-m', 'utilities.publication_inventory', '--public-root', CANARY,
+	'--paths', publicNames, '--state-root', STATE, '--state-paths', stateNames
+]);
+rmSync(publicNames);
+rmSync(stateNames);
+
 console.log(`building the site from ${ROOT}`);
 execFileSync('npm', ['run', 'build'], {
 	stdio: 'inherit',
 	shell: process.platform === 'win32',
-	env: { ...process.env, DIGEST_ROOT: ROOT, STATE_ROOT: STATE, TELEMETRY_ROOT: join(STATE, 'telemetry') }
+	env: {
+		...process.env, CANARY_BUILD: '1', DIGEST_ROOT: ROOT,
+		STATE_ROOT: STATE, TELEMETRY_ROOT: join(STATE, 'telemetry')
+	}
 });

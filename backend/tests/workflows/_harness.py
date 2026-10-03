@@ -135,6 +135,7 @@ DISPATCH_READ_BY_NAME: Final = "read by name"
 
 DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("backfill.yml", "commit"): DISPATCH_BOOLEAN,
+    ("backfill.yml", "days"): DISPATCH_READ_BY_NAME,
     # The one that decides a published address. See the two tests that run the
     # step for what it accepts and what it now stops.
     ("digest.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
@@ -674,12 +675,14 @@ COMMIT_BASE_ENV: Final = frozenset(
 # rebase.
 COMMIT_SCRIPT_ENV: Final = {
     "plan": COMMIT_BASE_ENV,
-    "work": COMMIT_BASE_ENV | {"SHARD"},
+    "work": COMMIT_BASE_ENV | {"SHARD", "PREPARE_COMMAND", "PREPARED_PATHS_FILE"},
     "assemble": COMMIT_BASE_ENV
     | {
         "REFRESH_PATHS",
         "REGENERATE_COMMAND",
         "DROP_RACED_ASSETS_COMMAND",
+        "PREPARE_COMMAND",
+        "PREPARED_PATHS_FILE",
     },
     "bench": COMMIT_BASE_ENV,
 }
@@ -692,6 +695,7 @@ COMMIT_STAGED_PATHS: Final = {
     # segment deletions while leaving the heads behind.
     "plan": [
         "state",
+        "frontend/public/publication.json",
     ],
     # `state` whole since 2026-09-22, where this was `state/traces` and
     # `state/segments` named one at a time. Every tree a shard writes now names
@@ -845,6 +849,10 @@ SUBSTITUTED_DAY_DIR: Final = "frontend/public/digest/2026/08/25"
 
 SUBSTITUTED_SHA: Final = "0" * 40
 
+SUBSTITUTED_EXECUTION: Final = "40000000001"
+
+SUBSTITUTED_ATTEMPT: Final = "1"
+
 SUBSTITUTED_SHARD: Final = "3"
 
 SUBSTITUTED_SHARDS: Final = "8"
@@ -874,6 +882,8 @@ EXPRESSION_VALUES: Final = {
     # exists to remove.
     "steps.derived.outputs.refresh_paths": path_classes.refresh_paths(day_dir=SUBSTITUTED_DAY_DIR),
     "github.sha": SUBSTITUTED_SHA,
+    "github.run_id": SUBSTITUTED_EXECUTION,
+    "github.run_attempt": SUBSTITUTED_ATTEMPT,
     "matrix.shard": SUBSTITUTED_SHARD,
     "matrix.shards": SUBSTITUTED_SHARDS,
     "matrix.tenant": SUBSTITUTED_TENANT,
@@ -1024,9 +1034,7 @@ def _inline_programs(script: str) -> list[str]:
     Both spellings index the config, so both are in scope. A step that carries
     neither contributes nothing and is not an error.
     """
-    programs: list[str] = re.findall(
-        r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL
-    )
+    programs: list[str] = re.findall(r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL)
     programs.extend(re.findall(r"python3?\s+-c\s+'([^']*)'", script))
     return programs
 
@@ -1066,9 +1074,7 @@ def _reads_the_environment(node: ast.AST) -> bool:
 
 def _names(node: ast.AST, name: str) -> bool:
     """Whether an expression reads a given name anywhere inside itself."""
-    return any(
-        isinstance(inner, ast.Name) and inner.id == name for inner in ast.walk(node)
-    )
+    return any(isinstance(inner, ast.Name) and inner.id == name for inner in ast.walk(node))
 
 
 def _own_nodes(scope: ast.AST) -> list[ast.AST]:
@@ -1173,9 +1179,7 @@ def _config_key_paths(program: str) -> list[tuple[str, tuple[str, ...]]]:
     tree = ast.parse(program)
     scopes: list[ast.AST] = [tree]
     scopes.extend(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
     )
     found: list[tuple[str, tuple[str, ...]]] = []
     for scope in scopes:
@@ -1268,7 +1272,9 @@ def _declared_steps(workflow: dict[str, object], job_name: str) -> list[dict[str
     """
     raw_steps = _job(workflow, job_name).get("steps")
     assert isinstance(raw_steps, list), f"job {job_name} steps must contain a YAML list"
-    assert all(isinstance(step, dict) for step in raw_steps), f"job {job_name} steps must be mappings"
+    assert all(isinstance(step, dict) for step in raw_steps), (
+        f"job {job_name} steps must be mappings"
+    )
     return cast(list[dict[str, object]], raw_steps)
 
 
@@ -1280,8 +1286,7 @@ def _action_call(workflow: dict[str, object], job_name: str, uses: str) -> dict[
     if given is None:
         return {}
     return {
-        name: str(value)
-        for name, value in _mapping(given, f"job {job_name} {uses} 'with'").items()
+        name: str(value) for name, value in _mapping(given, f"job {job_name} {uses} 'with'").items()
     }
 
 
@@ -1310,9 +1315,7 @@ def _steps(workflow: dict[str, object], job_name: str) -> list[dict[str, object]
     return resolved
 
 
-def _step(
-    workflow: dict[str, object], job_name: str, key: str, value: str
-) -> dict[str, object]:
+def _step(workflow: dict[str, object], job_name: str, key: str, value: str) -> dict[str, object]:
     matches = [step for step in _steps(workflow, job_name) if step.get(key) == value]
     assert len(matches) == 1, f"job {job_name} must have one step with {key}={value}"
     return matches[0]
@@ -1460,10 +1463,7 @@ def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> 
         "exit 1",
         "fi",
     ]
-    matrix_line = (
-        'echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" '
-        '>> "$GITHUB_OUTPUT"'
-    )
+    matrix_line = 'echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"'
 
     assert [line for line in lines if line.startswith("SHARD_PATTERN=")] == [pattern_line]
     assert lines.count(input_line) == 1
@@ -1733,9 +1733,7 @@ def _decide_script(step: dict[str, object]) -> str:
     the date has to arrive as a variable, or the pattern below it is reading a
     script somebody else already edited.
     """
-    script = _script(step, "digest.yml/plan/decide").replace(
-        _expression("inputs.faithfulness"), ""
-    )
+    script = _script(step, "digest.yml/plan/decide").replace(_expression("inputs.faithfulness"), "")
     assert "${{" not in script, "the decide step reads the dispatch date by name, not by paste"
     return script
 
@@ -1872,6 +1870,7 @@ def _bash() -> str | None:
             candidates.append(Path(root) / "Git" / "bin" / "bash.exe")
     return next((str(path) for path in candidates if path.is_file()), None)
 
+
 requires_bash: Final = pytest.mark.skipif(
     _bash() is None,
     reason="no bash on this host to execute the shell a workflow inlines",
@@ -1881,11 +1880,10 @@ requires_bash: Final = pytest.mark.skipif(
 # own value expects, so a harness that has to name an interpreter needs a path
 # without one.
 requires_space_free_paths: Final = pytest.mark.skipif(
-    " " in sys.executable
-    or " " in str(REBUILD_STAND_IN)
-    or " " in str(DROP_ENTRY_POINT),
+    " " in sys.executable or " " in str(REBUILD_STAND_IN) or " " in str(DROP_ENTRY_POINT),
     reason="REGENERATE_COMMAND is word-split on spaces",
 )
+
 
 def _isolated_env(tmp_path: Path) -> dict[str, str]:
     """Git with no machine identity and no machine config to fall back on.
@@ -1901,7 +1899,12 @@ def _isolated_env(tmp_path: Path) -> dict[str, str]:
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     return {
-        **{name: value for name, value in os.environ.items() if name != "GITHUB_OUTPUT"},
+        **{
+            name: value
+            for name, value in os.environ.items()
+            if name not in {"GITHUB_OUTPUT", "PUSH_RETRY_CONFIG"}
+            and not name.startswith("GIT_CONFIG_")
+        },
         "HOME": str(home),
         "USERPROFILE": str(home),
         "GIT_CONFIG_GLOBAL": str(home / "gitconfig"),
@@ -1976,7 +1979,15 @@ def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     # whether two runs that both appended are in conflict, so a scripted origin
     # without it would test a different repository.
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    _git(seed, env, "add", ".gitattributes", "docs", "runner-noise.txt", *staged_paths)
+    for relative in (
+        ".gitignore", "config/push-retry.json", "backend/utilities/prepare_evaluation_publication.py"
+    ):
+        _write(seed / relative, read_text(REPO_ROOT / relative))
+    _git(
+        seed, env, "add", ".gitattributes", ".gitignore", "config/push-retry.json",
+        "backend/utilities/prepare_evaluation_publication.py", "docs", "runner-noise.txt",
+        *staged_paths,
+    )
     _git(seed, env, "commit", "-m", "seed")
     _git(seed, env, "push", "-u", "origin", "main")
 
@@ -2086,6 +2097,8 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     seed = root / "seed"
     _git(root, env, "clone", str(origin), str(seed))
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
+    for relative in (".gitignore", "backend/utilities/prepare_evaluation_publication.py"):
+        _write(seed / relative, read_text(REPO_ROOT / relative))
     _write(seed / "docs" / "unrelated.md", "seed\n")
     # Empty files suffice: the commit loop does not interpret corpus contents.
     for relative in CORPUS_SEED:
@@ -2093,7 +2106,11 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     for dirname in series.PUBLISHED_ROOTS:
         _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
     _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
-    _git(seed, env, "add", ".gitattributes", "docs", *COMMIT_STAGED_PATHS["assemble"])
+    _git(
+        seed, env, "add", ".gitattributes", ".gitignore",
+        "backend/utilities/prepare_evaluation_publication.py", "docs",
+        *COMMIT_STAGED_PATHS["assemble"],
+    )
     _git(seed, env, "commit", "-m", f"digest: {date}")
     _git(seed, env, "push", "-u", "origin", "main")
 

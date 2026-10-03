@@ -139,7 +139,7 @@ def test_every_run_records_the_rate_it_ran_under(
     same eight hundred rows in the ledger, and only the manifest can separate
     them.
     """
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     settings = observed(ObservabilityConfig(sample_rate=rate))
     isolate_ledgers(tmp_path, monkeypatch)
 
@@ -155,7 +155,7 @@ def test_a_run_with_the_scorer_off_writes_no_row_and_names_no_instrument(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """Switched off and would not load are different facts, and null is neither."""
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     settings = observed(ObservabilityConfig(evaluation_enabled=False))
     isolate_ledgers(tmp_path, monkeypatch)
 
@@ -170,7 +170,7 @@ def test_a_run_with_the_scorer_off_writes_no_row_and_names_no_instrument(
 def test_a_scored_run_names_the_instrument_that_wrote_its_rows(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"

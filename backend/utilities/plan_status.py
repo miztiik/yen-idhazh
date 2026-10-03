@@ -426,13 +426,13 @@ def parse_plan(path: PurePosixPath, text: str) -> Plan | None:
     )
 
 
-def read_plans(root: Path) -> list[Plan]:
-    """Every plan-doc under `TODO/` that carries a Status Reckoner, in name order."""
+def read_plans(root: Path, names: Sequence[str]) -> list[Plan]:
+    """Read only named plan documents that carry a Status Reckoner."""
+    root = root.resolve()
     plans: list[Plan] = []
-    folder = root / PLANS
-    if not folder.is_dir():
-        return plans
-    for path in sorted(folder.glob("*.md")):
+    from utilities.named_inputs import named_files
+
+    for path in named_files(root, names):
         plan = parse_plan(
             PurePosixPath(path.relative_to(root).as_posix()),
             path.read_text(encoding="utf-8"),
@@ -509,9 +509,7 @@ def find_drift(
         for row in plan.rows:
             if row.state == "unknown":
                 said = row.status_text.strip() or "(blank)"
-                drift.append(
-                    Drift("unknown-status", row.name, row.where, f"status reads {said!r}")
-                )
+                drift.append(Drift("unknown-status", row.name, row.where, f"status reads {said!r}"))
             if (
                 pull_states is not None
                 and row.pull is not None
@@ -617,9 +615,7 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
 def _gh(repo: Path, *args: str) -> str:
     """Run `gh` and return its stdout. Raises LookupError when it cannot answer."""
     try:
-        done = subprocess.run(
-            ["gh", *args], cwd=repo, capture_output=True, text=True, check=False
-        )
+        done = subprocess.run(["gh", *args], cwd=repo, capture_output=True, text=True, check=False)
     except OSError as error:
         raise LookupError(str(error)) from error
     if done.returncode != 0:
@@ -966,7 +962,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Read the plan queue and its drift.")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--trunk", default=TRUNK)
-    parser.add_argument("--plan", default="", help="only plans whose filename holds this")
+    parser.add_argument(
+        "--plan", action="append", required=True, help="Named plan path. Repeatable."
+    )
     parser.add_argument("--all", action="store_true", help="include plans with no live row")
     parser.add_argument("--ready", action="store_true", help="skip the per-row listing")
     parser.add_argument(
@@ -981,9 +979,7 @@ def main() -> None:
     parser.add_argument("--no-gh", action="store_true", help="ask git only, never gh")
     args = parser.parse_args()
 
-    every = read_plans(args.repo)
-    if args.plan:
-        every = [plan for plan in every if args.plan.lower() in plan.path.name.lower()]
+    every = read_plans(args.repo, args.plan)
     index = index_rows(every)
 
     listed = every if args.all else [plan for plan in every if plan.live]

@@ -1,0 +1,17 @@
+{
+  "generation": "32bd26ae750e261c25aec390a8cdf93790f03a209d85fa389f3e25953ffc872d",
+  "key_fields": [
+    "url_key",
+    "output_digest",
+    "scorer_version"
+  ],
+  "node": {
+    "kind": "page",
+    "sha256": "05fb88ded983ef1eaaec23486f1fb2b9ab39aab4ec0a22229b2f1e16d3f0e55c"
+  },
+  "settings": {
+    "max_leaf_bytes": 262144,
+    "sqlite_page_bytes": 4096
+  },
+  "version": "2026-10-02"
+}

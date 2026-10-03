@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -18,7 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger
 from idhazh.contracts.council_shard_outcome import (
@@ -31,6 +30,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
+from ._config import copy_config
 from ._tenants import a_scripted_venue, a_venue, forget, written
 
 A_VENUE = "a_paper_venue"
@@ -76,9 +76,8 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 
 
 def _config_registering(root: Path, *slugs: str) -> Path:
-    """A whole `config/` in a temp directory, with the named slugs registered."""
-    target = root / "config"
-    shutil.copytree(CONFIG_DIR, target)
+    """The loader's named config inputs, with the named slugs registered."""
+    target = copy_config(root)
     raw = json.loads(read_text(target / "idhazh.json"))
     raw["council"]["tenants"] = list(slugs)
     (target / "idhazh.json").write_text(
@@ -437,7 +436,7 @@ def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> 
 
     Written once, it is a phantom day in the prune target and the day inventory
     for as long as the ledger exists - so a night with nothing to record writes
-    nothing at all. The ledger's directory is kept by its own `.gitkeep`.
+    nothing at all.
     """
     state_root = tmp_path / "state"
     empty = _config_registering(tmp_path)
@@ -460,10 +459,6 @@ def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> 
     )
 
     assert not ledger.path(state_root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, A_DATE).exists()
-    assert (
-        ledger.tree_root(REPO_ROOT / ledger.STATE_DIRNAME, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES)
-        / ".gitkeep"
-    ).exists()
 
 
 def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:
@@ -478,11 +473,8 @@ def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:
     types from. That edge is the ledger's and predates this check; what is held
     here is that no judge's CODE is reachable from a council verb.
 
-    **This is the RUN-TIME half and it is kept for one reason**: a module pulled
-    in by name rather than by an import statement, which no syntax tree resolves.
-    `test_council_runs_without_a_judge.py` is the static half - it reads the
-    import statements, so it catches a coupling on the commit that adds it, and
-    it is the one that holds the three contracts above to exactly three.
+    This also catches modules loaded by name at runtime. The named-source-input
+    checks in `test_council_runs_without_a_judge.py` hold the contract exception.
     """
     found = _judge_modules_reached(
         "idhazh.council.session", ("idhazh.similarity", *JUDGE_STAGE_MODULES)

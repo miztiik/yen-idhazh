@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -111,7 +111,13 @@ The shapes, and where each one lives once written:
 | `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one row of `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/summary-quality-evals/` |
-| `ObservationIndexRow` | `observation-index-row` | one row of `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/` or of a closed month's `<YYYY>/<MM>/settled.csv`, the identity of one measurement the eval ledger holds |
+| `ObservationIndexRow` | `observation-index-row` | legacy CSV ID row, read only by the [explicit lookup migration](../../how-to/migrate-observation-lookup.md) |
+| `ObservationLookupRoot` | `observation-lookup-root` | `state/summary-quality-evals-index/lookup/root.json` |
+| `ObservationLookupPage` | `observation-lookup-page` | content-addressed JSON routing node under the lookup root |
+| `ObservationLookupReceipt` | `observation-lookup-receipt` | a batch entry inside a SQLite lookup leaf, not a standalone receipt file |
+| `ObservationLookupTransaction` | `observation-lookup-transaction` | ignored `lookup/.transaction.json` for local recovery |
+| `ObservationBatch` | `observation-batch` | committed `incoming/<batch-id>.json` and the original ignored job-local input |
+| `ObservationPreparation` | `observation-preparation` | an ignored per-job or named-recovery manifest under `backend/var/evaluation-inputs/` |
 | `SeenRow` | `seen-row` | one row of `state/raw/seen/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/seen/` |
 | `PublishedRow` | `published-row` | one row of `state/raw/published/<YYYY>/<MM>/<DD>/`, in the raw file the assemble job files through the ledger door, packed later under `state/compact/published/` |
 | `FeedHealthRow` | `feed-health-row` | one row of `state/feed-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
@@ -134,11 +140,11 @@ The shapes, and where each one lives once written:
 | `CorpusRow` | `corpus-row` | one line of `corpus/corpus.jsonl` |
 | `CorpusMeta` | `corpus-meta` | `corpus/corpus.meta.json` |
 
-Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
+`state/` holds row-ledger contracts and whole-document contracts. The six lookup envelopes above are registered in `CONTRACTS` and have golden fixtures under `tests/fixtures/contracts/`. Their layout, identity and recovery rules live in [observation-lookup.md](observation-lookup.md). Which ledgers a later run reads back, and what each answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
-`ItemHealthSummaryRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored. What decides when a month is folded is the `full-grain` series of `config/gardener/telemetry-aggregate.json`, and its deletion safeguards are in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
+`ItemHealthSummaryRow` describes a derived row: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored. What decides when a month is folded is the `full-grain` series of `config/gardener/telemetry-aggregate.json`, and its deletion safeguards are in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
-`DayMetrics` is the second, and a document rather than a row: it is a whole-day fact, not a per-row one. A run writes one `state/day-metrics/<YYYY>/<MM>/<DD>.json` per published day - the day's counts and sums stored directly, and each median, distinct count or ranked list stored as the day's own value plus whatever lets a reader combine days in a defined way, because a percentile cannot be re-added into a window's percentile. It nests by year and month to mirror the published digest-day layout, and it is never a running total: a correction rewrites the whole record for that day. The console reads it back instead of walking every score, item-health, feed-health and published-day row for a figure that never changes once the day is frozen (Guardrail #12). It was authored as a contract in row 21 of the constant-cost-reads plan (#486), written by the producer in row 22 (#489), and read by the console reducers in rows 23 and 24 (#500, #501).
+`DayMetrics` is a document rather than a row: it is a whole-day fact, not a per-row one. A run writes one `state/day-metrics/<YYYY>/<MM>/<DD>.json` per published day - the day's counts and sums stored directly, and each median, distinct count or ranked list stored as the day's own value plus whatever lets a reader combine days in a defined way, because a percentile cannot be re-added into a window's percentile. It nests by year and month to mirror the published digest-day layout, and it is never a running total: a correction rewrites the whole record for that day. The console reads it back instead of walking every score, item-health, feed-health and published-day row for a figure that never changes once the day is frozen (Guardrail #12). It was authored as a contract in row 21 of the constant-cost-reads plan (#486), written by the producer in row 22 (#489), and read by the console reducers in rows 23 and 24 (#500, #501).
 
 ### A new row ledger ships with its header, not with its first run
 
@@ -211,7 +217,7 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| `state/summary-quality-evals-index/` | a file per writer by day, and one file a closed month | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains. Once a month is closed the gardener settles its days into one `settled.csv` in the month's folder, which the dedupe reads as it reads a day |
+| `state/summary-quality-evals-index/` | `lookup/root.json`, bounded JSON routing nodes and SQLite leaves; named JSON batches under `incoming/` | which supplied measurement IDs are already recorded? | no time window; exact keys select bounded leaves ([observation-lookup.md](observation-lookup.md)) |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
@@ -239,11 +245,15 @@ publisher is the bridge: it folds a month from that month's days, read through
 `ledger.load_days`, at most 31. Both rules and what the bridge costs are in
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains).
 
-Without a window, sharding is a cost with no matching saving. A question with no
-time bound has to read every row, so every shard gets opened anyway - the same
+For a whole-history scan, time sharding is a cost with no matching read saving.
+The scan has to read every row, so every shard gets opened anyway - the same
 bytes through more file handles, plus a directory listing and a stem loop that a
 single `open` does not need. Splitting a file you always read whole makes it
 slower, not faster.
+
+An exact-key lookup is not a whole-history scan. Its incoming keys select
+[bounded digest-prefix leaves](observation-lookup.md#physical-layout), with no
+time window and no historical ID scan.
 
 Two consequences worth stating so nobody re-derives them:
 
@@ -258,8 +268,8 @@ Two consequences worth stating so nobody re-derives them:
  files, so the period was a layout change and not a contract change; see
  [../sources/item-health.md](../sources/item-health.md).
 
-**A ledger read with no window gains nothing from sharding, and the burden is
-on a change that shards one.** Its read opens every file anyway, so a partition
+**A ledger read in full gains nothing from sharding, and the burden is
+on a change that shards one.** That read opens every file anyway, so a partition
 costs a directory walk a single `open` does not need.
 
 There were four single files read that way until 2026-09-13, three until
@@ -328,7 +338,7 @@ The rewrite is small enough to be reviewed as a diff rather than run as a utilit
 
 ### Design rationale: one widener for every ledger, rather than one per widening
 
-`backend/utilities/widen_ledger_header.py` is the operator's door onto `ledger.migrate_header`. Until 2026-09-21 nothing in the repository could widen a header from a command line: `migrate_header` was reached only from the compaction verb, which folds a segment into a head and takes no ledger argument. So every widening before it shipped its own utility - one for the feed-health header, another for the item-health header - each one a new file doing what the engine already did. Both are deleted; this door is what re-files a CSV ledger now. The item-health ledger has since moved to the ledger door, where a file keeps the shape it was written under and nothing re-files it.
+`backend/utilities/widen_ledger_header.py` is the operator's door onto `ledger.migrate_header`. It requires `--target <ledger>` and one or more `--file <CSV-path>` arguments relative to that ledger's root. It re-files those files only; it never searches the ledger tree. The default is a dry run. `--no-dry-run` writes each changed file atomically. The item-health ledger uses the ledger door, where a file keeps the shape it was written under and nothing re-files it.
 
 One utility is possible because the two things it needs are already registered elsewhere. The ledger comes from the prune vocabulary, so a word means the same ledger in every command an operator types. The contract that reads a row comes from whichever of the two reader registries holds that ledger: `ledger.keys._TREE_SHAPES` through `segment_contract` and `segment_carried` for a day tree, and `ledger.keyed_paths` for a ledger the post-merge settlement covers. No list is restated in the utility, so none can drift from it, and a ledger that ships before its writer reports nothing rather than failing.
 
@@ -516,7 +526,14 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 | Keep the generator for the six names the frontend uses | A generator that runs over one contract is a generator, with its command, its gate and its regenerated diff. Six names are a copy and three tests. | Fowler |
 | Delete only the 61 schemas nothing imports | The count is a fact about one day. The next contract adds a sixty-seventh and the generator still runs in full. | Fowler |
 
-`RawDayIndex` also has a frontend hand copy in `frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so older compaction listings still validate; the frontend copy requires it because the site build fills it before a browser can price writer files.
+`RawDayIndex` also has a frontend hand copy in
+`frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so
+older compaction listings still validate; the frontend copy requires it because
+the site build fills it before a browser can price writer files. The build is
+now the only writer of the shape, for staged-site listings; the compaction no
+longer writes one. `backend/tests/contracts/test_raw_day_listing_fixture.py`
+holds an older compaction listing to the shape and its digest rule, and `frontend/tests/ledger-copy.spec.ts` holds the build's listing,
+sizes and non-parquet refusal.
 
 ## See also
 

@@ -31,7 +31,6 @@ from idhazh.contracts.fitted_similarity_threshold import (
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS as DROPPED_PAIR_CELLS,
@@ -291,7 +290,6 @@ class _TreeShape(NamedTuple):
 #: declared table rather than a rule a reader re-derives: the key is a fact about
 #: the ledger and a second copy of it is how two readers start disagreeing.
 _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
-    LedgerName.SUMMARY_QUALITY_EVALS_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
     LedgerName.FEED_HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
 }
 

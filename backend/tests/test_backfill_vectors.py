@@ -90,7 +90,11 @@ def needs_encoder() -> None:
 def backfill(root: Path, today: str, encoder: Embedder) -> int:
     """The command as the CLI invokes it, with the index beside the days."""
     return stage_backfill_vectors(
-        root=root, index_root=root / "index", today=today, embedder=encoder
+        root=root,
+        index_root=root / "index",
+        today=today,
+        dates=[day().date],
+        embedder=encoder,
     )
 
 
@@ -106,6 +110,34 @@ class TestWhichDaysAreInScope:
     def test_a_day_stamped_ahead_of_today_is_not(self) -> None:
         """A clock skew must not open the live day's neighbour either."""
         assert not is_closed("2026-08-27", today="2026-08-26")
+
+    def test_invalid_or_future_named_dates_are_refused(self, tmp_path: Path) -> None:
+        encoder = embedder()
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            stage_backfill_vectors(
+                root=tmp_path,
+                index_root=tmp_path / "index",
+                today="2026-08-24",
+                dates=["2026-8-23"],
+                embedder=encoder,
+            )
+        with pytest.raises(ValueError, match="after today"):
+            stage_backfill_vectors(
+                root=tmp_path,
+                index_root=tmp_path / "index",
+                today="2026-08-23",
+                dates=["2026-08-24"],
+                embedder=encoder,
+            )
+
+    def test_no_named_dates_does_no_work_without_an_encoder(self, tmp_path: Path) -> None:
+        assert stage_backfill_vectors(
+            root=tmp_path,
+            index_root=tmp_path / "index",
+            today="2026-08-23",
+            dates=[],
+            embedder=embedder(tmp_path / "empty"),
+        ) == 0
 
 
 class TestWhichItemsEarnAVector:
@@ -234,9 +266,31 @@ class TestTheBackfill:
         path = write_day(tmp_path, with_block(block({})))
         before = path.read_bytes()
 
-        assert backfill(tmp_path, "2026-08-21", embedder()) == 0
+        assert backfill(tmp_path, day().date, embedder()) == 0
 
         assert path.read_bytes() == before
+
+    def test_days_outside_the_named_list_are_not_read_or_rewritten(self, tmp_path: Path) -> None:
+        needs_encoder()
+        inside = day().date
+        outside = "2026-08-24" if inside != "2026-08-24" else "2026-08-25"
+        selected_path = write_day(tmp_path, with_block(block({})))
+        outside_day = with_block(block({})).model_copy(update={"date": outside})
+        outside_path = write_day(tmp_path, outside_day)
+        before = outside_path.read_bytes()
+
+        assert stage_backfill_vectors(
+            root=tmp_path,
+            index_root=tmp_path / "index",
+            today="2026-08-26",
+            dates=[inside],
+            embedder=embedder(),
+        ) == 0
+
+        repaired = DigestDay.from_json(selected_path.read_text(encoding="utf-8"))
+        assert repaired.embeddings is not None
+        assert set(repaired.embeddings.vectors) == earns_a_vector(repaired, embedder())
+        assert outside_path.read_bytes() == before
 
     def test_no_encoder_fails_instead_of_reporting_success(self, tmp_path: Path) -> None:
         """Unlike a run, this command has nothing else to publish. A no-op is a lie."""

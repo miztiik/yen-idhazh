@@ -92,6 +92,33 @@ def test_an_empty_garden_is_one_line_from_both_writers(tmp_path: Path) -> None:
     ]
 
 
+def test_both_loaders_ignore_unnamed_declarations(tmp_path: Path) -> None:
+    config_dir = a_fixture_config(tmp_path, "garden")
+    before = gardener_shards.payload(gardener_shards.plan(config_dir))
+    (config_dir / "gardener/unnamed.json").write_bytes(b"\xff")
+    assert gardener_shards.payload(gardener_shards.plan(config_dir)) == before
+    assert shards.payload(shards.plan(config.load_gardener(config_dir))) == before
+
+
+@pytest.mark.parametrize("failure", ["missing", "duplicate"])
+def test_both_loaders_refuse_bad_named_lists(tmp_path: Path, failure: str) -> None:
+    config_dir = a_fixture_config(tmp_path, "garden")
+    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
+    name = knobs["task_names"][0]
+    if failure == "missing":
+        (config_dir / "gardener" / f"{name}.json").unlink()
+        expected = "is missing"
+    else:
+        knobs["task_names"].append(name)
+        knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
+        expected = "repeats a task"
+    with pytest.raises(ValueError, match=expected):
+        gardener_shards.plan(config_dir)
+    with pytest.raises(ValueError, match=expected):
+        config.load_gardener(config_dir)
+
+
 def _a_plan() -> dict[str, object]:
     return {
         "any_active_task": True,

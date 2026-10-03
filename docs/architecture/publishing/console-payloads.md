@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -155,23 +155,22 @@ digest because a feed's reliability is an observation about the run and not a
 product surface.
 ### The three rules
 
-**One month per run.** The run knows which month it appended to, so the daily
-caller names that one and every other month is skipped without being read
-(Guardrail #12). A month whose published file is **missing** is read anyway, which is
-what makes a fresh clone, a deleted file and a first backfill all land.
+**Only caller-named months are read.** The run knows which month it appended
+to, so the daily caller names that one and every other month is skipped without
+being read (Guardrail #12). A missing published file is rebuilt only when its
+month is named; a fresh clone or historical repair must name the months to
+publish.
 
 **Only on a byte difference.** A re-derived month whose bytes match what is on
 disk is not rewritten. Content, never a timestamp: a rebuild can carry identical
 bytes and a new mtime, and a fresh checkout can carry a new mtime and identical
 bytes, so a timestamp answers wrongly in both directions.
 
-**Nothing outlives its knob**, and the two rules above have to agree about the
-boundary. A month below `oldest_month_kept` is not resurrected by the
-missing-file rule - without that clause the prune deletes a month, the next run
-finds it missing and writes it, and the prune deletes it again, every run, for a
-month no console window can reach. The oracle for this row caught exactly that:
-six months of a twenty-month fixture were rewritten and re-deleted on the second
-pass.
+**Nothing outlives its knob**, and the named month list has to agree about the
+boundary. A month below `oldest_month_kept` is not named - otherwise the next
+run would write a month the console window can no longer reach. The oracle for
+this row caught exactly that: six months of a twenty-month fixture were
+rewritten and re-deleted on the second pass.
 
 ### The band is a reduction of the payloads beside it
 
@@ -506,16 +505,13 @@ more days before the newest published day (`recordNotes` in
 packed file or a packed day is missing says which, because each has its own fix
 ([the four faults](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)).
 
-**The settlement is per day, never over the whole cover, and that is the part
-that carries the weight.** `OBSERVATION_KEY` carries no date. It is the article,
-the words that came out, and the version of the instrument that read them - so
-two days holding one key can be two real measurements, and collapsing the cover
-would delete the second. Measured 2026-09-23 over the committed ledger: of
-12,463 keys, exactly one spans two days, and a cover-wide settlement would have
-dropped it. So the packing settles a day on its own and joins a month's days as
-they are, never across them: a repeat inside a day is one record written twice
-and a repeat across days is not. The scope costs nothing for a key that already
-carries `date`.
+**Packing settles rows per day, not over the whole requested window.** This
+scope preserves historical rows; it does not define measurement identity.
+The [observation key](../contracts/observation-lookup.md#measurement-identity)
+has no date, so the same key on two days is the same measurement. New
+publication admits it only once across jobs and days. The lookup migration
+does not rewrite evaluation bytes or change the console's per-day settlement
+of existing history.
 
 **A key with no preference keeps the first row it saw.** That is what the
 backend does with a key `ledger.preference_for` has no rule for, and the ledger
