@@ -15,9 +15,8 @@ committed under `frontend/static/` and the archive is committed under
 **Every read here carries a cover.** The gate reads the days through
 `assist.eval_corpus_through`, because nothing it asks can be answered by a day
 the pin excludes. The index comparison reads the shard that pin names. The knob
-check and the answer-key placement below read a directory listing and open no
-shard at all. The one question none of them fits - does the index name every
-published item - is `backend/utilities/measure_retrieval.py`.
+check builds its own shards. The one question none of them fits - does the
+index name every published item - is `backend/utilities/measure_retrieval.py`.
 """
 
 from __future__ import annotations
@@ -378,43 +377,16 @@ def test_every_labelled_answer_is_still_in_the_archive(
 def test_the_frozen_answer_key_sits_inside_the_pin_the_gate_scores(
     queries: tuple[LabelledQuery, ...], config: AppConfig
 ) -> None:
-    """Where the frozen key sits in the calendar: against the pin, and the window.
+    """Every judged answer sits on or before `assist.eval_corpus_through`.
 
-    `assist.eval_corpus_through` bounds the corpus the gate scores. Move the pin
-    earlier and the judged answers past it stop being scorable, so the gate
-    quietly measures a smaller key against an unchanged bar. The membership test
-    above goes red on the same edit, but it names a vanished gold item, which is
-    the wrong cause. This one names the pin. Measured 2026-09-23: all 297 judged
-    answers fall between 2026-08-21 and 2026-08-26, against a pin of 2026-08-26.
-
-    The printed line is the other half and carries no bar. A reader's tab reads
-    the newest `assist.search_months` shards, and the key was written in one
-    sitting that nobody has extended, so the overlap between the two only falls
-    as the archive moves. Measured 2026-09-23 it is 0 of 297, because the key
-    closes in August and the window is September - which is where the key sits
-    in the calendar, not a search failure. A bar on it would gate the merge on
-    the publishing date.
-
-    Both halves are fixed cost. The months come off their own file names, so
-    this opens the query fixture and nothing else. Whether `search_min_days`
-    pulls one more shard in cannot be known without opening one, so the line
-    names the floor rather than guessing at it.
+    The pin bounds the corpus the gate scores. Move the pin earlier and the
+    judged answers past it stop being scorable, so the gate quietly measures a
+    smaller key against an unchanged bar. The membership test above goes red on
+    the same edit, but it names a vanished gold item, which is the wrong cause.
+    This one names the pin. It opens the query fixture and the config, nothing
+    else.
     """
     judged = [(query.id, date, item_id) for query in queries for (date, item_id) in query.relevant]
-
-    stems = retrieval.index_months(REPO_ROOT)
-    if stems:
-        days = sorted(date for (_, date, _) in judged)
-        window = sorted(stems[-config.assist.search_months :])
-        reachable = [row for row in judged if row[1][:7] in set(window)]
-        print(
-            f"\nanswer key against the reader's window: {len(reachable)} of {len(judged)} "
-            f"judged answers fall in {', '.join(window)}, the newest "
-            f"{config.assist.search_months} of {len(stems)} months on file, and one more "
-            f"month is read when the newest holds under {config.assist.search_min_days} "
-            f"days. The key runs {days[0]} to {days[-1]}, so this is where the key sits "
-            "in the calendar and not a search failure."
-        )
 
     pin = config.assist.eval_corpus_through
     if pin is None:
@@ -584,41 +556,41 @@ def test_moving_search_to_the_index_cost_no_recall(
     )
 
 
-def test_a_reader_only_searches_the_months_the_knob_names(config: AppConfig) -> None:
+def test_a_reader_only_searches_the_months_the_knob_names(tmp_path: Path) -> None:
     """`assist.search_months` and `assist.search_min_days` are what a tab reads.
 
-    The scope buys download seconds rather than compute seconds - one month is a
-    2.53 MB vector file and the ranking over it is 74 to 159 milliseconds - so
-    the knobs are the only thing standing between a reader and a fourteen-second
-    wait at three months. The floor is the other half: a calendar shard is not a
-    window, so on the first of a month `search_months` alone reaches one day.
+    The scope buys download seconds rather than compute seconds, so the knobs
+    are what stands between a reader and a long wait at three months. The floor
+    is the other half: a calendar shard is not a window, so on the first of a
+    month `search_months` alone reaches one day. Below the floor the tab reads
+    one more shard, and one only.
 
-    The set of months on file comes from a listing rather than a load. The
-    question is which months exist, and a shard's own name answers it.
+    Built here rather than read off the committed shards: which months those
+    hold moves with every publish, and the rule does not.
     """
-    every = set(retrieval.index_months(REPO_ROOT))
-    if not every:
-        pytest.skip("no committed month index in this checkout")
+    directory = tmp_path / retrieval.INDEX_RELDIR
+    directory.mkdir(parents=True)
+    shards: dict[str, list[tuple[str, int | None]]] = {
+        "2026-07": [("2026-07-01", 0)],
+        "2026-08": [("2026-08-01", 0), ("2026-08-02", 0)],
+        # A day with no vector is a day a reader cannot search, so it does not
+        # count toward the floor.
+        "2026-09": [("2026-09-01", 0), ("2026-09-02", None)],
+    }
+    for stem, entries in shards.items():
+        rows = [{"date": date, "item_id": "ai-01", "vector": offset} for date, offset in entries]
+        (directory / f"{stem}.json").write_text(json.dumps({"entries": rows}), encoding="utf-8")
 
-    scoped = retrieval.load_index_corpus(
-        REPO_ROOT,
-        months=config.assist.search_months,
-        min_days=config.assist.search_min_days,
-    )
-    assert scoped.items, "the configured scope reads no month at all"
+    def months_read(months: int, min_days: int) -> set[str]:
+        scoped = retrieval.load_index_corpus(tmp_path, months=months, min_days=min_days)
+        return {item.date[:7] for item in scoped.items}
 
-    months = {item.date[:7] for item in scoped.items}
-    # One extra shard when the floor bites, and one only. Never more.
-    assert len(months) <= config.assist.search_months + 1
-    assert months <= every
-    # Newest first, so the scope always holds the months a reader would expect.
-    assert months == set(sorted(every, reverse=True)[: len(months)])
-    # And the floor is met, unless there is no older shard left to meet it with.
-    days = {item.date for item in scoped.items if item.vector is not None}
-    assert len(days) >= config.assist.search_min_days or months == every, (
-        f"the scope covers {len(days)} days against a floor of "
-        f"{config.assist.search_min_days}, with {len(every) - len(months)} shards unread"
-    )
+    assert months_read(1, 1) == {"2026-09"}
+    assert months_read(2, 0) == {"2026-09", "2026-08"}
+    # The newest month holds one searchable day, so a floor of two buys August.
+    assert months_read(1, 2) == {"2026-09", "2026-08"}
+    # However far short the floor falls, the extra shard is one, never two.
+    assert months_read(1, 50) == {"2026-09", "2026-08"}
 
 
 def test_the_floor_lets_the_empty_state_fire(corpus: Corpus, config: AppConfig) -> None:
