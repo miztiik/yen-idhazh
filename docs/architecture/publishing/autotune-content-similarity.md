@@ -253,7 +253,8 @@ It covers `band_low` up to `band_high` in slices `bin_width` wide, which on the
 committed block is 120 slots. That record is the whole input to the fit, so the
 fit costs the same on the thousandth day as on the tenth, and a reader who takes
 the walk to mean "sort every pair ever judged" has put back the growing read this
-shape exists to avoid ([../../concepts/growing-reads.md](../../concepts/growing-reads.md)).
+shape exists to avoid (the fixed-size input rule in
+[../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12).
 A date goes in once: a date already on the record is refused a second time, which
 is what makes re-running a day free rather than damaging.
 
@@ -521,7 +522,7 @@ A story that breaks at 23:00 and is picked up at 07:00 is one story, and a day b
 | What the window does | What it does not do |
 | --- | --- |
 | Lets a story on this day pair with one on an earlier published day, on the hours between the two stories' own times. | Group two earlier days with each other. A published day is finished; the pass reads it and never re-decides it. |
-| Bound the read. `stages.assemble._earlier_days` opens `ceil(hours / 24)` days by date arithmetic - one at 36 - so the cost is the same on the thousandth day as the third ([growing-reads.md](../../concepts/growing-reads.md)). | Bind a pair inside one published day. Those are scored exactly as they were, which is what makes `0` an exact revert rather than an approximate one. |
+| Bound the read. `stages.assemble._earlier_days` opens `ceil(hours / 24)` days by date arithmetic - one at 36 - so the cost is the same on the thousandth day as the third (Guardrail #12). | Bind a pair inside one published day. Those are scored exactly as they were, which is what makes `0` an exact revert rather than an approximate one. |
 | Record the match on the NEWER story, as `also_ran_earlier`. | Fold anything. Today's story keeps its card, its place in the order and its anchor. |
 
 **A cross-day match is a name in the stack and never a fold.** `same_story_as` still means this day's own anchor, because folding today's page onto a card it does not hold would leave the reader with nothing to open. What today's story gains is `also_ran_earlier` - up to `EARLIER_OUTLETS_MAX` mastheads, each with the day it ran and the address on that day - and the card prints them as more names in the same `Also covered by` stack, each saying which day and linking to that day's page.

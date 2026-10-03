@@ -1,0 +1,9 @@
+[
+  {
+    "total": "6",
+    "decimal_value": "1.5",
+    "day_value": "2026-09-01",
+    "list_value": "[1, 2]",
+    "struct_value": "{'a': 1}"
+  }
+]

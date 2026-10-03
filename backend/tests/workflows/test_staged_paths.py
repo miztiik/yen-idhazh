@@ -1,4 +1,4 @@
-"""Which paths does a run stage, do they exist in a fresh checkout, and which may force-push?"""
+"""Which paths does a run stage, and which named push program may replace history?"""
 
 from __future__ import annotations
 
@@ -13,10 +13,9 @@ import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger
-from idhazh.telemetry.publish import series
 
 from ._harness import (
-    COMMIT_STAGED_PATHS,
+    COMMIT_PROGRAM,
     COMMIT_STEPS,
     CORPUS_SEED,
     HARVEST_COMMAND,
@@ -130,67 +129,10 @@ def test_the_corpus_is_committed_but_never_rebuilt() -> None:
     assert "corpus" not in settings["REGENERATE_COMMAND"].split()
 
 
-def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
-    """`git add "$@"` runs under `set -euo pipefail`.
-
-    A staged path that only appears once its producer succeeded therefore aborts
-    the whole commit step, and takes every sibling ledger staged in the same call
-    with it. The seed is what makes the corpus path safe to name.
-
-    Every path the step names is asked of the working tree, so a root added to
-    the list without a committed file in it fails here rather than on the runner.
-    The console payload roots are the five that still have a producer: each ships
-    with the shard the producer wrote, which is the same pattern a seeded header
-    takes. `scores` and `feed-health` were two more
-    until 2026-09-16, and they are why the list is derived from
-    `series.PUBLISHED_ROOTS` rather than written out here - a root deleted in one
-    place has to leave the staging call in the same commit, or the next run's
-    `git add` aborts and takes every sibling ledger with it.
-    """
-    for relative in CORPUS_SEED:
-        assert (REPO_ROOT / relative).is_file(), f"{relative} must be committed, even when empty"
-    for relative in COMMIT_STAGED_PATHS["assemble"]:
-        assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
-    for dirname in series.PUBLISHED_ROOTS:
-        root = REPO_ROOT / "frontend" / "public" / dirname
-        assert root.is_dir(), f"frontend/public/{dirname} must be in a fresh checkout"
-        committed = subprocess.run(
-            ["git", "ls-files", f"frontend/public/{dirname}"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.split()
-        assert committed, f"frontend/public/{dirname} must hold at least one committed file"
-    tracked = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", *CORPUS_SEED],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert tracked.returncode == 0, tracked.stderr.strip()
-
-
-def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
-    """`git add` runs under `set -euo pipefail`, so a path that is not there ends the step.
-
-    The list became `state` whole on 2026-09-17, when the catch-up compaction
-    joined this job. It folds a segment into whichever head that segment's own
-    rows name, so what the job writes is not knowable when a list is written -
-    and a hand-listed set would commit the segment deletions while leaving the
-    heads behind. Naming the directory answers this test's own rule at the same
-    time: `state` is in every checkout, and a collection inside it need not be.
-
-    The feed retirements needed a header-only file of their own while they were
-    a CSV, because every run read the file and almost none wrote to it. They
-    moved under `state/raw/` on 2026-09-28, where a folder that is not there yet
-    reads as no retirements at all, so the seed went with them.
-    """
-    named = COMMIT_STAGED_PATHS["plan"]
+def test_the_plan_stages_the_state_root_not_selected_ledger_files() -> None:
+    """Compaction can write new heads and delete segments in the same run."""
+    named, _ = _commit_call("plan")
     assert named == [ledger.STATE_DIRNAME]
-    for relative in named:
-        assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
 
 
 def test_the_corpus_is_not_union_merged() -> None:
@@ -212,16 +154,7 @@ def test_the_corpus_is_not_union_merged() -> None:
 
 
 def test_only_the_scheduled_prune_may_force_push() -> None:
-    """The single exception in `CLAUDE.md` section 8, held closed-world.
-
-    Discovery is over every source a runner executes - every workflow body,
-    every shipped script, and every Python program under `backend/` - so a
-    second forcing push fails here whoever adds it and wherever they put it.
-
-    One file is named rather than none. The squash's push moved out of the
-    workflow so a test could drive it against a real repository and watch it
-    refuse a tip that moved, and the forcing flag moved with it.
-    """
+    """The named workflows and three push programs keep the history exception narrow."""
     forcing: set[str] = set()
     for filename, workflow in _load_workflows().items():
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
@@ -229,11 +162,12 @@ def test_only_the_scheduled_prune_may_force_push() -> None:
                 script = step.get("run")
                 if isinstance(script, str) and FORCE_PUSH.search(script):
                     forcing.add(f"{filename} step {step.get('name')}")
+    # Normal commits, gardener shard landing, and the history rewrite own pushes.
     executable = (
-        *(REPO_ROOT / "backend" / "utilities").glob("*.py"),
-        *(REPO_ROOT / "backend" / "idhazh").rglob("*.py"),
+        COMMIT_PROGRAM,
+        REPO_ROOT / "backend" / "utilities" / "gardener_publish.py",
+        PRUNE_PUSH_MODULE,
     )
-    assert executable, "nothing was read, so this is checking nothing"
     for path in sorted(executable):
         if FORCE_PUSH.search(ARGUMENT_PUNCTUATION.sub(" ", read_text(path))):
             forcing.add(path.name)

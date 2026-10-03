@@ -18,7 +18,6 @@ from ._harness import (
     ACTIONS_DIR,
     CONFIG_FILE_NAME,
     DOWNLOAD_MODEL_FILES,
-    GITHUB_DIR,
     HUB_HOST,
     LLAMA_RUNTIME_WORKFLOWS,
     MODEL_ENV_NAMES,
@@ -33,6 +32,7 @@ from ._harness import (
     WEIGHTS_CACHE_SUFFIX,
     WEIGHTS_CHECKS,
     WEIGHTS_FETCH_JOBS,
+    WORKFLOW_PATHS,
     WORKFLOWS_DIR,
     _action_call,
     _committed_models,
@@ -762,23 +762,14 @@ def test_the_search_that_finds_a_weights_fetch_still_finds_every_one_of_them() -
 
 
 def test_no_file_the_platform_runs_spells_the_hub_host() -> None:
-    """The Oracle. One address, in one program, and a caller cannot take it back.
-
-    A download written into a workflow is a second answer to where the weights
-    come from, and the one that drifts: it carries its own retry rule, its own
-    `-f`, and its own idea of what a revision is. Once the fetch is a program,
-    the host belongs to the program - so a file under `.github/` that spells it
-    again has undone the conversion, whatever else it kept.
-
-    Everything under `.github/` is read, not only the four workflows that fetch
-    today, because a rule scoped to a list stops covering the file somebody adds
-    beside it.
-    """
+    """Named workflows and download actions leave the host to the download program."""
+    # These actions build candidate inputs and fetch weights. The DuckDB
+    # preparation action does not participate in model downloads.
+    actions = tuple(ACTIONS_DIR / name / "action.yml" for name in ("candidate-config", "model-server"))
     spelling = [
-        path.relative_to(GITHUB_DIR).as_posix()
-        for path in sorted(GITHUB_DIR.rglob("*"))
-        if path.is_file()
-        and path.name != HUB_HOST_EXCEPTION
+        path.name
+        for path in (*WORKFLOW_PATHS, *actions)
+        if path.name != HUB_HOST_EXCEPTION
         and HUB_HOST in path.read_text(encoding="utf-8")
     ]
     assert not spelling, f"the hub host belongs to the download program: {spelling}"

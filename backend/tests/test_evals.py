@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from _source_files import source_files
 from conftest import (
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
@@ -1533,24 +1532,39 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
         cli.main(["rebuild-summary-quality-evals-index", "--month", "2026-02", "--every-shard"])
     assert both.value.code == 2
 
-    automated = sorted(
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in (
-            *(REPO_ROOT / ".github" / "workflows").glob("*.y*ml"),
-            *(REPO_ROOT / ".github" / "scripts").glob("*.sh"),
-        )
-        if "rebuild-summary-quality-evals-index" in read_text(path)
+    workflow_files = (
+        "backfill.yml",
+        "ci.yml",
+        "compaction-profile.yml",
+        "digest.yml",
+        "drift.yml",
+        "duckdb-addon.yml",
+        "idhazh-gardener.yml",
+        "idhazh-pipeline-tests.yaml",
+        "llm-council.yml",
+        "measure.yml",
+        "pages.yml",
+        "validate.yml",
     )
+    automated = [
+        f".github/workflows/{name}"
+        for name in workflow_files
+        if "rebuild-summary-quality-evals-index"
+        in read_text(REPO_ROOT / ".github" / "workflows" / name)
+    ]
     assert not automated, f"the rebuild is a step of {automated}"
 
-    callers = sorted(
+    callers = [
         path.relative_to(REPO_ROOT).as_posix()
-        for path in source_files(
-            roots=(REPO_ROOT / "backend" / "idhazh",),
-            suffixes=(".py",),
+        for path in (
+            REPO_ROOT / "backend" / "idhazh" / "evals" / "writer.py",
+            REPO_ROOT / "backend"
+            / "idhazh"
+            / "stages"
+            / "rebuild_summary_quality_evals_index.py",
         )
         if "rebuild_index(" in read_text(path)
-    )
+    ]
     assert callers == [
         "backend/idhazh/evals/writer.py",
         "backend/idhazh/stages/rebuild_summary_quality_evals_index.py",

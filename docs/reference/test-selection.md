@@ -1,6 +1,6 @@
 # Test Selection
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-03
 
 Why a pull request runs only some of the tests, what that choice gives up, and
 what was rejected on the way to it. The commands, the groups and the current
@@ -19,6 +19,13 @@ coverage stays the same, so nobody watches the bill arrive and no diff shows it
 growing. It became [CLAUDE.md](../../CLAUDE.md) Guardrail #12 and section 13,
 and it is why a per-item rule is driven from a fixture rather than from a loop
 over whatever the archive happens to hold.
+
+**A fixed fixture can still do needless work.** Per-item pipeline record and
+run-metadata tests limit the recorded plan to one item. Continuing after a
+failure, ordering and sibling totals need two. The
+timeout test keeps a real socket timeout of 60 ms; the stopwatch test keeps a
+real server wait of 50 ms. Both exercise the production path without changing
+production timeouts. Longer waits and unrelated items add cost, not coverage.
 
 **The second one was the larger cost, and selection would not have touched it.**
 The browser job is the critical path and the backend suite is small beside it
@@ -80,7 +87,7 @@ read.
 | --- | --- |
 | A nightly job for the deferred console specs | A second copy of the browser job is a second thing to keep correct, and a `main` push carrying code already runs every group. |
 | The panel pictures following the console's own answer | One answer fewer to keep in step, but a token, chart, readout or appearance edit - the kind that moves every panel picture at once - would be pictured only on the merge push, after a reviewer had approved it without seeing it (Susan, 2026-09-28). |
-| A guard listing the paths a test may not read | Written and deleted the same day; the reasoning is in [../concepts/growing-reads.md](../concepts/growing-reads.md). Guardrail #12 is stated as a property instead and review is the control. What that costs: nothing fails automatically, so a growing step can merge if nobody asks. |
+| A guard listing the paths a test may not read | Written and deleted the same day; the rule is now stated directly in [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 and section 13. What that costs: a regression can still merge if no check catches it. |
 | Treating the shared gate lock as a result cache | It only caps how many callers run at once across worktrees and knows nothing about what ran. Two workers can still do identical work. |
 | Trusting a cached green step without its executed-test count | Collected output is not executed-test evidence, and a run that collected nothing has the same shape as a suite that passed. |
 | Deleting backend tests to make CI faster | It buys close to zero wall clock, and it pays for that with coverage of the half that is cheap to check. |
@@ -90,7 +97,7 @@ read.
 
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the commands, the groups, and what each CI answer decides.
 - [../../CLAUDE.md](../../CLAUDE.md) - section 13 on the four test tiers and what a test may read, and Guardrail #12.
-- [../concepts/growing-reads.md](../concepts/growing-reads.md) - the deleted guard, and why the rule is a property rather than a list.
+- [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [benchmarks/what-the-suite-costs.md](benchmarks/what-the-suite-costs.md) - where the suite spends its time.
 - [benchmarks/what-the-suite-paid-to-re-read-the-archive.md](benchmarks/what-the-suite-paid-to-re-read-the-archive.md) - what the growing reads cost, and what removing them returned.
 - [agent-notes.md](agent-notes.md) - the traps that make a test command lie about its result.
