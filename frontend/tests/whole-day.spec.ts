@@ -6,6 +6,7 @@ import { publicFiles } from '../src/lib/server/publication';
 import type { DigestDay, DigestItem, VisualData } from '../src/lib/payload/types';
 import { canarySeedItems } from './support/canary-config';
 import { dayReady } from './support/day-ready';
+import { revealDayDrawings } from './support/day-drawings';
 
 const ROOT = resolve(process.cwd(), '..');
 const CANARY_ROOT = resolve(ROOT, 'backend', 'var', 'canary');
@@ -13,21 +14,31 @@ const CANARY_DAY = '2026-08-20';
 const DAY_FILE = `digest/${CANARY_DAY.replaceAll('-', '/')}/digest.json`;
 const WIDTHS = [390, 1440];
 const THEMES = ['dark', 'light'] as const;
-const SEED = canarySeedItems();
+let SEED: number;
+let INVENTORY_FILES: Set<string>;
+let ITEMS: DigestItem[];
+let LAST: string | undefined;
+let DRAWN: DigestItem[];
+let DRAWN_AFTER_SEED: DigestItem[];
+let HAS_CHART: boolean;
 
-const INVENTORY_FILES = new Set(publicFiles(CANARY_ROOT));
-if (!INVENTORY_FILES.has(DAY_FILE)) {
-	throw new Error(`the canary publication inventory does not name ${DAY_FILE}`);
-}
-const DAY = JSON.parse(readFileSync(join(CANARY_ROOT, DAY_FILE), 'utf8')) as DigestDay;
-const ITEMS: DigestItem[] = orderByTime(DAY.items);
-const LAST = ITEMS[ITEMS.length - 1]?.item_id;
-const DRAWN = ITEMS.filter(
-	(item) => item.visual?.state === 'rendered' && typeof item.visual.data_path === 'string'
-);
-const DRAWN_AFTER_SEED = ITEMS.slice(SEED).filter(
-	(item) => item.visual?.state === 'rendered' && typeof item.visual.data_path === 'string'
-);
+test.beforeAll(() => {
+	SEED = canarySeedItems();
+	INVENTORY_FILES = new Set(publicFiles(CANARY_ROOT));
+	if (!INVENTORY_FILES.has(DAY_FILE)) {
+		throw new Error(`the canary publication inventory does not name ${DAY_FILE}`);
+	}
+	const day = JSON.parse(readFileSync(join(CANARY_ROOT, DAY_FILE), 'utf8')) as DigestDay;
+	ITEMS = orderByTime(day.items);
+	LAST = ITEMS[ITEMS.length - 1]?.item_id;
+	DRAWN = ITEMS.filter(
+		(item) => item.visual?.state === 'rendered' && typeof item.visual.data_path === 'string'
+	);
+	DRAWN_AFTER_SEED = ITEMS.slice(SEED).filter(
+		(item) => item.visual?.state === 'rendered' && typeof item.visual.data_path === 'string'
+	);
+	HAS_CHART = DRAWN.some((item) => visualFor(item).type === 'bar');
+});
 function visualFor(item: DigestItem): VisualData {
 	const path = item.visual?.data_path;
 	if (!path || !INVENTORY_FILES.has(path)) {
@@ -35,7 +46,6 @@ function visualFor(item: DigestItem): VisualData {
 	}
 	return JSON.parse(readFileSync(join(CANARY_ROOT, path), 'utf8')) as VisualData;
 }
-const HAS_CHART = DRAWN.some((item) => visualFor(item).type === 'bar');
 
 interface Repaint {
 	part: string;
@@ -74,27 +84,6 @@ function watch(page: Page): Faults {
 		if (response.status() >= 400) faults.notOk.push(`${response.status()} ${response.url()}`);
 	});
 	return faults;
-}
-
-async function stepDown(page: Page): Promise<number> {
-	return page.evaluate(async () => {
-		const settle = () =>
-			new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())));
-		const step = Math.max(window.innerHeight, 1);
-		window.scrollTo(0, 0);
-		await settle();
-		let at = 0;
-		let steps = 0;
-		while (at < document.documentElement.scrollHeight && steps < 2000) {
-			at += step;
-			steps += 1;
-			window.scrollTo(0, at);
-			await settle();
-		}
-		window.scrollTo(0, 0);
-		await settle();
-		return steps;
-	});
 }
 
 async function openWholeDay(page: Page, width: number): Promise<void> {
@@ -145,7 +134,7 @@ for (const width of WIDTHS) {
 		page.on('request', (request) => requests.push(new URL(request.url()).pathname));
 
 		await openWholeDay(page, width);
-		const steps = await stepDown(page);
+		const steps = await revealDayDrawings(page);
 		await expect(page.locator('main figure svg')).toHaveCount(DRAWN.length);
 
 		const requestedLateDrawing = DRAWN_AFTER_SEED.some((item) =>
@@ -181,7 +170,7 @@ for (const width of WIDTHS) {
 		page
 	}) => {
 		await openWholeDay(page, width);
-		await stepDown(page);
+		await revealDayDrawings(page);
 		await expect(page.locator('main figure svg')).toHaveCount(DRAWN.length);
 
 		const themeValues: Record<string, string> = {};

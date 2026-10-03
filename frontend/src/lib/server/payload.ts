@@ -498,11 +498,14 @@ export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): 
 
 /** Read the newest recorded days named by the producer, oldest first. */
 export function readDayShards(
-	dir: string, days: number = LEDGER_WINDOW_DAYS, stateRoot: string = resolve(dir, '..')
+	dir: string,
+	days: number = LEDGER_WINDOW_DAYS,
+	stateRoot: string = resolve(dir, '..'),
+	publicationRoot?: string
 ): CsvTable {
 	const rows: Record<string, string>[] = [];
 	let columns: string[] = [];
-	for (const shard of dayShardFiles(dir, days, stateRoot)) {
+	for (const shard of dayShardFiles(dir, days, stateRoot, publicationRoot)) {
 		const table = readCsv(shard.path);
 		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
 		rows.push(...table.rows);
@@ -523,9 +526,12 @@ export interface DayShard {
 /** Named writer files grouped by recorded day, oldest first.
  * The cover counts days, not files. A missing named file fails the build. */
 export function dayShardFiles(
-	dir: string, days: number = LEDGER_WINDOW_DAYS, stateRoot: string = resolve(dir, '..')
+	dir: string,
+	days: number = LEDGER_WINDOW_DAYS,
+	stateRoot: string = resolve(dir, '..'),
+	publicationRoot?: string
 ): DayShard[] {
-	const inventoryRoot = stateRoot === STATE_ROOT ? PUBLIC_ROOT : stateRoot;
+	const inventoryRoot = publicationRoot ?? (stateRoot === STATE_ROOT ? PUBLIC_ROOT : stateRoot);
 	const prefix = `${relative(stateRoot, dir).replaceAll('\\', '/')}/`;
 	const grouped = new Map<string, DayShard[]>();
 	for (const file of stateFiles(inventoryRoot).sort()) {

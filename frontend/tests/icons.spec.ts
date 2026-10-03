@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ICON_IDS, ICONS, type IconId } from '../src/lib/icons/generated';
@@ -57,33 +58,26 @@ export const ICON_IDS = Object.keys(ICONS) as IconId[];
 }
 
 function invalidIconIdDiagnostics(): readonly ts.Diagnostic[] {
-	const virtualFile = join(ICON_DIRECTORY, '__icon_type_contract__.ts');
-	const source = [
-		"import type { IconId } from './generated';",
-		"const valid: IconId = 'band-high';",
-		"const invalid: IconId = '__not-a-named-icon__';",
-		'void valid;',
-		'void invalid;'
-	].join('\n');
+	const directory = mkdtempSync(join(tmpdir(), 'idhazh-icon-contract-'));
+	const fixture = readFileSync(join(FRONTEND, 'tests', 'fixtures', 'icons', 'invalid-id.ts.txt'), 'utf8');
+	const module = join(ICON_DIRECTORY, 'generated.ts').replaceAll('\\', '/');
 	const options: ts.CompilerOptions = {
 		module: ts.ModuleKind.ESNext,
 		moduleResolution: ts.ModuleResolutionKind.Bundler,
 		noEmit: true,
 		skipLibCheck: true,
 		strict: true,
-		target: ts.ScriptTarget.ES2022
+		target: ts.ScriptTarget.ES2022,
+		allowImportingTsExtensions: true,
+		types: []
 	};
-	const host = ts.createCompilerHost(options);
-	const getSourceFile = host.getSourceFile.bind(host);
-	host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) =>
-		fileName === virtualFile
-			? ts.createSourceFile(fileName, source, languageVersion, true)
-			: getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
-	const fileExists = host.fileExists.bind(host);
-	host.fileExists = (fileName) => fileName === virtualFile || fileExists(fileName);
-	const readFile = host.readFile.bind(host);
-	host.readFile = (fileName) => (fileName === virtualFile ? source : readFile(fileName));
-	return ts.getPreEmitDiagnostics(ts.createProgram([virtualFile], options, host));
+	try {
+		const file = join(directory, 'invalid-id.ts');
+		writeFileSync(file, fixture.replace('"__ICON_TYPES__"', JSON.stringify(module)));
+		return ts.getPreEmitDiagnostics(ts.createProgram([file], options));
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
 }
 
 test.describe('the icon set', () => {
@@ -115,7 +109,13 @@ test.describe('the icon set', () => {
 
 	test('an id outside the named set is a type error', () => {
 		const diagnostics = invalidIconIdDiagnostics();
-		expect(diagnostics.some((diagnostic) => diagnostic.code === 2322)).toBe(true);
+		const errors = diagnostics.map((diagnostic) => ({
+			code: diagnostic.code,
+			message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
+		}));
+		expect(errors).toHaveLength(1);
+		expect(errors[0].code).toBe(2322);
+		expect(errors[0].message).toContain('__not-a-named-icon__');
 	});
 });
 

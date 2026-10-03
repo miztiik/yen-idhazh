@@ -1,5 +1,5 @@
 /** Read the producer's named publication inventory without discovering files. */
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface PublicationInventory {
@@ -13,16 +13,33 @@ export interface PublicationInventory {
 
 type NamedEntry = Pick<PublicationInventory['entries'][number], 'root' | 'path'>;
 
+let warnedEmpty = false;
+
+function emptyInventory(): { entries: NamedEntry[]; dates: string[] } {
+	if (!warnedEmpty) {
+		console.warn('Publication inventory is missing or empty; no published files are selected.');
+		warnedEmpty = true;
+	}
+	return { entries: [], dates: [] };
+}
+
 function readInventory(root: string): { entries: NamedEntry[]; dates: string[] } {
 	const file = join(root, 'publication.json');
-	if (!existsSync(file)) {
-		throw new Error('Publication inventory is missing. Initialize publication.json with an explicit named seed.');
+	let content: string;
+	try {
+		content = readFileSync(file, 'utf8');
+	} catch (error) {
+		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+			return emptyInventory();
+		}
+		throw error;
 	}
-	const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+	if (content.trim() === '') return emptyInventory();
+	const parsed: unknown = JSON.parse(content);
 	if (parsed === null || typeof parsed !== 'object') throw new Error('Publication inventory is not an object.');
 	const inventory = parsed as Partial<PublicationInventory> & { files?: unknown; state_files?: unknown };
 	let entries: NamedEntry[] | undefined = inventory.entries;
-	if (!Array.isArray(entries) && Array.isArray(inventory.files)) {
+	if (entries === undefined && Array.isArray(inventory.files)) {
 		entries = inventory.files.map((file: unknown): NamedEntry => {
 			if (typeof file !== 'string') throw new Error('Legacy publication inventory names a non-string path.');
 			return file.startsWith('state/')
@@ -56,7 +73,7 @@ function readInventory(root: string): { entries: NamedEntry[]; dates: string[] }
 	if (inventory.dates.some((date) => typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date))) {
 		throw new Error('Publication inventory names an invalid UTC date.');
 	}
-	return { entries, dates: inventory.dates };
+	return entries.length === 0 ? emptyInventory() : { entries, dates: inventory.dates };
 }
 
 export function publicFiles(root: string): string[] {

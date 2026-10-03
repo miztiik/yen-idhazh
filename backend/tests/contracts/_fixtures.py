@@ -97,6 +97,7 @@ FIXTURE_FILES: Final = (
     "public-run-day/five-runs.json",
     "public-telemetry/fetch-failed.json",
     "public-telemetry/published.json",
+    "publication-inventory/published.json",
     "published-row/one-item.json",
     "qualification-report/qualified.json",
     "qualification-samples/two-samples.json",

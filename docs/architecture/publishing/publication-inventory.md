@@ -47,7 +47,11 @@ to recount them. Validation checks the stored totals against the named entries.
 
 ## Explicit initialization
 
-A missing inventory is an error, not permission to publish only the newest day.
+A missing inventory stops a backend writer; it never starts a newest-day-only
+inventory. The frontend instead selects zero entries when the file is absent,
+contains only whitespace, or declares zero entries. It warns once per process
+and never discovers replacement files. Malformed non-empty inventories and
+unsafe paths still fail.
 Prepare a named JSON seed using the same contract and all existing days and
 files that must remain browseable. Then run:
 
@@ -115,6 +119,11 @@ State entries never contribute to the published
 byte or item total.
 
 ## Design rationale
+
+Owner exception, kumarsnaveen_microsoft, 2026-10-03: a missing or empty frontend
+inventory degrades to an empty page selection with one warning, rather than
+stopping the build. The backend must still refuse a missing inventory so an
+update cannot silently lose older names.
 
 The day writer already knows the day and item identities. Recording those
 names avoids making each build rediscover every historical directory.

@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { dayShardFiles, readDayShards } from '../src/lib/server/payload';
+import type { PublicationInventory } from '../src/lib/server/publication';
 
 /**
  * The server-side day walk: a day is a `<DD>/` directory of writer-owned files,
@@ -127,6 +128,50 @@ test('a missing named writer file stops the read rather than drawing nothing', (
 		mkdirSync(join(root, 'scores', '2026', '09'), { recursive: true });
 		writeFileSync(join(root, 'scores', '2026', '09', 'notes.txt'), '', 'utf8');
 		expect(dayShardFiles(join(root, 'scores'), -1)).toEqual([]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('readDayShards reads a named ledger from a separate publication root', () => {
+	const root = mkdtempSync(join(tmpdir(), 'day-shards-roots-'));
+	try {
+		const publicRoot = join(root, 'public');
+		const stateRoot = join(root, 'state');
+		const relativePath = 'feed-health/2026/09/18/run.csv';
+		const ledger = join(stateRoot, ...relativePath.split('/'));
+		mkdirSync(join(stateRoot, 'feed-health', '2026', '09', '18'), { recursive: true });
+		mkdirSync(publicRoot, { recursive: true });
+		writeFileSync(ledger, 'date,run_id,feed_id\n2026-09-18,run-1,feed-1\n');
+
+		const templatePath = resolve(
+			process.cwd(),
+			'..',
+			'tests',
+			'fixtures',
+			'contracts',
+			'publication-inventory',
+			'published.json'
+		);
+		const template = JSON.parse(readFileSync(templatePath, 'utf8')) as PublicationInventory;
+		const entry = {
+			root: 'state' as const,
+			path: relativePath,
+			bytes: statSync(ledger).size,
+			items: 0
+		};
+		const inventory: PublicationInventory = {
+			...template,
+			dates: [],
+			entries: [entry],
+			total_bytes: 0,
+			total_items: 0
+		};
+		writeFileSync(join(publicRoot, 'publication.json'), `${JSON.stringify(inventory)}\n`);
+
+		expect(
+			readDayShards(join(stateRoot, 'feed-health'), -1, stateRoot, publicRoot).rows
+		).toEqual([{ date: '2026-09-18', run_id: 'run-1', feed_id: 'feed-1' }]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

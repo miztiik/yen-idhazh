@@ -33,32 +33,38 @@
     {
       "bytes": 2,
       "items": 0,
-      "path": "assist/index/2026-08.bin"
+      "path": "assist/index/2026-08.bin",
+      "root": "public"
     },
     {
       "bytes": 2,
       "items": 0,
-      "path": "assist/index/2026-08.json"
+      "path": "assist/index/2026-08.json",
+      "root": "public"
     },
     {
       "bytes": 2,
       "items": 3,
-      "path": "digest/2026/08/20/digest.json"
+      "path": "digest/2026/08/20/digest.json",
+      "root": "public"
     },
     {
       "bytes": 2,
       "items": 0,
-      "path": "digest/2026/08/20/run.json"
+      "path": "digest/2026/08/20/run.json",
+      "root": "public"
     },
     {
       "bytes": 2,
       "items": 0,
-      "path": "machine/2026-08.csv"
+      "path": "machine/2026-08.csv",
+      "root": "public"
     },
     {
       "bytes": 2,
       "items": 0,
-      "path": "telemetry/2026-08.csv"
+      "path": "telemetry/2026-08.csv",
+      "root": "public"
     }
   ],
   "total_bytes": 12,

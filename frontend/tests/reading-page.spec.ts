@@ -644,27 +644,28 @@ test.describe('with the offline reader installed', () => {
 	test('a day out of the device and a day off the network are the same page', async ({ page }) => {
 		test.skip(!PAST_SEED, `${DAY} never fetches, so there is nothing for a cache to hold`);
 
+		const delivered = page.waitForResponse(
+			(response) => new URL(response.url()).pathname === DAY_PATH && response.status() === 200
+		);
 		await open(page, 'dark', `/${DAY}/`, 1536);
+		await delivered;
 		await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, {
 			timeout: 60_000
 		});
 		const fetched = await showing(page);
 		expect(fetched.ids.length, 'the first visit drew no story').toBeGreaterThan(0);
-		expect(
-			fetched.more,
-			'the first visit says it holds no more, so the day never arrived'
-		).not.toBe('no more');
-
 		await page.reload();
 		await dayReady(page);
 		// What the worker actually answered, named by the browser rather than by
 		// the worker. A second visit that went to the network is a null result:
 		// it proves a page loads twice, which it would have done anyway.
 		const served = await page.evaluate(
-			() =>
+			(path) =>
 				performance
 					.getEntriesByType('resource')
-					.filter((entry) => (entry as PerformanceResourceTiming).workerStart > 0).length
+					.filter((entry) => new URL(entry.name).pathname === path &&
+						(entry as PerformanceResourceTiming).workerStart > 0).length,
+			DAY_PATH
 		);
 		console.log(`[reading-page] the offline reader answered ${served} requests on the second visit`);
 		expect(served, 'the second visit reached nothing the worker holds').toBeGreaterThan(0);

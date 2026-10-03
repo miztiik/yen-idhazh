@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { publicFiles, stateFiles } from '../src/lib/server/publication';
 import { indexMonths, publishedDates, telemetryMonths } from '../src/lib/server/payload';
 import ts from 'typescript';
@@ -130,12 +132,45 @@ test('publication discovery reads named inventory files, not other files in the 
 	}
 });
 
-test('a missing or unsafe inventory fails rather than discovering replacement files', () => {
+test('missing and empty inventories select no files and warn once per process', () => {
+	const root = mkdtempSync(join(tmpdir(), 'publication-empty-'));
+	try {
+		const module = pathToFileURL(join(import.meta.dirname, '..', 'src', 'lib', 'server', 'publication.ts')).href;
+		const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+			import { writeFileSync } from 'node:fs';
+			import { join } from 'node:path';
+			import { publicFiles, stateFiles } from ${JSON.stringify(module)};
+			const root = ${JSON.stringify(root)};
+			const selections = [publicFiles(root), stateFiles(root)];
+			writeFileSync(join(root, 'publication.json'), ' \\n\\t');
+			selections.push(publicFiles(root), stateFiles(root));
+			writeFileSync(join(root, 'publication.json'), ${JSON.stringify(inventory([]))});
+			selections.push(publicFiles(root), stateFiles(root));
+			console.log(JSON.stringify(selections));
+		`], { encoding: 'utf8' });
+		expect(result.error).toBeUndefined();
+		expect(result.status, result.stderr).toBe(0);
+		expect(JSON.parse(result.stdout)).toEqual([[], [], [], [], [], []]);
+		expect(result.stderr.split('\n').filter((line) => line.includes('Publication inventory')))
+			.toEqual(['Publication inventory is missing or empty; no published files are selected.']);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('an unsafe or malformed inventory fails rather than discovering replacement files', () => {
 	const root = mkdtempSync(join(tmpdir(), 'publication-'));
 	try {
-		expect(() => publicFiles(root)).toThrow(/inventory is missing/);
 		writeFileSync(join(root, 'publication.json'), inventory(['../secret.json']));
 		expect(() => publicFiles(root)).toThrow(/invalid relative file path/);
+		for (const entries of [null, {}, 'invalid', false]) {
+			writeFileSync(join(root, 'publication.json'), JSON.stringify({
+				version: '2026-10-03', changelog: [], dates: [], entries, files: ['digest/day.json']
+			}));
+			expect(() => publicFiles(root)).toThrow(/missing version, changelog, dates or entries/);
+		}
+		writeFileSync(join(root, 'publication.json'), '{');
+		expect(() => publicFiles(root)).toThrow(SyntaxError);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
