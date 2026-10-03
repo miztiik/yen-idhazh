@@ -345,14 +345,12 @@ type PanelGroups = Record<string, ConsolePanelGroup[]>;
 
 /** What on-device archive search reads, keeps and shows.
  *
- * **Four fields, and the `assist` block in `config/` holds eight.** Whatever
+ * **Four fields, and the `assist` block in `config/` holds more.** Whatever
  * `assistConfig()` returns is inlined into the prerendered `/archive/`
  * document, so a knob no component opens would ride to every reader who ever
- * loads that page. The four that are not here belong to the pipeline:
- * `recall_min` and `eval_corpus_through` are the retrieval gate's, read by
- * `backend/tests/test_retrieval_eval.py`; `max_tokens` and
- * `min_readable_letter_share` are the encoder's, read by
- * `backend/idhazh/embed.py`.
+ * loads that page. `max_tokens` and `min_readable_letter_share` belong to the
+ * encoder, read by `backend/idhazh/embed.py`, and the `model_` keys to the
+ * build.
  *
  * The browser needs its own token cap and holds one in `$lib/assist/loader.ts`,
  * hardcoded. That is a second copy of one number and it is a real defect, but

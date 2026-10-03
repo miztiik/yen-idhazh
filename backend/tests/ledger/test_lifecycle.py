@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
@@ -43,6 +43,8 @@ from idhazh.stages import score_merge_line_holdout, work
 from idhazh.telemetry import FileSink, source_health
 from idhazh.telemetry.publish import day_metrics
 
+from ._fixtures import fixture_rows
+
 pytestmark = pytest.mark.contract
 
 A_DAY: Final = "2026-09-24"
@@ -51,9 +53,8 @@ SKIPPED: Final = "ledger write skipped"
 
 
 def _first[M: Contract](model: type[M]) -> M:
-    """The first committed contract fixture of this model."""
-    directory = CONTRACT_FIXTURES_DIR / model.__schema_stem__
-    return model.from_json(read_text(sorted(directory.glob("*.json"))[0]))
+    """The first named contract fixture of this model."""
+    return fixture_rows(model)[0]
 
 
 def _identity(job: ServerJob) -> WriterIdentity:

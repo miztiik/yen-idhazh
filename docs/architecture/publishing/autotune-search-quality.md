@@ -1,6 +1,6 @@
 # Autotuning search quality
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-03
 
 **This page is research, not a description of what runs.** Nothing here is built.
 It records what search does today, what was measured about it, what was found
@@ -135,8 +135,8 @@ had drifted from the archive. That is answerable from the month file names plus
 the key's own dates, at fixed cost, without running the ranker over the whole
 archive.
 
-**It is deleted, along with the declared growing read that covered it in
-[growing-reads.md](../../concepts/growing-reads.md).** What the project gives up
+**It is deleted, along with the growing read that violates the fixed-size input
+rule in Guardrail #12.** What the project gives up
 is the whole-archive number as a watchable level - 0.602 on 2026-09-04, falling
 at 0.0000479 per story published, which is about 0.031 a day. Nobody acted on
 it, because the gate is pinned and the decline is a fitted line rather than a
@@ -157,8 +157,8 @@ stories that do not answer the question costs the reader the time to read them
 and costs the digest its credibility. The two failures are not symmetric.
 
 So **precision at the filled slots becomes the gated number, and recall becomes
-reported-only.** Today it is the reverse: `assist.recall_min` is 0.68 and
-nothing gates precision. Precision here means: of the slots the search filled,
+reported-only.** Today nothing gates either: since 2026-10-03 an operator
+reads recall from `measure_retrieval.py --quality` and nothing measures precision. Precision here means: of the slots the search filled,
 how many held a story that actually answers.
 
 The floor is the right knob for an autotuner to move, for one structural reason.
@@ -195,8 +195,8 @@ says the vocabulary moved; it does not say the number moved *because* it moved.
 | B3 | `queries_added`, `queries_dropped` | How the set moved between runs |
 | B4 | `score_on_common` | **The answer.** The metric over the questions present in both runs, which holds the denominator still while the vocabulary grows |
 
-B4 is the same move `assist.eval_corpus_through` already makes for the stories:
-pin the comparison, report the live figure beside it.
+B4 is the move the deleted `assist.eval_corpus_through` pin made for the stories:
+hold the comparison still, report the live figure beside it.
 
 **A moving vocabulary also leaves the index itself behind, and that is a second
 problem wearing the same coat.** The metric above survives a vocabulary change
@@ -298,12 +298,12 @@ shapes already exist.
 | D2 | [autotune-content-similarity.md](autotune-content-similarity.md) | Damping, dead zone, step cap, band walls, and a judge that is already a council tenant |
 | D3 | [llm-council.md](llm-council.md) | The venue, three verbs, tenancy protocol, the 6 h arithmetic |
 | D4 | `backend/idhazh/ledger/filenames.py` | `SEGMENT_NAME`, the one-writer-per-path filename; `idhazh.path_classes` checks it |
-| D5 | `backend/tests/test_retrieval_eval.py` | Noise 95th percentile **0.2716** over **126,843** pairs, 2026-08-26; off-domain probes at 0.235, 0.295, 0.258, 0.194 |
-| D6 | `backend/idhazh/contracts/knobs/assist.py` | Floor 0.35, `recall_min` 0.68, limit 10, months 1, min days 7, and the pin `eval_corpus_through` |
+| D5 | `backend/utilities/measure_retrieval.py --quality` | Noise 95th percentile **0.2716** over **126,843** pairs, 2026-08-26; off-domain probes at 0.235, 0.295, 0.258, 0.194 |
+| D6 | `backend/idhazh/contracts/knobs/assist.py` | Floor 0.35, limit 10, months 1, min days 7 |
 | D7 | `tests/fixtures/search/retrieval-queries.json` | The 60 questions and 297 judgements, and their six-day span |
-| D8 | `backend/utilities/measure_retrieval.py` | The index-coverage read: does the index name every published story |
+| D8 | `backend/utilities/measure_retrieval.py` | Over named days and months: does the index name every published story, and with `--quality` recall and null scores |
 | D9 | `frontend/src/lib/assist/search.ts` | `readScope` and `searchable`, the two rules the Python twin must match |
-| D10 | [search-quality.md](../../concepts/search-quality.md) | The baseline, the bar, the pooling bias, and why recall@10 is a lower bound |
+| D10 | [search-quality.md](../../concepts/search-quality.md) | The baseline, the retired bar, the pooling bias, and why recall@10 is a lower bound |
 
 Measured figures worth not re-taking: the one-month window holds **7,044
 stories and zero judged answers**; the self-hydrating key covers **2,874 of
@@ -343,6 +343,6 @@ story published**.
 - [autotune-content-similarity.md](autotune-content-similarity.md) - the working precedent: a judged line that fits itself nightly.
 - [autotune-desk-assignment.md](autotune-desk-assignment.md) - who rebuilds the index and the label vectors when the vocabulary moves, and why neither is rebuilt today.
 - [../../concepts/search-quality.md](../../concepts/search-quality.md) - the measured baseline, the bar, and why the number is a lower bound.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [retention.md](retention.md) - why a reading not taken on the day cannot be recomputed.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10 (measure to decide), #12 (growth is not recurring work), section 1a (what a model verdict may decide).

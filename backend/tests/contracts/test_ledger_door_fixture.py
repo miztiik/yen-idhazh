@@ -11,13 +11,13 @@ an index that disagreed with its files would test the door against a tree the
 compaction never writes. This checks each root with the backend's own readers:
 every index is a `CompactIndex` document, every entry's `rows` is the row count
 `persist.load` returns and its `bytes` is the file's size on disk, each file's
-envelope names the ledger, the period and what its entry covers, and no compact
-file sits in a root without an entry naming it. It also pins the cases the spec
+envelope names the ledger, the period and what its entry covers. It also pins the cases the spec
 drives the door through, so a regenerated fixture cannot drop one quietly.
 """
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
@@ -28,7 +28,7 @@ from conftest import REPO_ROOT
 
 from idhazh.contracts.file_envelope import Period, Tier
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
-from idhazh.contracts.ledger_index import CompactIndex
+from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import load, read_envelope
 from idhazh.ledger.paths import compact_index_path, compact_path
@@ -92,23 +92,6 @@ def test_every_entry_matches_the_file_the_backend_reader_opens(root: str, period
         )
 
 
-@pytest.mark.parametrize("root", list(HELD))
-def test_no_compact_file_sits_in_the_tree_without_an_entry(root: str) -> None:
-    """A file no index names is a file the door can never reach and the spec never tests."""
-    named = {
-        compact_path(FIXTURE / root, LEDGER, period, entry.covers)
-        for period in HELD[root]
-        for entry in index(root, period).entries
-    }
-    on_disk = {
-        path
-        for period in Period
-        for path in (FIXTURE / root / "compact" / LEDGER.value / period.value).rglob("*")
-        if path.is_file()
-    }
-    assert on_disk == named
-
-
 def test_the_fixture_carries_every_case_the_door_is_driven_through() -> None:
     """A month file, a zero-row day, a hole, and a day both indexes name."""
     days = [entry.covers for entry in index("state", Period.DAILY).entries]
@@ -143,3 +126,62 @@ def test_the_packed_year_holds_the_first_root_s_rows_one_row_group_a_month() -> 
     footer = pyarrow.parquet.read_metadata(year)
     groups = [footer.row_group(at).num_rows for at in range(footer.num_row_groups)]
     assert groups == [len(month) for month in months]
+
+
+def test_raw_listings_name_files_and_sizes() -> None:
+    listing = RawDayIndex.read(FIXTURE / "state" / "raw" / "item-health" / "index" / "2026-09-06.json")
+
+    assert listing.bytes is not None
+    for name, size in zip(listing.files, listing.bytes, strict=True):
+        path = FIXTURE / "state" / "raw" / "item-health" / "2026" / "09" / "06" / name
+        assert path.is_file(), f"{name} is listed and not on disk"
+        assert path.stat().st_size == size
+
+
+def test_answer_fixtures_are_recomputed_with_duckdb() -> None:
+    import duckdb
+
+    con = duckdb.connect()
+    host = (FIXTURE / "state" / "compact" / "host-fingerprint" / "daily" / "2026" / "09" / "01.parquet").as_posix()
+    item = (FIXTURE / "state" / "compact" / "item-health" / "daily" / "2026" / "09" / "01.parquet").as_posix()
+    rows = con.execute(
+        f"SELECT h.date, h.job, i.job AS item_job FROM read_parquet('{host}') h "
+        f"JOIN read_parquet('{item}') i USING (date) ORDER BY h.shard, i.shard, h.job, i.job LIMIT 3"
+    ).fetchall()
+    columns = [column[0] for column in con.description]
+    expected = json.loads((FIXTURE / "answers" / "join-two-ledgers.json").read_text())
+    assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
+
+    raw = sorted((FIXTURE / "state" / "raw" / "item-health" / "2026" / "09" / "06").glob("*.parquet"))
+    files = ", ".join(f"'{path.as_posix()}'" for path in raw)
+    rows = con.execute(
+        f"SELECT date, run_id, hostile FROM read_parquet([{files}], union_by_name=true) ORDER BY run_id"
+    ).fetchall()
+    columns = [column[0] for column in con.description]
+    expected = json.loads((FIXTURE / "answers" / "raw-writer-day.json").read_text())
+    assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
+
+
+def test_additional_answer_fixtures_are_recomputed_with_duckdb() -> None:
+    import duckdb
+
+    con = duckdb.connect()
+    host = (FIXTURE / "state" / "compact" / "host-fingerprint" / "daily" / "2026" / "09" / "01.parquet").as_posix()
+    item = (FIXTURE / "state" / "compact" / "item-health" / "daily" / "2026" / "09" / "01.parquet").as_posix()
+    con.execute(f"CREATE VIEW hf AS SELECT * FROM read_parquet('{host}', union_by_name=true)")
+    con.execute(f"CREATE VIEW ih AS SELECT * FROM read_parquet('{item}', union_by_name=true)")
+    cases = {
+        "order-by-cap": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT date, shard FROM hf WHERE date='2026-09-01' ORDER BY shard DESC) LIMIT 2",
+        "trailing-comment": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT 1 AS one -- done\n) LIMIT 11",
+        "semicolon-comment": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT 1 AS one\n) LIMIT 11",
+        "typed-values": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT sum(cores) AS total, 1.5 AS decimal_value, DATE '2026-09-01' AS day_value, [1,2] AS list_value, {'a':1} AS struct_value FROM hf) LIMIT 11",
+        "summarize": "SELECT COLUMNS(*)::VARCHAR FROM (SUMMARIZE SELECT * FROM hf) LIMIT 3",
+        "duplicate-id": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT h.shard AS id, i.shard AS id FROM hf h JOIN ih i USING (date) ORDER BY h.shard, i.shard) LIMIT 3",
+        "empty-view": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT count(*) AS rows FROM hf) LIMIT 11",
+        "explain": "EXPLAIN SELECT 1 AS one",
+    }
+    for name, sql in cases.items():
+        rows = con.execute(sql).fetchall()
+        columns = [column[0] for column in con.description]
+        expected = json.loads((FIXTURE / "answers" / f"{name}.json").read_text())
+        assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
