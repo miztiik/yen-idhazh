@@ -28,10 +28,18 @@ def test_the_fixture_ledgers_pack_from_a_state_tree_outside_the_repository_root(
 
     build_canary_day.file_published_fixture_rows(state)
     build_canary_day.pack_fixture_ledgers(state, tmp_path)
+    build_canary_day.file_unpacked_fixture_day(state)
 
     for which in build_canary_day.PACKED_LEDGERS:
         assert ledger.watermark_path(state, which, Period.DAILY).is_file(), which.value
         assert (state / "compact" / which.value / "index" / "daily.json").is_file()
+
+    raw_day = state / "raw" / "item-health" / build_canary_day.UNPACKED_DATE.replace("-", "/")
+    assert raw_day.is_dir()
+    assert list(raw_day.glob("*.parquet"))
+    assert not (
+        state / "raw" / "item-health" / "index" / f"{build_canary_day.UNPACKED_DATE}.json"
+    ).exists()
 
 
 def test_the_canary_feed_results_reach_the_packed_days_the_voices_page_reads(

@@ -242,9 +242,7 @@ def test_the_plan_jobs_checkout_holds_every_folder_its_reader_opens(tmp_path: Pa
         path
         for path in opened
         if "/" in path
-        and not any(
-            PurePosixPath(path).is_relative_to(PurePosixPath(folder)) for folder in cone
-        )
+        and not any(PurePosixPath(path).is_relative_to(PurePosixPath(folder)) for folder in cone)
     ]
     assert not outside, (
         f"the plan job's reader opens {outside[0]}, which its sparse checkout {cone} never "

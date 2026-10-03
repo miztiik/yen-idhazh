@@ -142,6 +142,7 @@ PACKED_LEDGERS: Final = (*config.load().app.ledger.published, LedgerName.FEED_HE
 #: day, the first day the declared rule admits it. A fixed day rather than the
 #: clock, so every day of the fixture is packed the same way on every build.
 PACKED_ON: Final = calendar_date.fromisoformat(DATE) + timedelta(days=2)
+UNPACKED_DATE: Final = (calendar_date.fromisoformat(DATE) + timedelta(days=1)).isoformat()
 
 #: How many days one packing pass may take here. The declared budget paces a
 #: daily wake; the fixture is packed whole, once.
@@ -1721,6 +1722,32 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
             )
 
 
+def file_unpacked_fixture_day(state: Path) -> int:
+    """Write one raw day after packing, so the site build stages a writer listing."""
+    url = "https://canary.example.com/unpacked-ledger"
+    row = ItemHealthRow(
+        version=ItemHealthRow.schema_version(),
+        date=UNPACKED_DATE,
+        run_id=f"{UNPACKED_DATE}-1",
+        item_id="unpacked-0001",
+        url_key=derive_url_key(url),
+        canonical_url=url,
+        vertical="ai",
+        stage=ItemStage.PUBLISH,
+        source_id="canary-steady",
+        outcome=ItemOutcome.OK,
+        code=None,
+    )
+    ledger.persist(
+        state,
+        [row],
+        ledger=LedgerName.ITEM_HEALTH,
+        covers=UNPACKED_DATE,
+        identity=_fixture_writer(row.run_id),
+    )
+    return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path("backend/var/canary/digest"))
@@ -1758,6 +1785,8 @@ def main() -> int:
         filed = file_fixture_rows(args.state, args.file_fixture_rows)
         filed.update(file_published_fixture_rows(args.state))
         pack_fixture_ledgers(args.state.resolve(), Path.cwd().resolve())
+        unpacked = file_unpacked_fixture_day(args.state)
+        filed[LedgerName.ITEM_HEALTH] = filed.get(LedgerName.ITEM_HEALTH, 0) + unpacked
         for which, count in filed.items():
             print(f"filed {count} {which.value} fixture rows through the ledger door")
         print(f"packed {', '.join(which.value for which in PACKED_LEDGERS)} as of {PACKED_ON}")

@@ -261,10 +261,17 @@ staged tree.
   published wrongly. The whole site waits, reading pages included, until the
   ledger is whole again or leaves `ledger.published`.
 - **The cap is the widest console span, anchored on the ledger's data.** On
-  2026-10-02 that span is 90 UTC days. It is counted back from the newest packed period: the newest day in `daily.json`, else the last day of the newest month in `monthly.json`, else the last day of the newest year in `yearly.json`, never from the build clock. A period is copied
-  whole when it overlaps that span, so a month or year can make the oldest
-  reachable day older than 90 days, and nothing older than that overlapping
-  period is named.
+  2026-10-03 that span is 90 UTC days. It is counted back from the newest day
+  any of the three packed indexes names: a day as itself, a month through its
+  last UTC day and a year through 31 December. A period is copied whole when it
+  overlaps that span, so a month or year can make the oldest reachable day older
+  than 90 days, and nothing older than that overlapping period is named.
+- **Raw days after the newest packed day are listed for the site only.** The
+   build checks at most the same 90 UTC days after each ledger's newest packed
+   day, writes one `RawDayIndex` under `state/raw/<ledger>/index/<day>.json` for
+   each listed day, and copies the parquet writer files the listing names. A day
+   whose raw directory also holds a non-parquet writer file is left unlisted, and
+   the build log names that file.
 - **A data file an index names and the tree lacks does not stop it.** The build
   copies the rest and puts a `file-missing` warning, naming the file, on the run's
   page; the door answers `unreachable` for a span that reaches that day.
@@ -301,14 +308,20 @@ the same index about 4 percent smaller. **The data files carry no ceiling, and n
 gate yet weighs what one span reads.**
 
 Measured 2026-10-03 on this shared Windows machine from a real build of the
-committed `state/`, the whole built site weighed 155,716,481 bytes, or 148.5 MB,
-beside the 1,073,741,824-byte Pages cap. That leaves 875 MB before GitHub Pages
-refuses the deploy. The staged ledger files under `build/state/compact/` weighed
-15,417,159 bytes, or 15.42 MB, in all: `candidate-models` 43,737 bytes,
-`counterfactual-scores` 782,471 bytes, `host-fingerprint` 340,930 bytes,
-`item-health` 4,190,954 bytes, `published` 926,603 bytes, `seen` 4,453,977 bytes
-and `summary-quality-evals` 4,678,487 bytes. That reading is not a gate; `idhazh
-site-weight` is the gate and the cap is the platform limit.
+committed `state/`, after raw-day listings were staged, the whole built site
+weighed 160,958,761 bytes, or 153.5 MB, beside the 1,073,741,824-byte Pages cap.
+That leaves 870.5 MB before GitHub Pages refuses the deploy. The compact ledger
+files under `build/state/compact/` weighed 15,809,007 bytes, or 15.1 MB, in all:
+`candidate-models` 87,319 bytes, `counterfactual-scores` 828,742 bytes,
+`host-fingerprint` 357,233 bytes, `item-health` 4,349,116 bytes, `published`
+947,535 bytes, `seen` 4,560,565 bytes and `summary-quality-evals` 4,678,487
+bytes. The raw-day tier added these listings and writer files:
+`counterfactual-scores` 2 listings and 6 files, 135,442 bytes; `host-fingerprint` 2 listings and
+58 files, 721,224 bytes; `item-health` 2 listings and 30 files, 1,841,816 bytes;
+`published` 1 listing and 7 files, 87,595 bytes; `seen` 2 listings and 5 files,
+234,524 bytes; and `summary-quality-evals` 3 listings and 50 files, 1,433,599
+bytes. That reading is not a gate; `idhazh site-weight` is the gate and the cap
+is the platform limit.
 
 ## How a year file is read by byte range
 

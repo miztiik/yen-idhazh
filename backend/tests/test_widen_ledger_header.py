@@ -38,6 +38,7 @@ TARGET = "content-similarity-judge-scored-pairs"
 #: The day the census below files each ledger's one header-only file under.
 CENSUS_DATE = "2026-09-16"
 
+
 def test_relative_state_root_refiles_the_named_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

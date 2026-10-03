@@ -633,7 +633,13 @@ def test_a_ledger_still_on_csv_is_refused(tmp_path: Path) -> None:
     """
     state = tmp_path / "state"
     _csv(state, ON_CSV, OLD, _writer(OLD, 1, ServerJob.PLAN), [_feed(OLD).csv_row()])
-    _csv(state, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [_item(OLD, "ai-01", machine=True).csv_row()])
+    _csv(
+        state,
+        ITEM,
+        OLD,
+        _writer(OLD, 1, ServerJob.WORK),
+        [_item(OLD, "ai-01", machine=True).csv_row()],
+    )
     config_dir = _beside(state)
     registry_path = config_dir / "ledgers.json"
     registry = json.loads(registry_path.read_text(encoding="utf-8"))

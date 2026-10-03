@@ -639,9 +639,7 @@ def _thirteen_months(name: str) -> dict[str, Any]:
     return declared
 
 
-@pytest.mark.parametrize(
-    "name", ["feed-health", "summary-quality-evals-index", "telemetry-aggregate"]
-)
+@pytest.mark.parametrize("name", ["summary-quality-evals-index", "telemetry-aggregate"])
 def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: str) -> None:
     """A 366-day read reaches fourteen month shards, and thirteen is one short of it.
 

@@ -292,6 +292,7 @@ function stageLedgers() {
 				'console shows the days it covers as unreachable. Re-pack that day.'
 		);
 	}
+	for (const line of copy.logs ?? []) console.log(line);
 	// The same switch as the marks: the door asks that host for these files, so a
 	// copy staged here would be bytes nobody fetches.
 	if (servedElsewhere) {
