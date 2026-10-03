@@ -66,8 +66,23 @@ test('data helpers select ledger logic and console consumers without unrelated f
 		assert.equal(selection.tooling, false);
 		assert.equal(selection.reasons[0].reason, 'ledger queries and console consumers');
 		assert.deepEqual(ciAnswer([path], true), {
-			browser: true, code: true, console: false, panels: false, validateAll: false
+			browser: true, code: true, console: false, panels: false, robots: false, validateAll: false
 		});
+	}
+});
+
+test('the second-interpreter robots job runs only when its tests can have moved', () => {
+	for (const path of [
+		'backend/idhazh/extract.py', 'backend/idhazh/sanitize.py', 'backend/tests/test_extract.py',
+		'pyproject.toml', 'new-area/module.ts', 'full-ci-run', 'unresolved-change-base'
+	]) {
+		assert.equal(ciAnswer([path], true).robots, true, path);
+	}
+	for (const path of [
+		'docs/a.md', 'frontend/src/routes/+page.svelte', 'backend/idhazh/ledger.py',
+		'backend/tests/test_ledger.py'
+	]) {
+		assert.equal(ciAnswer([path], true).robots, false, path);
 	}
 });
 

@@ -69,6 +69,7 @@ frontend/static/digest/
 frontend/static/telemetry/
 frontend/static/index/
 frontend/static/console/
+frontend/static/config/
 frontend/static/scores/
 frontend/static/run-days/
 frontend/static/day-metrics/
