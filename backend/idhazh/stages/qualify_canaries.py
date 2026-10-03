@@ -60,5 +60,5 @@ def stage_qualify_canaries(
     return _canary_report(
         observations,
         root=common.QUALIFICATION_ROOT / date,
-        required=len(sorted(common.CANARY_DIR.glob("*.json"))),
+        required=len(settings.app.evaluation.canary_files),
     )
