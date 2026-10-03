@@ -23,6 +23,8 @@ over whatever the archive happens to hold.
 Gardener integration fixtures copy the declarations named in
 `backend/tests/gardener/_garden.py`, and import its named task modules.
 Adding an unrelated declaration or source module does not expand those inputs.
+Full shard and fold-landing fixtures copy those named real task sources into a
+temporary package, so discovery reads only the package the test built.
 The producer's preflight still checks its live registry. Council command-line
 fixtures copy the five config inputs and the active model file, not `config/`.
 Their static import check reads the named inputs in `council/_imports.py` and

@@ -26,9 +26,10 @@ import tarfile
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Final
+from uuid import uuid4
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR
+from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT
 from origin_template import copy_origin, template
 
 from idhazh.gardener.registry import TaskModule
@@ -151,6 +152,26 @@ def named_task_modules() -> dict[str, TaskModule]:
         module = importlib.import_module(f"idhazh.gardener.tasks.{stem}")
         modules[stem] = TaskModule(stem=stem, kind=module.KIND, run=module.run)
     return modules
+
+
+def named_task_package(root: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """Build a discoverable package from named real sources, never a source-tree walk."""
+    name = f"garden_tasks_{uuid4().hex}"
+    folder = root / name
+    folder.mkdir()
+    source = REPO_ROOT / "backend" / "idhazh" / "gardener" / "tasks"
+    for stem in (
+        "__init__",
+        "_compact_tree",
+        "_daily_period",
+        "_index_day",
+        "_monthly_period",
+        "_yearly_period",
+        *TASK_MODULES,
+    ):
+        shutil.copyfile(source / f"{stem}.py", folder / f"{stem}.py")
+    monkeypatch.syspath_prepend(str(root))
+    return importlib.import_module(name)
 
 
 def quiet_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
