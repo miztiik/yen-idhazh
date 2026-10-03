@@ -10,6 +10,7 @@
  * | `quiet` | every month arrived and the window is genuinely empty | widen it |
  * | `missing` | the pipeline never wrote those months | nothing - it is real |
  * | `unreachable` | a month was asked for and did not come back | retry it |
+ * | `refused` | the page or the engine would not run the question | change the question |
  *
  * **Telling `missing` from `unreachable` is the whole reason this file exists.**
  * Before it, both drew an unmarked gap, so a quiet pipeline and a broken fetch
@@ -20,10 +21,12 @@
  * edit rather than a hunt.
  */
 import { MONTHS } from '$lib/format';
+import { megabytes } from '$lib/assist/session';
 import { grouped } from '$lib/charts/series';
 import { monthsInWindow, type TimeWindow } from '$lib/charts/viewport';
+import type { AskRefusal } from '$lib/data/ledger';
 
-export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachable';
+export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachable' | 'refused';
 
 /** A panel's state, plus the one nothing only its chart can see.
  *
@@ -189,4 +192,17 @@ export function tooFewSentence(have: number, floor: number, noun: string): strin
  */
 export function retryLabel(months: readonly string[]): string {
 	return `Try ${nameMonths(months)} again`;
+}
+
+function mb(bytes: number): string {
+	return `${megabytes(bytes)} MB`;
+}
+
+/** The sentence a refused written question prints in the answer panel. */
+export function refusedSentence(because: AskRefusal): string {
+	if (because.kind === 'statements') return `Run one statement at a time. This has ${because.count}.`;
+	if (because.kind === 'not-read-only') return `Only questions run here: start with SELECT, WITH, DESCRIBE, SUMMARIZE or EXPLAIN. This starts with ${because.word}.`;
+	if (because.kind === 'too-long') return `This question is ${because.chars} characters long; the most this page runs is ${because.max}.`;
+	if (because.kind === 'over-ceiling') return `These days would fetch ${mb(because.bytes)} from ${because.files} files, and one question may fetch ${mb(because.max)}. Pick fewer days or fewer ledgers.`;
+	return 'The engine could not run this:';
 }

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import re
 import shlex
-import shutil
 import subprocess
 import sys
 import time
@@ -66,6 +65,7 @@ from ._harness import (
     _artifact_upload,
     _bash,
     _commit_call,
+    _copy_config,
     _declared_dispatch_inputs,
     _expression,
     _isolated_env,
@@ -345,7 +345,7 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     and nothing is what leaves the state root where the console reads it.
     """
     scratch = tmp_path / "candidate-config"
-    shutil.copytree(REPO_ROOT / "config", scratch)
+    _copy_config(scratch)
     committed = json.loads((scratch / "idhazh.json").read_text(encoding="utf-8"))
     candidate_pointer.point_at(
         committed[MODELS_POINTER_KEY], scratch=scratch, trial_state=BENCH_TRIAL_STATE
@@ -656,7 +656,7 @@ def test_the_bench_corpus_size_is_a_knob_and_the_cut_follows_it(
     has to die before the server starts rather than an hour in.
     """
     scratch = tmp_path / "candidate-config"
-    shutil.copytree(REPO_ROOT / "config", scratch)
+    _copy_config(scratch)
     settings = json.loads((scratch / "idhazh.json").read_text(encoding="utf-8"))
     settings["bench"]["corpus_items"] = 2
     (scratch / "idhazh.json").write_text(json.dumps(settings, indent=2), encoding="utf-8")
@@ -707,7 +707,7 @@ def test_the_dispatch_corpus_size_is_written_into_the_config_every_stage_reads(
     one size and expect another (Guardrail #6).
     """
     scratch = tmp_path / "candidate-config"
-    shutil.copytree(REPO_ROOT / "config", scratch)
+    _copy_config(scratch)
 
     assert runtime_sweep.corpus_items(scratch, dispatch="2") == 2
     assert runtime_sweep.corpus_items(scratch) == 2, "the scratch config carries it now"
@@ -769,18 +769,22 @@ def test_a_job_that_runs_a_script_importing_idhazh_installs_it_first() -> None:
     the same mistake in any other job of this file fails here too.
     """
     workflow = _load_workflows()["measure.yml"]
-    importers = {
-        path.name
-        for path in (REPO_ROOT / "backend" / "utilities").glob("*.py")
-        if re.search(r"^from idhazh|^import idhazh", read_text(path), re.MULTILINE)
-    }
-
     for job_name in _mapping(workflow["jobs"], "measure.yml jobs"):
         bodies: list[str] = [
             body
             for step in _steps(workflow, job_name)
             if isinstance(body := step.get("run"), str)
         ]
+        utilities = {
+            match
+            for body in bodies
+            for match in re.findall(r"backend/utilities/[A-Za-z0-9_]+\.py", body)
+        }
+        importers = {
+            path
+            for path in utilities
+            if re.search(r"^from idhazh|^import idhazh", read_text(REPO_ROOT / path), re.MULTILINE)
+        }
         needs_the_package = any(script in body for body in bodies for script in importers)
         if not needs_the_package:
             continue
@@ -998,7 +1002,7 @@ def test_an_empty_repeat_dispatch_follows_the_knob_and_a_named_one_is_bounded(
     waiting to disagree.
     """
     scratch = tmp_path / "candidate-config"
-    shutil.copytree(REPO_ROOT / "config", scratch)
+    _copy_config(scratch)
     committed = json.loads(read_text(scratch / "idhazh.json"))["bench"]["repeats"]
 
     assert runtime_sweep.repeats(scratch) == committed, "empty follows the knob"
