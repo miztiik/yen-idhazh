@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
 
@@ -33,10 +32,6 @@ function anIndex(ledger: string, period: 'daily' | 'monthly' | 'yearly', covers:
 
 function coversIn(index: string): string[] {
 	return (JSON.parse(index).entries as { covers: string }[]).map((entry) => entry.covers);
-}
-
-function contentDigest(files: string[]): string {
-	return createHash('sha256').update(files.join('\n'), 'utf8').digest('hex');
 }
 
 /** A whole ledger: all indexes, every file they name, the watermark beside them and a stray file. */
@@ -251,13 +246,40 @@ test('raw days after the newest packed day are listed through the newest raw day
 		ledger: 'item-health',
 		date: '2026-09-02',
 		files: [first, second],
-		content_sha256: contentDigest([first, second]),
 		bytes: [8, 4]
 	});
 	expect(listed).not.toHaveProperty('version');
 	expect(listed.listed_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
 	expect(JSON.parse(copy.indexes['raw/item-health/index/2026-09-03.json']).files).toEqual([]);
 	expect(JSON.parse(copy.indexes['raw/item-health/index/2026-09-04.json']).bytes).toEqual([5]);
+});
+
+test('the build listing keeps the compaction listing digest and adds file sizes', () => {
+	const fixtureRoot = join(process.cwd(), '..', 'tests', 'fixtures', 'raw-day-listing', 'state', 'raw', 'item-health');
+	const fixtureDay = join(fixtureRoot, '2026', '09', '02');
+	const root = aStateTree({
+		'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2026-09-01']),
+		'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
+		'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', []),
+		'compact/item-health/daily/2026/09/01.parquet': 'PAR1'
+	});
+	const targetDay = join(root, 'raw', 'item-health', '2026', '09', '02');
+	mkdirSync(targetDay, { recursive: true });
+	for (const name of ['01a0fbc4-1707-8428-b765-119571d6249f.parquet', '01a0fca4-b1cd-8c8b-a2ea-b2f6f3a7e52e.parquet']) {
+		cpSync(join(fixtureDay, name), join(targetDay, name));
+	}
+
+	const copy = ledgerCopy(root, ['item-health']);
+	const staged = JSON.parse(copy.indexes['raw/item-health/index/2026-09-02.json']);
+	const fixture = JSON.parse(readFileSync(join(fixtureRoot, 'index', '2026-09-02.json'), 'utf8'));
+	expect(staged).toMatchObject({
+		ledger: fixture.ledger,
+		date: fixture.date,
+		files: fixture.files,
+		content_sha256: fixture.content_sha256,
+		bytes: fixture.files.map((name: string) => statSync(join(fixtureDay, name)).size)
+	});
+	expect(staged).not.toHaveProperty('version');
 });
 
 test('a raw day holding a non-parquet writer file is left unlisted and named in the build log', () => {
@@ -299,4 +321,20 @@ test('a ledger with no packed day stages no raw listings and logs the skipped wa
 	expect(copy.logs).toEqual([
 		'published ledgers: candidate-models has no packed day; raw-day walk skipped.'
 	]);
+});
+
+test('a raw directory inside the widest window is listed even when its date is after today', () => {
+	const file = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
+	const copy = ledgerCopy(
+		aStateTree({
+			'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2099-01-01']),
+			'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
+			'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', []),
+			'compact/item-health/daily/2099/01/01.parquet': 'PAR1',
+			[`raw/item-health/2099/01/02/${file}`]: 'PAR1'
+		}),
+		['item-health']
+	);
+	expect(copy.files).toContain('raw/item-health/index/2099-01-02.json');
+	expect(copy.files).toContain(`raw/item-health/2099/01/02/${file}`);
 });

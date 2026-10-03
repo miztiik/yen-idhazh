@@ -1,10 +1,18 @@
 import { expect, test } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { newestPackedDay, publishedLedgers } from '../scripts/published-ledgers.mjs';
+import { rawListedThrough } from '../scripts/raw-listed-through.mjs';
 import { COMPACT_PERIODS, readIndex } from '../src/lib/data/compact-index';
+import { nodeEngine } from '../src/lib/data/engine';
+import { pageKeeper } from '../src/lib/data/page-keeper';
 import { readRawDayIndex } from '../src/lib/data/raw-day-index';
+import { readAsk } from '../src/lib/data/ask-reader';
+import { daysBetween } from '../src/lib/data/slice';
 import { dataPath, indexPath, rawDataPath, rawIndexPath } from '../src/lib/data/slice-reader';
+import { engineExtensionRepository } from '../src/lib/server/config';
+import { diskBytes } from '../src/lib/server/ledger-disk';
 import type { LedgerName } from '../src/lib/data/slice-shapes';
 
 /**
@@ -27,6 +35,10 @@ import type { LedgerName } from '../src/lib/data/slice-shapes';
 
 const STATE = resolve(process.cwd(), 'build', 'state');
 const BUILD = resolve(process.cwd(), 'build');
+const STATIC = resolve(process.cwd(), 'static');
+const CANARY_STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
+const resolver = createRequire(import.meta.url);
+const locate = (specifier: string): string => resolver.resolve(specifier);
 
 /** Every file under a directory, as a POSIX path relative to it. */
 function filesUnder(root: string, prefix = ''): string[] {
@@ -40,6 +52,10 @@ function filesUnder(root: string, prefix = ''): string[] {
 
 function at(path: string): string {
 	return join(STATE, ...path.split('/'));
+}
+
+function inCanaryState(path: string): string {
+	return join(CANARY_STATE, ...path.split('/'));
 }
 
 function dayNumber(day: string): number {
@@ -175,6 +191,71 @@ test('every published index is capped to the widest console span, anchored on it
 				).toBeTruthy();
 			}
 		}
+	}
+});
+
+test('raw-day listings are complete, bounded and become the baked listed-through value', () => {
+	const appearance = JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8'));
+	const widest = Math.max(...appearance.console.window_presets);
+	const stagedThrough = rawListedThrough(STATIC);
+	const problems: string[] = [];
+	const newestListedByLedger: Record<string, string> = {};
+	for (const ledger of publishedLedgers() as LedgerName[]) {
+		const newest = newestPackedDay(STATE, ledger);
+		if (newest === null) continue;
+		const indexRoot = join(STATE, 'raw', ledger, 'index');
+		const listed = existsSync(indexRoot)
+			? readdirSync(indexRoot)
+					.filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/.test(name))
+					.map((name) => name.slice(0, -5))
+					.sort()
+			: [];
+		if (listed.length === 0) continue;
+		const newestListed = listed.at(-1)!;
+		newestListedByLedger[ledger] = newestListed;
+		const packedDay = new Date(newest * 86_400_000).toISOString().slice(0, 10);
+		for (const day of listed) {
+			const listedNumber = dayNumber(day);
+			if (listedNumber <= newest) problems.push(`${ledger} lists ${day}, not after newest packed ${packedDay}`);
+			if (listedNumber - newest > widest) problems.push(`${ledger} lists ${day}, beyond ${widest} days after ${packedDay}`);
+		}
+		for (const day of daysBetween(new Date((newest + 1) * 86_400_000).toISOString().slice(0, 10), newestListed)) {
+			const listing = rawIndexPath(ledger, day);
+			if (existsSync(at(listing))) continue;
+			const [year, month, date] = day.split('-');
+			const directory = inCanaryState(`raw/${ledger}/${year}/${month}/${date}`);
+			const nonParquet = existsSync(directory)
+				? readdirSync(directory).filter((name) => !name.endsWith('.parquet'))
+				: [];
+			if (nonParquet.length === 0) {
+				problems.push(`${ledger} ${day} has no listing and no non-parquet writer file in the canary state root`);
+			}
+		}
+	}
+	expect(problems).toEqual([]);
+	expect(stagedThrough).toEqual(newestListedByLedger);
+});
+
+test('the query door reads the canary raw day through the staged listing', async () => {
+	const keeper = pageKeeper(diskBytes(STATE), () => nodeEngine(locate, engineExtensionRepository()));
+	try {
+		const answer = await readAsk(
+			keeper,
+			{
+				ledgers: ['item-health'],
+				from: '2026-08-21',
+				to: '2026-08-21',
+				sql: 'SELECT item_id FROM "item-health" ORDER BY item_id',
+				maxChars: 200,
+				maxRows: 10,
+				maxFetchBytes: 100_000_000
+			},
+			rawListedThrough(STATIC)
+		);
+		expect(answer).toMatchObject({ state: 'ok', unpackedDays: ['2026-08-21'] });
+		expect(answer.state === 'ok' ? answer.rows : []).toEqual([{ item_id: 'unpacked-0001' }]);
+	} finally {
+		await keeper.release();
 	}
 });
 

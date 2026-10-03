@@ -283,10 +283,6 @@ function dayString(day) {
 	return new Date(day * 86_400_000).toISOString().slice(0, 10);
 }
 
-function todayUtcDay() {
-	return Math.floor(Date.now() / 86_400_000);
-}
-
 /** @param {string[]} names */
 function rawDigest(names) {
 	return createHash('sha256').update(names.join('\n'), 'utf8').digest('hex');
@@ -331,7 +327,7 @@ function rawDaysNotPackedYet(stateRoot, ledger, newestPacked, spanDays, listedAt
 		return { files: [], listings: {}, logs: [`published ledgers: ${ledger} has no packed day; raw-day walk skipped.`] };
 	}
 	const start = newestPacked + 1;
-	const end = Math.min(start + spanDays - 1, todayUtcDay());
+	const end = start + spanDays - 1;
 	if (start > end) return { files: [], listings: {}, logs: [] };
 	/** @type {{day: string, directory: string, exists: boolean}[]} */
 	const checked = [];
