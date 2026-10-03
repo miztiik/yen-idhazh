@@ -86,7 +86,13 @@ class LedgerConfig(Model):
     @field_validator("engine_extension_repository", "archive_base_url")
     @classmethod
     def _browser_reachable_prefix_is_https(cls, value: str, info: ValidationInfo) -> str:
-        """An absolute `https://` prefix with no trailing slash, whitespace or quote."""
+        """An absolute `https://` prefix with no trailing slash, whitespace or quote.
+
+        The engine appends `/<version>/<platform>/<name>` and writes the value into
+        a `SET` statement; the archive keeper appends `/state/compact/...`. A
+        trailing slash or quote breaks the address or the statement instead of
+        failing the build here.
+        """
         field = info.field_name or "ledger prefix"
         if field == "archive_base_url" and value == "":
             return value

@@ -77,11 +77,14 @@ def a_retention(owns: list[str], window: dict[str, Any], status: str = "active")
 
 
 def a_compaction(ledger: str, **changes: Any) -> dict[str, Any]:
-    return fixture(
-        "compact-gardener",
-        ledger=ledger,
-        owns=[f"state/raw/{ledger}", f"state/compact/{ledger}"],
-    ) | changes
+    return (
+        fixture(
+            "compact-gardener",
+            ledger=ledger,
+            owns=[f"state/raw/{ledger}", f"state/compact/{ledger}"],
+        )
+        | changes
+    )
 
 
 MONTHS = {"unit": "months", "value": 14}
@@ -492,7 +495,9 @@ def test_a_window_a_reader_still_opens_is_not_deleted_under_it(
 ) -> None:
     """Days against months are compared at the fewest days the months can hold."""
     owns = [f"state/{name}"]
-    config_dir = a_garden(tmp_path, **{name.replace("-", "_"): fixture("seen", owns=owns, window=window)})
+    config_dir = a_garden(
+        tmp_path, **{name.replace("-", "_"): fixture("seen", owns=owns, window=window)}
+    )
     if loads:
         config.load_gardener(config_dir)
     else:

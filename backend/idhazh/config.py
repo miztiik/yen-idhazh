@@ -326,6 +326,8 @@ def _declarations(config_dir: Path, names: tuple[str, ...]) -> dict[str, TaskPol
                 f"{where} is refused: a task is named by its file, and {name!r} is "
                 "not a lower-case word or words joined by hyphens"
             )
+        if not path.is_file():
+            raise ValueError(f"{where} is missing; config/{GARDENER_FILE} names it in task_names")
         try:
             found[path.stem] = _TASK_POLICY.validate_json(path.read_text(encoding="utf-8"))
         except FileNotFoundError as error:

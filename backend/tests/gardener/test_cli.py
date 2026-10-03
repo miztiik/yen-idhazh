@@ -8,6 +8,7 @@ same line, and one test drives it the same way.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -46,14 +47,19 @@ def test_the_retired_cleanup_verb_is_gone_now_the_gardener_workflow_runs_its_tas
     assert "invalid choice: 'prune-state'" in capsys.readouterr().err
 
 
-def test_list_tasks_prints_one_line_a_task(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_list_tasks_prints_one_line_a_task(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     config_dir = the_garden(tmp_path)
 
     assert cli.main(["gardener", "list-tasks", "--config", str(config_dir)]) == 0
 
     printed = capsys.readouterr().out.splitlines()
     assert len(printed) == len(list((config_dir / "gardener").glob("*.json")))
-    assert "trials: active retention, keeps 90 days, reports only, owns everything else under state" in printed
+    assert (
+        "trials: active retention, keeps 90 days, reports only, owns everything else under state"
+        in printed
+    )
 
 
 def test_plan_shards_prints_the_payload_the_plan_job_prints(
@@ -83,10 +89,13 @@ def test_an_empty_garden_lists_nothing_and_plans_nothing(tmp_path: Path) -> None
 def test_an_unconfigured_declaration_is_not_read(tmp_path: Path) -> None:
     config_dir = the_garden(tmp_path)
     (config_dir / "gardener" / "Not A Name.json").write_text("{}", encoding="ascii")
+    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
+    knobs["task_names"].append("Not A Name")
+    knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
 
-    settings = config.load_gardener(config_dir)
-
-    assert "Not A Name" not in settings.tasks
+    assert cli.main(["gardener", "list-tasks", "--config", str(config_dir)]) == EXIT_INTEGRITY
+    assert "config/idhazh_gardener.json is refused" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

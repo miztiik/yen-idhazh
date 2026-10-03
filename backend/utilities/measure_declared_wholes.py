@@ -85,20 +85,17 @@ that correlation, so a null article is arithmetically harder than a real one.
 Every ratio this prints is therefore an upper bound on the signal, and the
 measured rate is an upper bound on the true rate (Andre, 2026-09-13).
 
-This is a growing read
-----------------------
+The input is one named corpus file
+---------------------------------
 
-`CLAUDE.md` Guardrail #12, taken under its escape hatch: this opens every row of
-`corpus/corpus.jsonl`, it is run by hand, it is not on the daily path, and no
-test repeats it. A bounded input cannot answer it - the question is the rate over
-the whole window, so a sample would answer a different question and carry a
-spread nobody asked for.
+`--corpus` is required. This reads that file and discovers no other corpus,
+day or shard. The reported rate describes that input only.
 
 Usage, from the root of a checkout::
 
-    python backend/utilities/measure_declared_wholes.py
-    python backend/utilities/measure_declared_wholes.py --sweep
-    python backend/utilities/measure_declared_wholes.py --examples 8 --json
+    python backend/utilities/measure_declared_wholes.py --corpus corpus/corpus.jsonl
+    python backend/utilities/measure_declared_wholes.py --corpus corpus/corpus.jsonl --sweep
+    python backend/utilities/measure_declared_wholes.py --corpus corpus/corpus.jsonl --json
 
 Exit code 1 when there is no corpus to read, so a shell can tell "nothing to
 read" from "read it, here are the numbers".
@@ -343,9 +340,7 @@ def group(unit: str, members: list[Quantity]) -> Group:
         ),
         key=lambda row: row[0],
     )
-    return Group(
-        unit, tuple(members), tuple(row[0] for row in rows), tuple(row[1] for row in rows)
-    )
+    return Group(unit, tuple(members), tuple(row[0] for row in rows), tuple(row[1] for row in rows))
 
 
 def groups_of(quants: list[Quantity]) -> tuple[list[Group], int]:
@@ -376,9 +371,7 @@ def _parts_for(
     if total <= 0:
         return None
     low, high = total * (1 - tolerance), total * (1 + tolerance)
-    for index in range(
-        bisect_left(unit_group.totals, low), bisect_right(unit_group.totals, high)
-    ):
+    for index in range(bisect_left(unit_group.totals, low), bisect_right(unit_group.totals, high)):
         combo = unit_group.combos[index]
         if whole is not None and any(q.start == whole.start for q in combo):
             continue
@@ -627,7 +620,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Count how often an article states a whole its parts add up to."
     )
-    parser.add_argument("--corpus", type=Path, default=REPO_ROOT / CORPUS_RELPATH)
+    parser.add_argument("--corpus", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=20260913, help="makes the null reproducible")
     parser.add_argument("--window", type=int, default=WINDOW, help="0 means the whole article")
     parser.add_argument("--tolerance", type=float, default=TOLERANCE, help="0 means exact")

@@ -124,18 +124,17 @@ def a_config(root: Path, *declarations: Path) -> Path:
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
     task_names: set[str] = set()
     for given in declarations:
-        if given.parent == GARDENER_FIXTURES:
-            for name in FIXTURE_DECLARATIONS[given.name]:
-                shutil.copyfile(given / name, config_dir / "gardener" / name)
-                task_names.add(Path(name).stem)
-            continue
-        sources = (
-            [given / name for name in COMMITTED_DECLARATIONS]
-            if given == CONFIG_DIR / "gardener"
-            else sorted(given.glob("*.json"))
-            if given.is_dir()
-            else [given]
-        )
+        if given == CONFIG_DIR / "gardener":
+            configured = json.loads(
+                (config_dir / "idhazh_gardener.json").read_text(encoding="utf-8")
+            )["task_names"]
+            sources = [given / f"{name}.json" for name in configured]
+        elif given.parent == GARDENER_FIXTURES:
+            sources = [given / name for name in FIXTURE_DECLARATIONS[given.name]]
+        elif given.is_dir():
+            raise ValueError(f"test declarations must be named, not listed: {given}")
+        else:
+            sources = [given]
         for source in sources:
             shutil.copyfile(source, config_dir / "gardener" / source.name)
             task_names.add(source.stem)
