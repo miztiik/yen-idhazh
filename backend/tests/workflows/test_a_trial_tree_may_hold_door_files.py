@@ -36,6 +36,10 @@ from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.observation_lookup import ObservationLookupRoot, ObservationLookupSettings
+from idhazh.evals.lookup_nodes import node_path
+from idhazh.evals.observation_batches import file_batch, input_root, lookup_root, preparation_path
+from idhazh.evals.observation_lookup import LOCK_NAME, ROOT_NAME
 from idhazh.telemetry import traces
 from utilities import pipeline_test_ledgers
 
@@ -55,7 +59,7 @@ def _a_trial_tree(tmp_path: Path) -> tuple[Path, Path, frozenset[str]]:
     these trees with it.
     """
     roots = pipeline_test_ledgers._roots(CONFIG_DIR)
-    tree = tmp_path / "trial-ledgers"
+    tree = tmp_path / ledger.STATE_DIRNAME
     return tree, tree / roots[0], frozenset(roots)
 
 
@@ -155,7 +159,74 @@ def test_the_check_passes_the_raw_files_a_test_case_run_files(
     assert file_rows(root), f"no {which.value} row was filed"
     assert ledger.list_raw_files(root, which), f"the door wrote no raw {which.value} file"
 
-    assert pipeline_test_ledgers.refusals(tree, roots=roots) == []
+    gathered = tmp_path / "trial-ledgers"
+    pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots), days=[DAY])
+    assert pipeline_test_ledgers.refusals(gathered, roots=roots) == []
+    if which is LedgerName.SUMMARY_QUALITY_EVALS:
+        assert not input_root(root).is_relative_to(tree)
+        assert (lookup_root(root) / LOCK_NAME).is_file()
+        assert not (lookup_root(gathered / root.name) / LOCK_NAME).exists()
+
+
+def test_trial_inputs_are_ignored_runtime_files_and_do_not_share_job_manifests(tmp_path: Path) -> None:
+    tree, root, _ = _a_trial_tree(tmp_path)
+    identity = writer_identity(RUN_ID)
+    production = tmp_path / "backend" / "var" / "evaluation-inputs"
+
+    assert input_root(tree) == production
+    assert input_root(root) == production / "trials" / root.name
+    assert preparation_path(root, identity) != preparation_path(tree, identity)
+    assert not input_root(root).is_relative_to(tree)
+
+
+def test_the_trial_check_reads_split_lookup_pages_and_their_leaves(tmp_path: Path) -> None:
+    tree, root, roots = _a_trial_tree(tmp_path)
+    rows = [
+        _measurement().model_copy(update={"url_key": f"{number:064x}"})
+        for number in range(128)
+    ]
+    assert file_batch(
+        root, rows, writer_identity(RUN_ID), ObservationLookupSettings(max_leaf_bytes=16384)
+    ) == len(rows)
+    assert ObservationLookupRoot.read(lookup_root(root) / ROOT_NAME).node.kind == "page"
+    gathered = tmp_path / "trial-ledgers"
+    pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots), days=[DAY])
+
+    assert pipeline_test_ledgers.refusals(gathered, roots=roots) == []
+
+
+@pytest.mark.parametrize(
+    "damage",
+    ["missing-node", "changed-node", "wrong-name", "bad-root", "extra-file", "lock", "wrong-key"],
+)
+def test_the_trial_check_refuses_invalid_or_unrelated_lookup_files(
+    tmp_path: Path, damage: str
+) -> None:
+    tree, root, roots = _a_trial_tree(tmp_path)
+    assert _file_measurement(root)
+    gathered = tmp_path / "trial-ledgers"
+    pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots), days=[DAY])
+    directory = lookup_root(gathered / root.name)
+    root_path = directory / ROOT_NAME
+    manifest = ObservationLookupRoot.read(root_path)
+    leaf = node_path(directory, manifest.node)
+    if damage == "missing-node":
+        leaf.unlink()
+    elif damage == "changed-node":
+        leaf.write_bytes(b"not the sealed lookup leaf")
+    elif damage == "wrong-name":
+        leaf.rename(leaf.with_name(f"{'0' * 64}.sqlite"))
+    elif damage == "bad-root":
+        root_path.write_text("{}\n", encoding="ascii", newline="\n")
+    elif damage == "wrong-key":
+        payload = json.loads(root_path.read_text())
+        payload["key_fields"] = ["item_id"]
+        root_path.write_text(json.dumps(payload) + "\n", encoding="ascii", newline="\n")
+    else:
+        name = LOCK_NAME if damage == "lock" else "unrelated.json"
+        (directory / name).write_text("{}\n", encoding="ascii", newline="\n")
+
+    assert pipeline_test_ledgers.refusals(gathered, roots=roots)
 
 
 def test_a_day_shard_and_a_trace_still_pass_beside_the_door_files(tmp_path: Path) -> None:

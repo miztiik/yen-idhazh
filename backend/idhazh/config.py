@@ -52,6 +52,7 @@ from idhazh.contracts.knobs.gardener import (
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.observation_lookup import ObservationLookupSettings
 from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
@@ -60,6 +61,15 @@ from idhazh.llm.server import SETTING_KEYS, refuse_a_sampling_key_a_route_sets
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR: Final = REPO_ROOT / "config"
+
+
+@cache
+def load_observation_lookup(config_dir: Path = DEFAULT_CONFIG_DIR) -> ObservationLookupSettings:
+    """Read the declared limits for exact evaluation-ID lookup partitions."""
+    return ObservationLookupSettings.model_validate_json(
+        (config_dir / "observation-lookup.json").read_text(encoding="utf-8")
+    )
+
 
 _FILES: Final[tuple[str, ...]] = ("idhazh.json", "sources.json", "taxonomy.json", "watchlist.json")
 #: Read for validation and not digested. It owns the console window every
@@ -252,7 +262,6 @@ _SUMMARY_SERIES: Final[Mapping[str, str]] = MappingProxyType({"telemetry-aggrega
 #: governs it keeps every month file the widest read can select.
 _CONSOLE_READ_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.FEED_HEALTH,
-    LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
 )
 
 #: Each task series whose files a console read can still open, held the same way.
