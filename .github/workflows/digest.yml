@@ -716,25 +716,9 @@ jobs:
             --server-log llama-server.log \
             --counters-file llama-metrics.prom
 
-      # The shape the plan job uses, for the reason written there, and the same
-      # script - eight shards racing one branch is what its rebase loop is for.
-      # It cannot rebuild what it commits, so it carries none of the refresh
-      # settings.
-      #
-      # Appending the same row twice is the one thing that would make this worse
-      # than the loss it fixes, because `public_telemetry` copies every row into
-      # the file the console reads. No file is shared here any more: the item
-      # census, the eval rows and the record of what those rows are
-      # each go into their day directory under a name that carries this
-      # writer's run, attempt, job and shard.
-      #
-      # Nothing here shares a file with another writer any more, which is why no
-      # settling pass runs after the rebase. Until 2026-09-19 one did:
-      # `.gitattributes` gave `state/**/*.csv` a union merge driver, a second
-      # attempt at this shard could not see what the first attempt pushed, and
-      # the merge kept both rows. Each writer takes its own segment now, so two
-      # attempts write two files and the second one replaces the first when the
-      # compaction folds them by key.
+      # Full evaluation inputs are committed before rows, index and receipts.
+      # Preparation replays the named inputs after each rejected push. Its fresh
+      # path list is separate from the saved job input manifest.
       #
       # `state` whole is what this stages now, and naming the directory rather
       # than its contents is what makes the step survive a fresh clone: `git add`
@@ -743,12 +727,6 @@ jobs:
       # every checkout; a collection inside it need not be. It is also what the
       # plan job and the assemble commit have always staged.
       #
-      # Every path this shard writes under it carries this writer's run,
-      # attempt, job and shard in the file name - the item census, the eval
-      # rows, the record of what those rows are, the machine row
-      # and the committed trace alike. Two shards never write one path and two
-      # attempts at one shard never write one path, so no merge driver is needed
-      # anywhere below and a lost push race costs a rebase rather than the rows.
       # config/push-retry.json gives work shards their shorter deadline, so the
       # push leaves time for the artifact upload after the last item.
       #
@@ -763,6 +741,12 @@ jobs:
           NOTHING_STAGED_MESSAGE: "nothing measured to record"
           PUSH_FAILED_MESSAGE: "could not push what this shard measured"
           SHARD: ${{ matrix.shard }}
+          PREPARE_COMMAND: >-
+            python backend/utilities/prepare_evaluation_publication.py --state-dir state
+            --inputs backend/var/evaluation-inputs/${{ needs.plan.outputs.date }}-${{ github.run_id }}/work-${{ matrix.shard }}.json
+            --attempt ${{ github.run_attempt }}
+            --paths-file backend/var/evaluation-inputs/prepared-work-${{ matrix.shard }}.json
+          PREPARED_PATHS_FILE: backend/var/evaluation-inputs/prepared-work-${{ matrix.shard }}.json
         run: >-
           python backend/utilities/commit_and_push.py
           state
@@ -1165,6 +1149,12 @@ jobs:
           DROP_RACED_ASSETS_COMMAND: >-
             python backend/utilities/drop_raced_assets.py
             --date ${{ needs.plan.outputs.date }}
+          PREPARE_COMMAND: >-
+            python backend/utilities/prepare_evaluation_publication.py --state-dir state
+            --inputs backend/var/evaluation-inputs/${{ needs.plan.outputs.date }}-${{ github.run_id }}/assemble-0.json
+            --attempt ${{ github.run_attempt }}
+            --paths-file backend/var/evaluation-inputs/prepared-assemble-0.json
+          PREPARED_PATHS_FILE: backend/var/evaluation-inputs/prepared-assemble-0.json
         run: >-
           python backend/utilities/commit_and_push.py
           frontend/public/digest frontend/public/telemetry frontend/public/assist/index

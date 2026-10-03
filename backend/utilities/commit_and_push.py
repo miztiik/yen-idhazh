@@ -54,9 +54,17 @@ Environment:
   REGENERATE_COMMAND        optional: the producer that rebuilds them
   DROP_RACED_ASSETS_COMMAND optional: deletes this attempt's rendered assets
                             from the paths the tip already publishes
+    PREPARE_COMMAND          optional: prepares derived paths before committing
+    PREPARED_PATHS_FILE      optional: path to this attempt's output manifest
 
-The last three are split on spaces, so no path and no argument may carry one.
-The first two are given together or not at all.
+Commands and REFRESH_PATHS are split on spaces; their arguments cannot contain
+spaces. REFRESH_PATHS and REGENERATE_COMMAND are paired. PREPARE_COMMAND and
+PREPARED_PATHS_FILE are a separate pair. Preparation must write a fresh manifest
+each time and runs after regeneration when a push loses a race.
+
+The manifest is an untracked, ignored job-local file. Its JSON array names every
+repo-relative POSIX file prepared this attempt, including deletions and skipped
+files. The manifest path may be absolute or relative to the checkout root.
 
 Outputs, when the caller is a workflow step:
   rebased  true when the push lost a race and this program rewrote the
@@ -346,7 +354,7 @@ def _keep_what_origin_has(tip: str, path: str) -> bool:
 
     This one runs before the rebase starts, so there is no side to name yet.
     """
-    return _git("checkout", tip, "--", path).returncode == 0
+    return _git("--literal-pathspecs", "checkout", tip, "--", path).returncode == 0
 
 
 def _capture_publication_delta() -> PublicationDelta | None:
@@ -473,13 +481,16 @@ def _hand_back(tip: str, refresh: Sequence[str]) -> bool:
     is never refreshed whole: those assets came from another job's artifact and
     no producer here can make them again.
     """
+    if not refresh:
+        return True
     listed = _git(
-        "diff", "--name-only", "--diff-filter=A", tip, "HEAD", "--", *refresh, capture=True
+        "--literal-pathspecs", "diff", "--name-only", "-z", "--no-renames", "--diff-filter=A",
+        tip, "HEAD", "--", *refresh, capture=True,
     )
     if listed.returncode != 0:
         return False
-    for path in _lines(listed):
-        if _git("rm", "--quiet", "--force", "--", path).returncode != 0:
+    for path in filter(None, listed.stdout.split("\0")):
+        if _git("--literal-pathspecs", "rm", "--quiet", "--force", "--", path).returncode != 0:
             return False
     for path in refresh:
         # Absent upstream means this attempt introduced it, and the loop above
@@ -515,6 +526,68 @@ def _spare_the_published_assets(
     return dropped.returncode == 0
 
 
+def _validate_prepared_path(root: Path, value: object) -> str:
+    """Accept one literal file inside the checkout, never metadata or a directory."""
+    if not isinstance(value, str) or not value:
+        raise ValueError("prepared paths must be nonempty strings")
+    parts = value.split("/")
+    if (
+        any(part in {"", ".", ".."} or part.lower() == ".git" for part in parts)
+        or any(part.endswith((".", " ")) for part in parts)
+        or "\\" in value
+        or ":" in value
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
+        raise ValueError(f"unsafe prepared path: {value!r}")
+    destination = root
+    for part in parts:
+        destination /= part
+        if destination.is_symlink() or destination.is_junction():
+            raise ValueError(f"prepared path traverses a link: {value!r}")
+    if destination.exists() and not destination.is_file():
+        raise ValueError(f"prepared path is not a file: {value!r}")
+    return value
+
+
+def _prepare_outputs(command: Sequence[str], paths_file: str) -> list[str] | None:
+    """Run preparation and read only this attempt's freshly written path manifest."""
+    if not command:
+        return []
+    located = _git("rev-parse", "--show-toplevel", capture=True)
+    if located.returncode != 0:
+        return None
+    root = Path(located.stdout.strip()).resolve()
+    try:
+        destination = Path(paths_file).absolute()
+        relative = _validate_prepared_path(root, destination.relative_to(root).as_posix())
+        if _git("check-ignore", "--quiet", "--", relative).returncode != 0:
+            raise ValueError("PREPARED_PATHS_FILE must be an untracked, ignored file")
+        destination.unlink(missing_ok=True)
+        if subprocess.run(list(command), check=False).returncode != 0:
+            _warn("PREPARE_COMMAND failed")
+            return None
+        _validate_prepared_path(root, relative)
+        declared = json.loads(destination.read_text(encoding="utf-8"))
+        if not isinstance(declared, list):
+            raise ValueError("PREPARED_PATHS_FILE must contain a JSON array")
+        return list(dict.fromkeys(_validate_prepared_path(root, value) for value in declared))
+    except (OSError, ValueError) as error:
+        _warn(f"could not prepare the committed paths: {error}")
+        return None
+
+
+def _stage_prepared_paths(paths: Sequence[str]) -> bool:
+    """Stage named outputs and deletions, allowing files skipped by preparation."""
+    if not paths:
+        return True
+    listed = _git("--literal-pathspecs", "ls-files", "-z", "--", *paths, capture=True)
+    if listed.returncode != 0:
+        return False
+    tracked = set(listed.stdout.split("\0"))
+    present = [path for path in paths if Path(path).exists() or path in tracked]
+    return not present or _git("--literal-pathspecs", "add", "--", *present).returncode == 0
+
+
 def main(argv: Sequence[str]) -> int:
     """Commit the staged paths and push them, rebuilding while the clock allows."""
     settings = {
@@ -548,6 +621,11 @@ def main(argv: Sequence[str]) -> int:
     refresh = os.environ.get("REFRESH_PATHS", "").split()
     regenerate = os.environ.get("REGENERATE_COMMAND", "").split()
     drop_raced = os.environ.get("DROP_RACED_ASSETS_COMMAND", "").split()
+    prepare = os.environ.get("PREPARE_COMMAND", "").split()
+    prepared_paths_file = os.environ.get("PREPARED_PATHS_FILE", "")
+    if bool(prepare) != bool(prepared_paths_file):
+        _warn("PREPARE_COMMAND and PREPARED_PATHS_FILE must be given together")
+        return 2
     # A refresh with no producer hands this job's work to origin and never
     # rebuilds it. A producer with no refresh rebuilds on top of its own last
     # attempt and reads that attempt as the day's history.
@@ -599,19 +677,24 @@ def main(argv: Sequence[str]) -> int:
     rebased = False
     publication_delta: PublicationDelta | None = None
     publication_delta_captured = False
+    prepared_paths = _prepare_outputs(prepare, prepared_paths_file)
     # `all` over a generator stops at the first failure, which is what `set -e`
     # did for these three. A `git add` that failed and was not read would reach
     # the check below, find nothing staged, and report success over work that
     # was never staged at all.
-    prepared = all(
-        _git(*command).returncode == 0
-        for command in (
-            ("config", "user.name", COMMITTER_NAME),
-            ("config", "user.email", COMMITTER_EMAIL),
-            ("add", *staged_paths),
+    prepared = (
+        prepared_paths is not None
+        and all(
+            _git(*command).returncode == 0
+            for command in (
+                ("config", "user.name", COMMITTER_NAME),
+                ("config", "user.email", COMMITTER_EMAIL),
+                ("add", *staged_paths),
+            )
         )
+        and _stage_prepared_paths(prepared_paths)
     )
-    if not prepared:
+    if not prepared or prepared_paths is None:
         _warn("could not stage what this job produced")
         _report_rebased(rebased)
         return 1
@@ -692,13 +775,17 @@ def main(argv: Sequence[str]) -> int:
             _warn("could not drop this attempt's copies of the assets origin publishes")
             break
         step_started = time.monotonic()
-        if refresh:
-            if not _hand_back("FETCH_HEAD", refresh):
+        if refresh or prepare:
+            effective_refresh = list(dict.fromkeys([*refresh, *prepared_paths]))
+            if not _hand_back("FETCH_HEAD", effective_refresh):
                 _warn("could not hand the rebuilt paths back to origin/main")
                 break
             # The drops above are worktree deletions, which no index knows about
             # yet.
-            if _git("add", *staged_paths).returncode != 0:
+            if (
+                _git("add", *staged_paths).returncode != 0
+                or not _stage_prepared_paths(prepared_paths)
+            ):
                 _warn("could not stage the refreshed paths")
                 break
             if _git("commit", "--amend", "--no-edit", "--allow-empty").returncode != 0:
@@ -736,7 +823,7 @@ def main(argv: Sequence[str]) -> int:
                     _warn("the rebase could not be aborted")
                 break
         stamps.rebase_ms = _elapsed_ms(step_started)
-        if not refresh:
+        if not refresh and not prepare:
             continue
         # Keep the content, drop the commit: the producer is about to rewrite
         # most of it, and one run leaves one commit however many attempts it
@@ -744,14 +831,19 @@ def main(argv: Sequence[str]) -> int:
         if _git("reset", "--soft", "FETCH_HEAD").returncode != 0:
             _warn("could not reopen the commit for the rebuild")
             break
-        _say("rebuilding the day against origin/main")
         step_started = time.monotonic()
-        rebuilt = subprocess.run(list(regenerate), check=False)
-        if rebuilt.returncode != 0:
-            _warn("the rebuild failed against origin/main")
+        if regenerate:
+            _say("rebuilding the day against origin/main")
+            rebuilt = subprocess.run(list(regenerate), check=False)
+            if rebuilt.returncode != 0:
+                _warn("the rebuild failed against origin/main")
+                break
+        prepared_again = _prepare_outputs(prepare, prepared_paths_file)
+        if prepared_again is None:
             break
+        prepared_paths = prepared_again
         stamps.rebuild_ms = _elapsed_ms(step_started)
-        if _git("add", *staged_paths).returncode != 0:
+        if _git("add", *staged_paths).returncode != 0 or not _stage_prepared_paths(prepared_paths):
             _warn("could not stage the rebuilt paths")
             break
         if _git("diff", "--cached", "--quiet").returncode == 0:

@@ -675,12 +675,14 @@ COMMIT_BASE_ENV: Final = frozenset(
 # rebase.
 COMMIT_SCRIPT_ENV: Final = {
     "plan": COMMIT_BASE_ENV,
-    "work": COMMIT_BASE_ENV | {"SHARD"},
+    "work": COMMIT_BASE_ENV | {"SHARD", "PREPARE_COMMAND", "PREPARED_PATHS_FILE"},
     "assemble": COMMIT_BASE_ENV
     | {
         "REFRESH_PATHS",
         "REGENERATE_COMMAND",
         "DROP_RACED_ASSETS_COMMAND",
+        "PREPARE_COMMAND",
+        "PREPARED_PATHS_FILE",
     },
     "bench": COMMIT_BASE_ENV,
 }
@@ -846,6 +848,10 @@ SUBSTITUTED_DAY_DIR: Final = "frontend/public/digest/2026/08/25"
 
 SUBSTITUTED_SHA: Final = "0" * 40
 
+SUBSTITUTED_EXECUTION: Final = "40000000001"
+
+SUBSTITUTED_ATTEMPT: Final = "1"
+
 SUBSTITUTED_SHARD: Final = "3"
 
 SUBSTITUTED_SHARDS: Final = "8"
@@ -875,6 +881,8 @@ EXPRESSION_VALUES: Final = {
     # exists to remove.
     "steps.derived.outputs.refresh_paths": path_classes.refresh_paths(day_dir=SUBSTITUTED_DAY_DIR),
     "github.sha": SUBSTITUTED_SHA,
+    "github.run_id": SUBSTITUTED_EXECUTION,
+    "github.run_attempt": SUBSTITUTED_ATTEMPT,
     "matrix.shard": SUBSTITUTED_SHARD,
     "matrix.shards": SUBSTITUTED_SHARDS,
     "matrix.tenant": SUBSTITUTED_TENANT,
@@ -1890,7 +1898,12 @@ def _isolated_env(tmp_path: Path) -> dict[str, str]:
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     return {
-        **{name: value for name, value in os.environ.items() if name != "GITHUB_OUTPUT"},
+        **{
+            name: value
+            for name, value in os.environ.items()
+            if name not in {"GITHUB_OUTPUT", "PUSH_RETRY_CONFIG"}
+            and not name.startswith("GIT_CONFIG_")
+        },
         "HOME": str(home),
         "USERPROFILE": str(home),
         "GIT_CONFIG_GLOBAL": str(home / "gitconfig"),
@@ -1965,7 +1978,15 @@ def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     # whether two runs that both appended are in conflict, so a scripted origin
     # without it would test a different repository.
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    _git(seed, env, "add", ".gitattributes", "docs", "runner-noise.txt", *staged_paths)
+    for relative in (
+        ".gitignore", "config/push-retry.json", "backend/utilities/prepare_evaluation_publication.py"
+    ):
+        _write(seed / relative, read_text(REPO_ROOT / relative))
+    _git(
+        seed, env, "add", ".gitattributes", ".gitignore", "config/push-retry.json",
+        "backend/utilities/prepare_evaluation_publication.py", "docs", "runner-noise.txt",
+        *staged_paths,
+    )
     _git(seed, env, "commit", "-m", "seed")
     _git(seed, env, "push", "-u", "origin", "main")
 
@@ -2075,6 +2096,8 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     seed = root / "seed"
     _git(root, env, "clone", str(origin), str(seed))
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
+    for relative in (".gitignore", "backend/utilities/prepare_evaluation_publication.py"):
+        _write(seed / relative, read_text(REPO_ROOT / relative))
     _write(seed / "docs" / "unrelated.md", "seed\n")
     # Empty files suffice: the commit loop does not interpret corpus contents.
     for relative in CORPUS_SEED:
@@ -2082,7 +2105,11 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     for dirname in series.PUBLISHED_ROOTS:
         _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
     _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
-    _git(seed, env, "add", ".gitattributes", "docs", *COMMIT_STAGED_PATHS["assemble"])
+    _git(
+        seed, env, "add", ".gitattributes", ".gitignore",
+        "backend/utilities/prepare_evaluation_publication.py", "docs",
+        *COMMIT_STAGED_PATHS["assemble"],
+    )
     _git(seed, env, "commit", "-m", f"digest: {date}")
     _git(seed, env, "push", "-u", "origin", "main")
 

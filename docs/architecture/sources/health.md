@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-02
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -70,7 +70,7 @@ The gardener's `feed-health` task keeps 14 months, the window in `config/gardene
 
 **Two runs are entitled to a row each and always get one**, because a run id carries the identity of the execution that made it. What repeats the key is one execution attempted twice: the second attempt writes against a checkout frozen at the commit its run was triggered at, so it cannot see what the first attempt pushed. Until 2026-09-19 a union merge driver on `state/**/*.csv` then concatenated the two rather than conflicting, and counted raw, one bad run read as two failures and a five-strike rest arrived in three runs.
 
-`ledger.write_segment` puts each writer's rows in its own file under the day, and `day_shards.settled_rows` settles the day against `FEED_HEALTH_KEY` at read time. That settlement is what this ledger gets, and it is enough because the union driver is gone: a second attempt that races its own first attempt stops at the rebase instead of landing a second row. A repeat already in committed history is data this change does not touch - `idhazh rebuild-summary-quality-evals-index` is the shape an operator's repair takes, and there is no equivalent verb for this file.
+`ledger.write_segment` puts each writer's rows in its own file under the day, and `day_shards.settled_rows` settles the day against `FEED_HEALTH_KEY` at read time. That settlement is what this ledger gets, and it is enough because the union driver is gone: a second attempt that races its own first attempt stops at the rebase instead of landing a second row. This read-time settlement does not rewrite the older feed-health files.
 
 **Where two accounts conflict, the read that carried entries wins**, whichever row is newer: the attempt that got articles is the attempt that happened, and an empty retry against an address that had just delivered describes the retry rather than the feed. Between two rows that agree on that, the later `checked_at` wins. A tie leaves the row already on record. The rule is `contracts.feed_health.supersedes`, and it is the one key here settled by a rule instead of by arrival order - everywhere else a repeat is one attempt written down twice, so the two rows agree.
 
