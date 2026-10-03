@@ -990,6 +990,7 @@ function writeItemHealthCanary() {
 	for (const writer of byWriter.values()) {
 		writeDayShard(dir, writer.day, writer.runId, COLUMNS, writer.rows);
 	}
+	return [date, longAgo];
 }
 
 /** The machines the canary's jobs drew, so the machine panels have cards to draw.
@@ -1179,7 +1180,7 @@ function writeHostFingerprintCanary() {
 	}
 }
 
-writeItemHealthCanary();
+const canaryDays = writeItemHealthCanary();
 writeHostFingerprintCanary();
 // The two ledgers above go through the ledger door, and then every fixture day of
 // the console's three door ledgers is packed: the console reads them from packed
@@ -1192,9 +1193,9 @@ python([
 	STATE
 ]);
 
-const canaryYear = newestDirectory(ROOT);
-const canaryMonth = newestDirectory(join(ROOT, canaryYear));
-const telemetryMonth = `${canaryYear}-${canaryMonth}`;
+const telemetryMonths = canaryDays.map((day) => day.slice(0, 7)).sort();
+const telemetryFromMonth = telemetryMonths[0];
+const telemetryThroughMonth = telemetryMonths[telemetryMonths.length - 1];
 python([
 	'-m',
 	'idhazh.telemetry.publish.public_telemetry',
@@ -1203,9 +1204,9 @@ python([
 	'--public',
 	join(STATE, 'telemetry'),
 	'--from-month',
-	telemetryMonth,
+	telemetryFromMonth,
 	'--through-month',
-	telemetryMonth
+	telemetryThroughMonth
 ]);
 
 // The payloads the console fetches, written here and not in `build_canary_day.py`
