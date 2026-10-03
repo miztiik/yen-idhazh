@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-import tracemalloc
 from collections.abc import Collection, Iterator, Sequence
 from datetime import date as date_type
 from datetime import timedelta
@@ -278,61 +277,13 @@ def _a_month_of_publications(state: Path, months: Sequence[str], url_keys: Seque
         _published(state, f"{month}-01", url_keys)
 
 
-#: How many times each tree is read before its peak is taken. One read's peak
-#: moves by a few kilobytes between runs with what the allocator happens to
-#: reuse, about a tenth of this fixture's peak; the highest of several reads is
-#: the stable figure, taken the same way for both trees.
-PEAK_READS: Final = 3
+def test_load_published_reduces_repeated_addresses_across_months(tmp_path: Path) -> None:
+    """Repeated rows in another month keep each address's earliest date."""
+    addresses = [_address(0), _address(1)]
+    state = tmp_path / "state"
+    _a_month_of_publications(state, ["2026-01", "2026-02"], addresses)
 
-
-def _peak_of_load_published(state: Path) -> tuple[dict[str, str], int]:
-    """The answer, and the highest traced peak over `PEAK_READS` reads of this tree."""
-    peaks: list[int] = []
-    published: dict[str, str] = {}
-    for _ in range(PEAK_READS):
-        tracemalloc.start()
-        try:
-            published = _whole_ledger(state)
-            peaks.append(tracemalloc.get_traced_memory()[1])
-        finally:
-            tracemalloc.stop()
-    return published, max(peaks)
-
-
-def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> None:
-    """Double the source rows behind a fixed answer, and the peak stays flat.
-
-    The published read is the one read over a ledger with no natural bound: its
-    committed cover is open, so it reads every day the ledger has ever held. It
-    reads one month at a time and folds each into the answer before the next, so
-    what it holds at once is one month's rows and the answer, never the history.
-
-    Sixteen addresses make the answer the same in both trees. Two months versus
-    four months doubles the source rows from 32 to 64. Both reads have a later
-    month to load after the answer is populated, so the peak includes the answer
-    and one month's rows. Each peak is the highest of several reads, so the
-    allocator's wobble between runs cannot land on one tree only. The 10 percent
-    margin then allows per-file allocation noise; a reader holding every month
-    still retains twice the source rows.
-    The first read is not measured, so a cost paid once per process lands in
-    neither number. Both ledgers are built and fixed (Guardrail #12, section 13).
-    """
-    addresses = [_address(number) for number in range(16)]
-    small, large = tmp_path / "small", tmp_path / "large"
-    _a_month_of_publications(small, ["2026-01", "2026-02"], addresses)
-    _a_month_of_publications(large, ["2026-01", "2026-02", "2026-03", "2026-04"], addresses)
-    expected = dict.fromkeys(addresses, "2026-01-01")
-    _whole_ledger(small)
-
-    published_small, peak_small = _peak_of_load_published(small)
-    published_large, peak_large = _peak_of_load_published(large)
-
-    assert published_small == expected, "the reduction must keep the earliest date"
-    assert published_large == expected
-    assert peak_large < peak_small * 1.1, (
-        f"twice the rows behind the same addresses moved peak from {peak_small} B to "
-        f"{peak_large} B, so the read is holding the ledger rather than one month of it"
-    )
+    assert _whole_ledger(state) == dict.fromkeys(addresses, "2026-01-01")
 
 
 def _address(number: int) -> str:

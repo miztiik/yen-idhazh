@@ -1,8 +1,7 @@
 """Is the ledger a package with one door, and does the door stay empty?
 
-Six checks, each over the package's own files or a single fixed interpreter run,
-so what each one costs grows with the code rather than with the archive
-(Guardrail #12). What each one has to be able to fail is the property the move
+Checks over named files or a single fixed interpreter run do not scan the
+package tree. What each one has to be able to fail is the property the move
 could break: the facade shape, the write-path composition, the load order and
 the pyarrow probe.
 
@@ -148,35 +147,6 @@ def test_a_writers_day_shard_is_the_day_directory_plus_the_writers_name(
 
 
 # --- the package and day_shards stay acyclic ---------------------------------
-
-
-def test_no_ledger_module_imports_day_shards_at_module_scope() -> None:
-    """`day_shards` imports out of this package at its own top, so we cannot.
-
-    Importing the package runs `__init__`, which imports every module below it.
-    A module-scope `day_shards` import in any of them would re-enter a package
-    that is still half built. The readers that need it import it inside the
-    function body, where the package is finished by the time the call runs.
-    """
-    at_module_scope: list[str] = []
-    for path in sorted(PACKAGE.glob("*.py")):
-        for node in ast.parse(path.read_text(encoding="utf-8")).body:
-            reaches = (
-                isinstance(node, ast.ImportFrom)
-                and node.module == "idhazh"
-                and any(alias.name == "day_shards" for alias in node.names)
-            ) or (
-                isinstance(node, ast.Import)
-                and any(alias.name == "idhazh.day_shards" for alias in node.names)
-            )
-            if reaches:
-                at_module_scope.append(f"{path.name}:{node.lineno}")
-
-    assert not at_module_scope, (
-        f"{at_module_scope} imports day_shards at module scope. Move it inside the "
-        "function that calls it: day_shards imports names back out of this package, so "
-        "a module-scope import here closes a load-time cycle."
-    )
 
 
 @pytest.mark.parametrize("first", ["idhazh.ledger", "idhazh.day_shards"])

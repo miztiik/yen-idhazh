@@ -24,6 +24,7 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh import config
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.taxonomy import LifecycleStatus
 from idhazh.contracts.visual import PlanEncodings
 from idhazh.measured import (
@@ -193,9 +194,11 @@ def a_config_dir(root: Path, taxonomy: dict[str, Any]) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     for name in ("idhazh.json", "sources.json", "watchlist.json", "appearance.json"):
         (root / name).write_bytes((CONFIG_DIR / name).read_bytes())
-    (root / "models").mkdir(exist_ok=True)
-    for model in (CONFIG_DIR / "models").iterdir():
-        (root / "models" / model.name).write_bytes(model.read_bytes())
+    app = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    model = config.models_path(CONFIG_DIR, app)
+    target = config.models_path(root, app)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(model.read_bytes())
     (root / "taxonomy.json").write_text(json.dumps(taxonomy), encoding="utf-8")
     return root
 
