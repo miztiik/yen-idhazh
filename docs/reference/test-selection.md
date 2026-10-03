@@ -65,6 +65,15 @@ deferral above and full coverage on a code push to `main` do not change.
 guesses narrow on a path nobody listed fails silently, and it fails in the
 direction that loses coverage.
 
+**A backend module with no mapped tests buys the whole backend suite and no
+browser** on a pull request. This covers every `backend/idhazh/` Python file
+outside `contracts/`. The browser reaches backend code only through the canary
+build, and buying the build and every group for each backend edit made most
+backend pull requests wait on the browser job. The cost: a backend change that
+breaks a published page is found on the merge push to `main`, which still runs
+every group. A contract keeps full coverage, because it is the shape both halves
+read.
+
 ## Rejected alternatives
 
 | Rejected | Why |
