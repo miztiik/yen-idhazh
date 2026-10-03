@@ -364,9 +364,8 @@ def test_linked_input_or_output_cannot_reach_another_state(
         state, LedgerName.SUMMARY_QUALITY_EVALS
     )
     root.parent.mkdir(parents=True, exist_ok=True)
-    junction = sys.platform == "win32"
     try:
-        if junction:
+        if sys.platform == "win32":
             import _winapi
 
             _winapi.CreateJunction(str(other), str(root))
@@ -382,7 +381,7 @@ def test_linked_input_or_output_cannot_reach_another_state(
             migrate(state, load_observation_lookup(), existing="verify")
         assert bytes_under(other) == before
     finally:
-        if junction:
+        if sys.platform == "win32":
             root.rmdir()
         else:
             root.unlink()
