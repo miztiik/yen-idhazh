@@ -1,5 +1,5 @@
-import { readdirSync } from 'node:fs';
-import { basename } from 'node:path';
+import { existsSync } from 'node:fs';
+import { basename, join } from 'node:path';
 
 export const FRONTEND_GROUPS = [
 	'logic', 'reader', 'offline', 'console', 'panels', 'archive', 'model-search', 'publishing'
@@ -7,7 +7,28 @@ export const FRONTEND_GROUPS = [
 
 export type FrontendGroup = (typeof FRONTEND_GROUPS)[number];
 
-const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
+const FILES: Record<FrontendGroup, readonly string[]> = {
+	console: [
+		'console', 'console-article-cost', 'console-axis', 'console-band',
+		'console-chart-lifetime', 'console-chart-pending', 'console-charts-rule',
+		'console-chrome', 'console-cold-load', 'console-compression', 'console-coverage',
+		'console-disk-reads', 'console-doubt', 'console-extraction', 'console-failure',
+		'console-failures', 'console-flow', 'console-frame', 'console-host-spans',
+		'console-item-cost', 'console-judgement-agreement', 'console-judgement-holdout',
+		'console-judgement-line', 'console-judgement-merges', 'console-judgement-verdict',
+		'console-machine-cards', 'console-machine-data', 'console-machine-page',
+		'console-machine-panels', 'console-machine-reuse', 'console-machine-split',
+		'console-machine', 'console-mark-parity', 'console-memory-board',
+		'console-memory-held', 'console-model-instruments', 'console-model-panels',
+		'console-model-reasons', 'console-model-rule', 'console-model', 'console-nav',
+		'console-pipeline-timeline', 'console-polarity', 'console-processor-lost',
+		'console-published', 'console-query-door', 'console-ranked', 'console-readout',
+		'console-reserved', 'console-run-health', 'console-run-yield',
+		'console-shard-board', 'console-shell', 'console-site-size',
+		'console-telemetry-heal', 'console-throughput', 'console-timings', 'console-title',
+		'console-voices-cuts', 'console-voices-feeds', 'console-voices-retiring',
+		'console-voices-sources', 'console-voices', 'console-window-claims', 'console-window'
+	],
 	logic: [
 		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'day-shards',
@@ -16,6 +37,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'one-pass-reductions',
 		'platform-mix', 'preview-port',
 		'processor-lost', 'prompt-reuse',
+		'publication',
 		'run-axis', 'run-yield',
 		'settings-moved',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',
@@ -56,11 +78,15 @@ export function groupedSpecs(directory: string): Record<FrontendGroup, string[]>
 	const groups: Record<FrontendGroup, string[]> = {
 		logic: [], reader: [], offline: [], console: [], panels: [], archive: [], 'model-search': [], publishing: []
 	};
-	for (const filename of readdirSync(directory, { recursive: true, encoding: 'utf8' })
-		.filter((name) => name.endsWith('.spec.ts')).map((name) => name.replaceAll('\\', '/')).sort()) {
-		const group = groupForSpec(filename);
-		if (!group) throw new Error(`No test group owns ${filename}; add it to scripts/test-groups.ts.`);
-		groups[group].push(filename);
+	for (const group of FRONTEND_GROUPS) {
+		for (const name of FILES[group]) {
+			const filename = `${name}.spec.ts`;
+			if (!existsSync(join(directory, filename))) {
+				throw new Error(`Declared test ${filename} is missing; update scripts/test-groups.ts.`);
+			}
+			groups[group].push(filename);
+		}
+		groups[group].sort();
 	}
 	return groups;
 }

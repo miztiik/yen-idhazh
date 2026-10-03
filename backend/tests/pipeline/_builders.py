@@ -241,6 +241,16 @@ def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
+    from idhazh.contracts.publication_inventory import PublicationInventory
+    from idhazh.publication import initialize_inventory
+
+    if not (tmp_path / "public" / "publication.json").exists():
+        initialize_inventory(
+            tmp_path / "public",
+            seed=PublicationInventory(
+                version=PublicationInventory.schema_version(), dates=[]
+            ),
+        )
 
 
 def a_config_pointing_at(root: Path, base_url: str) -> config.Settings:
@@ -313,11 +323,7 @@ def _work_stage(
     and cannot say how long the caller stood there.
     """
     run_plan = run_plan if run_plan is not None else plan()
-    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-    # The state root too, or a traced work stage writes its trace and its span
-    # rollup into the committed `state/` tree and `git status` is what tells you.
-    monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
+    isolate_ledgers(tmp_path, monkeypatch)
     with RecordedEndpoint(200, *replies, hold_s=hold_s) as server:
         stage_work(
             run_plan,

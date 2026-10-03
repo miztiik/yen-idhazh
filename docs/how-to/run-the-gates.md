@@ -82,7 +82,11 @@ existing server. `PREVIEW_PORT` remains the override for a port collision.
 Run records under `backend/var/checks/` hold the source fingerprint, selected
 groups and specs, exit status, step durations, test counts and queue/startup
 time separately. Logic and browser reports use separate output directories.
-A matching completed run is reused.
+A matching completed run is reused. Its input fingerprint combines Git's
+committed tree object, the binary diff against `HEAD`, and the contents of
+non-ignored untracked files. The launcher does not enumerate committed paths.
+A source, test, fixture or documentation edit invalidates the record. Generated
+output is ignored by Git and has its own build fingerprint.
 A caller joining the same active run waits for that attempt, not an old pass.
 Only an explicit `--fresh` reruns unchanged completed inputs. A failed or
 interrupted run is never reported as success, and collection-only or all-skipped
@@ -92,8 +96,9 @@ reports cannot certify a change. Inspect status instead of relaunching:
 npm run test:changed -- --status
 ```
 
-The group inventory includes subdirectories and fails when a new spec has no
-owner. Its tests also prove
+The group inventory names each spec and refuses a missing named file. Add a
+new spec to `test-groups.ts` in the same change; no test-directory walk discovers
+it. Its tests also prove
 that shared and unknown paths select broader coverage. New dependencies between
 areas need a selector regression test, not only a new group label. The selector
 lives in `frontend/scripts/test-scope.ts`; the group inventory lives beside it

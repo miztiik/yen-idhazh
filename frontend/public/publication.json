@@ -1,0 +1,1080 @@
+{
+  "changelog": [
+    {
+      "change": "Use root-qualified entries as the only file list.",
+      "version": "2026-10-03T13:33",
+      "why": "Readers filter one list instead of keeping duplicate path lists in step."
+    },
+    {
+      "change": "Include state-prefixed discovery paths in the shared files list.",
+      "version": "2026-10-03T13:24",
+      "why": "The static reader uses one list to discover public and feed-health files."
+    },
+    {
+      "change": "Distinguish public files from named state files.",
+      "version": "2026-10-03T13:18",
+      "why": "Feed-health day files need named discovery without mixing the two data roots."
+    },
+    {
+      "change": "Record bytes and items per file, with running publication totals.",
+      "version": "2026-10-03T13:10",
+      "why": "Weight and item counters read one named inventory instead of historical payloads."
+    },
+    {
+      "change": "Declare published UTC days and public-root-relative file names.",
+      "version": "2026-10-03",
+      "why": "Static builds read a named inventory instead of walking an archive."
+    }
+  ],
+  "dates": [
+    "2026-10-02",
+    "2026-10-01",
+    "2026-09-30",
+    "2026-09-29",
+    "2026-09-28",
+    "2026-09-27",
+    "2026-09-26",
+    "2026-09-25",
+    "2026-09-24",
+    "2026-09-23",
+    "2026-09-22",
+    "2026-09-21",
+    "2026-09-20",
+    "2026-09-18",
+    "2026-09-17",
+    "2026-09-16",
+    "2026-09-15",
+    "2026-09-14",
+    "2026-09-13",
+    "2026-09-12",
+    "2026-09-11",
+    "2026-09-10",
+    "2026-09-09",
+    "2026-09-08",
+    "2026-09-07",
+    "2026-09-06",
+    "2026-09-05",
+    "2026-09-04",
+    "2026-09-03",
+    "2026-09-02",
+    "2026-09-01",
+    "2026-08-31",
+    "2026-08-30",
+    "2026-08-29",
+    "2026-08-28",
+    "2026-08-27",
+    "2026-08-26",
+    "2026-08-25",
+    "2026-08-24",
+    "2026-08-23",
+    "2026-08-22",
+    "2026-08-21"
+  ],
+  "entries": [
+    {
+      "bytes": 1568256,
+      "items": 0,
+      "path": "assist/index/2026-08.bin",
+      "root": "public"
+    },
+    {
+      "bytes": 691674,
+      "items": 0,
+      "path": "assist/index/2026-08.json",
+      "root": "public"
+    },
+    {
+      "bytes": 3747840,
+      "items": 0,
+      "path": "assist/index/2026-09.bin",
+      "root": "public"
+    },
+    {
+      "bytes": 1663315,
+      "items": 0,
+      "path": "assist/index/2026-09.json",
+      "root": "public"
+    },
+    {
+      "bytes": 227328,
+      "items": 0,
+      "path": "assist/index/2026-10.bin",
+      "root": "public"
+    },
+    {
+      "bytes": 100082,
+      "items": 0,
+      "path": "assist/index/2026-10.json",
+      "root": "public"
+    },
+    {
+      "bytes": 3149,
+      "items": 0,
+      "path": "console/band.json",
+      "root": "public"
+    },
+    {
+      "bytes": 147384,
+      "items": 0,
+      "path": "day-metrics/2026-08.json",
+      "root": "public"
+    },
+    {
+      "bytes": 439744,
+      "items": 0,
+      "path": "day-metrics/2026-09.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31934,
+      "items": 0,
+      "path": "day-metrics/2026-10.json",
+      "root": "public"
+    },
+    {
+      "bytes": 11547,
+      "items": 4,
+      "path": "digest/2026/08/21/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 4583,
+      "items": 0,
+      "path": "digest/2026/08/21/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 27985,
+      "items": 10,
+      "path": "digest/2026/08/22/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 2336,
+      "items": 0,
+      "path": "digest/2026/08/22/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 400241,
+      "items": 147,
+      "path": "digest/2026/08/23/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 6884,
+      "items": 0,
+      "path": "digest/2026/08/23/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1924051,
+      "items": 731,
+      "path": "digest/2026/08/24/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 11646,
+      "items": 0,
+      "path": "digest/2026/08/24/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1908570,
+      "items": 724,
+      "path": "digest/2026/08/25/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 12115,
+      "items": 0,
+      "path": "digest/2026/08/25/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1643281,
+      "items": 621,
+      "path": "digest/2026/08/26/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 12704,
+      "items": 0,
+      "path": "digest/2026/08/26/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 839022,
+      "items": 334,
+      "path": "digest/2026/08/27/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 7911,
+      "items": 0,
+      "path": "digest/2026/08/27/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 294931,
+      "items": 117,
+      "path": "digest/2026/08/28/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 2688,
+      "items": 0,
+      "path": "digest/2026/08/28/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 922118,
+      "items": 366,
+      "path": "digest/2026/08/29/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 10532,
+      "items": 0,
+      "path": "digest/2026/08/29/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1066895,
+      "items": 431,
+      "path": "digest/2026/08/30/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 14195,
+      "items": 0,
+      "path": "digest/2026/08/30/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1577606,
+      "items": 601,
+      "path": "digest/2026/08/31/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 14346,
+      "items": 0,
+      "path": "digest/2026/08/31/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1700331,
+      "items": 627,
+      "path": "digest/2026/09/01/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 14704,
+      "items": 0,
+      "path": "digest/2026/09/01/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1455793,
+      "items": 537,
+      "path": "digest/2026/09/02/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 12956,
+      "items": 0,
+      "path": "digest/2026/09/02/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1608246,
+      "items": 593,
+      "path": "digest/2026/09/03/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 15975,
+      "items": 0,
+      "path": "digest/2026/09/03/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1564940,
+      "items": 582,
+      "path": "digest/2026/09/04/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 16043,
+      "items": 0,
+      "path": "digest/2026/09/04/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 999950,
+      "items": 374,
+      "path": "digest/2026/09/05/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 12713,
+      "items": 0,
+      "path": "digest/2026/09/05/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 1022924,
+      "items": 387,
+      "path": "digest/2026/09/06/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 16013,
+      "items": 0,
+      "path": "digest/2026/09/06/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 898835,
+      "items": 357,
+      "path": "digest/2026/09/07/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 16165,
+      "items": 0,
+      "path": "digest/2026/09/07/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 722565,
+      "items": 282,
+      "path": "digest/2026/09/08/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 13010,
+      "items": 0,
+      "path": "digest/2026/09/08/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 932992,
+      "items": 360,
+      "path": "digest/2026/09/09/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 20471,
+      "items": 0,
+      "path": "digest/2026/09/09/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 904651,
+      "items": 365,
+      "path": "digest/2026/09/10/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 20391,
+      "items": 0,
+      "path": "digest/2026/09/10/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 928021,
+      "items": 372,
+      "path": "digest/2026/09/11/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 20238,
+      "items": 0,
+      "path": "digest/2026/09/11/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 888914,
+      "items": 356,
+      "path": "digest/2026/09/12/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 20226,
+      "items": 0,
+      "path": "digest/2026/09/12/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 193398,
+      "items": 75,
+      "path": "digest/2026/09/13/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 8785,
+      "items": 0,
+      "path": "digest/2026/09/13/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 36318,
+      "items": 13,
+      "path": "digest/2026/09/14/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 18571,
+      "items": 0,
+      "path": "digest/2026/09/14/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 493831,
+      "items": 188,
+      "path": "digest/2026/09/15/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 16966,
+      "items": 0,
+      "path": "digest/2026/09/15/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 965353,
+      "items": 364,
+      "path": "digest/2026/09/16/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 28227,
+      "items": 0,
+      "path": "digest/2026/09/16/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 732041,
+      "items": 272,
+      "path": "digest/2026/09/17/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 22603,
+      "items": 0,
+      "path": "digest/2026/09/17/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 358477,
+      "items": 138,
+      "path": "digest/2026/09/18/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 11349,
+      "items": 0,
+      "path": "digest/2026/09/18/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 777778,
+      "items": 301,
+      "path": "digest/2026/09/20/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 22848,
+      "items": 0,
+      "path": "digest/2026/09/20/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 748409,
+      "items": 291,
+      "path": "digest/2026/09/21/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 24615,
+      "items": 0,
+      "path": "digest/2026/09/21/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 543784,
+      "items": 210,
+      "path": "digest/2026/09/22/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 24856,
+      "items": 0,
+      "path": "digest/2026/09/22/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 834353,
+      "items": 325,
+      "path": "digest/2026/09/23/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 30798,
+      "items": 0,
+      "path": "digest/2026/09/23/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 808616,
+      "items": 370,
+      "path": "digest/2026/09/24/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31888,
+      "items": 0,
+      "path": "digest/2026/09/24/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 736319,
+      "items": 342,
+      "path": "digest/2026/09/25/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31875,
+      "items": 0,
+      "path": "digest/2026/09/25/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 789257,
+      "items": 366,
+      "path": "digest/2026/09/26/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31863,
+      "items": 0,
+      "path": "digest/2026/09/26/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 667075,
+      "items": 309,
+      "path": "digest/2026/09/27/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31863,
+      "items": 0,
+      "path": "digest/2026/09/27/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 685074,
+      "items": 318,
+      "path": "digest/2026/09/28/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31875,
+      "items": 0,
+      "path": "digest/2026/09/28/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 739376,
+      "items": 340,
+      "path": "digest/2026/09/29/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31868,
+      "items": 0,
+      "path": "digest/2026/09/29/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 748646,
+      "items": 347,
+      "path": "digest/2026/09/30/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31878,
+      "items": 0,
+      "path": "digest/2026/09/30/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 677042,
+      "items": 311,
+      "path": "digest/2026/10/01/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31878,
+      "items": 0,
+      "path": "digest/2026/10/01/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 608148,
+      "items": 281,
+      "path": "digest/2026/10/02/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 31867,
+      "items": 0,
+      "path": "digest/2026/10/02/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 4162,
+      "items": 0,
+      "path": "machine/2026-08.csv",
+      "root": "public"
+    },
+    {
+      "bytes": 79366,
+      "items": 0,
+      "path": "machine/2026-09.csv",
+      "root": "public"
+    },
+    {
+      "bytes": 7967,
+      "items": 0,
+      "path": "machine/2026-10.csv",
+      "root": "public"
+    },
+    {
+      "bytes": 17459,
+      "items": 0,
+      "path": "run-days/2026-08.json",
+      "root": "public"
+    },
+    {
+      "bytes": 56766,
+      "items": 0,
+      "path": "run-days/2026-09.json",
+      "root": "public"
+    },
+    {
+      "bytes": 4312,
+      "items": 0,
+      "path": "run-days/2026-10.json",
+      "root": "public"
+    },
+    {
+      "bytes": 643201,
+      "items": 0,
+      "path": "run-timeline/2026-09.csv",
+      "root": "public"
+    },
+    {
+      "bytes": 94927,
+      "items": 0,
+      "path": "run-timeline/2026-10.csv",
+      "root": "public"
+    },
+    {
+      "bytes": 384235,
+      "items": 0,
+      "path": "source-health.json",
+      "root": "public"
+    },
+    {
+      "bytes": 771954,
+      "items": 0,
+      "path": "telemetry/2026-08.csv",
+      "root": "public"
+    },
+    {
+      "bytes": 3003821,
+      "items": 0,
+      "path": "telemetry/2026-09.csv",
+      "root": "public"
+    },
+    {
+      "bytes": 259222,
+      "items": 0,
+      "path": "telemetry/2026-10.csv",
+      "root": "public"
+    },
+    {
+      "bytes": 863,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/18.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 846,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/20.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 1238,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/21.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 1245,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/22.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 862,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/23.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 849,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/24.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 866,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/25.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 826,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/26.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 1215,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/27.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 1215,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/28.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 1215,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/29.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 1218,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/09/30.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 1221,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/10/01.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 829,
+      "items": 0,
+      "path": "content-similarity-judge/fitted-thresholds/2026/10/02.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 330,
+      "items": 0,
+      "path": "content-similarity-judge/merge-line-holdout-scores/2026/09/21.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 25672,
+      "items": 0,
+      "path": "feed-health/2026/08/23/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 64890,
+      "items": 0,
+      "path": "feed-health/2026/08/24/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 65206,
+      "items": 0,
+      "path": "feed-health/2026/08/25/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 65318,
+      "items": 0,
+      "path": "feed-health/2026/08/26/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 39137,
+      "items": 0,
+      "path": "feed-health/2026/08/27/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 13251,
+      "items": 0,
+      "path": "feed-health/2026/08/28/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 39375,
+      "items": 0,
+      "path": "feed-health/2026/08/29/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 65234,
+      "items": 0,
+      "path": "feed-health/2026/08/30/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 72381,
+      "items": 0,
+      "path": "feed-health/2026/08/31/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 72337,
+      "items": 0,
+      "path": "feed-health/2026/09/01/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 74077,
+      "items": 0,
+      "path": "feed-health/2026/09/02/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 128570,
+      "items": 0,
+      "path": "feed-health/2026/09/03/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 128593,
+      "items": 0,
+      "path": "feed-health/2026/09/04/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 128709,
+      "items": 0,
+      "path": "feed-health/2026/09/05/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 128691,
+      "items": 0,
+      "path": "feed-health/2026/09/06/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 130592,
+      "items": 0,
+      "path": "feed-health/2026/09/07/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 104501,
+      "items": 0,
+      "path": "feed-health/2026/09/08/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 159203,
+      "items": 0,
+      "path": "feed-health/2026/09/09/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 134919,
+      "items": 0,
+      "path": "feed-health/2026/09/10/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 135036,
+      "items": 0,
+      "path": "feed-health/2026/09/11/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 135000,
+      "items": 0,
+      "path": "feed-health/2026/09/12/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140110,
+      "items": 0,
+      "path": "feed-health/2026/09/13/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 172534,
+      "items": 0,
+      "path": "feed-health/2026/09/14/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 143709,
+      "items": 0,
+      "path": "feed-health/2026/09/15/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140275,
+      "items": 0,
+      "path": "feed-health/2026/09/16/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140551,
+      "items": 0,
+      "path": "feed-health/2026/09/17/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 84284,
+      "items": 0,
+      "path": "feed-health/2026/09/18/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 28207,
+      "items": 0,
+      "path": "feed-health/2026/09/19/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140279,
+      "items": 0,
+      "path": "feed-health/2026/09/20/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 112290,
+      "items": 0,
+      "path": "feed-health/2026/09/21/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 112447,
+      "items": 0,
+      "path": "feed-health/2026/09/22/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140453,
+      "items": 0,
+      "path": "feed-health/2026/09/23/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140345,
+      "items": 0,
+      "path": "feed-health/2026/09/24/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140428,
+      "items": 0,
+      "path": "feed-health/2026/09/25/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140483,
+      "items": 0,
+      "path": "feed-health/2026/09/26/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140330,
+      "items": 0,
+      "path": "feed-health/2026/09/27/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140456,
+      "items": 0,
+      "path": "feed-health/2026/09/28/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140542,
+      "items": 0,
+      "path": "feed-health/2026/09/29/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140350,
+      "items": 0,
+      "path": "feed-health/2026/09/30/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 140362,
+      "items": 0,
+      "path": "feed-health/2026/10/01/settled.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 28182,
+      "items": 0,
+      "path": "feed-health/2026/10/02/2026-10-02-36985028637-1-plan-00.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 28209,
+      "items": 0,
+      "path": "feed-health/2026/10/02/2026-10-02-37008240270-1-plan-00.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 28123,
+      "items": 0,
+      "path": "feed-health/2026/10/02/2026-10-02-37032840412-1-plan-00.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 28206,
+      "items": 0,
+      "path": "feed-health/2026/10/02/2026-10-02-37053771021-1-plan-00.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 28195,
+      "items": 0,
+      "path": "feed-health/2026/10/02/2026-10-02-37071896799-1-plan-00.csv",
+      "root": "state"
+    },
+    {
+      "bytes": 28179,
+      "items": 0,
+      "path": "feed-health/2026/10/03/2026-10-03-37108956194-1-plan-00.csv",
+      "root": "state"
+    }
+  ],
+  "total_bytes": 51131120,
+  "total_items": 14439,
+  "version": "2026-10-03T13:33"
+}
