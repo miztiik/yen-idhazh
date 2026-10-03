@@ -42,6 +42,7 @@ from idhazh.contracts.base import (
     RunId,
     Sha256,
     Timestamp,
+    records_json,
 )
 from idhazh.contracts.file_envelope import Period, Tier, covers_fits
 from idhazh.contracts.ledger_name import LedgerName
@@ -224,6 +225,15 @@ class CompactIndex(Contract):
             "Every entry covers one period of the kind `period` names."
         )
     )
+
+    def to_json(self) -> str:
+        """One entry a line - see `records_json`.
+
+        A reader checks which days exist by scanning the list, and an entry's
+        three fields mean nothing apart. The layout is not part of the shape, so
+        a file in the older layout is still read and is re-laid-out when written.
+        """
+        return records_json(self.model_dump(mode="json"))
 
     @model_validator(mode="after")
     def _the_entries_ascend_once_each_at_the_period_s_grain(self) -> Self:
