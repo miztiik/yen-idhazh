@@ -75,6 +75,24 @@ under [CLAUDE.md](../../CLAUDE.md) section 6. Deletion and direct cutover are
 allowed; losing source evidence, reader content, the meaning of a measurement or
 a cached reader's compatibility without saying so is not.
 
+## Current bounded walks
+
+The site build stages raw-day listings for the query door after each published
+ledger's newest packed day. For each published ledger it checks at most
+`max(console.window_presets)` UTC-day directories under
+`state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, starting on the day after the ledger's
+newest packed day. It reads the names and sizes in directories inside that
+fixed window, writes `RawDayIndex` listings into the staged site only, and copies
+only the parquet writer files those listings name.
+
+The cost scales with the number of published ledgers times the widest console
+preset. It does not scale with how long the repository has been running, because
+a ledger that has not packed for longer than the widest preset still gets only
+that many directory checks. The widest preset is the right bound because no
+console query can ask the site for more days than that without using the archive
+reader, which reads packed files from the repository instead of raw writer files
+from the site.
+
 | Concern | The rule | What retires the old path |
 | --- | --- | --- |
 | Write ownership | Workers emit immutable run results and early failure evidence. One serialised owner applies them under idempotent keys. Serialising publication does not mean serialising inference. | Cancelled work stays recorded, and replayed or overlapping shards settle without line-based repair. |

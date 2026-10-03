@@ -9,6 +9,7 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Inspect `npm --prefix frontend run test:changed -- --list`, then run the selected checks. Keep full-suite checks in CI unless local full coverage is needed.
 - Read the first failure and which later checks did not run. A missing tool, interrupted process, cached failure or skipped test is not a pass.
 - Inspect an existing run before starting another. Use the launcher's `--status`; use `--fresh` only when an unchanged run must be repeated.
+- `node scripts/build-state.ts --complete` took 112.5 s on the shared Windows machine on 2026-10-03, so wait for it rather than calling it hung.
 
 ## Running the gates
 
