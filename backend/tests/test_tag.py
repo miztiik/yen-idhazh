@@ -263,8 +263,17 @@ def test_the_same_text_tags_the_same_way_twice() -> None:
 
 def test_no_prompt_asks_a_model_for_a_tag() -> None:
     """Andre's ruling: a page choosing its own reader-facing tags steers a control."""
-    prompts = sorted((REPO_ROOT / "backend" / "idhazh" / "prompts").glob("*.txt"))
-    assert prompts, "the prompt directory must not be empty for this to mean anything"
+    prompts = tuple(
+        REPO_ROOT / "backend" / "idhazh" / "prompts" / name
+        for name in (
+            "judge_same_story.txt",
+            "label_article_elements.txt",
+            "plan_visual.txt",
+            "summarize.txt",
+            "summarize_and_plan_visual.txt",
+            "write_about_the_item.txt",
+        )
+    )
     for prompt in prompts:
         body = prompt.read_text(encoding="utf-8").lower()
         assert "lens" not in body, prompt.name

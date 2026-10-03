@@ -71,7 +71,7 @@ def test_a_dead_model_server_marks_every_item_without_parsing(
     proofs are answered, and then the line closes on every completion with
     nothing on it, which is the shape a process that died mid-shard leaves.
     """
-    run_plan = plan()
+    run_plan = plan(item_count=2)
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
     with SilentCompletionEndpoint(holds=False) as server:
@@ -101,7 +101,7 @@ def test_a_dead_model_server_marks_every_item_without_parsing(
 def test_a_hung_model_request_costs_one_item_not_the_shard(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    run_plan = plan()
+    run_plan = plan(item_count=2)
     settings = config.load(CONFIG_DIR)
     # `model_copy(update=...)` does not validate, so the update has to name a
     # key the model really has. Aimed one level too high it sets an attribute
@@ -113,7 +113,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
         models=settings.models.model_copy(
             update={
                 "summarizer": summarizer.model_copy(
-                    update={"request_timeout_minutes": 0.01}
+                    update={"request_timeout_minutes": 0.001}
                 )
             }
         ),
@@ -169,7 +169,7 @@ def test_a_shard_out_of_clock_stops_itself_instead_of_being_killed(
     first item and the loop stops at the top - which is the branch that matters,
     because it is the one that says the shard chose to stop.
     """
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     settings = config.load(CONFIG_DIR)
     out_of_time = config.Settings(
         app=settings.app.model_copy(

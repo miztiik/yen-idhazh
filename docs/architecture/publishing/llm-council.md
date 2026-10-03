@@ -123,14 +123,14 @@ checked rather than reviewed. Three checks, each failing on a different mistake.
 
 | The check | Where | What it refuses |
 | --- | --- | --- |
-| directory | [../../../backend/tests/contracts/test_repo_structure.py](../../../backend/tests/contracts/test_repo_structure.py) | any statement in `backend/idhazh/council/` naming the judge's package, its four stage modules or any judge contract |
+| runtime | [../../../backend/tests/council/test_session.py](../../../backend/tests/council/test_session.py) | dynamically loaded judge code or judge-stage imports retained by the command router |
 | named import inputs | [../../../backend/tests/council/test_council_runs_without_a_judge.py](../../../backend/tests/council/test_council_runs_without_a_judge.py) | a judge module reached by static imports from the named council modules, through any named dependency |
 | run | the same file | a night that cannot be driven end to end against tenants the test wrote |
 
-**The directory check alone would have proved nothing.** Both couplings that
-really existed lived outside that directory: the command router imported four of
-the judge's stage modules, and the composed application config imported the
-judge's knob block. A check scoped to one directory reads green over both.
+**A check limited to the council directory misses shared-module couplings.**
+The command router and composed application config can load a judge without
+the council importing it directly. The named static inputs and runtime checks
+cover those routes.
 
 The static check reads only the source files named in
 `backend/tests/council/_imports.py`. An unlisted dependency fails before it is

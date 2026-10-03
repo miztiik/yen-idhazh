@@ -1,14 +1,13 @@
 # Search Quality
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-03
 Whether the archive's on-device search finds the right story: the metric, the
-label set, the bar it has to clear, and what it costs to keep that bar honest as
-the archive grows.
+label set, how an operator measures it, and why no test gates it.
 
 **This is a different instrument from [evaluation.md](evaluation.md)**, which
 asks whether a published summary is faithful to its article. The two share no
-data, no metric and no config: this page backs `assist.recall_min` and the
-similarity floor, where that one backs the confidence bands. A person arrives
+data, no metric and no config: this page backs the similarity floor and the
+slot count, where that one backs the confidence bands. A person arrives
 holding one question or the other and never both.
 
 Everything above scores a summary. This section scores a different promise: that
@@ -20,9 +19,11 @@ so it cannot see a ten-point regression. It stays exactly what it is and its bar
 is never raised.
 
 The instrument is [`backend/idhazh/evals/retrieval.py`](../../backend/idhazh/evals/retrieval.py),
-run by the backend test suite. It is not a browser test. The quality question
-has nothing to do with a browser, and the browser path pays the whole encoder
-download on every run.
+run by hand with `backend/utilities/measure_retrieval.py --quality` over the
+days an operator names. It is not a browser test and not a pytest gate: the
+backend suite proves only its arithmetic, on hand-built vectors. The quality
+question has nothing to do with a browser, and the browser path pays the whole
+encoder download on every run.
 
 ## Two tiers, and only one of them exists today
 
@@ -92,9 +93,9 @@ you have, how many did you show. The uncapped figure is reported beside it.
 **A miss and an absence are different failures, and conflating them makes the
 instrument lie.** An item with no vector cannot be retrieved at any threshold.
 Every result therefore carries two numbers: the reader-facing one over all
-labelled answers, and the ranking one over the answers that carry a vector. Only
-the second is gated (`assist.recall_min`), because failing this gate for a gap in
-the embedding stage would point at the wrong code.
+labelled answers, and the ranking one over the answers that carry a vector. The
+second is the one to tune against, because a gap in the embedding stage would
+otherwise point at the wrong code.
 
 ## The baseline, 2026-08-26
 
@@ -225,7 +226,11 @@ treating a lower recall as a regression.
 
 ## The bar, and what it is worth
 
-`assist.recall_min` is **0.68**, two standard errors below the pinned baseline of
+**Historical since 2026-10-03.** No test gates recall any more; the section
+below explains the bar that existed and why every version of it expired. See
+"The gate went entirely" further down.
+
+`assist.recall_min` was **0.68**, two standard errors below the pinned baseline of
 0.756 +/- 0.037 (n=60) over the 2,237 items published through 2026-08-26, of
 which 2,235 carry a vector: `0.756 - 2 x 0.037 = 0.682`, rounded to two places
 the way 0.69 and 0.61 were. It catches what a bar is for: a ranking change that
@@ -428,6 +433,20 @@ and re-fitting recovers it. The full picture is in
 [../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md).
 Authority: owner, `CLAUDE.md` section 13.
 
+**The gate went entirely, and quality became a measurement (2026-10-03).**
+Search quality is a fact about published data and labels, not a behaviour code
+gets wrong on its own (`CLAUDE.md` section 13 rule 2), and the gate read the
+committed archive and ran the real encoder on every test run - a read that grew
+with every published day (Guardrail #12). So `test_the_ranking_clears_its_bar`,
+`assist.recall_min` and `assist.eval_corpus_through` are deleted. The backend
+suite keeps only arithmetic tests on hand-built vectors and `tmp_path` days.
+Recall and the floor's null-score evidence are printed by
+`python backend/utilities/measure_retrieval.py --day YYYY-MM-DD --month YYYY-MM --quality`
+over the days an operator names, and an operator tunes the floor and slot count
+against that reading. **What the project gives up** is an automatic alarm when
+a ranking change costs recall; a person now has to run the tool before changing
+the encoder, the floor or the ranking. Authority: owner.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -456,7 +475,7 @@ Authority: owner, `CLAUDE.md` section 13.
 
 - [evaluation.md](evaluation.md) - the other instrument: whether a summary is faithful to its article.
 - [digest.md](digest.md) - what a reader is searching over.
-- [config/appearance.md](config/appearance.md) - `assist.recall_min` and the similarity floor.
+- [config/appearance.md](config/appearance.md) - the similarity floor and the slot count.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the search control and what it downloads.
 - [../reference/site-weight.md](../reference/site-weight.md#bounded-loading) - the transfer cost of search metadata and vectors.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (measured, not estimated).

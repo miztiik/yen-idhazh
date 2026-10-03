@@ -32,6 +32,13 @@ refuses an unlisted dependency before opening it.
 Visual-retention fixtures use sparse boundary days and a two-file deletion cap,
 so month and year skipping and an unfinished deletion run need no large archive.
 
+**A fixed fixture can still do needless work.** Per-item pipeline record and
+run-metadata tests limit the recorded plan to one item. Continuing after a
+failure, ordering and sibling totals need two. The
+timeout test keeps a real socket timeout of 60 ms; the stopwatch test keeps a
+real server wait of 50 ms. Both exercise the production path without changing
+production timeouts. Longer waits and unrelated items add cost, not coverage.
+
 **The second one was the larger cost, and selection would not have touched it.**
 The browser job is the critical path and the backend suite is small beside it
 ([benchmarks/what-the-suite-paid-to-re-read-the-archive.md](benchmarks/what-the-suite-paid-to-re-read-the-archive.md)),

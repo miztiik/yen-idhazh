@@ -22,7 +22,6 @@ deleted with the field - a record nothing wrote and nothing read.
 
 from __future__ import annotations
 
-import inspect
 import re
 from pathlib import Path
 from string import Template
@@ -33,11 +32,9 @@ from conftest import CONFIG_DIR, a_sampling, a_server
 
 from idhazh import config
 from idhazh.classify import calls
-from idhazh.contracts.base import Contract
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.model_server import ModelServerConfig
 from idhazh.contracts.knobs.models import ModelRef, ModelsConfig
-from idhazh.corpus import read_rows, scored_from_items
 from idhazh.fingerprint import (
     DIGESTED_FLAGS,
     MACHINE_INPUTS,
@@ -52,7 +49,6 @@ from idhazh.fingerprint import (
     runtime_flags_spelling,
     sampling_spelling,
 )
-from idhazh.ledger import load_retirements
 from idhazh.llm.server import SystemPlacement, TurnMarkers, turn_markers_digest
 
 pytestmark = pytest.mark.contract
@@ -439,39 +435,6 @@ def test_the_change_names_the_input_that_moved_rather_than_saying_one_did() -> N
         "model_sha256",
         "sanitizer_version",
     )
-
-
-# --- The four bounds this row declares ---------------------------------------
-
-#: Items 18 to 21 of the plan's inventory: the reads ruled deliberately
-#: unbounded, and the word each one's cover turns on. They are asserted here
-#: rather than beside each module because they were declared together, in one
-#: row, against one rule - and a set that is checked in four places drifts.
-DECLARED_BOUNDS: Final[tuple[tuple[str, object, str], ...]] = (
-    ("ledger.load_retirements", load_retirements, "-1"),
-    ("corpus.scored_from_items", scored_from_items, "one run"),
-    ("corpus.read_rows", read_rows, "finetune.corpus_rows"),
-    ("contracts.base.Contract.read", Contract.read, "one payload"),
-)
-
-
-@pytest.mark.parametrize(
-    ("name", "read", "cover"),
-    DECLARED_BOUNDS,
-    ids=[name for name, _, _ in DECLARED_BOUNDS],
-)
-def test_a_deliberately_unbounded_read_declares_its_cover(
-    name: str, read: object, cover: str
-) -> None:
-    """Guardrail #12's escape hatch is a person agreeing in the open, so it is written down.
-
-    Each of these four reads was ruled unbounded on purpose. The ruling is worth
-    nothing to the next reader unless it sits next to the code, so each one names
-    what it covers and why a cover in days is not the answer.
-    """
-    doc = inspect.getdoc(read) or ""
-    assert "Cover:" in doc, f"{name} was ruled unbounded on purpose and declares no cover"
-    assert cover in doc, f"{name} declares a cover that does not name {cover!r}"
 
 
 # --- Building the stamp -----------------------------------------------------

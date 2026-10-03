@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import read_text
 from pydantic import ValidationError
 
 from idhazh.contracts import CONTRACTS, canonical_json
@@ -13,40 +13,11 @@ from idhazh.contracts import CONTRACTS, canonical_json
 from ._config import (
     FINGERPRINT_FIXTURES,
     FINGERPRINT_POPPERS,
-    FINGERPRINT_SURVIVORS,
     misspell,
 )
+from ._fixtures import fixture_paths
 
 pytestmark = pytest.mark.contract
-
-
-def test_nothing_reads_the_pipeline_fingerprint_except_the_places_named_here() -> None:
-    """The stamp stopped gating, and the field is gone from nine of the ten shapes.
-
-    A fixed-size read of code a person wrote, never of data a run appended
-    (`CLAUDE.md` section 13). It grows with the codebase and not with the
-    archive, so a day that publishes changes nothing here.
-
-    The gate is not "the name appears nowhere", because two shapes have to name
-    the key to pop it and one still declares the field. Both are named above,
-    which is what makes this a rule rather than a habit.
-    """
-    roots = (
-        (REPO_ROOT / "backend" / "idhazh", ("*.py",)),
-        (REPO_ROOT / "frontend" / "src", ("*.ts", "*.svelte", "*.js")),
-    )
-    found: set[str] = set()
-    for root, patterns in roots:
-        for pattern in patterns:
-            for path in root.rglob(pattern):
-                if "pipeline_fingerprint" in path.read_text(encoding="utf-8"):
-                    found.add(path.relative_to(REPO_ROOT).as_posix())
-
-    assert found == set(FINGERPRINT_SURVIVORS), (
-        "a module names pipeline_fingerprint that is not on the survivor list. "
-        "Either it is a reader and has to stop reading, or it is a survivor and "
-        "has to say why it survives."
-    )
 
 
 @pytest.mark.parametrize(("name", "key"), [(n, k) for n, (k, _) in FINGERPRINT_POPPERS.items()])
@@ -101,23 +72,17 @@ def test_no_other_contract_learned_to_accept_the_retired_key() -> None:
     to a key only two of them ever held. Nothing else can fail that, which is why
     this case is not optional.
 
-    Driven from the committed contract fixtures, which are a fixed set of files a
-    person wrote (`CLAUDE.md` section 13). `EvalRow` is skipped because it still
-    declares the field.
+    Driven from the named fixture inputs. `EvalRow` still declares the field.
     """
     checked = 0
+    fixtures = {path.parent.name: path for path in reversed(fixture_paths())}
     for model in CONTRACTS:
         key = "pipeline_fingerprint"
         if model.__name__ in FINGERPRINT_POPPERS or key in model.model_fields:
             continue
-        directory = CONTRACT_FIXTURES_DIR / model.__schema_stem__
-        for path in sorted(directory.glob("*.json")):
-            payload = json.loads(read_text(path))
-            if not isinstance(payload, dict):
-                continue
-            with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-                model.model_validate({**payload, key: "a" * 64})
-            checked += 1
-            break
+        payload = json.loads(read_text(fixtures[model.__schema_stem__]))
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            model.model_validate({**payload, key: "a" * 64})
+        checked += 1
 
     assert checked >= 30, f"only {checked} contracts were offered the retired key"

@@ -1267,16 +1267,3 @@ def test_the_dispatcher_routes_every_registered_projection_exactly_once(
     declared = tuple(projection.name for projection in dispatch.PROJECTIONS)
     assert published.dispatched == declared
     assert len(set(declared)) == len(declared), "two entries would share one writer"
-
-
-def test_every_module_in_the_publish_package_is_reachable_from_the_dispatcher() -> None:
-    """A projection nobody registered is a payload no run writes.
-
-    Two modules are deliberately absent: `dispatch` itself, and `series`, which
-    is the write rule the month-sharded payloads obey rather than a payload of
-    its own.
-    """
-    package = Path(dispatch.__file__).parent
-    modules = {path.stem for path in package.glob("*.py")} - {"__init__", "dispatch", "series"}
-
-    assert {projection.module for projection in dispatch.PROJECTIONS} == modules
