@@ -22,7 +22,6 @@
  */
 import { MONTHS } from '$lib/format';
 import { megabytes } from '$lib/assist/session';
-import type { AskRefusal } from '$lib/data/slice-shapes';
 import { grouped } from '$lib/charts/series';
 import { monthsInWindow, type TimeWindow } from '$lib/charts/viewport';
 
@@ -37,6 +36,8 @@ export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachabl
  * that failed, and a floor missed is not a failure.
  */
 export type ChartState = PanelState | 'too-few';
+
+type AskRefusal = import('$lib/data/slice-shapes').AskRefusal;
 
 
 /** What became of one month file the open window reaches into. */
