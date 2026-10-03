@@ -189,11 +189,6 @@ class CompactIndex(Contract):
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-02",
-            change="bytes is an optional size for each listed file, filled by the site build.",
-            why="A browser prices and checks writer files before it fetches them.",
-        ),
-        ChangelogEntry(
             version="2026-10-01T16:50",
             change="Remove the retired aggregate from the ledger vocabulary.",
             why="Only declared families may reach an index; surviving periods are unchanged.",
@@ -260,11 +255,6 @@ class Watermark(Contract):
 
     __schema_stem__: ClassVar[str] = "watermark"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
-        ChangelogEntry(
-            version="2026-10-02",
-            change="bytes is an optional size for each listed file, filled by the site build.",
-            why="A browser prices and checks writer files before it fetches them.",
-        ),
         ChangelogEntry(
             version="2026-10-01T16:50",
             change="Remove the retired aggregate from the ledger vocabulary.",

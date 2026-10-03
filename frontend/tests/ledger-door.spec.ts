@@ -11,7 +11,7 @@ import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
 import { readAsk, readAskCost } from '../src/lib/data/ask-reader';
 import { readReach } from '../src/lib/data/ledger-reach';
 import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper, type WantedFile } from '../src/lib/data/page-keeper';
-import { daysBetween, filesFor } from '../src/lib/data/slice';
+import { daysBetween, filesFor, newestNamed } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
 import { dataPath, indexPath, readSlice } from '../src/lib/data/slice-reader';
 import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
@@ -223,6 +223,21 @@ test('the engine starts while a whole file is still arriving', async () => {
 		await reading;
 		await keeper.release();
 	}
+});
+
+
+
+test.describe('newest day any index names', () => {
+	const entry = (covers: string): CompactEntry => ({ covers, rows: 1, bytes: 1 });
+
+	test('daily, month and year entries count through the day they cover', () => {
+		expect(newestNamed([entry('2026-09-02')], [], [])).toBe('2026-09-02');
+		expect(newestNamed([], [entry('2026-09')], [])).toBe('2026-09-30');
+		expect(newestNamed([], [], [entry('2026')])).toBe('2026-12-31');
+		expect(newestNamed([entry('2026-09-02')], [entry('2026-10')], [])).toBe('2026-10-31');
+		expect(newestNamed([], [entry('2028-02')], [])).toBe('2028-02-29');
+		expect(newestNamed([], [], [])).toBeNull();
+	});
 });
 
 test.describe('which files a range needs', () => {
@@ -607,6 +622,26 @@ test.describe('THE ORACLE through the engine, at both entry points', () => {
 });
 
 test.describe('what a page keeps', () => {
+	test('reports which wanted files were fetched and which were already held', async () => {
+		const { fetcher } = recorded();
+		const engine = counted();
+		const page = freshPage(fetcher, engine);
+		const entry = fixtureEntries('daily').find((one) => one.covers === '2026-09-01');
+		expect(entry).toBeDefined();
+		const file = {
+			path: dayFile('2026-09-01'),
+			version: `${entry?.rows}-${entry?.bytes}`,
+			bytes: bytesOf(dayFile('2026-09-01')).byteLength,
+			byRange: false
+		};
+		const first = await page.hold([file]);
+		expect(first).toMatchObject({ fetched: [true] });
+		if (!('failed' in first)) await first.done();
+		const second = await page.hold([file]);
+		expect(second).toMatchObject({ fetched: [false] });
+		if (!('failed' in second)) await second.done();
+	});
+
 	const MONTH_FILE = dataPath(LEDGER, 'monthly', '2026-08');
 	/** Both indexes and every file a span from 2026-08-30 to 2026-09-02 reads, each once. */
 	const ONCE_EACH = {

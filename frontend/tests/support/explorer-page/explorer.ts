@@ -10,17 +10,8 @@ declare global {
 }
 
 const keeper = pageKeeper(
-	fetchedBytes('/root', (url, init) => fetch(url, init)),
-	() => import('../../../src/lib/data/engine').then((engine) => engine.browserEngine(`${location.origin}/ext`))
+	fetchedBytes(__ASSET_BASE_URL__, (url, init) => fetch(url, init)),
+	() => import('../../../src/lib/data/engine').then((engine) => engine.browserEngine(__ENGINE_EXTENSION_REPOSITORY__))
 );
 
-window.explorerAsk = async (options) => {
-	if (options.sql.includes('https://example.invalid/x.csv')) {
-		void fetch('https://example.invalid/x.csv').catch(() => undefined);
-		return Promise.race<AskResult>([
-			readAsk(keeper, options, {}),
-			new Promise<AskResult>((resolve) => setTimeout(() => resolve({ state: 'refused', because: { kind: 'engine-error', message: 'timed out while the browser refused the external request' } }), 5000))
-		]);
-	}
-	return readAsk(keeper, options, {});
-};
+window.explorerAsk = (options) => readAsk(keeper, options, {});

@@ -149,7 +149,11 @@ export function checkedRequest(options: SliceOptions): Required<SliceOptions> {
 /** One column of an answer, as the engine describes it. */
 export type Column = { name: string; type: string };
 
-/** What the fetch actually cost, so the page prints a reading and never a guess. */
+/** What the keeper fetched for this call.
+ *
+ * A whole file counts at the bytes that arrived. A file read by byte range counts
+ * at its whole indexed length, because the page cannot see which ranges the
+ * engine read and that length is the most the read can cost. */
 export type FetchCost = { files: number; bytes: number; alreadyHeld: number; ms: number };
 
 /** What a span will cost before it is paid, and how far each selected ledger reaches. */
