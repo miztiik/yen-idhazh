@@ -15,6 +15,8 @@ function fixture() {
 	writeFileSync(join(root, 'frontend/src/page.ts'), 'export const value = 1;\n');
 	writeFileSync(join(root, 'frontend/build/index.html'), '<h1>A fixture page</h1>\n');
 	writeFileSync(join(root, 'frontend/.svelte-kit/output/client/start.js'), 'const value = 1;\n');
+	writeFileSync(join(root, '.gitignore'), 'frontend/build/\nfrontend/.svelte-kit/\nbackend/var/\n');
+	commit(root, '.gitignore', 'frontend/src/page.ts');
 	return root;
 }
 
@@ -35,7 +37,7 @@ test('a build record rejects missing, wrong-mode, stale-source and changed-outpu
 	}
 });
 
-test('test and documentation edits do not require a site rebuild', () => {
+test('test and documentation edits invalidate a site build and its checks', () => {
 	const root = fixture();
 	try {
 		recordBuild(root, 'real');
@@ -43,11 +45,11 @@ test('test and documentation edits do not require a site rebuild', () => {
 		writeFileSync(join(root, 'frontend/tests/example.spec.ts'), 'test changes\n');
 		writeFileSync(join(root, 'frontend/playwright.config.ts'), 'test configuration changes\n');
 		writeFileSync(join(root, 'docs/example.md'), '# New documentation\n');
-		assert.doesNotThrow(() => assertBuild(root, 'real'));
+		assert.throws(() => assertBuild(root, 'real'), /stale inputs/);
 		assert.notEqual(inputFingerprint(root), before);
 		const after = inputFingerprint(root);
 		writeFileSync(join(root, 'docs/example.md'), '# More documentation\n');
-		assert.equal(inputFingerprint(root), after);
+		assert.notEqual(inputFingerprint(root), after);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -56,18 +58,15 @@ test('test and documentation edits do not require a site rebuild', () => {
 test('a stale build names the inputs that moved, and nothing that is not one', () => {
 	const root = fixture();
 	try {
-		execFileSync('git', ['-C', root, 'add', '--all']);
-		execFileSync('git', ['-C', root, '-c', 'user.email=t@example.com', '-c', 'user.name=Test',
-			'-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'a fixture']);
 		recordBuild(root, 'real');
 		assert.equal(changedInputNote(root, 'build'), '', 'a clean tree has nothing to name');
 		writeFileSync(join(root, 'docs/example.md'), '# New documentation\n');
-		assert.equal(changedInputNote(root, 'build'), '', 'prose no program reads is not an input');
+		assert.match(changedInputNote(root, 'build'), /docs\/example\.md/);
 		writeFileSync(join(root, 'frontend/src/page.ts'), 'export const value = 2;\n');
 		assert.throws(
 			() => assertBuild(root, 'real'),
 			(error) => /stale inputs/.test(error.message)
-				&& /Changed in the working tree: frontend\/src\/page\.ts\./.test(error.message),
+				&& /frontend\/src\/page\.ts/.test(error.message),
 			'a stale build says which file moved, or the reader has to find it'
 		);
 	} finally {
@@ -119,7 +118,7 @@ test('base path and build version changes invalidate a recorded build', () => {
 	}
 });
 
-test('Markdown fixture data invalidates checks even though documentation does not', () => {
+test('Markdown fixture data invalidates checks', () => {
 	const root = fixture();
 	try {
 		mkdirSync(join(root, 'tests/fixtures'), { recursive: true });
@@ -137,11 +136,31 @@ function commit(root, ...paths) {
 		'-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'a fixture']);
 }
 
-test('a tracked file git reports unchanged is taken from the index and never opened', () => {
+test('committed changes, working changes and non-ignored untracked files each change the fingerprint', () => {
+	const root = fixture();
+	try {
+		const first = inputFingerprint(root);
+		writeFileSync(join(root, 'frontend/src/page.ts'), 'export const value = 2;\n');
+		const working = inputFingerprint(root);
+		assert.notEqual(working, first);
+		commit(root, 'frontend/src/page.ts');
+		const committed = inputFingerprint(root);
+		assert.notEqual(committed, first);
+		assert.notEqual(committed, working);
+		writeFileSync(join(root, 'frontend/src/new.ts'), 'export const added = true;\n');
+		const untracked = inputFingerprint(root);
+		assert.notEqual(untracked, committed);
+		writeFileSync(join(root, 'frontend/src/new.ts'), 'export const added = false;\n');
+		assert.notEqual(inputFingerprint(root), untracked);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('an unchanged committed file is represented by its tree object', () => {
 	const root = fixture();
 	try {
 		const source = join(root, 'frontend/src/page.ts');
-		commit(root, 'frontend/src/page.ts');
 		const before = inputFingerprint(root);
 		// git is told to stop reporting this path, so a fingerprint that moved
 		// could only have come from reading the file off disk.
@@ -153,11 +172,10 @@ test('a tracked file git reports unchanged is taken from the index and never ope
 	}
 });
 
-test('a tracked file that is modified or deleted is read, not taken from the index', () => {
+test('a tracked file modification or deletion changes the Git diff fingerprint', () => {
 	const root = fixture();
 	try {
 		const source = join(root, 'frontend/src/page.ts');
-		commit(root, 'frontend/src/page.ts');
 		const committed = inputFingerprint(root);
 		writeFileSync(source, 'export const value = 2;\n');
 		const modified = inputFingerprint(root);

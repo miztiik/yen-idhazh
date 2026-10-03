@@ -92,12 +92,6 @@ def a_compaction(ledger: str, **changes: Any) -> dict[str, Any]:
 
 MONTHS = {"unit": "months", "value": 14}
 
-#: Why every closed-day fold ships live while the window beside it only reports.
-FOLD_ALREADY_RAN_LIVE: Final = (
-    "the fold copies the closed-day fold digest.yml ran live on every run until "
-    "the gardener took it over, and a fold changes no answer a reader gets"
-)
-
 #: Why two of the ledgers the console reads are packed at every wake.
 PACKED_FOR_THE_CONSOLE: Final = (
     "packed live by owner decision: the console reads this ledger from its packed "
@@ -138,11 +132,6 @@ LIVE_BY_DECISION: Final = {
     ("corpus-squash", "dry_run"): (
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
-    ),
-    ("summary-quality-evals-index", "fold.dry_run"): (
-        f"{FOLD_ALREADY_RAN_LIVE}; and a person ruled that the eval ledger's ID files stop "
-        "growing by a file a day with no summary, so the same switch settles each closed "
-        "month of them into one file"
     ),
 }
 
@@ -639,7 +628,7 @@ def _thirteen_months(name: str) -> dict[str, Any]:
     return declared
 
 
-@pytest.mark.parametrize("name", ["summary-quality-evals-index", "telemetry-aggregate"])
+@pytest.mark.parametrize("name", ["telemetry-aggregate"])
 def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: str) -> None:
     """A 366-day read reaches fourteen month shards, and thirteen is one short of it.
 

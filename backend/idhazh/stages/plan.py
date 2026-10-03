@@ -12,7 +12,7 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, config, discover, fetch, ledger, rank, run_context, tag
+from idhazh import assemble, config, discover, fetch, ledger, publication, rank, run_context, tag
 from idhazh.contracts.base import ServerJob, fit_field
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import (
@@ -196,10 +196,15 @@ def stage_plan(
         _first_sights(candidates, first_seen, generated_at, run_id),
         identity=identity,
     )
-    # This job's own raw file, never a file two plan jobs would share: a night
-    # runs the plan more than once and each run has a verdict on every feed. Each
-    # row is filed under the day its own `date` names.
-    ledger.persist(state, health, ledger=LedgerName.FEED_HEALTH, covers=date, identity=identity)
+    feed_files = ledger.persist(
+        state, health, ledger=LedgerName.FEED_HEALTH, covers=date, identity=identity
+    )
+    if state.resolve() == (config.REPO_ROOT / ledger.STATE_DIRNAME).resolve():
+        publication.record_feed_health(
+            common.PUBLIC_ROOT.parent,
+            state,
+            paths=[path.relative_to(state).as_posix() for path in feed_files],
+        )
     published_on = ledger.load_published(
         state, today=date, within_days=collect.published_window_days
     )

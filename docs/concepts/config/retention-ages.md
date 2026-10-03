@@ -2,7 +2,6 @@
 
 **Last Updated**: 2026-10-02
 
-Which instruments run at all, and how long what they write is kept. The switches
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
 a publisher reads, because a switch that stops a record being written and an age
 that stops it being kept are the two ends of the same question. **The age of a
@@ -107,13 +106,6 @@ fold reads the age, it is a knob in `observability`, and
 `ObservabilityConfig.full_grain_months` returns the ones a console read opens so
 `refuse_windows_shorter_than` can check them against what that read still
 selects. `visuals_full_grain_months` is a full-grain window and is **not** in
-that mapping yet, because no console read opens one of its shards today
-([../adaptive-pruning.md](../adaptive-pruning.md#the-visual-fold-key-is-eight-terms-and-it-could-not-wait)).
-
-| Ledger | Full grain | Summary after it | Declared in |
-| --- | --- | --- | --- |
-| the item-health ledger, `state/raw/item-health/` and `state/compact/item-health/` | 14 months before a month is summarised; its rows go when the 15-month `monthly_window` of its compaction passes | forever, in `state/item-health-summary/` | `config/gardener/telemetry-aggregate.json`, series `full-grain` and `aggregate`, and `config/gardener/compact-item-health.json` |
-| the eval ledger, `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | forever - the `monthly_window` of its compaction is `forever`, so no row is ever deleted | none - a chart that wants a monthly figure computes it from the rows | `config/gardener/compact-summary-quality-evals.json` |
 | `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
 | the feed-health ledger, `state/raw/feed-health/` and `state/compact/feed-health/` | the 14-month `monthly_window` of its compaction | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/compact-feed-health.json` |
 | the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`, which may not keep less than `public_machine_keep_months` |
@@ -204,8 +196,7 @@ month is not thirty days. The check now compares against the shards, and
 `backend/tests/contracts/` sweeps every end date in one 400-year
 Gregorian cycle to prove it. The gardener loader makes the same comparison for
 every declaration whose files a console read opens - the feed-health
-compaction's `monthly_window` and the `summary-quality-evals-index` window, the
-`full-grain` series of `telemetry-aggregate`, and the
+compaction's `monthly_window`, the `full-grain` series of `telemetry-aggregate`, and the
 `public-copy` series - and refuses a window under fourteen months by naming the
 file. Measured 2026-09-02 over all **146,097** anchor
 dates - arithmetic over the calendar, so the spread is zero by construction:
@@ -298,9 +289,7 @@ stands, and the measurement only strengthens it.
 **Each of these ages is one task's own window, and that task spends it.** The
 `telemetry-aggregate` task summarises an item-health month past its `full-grain`
 series and unlinks the browser's copy of that month past its `public-copy`
-series; and the `summary-quality-evals-index` task keeps every
-`state/summary-quality-evals-index/` day, because its window is `forever`. The
-item-health, host-fingerprint and feed-health rows are deleted by each ledger's
+series. The item-health, host-fingerprint and feed-health rows are deleted by each ledger's
 compaction past its `monthly_window`, and the eval rows' compaction keeps every
 month.
 
@@ -310,9 +299,9 @@ and a chart that wants a monthly figure computes it from the rows when it draws
 ([../evaluation.md](../evaluation.md#design-rationale)). The `monthly_window` of
 `config/gardener/compact-summary-quality-evals.json` is `forever`, so its compaction may pack a
 month and never drops one, and its `monthly_keep_days` packs a finished year's
-months into one year file. The index a run dedupes against keeps every day for
-its own reason: an observation key carries no date, so a dropped day would make
-every measurement in it new again.
+months into one year file. The [observation lookup](../../architecture/contracts/observation-lookup.md)
+keeps every measurement ID independently of these periods. It has no retention
+task, time window or day/month fold.
 
 **Feed health is deleted and never summarised.** Its rows are per-feed-per-run
 evidence, the quarantine reads 31 days, and the console reaches at most 366 - so

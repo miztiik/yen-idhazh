@@ -16,7 +16,6 @@
     "compact-visual-prunes",
     "corpus-squash",
     "digest-fragments",
-    "summary-quality-evals-index",
     "telemetry-aggregate",
     "traces",
     "trials",

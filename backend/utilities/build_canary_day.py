@@ -597,7 +597,7 @@ def lenses_for(index: int) -> list[str]:
 def visual_for(
     index: int, item_id: str, target: Path, *, visuals: VisualsConfig
 ) -> VisualDecision | None:
-    """A published chart on each of the first two items, and a failed one on the third.
+    """Published charts on the first and fourth items, and a failed one on the third.
 
     Two published, not one, because the browser suite's oracle is that every
     promised picture is served - a single figure cannot show that the page draws
@@ -637,7 +637,7 @@ def visual_for(
             relpath=relpath,
             visuals=visuals,
         )
-    if index == 1:
+    if index == 3:
         data = _unitless_bars(item_id)
         written = decided(
             VisualKind.CHART,

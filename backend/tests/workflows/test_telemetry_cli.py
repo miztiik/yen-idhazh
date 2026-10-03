@@ -32,6 +32,7 @@ from conftest import (
     read_text,
     seed_feed_health,
     seed_item_health,
+    seed_publication_inventory,
 )
 
 from idhazh import assemble, atomic_write, cli, ledger
@@ -114,6 +115,7 @@ def _a_published_day(tmp_path: Path) -> tuple[Path, Path, str]:
     run_id = manifest.runs[-1].run_id
 
     digest_root = tmp_path / "digest"
+    seed_publication_inventory(digest_root.parent)
     target = assemble.day_dir(digest_root, day.date)
     atomic_write.write_atomic(target / "digest.json", day.to_json())
     atomic_write.write_atomic(target / "run.json", manifest.to_json())

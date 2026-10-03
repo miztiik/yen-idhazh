@@ -1,18 +1,8 @@
-"""A day directory of writer-owned files reads back as one row per record.
+"""Does the day-shard reader accept only the declared writer-owned files?
 
-Two claims, and they answer different questions.
-
-**Parity.** `day_shards.settled_rows` over a day directory returns exactly what
-the gardener's closed-day fold writes into that day's `settled.csv` for the same
-bytes. The fixture files are the same files in both runs, so a difference is a
-difference in the fold rather than in the input. That is the whole of what
-moving the settlement out of the writer is allowed to change: nothing.
-
-**The readers.** Parity cannot say whether every production reader of a
-writer-owned tree reads it through the walker, so the second half of this module
-names each one and checks it by name. The list is fixed and written out here, so
-this test costs the same however much the repository grows (`CLAUDE.md` section
-13).
+The fixture tests the day shape, read order, and named production readers. The
+list of production readers is fixed and written out here, so this test costs the
+same however much the repository grows (`CLAUDE.md` section 13).
 
 A day is a directory, so a `<DD>.csv` beside one is a name no writer spells
 and the walk refuses it with every other stray. The one file a month folder may
@@ -25,20 +15,15 @@ from __future__ import annotations
 import csv
 import shutil
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
 import pytest
 
 from idhazh import day_shards, ledger
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.validation_row import ValidationRow
-from idhazh.gardener import closed_day_fold
 
 pytestmark = pytest.mark.contract
 
@@ -69,62 +54,6 @@ def _root() -> Path:
 def _rows_of(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
-
-
-def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
-    tmp_path: Path,
-) -> None:
-    """The oracle. Same bytes, two settlements, one answer, row for row."""
-    state = tmp_path / ledger.STATE_DIRNAME
-    observations = [
-        ObservationIndexRow.model_validate(
-            {
-                "version": ObservationIndexRow.schema_version(),
-                "observation_digest": f"{value:064x}",
-            }
-        )
-        for value in range(3)
-    ]
-    for attempt, shard, rows in (
-        (1, 0, observations[:2]),
-        (1, 1, observations[2:]),
-        (2, 0, observations[:1]),
-    ):
-        ledger.write_segment(
-            state,
-            ID_TREE,
-            rows,
-            run_id="2026-09-18-1",
-            attempt=attempt,
-            job=ServerJob.WORK,
-            shard=shard,
-            date="2026-09-18",
-        )
-    root = ledger.tree_root(state, ID_TREE)
-    day = ledger.path(state, ID_TREE, "2026-09-18")
-    assert sorted(path.name for path in day.iterdir()) == list(WRITERS)
-    assert sum(len(_rows_of(path)) for path in day.iterdir()) == 4
-    settled = day_shards.settled_rows(
-        root, ledger.segment_key(ID_TREE), ObservationIndexRow, days=1
-    )
-    assert [row["observation_digest"] for row in settled] == [
-        observation.observation_digest for observation in observations
-    ]
-
-    folded = closed_day_fold.fold(
-        state,
-        [ID_TREE],
-        now=datetime(2026, 9, 30, tzinfo=UTC),
-        after_days=DEFAULT_CLOSED_AFTER_DAYS,
-        dry_run=False,
-    )
-    assert folded.files == len(WRITERS)
-    folded_rows = _rows_of(day / day_shards.SETTLED_NAME)
-
-    assert settled == folded_rows
-    assert day_shards.settled_rows(
-        root, ledger.segment_key(ID_TREE), ObservationIndexRow, days=1
-    ) == settled
 
 
 def test_the_walk_reads_every_writer_file_of_a_day_and_nothing_else() -> None:
@@ -174,61 +103,6 @@ def test_a_day_file_beside_the_day_directories_stops_the_read(tmp_path: Path) ->
     with pytest.raises(ValueError, match=r"17\.csv"):
         list(day_shards.shard_files(tmp_path, days=UNBOUNDED_WINDOW))
     assert day_shards.one_day(tmp_path, "2026-09-17") == []
-
-
-#: The tree whose closed months are settled whole: the eval ledger's ID folder.
-ID_TREE: Final = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
-
-
-def _a_month_settled_whole(tmp_path: Path) -> Path:
-    """The id-months fixture with August settled into one file, and the folder that holds it."""
-    source = FIXTURE / "id-months" / ID_TREE.value
-    assert source.is_dir(), f"the id-months fixture is missing at {source}"
-    state = tmp_path / ledger.STATE_DIRNAME
-    root = ledger.tree_root(state, ID_TREE)
-    shutil.copytree(source, root)
-    folded = closed_day_fold.fold(
-        state,
-        [ID_TREE],
-        now=datetime(2026, 10, 1, tzinfo=UTC),
-        after_days=DEFAULT_CLOSED_AFTER_DAYS,
-        dry_run=False,
-        settles_months=True,
-    )
-    assert [each.month for each in folded.months] == ["2026-08"]
-    return root
-
-
-def test_a_month_settled_whole_reads_back_as_the_days_it_replaced(tmp_path: Path) -> None:
-    """Every reader that walks the tree gets the same rows, in the same order, after the fold.
-
-    The month's file is a member of the walk, stamped with its month, after every
-    earlier month and before every later one. It reads at attempt 0 and holds
-    the settled answer of every file it replaced, which is the answer those
-    files gave.
-    """
-    source = FIXTURE / "id-months" / ID_TREE.value
-    key, model = ledger.segment_key(ID_TREE), ledger.segment_contract(ID_TREE)
-    before = day_shards.settled_rows(source, key, model, days=UNBOUNDED_WINDOW)
-
-    root = _a_month_settled_whole(tmp_path)
-
-    month_file = root / "2026" / "08" / day_shards.SETTLED_NAME
-    assert month_file in list(day_shards.shard_files(root, days=UNBOUNDED_WINDOW))
-    assert day_shards.is_month_file(month_file)
-    assert day_shards.date_of(month_file) == "2026-08"
-    assert not day_shards.is_month_file(root / "2026" / "09" / "29" / day_shards.SETTLED_NAME)
-    assert day_shards.settled_rows(root, key, model, days=UNBOUNDED_WINDOW) == before
-
-
-def test_a_reader_that_settles_day_by_day_is_refused_a_month_settled_whole(
-    tmp_path: Path,
-) -> None:
-    """Its rows name no day, so a reader asking for dates would read none of them."""
-    root = _a_month_settled_whole(tmp_path)
-
-    with pytest.raises(ValueError, match=r"2026/08/settled\.csv"):
-        day_shards.dates_by_month(root, days=UNBOUNDED_WINDOW)
 
 
 def test_settled_sorts_below_every_writer_file(tmp_path: Path) -> None:
@@ -362,7 +236,6 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
 MOVED: Final = (
     ("backend/idhazh/gardener/closed_day_fold.py", "day_files(root)", "shard_files("),
     ("backend/idhazh/gardener/retention_files.py", "day_files(tree)", "shards_by_month("),
-    ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)", "shard_files("),
 )
 
 #: A ledger that keeps the day-file walk, and the reader that walks it: the judge's

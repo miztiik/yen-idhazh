@@ -2301,4 +2301,3 @@ test('the plot reads the cut off two lengths, so no ledger stamp can change what
 	expect(older.kind === 'point' && older.point.source_words).toBe(880);
 	expect(older.kind === 'point' && 'source_seen_words' in older.point).toBe(false);
 });
-

@@ -72,6 +72,7 @@ UNREGISTERED: Final = frozenset(
         "-".join(
             ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES).prefix
         ),
+        "-".join(ledger.entry(LedgerName.SUMMARY_QUALITY_EVALS_INDEX).prefix),
     }
 )
 
@@ -339,7 +340,7 @@ def test_a_store_with_no_file_yet_reports_nothing_and_raises_nothing(tmp_path: P
         )
 
 
-def test_every_store_in_the_vocabulary_resolves_except_the_two_named_here(
+def test_every_store_in_the_vocabulary_resolves_except_the_named_ledgers(
     tmp_path: Path,
 ) -> None:
     """The census. A ledger that quietly loses its reader is named here, not counted.
@@ -350,7 +351,7 @@ def test_every_store_in_the_vocabulary_resolves_except_the_two_named_here(
     under test was one the file asserted was correct.
 
     Asserted as set equality in both directions at once, so it is red when a
-    ledger loses its reader AND red when one of these two gains one. Either way
+    ledger loses its reader AND red when an unregistered ledger gains one. Either way
     the diff names the ledger.
 
     One header-only file per ledger, because `widen` reports nothing for a ledger
@@ -370,6 +371,6 @@ def test_every_store_in_the_vocabulary_resolves_except_the_two_named_here(
             refused.add(name)
 
     assert refused == UNREGISTERED
-    assert len(widen_ledger_header.LEDGERS) - len(refused) == 4, (
-        "four of six; the other two are named in UNREGISTERED with the reason"
+    assert len(widen_ledger_header.LEDGERS) - len(refused) == 3, (
+        "three of six have CSV headers; the other three are named in UNREGISTERED"
     )

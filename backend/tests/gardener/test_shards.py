@@ -42,16 +42,16 @@ def test_the_matrix_runs_every_active_task_but_history(tmp_path: Path) -> None:
 
 
 def test_the_split_is_round_robin_over_sorted_names(tmp_path: Path) -> None:
-    """Eight tasks into five shards: the first three shards take two, the last two take one."""
+    """Seven tasks into five shards: the first two take two and the rest take one."""
     planned = shards.plan(the_garden(tmp_path))
 
     assert planned.shard_count == 5
     assert [shard.task_names for shard in planned.shards] == [
-        ("compact-feed-health", "traces"),
-        ("compact-gardener", "trials"),
-        ("seen", "workflow-artifacts"),
-        ("summary-quality-evals-index",),
+        ("compact-feed-health", "trials"),
+        ("compact-gardener", "workflow-artifacts"),
+        ("seen",),
         ("telemetry-aggregate",),
+        ("traces",),
     ]
     assert shards.fullest(planned) == planned.shards[0]
 

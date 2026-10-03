@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from idhazh import assemble, config, ledger
+from idhazh import assemble, config, ledger, publication
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.fitted_similarity_threshold import (
     ClampKind,
@@ -50,9 +50,7 @@ def merge_count(day: DigestDay) -> int:
     return len(anchors)
 
 
-def _ruler(
-    record: StorySimilarityDistribution, scorer: ScorerStamp
-) -> tuple[ScorerModelId, float]:
+def _ruler(record: StorySimilarityDistribution, scorer: ScorerStamp) -> tuple[ScorerModelId, float]:
     """Which encoder and weight the counts being fitted were taken under.
 
     Off the record rather than off the config, because the row is a statement
@@ -239,6 +237,15 @@ def stage_set_merge_line(
         grammar_digest=record.grammar_digest,
     )
     ledger.append_fitted_thresholds(state, date, [row])
+    publication.record_state_files(
+        digest_root.parent,
+        state,
+        paths=[
+            ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date)
+            .relative_to(state)
+            .as_posix()
+        ],
+    )
     LOG.info(
         "set-merge-line date=%s run=%s previous=%s proposed=%s applied=%s clamp=%s held=%s "
         "settled=%s shift=%s typical=%s",

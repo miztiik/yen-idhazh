@@ -31,7 +31,6 @@ from idhazh.contracts.fitted_similarity_threshold import (
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS as DROPPED_PAIR_CELLS,
@@ -209,8 +208,9 @@ def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
 
     Parsed here rather than compared cell by cell so the rule is written once,
     in the contract that owns what a feed result means. A row that no longer
-    parses keeps whatever is already on record: this ledger is diagnostic, and
-    refusing would cost the read or the packing pass this settlement runs in.
+    parses keeps whatever is already on record - the same choice `load_health`
+    makes, and for the same reason: this ledger is diagnostic, and refusing
+    would cost a run the whole commit step this pass was called from.
     """
     try:
         return supersedes(FeedHealthRow.from_csv_row(later), FeedHealthRow.from_csv_row(kept))
@@ -290,7 +290,6 @@ class _TreeShape(NamedTuple):
 #: declared table rather than a rule a reader re-derives: the key is a fact about
 #: the ledger and a second copy of it is how two readers start disagreeing.
 _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
-    LedgerName.SUMMARY_QUALITY_EVALS_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
 }
 
 

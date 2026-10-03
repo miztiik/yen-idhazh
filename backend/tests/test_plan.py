@@ -29,6 +29,7 @@ from conftest import (
     read_text,
     seed_feed_health,
     seed_item_health,
+    seed_publication_inventory,
     writer_identity,
 )
 
@@ -705,6 +706,7 @@ def test_the_cap_flag_reaches_the_plan_stage(
         encoding="utf-8",
     )
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+    seed_publication_inventory(tmp_path / "public")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
     monkeypatch.setattr(
@@ -1234,6 +1236,19 @@ def test_every_feed_gets_a_row_whether_it_answered_or_not() -> None:
     dead = next(row for row in rows if row.feed_id == "trade-press")
     assert (dead.outcome, dead.status, dead.items) == (FetchOutcome.TRANSIENT, 503, 0)
     assert dead.failing
+
+
+def test_an_alternate_state_root_does_not_update_the_site_inventory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state = tmp_path / "state"
+    public = tmp_path / "public"
+    monkeypatch.setattr(common, "PUBLIC_ROOT", public / "digest")
+
+    plan([LAB], state=state)
+
+    assert health_after(state)
+    assert not (public / "publication.json").exists()
 
 
 def test_a_feed_that_answered_with_nothing_is_recorded_as_failing() -> None:

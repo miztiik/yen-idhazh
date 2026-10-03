@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from idhazh import config, ledger
+from idhazh import config, ledger, publication
 from idhazh.contracts.knobs.placement import HOLDOUT_TWO_STORY_MAX
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
@@ -175,6 +175,15 @@ def stage_score_merge_line_holdout(
         cosine_weight=scorer.cosine_weight,
     )
     _append(state, date, row)
+    publication.record_state_files(
+        digest_root.parent,
+        state,
+        paths=[
+            ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, date)
+            .relative_to(state)
+            .as_posix()
+        ],
+    )
     LOG.info(
         "score-merge-line-holdout date=%s run=%s line=%s merged_one=%d merged_two=%d "
         "apart_one=%d apart_two=%d unresolved=%d marked=%d two_story_marks=%d days=%d",
