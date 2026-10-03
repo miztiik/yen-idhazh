@@ -516,7 +516,14 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 | Keep the generator for the six names the frontend uses | A generator that runs over one contract is a generator, with its command, its gate and its regenerated diff. Six names are a copy and three tests. | Fowler |
 | Delete only the 61 schemas nothing imports | The count is a fact about one day. The next contract adds a sixty-seventh and the generator still runs in full. | Fowler |
 
-`RawDayIndex` also has a frontend hand copy in `frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so older compaction listings still validate; the frontend copy requires it because the site build fills it before a browser can price writer files.
+`RawDayIndex` also has a frontend hand copy in
+`frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so
+older compaction listings still validate; the frontend copy requires it because
+the site build fills it before a browser can price writer files. The build is
+now a second writer of the shape for staged-site listings only:
+`backend/tests/contracts/test_raw_day_listing_fixture.py` holds the compaction
+fixture, and `frontend/tests/ledger-copy.spec.ts` holds the build's listing,
+sizes and non-parquet refusal.
 
 ## See also
 

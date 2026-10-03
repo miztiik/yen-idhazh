@@ -1,0 +1,11 @@
+{
+  "version": "2026-10-02",
+  "ledger": "item-health",
+  "date": "2026-09-02",
+  "files": [
+    "01a0fbc4-1707-8428-b765-119571d6249f.parquet",
+    "01a0fca4-b1cd-8c8b-a2ea-b2f6f3a7e52e.parquet"
+  ],
+  "content_sha256": "d68833c946407d8c06fe5835c706cc425a3891d3e95f410652d0f7b5a6598495",
+  "listed_at": "2026-09-02T00:00:00Z"
+}
