@@ -810,6 +810,15 @@ before a route's panels were regrouped, and both passed until the regrouping put
 the first chart they reach more than a viewport down with nothing scrolling to
 it first.
 
+**After a load, wait for the charts, never for a fixed time.** Each chart host
+carries `data-chart`: `waiting` until the engine draws it, then `live` or
+`failed`. `chartsReady(page)` in
+[`frontend/tests/support/charts-ready.ts`](../../frontend/tests/support/charts-ready.ts)
+waits until every chart near the viewport has left `waiting`. A sleep after
+`goto` was too short on a slow runner and wasted time on a fast one. After a key
+press or a pointer move, assert the new text with `expect(...).toHaveText` -
+it retries, so it needs no sleep either.
+
 ## Smoke-test a published-site change by hand
 
 `CLAUDE.md` section 12 requires an agent to drive the affected pages in a

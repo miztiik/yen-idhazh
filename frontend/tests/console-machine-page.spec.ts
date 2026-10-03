@@ -8,6 +8,7 @@
  */
 
 import { expect, test, type Page } from './support/browser';
+import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -111,7 +112,8 @@ test.describe('the page as a whole', () => {
 		});
 
 		await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
-		await page.waitForTimeout(900);
+		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
+		await chartsReady(page);
 
 		expect(await page.locator('[data-console-panel]').count()).toBeGreaterThan(5);
 		expect(errors).toEqual([]);
@@ -120,7 +122,8 @@ test.describe('the page as a whole', () => {
 
 	test('every chart on the route names itself for anybody who cannot see it', async ({ page }) => {
 		await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
-		await page.waitForTimeout(900);
+		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
+		await chartsReady(page);
 		const described = await page.evaluate(() =>
 			[...document.querySelectorAll('[data-surface="operator"] svg')]
 				.filter((svg) => svg.closest('[aria-hidden="true"]') === null)

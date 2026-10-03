@@ -13,6 +13,7 @@
  */
 
 import { expect, test, type Page } from './support/browser';
+import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -51,7 +52,7 @@ const CONFIG_WORDS = [
 async function open(page: Page, width = 1440): Promise<void> {
 	await page.setViewportSize({ width, height: 1000 });
 	await page.goto(ROUTE);
-	await page.waitForTimeout(700);
+	await chartsReady(page);
 }
 
 async function domain(page: Page): Promise<string> {
