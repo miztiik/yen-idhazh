@@ -36,7 +36,12 @@ from typing import Final
 from idhazh import config, month_partition
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN
-from idhazh.contracts.knobs.gardener import DaysWindow, MonthsWindow
+from idhazh.contracts.knobs.gardener import (
+    CompactionPolicy,
+    DaysWindow,
+    MonthsWindow,
+    RetentionPolicy,
+)
 from idhazh.gardener import listing, runner, shards
 from idhazh.gardener.outcome import EXIT_INTEGRITY
 
@@ -146,13 +151,19 @@ def period_range(
     if args.name is None:
         parser.error("--from and --to are available only with one named task")
     policy = settings.tasks[args.name]
-    if isinstance(policy.window, MonthsWindow):
+    if isinstance(policy, CompactionPolicy) or isinstance(
+        policy.window, MonthsWindow
+    ) or (
+        isinstance(policy, RetentionPolicy)
+        and policy.fold is not None
+        and policy.fold.settles_months
+    ):
         if not month_partition.is_month_stem(start) or not month_partition.is_month_stem(end):
             parser.error("--from and --to must be real YYYY-MM months for this task")
         if start > end:
             parser.error("--from must not be later than --to")
         return start, end
-    if isinstance(policy.window, DaysWindow):
+    if isinstance(policy, RetentionPolicy) and isinstance(policy.window, DaysWindow):
         try:
             first = date.fromisoformat(start)
             last = date.fromisoformat(end)
@@ -186,8 +197,7 @@ def main(argv: Sequence[str] | None) -> int:
     names, shard = chosen(settings, args, parser)
     selected_range = period_range(settings, args, parser)
     # No commit listing: this package starts no process, so a task lists its
-    # folders as the checkout holds them, a complement task is refused, and the
-    # record says the shard's weight was not read.
+    # configured period paths as the checkout holds them.
     outcome = runner.run(
         names,
         settings=settings,

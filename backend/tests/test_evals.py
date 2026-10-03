@@ -1419,6 +1419,7 @@ def _settle_months(state: Path) -> None:
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=False,
         settles_months=True,
+        period_paths=[ledger.tree_root(state, LedgerName.SUMMARY_QUALITY_EVALS_INDEX)],
     )
 
 

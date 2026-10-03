@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 import pytest
 
-from idhazh.month_partition import expired_months, months_before, months_between
+from idhazh.month_partition import day_bounds, expired_months, months_before, months_between
 
 
 def test_months_between_returns_the_named_calendar_months() -> None:
@@ -18,7 +19,7 @@ def test_months_between_returns_the_named_calendar_months() -> None:
     ]
 
 
-def test_month_files_are_selected_from_the_named_months(tmp_path) -> None:
+def test_month_files_are_selected_from_the_named_months(tmp_path: Path) -> None:
     from idhazh.month_partition import month_files
 
     for month in ("2025-12", "2026-01", "2026-02"):
@@ -35,6 +36,10 @@ def test_month_files_are_selected_from_the_named_months(tmp_path) -> None:
 def test_expired_months_are_a_fixed_window_before_the_retention_boundary() -> None:
     assert expired_months(date(2026, 10, 3), 14, 2) == ["2025-07", "2025-08"]
     assert months_before("2026-01", 2) == ["2025-11", "2025-12"]
+
+
+def test_month_range_uses_valid_day_bounds_for_day_only_reports() -> None:
+    assert day_bounds("2025-12", "2026-02") == ("2025-12-01", "2026-02-28")
 
 
 @pytest.mark.parametrize(

@@ -57,7 +57,9 @@ def test_list_tasks_prints_one_line_a_task(
     printed = capsys.readouterr().out.splitlines()
     assert len(printed) == len(list((config_dir / "gardener").glob("*.json")))
     assert (
-        "trials: active retention, keeps 90 days, reports only, owns everything else under state"
+        "trials: active retention, keeps 90 days, reports only, owns "
+        "state/pipeline-tests-production-settings, state/pipeline-tests-no-visual-plan, "
+        "state/pipeline-tests-parallel-summarization"
         in printed
     )
 
@@ -86,7 +88,9 @@ def test_an_empty_garden_lists_nothing_and_plans_nothing(tmp_path: Path) -> None
     assert listing.tasks(settings) == ["no task is declared: config/gardener/ holds no declaration"]
 
 
-def test_an_unconfigured_declaration_is_not_read(tmp_path: Path) -> None:
+def test_an_unconfigured_declaration_is_not_read(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     config_dir = the_garden(tmp_path)
     (config_dir / "gardener" / "Not A Name.json").write_text("{}", encoding="ascii")
     knobs_path = config_dir / "idhazh_gardener.json"

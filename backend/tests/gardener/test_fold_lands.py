@@ -52,7 +52,7 @@ from ._garden import task_package as a_package
 WAKE: Final = datetime(2026, 9, 28, 0, 40, tzinfo=UTC)
 RUN_ID: Final = "2026-09-28-18099999999"
 OPEN_DAY: Final = "2026-09-27"
-CLOSED_DAYS: Final = ("2026-09-05", "2026-09-06", "2026-09-07")
+CLOSED_DAYS: Final = ("2026-09-19", "2026-09-20", "2026-09-21")
 #: A day the 14-month window has aged out. The window is a dry run, so it only
 #: reports this day's files, and the fold leaves the day to the window.
 REPORTED_DAY: Final = "2025-06-10"

@@ -108,8 +108,8 @@ SEED_IDENTITY: Final = (
 #: it: a fetch handed the ids of the files it lacks on its input.
 LAZY_FETCH: Final = re.compile(r"run_command: .*fetch.*--filter=blob:none --stdin")
 
-#: How GitHub's trees API is asked for everything under one tree.
-_TREE_ROUTE: Final = re.compile(r"git/trees/([0-9a-f]{40})\?recursive=1")
+#: How GitHub's blob API is asked for the size of one named file.
+_BLOB_ROUTE: Final = re.compile(r"git/blobs/([0-9a-f]{40})")
 
 
 def a_config(root: Path, *declarations: Path) -> Path:
@@ -321,30 +321,20 @@ def lazy_fetches(trace: Path) -> int:
     return sum(1 for line in logged if LAZY_FETCH.search(line))
 
 
-class OriginTrees:
-    """GitHub's trees API, answered by the origin's own git, which holds the same trees.
+class OriginBlobs:
+    """GitHub's blob size endpoint, answered by the origin's own git.
 
-    A tree id names one set of files wherever it is read, so the sizes the
-    origin's git prints for a tree are the sizes GitHub reports for it. The
-    shape of GitHub's own reply is held by `test_github_trees.py`, against a
-    reply recorded from GitHub.
+    The origin holds the same blob objects GitHub holds, so git's byte count is
+    the size endpoint's answer without returning any sibling names.
     """
 
     def __init__(self, origin: Path) -> None:
         self._origin = origin
-        #: Every tree asked about, in order.
+        #: Every blob asked about, in order.
         self.asked: list[str] = []
 
     def read(self, path: str) -> dict[str, Any]:
-        found = _TREE_ROUTE.fullmatch(path)
-        assert found is not None, f"only a whole tree is asked for, not {path}"
+        found = _BLOB_ROUTE.fullmatch(path)
+        assert found is not None, f"only a named blob is asked for, not {path}"
         self.asked.append(found[1])
-        tree: list[dict[str, Any]] = []
-        for record in git(self._origin, "ls-tree", "-r", "-l", "-z", found[1]).split("\0"):
-            if record:
-                described, name = record.split("\t", 1)
-                mode, kind, sha, size = described.split()
-                tree.append(
-                    {"path": name, "mode": mode, "type": kind, "sha": sha, "size": int(size)}
-                )
-        return {"sha": found[1], "tree": tree, "truncated": False}
+        return {"size": int(git(self._origin, "cat-file", "-s", found[1]))}

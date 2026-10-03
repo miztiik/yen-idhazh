@@ -12,6 +12,7 @@ own the active windows, deletion ceilings and dry-run settings.
 - Read retention policy from config. A site-size warning is not permission to delete data, and a size forecast is not a deletion schedule.
 - Use UTC boundaries. Decide age from the period being retained, not when the job woke. Delete only below the retention floor, so a pass using a past date cannot delete newer data.
 - A scheduled pass reads the period that just expired and the configured number of earlier periods. Its report describes only that fixed window, not the full backlog. Use `idhazh gardener run-task` with inclusive `--from` and `--to` dates or months to drain older periods.
+- If a backlog exists when a fixed window is introduced, drain it once with a known inclusive range. The scheduled task does not scan the archive to find older periods.
 - Keep every period a supported reader can request. Compare calendar windows at their actual partition boundaries; do not approximate every month as thirty days.
 - Respect each task's ownership, lifecycle status, dry-run setting and deletion ceiling. Do not assume all tasks have the same mode.
 - Review the dry-run list before enabling deletion. Enabling a task is an explicit configuration decision, not a side effect of adding it.

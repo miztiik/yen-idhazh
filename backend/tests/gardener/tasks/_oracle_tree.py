@@ -91,14 +91,14 @@ VISUAL_DAYS: Final = {
 #: path: 90 days back is past the window, 89 is inside it, an undated name is
 #: kept, a month head is dated by its last day, and a day ahead of `TODAY` stays.
 TRIAL_FILES: Final = (
-    "pipeline-tests/seen/2027/08/17.csv",
-    "pipeline-tests/seen/2027/08/18.csv",
-    "pipeline-tests/segments/item-health/2027-08-01-1-1-work-0.csv",
-    "pipeline-tests/traces/2027/11/10-0001-0.jsonl",
-    "pipeline-tests/item-health/2027-07.csv",
-    "pipeline-tests/notes.txt",
-    "pipeline-tests/seen/2027/12/01.csv",
-    "old-trial/seen/2026/01/01.csv",
+    "pipeline-tests-production-settings/seen/2027/08/17.csv",
+    "pipeline-tests-production-settings/seen/2027/08/18.csv",
+    "pipeline-tests-production-settings/segments/item-health/2027-08-01-1-1-work-0.csv",
+    "pipeline-tests-production-settings/traces/2027/11/10-0001-0.jsonl",
+    "pipeline-tests-production-settings/item-health/2027-07.csv",
+    "pipeline-tests-production-settings/notes.txt",
+    "pipeline-tests-production-settings/seen/2027/12/01.csv",
+    "pipeline-tests-no-visual-plan/seen/2026/01/01.csv",
 )
 
 #: The browser's copies of the item-health months, and one whose source month is

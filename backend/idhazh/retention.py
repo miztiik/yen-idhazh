@@ -17,6 +17,7 @@ counted, capped and recorded in the gardener's own record.
 
 from __future__ import annotations
 
+import errno
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from datetime import date, timedelta
@@ -345,18 +346,25 @@ def trial_day(relpath: str) -> date | None:
         return None
 
 
-def drop_empty_directories(root: Path) -> None:
-    """Take the emptied trial tree away, root included.
+def drop_empty_directories(root: Path, deleted_paths: Iterable[Path]) -> None:
+    """Remove empty parents of the files this pass deleted, up to their named trial root."""
+    candidates: set[Path] = set()
+    root = root.resolve()
+    for path in deleted_paths:
+        current = path.resolve().parent
+        try:
+            current.relative_to(root)
+        except ValueError as refusal:
+            raise ValueError(f"{path} is outside trial root {root}") from refusal
+        while current != root.parent:
+            candidates.add(current)
+            current = current.parent
 
-    Without this the child count under `state/` only ever rises: a trial that
-    ran once leaves a directory for ever, and a reader opening `state/` cannot
-    tell an empty husk from a tree still being written (Guardrail #12). A tree
-    the checkout never downloaded has no folder here to take away.
-    """
-    if not root.is_dir():
-        return
-    for directory in sorted((entry for entry in root.rglob("*") if entry.is_dir()), reverse=True):
-        if not any(directory.iterdir()):
+    for directory in sorted(candidates, key=lambda item: len(item.parts), reverse=True):
+        try:
             directory.rmdir()
-    if not any(root.iterdir()):
-        root.rmdir()
+        except FileNotFoundError:
+            continue
+        except OSError as refusal:
+            if refusal.errno not in {errno.ENOTEMPTY, errno.EEXIST}:
+                raise

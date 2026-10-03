@@ -101,6 +101,7 @@ from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
+from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.site_weight import BYTES_PER_MB
 
 logger = logging.getLogger(__name__)
@@ -157,37 +158,9 @@ def _nested(path: str, folder: str) -> bool:
 
 
 def owner_of(name: str, tasks: Mapping[str, TaskPolicy]) -> Callable[[str], bool]:
-    """Whether a path is one this task owns: inside its folders, or in its complement.
-
-    The complement is every path under the task's roots that no other task owns,
-    whatever that task's status, and that no ledger family or ledger root claims,
-    so a sweep over `state/` can never reach a ledger's own tree.
-    """
-    policy = tasks[name]
-    if policy.owns is not None:
-        folders = tuple(policy.owns)
-        return lambda path: any(_nested(path, folder) for folder in folders)
-    roots = tuple(policy.owns_everything_else_under or ())
-    others = tuple(
-        folder
-        for other, declared in tasks.items()
-        if other != name
-        for folder in declared.owns or ()
-    )
-    claimed = ledger.claimed_roots()
-
-    def in_the_complement(path: str) -> bool:
-        parts = PurePosixPath(path).parts
-        for root in roots:
-            below = PurePosixPath(root).parts
-            if parts[: len(below)] != below or len(parts) <= len(below):
-                continue
-            if root == ledger.STATE_DIRNAME and parts[len(below)] in claimed:
-                return False
-            return not any(_nested(path, folder) for folder in others)
-        return False
-
-    return in_the_complement
+    """Whether a path sits inside one of this task's configured folders."""
+    folders = tuple(tasks[name].owns)
+    return lambda path: any(_nested(path, folder) for folder in folders)
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,11 +174,6 @@ class Folders:
     absent: tuple[str, ...]
 
 
-def _a_child_of(folder: str, roots: Sequence[str]) -> bool:
-    parent = PurePosixPath(folder).parent
-    return any(parent == PurePosixPath(root) for root in roots)
-
-
 def folders_of(
     name: str,
     tasks: Mapping[str, TaskPolicy],
@@ -214,34 +182,13 @@ def folders_of(
 ) -> Folders:
     """Which folders a task walks, judged against the commit when the caller could read it.
 
-    `committed` is every folder the commit holds that a declaration names, and
-    every folder directly under `state/`, read by the program that runs git. A
-    folder it holds is walked whatever the checkout holds, because the task's
-    names come from the commit. None means nobody could read the commit -
-    `idhazh gardener run-task` starts no process - and the checkout is then
-    taken as it stands.
-
-    A complement task cannot be answered without the commit. What it owns is
-    whatever nothing else claims, and read off a working tree that set would
-    include a folder somebody left there and never committed.
+    `committed` is every exact folder a declaration names, read by the program
+    that runs git. A folder it holds is walked whatever the checkout holds,
+    because the task's names come from the commit. None means nobody could read
+    the commit - `idhazh gardener run-task` starts no process - and the checkout
+    is then taken as it stands.
     """
     policy = tasks[name]
-    if policy.owns is None:
-        if committed is None:
-            raise ShardRefusedError(
-                f"{name} owns everything else under {', '.join(policy.claims())}, and only the "
-                "commit can say what that is. Run it through backend/utilities/"
-                "gardener_publish.py, which reads the commit"
-            )
-        owns = owner_of(name, tasks)
-        swept = tuple(
-            sorted(
-                folder
-                for folder in committed
-                if _a_child_of(folder, policy.claims()) and owns(folder)
-            )
-        )
-        return Folders(walk=swept, absent=())
     walk: list[str] = []
     absent: list[str] = []
     for folder in (*policy.owns, *policy.reads):
@@ -254,14 +201,12 @@ def folders_of(
 
 
 def listed_folders(policy: TaskPolicy, folders: Folders) -> tuple[str, ...]:
-    """The folders a task's listing covers: every folder it owns or reads, or its complement's.
+    """The folders a task's listing covers: every folder it owns or reads.
 
     A declared folder the commit does not hold is listed too, and answers empty,
     so a task that asks about it learns there is nothing there rather than being
     refused.
     """
-    if policy.owns is None:
-        return folders.walk
     return (*policy.owns, *policy.reads)
 
 
@@ -510,6 +455,7 @@ def run(
     cone_bytes: Mapping[str, int] | None,
     listing: FileListing | None,
     period_range: tuple[str, str] | None = None,
+    started_at: datetime | None = None,
     package: ModuleType = shipped_tasks,
     clock: Callable[[], datetime] = utc_now,
     say: Callable[[str], None] = print,
@@ -538,13 +484,13 @@ def run(
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
     state_dir = repo_root / ledger.STATE_DIRNAME
     try:
-        bound = preflight(settings.tasks, registry.discover(package))
+        bound = preflight(settings.tasks, registry.discover(package, settings.tasks))
     except registry.DiscoveryError as refusal:
         say(f"shard {shard}: {refusal}")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
 
     weighed = None if cone_bytes is None else sum(cone_bytes.values())
-    started = clock()
+    started = started_at or clock()
     today = started.date()
     job = ServerJob.RUN_TASKS
     identity = WriterIdentity(
@@ -566,9 +512,28 @@ def run(
         covered = {
             name: listed_folders(settings.tasks[name], resolved[name]) for name in names
         }
+        period_ranges = {
+            name: period_range
+            if period_range is not None
+            else scheduled_range(name, settings.tasks[name], today)
+            for name in names
+        }
         if listing is None:
+            period_paths = {
+                path
+                for name in names
+                for path in paths_for_task(
+                    repo_root,
+                    name,
+                    settings.tasks[name],
+                    period_ranges[name],
+                    today=today,
+                )
+            }
             listing = FileListing.from_disk(
-                repo_root, {folder for folders in covered.values() for folder in folders}
+                repo_root,
+                {folder for folders in covered.values() for folder in folders},
+                paths=period_paths,
             )
         for name in names:
             context = TaskContext(
@@ -583,7 +548,7 @@ def run(
                 git_sha=git_sha,
                 owned_folders=resolved[name].walk,
                 listing=listing.within(covered[name]),
-                period_range=period_range,
+                period_range=period_ranges[name],
             )
             done = _run_one(name, bound[name], context, resolved[name])
             _refuse_a_path_outside(done, settings.tasks)

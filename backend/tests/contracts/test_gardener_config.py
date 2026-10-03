@@ -34,6 +34,7 @@ from idhazh.contracts.knobs.gardener import (
     Window,
 )
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 
 pytestmark = pytest.mark.contract
 
@@ -294,11 +295,10 @@ def test_a_fold_that_names_no_wait_closes_a_day_after_the_shared_one() -> None:
     assert FoldPolicy(dry_run=True).after_days == DEFAULT_CLOSED_AFTER_DAYS
 
 
-#: The keys every kind shares that a declaration may leave out: the two ways of
-#: owning, and the folders read and ledgers appended to, empty unless named.
-SHARED_OPTIONAL_KEYS: Final = frozenset(
-    {"owns", "owns_everything_else_under", "reads", "appends_to"}
-)
+#: The keys every kind shares that a declaration may leave out, plus compaction's
+#: optional lookback, whose default is two months.
+SHARED_OPTIONAL_KEYS: Final = frozenset({"reads", "appends_to"})
+COMPACTION_OPTIONAL_KEYS: Final = SHARED_OPTIONAL_KEYS | {"lookback"}
 
 #: Every key a compaction declaration has to write.
 COMPACTION_KEYS: Final = tuple(
@@ -315,7 +315,7 @@ def test_no_setting_a_compaction_runs_with_has_a_default() -> None:
     optional = {
         name for name, field in CompactionPolicy.model_fields.items() if not field.is_required()
     }
-    assert optional == SHARED_OPTIONAL_KEYS
+    assert optional == COMPACTION_OPTIONAL_KEYS
 
 
 @pytest.mark.parametrize("key", COMPACTION_KEYS)
@@ -405,11 +405,14 @@ def test_a_window_that_includes_today_or_numbers_forever_is_refused(
     )
 
 
-def test_a_declaration_owns_one_way_and_only_one(tmp_path: Path) -> None:
-    both = fixture("traces", owns_everything_else_under=["frontend"])
-    assert "exactly one of owns" in refused(a_garden(tmp_path / "both", traces=both))
-    neither = {key: value for key, value in fixture("traces").items() if key != "owns"}
-    assert "exactly one of owns" in refused(a_garden(tmp_path / "neither", traces=neither))
+def test_a_declaration_must_name_its_owned_folders(tmp_path: Path) -> None:
+    declaration = fixture("traces")
+    del declaration["owns"]
+    assert "owns" in refused(a_garden(tmp_path / "missing", traces=declaration))
+    legacy = fixture("trials", owns_everything_else_under=["state"])
+    assert "owns_everything_else_under" in refused(
+        a_garden(tmp_path / "legacy", trials=legacy)
+    )
 
 
 @pytest.mark.parametrize(
@@ -434,9 +437,16 @@ def test_a_folder_that_only_shares_a_prefix_of_letters_is_not_nested(tmp_path: P
     assert "traces-archive" in config.load_gardener(a_garden(tmp_path, traces_archive=extra)).tasks
 
 
-def test_one_task_at_most_takes_the_complement(tmp_path: Path) -> None:
-    second = fixture("trials", owns_everything_else_under=["frontend/public"])
-    assert "One task may take the complement" in refused(a_garden(tmp_path, strays=second))
+def test_trials_owns_only_configured_pipeline_test_roots() -> None:
+    policy = config.load_gardener().tasks["trials"]
+    tests = PipelineTestsConfig.from_json(
+        (CONFIG_DIR / "pipeline-tests.json").read_text(encoding="utf-8")
+    )
+
+    assert policy.owns == [
+        f"state/{test_case.trial_state_dirname}" for test_case in tests.test_cases
+    ]
+    assert "state" not in policy.owns
 
 
 @pytest.mark.parametrize("reads", [["state/traces"], ["state/traces/2026"], ["state"]])
@@ -448,10 +458,10 @@ def test_a_task_does_not_read_a_folder_it_owns_or_one_that_holds_it(
     assert "config/gardener/traces.json is refused" in message and "is in reads" in message
 
 
-def test_the_task_that_takes_the_complement_reads_nothing_more(tmp_path: Path) -> None:
-    """Everything under its root is listed for it already."""
-    trials = fixture("trials", reads=["frontend/public/digest"])
-    assert "declares no reads" in refused(a_garden(tmp_path, trials=trials))
+def test_trials_declares_no_additional_reads() -> None:
+    """Every trial path it may read is in its explicit root list."""
+    trials = config.load_gardener().tasks["trials"]
+    assert not trials.reads
 
 
 def test_a_task_may_read_a_folder_another_task_owns(tmp_path: Path) -> None:

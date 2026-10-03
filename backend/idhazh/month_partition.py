@@ -38,6 +38,7 @@ to hold things that are not the partitioned tree at all.
 
 from __future__ import annotations
 
+import calendar
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -82,6 +83,17 @@ def months_between(first: str, last: str) -> list[str]:
         else:
             month += 1
     return months
+
+
+def day_bounds(first: str, last: str) -> tuple[str, str]:
+    """The first UTC day of `first` month and last UTC day of `last` month."""
+    months = months_between(first, last)
+    first_year, first_month = map(int, months[0].split("-"))
+    last_year, last_month = map(int, months[-1].split("-"))
+    return (
+        f"{first_year:04d}-{first_month:02d}-01",
+        f"{last_year:04d}-{last_month:02d}-{calendar.monthrange(last_year, last_month)[1]:02d}",
+    )
 
 
 def month_files(directory: Path, suffix: str, months: Iterable[str]) -> list[Path]:

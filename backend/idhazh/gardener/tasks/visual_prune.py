@@ -41,7 +41,7 @@ def run(context: TaskContext) -> Pass:
     from idhazh.gardener import named_trees, retention_files
 
     policy = context.policy
-    owns = policy.owns or []
+    owns = policy.owns
     if len(owns) != 1 or policy.max_deletes_per_run is None:
         raise ValueError(
             "visual-prune walks one digest tree and reports the fuse that held a pass back, "

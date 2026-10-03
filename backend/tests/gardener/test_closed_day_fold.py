@@ -80,6 +80,7 @@ def fold(
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=dry_run,
         skip=skip,
+        period_paths=[ledger.tree_root(state, tree) for tree in DAY_TREES],
     )
 
 
@@ -351,6 +352,7 @@ def test_only_the_trees_handed_in_are_folded(tmp_path: Path) -> None:
         now=midnight(WAKE),
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=False,
+        period_paths=[ledger.tree_root(state, LedgerName.FEED_HEALTH)],
     )
 
     assert names_in(feeds) == [day_shards.SETTLED_NAME]
@@ -518,6 +520,7 @@ def fold_months(
         dry_run=dry_run,
         settles_months=True,
         skip=skip,
+        period_paths=[ledger.tree_root(state, ID_TREE)],
     )
 
 

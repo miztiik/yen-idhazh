@@ -59,10 +59,10 @@
   "trials": {
     "dry_written": [],
     "removed": [
-      "state/old-trial/seen/2026/01/01.csv",
-      "state/pipeline-tests/item-health/2027-07.csv",
-      "state/pipeline-tests/seen/2027/08/17.csv",
-      "state/pipeline-tests/segments/item-health/2027-08-01-1-1-work-0.csv"
+      "state/pipeline-tests-no-visual-plan/seen/2026/01/01.csv",
+      "state/pipeline-tests-production-settings/item-health/2027-07.csv",
+      "state/pipeline-tests-production-settings/seen/2027/08/17.csv",
+      "state/pipeline-tests-production-settings/segments/item-health/2027-08-01-1-1-work-0.csv"
     ],
     "written": []
   },

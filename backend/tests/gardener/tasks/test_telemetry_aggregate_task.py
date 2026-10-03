@@ -72,7 +72,7 @@ def pruned(
     period_range: tuple[str, str] | None = None,
 ) -> Folded:
     """One pass of the shipped task over the checkout `state` sits in."""
-    full = {"unit": "months", "value": full_grain_months()}
+    full: dict[str, str | int] = {"unit": "months", "value": full_grain_months()}
     aggregate = (
         {"unit": "forever"}
         if aggregate_months is None

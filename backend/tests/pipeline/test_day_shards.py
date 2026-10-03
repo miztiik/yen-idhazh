@@ -117,6 +117,7 @@ def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
         now=datetime(2026, 9, 30, tzinfo=UTC),
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=False,
+        period_paths=[ledger.tree_root(state, ID_TREE)],
     )
     assert folded.files == len(WRITERS)
     folded_rows = _rows_of(day / day_shards.SETTLED_NAME)
@@ -194,6 +195,7 @@ def _a_month_settled_whole(tmp_path: Path) -> Path:
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=False,
         settles_months=True,
+        period_paths=[root],
     )
     assert [each.month for each in folded.months] == ["2026-08"]
     return root

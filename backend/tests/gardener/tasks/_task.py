@@ -53,7 +53,7 @@ def committed_folders(root: Path, tasks: dict[str, TaskPolicy]) -> frozenset[str
     named = {
         folder
         for policy in tasks.values()
-        for folder in (*(policy.owns or ()), *policy.reads)
+        for folder in (*policy.owns, *policy.reads)
         if (root / folder).is_dir()
     }
     return frozenset(children | named)
@@ -85,7 +85,14 @@ def context_for(
         shard=0,
         git_sha=GIT_SHA,
         owned_folders=folders.walk,
-        listing=FileListing.from_disk(root, runner.listed_folders(policy, folders)),
+        listing=FileListing.from_disk(
+            root,
+            runner.listed_folders(policy, folders),
+            paths=(
+                root / folder
+                for folder in runner.listed_folders(policy, folders)
+            ),
+        ),
         period_range=period_range,
     )
 

@@ -23,22 +23,22 @@ The gardener runs **tasks**. A task is two things that land together:
   names: `KIND`, the kind it serves, and `run`, which takes a `TaskContext` and
   returns a `Pass`.
 
-There is no list of tasks anywhere. `registry.discover()` imports every module
-in `tasks/`, and `registry.bind()` finds the module that runs one declaration in
-two lookups: the module named for the task (hyphens become underscores), else
-the module named for its kind. A config value never names a module, so text in
-a file cannot choose which code runs (Guardrail #11).
+`config/idhazh_gardener.json` names the complete task list. For each listed
+task, `registry.discover()` imports only its named module and the shared module
+for its kind as a fallback. `registry.bind()` selects the named module first.
+A config value never names a module, so text in a file cannot choose which
+code runs (Guardrail #11).
 
-**The folder is the only count.** `config/gardener/` says how many tasks there
-are, and nothing else does: a task joins when its declaration and its module
-land together, and the pre-flight below refuses either one arriving alone.
+**The named list is the task set.** The loader opens only the declaration files
+named in `config/idhazh_gardener.json`. An unrelated file in `config/gardener/`
+cannot change which tasks a wake plans.
 
 ## A wake, in order
 
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
 | 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Reads the commit the checkout is at and lists the name and size of every file under the folders the shard's tasks own or read, downloading none of them, then loads the declarations through the typed loader, finds the modules, and runs the pre-flight |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each task's fixed UTC period window, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
 | 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
@@ -366,8 +366,10 @@ idhazh gardener run-task NAME --from YYYY-MM --to YYYY-MM ...
 
 The task's window decides whether the endpoints must be dates or months. The
 range is accepted only for one named task, never a scheduled shard. Run the
-operator pass once for each backlog range; the next scheduled wake returns to
-its fixed window.
+operator pass once for each backlog range. If an older backlog exists when a
+fixed window is introduced, drain it once with a known inclusive range; the
+scheduled task does not scan the archive to discover it. The next scheduled
+wake returns to its fixed window.
 
 ## The collection tasks
 
@@ -753,7 +755,7 @@ days, which would take the month's file whole once its first day aged out.
 | --- | --- |
 | 1 | The task's window runs first, dry or live, and returns what it took |
 | 2 | The runner calls the fold, unless the window failed - then the fold waits a wake, and the row's fold cells stay empty |
-| 3 | The fold lists every day of each tree the task walks and takes each day that is closed - `fold.after_days` whole days after it ended, default 1, the rule `compact_after_days` reads - and still holds a writer file. With `fold.settles_months` it first takes each closed month that still holds a day's file, and leaves that month's days to it |
+| 3 | The fold lists only its fixed day and month windows, then takes each closed period that still holds a writer file. `fold.after_days` sets when a period closes; `fold.settles_months` settles a closed month whole and leaves its days to it |
 | 4 | It skips a day folder the window took, or would take on a dry run, and a month holding one: a shard refuses a path it both writes and deletes |
 | 5 | It settles each month, then each day, writes `settled.csv` in its folder and deletes the rest - or, on a dry run, reads and settles each one and changes nothing |
 

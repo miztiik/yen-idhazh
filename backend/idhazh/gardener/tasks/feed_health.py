@@ -22,12 +22,20 @@ KIND = TaskKind.RETENTION
 
 def run(context: TaskContext) -> Pass:
     """Take every day file of every month older than the oldest month the window keeps."""
-    from idhazh import day_partition, ledger
+    from idhazh import day_partition, ledger, month_partition
     from idhazh.contracts.ledger_name import LedgerName
     from idhazh.gardener import retention_files
 
     which = LedgerName.FEED_HEALTH
     first_month = retention_files.first_kept_month(context.policy.window, context.today)
+    if context.period_range is not None:
+        start, end = context.period_range
+        requested = month_partition.months_between(start, end)
+        if first_month is None or requested[-1] >= first_month:
+            raise ValueError(
+                f"backlog range {start} through {end} must end before kept-month "
+                f"boundary {first_month}"
+            )
     tree = retention_files.owned_tree(context, ledger.tree_root(context.state_dir, which))
     return retention_files.take_files(
         context,

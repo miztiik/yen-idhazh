@@ -348,7 +348,7 @@ def refuse_what_the_declarations_break(
 ) -> None:
     """Every rule the declarations must keep that needs no task module to check."""
     _refuse_overlapping_claims(tasks)
-    _refuse_a_second_complement(tasks)
+
     _refuse_a_file_where_a_folder_belongs(tasks, repo_root)
     _refuse_a_window_under_its_floor(tasks, app)
     _refuse_a_series_the_task_cannot_keep(tasks)
@@ -392,12 +392,12 @@ def _refuse_overlapping_claims(tasks: Mapping[str, TaskPolicy]) -> None:
 
     Every status takes part. A paused task still owns what it owns, and a retired
     one keeps its claim so its window stays readable after its tree has moved.
-    The complement form is left out on purpose: it is everything nothing else
-    claims, so it holds every other task's folders by definition.
+    Every task names its folders directly. A task cannot claim an accumulating
+    parent and discover its children at run time.
     """
     for (first, one), (second, other) in combinations(tasks.items(), 2):
-        for mine in one.owns or ():
-            for theirs in other.owns or ():
+        for mine in one.owns:
+            for theirs in other.owns:
                 if _nested(mine, theirs):
                     raise ValueError(
                         f"config/{GARDENER_TASKS_DIR}/{first}.json owns {mine} and "
@@ -405,16 +405,6 @@ def _refuse_overlapping_claims(tasks: Mapping[str, TaskPolicy]) -> None:
                         "tasks may not own one folder or a folder inside the other's, "
                         "whatever their status, or both would delete in it"
                     )
-
-
-def _refuse_a_second_complement(tasks: Mapping[str, TaskPolicy]) -> None:
-    using = sorted(name for name, policy in tasks.items() if policy.owns is None)
-    if len(using) > 1:
-        raise ValueError(
-            f"{', '.join(using)} all own everything else under a root. One task may take "
-            "the complement; two would each claim what the other claims"
-        )
-
 
 def _refuse_a_file_where_a_folder_belongs(tasks: Mapping[str, TaskPolicy], repo_root: Path) -> None:
     """A shard lists the files under each folder a task owns, so an owned file would list none."""
@@ -533,7 +523,7 @@ def _governing(
         return name, compaction
     folder = "/".join((STATE_DIRNAME, *entry(ledger).prefix))
     for task, policy in tasks.items():
-        if isinstance(policy, RetentionPolicy) and folder in (policy.owns or ()):
+        if isinstance(policy, RetentionPolicy) and folder in policy.owns:
             return task, policy
     return None
 

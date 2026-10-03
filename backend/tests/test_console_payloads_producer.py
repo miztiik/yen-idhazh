@@ -1168,6 +1168,7 @@ def _band_after_folding(state: Path, digest: Path) -> Any:
         now=datetime.combine(date.fromisoformat(NEWEST_DAY), time.min, tzinfo=UTC),
         after_days=7,
         dry_run=False,
+        period_paths=[ledger.tree_root(state, tree) for tree in DAY_TREES],
     )
     _publish_all(state, digest, months=set(MONTHS))
     console_band.publish(

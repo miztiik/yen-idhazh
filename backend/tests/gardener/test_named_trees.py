@@ -53,7 +53,7 @@ def walked[T](walk: Callable[[], Iterable[T]]) -> tuple[list[T], bool]:
 
 
 def listing_of(repo: Path, folder: str) -> FileListing:
-    return FileListing.from_disk(repo, [folder])
+    return FileListing.from_disk(repo, [folder], paths=[repo / folder])
 
 
 SHARD_TREES: Final = {
@@ -295,7 +295,9 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
     an_index(state, Period.DAILY, ["2026-08-01", "2026-08-02"])
     compacted = ledger.watermark_path(state, RAW, Period.DAILY).parent.parent
     listing = FileListing.from_disk(
-        tmp_path, [raw.relative_to(tmp_path).as_posix(), compacted.relative_to(tmp_path).as_posix()]
+        tmp_path,
+        [raw.relative_to(tmp_path).as_posix(), compacted.relative_to(tmp_path).as_posix()],
+        paths=[raw, compacted],
     )
 
     year = [f"2025-{number:02d}" for number in range(1, 13)]

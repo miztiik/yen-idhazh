@@ -1075,8 +1075,12 @@ def _live(root: Path, which: LedgerName, today: date) -> TaskContext:
         job=ServerJob.RUN_TASKS,
         shard=0,
         git_sha=SEED_COMMIT,
-        owned_folders=tuple(declared.owns or ()),
-        listing=FileListing.from_disk(root, declared.owns or ()),
+        owned_folders=tuple(declared.owns),
+        listing=FileListing.from_disk(
+            root,
+            declared.owns,
+            paths=(root / folder for folder in declared.owns),
+        ),
     )
 
 
