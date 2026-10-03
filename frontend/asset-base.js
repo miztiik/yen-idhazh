@@ -172,3 +172,22 @@ export function engineOrigins() {
 		return [];
 	}
 }
+
+/**
+ * The origin the data explorer may use for packed ledgers older than this site carries.
+ *
+ * `ledger.archive_base_url` ships empty. When it is set, row 6's archive keeper
+ * fetches whole files from that committed prefix and hands them to the engine as
+ * buffers; the engine is not given the address.
+ *
+ * @returns {string[]}
+ */
+export function archiveOrigins() {
+	if (!existsSync(CONFIG_FILE)) return [];
+	try {
+		const value = JSON.parse(readFileSync(CONFIG_FILE, 'utf8'))?.ledger?.archive_base_url;
+		return typeof value === 'string' && value ? [new URL(value).origin] : [];
+	} catch {
+		return [];
+	}
+}

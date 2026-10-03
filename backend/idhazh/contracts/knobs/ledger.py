@@ -5,22 +5,23 @@ file is written as when its caller names none. The two compressions are one per
 tier: snappy for a raw file, which every reader opens without a plugin and which
 the compaction reads once, and zstd for a compact file, which is smaller and is
 read by this project alone. `published` names the ledgers whose compact files a
-browser may fetch.
+browser may fetch, and `archive_base_url` names the optional public repository
+prefix the data explorer can use for older packed files.
 
-**`published` names the three ledgers the console reads**: `host-fingerprint`,
-`item-health` and `summary-quality-evals`. The site build copies each one's two indexes and
-every compact file they name, unchanged, and refuses a ledger that lacks either
-index. A backend test holds every ledger a console panel asks the browser's
-query door for to this list.
+**`published` names every packed ledger the console can ask for.** The site
+build copies each one's three indexes, trimmed to the widest console span, and
+every compact file those trimmed indexes name. It refuses a ledger that lacks any
+index. A backend test holds every ledger a console panel asks the browser's query
+door for to this list.
 
-The fifth, `engine_extension_repository`, is read by the site build alone: it is
+`engine_extension_repository` is read by the site build alone: it is
 where the query engine that reads these files downloads its add-ons, and the one
 origin for that the page's `connect-src` admits.
 """
 
 from __future__ import annotations
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.file_envelope import Compression, Format
@@ -58,8 +59,17 @@ class LedgerConfig(Model):
         default_factory=list,
         description=(
             "The ledgers whose compact files a browser may fetch. The site build copies "
-            "each one's two indexes and the compact files they name, unchanged. Empty by "
-            "default, because an entry here publishes files."
+            "each one's three indexes trimmed to the widest console span, and the compact "
+            "files those trimmed indexes name. Empty by default, because an entry here "
+            "publishes files."
+        ),
+    )
+    archive_base_url: str = Field(
+        default="",
+        description=(
+            "The public https prefix for packed ledger files older than this site carries. "
+            "Empty means the site only; a non-empty value joins the page's connect-src "
+            "origins and is fetched by the page, never handed to the engine."
         ),
     )
     engine_extension_repository: str = Field(
@@ -73,21 +83,24 @@ class LedgerConfig(Model):
         ),
     )
 
-    @field_validator("engine_extension_repository")
+    @field_validator("engine_extension_repository", "archive_base_url")
     @classmethod
-    def _the_repository_is_a_prefix_the_engine_joins_onto(cls, value: str) -> str:
-        """An absolute `https://` prefix with no trailing slash, whitespace or quote.
-
-        The engine appends `/<version>/<platform>/<name>` itself, and the value is
-        written into a `SET` statement, so a slash or a quote here breaks the
-        address or the statement rather than failing the build.
-        """
+    def _browser_reachable_prefix_is_https(cls, value: str, info: ValidationInfo) -> str:
+        """An absolute `https://` prefix with no trailing slash, whitespace or quote."""
+        field = info.field_name or "ledger prefix"
+        if field == "archive_base_url" and value == "":
+            return value
         if not value.startswith("https://"):
-            raise ValueError("ledger.engine_extension_repository begins with https://")
+            hint = (
+                " is empty or begins with https://"
+                if field == "archive_base_url"
+                else " begins with https://"
+            )
+            raise ValueError(f"ledger.{field}{hint}")
         if value.endswith("/"):
-            raise ValueError("ledger.engine_extension_repository carries no trailing slash")
+            raise ValueError(f"ledger.{field} carries no trailing slash")
         if any(character in value for character in " \t?#'\""):
             raise ValueError(
-                "ledger.engine_extension_repository carries no whitespace, quote, query or fragment"
+                f"ledger.{field} carries no whitespace, quote, query or fragment"
             )
         return value

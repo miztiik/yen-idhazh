@@ -237,33 +237,45 @@ handed to `sliceFromDisk()`.
 
 ## What the site holds for the door
 
-The site holds the ledgers `ledger.published` in `config/idhazh.json` names -
-`host-fingerprint`, `item-health` and `summary-quality-evals` - and nothing else of `state/`. The
-build copies each one's three indexes and every compact file they name, byte for
-byte, to the path each has under `state/`: `frontend/scripts/copy-visuals.mjs`
-stages them into `frontend/static/state/`, which git ignores, and the bundler
-carries them into the site. A published file is the ledger itself, so it cannot
-say anything `state/` does not. `frontend/scripts/published-ledgers.mjs` decides
-which files.
+The site holds the ledgers `ledger.published` in `config/idhazh.json` names:
+`candidate-models`, `counterfactual-scores`, `host-fingerprint`, `item-health`,
+`published`, `seen` and `summary-quality-evals`. It holds nothing else of
+`state/`. The build copies each ledger's three indexes, trimmed to the widest
+console span, and every compact file those trimmed indexes name, to the path each
+has under `state/`: `frontend/scripts/copy-visuals.mjs` stages them into
+`frontend/static/state/`, which git ignores, and the bundler carries them into
+the site. A published data file is byte for byte the ledger itself, so it cannot
+say anything `state/` does not. The trimmed indexes are new files for the staged
+site only, and they keep the same `CompactIndex` shape. The committed registry
+`config/ledgers.json` is copied verbatim to the site at `config/ledgers.json`.
+`frontend/scripts/published-ledgers.mjs` decides which ledger files are in that
+staged tree.
 
-- **The indexes are the list.** No directory is walked, so the gardener's
-  watermark, a raw day and any file no index names stay off the site with no list
-  of things to leave out. A file whose entry has `rows: 0` is copied too, so every
-  entry resolves, although the door never asks for one.
+- **The trimmed indexes are the list.** No directory is walked, so the gardener's
+  watermark, a raw day and any file no trimmed index names stay off the site with
+  no list of things to leave out. A file whose entry has `rows: 0` is copied too,
+  so every entry resolves, although the door never asks for one.
 - **A published ledger without all three indexes stops the build**, which names the
   ledger and the missing file. A browser asks for a ledger's indexes before
   anything else, so a 404 there would be the only sign that the ledger was
   published wrongly. The whole site waits, reading pages included, until the
   ledger is whole again or leaves `ledger.published`.
+- **The cap is the widest console span, anchored on the ledger's data.** On
+  2026-10-02 that span is 90 UTC days. It is counted back from the newest packed period: the newest day in `daily.json`, else the last day of the newest month in `monthly.json`, else the last day of the newest year in `yearly.json`, never from the build clock. A period is copied
+  whole when it overlaps that span, so a month or year can make the oldest
+  reachable day older than 90 days, and nothing older than that overlapping
+  period is named.
 - **A data file an index names and the tree lacks does not stop it.** The build
   copies the rest and puts a `file-missing` warning, naming the file, on the run's
   page; the door answers `unreachable` for a span that reaches that day.
 - **The canary build publishes the fixture's ledgers**, because the copy reads the
   same `STATE_ROOT` the build-time readers do, and a root that is not there stops
   the build rather than publishing nothing.
-- **With `visuals.asset_base_url` set, nothing is copied**, because the door asks
-  that host. Whoever sets it puts each `state/compact/<ledger>/` tree there, and
-  the bundle gate skips the ledgers' keys.
+- **With `visuals.asset_base_url` set, no ledger file is copied**, because the
+  door asks that host. Whoever sets it puts each `state/compact/<ledger>/` tree
+  there, and the bundle gate skips the ledgers' keys. The registry still ships
+  from this site, because the page reads it as the site's declaration of what it
+  can show.
 - **`backend/tests/contracts/test_published_ledgers_cover_the_panels.py` holds the
   two sides together**: every ledger a panel names in a `slice()` or
   `ledgerReach()` call, and every ledger the door's closed set admits, is in
@@ -271,27 +283,30 @@ which files.
   site the door's own questions: every address an index names is there, at the
   size its entry gives, and nothing else of `state/` is.
 
-**What it weighs, and what bounds it.** On 2026-09-30 the three ledgers were
-9.47 MB, summed from the sizes their committed indexes give: `item-health` 4.71 MB
-over 59 days, `summary-quality-evals` 4.45 MB over 59 and `host-fingerprint` 0.31 MB over 28,
-with 0.87 MB of it files that hold no row. That was 6.4 percent of a full site
-build that day. Day and month indexes are bounded by each ledger's declaration:
-`daily_keep_days` plus 31 day entries and the months its window keeps, or the
-months awaiting yearly packing. Eval rows are kept forever, so their year files
-and year index still grow by one file and entry per year. Each ledger's index
-directory has a `page_weight.payload_ceilings_bytes` key of 2,200 gzipped bytes,
-at least twice its longest bounded day or month index. The bundle gate weighs
-all three indexes; `backend/tests/contracts/test_page_ceilings.py` also fails
-when a day or month keep window grows past its bound. The longest day index
-today has 76 entries: 1,006
-bytes at gzip -5 through the CI runner's zlib. Size a key from the runner's
-reading, because zlib-ng, which some local Python builds use, reads the same
-index about 4 percent smaller. **The data files carry no ceiling, and no gate yet
-weighs what one span reads.** Summed from the same indexes, a 30-day span is about
-0.18 MB of `host-fingerprint`, 3.53 MB of `item-health` and 3.43 MB of `summary-quality-evals`
-(estimate): each of the last two alone is more than the 2.3 MB a cold console load
-is allowed at the 14-day default window, which prices a panel that queries them in
-the browser.
+**What it weighs, and what bounds it.** Day and month indexes are bounded by each
+ledger's declaration: `daily_keep_days` plus 31 day entries and the months its
+window keeps, or the months awaiting yearly packing. A ledger that keeps rows
+forever packs years, so the yearly index grows by one entry a year rather than by
+one month forever. Each published ledger's index directory has a
+`page_weight.payload_ceilings_bytes` key of 2,200 gzipped bytes, at least twice
+its longest bounded day or month index. The copied registry has its own
+`config/ledgers.json` key of 3,200 gzipped bytes, which is a little over twice
+the 1,469 bytes measured at gzip -5 on 2026-10-02. The bundle gate weighs all
+three indexes and the registry; `backend/tests/contracts/test_page_ceilings.py`
+also fails when a day or month keep window grows past its bound. Size a key from
+the runner's reading, because zlib-ng, which some local Python builds use, reads
+the same index about 4 percent smaller. **The data files carry no ceiling, and no
+gate yet weighs what one span reads.**
+
+Measured 2026-10-03 on this shared Windows machine from a real build of the
+committed `state/`, the whole built site weighed 155,716,481 bytes, or 148.5 MB,
+beside the 1,073,741,824-byte Pages cap. That leaves 875 MB before GitHub Pages
+refuses the deploy. The staged ledger files under `build/state/compact/` weighed
+15,417,159 bytes, or 15.42 MB, in all: `candidate-models` 43,737 bytes,
+`counterfactual-scores` 782,471 bytes, `host-fingerprint` 340,930 bytes,
+`item-health` 4,190,954 bytes, `published` 926,603 bytes, `seen` 4,453,977 bytes
+and `summary-quality-evals` 4,678,487 bytes. That reading is not a gate; `idhazh
+site-weight` is the gate and the cap is the platform limit.
 
 ## How a year file is read by byte range
 

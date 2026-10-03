@@ -64,6 +64,7 @@ const ROOT = 'build/_app/immutable';
 // Where the published ledgers sit in the build: `copy-visuals.mjs` copies each
 // file to the path it has under the repository's `state/`.
 const LEDGERS = 'state/';
+const REGISTRY = 'config/ledgers.json';
 
 // Directories whose modules a browser loads before any reader gesture: the
 // entry point and the route modules. A chunk one of them imports statically is
@@ -378,10 +379,11 @@ for (const key of payloadKeys) {
  * three hundred and sixty-three days of the year.
  *
  * **A key under `state/` is left out**, because it is not a month series and no
- * cold opening of `/console/` fetches a published ledger. Its indexes are
- * weighed file by file above. The data files the browser's query door reads for
- * a span carry no ceiling and no gate weighs them yet: the door reads one file a
- * day, so a span reads at most one file per day it covers.
+ * cold opening of `/console/` fetches a published ledger. `config/ledgers.json`
+ * is left out for the same reason: only the data explorer fetches it. Its indexes
+ * are weighed file by file above. The data files the browser's query door reads
+ * for a span carry no ceiling and no gate weighs them yet: the door reads one
+ * file a day, so a span reads at most one file per day it covers.
  */
 const coldCeiling = config.page_weight?.cold_console_load_bytes ?? 0;
 if (Number.isInteger(coldCeiling) && coldCeiling > 0) {
@@ -397,7 +399,7 @@ if (Number.isInteger(coldCeiling) && coldCeiling > 0) {
 	let cold = 0;
 	const parts = [];
 	for (const key of payloadKeys) {
-		if (key.startsWith(LEDGERS)) continue;
+		if (key.startsWith(LEDGERS) || key === REGISTRY) continue;
 		const heaviest = heaviestPayload.get(key);
 		if (heaviest === undefined) continue;
 		const copies = key.endsWith('/') ? monthsTouched : 1;

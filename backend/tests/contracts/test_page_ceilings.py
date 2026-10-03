@@ -22,6 +22,7 @@ pytestmark = pytest.mark.contract
 
 #: Where the published ledgers sit in the build, as a payload key names them.
 LEDGERS: Final = "state/"
+LEDGER_REGISTRY: Final = "config/ledgers.json"
 
 #: The most days one calendar month holds. A month is absorbed whole, so a day
 #: index holds between `daily_keep_days` and this many entries more.
@@ -168,6 +169,12 @@ def test_the_committed_config_caps_what_a_cold_console_load_fetches() -> None:
             "gate cannot fail a file nobody named, so this one would grow unwatched"
         )
 
+    assert LEDGER_REGISTRY in payloads, (
+        "the data explorer fetches config/ledgers.json, so it needs its own payload "
+        "ceiling even though a cold opening of /console/ does not fetch it"
+    )
+    assert payloads[LEDGER_REGISTRY] >= 2 * gzipped((CONFIG_DIR / "ledgers.json").read_bytes())
+
     # The worst case a run of N consecutive days can land in, because February is
     # the shortest month there is. Mirrors the arithmetic in bundle-gate.mjs: a key
     # naming a file counts once, a key naming a directory of month shards once a
@@ -178,7 +185,7 @@ def test_the_committed_config_caps_what_a_cold_console_load_fetches() -> None:
     worst = sum(
         ceiling * (months_touched if path.endswith("/") else 1)
         for path, ceiling in payloads.items()
-        if not path.startswith(LEDGERS)
+        if not path.startswith(LEDGERS) and path != LEDGER_REGISTRY
     )
     assert weight.cold_console_load_bytes >= worst, (
         "a cold load of every payload sitting exactly on its own ceiling is already "

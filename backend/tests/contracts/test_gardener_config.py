@@ -501,10 +501,13 @@ def test_a_compaction_keeps_every_day_a_reader_still_opens(
     The garden's `seen` task keeps 90 days, and it no longer counts. The pair
     reaches back 45 days and the fewest days its months hold: one month is 73
     days, under the 90 `collect.seen_window_days` reads, and two are 104.
-    `collect.published_window_days` is -1, which reads every day, so only a
-    compaction that keeps every month reaches it.
+    `collect.published_window_days` is -1, which reads every day, so a published
+    compaction with a forever window also has to pack years to bound its first
+    index fetch.
     """
     compaction = a_compaction(name, monthly_window=monthly)
+    if name == "published" and monthly["unit"] == "forever":
+        compaction["monthly_keep_days"] = 93
     config_dir = a_garden(tmp_path, **{f"compact_{name}": compaction})
     if loads:
         config.load_gardener(config_dir)
