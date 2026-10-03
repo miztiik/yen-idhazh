@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -48,6 +47,7 @@ from ._harness import (
     _action_call,
     _artifact_upload,
     _bash,
+    _copy_config,
     _declared_steps,
     _isolated_env,
     _load_workflows,
@@ -461,7 +461,7 @@ def _a_config_root_posting_to(root: Path, base_url: str) -> Path:
     builds its own the same way, for the stage side of the same question.
     """
     target = root / "config"
-    shutil.copytree(CONFIG_DIR, target)
+    _copy_config(target)
     payload = json.loads(read_text(target / "idhazh.json"))
     payload["model_server"]["base_url"] = base_url
     (target / "idhazh.json").write_text(canonical_json(payload), encoding="utf-8", newline="\n")
@@ -638,7 +638,7 @@ def _the_launch_roots(tmp_path: Path) -> dict[str, list[Path]]:
     """
     committed = CONFIG_DIR
     scratch = tmp_path / "candidate-config"
-    shutil.copytree(committed, scratch)
+    _copy_config(scratch)
     pointer = _published(model_refs.trial_rows(committed, "", prefix=""))["models_file"]
     candidate_pointer.point_at(pointer, scratch=scratch)
 

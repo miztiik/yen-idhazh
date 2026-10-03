@@ -38,7 +38,7 @@ def test_the_work_stage_leaves_its_inputs_where_assemble_can_reach_them(
     thrown away when the shard ends. So it writes one payload beside the items it
     produced and `stage_assemble`, which owns the run record, hangs it on the run.
     """
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
@@ -86,7 +86,7 @@ def test_the_recorded_inputs_name_the_run_and_never_a_placeholder(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """The three fields this row replaced were two literals and a model slug."""
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     work_then_assemble(run_plan, settings)
@@ -119,7 +119,7 @@ def test_a_run_pointed_at_a_second_machine_records_no_build_for_it(
     recording server on this one and the first end-to-end reading is a person
     running a server elsewhere by hand.
     """
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     isolate_ledgers(tmp_path, monkeypatch)
     monkeypatch.setenv("LLAMA_CPP_BUILD", "b10598")
     settings = a_config_pointing_at(tmp_path, "http://192.168.1.20:9090")
@@ -150,7 +150,7 @@ def test_a_second_run_over_the_same_inputs_reports_no_prose_change(
     the caller already holds, so it costs the same on a repository of one
     published day and of a thousand (Guardrail #12).
     """
-    run_plan = plan()
+    run_plan = plan(item_count=1)
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     work_then_assemble(run_plan, settings)
@@ -167,7 +167,7 @@ def test_a_traced_work_shard_writes_separate_item_passes_and_their_children(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """The recorded model refusal still leaves the real worker's trace tree."""
-    run_plan = plan()
+    run_plan = plan(item_count=2)
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     settings = config.load(CONFIG_DIR)
     assert settings.app.observability.tracing_enabled, "the committed config traces by default"

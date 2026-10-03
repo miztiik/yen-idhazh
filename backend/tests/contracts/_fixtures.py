@@ -31,23 +31,143 @@ CONFIG_FILES: dict[str, type[Contract]] = {
     "watchlist.json": Watchlist,
 }
 
+FIXTURE_FILES: Final = (
+    "app-config/every-knob-differs-from-the-committed-config.json",
+    "appearance-config/knobs-set-away-from-the-defaults.json",
+    "article/brief.json",
+    "article/fetch-failed.json",
+    "article/ok.json",
+    "article/truncated.json",
+    "collection-prune-row/a-live-fold-beside-a-dry-window.json",
+    "collection-prune-row/ceiling-reached.json",
+    "collection-prune-row/exhausted-dry-run.json",
+    "compact-index/a-daily-index.json",
+    "compact-index/a-monthly-index.json",
+    "compact-index/a-yearly-index.json",
+    "console-band/newest-day.json",
+    "content-similarity-judge-merge-line-holdout-score/a-holdout-retention-has-eaten-into.json",
+    "content-similarity-judge-merge-line-holdout-score/a-line-scored-against-the-holdout.json",
+    "content-similarity-judge-metrics/a-shard-that-read-its-pairs.json",
+    "content-similarity-judge-metrics/a-shard-that-was-dealt-nothing.json",
+    "corpus-meta/window.json",
+    "corpus-row/harvested.json",
+    "council-shard-outcome/a-unit-that-ran-no-model.json",
+    "council-shard-outcome/a-unit-that-stopped-on-its-own-clock.json",
+    "counterfactual-score-row/a-refused-candidate-a-heavier-lens-would-lift.json",
+    "counterfactual-score-row/no-lens-matched-so-both-scores-agree.json",
+    "day-metrics/full.json",
+    "day-metrics/with-label-similarity.json",
+    "digest-day/two-runs.json",
+    "digest-run-fragment/one-block.json",
+    "digest-view/one-day.json",
+    "element-table/labelled.json",
+    "element-table/regex-only.json",
+    "eval-row/determinism-violation.json",
+    "eval-row/high.json",
+    "eval-row/low-invented-number.json",
+    "eval-row/premise-recorded.json",
+    "eval-row/truncation-artifact.json",
+    "evidence-item/premise-recorded.json",
+    "feed-health-row/answered.json",
+    "feed-health-row/unreachable.json",
+    "feed-retirement-row/answered-and-never-read.json",
+    "feed-retirement-row/gone.json",
+    "file-envelope/a-monthly-compact-file.json",
+    "file-envelope/a-raw-file.json",
+    "fitted-similarity-threshold/the-clamp-held-a-fall-back-to-the-step.json",
+    "fitted-similarity-threshold/the-record-is-too-small-to-fit-on.json",
+    "host-fingerprint-row/a-machine-that-reported-nothing.json",
+    "host-fingerprint-row/every-reading-taken.json",
+    "host-fingerprint-row/the-clock-a-job-kept.json",
+    "icon-manifest/the-committed-set.json",
+    "item-health-row/extract-too-short.json",
+    "item-health-row/published-with-elements.json",
+    "item-health-row/published.json",
+    "item-health-row/summarize-model-unreachable.json",
+    "item-health-summary-row/nothing-was-timed.json",
+    "item-health-summary-row/published-day.json",
+    "label-row/supported.json",
+    "label-row/unsupported.json",
+    "machine-panels/nothing-recorded-this-run.json",
+    "machine-panels/three-machines-one-run.json",
+    "machine-shard-row/a-shard-both-instruments-reached.json",
+    "machine-shard-row/a-shard-that-kept-nothing.json",
+    "observation-index-row/one.json",
+    "pipeline-tests-config/the-smallest-list-that-draws.json",
+    "public-run-day/five-runs.json",
+    "public-telemetry/fetch-failed.json",
+    "public-telemetry/published.json",
+    "published-row/one-item.json",
+    "qualification-report/qualified.json",
+    "qualification-samples/two-samples.json",
+    "qualification-shard/one-shard.json",
+    "raw-day-index/a-json-format-day.json",
+    "raw-day-index/a-populated-day.json",
+    "raw-day-index/an-empty-day.json",
+    "reference-dataset-config/defaults.json",
+    "reference-dataset-extractions/extracted.json",
+    "reference-dataset-extractions/robots-denied.json",
+    "reference-dataset-manifest/newsletter-on-a-shared-platform.json",
+    "reference-dataset-metadata/extraction.json",
+    "reference-dataset-metadata/import.json",
+    "reference-dataset-metadata/selection.json",
+    "reference-dataset-row/labelled-by-two-people.json",
+    "reference-dataset-row/unlabelled.json",
+    "reference-dataset-selection/chosen.json",
+    "review-queue/one-of-each-population.json",
+    "run-manifest/runs-with-a-gap.json",
+    "run-manifest/two-runs.json",
+    "run-plan/one-day.json",
+    "run-timeline-row/died-at-fetch.json",
+    "run-timeline-row/every-step.json",
+    "search-index/one-month.json",
+    "seen-row/first-sight.json",
+    "similarity-holdout-pair/two-stories-a-person-marked-apart.json",
+    "source-health-view/four-facts.json",
+    "sources/two-verticals.json",
+    "story-similarity-distribution/a-narrow-band-with-one-day-counted.json",
+    "story-similarity-pair/a-headline-match-scores-one.json",
+    "story-similarity-pair/judged-the-same-in-both-orders.json",
+    "story-similarity-pair/scored-but-not-yet-judged.json",
+    "summary/failed.json",
+    "summary/ok.json",
+    "summary/titled.json",
+    "taxonomy/with-tombstones.json",
+    "validation-row/confirmed.json",
+    "validation-row/not-reported.json",
+    "visual-aggregate-row/a-gate-that-refused.json",
+    "visual-aggregate-row/a-group-nothing-measured.json",
+    "visual-aggregate-row/published-charts.json",
+    "visual-attempt-row/nothing-was-measured.json",
+    "visual-attempt-row/published-chart.json",
+    "visual-attempt-row/refused-by-the-validator.json",
+    "visual-data/bars-from-the-committed-plan.json",
+    "visual-decision/chart-render-failed.json",
+    "visual-decision/chart-rendered.json",
+    "visual-decision/none-the-gate-refused.json",
+    "visual-decision/none.json",
+    "visual-plan/bar-chart.json",
+    "visual-plan/declined.json",
+    "visual-prune-row/fuse-tripped.json",
+    "visual-prune-row/policy-off.json",
+    "watchlist/seeded.json",
+    "watermark/a-daily-watermark.json",
+    "watermark/a-monthly-watermark.json",
+    "watermark/a-yearly-watermark.json",
+)
+
 #: The three blocks `AppearanceConfig` re-exposes, as (the key
 #: `config/idhazh.json` still carries, the key `config/appearance.json` carries).
 MOVED_BLOCKS = (("ui", "digest"), ("console", "console"), ("assist", "assist"))
 
 #: Keys `config/idhazh.json` owns although they sit on a moved model, with the
-#: reason each one is not the appearance file's to declare. All four are on
-#: `AssistConfig` and none is drawn, so the frontend's own `AssistConfig`
-#: interface declares none of them. `recall_min` and `eval_corpus_through` are
-#: the retrieval gate's inputs, read by `backend/tests/test_retrieval_eval.py`.
-#: `max_tokens` and `min_readable_letter_share` are the encoder's, read by
-#: `backend/idhazh/embed.py`; the appearance file carried a copy of each with
-#: the same value, which was the middle merge layer doing its job until the
-#: keep-list stopped the page receiving either - and a copy nothing reads is
-#: where `recall_min` was an hour earlier, so both were deleted (2026-09-05).
+#: reason each one is not the appearance file's to declare. Both are on
+#: `AssistConfig` and neither is drawn, so the frontend's own `AssistConfig`
+#: interface declares neither. `max_tokens` and `min_readable_letter_share` are
+#: the encoder's, read by `backend/idhazh/embed.py`; the appearance file carried
+#: a copy of each with the same value until the keep-list stopped the page
+#: receiving either, and a copy nothing reads was deleted (2026-09-05).
 PIPELINE_OWNED = {
-    "recall_min",
-    "eval_corpus_through",
     "max_tokens",
     "min_readable_letter_share",
     # Build-owned rather than pipeline-owned, and on this list for the same
@@ -75,15 +195,6 @@ CONFIG_NOT_OWNED: dict[str, frozenset[str]] = {
     "idhazh.json": frozenset(legacy for legacy, _ in MOVED_BLOCKS),
     "appearance.json": frozenset(f"assist.{key}" for key in PIPELINE_OWNED),
 }
-
-
-#: A digest, at the two widths this project ever writes one: a sha256 is 64 hex
-#: characters and a truncated one is 32. The guard used to read `[0-9a-f]{16,}`,
-#: which an item id can satisfy by accident - sixteen Crockford base32 symbols
-#: all landing inside `[0-9a-f]` is about one item in 65,536, so a width-agnostic
-#: guard goes red on a day nobody touched the code and there is nothing to
-#: bisect. Matching the width says what the rule always meant.
-HEX_DIGEST = re.compile(r"(?<![0-9a-z])(?:[0-9a-f]{64}|[0-9a-f]{32})(?![0-9a-z])")
 
 
 #: The two pages that spell the item-health failure vocabulary out by hand.
@@ -130,7 +241,8 @@ def committed_models() -> ModelsConfig:
 
 
 def fixture_paths() -> list[Path]:
-    return sorted(CONTRACT_FIXTURES_DIR.glob("*/*.json"))
+    """Return named inputs without discovering files as the tree grows."""
+    return [CONTRACT_FIXTURES_DIR / name for name in FIXTURE_FILES]
 
 
 def fixture_id(path: Path) -> str:
@@ -142,18 +254,19 @@ def load(path: Path) -> Contract:
 
 
 def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
-    """A whole `config/` in a temp directory, with the active model file replaced.
+    """The config loader's named inputs, with the active model file replaced.
 
-    The whole tree, because `config.load` reads five files and cross-checks two
-    of them - a test that wrote only the file it cares about would be driving a
-    config that cannot load for a reason it did not mean to test.
+    Copy only the files `config.load` consumes, not unrelated declarations.
 
     Returns the pointer the copy carries, which is the path a refusal has to
     name and the value a swap has to move.
     """
     target = root / "config"
-    shutil.copytree(CONFIG_DIR, target)
-    pointer = str(AppConfig.from_json(read_text(target / "idhazh.json")).models_file)
+    pointer = str(AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models_file)
+    for name in ("idhazh.json", "sources.json", "taxonomy.json", "watchlist.json", "appearance.json", pointer):
+        destination = target / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(CONFIG_DIR / name, destination)
     if models is not None:
         (target / pointer).write_text(canonical_json(models), encoding="utf-8", newline="\n")
     return pointer

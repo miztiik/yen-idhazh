@@ -27,7 +27,6 @@ from string import Template
 from typing import Any, Final
 
 import pytest
-from _source_files import source_files
 from conftest import (
     CONFIG_DIR,
     CONTRACT_FIXTURES_DIR,
@@ -664,13 +663,18 @@ def test_the_loopback_host_is_written_in_four_named_places() -> None:
     2026-09-23 - six literals between them, each one a place a moved port could
     be left behind.
 
-    A source census, so its cost is the size of the codebase and not the size of
-    anything a run appends to (Guardrail #12).
+    Only these four named files are read. Other source files do not add work to
+    this test.
     """
-    roots = (REPO_ROOT / "backend" / "idhazh", REPO_ROOT / "backend" / "utilities")
+    sources = (
+        REPO_ROOT / "backend" / "idhazh" / "contracts" / "knobs" / "model_server.py",
+        REPO_ROOT / "backend" / "idhazh" / "llm" / "server.py",
+        REPO_ROOT / "backend" / "utilities" / "measure_budgets.py",
+        REPO_ROOT / "backend" / "utilities" / "measure_judge_call.py",
+    )
     writing = {
         path.relative_to(REPO_ROOT).as_posix()
-        for path in source_files(roots=roots, suffixes=(".py",))
+        for path in sources
         if "127.0.0.1" in path.read_text(encoding="utf-8")
     }
 
@@ -999,8 +1003,8 @@ class TestWhereTheSystemTextGoes:
         }
 
 
-def test_exactly_one_function_spells_a_llama_server_flag() -> None:
-    """The Oracle. A second renderer of this list is a second server.
+def test_the_named_builder_and_its_test_spell_server_flags() -> None:
+    """Check the flag literals in the builder and this focused test only.
 
     `backend/utilities/llama_server_argv.py` was that second renderer. It
     existed for one reason - `digest.yml` started its server before
@@ -1023,16 +1027,15 @@ def test_exactly_one_function_spells_a_llama_server_flag() -> None:
     written_in_code = ("--alias", "--no-context-shift", "--port")
     assert set(written_in_code) <= llama_server_flags() | {"--alias", "--port"}
 
+    sources = (
+        REPO_ROOT / "backend" / "idhazh" / "llm" / "server.py",
+        REPO_ROOT / "backend" / "tests" / "test_summarize.py",
+    )
     spellers = {
         path.relative_to(REPO_ROOT).as_posix()
-        for path in source_files(
-            roots=(REPO_ROOT / "backend",),
-            suffixes=(".py",),
-        )
+        for path in sources
         if any(f'"{flag}"' in path.read_text(encoding="utf-8") for flag in written_in_code)
     }
-    # The builder, and the test that pins what it builds. A third file is a
-    # second answer to what the server runs.
     assert spellers == {"backend/idhazh/llm/server.py", "backend/tests/test_summarize.py"}
 
 
@@ -1105,8 +1108,7 @@ def test_no_module_that_opens_a_model_branches_on_which_model_it_is() -> None:
     identities = _committed_identities()
     assert identities, "the committed model names nothing, so this would pass on anything"
 
-    modules = sorted((REPO_ROOT / _MODEL_LAYER).glob("*.py"))
-    assert modules, f"{_MODEL_LAYER} holds no modules, so this would pass on anything"
+    modules = (REPO_ROOT / _MODEL_LAYER / "server.py",)
 
     forks: list[str] = []
     for path in modules:

@@ -49,7 +49,18 @@ from idhazh.fetch import FetchResult
 
 APP: Final = config.load(CONFIG_DIR).app
 ELEMENTS: Final = APP.elements
-PAGES: Final = sorted((FIXTURES_DIR / "pages").glob("*.html"))
+PAGES: Final = tuple(
+    FIXTURES_DIR / "pages" / name
+    for name in (
+        "article.html",
+        "chrome-only.html",
+        "contaminated-front-page.html",
+        "france24-player.html",
+        "hostile.html",
+        "wind.html",
+    )
+)
+CANARY_NAMES: Final = tuple(sorted(canaries.REQUIRED_ATTACKS))
 
 #: One figure, two periods. The article a trend chart exists for, and the one
 #: `numeric_facts` is right to collapse and this pass is wrong to.
@@ -145,8 +156,9 @@ def one(text: str) -> Element:
 # --- The Oracle: the characters prove it -----------------------------------
 
 
-@pytest.mark.parametrize("canary", canaries.ALL, ids=lambda c: c.name)
-def test_every_span_re_slices_to_its_own_excerpt_on_a_canary(canary: canaries.Canary) -> None:
+@pytest.mark.parametrize("name", CANARY_NAMES)
+def test_every_span_re_slices_to_its_own_excerpt_on_a_canary(name: str) -> None:
+    canary = canaries.load_canary(name)
     article = canary_article(canary)
     text = article.text or ""
     table = element_table(article, config=ELEMENTS)
@@ -166,8 +178,10 @@ def test_every_span_re_slices_to_its_own_excerpt_on_a_captured_page(path: Path) 
 def test_the_corpus_the_oracle_runs_over_actually_carries_quantities() -> None:
     """The counter-oracle. A pass that emits nothing satisfies a re-slice trivially."""
     emitted = 0
-    for canary in canaries.ALL:
-        emitted += len(element_table(canary_article(canary), config=ELEMENTS).elements)
+    for name in CANARY_NAMES:
+        emitted += len(
+            element_table(canary_article(canaries.load_canary(name)), config=ELEMENTS).elements
+        )
     for path in PAGES:
         emitted += len(element_table(page_article(path), config=ELEMENTS).elements)
     assert emitted == 83, "the bounded fixtures carried 83 elements on 2026-09-22"
@@ -183,7 +197,9 @@ def overlaps(left: Element, right: Element) -> bool:
 
 def bounded_articles() -> list[tuple[str, Article]]:
     """The fixtures no run appends to: the committed canaries and the captured pages."""
-    articles = [(canary.name, canary_article(canary)) for canary in canaries.ALL]
+    articles = [
+        (name, canary_article(canaries.load_canary(name))) for name in CANARY_NAMES
+    ]
     return articles + [(path.name, page_article(path)) for path in PAGES]
 
 

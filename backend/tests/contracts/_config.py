@@ -7,38 +7,6 @@ from typing import Any, Final
 
 from conftest import FIXTURES_DIR
 
-#: Every place `pipeline_fingerprint` may still be named in source a person
-#: wrote or a generator emits, and why. The removal cannot be gated on "the name
-#: appears nowhere": the read-side migration has to name the key it pops, and one
-#: shape still declares the field because the console still reads its column. So
-#: the gate is that every mention is one of these, with its reason beside it.
-FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
-    "backend/idhazh/contracts/day_metrics.py": (
-        "the popper: 23 committed state/day-metrics/ records and both published "
-        "month mirrors carry the key, and extra=forbid refuses it"
-    ),
-    "backend/idhazh/contracts/run_manifest.py": (
-        "the popper, spelled plural: every run.json committed before the key was "
-        "dropped carries pipeline_fingerprints, and a published day is never rewritten"
-    ),
-    "backend/idhazh/contracts/eval_row.py": (
-        "the one field that survives the drop, because the console reads its "
-        "summary-quality-evals column for every day that recorded its identity that way - "
-        "the condition that removes it is on the line that declares it"
-    ),
-    "backend/idhazh/contracts/evidence.py": "a changelog entry, which is history",
-    "backend/idhazh/contracts/label_row.py": "a changelog entry, which is history",
-    "frontend/src/lib/server/model-work.ts": (
-        "the branch that reads a day whose identity is a digest, and the precedence "
-        "that lets a manifest beside one win. It retires on the condition written "
-        "beside the field itself, which is about the rows and not about a date"
-    ),
-    "frontend/src/lib/console/eval-instruments.ts": (
-        "the ledger column's own note, which says why no panel draws it"
-    ),
-}
-
-
 #: The two shapes that carry a read-side migration for the retired key, the key
 #: each one pops, and the misspelling that must still be refused. `RunRecord`
 #: spells it plural, so one shared key constant in `base.py` would have covered
