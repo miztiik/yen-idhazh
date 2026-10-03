@@ -155,6 +155,22 @@ def test_month_refresh_removes_only_named_missing_files(tmp_path: Path) -> None:
     assert inventory.total_bytes == 4
 
 
+def test_removing_a_named_digest_also_removes_its_date(tmp_path: Path) -> None:
+    empty_inventory(tmp_path)
+    day = DigestDay.read(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json")
+    name = f"digest/{day.date.replace('-', '/')}/digest.json"
+    digest = put(tmp_path, name, day.to_json())
+    record_files(tmp_path, dates=[day.date], paths=[name], item_counts={name: len(day.items)})
+
+    digest.unlink()
+    inventory = record_files(tmp_path, paths=[name], remove_dates=[day.date])
+
+    assert inventory.dates == []
+    assert paths(inventory, "public") == []
+    assert inventory.total_bytes == 0
+    assert inventory.total_items == 0
+
+
 def test_day_writer_recomputes_visual_name_not_payload_path(tmp_path: Path) -> None:
     empty_inventory(tmp_path)
     day = DigestDay.read(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json")

@@ -10,7 +10,7 @@ from typing import Final
 from pydantic import TypeAdapter
 
 from idhazh.atomic_write import write_atomic
-from idhazh.contracts.base import RelPath, StalePayloadError
+from idhazh.contracts.base import DateStamp, RelPath, StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.publication_inventory import (
     LegacyPublicationInventory,
@@ -22,6 +22,7 @@ from idhazh.publication_lock import serialize_update
 # A published protocol filename, shared with the static build's reader.
 PUBLICATION_FILENAME: Final = "publication.json"
 _RELATIVE_PATH: Final = TypeAdapter(RelPath)
+_DATE_STAMP: Final = TypeAdapter(DateStamp)
 
 
 def read_inventory(public_root: Path) -> PublicationInventory:
@@ -118,6 +119,7 @@ def record_files(
     dates: Iterable[str] = (),
     paths: Iterable[str],
     item_counts: Mapping[str, int] | None = None,
+    remove_dates: Iterable[str] = (),
 ) -> PublicationInventory:
     """Refresh only named files, preserving all other inventory entries.
 
@@ -126,7 +128,11 @@ def record_files(
     is explicit, rather than an implicit archive scan.
     """
     previous = read_inventory(public_root)
-    days = set(previous.dates).union(dates)
+    added_days = {_DATE_STAMP.validate_python(day) for day in dates}
+    removed_days = {_DATE_STAMP.validate_python(day) for day in remove_dates}
+    if added_days & removed_days:
+        raise ValueError("dates and remove_dates must be disjoint")
+    days = set(previous.dates).union(added_days)
     digests = {f"digest/{day.replace('-', '/')}/digest.json" for day in days}
     named = {_RELATIVE_PATH.validate_python(name) for name in paths}
     counts = dict(item_counts or {})
@@ -153,6 +159,13 @@ def record_files(
         entries[name] = entry
         total_bytes += entry.bytes
         total_items += entry.items
+    # A concurrent origin entry for this day wins if its digest still exists.
+    days.difference_update(removed_days)
+    days.update(
+        day
+        for day in removed_days
+        if f"digest/{day.replace('-', '/')}/digest.json" in entries
+    )
     inventory = PublicationInventory(
         version=PublicationInventory.schema_version(),
         dates=sorted(days, reverse=True),

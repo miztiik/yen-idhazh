@@ -125,6 +125,14 @@ inventory degrades to an empty page selection with one warning, rather than
 stopping the build. The backend must still refuse a missing inventory so an
 update cannot silently lose older names.
 
+The plan commits the named inventory with its state files. Separate checkouts
+never resolve an inventory conflict with Git text merging. The commit retry
+takes origin's inventory and upserts only this run's named changes before it
+continues the existing rebase. It re-stats those files and refreshes their counts
+and public totals, preserving every other writer's entries. The existing retry
+attempt limit still applies. The OS-held lock protects one checkout; the Git
+retry protects independent checkouts.
+
 The day writer already knows the day and item identities. Recording those
 names avoids making each build rediscover every historical directory.
 An explicit seed keeps old published days visible without allowing an implicit
