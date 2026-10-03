@@ -296,7 +296,7 @@ class CompactTree:
 
         A deleted file takes any date folder it leaves empty with it, so the next
         listing of the raw tree does not meet a day that holds nothing. A file
-        deleted by its name alone - a raw listing past its keep - may never have
+        deleted by its name alone - a raw listing an earlier build left - may never have
         been downloaded, and its deletion lands from the name.
         """
         for change in self.changes:

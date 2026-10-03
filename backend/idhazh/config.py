@@ -842,12 +842,6 @@ def _refuse_a_compaction_that_cuts_its_ledger(
             f"{where} compacts {ledger.value}, and a compaction is named for its ledger: "
             f"call it compact-{ledger.value}.json"
         )
-    if policy.raw_index_keep_days < policy.daily_keep_days:
-        raise ValueError(
-            f"{where} keeps raw_index_keep_days {policy.raw_index_keep_days} and "
-            f"daily_keep_days {policy.daily_keep_days}. The raw index must outlive the "
-            "daily period, which may still need it to rebuild a daily file"
-        )
     reach = _reach(policy)
     if ledger in app.ledger.published:
         _refuse_a_published_reach_that_grows_or_falls_short(
