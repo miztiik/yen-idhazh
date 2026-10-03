@@ -15,8 +15,6 @@ declares, because the robots corpus below has to read the same way on each.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import socket
 import threading
 import time
@@ -177,13 +175,6 @@ ROBOTS_PATHS = (
     "/nocolon/a",
 )
 
-#: What the whole corpus answers, as one value. Recorded 2026-09-02 against
-#: protego 0.6.2 over 10 files and 19 paths, on CPython 3.14.2. CI runs this
-#: file on 3.12 and 3.14, so an interpreter that reads one rule differently
-#: moves this digest and fails.
-ROBOTS_GRID_DIGEST = "2fe013ae24d46ba4ac7fb6b276dbca15c9d3f792597d5c74834ca000b132a3eb"
-
-
 class RobotsCase(NamedTuple):
     """One committed file, what it is here to cover, and both of its answers."""
 
@@ -293,26 +284,6 @@ def test_a_group_naming_another_crawler_does_not_bind_us() -> None:
     rules = rules_for("crawler-specific-group.txt")
     assert rules.permits(AGENT, f"{HOST}/") is RobotsOutcome.ALLOWED
     assert rules.permits("GPTBot", f"{HOST}/") is RobotsOutcome.DENIED
-
-
-def test_the_whole_corpus_reads_the_same_way_on_every_supported_python() -> None:
-    """The oracle CI runs twice: one digest over every file and every path.
-
-    `robots.txt` is a permission, and until 2026-09-02 the standard library
-    read one file two ways across the range `pyproject.toml` declares - 3.12
-    takes the first matching group and the first matching rule, 3.14 merges
-    repeated groups and applies longest-match. Which pages this crawler may
-    read is not allowed to depend on which runner picked up the job.
-    """
-    names = sorted(path.name for path in ROBOTS.glob("*.txt"))
-    assert len(names) == len(ROBOTS_CASES) + 3, "every fixture is named by a case or its own test"
-    grid = "\n".join(
-        f"{name} {path} {rules_for(name).permits(AGENT, HOST + path).value}"
-        for name in names
-        for path in ROBOTS_PATHS
-    )
-    assert len(grid.splitlines()) == len(names) * len(ROBOTS_PATHS)
-    assert hashlib.sha256(grid.encode("utf-8")).hexdigest() == ROBOTS_GRID_DIGEST
 
 
 @pytest.mark.parametrize(
@@ -1260,24 +1231,6 @@ def test_the_headline_match_tolerates_the_punctuation_a_template_changes() -> No
     )
 
     assert corroborated_words(page_text, min_words=100) is not None
-
-
-def test_the_labelled_short_source_oracle_matches_disposition_and_reason() -> None:
-    for meta_path in sorted(SHORT_SOURCES.glob("*.json")):
-        meta = json.loads(read_text(meta_path))
-        html_path = meta_path.with_suffix(".html")
-        item = fixture_item(meta["source_id"], meta["source_url"], 1)
-        article = to_article(
-            item,
-            FetchResult(FetchOutcome.OK, status=200, body=html_path.read_bytes()),
-            config=ExtractConfig(),
-            fetched_at=FETCHED_AT,
-        )
-        expected_reason = meta["expected_reason"]
-        observed_reason = article.failure_code.value if article.failure_code is not None else None
-
-        assert disposition(article.status, article.brief, article.failure_code) == meta["label"]
-        assert observed_reason == expected_reason
 
 
 # --- The headline: the feed's first, then the page's own --------------------

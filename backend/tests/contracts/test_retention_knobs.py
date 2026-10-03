@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import json
 import re
 from datetime import date, timedelta
+from types import ModuleType
 
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
@@ -157,30 +159,27 @@ def test_the_router_exposes_no_name_a_stage_owns() -> None:
     passes against the thing it meant to replace.
 
     So the router imports stage modules and never the names inside them. This
-    reads the imported module rather than its source, because an import written
-    anywhere in the chain republishes a name just as effectively as one written
-    in `cli.py`.
+    checks the imports in the named router file and their loaded bindings.
     """
-    owned: dict[str, str] = {}
-    for path in sorted((REPO_ROOT / "backend" / "idhazh" / "stages").glob("*.py")):
-        if path.stem == "__init__":
-            continue
-        for node in ast.parse(read_text(path)).body:
-            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-                owned.setdefault(node.name, path.stem)
-            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                owned.setdefault(node.target.id, path.stem)
-            elif isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        owned.setdefault(target.id, path.stem)
-    assert owned, "no stage modules were read, so this test proves nothing"
-
-    leaked = sorted(
-        f"cli.{name} is really idhazh.stages.{stem}.{name}"
-        for name, stem in owned.items()
-        if not name.startswith("__") and hasattr(cli, name)
-    )
+    path = REPO_ROOT / "backend" / "idhazh" / "cli.py"
+    tree = ast.parse(read_text(path))
+    imports = [
+        (node.module, alias.name, alias.asname or alias.name)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module is not None
+        and node.module.startswith("idhazh.stages")
+        for alias in node.names
+    ]
+    assert imports, "cli.py no longer imports its stages"
+    leaked = []
+    for module, name, bound in imports:
+        assert module == "idhazh.stages", f"cli.py imports a name inside {module}"
+        imported = getattr(cli, bound)
+        if not isinstance(imported, ModuleType):
+            leaked.append(f"cli.{bound} is not a stage module")
+        else:
+            assert imported is importlib.import_module(f"{module}.{name}")
     assert not leaked, (
         "the router re-exports a name a stage owns, so a caller can reach the stage "
         "through cli and a redirect left on cli would bind a copy nothing reads. "

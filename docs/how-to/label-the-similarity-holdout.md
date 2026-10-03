@@ -50,8 +50,8 @@ and `composite_score` will do - the tool reads every `*.csv` in a `selection`
 slot under `--draw-root`, so pointing it at `backend/var/council` covers every
 day drawn so far. It reads the selection slot and nothing else because a night
 leaves its verdicts and its instrument rows in the same tree, and those carry no
-score. **Point it at all of them, not at one day.** The harvest joins on the
-whole population it can resolve, and a mark whose pair is not in the draw you
+score. Name the draw CSVs and every published UTC day needed to resolve their
+two sides. The harvest joins on that named population, and a mark whose pair is not in the draw you
 hand it is a mark that does not reach the file.
 
 ## Draw a sheet
@@ -60,12 +60,16 @@ Read-only apart from the two files it writes. It calls no model and opens no
 socket:
 
 ```powershell
-python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 0.94
+python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 0.94 `
+  --draw <selection.csv> --day 2026-09-01
 ```
 
 | Flag | Default | What it is |
 | --- | --- | --- |
-| `--draw-root` | required | The tree of drawn-pair CSVs to read. |
+| `--draw-root` | required | Base path for the named draw files. |
+| `--draw` | required, repeatable | CSV path relative to `--draw-root`. |
+| `--day` | required, repeatable | Published UTC day to read, `YYYY-MM-DD`. Name both sides of a pair across midnight. |
+| `--labels` | required with `--harvest`, repeatable | JSON label batch relative to `--out`. |
 | `--line` | required | The merge line the bands are measured against. `assemble.same_story.floor_min` is what a day was grouped at unless a fit has moved it. |
 | `--digest-root` | `frontend/public/digest` | Where the published days are, so a pair's two articles can be resolved to a title and a summary. |
 | `--out` | `test-results/similarity-pairs-to-label` | Where `pairs.json` and `pairs.md` are written. Refused inside `frontend/public/` or `frontend/build/`, because the sheet quotes untrusted text and a published one would put it on the site. |
@@ -162,6 +166,7 @@ with a guess.
 
 ```powershell
 python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 0.94 `
+  --draw <selection.csv> --day 2026-09-01 --labels labels-batch-01.json `
   --harvest state/content-similarity-judge/holdout-pairs.csv `
   --labeller claude-opus-4.6 --labelled-on 2026-09-19
 ```
@@ -170,7 +175,7 @@ python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 
 `note` column with the pair's score beside it, because a mark is worth what its
 labeller is worth and a row that does not say cannot be argued with later.
 
-**The join is on `pair_key`, against the whole drawn population and never
+**The join is on `pair_key`, against the named drawn population and never
 against the sheet in hand.** A mark belongs to a pair, not to a slot: harvesting
 from the sheet meant that re-drawing it, or changing how pairs are chosen,
 silently dropped every mark whose pair no longer made the cut - one selection

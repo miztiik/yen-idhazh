@@ -13,9 +13,10 @@ what a knob is at all is [../config.md](../config.md).
 
 | Knob | Committed | What it decides |
 | --- | --- | --- |
-| `version` | `2026-09-30` | The UTC day this file's shape last changed |
+| `version` | `2026-10-03` | The UTC day this file's shape last changed |
 | `attempts` | `6` | How many times one shard may try to push before it gives up with exit 3 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
+| `task_names` | Named list in the file | The declarations to read under `config/gardener/`. Empty means no tasks. Missing named files and repeated names are refused. |
 | `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate. Its first reset is to about twice the largest `downloaded_bytes` the first thirty scheduled wakes record ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
 
 **`attempts` must be above `shards`.** Every shard of a wake pushes to one
@@ -27,11 +28,11 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/traces.json` declares the task
-`traces`. A missing `config/gardener/` means no tasks. Twenty ship today:
+`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Twenty ship today:
 seven `retention` tasks, two `collection` tasks, ten `compaction` tasks (below)
 and `corpus-squash`, the one `history` task (below).
-**There is no index file and no `name` key**, so a task can never be listed under
-one name and filed under another.
+There is no `name` key inside a declaration. Both plan writers open the same
+named list, so adding an unrelated file cannot change a wake's plan.
 
 Every declaration carries these keys, whatever its kind:
 

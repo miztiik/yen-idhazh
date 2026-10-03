@@ -132,9 +132,7 @@ PLAN_ARTIFACT: str = "pipeline-tests-plan-${{ github.run_id }}"
 TEST_CASE_ROOT: str = "backend/var/test-cases/${{ matrix.test_case }}/config"
 
 
-def _module_outputs(
-    argv: list[str], *, cwd: Path, module: str = DRAW_MODULE
-) -> dict[str, str]:
+def _module_outputs(argv: list[str], *, cwd: Path, module: str = DRAW_MODULE) -> dict[str, str]:
     """The `KEY=value` lines a step appends to `$GITHUB_OUTPUT`, as a mapping."""
     done = subprocess.run(
         [sys.executable, str(REPO_ROOT / module), *argv],
@@ -259,7 +257,12 @@ def test_every_runner_of_every_enabled_test_case_is_a_job_of_its_own() -> None:
     """
     workflow = _load_workflows()[WORKFLOW]
     jobs = workflow.get("jobs")
-    assert isinstance(jobs, dict) and list(jobs) == [PLAN_JOB, TEST_CASE_JOB, REPORT_JOB, COMMIT_JOB]
+    assert isinstance(jobs, dict) and list(jobs) == [
+        PLAN_JOB,
+        TEST_CASE_JOB,
+        REPORT_JOB,
+        COMMIT_JOB,
+    ]
 
     runner = _job(workflow, TEST_CASE_JOB)
     assert _needs(workflow, TEST_CASE_JOB) == [PLAN_JOB], "every runner waits for the one plan"
@@ -657,6 +660,17 @@ def test_the_commit_job_stages_the_declared_trial_roots_and_nothing_wider() -> N
         )
 
 
+def test_trial_gather_reads_the_planned_day_only() -> None:
+    step = _step(
+        _load_workflows()[WORKFLOW], TEST_CASE_JOB, "name", "Gather the ledgers the test case wrote"
+    )
+    body = _script(step, "the ledger gather step")
+    assert f"{LEDGER_MODULE} gather" in body
+    assert '--day "$RUN_DATE"' in body
+    env = _mapping(step.get("env"), "the ledger gather environment")
+    assert env["RUN_DATE"] == "${{ needs.plan.outputs.date }}"
+
+
 #: How a job condition reads another job: `needs.<id>` or `needs['<id>']`, then
 #: optionally the output or the result it takes.
 NEEDS_REFERENCE: re.Pattern[str] = re.compile(
@@ -786,9 +800,9 @@ def test_the_check_passes_the_two_shapes_a_test_case_really_writes(tmp_path: Pat
     test_case = _settings().test_cases[0]
     tree = _a_downloaded_tree(tmp_path / "trial-ledgers", test_case=test_case.trial_state_dirname)
 
-    assert pipeline_test_ledgers.refusals(
-        tree, roots=frozenset({test_case.trial_state_dirname})
-    ) == []
+    assert (
+        pipeline_test_ledgers.refusals(tree, roots=frozenset({test_case.trial_state_dirname})) == []
+    )
 
 
 def test_the_check_has_nothing_to_refuse_when_nothing_arrived(tmp_path: Path) -> None:
@@ -808,7 +822,10 @@ def test_the_check_has_nothing_to_refuse_when_nothing_arrived(tmp_path: Path) ->
             "a ledger a test case run does not write",
         ),
         (f"{{test_case}}/summaries/{TEST_CASE_DAY_PATH}/{TEST_CASE_WRITER}", "no such ledger"),
-        (f"{{test_case}}/traces/{TEST_CASE_DAY_PATH}/{TEST_CASE_TRACE}", "a line that is not a span"),
+        (
+            f"{{test_case}}/traces/{TEST_CASE_DAY_PATH}/{TEST_CASE_TRACE}",
+            "a line that is not a span",
+        ),
     ],
 )
 def test_the_check_refuses_what_no_test_case_producer_wrote(
@@ -827,9 +844,7 @@ def test_the_check_refuses_what_no_test_case_producer_wrote(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("not a span\n", encoding="utf-8")
 
-    refused = pipeline_test_ledgers.refusals(
-        tree, roots=frozenset({test_case.trial_state_dirname})
-    )
+    refused = pipeline_test_ledgers.refusals(tree, roots=frozenset({test_case.trial_state_dirname}))
 
     assert refused, f"the check let through {because}"
 
@@ -862,6 +877,8 @@ def test_the_gather_verb_prints_nothing_a_step_could_mistake_for_output(
             str(state),
             "--config-root",
             str(CONFIG_DIR),
+            "--day",
+            TEST_CASE_DATE,
         ],
         cwd=tmp_path,
         env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")},
@@ -1114,9 +1131,7 @@ def test_each_test_case_writes_its_own_trial_root(written_test_cases: dict[str, 
         test_case_id: config.load(written).app.run.trial_state_dirname
         for test_case_id, written in written_test_cases.items()
     }
-    declared = {
-        test_case.id: test_case.trial_state_dirname for test_case in _settings().test_cases
-    }
+    declared = {test_case.id: test_case.trial_state_dirname for test_case in _settings().test_cases}
 
     assert len(set(roots.values())) == len(roots), f"two test cases share a trial root: {roots}"
     for test_case_id, root in roots.items():
@@ -1323,12 +1338,9 @@ def test_a_dispatch_that_names_nothing_runs_the_model_config_already_names() -> 
     that types nothing runs.
     """
     empty = dict(
-        row.split("=", 1)
-        for row in model_refs.trial_rows(CONFIG_DIR, "", prefix="candidate_")
+        row.split("=", 1) for row in model_refs.trial_rows(CONFIG_DIR, "", prefix="candidate_")
     )
-    configured = dict(
-        row.split("=", 1) for row in model_refs.pinned_rows(CONFIG_DIR)
-    )
+    configured = dict(row.split("=", 1) for row in model_refs.pinned_rows(CONFIG_DIR))
 
     pointer = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
     assert empty["candidate_models_file"] == pointer
@@ -1355,11 +1367,7 @@ def test_a_named_candidate_moves_one_line_and_leaves_the_committed_config_alone(
 
     assert written["models_file"] == named
     assert written["run"]["trial_state_dirname"] == TRIAL_STATE
-    moved = {
-        key
-        for key in set(committed) | set(written)
-        if committed.get(key) != written.get(key)
-    }
+    moved = {key for key in set(committed) | set(written) if committed.get(key) != written.get(key)}
     assert moved == {"models_file", "run"}, f"one pointer and one state root, not {moved}"
     assert json.loads(read_text(CONFIG_DIR / "idhazh.json")) == committed, (
         "the committed config is read, never written"

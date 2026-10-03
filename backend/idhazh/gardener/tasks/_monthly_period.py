@@ -85,9 +85,7 @@ def first_kept_month(*, now: datetime, daily_keep_days: int, window: Window) -> 
     return shift(newest_absorbable, 1 - window.value)
 
 
-def _past_the_window(
-    tree: CompactTree, *, first_kept: str | None
-) -> list[tuple[str, Path | None]]:
+def _past_the_window(tree: CompactTree, *, first_kept: str | None) -> list[tuple[str, Path | None]]:
     """Every month the window no longer keeps, oldest first, beside its file or None.
 
     It reads the listing and decides nothing, so a window that only reports names
@@ -103,7 +101,7 @@ def _past_the_window(
             ),
         )
         for month in sorted(tree.monthly)
-        if month < first_kept
+        if month < first_kept and (tree.months is None or month in tree.months)
     ]
 
 
@@ -137,9 +135,14 @@ def spare(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
 def _ready(tree: CompactTree, month: str, *, now: datetime, after_days: int) -> bool:
     """Whether a month is done: old enough, compacted to its end, and no raw day waiting in it."""
     return (
-        schedule.is_month_eligible(month, now=now, after_days=after_days)
+        (tree.months is None or month in tree.months)
+        and schedule.is_month_eligible(month, now=now, after_days=after_days)
         and tree.daily_through is not None
-        and tree.daily_through > days_of(month)[-1]
+        and (
+            tree.daily_through >= days_of(month)[-1]
+            if tree.months is not None
+            else tree.daily_through > days_of(month)[-1]
+        )
         and not any(day.startswith(f"{month}-") for day in tree.raw_days)
     )
 
@@ -204,6 +207,33 @@ def absorb(
         month = min(tree.daily)[:7]
     else:
         return ()
+    if tree.months is not None:
+        candidates = [
+            named
+            for named in sorted(tree.months)
+            if tree.monthly_through is None
+            or named > tree.monthly_through
+            or any(day.startswith(f"{named}-") for day in tree.daily)
+        ]
+        if not candidates:
+            return ()
+        month = candidates[0]
+        pending = sorted(
+            {
+                day[:7]
+                for day in tree.daily
+                if day[:7] < month
+                and day[:7] not in tree.monthly
+                and day[:4] not in tree.yearly
+                and (tree.monthly_through is None or day[:7] > tree.monthly_through)
+            }
+        )
+        if pending:
+            return _refused(
+                tree,
+                month,
+                f"name pending months before advancing the monthly watermark: {pending}",
+            )
     ready: list[str] = []
     while len(ready) < policy.max_periods_per_run and _ready(
         tree, shift(month, len(ready)), now=now, after_days=policy.daily_keep_days
@@ -218,9 +248,12 @@ def absorb(
             stops = _finish(tree, month)
             if stops:
                 return stops
-            tree.monthly_through = month
+            tree.monthly_through = max(month, tree.monthly_through or month)
             tree.write_watermark(
-                Period.MONTHLY, through=month, advanced_at=stamp, run_id=identity.run_id
+                Period.MONTHLY,
+                through=tree.monthly_through,
+                advanced_at=stamp,
+                run_id=identity.run_id,
             )
             taken += 1
             month = shift(month, 1)
@@ -272,9 +305,9 @@ def absorb(
         for day in days:
             del tree.daily[day]
         tree.mark_index(Period.DAILY)
-        tree.monthly_through = month
+        tree.monthly_through = max(month, tree.monthly_through or month)
         tree.write_watermark(
-            Period.MONTHLY, through=month, advanced_at=stamp, run_id=identity.run_id
+            Period.MONTHLY, through=tree.monthly_through, advanced_at=stamp, run_id=identity.run_id
         )
         taken += 1
         month = shift(month, 1)

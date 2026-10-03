@@ -34,7 +34,6 @@
     "same_story_window_hours": 18.0
   },
   "assist": {
-    "eval_corpus_through": "2026-08-26",
     "max_tokens": 320,
     "min_readable_letter_share": 0.6,
     "model_base_url": "https://hf.example.test/other/encoder",
@@ -46,7 +45,6 @@
     },
     "model_fetch_deadline_ms": 90000,
     "model_revision": "0123456789abcdef0123456789abcdef01234567",
-    "recall_min": 0.9,
     "result_limit": 8,
     "search_min_days": 14,
     "search_months": 3,
@@ -222,6 +220,7 @@
     "band_high_min": 0.85,
     "band_medium_min": 0.55,
     "brief_compression_ceiling": 0.5,
+    "canary_files": [],
     "chunk_overlap_words": 120,
     "chunk_words": 800,
     "golden_set_size": 40,

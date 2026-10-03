@@ -63,6 +63,25 @@ def is_month_stem(stem: str) -> bool:
     return True
 
 
+def months_between(first: str, last: str) -> list[str]:
+    """Every real calendar month in the inclusive, caller-named range."""
+    if not is_month_stem(first) or not is_month_stem(last):
+        raise ValueError("month range endpoints must be real YYYY-MM dates")
+    if first > last:
+        raise ValueError(f"month range starts after it ends: {first} > {last}")
+
+    year, month = map(int, first.split("-"))
+    end_year, end_month = map(int, last.split("-"))
+    months: list[str] = []
+    while (year, month) <= (end_year, end_month):
+        months.append(f"{year:04d}-{month:02d}")
+        if month == 12:
+            year, month = year + 1, 1
+        else:
+            month += 1
+    return months
+
+
 def month_files(directory: Path, suffix: str) -> list[Path]:
     """Every `<YYYY-MM><suffix>` in one directory, oldest first, and nothing else.
 

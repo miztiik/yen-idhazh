@@ -755,27 +755,6 @@ def records_in_month(state_root: Path, month: str) -> list[DayMetrics]:
     return [DayMetrics.read(path) for path in sorted(root.glob("*.json"))]
 
 
-def months_recorded(state_root: Path) -> list[str]:
-    """Every `<YYYY-MM>` the record tree holds, oldest first.
-
-    One listing a year plus one a month, and no record opened. It grows by one
-    entry a month for ever, and there is no cheaper way to answer which months
-    exist than to look.
-    """
-    root = ledger.tree_root(state_root, LedgerName.DAY_METRICS)
-    found: list[str] = []
-    if not root.is_dir():
-        return found
-    for year in sorted(entry for entry in root.iterdir() if entry.is_dir()):
-        if len(year.name) != 4 or not year.name.isascii() or not year.name.isdigit():
-            continue
-        for month in sorted(entry for entry in year.iterdir() if entry.is_dir()):
-            if len(month.name) != 2 or not month.name.isascii() or not month.name.isdigit():
-                continue
-            found.append(f"{year.name}-{month.name}")
-    return found
-
-
 def read_public_shard(path: Path) -> list[DayMetrics]:
     """Load a published month back through the contract that wrote it."""
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -793,7 +772,7 @@ def publish_public(
     months: Collection[str] | None = None,
     ensure_month: str | None = None,
 ) -> list[Path]:
-    """Write the browser's copy of each record month that changed."""
+    """Write only caller-named months; no range means no historical reads."""
 
     def encode(month: str) -> bytes:
         rows = records_in_month(state_root, month)
@@ -803,7 +782,7 @@ def publish_public(
         digest_root=digest_root,
         dirname=PUBLIC_DIRNAME,
         suffix=PUBLIC_SUFFIX,
-        available=months_recorded(state_root),
+        available=sorted(set(months or ())),
         encode=encode,
         keep_months=keep_months,
         today=today,

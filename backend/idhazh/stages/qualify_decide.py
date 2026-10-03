@@ -77,7 +77,7 @@ def stage_qualify_decide(
                 (o.summarize_seconds for shard in shards for o in shard.observations), default=0.0
             ),
         ),
-        required_canaries=len(sorted(common.CANARY_DIR.glob("*.json"))),
+        required_canaries=len(settings.app.evaluation.canary_files),
         thinking=settings.models.summarizer.thinks,
     )
     shortfalls = qualify.corpus_shortfalls(

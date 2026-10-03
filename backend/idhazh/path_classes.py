@@ -30,6 +30,7 @@ from pathlib import PurePosixPath
 from typing import Final
 
 from idhazh import day_shards, ledger
+from idhazh.ledger.filenames import _SEGMENT_NAME
 
 #: The one span an entry may carry, filled in by `refresh_paths`. A second kind
 #: of placeholder would be a second thing the caller has to know, and the caller
@@ -107,7 +108,7 @@ def is_written_once(relpath: str) -> bool:
     stem, _, suffix = name.rpartition(".")
     if not stem:
         return False
-    if ledger.SEGMENT_NAME.fullmatch(stem) is not None:
+    if _SEGMENT_NAME.fullmatch(stem) is not None:
         return True
     return suffix == "jsonl" and ledger.PRE_IDENTITY_TRACE.fullmatch(stem) is not None
 
