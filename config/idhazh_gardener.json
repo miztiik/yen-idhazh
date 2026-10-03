@@ -16,7 +16,6 @@
     "corpus-squash",
     "digest-fragments",
     "feed-health",
-    "summary-quality-evals-index",
     "telemetry-aggregate",
     "traces",
     "trials",

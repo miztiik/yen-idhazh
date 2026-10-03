@@ -19,24 +19,24 @@ newest closed day and the 16th is still open.
 from __future__ import annotations
 
 import csv
-import hashlib
-import shutil
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import FIXTURES_DIR, seed_feed_health
+from conftest import seed_feed_health
 
 from idhazh import day_shards, ledger
+from idhazh.config import load_observation_lookup
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.contracts.observation_index import ObservationIndexRow
-from idhazh.evals import writer
+from idhazh.contracts.observation_lookup import ObservationLookupEntry
+from idhazh.evals.observation_batches import lookup_root
+from idhazh.evals.observation_lookup import ObservationLookup
 from idhazh.gardener import closed_day_fold
 from idhazh.gardener.closed_day_fold import Folded, FoldInterruptedError
 
@@ -49,15 +49,14 @@ OLDEST_OPEN: Final = "2026-09-16"
 NEWEST_CLOSED: Final = "2026-09-15"
 OLDER_CLOSED: Final = "2026-09-04"
 
-#: Eight work shards of one run, each filing its own observation ID: eight writers,
+#: Eight work shards of one run, each filing a feed-health row: eight writers,
 #: eight files, one day directory.
 WORK_SHARDS: Final = tuple(range(8))
 
-#: The feed-health days the fixture tree carries beside its observation ID days.
+#: Three additional feed-health days in the fixture tree.
 FEED_DAYS: Final = ("2026-09-05", "2026-09-06", "2026-09-07")
 
-DAY_SHARDS: Final = FIXTURES_DIR / "day-shards"
-ID_TREE: Final = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
+TREE: Final = LedgerName.FEED_HEALTH
 
 
 def midnight(day: str) -> datetime:
@@ -83,29 +82,34 @@ def fold(
     )
 
 
-def an_observation(day: str, *, shard: int, run: int = 1) -> ObservationIndexRow:
-    """One observation ID, shaped the way the contract's validators demand."""
-    return ObservationIndexRow.model_validate(
+def a_row(day: str, *, shard: int, run: int = 1) -> FeedHealthRow:
+    """One real feed-health row, with a distinct feed for each work shard."""
+    return FeedHealthRow.model_validate(
         {
-            "version": ObservationIndexRow.schema_version(),
-            "observation_digest": hashlib.sha256(f"{day}:{run}:{shard}".encode("ascii")).hexdigest(),
+            "run_id": f"{day}-90000000{run}",
+            "date": day,
+            "feed_id": f"example-feed-{shard}",
+            "checked_at": f"{day}T06:00:00Z",
+            "outcome": FetchOutcome.OK,
+            "status": 200,
+            "items": 3,
         }
     )
 
 
-def file_observations(
+def file_rows(
     state: Path,
-    rows: list[ObservationIndexRow],
+    rows: list[FeedHealthRow],
     *,
     day: str,
     run: int = 1,
     attempt: int = 1,
     shard: int = 0,
 ) -> Path:
-    """File one shard's observation IDs and return the day folder."""
+    """File one shard's feed-health rows and return the day folder."""
     ledger.write_segment(
         state,
-        ID_TREE,
+        TREE,
         rows,
         run_id=f"{day}-90000000{run}",
         attempt=attempt,
@@ -113,19 +117,19 @@ def file_observations(
         shard=shard,
         date=day,
     )
-    return ledger.path(state, ID_TREE, day)
+    return ledger.path(state, TREE, day)
 
 
 def a_full_run(state: Path, day: str) -> Path:
-    """Every work shard of one run, each filing its observation ID into one day."""
+    """Every work shard of one run, each filing its feed-health row into one day."""
     for shard in WORK_SHARDS:
-        file_observations(
+        file_rows(
             state,
-            [an_observation(day, shard=shard)],
+            [a_row(day, shard=shard)],
             day=day,
             shard=shard,
         )
-    return ledger.path(state, ID_TREE, day)
+    return ledger.path(state, TREE, day)
 
 
 def a_verdict(day: str, *, run: int) -> FeedHealthRow:
@@ -183,7 +187,7 @@ def every_day(state: Path) -> dict[tuple[LedgerName, str], list[dict[str, str]]]
 
 
 def the_fixture_tree(root: Path) -> Path:
-    """Three feed-health days and two observation ID days in one tree.
+    """Five feed-health days with repeated attempts and a late row after folding.
 
     Six writer files over three feed-health days, where the plan jobs of two
     runs each filed a verdict; three writer files of one day where two attempts
@@ -193,23 +197,23 @@ def the_fixture_tree(root: Path) -> Path:
     state = root / ledger.STATE_DIRNAME
     a_full_run(state, NEWEST_CLOSED)
     fold(state)
-    file_observations(
+    file_rows(
         state,
-        [an_observation(NEWEST_CLOSED, shard=9, run=2)],
+        [a_row(NEWEST_CLOSED, shard=9, run=2)],
         day=NEWEST_CLOSED,
         run=2,
         shard=9,
     )
     for shard in range(2):
-        file_observations(
+        file_rows(
             state,
-            [an_observation(OLDER_CLOSED, shard=shard)],
+            [a_row(OLDER_CLOSED, shard=shard)],
             day=OLDER_CLOSED,
             shard=shard,
         )
-    file_observations(
+    file_rows(
         state,
-        [an_observation(OLDER_CLOSED, shard=0)],
+        [a_row(OLDER_CLOSED, shard=0)],
         day=OLDER_CLOSED,
         attempt=2,
     )
@@ -230,16 +234,16 @@ def test_the_fold_changes_no_answer_and_never_touches_an_open_day(tmp_path: Path
     """
     state = the_fixture_tree(tmp_path)
     wake = "2026-09-22"
-    open_day = file_observations(
+    open_day = file_rows(
         state,
-        [an_observation("2026-09-21", shard=0)],
+        [a_row("2026-09-21", shard=0)],
         day="2026-09-21",
     )
     open_bytes = {path.name: path.read_bytes() for path in open_day.iterdir()}
     before = every_day(state)
     assert len(before) == 6, "the fixture tree has to carry six days or this proves less"
-    assert len(before[(ID_TREE, OLDER_CLOSED)]) == 2
-    assert len(before[(ID_TREE, NEWEST_CLOSED)]) == len(WORK_SHARDS) + 1
+    assert len(before[(TREE, OLDER_CLOSED)]) == 2
+    assert len(before[(TREE, NEWEST_CLOSED)]) == len(WORK_SHARDS) + 1
 
     folded = fold(state, wake=wake)
 
@@ -268,13 +272,13 @@ def test_a_closed_day_folds_into_one_file_holding_every_row(tmp_path: Path) -> N
     """
     state = tmp_path / ledger.STATE_DIRNAME
     day = a_full_run(state, NEWEST_CLOSED)
-    before = settled_in(state, ID_TREE, NEWEST_CLOSED)
+    before = settled_in(state, TREE, NEWEST_CLOSED)
 
     folded = fold(state)
 
     assert names_in(day) == [day_shards.SETTLED_NAME]
     assert [(settled.tree, settled.day) for settled in folded.days] == [
-        (ID_TREE, NEWEST_CLOSED)
+        (TREE, NEWEST_CLOSED)
     ]
     assert folded.files == len(WORK_SHARDS)
     assert rows_in(day / day_shards.SETTLED_NAME) == before
@@ -325,36 +329,44 @@ def test_every_closed_day_goes_in_one_pass_so_a_missed_wake_catches_up(tmp_path:
     assert [settled.day for settled in folded.days] == [OLDER_CLOSED, NEWEST_CLOSED]
 
 
-def test_two_trees_closed_on_one_day_are_both_folded(tmp_path: Path) -> None:
-    """Every tree it is handed is folded, not the first one with a closed day."""
+def test_folding_a_ledger_leaves_the_observation_lookup_unchanged(tmp_path: Path) -> None:
     state = tmp_path / ledger.STATE_DIRNAME
-    observations = a_full_run(state, NEWEST_CLOSED)
     feeds = verdicts(state, NEWEST_CLOSED)
+    root = lookup_root(state)
+    identity = "a" * 64
+    with ObservationLookup(root) as lookup:
+        lookup.initialize(ledger.OBSERVATION_KEY, load_observation_lookup())
+        lookup.put(
+            [ObservationLookupEntry(namespace="observation", identity=identity)],
+            generation="b" * 64,
+        )
+    before = bytes_under(root)
 
     folded = fold(state)
 
-    assert names_in(observations) == names_in(feeds) == [day_shards.SETTLED_NAME]
-    assert sorted(settled.tree for settled in folded.days) == sorted(
-        (LedgerName.FEED_HEALTH, ID_TREE)
-    )
+    assert names_in(feeds) == [day_shards.SETTLED_NAME]
+    assert [settled.tree for settled in folded.days] == [TREE]
+    assert bytes_under(root) == before
+    with ObservationLookup(root) as lookup:
+        assert lookup.recorded([identity, "c" * 64]) == {identity}
 
 
 def test_only_the_trees_handed_in_are_folded(tmp_path: Path) -> None:
     """A task folds the trees it walks, so a tree another task owns is left to that task."""
     state = tmp_path / ledger.STATE_DIRNAME
-    observations = a_full_run(state, NEWEST_CLOSED)
-    feeds = verdicts(state, NEWEST_CLOSED)
+    feeds = a_full_run(state, NEWEST_CLOSED)
+    before = bytes_under(feeds)
 
-    closed_day_fold.fold(
+    folded = closed_day_fold.fold(
         state,
-        [LedgerName.FEED_HEALTH],
+        [],
         now=midnight(WAKE),
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=False,
     )
 
-    assert names_in(feeds) == [day_shards.SETTLED_NAME]
-    assert len(names_in(observations)) == len(WORK_SHARDS)
+    assert folded == Folded(dry_run=False)
+    assert bytes_under(feeds) == before
 
 
 def test_a_day_folder_the_window_took_is_left_to_the_window(tmp_path: Path) -> None:
@@ -400,9 +412,9 @@ def test_a_row_that_will_not_read_stops_the_fold_and_carries_the_days_before_it(
     bad = a_full_run(state, NEWEST_CLOSED)
     victim = sorted(bad.iterdir())[0]
     with victim.open("a", encoding="utf-8", newline="") as handle:
-        handle.write("not,an,observation\n")
+        handle.write("not,a,feed-row\n")
 
-    with pytest.raises(FoldInterruptedError, match=f"{ID_TREE.value} {NEWEST_CLOSED}") as stop:
+    with pytest.raises(FoldInterruptedError, match=f"{TREE.value} {NEWEST_CLOSED}") as stop:
         fold(state)
 
     assert stop.value.so_far.failed is True
@@ -436,8 +448,8 @@ def test_a_straggler_that_lands_after_a_fold_is_folded_into_the_file_beside_it(
     state = tmp_path / ledger.STATE_DIRNAME
     day = a_full_run(state, NEWEST_CLOSED)
     fold(state)
-    late = an_observation(NEWEST_CLOSED, shard=9, run=2)
-    file_observations(
+    late = a_row(NEWEST_CLOSED, shard=9, run=2)
+    file_rows(
         state,
         [late],
         day=NEWEST_CLOSED,
@@ -450,9 +462,9 @@ def test_a_straggler_that_lands_after_a_fold_is_folded_into_the_file_beside_it(
 
     assert names_in(day) == [day_shards.SETTLED_NAME]
     assert folded.files == 1, "the settled file is rewritten, so only the straggler goes"
-    observations = [row["observation_digest"] for row in rows_in(day / day_shards.SETTLED_NAME)]
-    assert late.observation_digest in observations
-    assert len(observations) == len(WORK_SHARDS) + 1
+    feeds = [row["feed_id"] for row in rows_in(day / day_shards.SETTLED_NAME)]
+    assert late.feed_id in feeds
+    assert len(feeds) == len(WORK_SHARDS) + 1
 
 
 def test_two_folds_of_one_closed_day_write_the_same_bytes(tmp_path: Path) -> None:
@@ -481,11 +493,6 @@ def test_two_folds_of_one_closed_day_write_the_same_bytes(tmp_path: Path) -> Non
 
 
 # --- A closed month settled whole --------------------------------------------------
-#
-# The eval ledger's ID folder asks its fold to settle each closed month into one
-# file, so the folder gains a file a month rather than a file a day. The tree is
-# the committed fixture under `tests/fixtures/day-shards/id-months/`, written by
-# the real segment writer and day fold; its README says what each day holds.
 
 #: A wake at which August closed a month ago, the 29th of September is a closed
 #: day of an open month, and the 30th is still open.
@@ -493,12 +500,18 @@ MONTH_WAKE: Final = "2026-10-01"
 CLOSED_MONTH: Final = "2026-08"
 
 
-def an_id_tree(root: Path) -> Path:
-    """The fixture ID folder under a state root of its own, and that state root."""
-    source = DAY_SHARDS / "id-months" / ID_TREE.value
-    assert source.is_dir(), f"the id-months fixture is missing at {source}"
+def a_month_tree(root: Path) -> Path:
+    """Five August files hold seven feed keys, beside one closed and one open September day."""
     state = root / ledger.STATE_DIRNAME
-    shutil.copytree(source, ledger.tree_root(state, ID_TREE))
+    first = "2026-08-03"
+    middle = "2026-08-17"
+    file_rows(state, [a_row(first, shard=0), a_row(first, shard=1)], day=first)
+    file_rows(state, [a_row(first, shard=0), a_row(first, shard=2)], day=first, attempt=2)
+    file_rows(state, [a_row(middle, shard=0), a_row(middle, shard=1)], day=middle)
+    fold(state, wake="2026-08-20", skip=frozenset({ledger.path(state, TREE, first)}))
+    file_rows(state, [a_row(middle, shard=2, run=2)], day=middle, run=2)
+    for day in ("2026-08-31", "2026-09-29", "2026-09-30"):
+        file_rows(state, [a_row(day, shard=0)], day=day)
     return state
 
 
@@ -509,10 +522,10 @@ def fold_months(
     dry_run: bool = False,
     skip: frozenset[Path] = frozenset(),
 ) -> Folded:
-    """The ID folder's fold as its declaration asks for it: closed months settled whole."""
+    """A real ledger folded with the closed-month option."""
     return closed_day_fold.fold(
         state,
-        [ID_TREE],
+        [TREE],
         now=midnight(wake),
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=dry_run,
@@ -521,9 +534,25 @@ def fold_months(
     )
 
 
-def digests_in(paths: Iterable[Path]) -> set[str]:
-    """Every ID these files hold together."""
-    return {row["observation_digest"] for path in paths for row in rows_in(path)}
+def keys_in(paths: Iterable[Path]) -> set[tuple[str, ...]]:
+    """Every real ledger key these files hold together."""
+    return {
+        tuple(row[column] for column in ledger.segment_key(TREE))
+        for path in paths
+        for row in rows_in(path)
+    }
+
+
+def recorded_keys(state: Path) -> set[tuple[str, ...]]:
+    return {
+        tuple(row[column] for column in ledger.segment_key(TREE))
+        for row in day_shards.settled_rows(
+            ledger.tree_root(state, TREE),
+            ledger.segment_key(TREE),
+            ledger.segment_contract(TREE),
+            days=UNBOUNDED_WINDOW,
+        )
+    }
 
 
 def bytes_under(root: Path) -> dict[str, bytes]:
@@ -542,36 +571,36 @@ def test_a_closed_month_settles_into_one_file_holding_every_id_its_days_held(
     The open month is the control on both sides of its own line: its closed day
     folds by day as before, and its open day keeps its bytes.
     """
-    state = an_id_tree(tmp_path)
-    root = ledger.tree_root(state, ID_TREE)
+    state = a_month_tree(tmp_path)
+    root = ledger.tree_root(state, TREE)
     month = root / "2026" / "08"
     august = day_shards.one_month(root, CLOSED_MONTH)
-    held = digests_in(august)
-    assert (len(august), len(held)) == (5, 7), "the fixture no longer holds what its README says"
+    held = keys_in(august)
+    assert (len(august), len(held)) == (5, 7), "the fixture needs five files and seven distinct keys"
     open_day = root / "2026" / "09" / "30"
     open_bytes = bytes_under(open_day)
-    before = writer.indexed_observations(state)
+    before = recorded_keys(state)
 
     folded = fold_months(state)
 
     assert names_in(month) == [day_shards.SETTLED_NAME], "a file of the closed month was left"
     settled = rows_in(month / day_shards.SETTLED_NAME)
-    assert {row["observation_digest"] for row in settled} == held
+    assert keys_in([month / day_shards.SETTLED_NAME]) == held
     assert len(settled) == len(held), "an ID two writers both filed is in the month file twice"
     assert [(each.tree, each.month, len(each.replaced)) for each in folded.months] == [
-        (ID_TREE, CLOSED_MONTH, len(august))
+        (TREE, CLOSED_MONTH, len(august))
     ]
-    assert [(each.tree, each.day) for each in folded.days] == [(ID_TREE, "2026-09-29")]
+    assert [(each.tree, each.day) for each in folded.days] == [(TREE, "2026-09-29")]
     assert names_in(root / "2026" / "09" / "29") == [day_shards.SETTLED_NAME]
     assert bytes_under(open_day) == open_bytes
-    assert writer.indexed_observations(state) == before
+    assert recorded_keys(state) == before
 
 
 def test_a_second_fold_of_a_settled_month_changes_nothing(tmp_path: Path) -> None:
     """A byte comparison, because a rewrite that reordered the rows is a diff every wake."""
-    state = an_id_tree(tmp_path)
+    state = a_month_tree(tmp_path)
     fold_months(state)
-    root = ledger.tree_root(state, ID_TREE)
+    root = ledger.tree_root(state, TREE)
     written = bytes_under(root)
 
     assert fold_months(state) == Folded(dry_run=False)
@@ -586,36 +615,30 @@ def test_a_day_that_lands_in_a_settled_month_is_settled_in_at_the_next_pass(
     A reader sees its ID at once, and the next pass settles it into the month's
     file with every ID the file already held.
     """
-    state = an_id_tree(tmp_path)
+    state = a_month_tree(tmp_path)
     fold_months(state)
-    root = ledger.tree_root(state, ID_TREE)
+    root = ledger.tree_root(state, TREE)
     month = root / "2026" / "08"
-    settled = digests_in([month / day_shards.SETTLED_NAME])
-    before = writer.indexed_observations(state)
-    late = hashlib.sha256(b"a re-run reaches back into August").hexdigest()
-    ledger.write_segment(
+    settled = keys_in([month / day_shards.SETTLED_NAME])
+    before = recorded_keys(state)
+    late = a_row("2026-08-20", shard=9, run=2)
+    file_rows(
         state,
-        ID_TREE,
-        [
-            ObservationIndexRow.model_validate(
-                {"version": ObservationIndexRow.schema_version(), "observation_digest": late}
-            )
-        ],
-        run_id="2026-08-20-17000000009",
+        [late],
+        day="2026-08-20",
+        run=2,
         attempt=2,
-        job=ServerJob.ASSEMBLE,
-        shard=0,
-        date="2026-08-20",
     )
+    late_key = tuple(late.csv_row()[column] for column in ledger.segment_key(TREE))
     assert names_in(month) == ["20", day_shards.SETTLED_NAME]
-    assert writer.indexed_observations(state) == before | {late}, "a reader missed the late day"
+    assert recorded_keys(state) == before | {late_key}, "a reader missed the late day"
 
     folded = fold_months(state)
 
     assert names_in(month) == [day_shards.SETTLED_NAME]
-    assert digests_in([month / day_shards.SETTLED_NAME]) == settled | {late}
+    assert keys_in([month / day_shards.SETTLED_NAME]) == settled | {late_key}
     assert [(each.month, len(each.replaced)) for each in folded.months] == [(CLOSED_MONTH, 1)]
-    assert writer.indexed_observations(state) == before | {late}
+    assert recorded_keys(state) == before | {late_key}
 
 
 def test_a_month_closes_whole_days_after_its_last_day_ends(tmp_path: Path) -> None:
@@ -625,8 +648,8 @@ def test_a_month_closes_whole_days_after_its_last_day_ends(tmp_path: Path) -> No
     the next day's wake settles the month whole - from the settled days and the
     last day's writer file alike.
     """
-    state = an_id_tree(tmp_path)
-    root = ledger.tree_root(state, ID_TREE)
+    state = a_month_tree(tmp_path)
+    root = ledger.tree_root(state, TREE)
 
     first = fold_months(state, wake="2026-09-01")
 
@@ -644,8 +667,8 @@ def test_a_fold_that_does_not_settle_months_keeps_one_file_a_closed_day(
     tmp_path: Path,
 ) -> None:
     """The month step is the declaration's to ask for; every other tree folds as it did."""
-    state = an_id_tree(tmp_path)
-    root = ledger.tree_root(state, ID_TREE)
+    state = a_month_tree(tmp_path)
+    root = ledger.tree_root(state, TREE)
 
     folded = fold(state, wake=MONTH_WAKE)
 
@@ -661,8 +684,8 @@ def test_a_fold_that_does_not_settle_months_keeps_one_file_a_closed_day(
 
 def test_a_dry_run_settles_a_closed_month_and_changes_nothing(tmp_path: Path) -> None:
     """The list a person reads before turning the step live is the list the live step takes."""
-    state = an_id_tree(tmp_path)
-    root = ledger.tree_root(state, ID_TREE)
+    state = a_month_tree(tmp_path)
+    root = ledger.tree_root(state, TREE)
     before = bytes_under(root)
 
     rehearsed = fold_months(state, dry_run=True)
@@ -675,8 +698,8 @@ def test_a_dry_run_settles_a_closed_month_and_changes_nothing(tmp_path: Path) ->
 
 def test_a_month_holding_a_day_the_window_took_is_left_to_the_window(tmp_path: Path) -> None:
     """The window goes first, and a month is settled whole or not at all."""
-    state = an_id_tree(tmp_path)
-    root = ledger.tree_root(state, ID_TREE)
+    state = a_month_tree(tmp_path)
+    root = ledger.tree_root(state, TREE)
     taken = root / "2026" / "08" / "17"
 
     folded = fold_months(state, skip=frozenset({taken}))

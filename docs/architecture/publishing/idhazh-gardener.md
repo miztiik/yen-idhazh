@@ -716,13 +716,13 @@ the files it read. It changes no answer a reader gets
 ([../../concepts/partitions.md](../../concepts/partitions.md)).
 
 **The retention task that owns each tree folds it**, when its declaration
-carries a `fold` block: `feed-health`,
-and `summary-quality-evals-index` (the eval ledger's ID folder).
+carries a `fold` block. The current task is `feed-health`.
 Which trees a task folds is read off the folders it walks, so
 one job writes each tree a wake and no tree is checked out twice. The
 item-health, summary-quality-evals, host-fingerprint, counterfactual-scores and
 candidate-models ledgers are not CSV day trees any more, so no fold reads them:
-their compaction packs them.
+their compaction packs them. The [evaluation ID lookup](../contracts/observation-lookup.md)
+has no day/month fold or age-deletion task.
 
 **A task may settle a closed month whole.** With `fold.settles_months`, once a
 month's last day is closed - `fold.after_days` whole days after the month ends -
@@ -730,8 +730,7 @@ the fold settles every file of that month, each day's writer files and settled
 files alike, into one `settled.csv` in the month's own folder,
 `state/<tree>/<YYYY>/<MM>/settled.csv`, and deletes what it read. A day of a
 closed month is the month's from then on, and a file a re-run adds to it later
-is settled in at the next wake. Only the ID folder's task asks for it: that
-folder keeps every file for ever, and the dedupe reads all of it on every run.
+is settled in at the next wake. No current task enables this option.
 A month's rows name no day, so the loader refuses the switch beside a window of
 days, which would take the month's file whole once its first day aged out.
 
@@ -747,9 +746,8 @@ days, which would take the month's file whole once its first day aged out.
 the window's `dry_run`, and the runner lands the fold's writes and deletions
 whenever the fold is live - a live fold inside a dry task would otherwise change
 the disk and stage nothing. Every path the fold touches is held to what the task
-owns, like every other. All four folds ship live, because they copy the fold
-`digest.yml` ran after each day's commit until the gardener took it over; every
-window beside them still only reports.
+owns, like every other. The feed-health fold runs live while its age-deletion
+window only reports.
 
 **The row says what the fold did.** `fold_dry_run`, `folded_days`,
 `folded_months` and `folded_files` sit on the task's own row beside the window's
@@ -990,25 +988,10 @@ monthly figure computes it from them when it draws. So the `monthly_window` of
 `config/gardener/compact-summary-quality-evals.json` is `forever`, and a live pass may make one
 file a day and one a month without taking a row. Its `monthly_keep_days` packs a
 finished year's month files into one year file, kept for ever, so the month files
-stop adding up and no row goes. The `summary-quality-evals-index` retention task
-keeps every day of the ID folder for the same end - a dropped index day would
-make every measurement in it new again - so its window is `forever` too, and its
-one live action is its fold, which settles each closed month into one file
-([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).
-
-**The ID folder is settled a month at a time by the fold.** It keeps every file
-for ever and the dedupe reads all of it on every run, so one file a closed day
-was a read that grew by 365 files a year: about 6 seconds a run at one year and
-about a minute at ten, at a measured 16 ms a file. A packed ledger and reading
-the IDs from the eval rows' key columns were the other two ways to stop it.
-Reading the key columns keeps no second copy, but the rows sit in one raw file a
-write until the eval ledger's packing runs live, so it would stop the growth
-only then. A month step on the fold that already runs live writes the CSV shape
-every reader already settles, moves no `dry_run`, needs no migration - the next
-wake settles the days already there - and deletes no ID, so the dedupe reads
-about 43 files at one year and 151 at ten (an estimate counted from the
-calendar). The operator prune refuses the folder by name: a month's file cannot
-serve a delete of a range of days, and no ID is ever deleted.
+stop adding up and no row goes. Measurement IDs survive independently in the
+[exact-ID lookup](../contracts/observation-lookup.md). No gardener task folds
+that tree or removes its IDs by age; compaction must not make an old measurement
+new again.
 
 ## See also
 

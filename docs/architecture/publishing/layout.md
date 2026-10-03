@@ -37,9 +37,14 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json  optional visual, drawn i
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
 state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice, kept for ever
-state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/ the identity of every measurement that day holds, 76 bytes each
-state/summary-quality-evals-index/<YYYY>/<MM>/settled.csv the same, for every day of a closed month, in one file
+state/summary-quality-evals-index/lookup/root.json the current exact-ID lookup generation
+state/summary-quality-evals-index/lookup/nodes/<prefix>/<digest>.json bounded routing page
+state/summary-quality-evals-index/lookup/nodes/<prefix>/<digest>.sqlite capped membership leaf
+state/summary-quality-evals-index/incoming/<batch-id>.json durable pending evaluation input
 ```
+
+The [observation lookup](../contracts/observation-lookup.md) owns these index
+paths and their publication protocol; they are not reader-facing URLs.
 
 ```
 / the newest published day, rendered inline moving
@@ -53,7 +58,7 @@ state/summary-quality-evals-index/<YYYY>/<MM>/settled.csv the same, for every da
 
 **One day directory is the deletion atom.** Nothing outside it points into its interior except the append-only ledger, which is what makes pruning a single operation with no second edit.
 
-**No hash appears in any path, filename or URL.** A day carries two reader-facing addresses and both are the item's own id: the anchor `#<item id>` and the visual's marks, `ai-wfyypy5sgvnwcxd3.json`. The id is derived from the article's address, so a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)), and it is not a digest of anything - a digest here is 32 or 64 hex characters, and an item id is neither of those widths. The sha256 `url_key` that identity for dedupe actually rests on stays a field on the payload and never becomes a path segment. Paths are for humans and for globs; a hash is for the contract.
+**Reader-facing item paths use the item's ID, not a raw hash.** A day carries two reader-facing addresses and both are the item's own id: the anchor `#<item id>` and the visual's marks, `ai-wfyypy5sgvnwcxd3.json`. The id is derived from the article's address, so a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)), and it is not a digest of anything - a digest here is 32 or 64 hex characters, and an item id is neither of those widths. The sha256 `url_key` stays a payload field, not a reader-facing path segment. Internal lookup nodes instead use checked content digests for their filenames.
 
 **Two id shapes are live, and the pattern that accepts them never contracts.** Every day published before 2026-09-12 carries `<vertical>-<ten decimal digits>`; a published day is frozen, so not one of those ids moved. A run writes `<vertical>-<sixteen Crockford base32 symbols>` from 2026-09-12 - the 32-symbol alphabet without `i`, `l`, `o` and `u`, so no id can be misread aloud, and a subset of the slug alphabet, so the id is still a slug. **Nothing sorts ids across days**, because the two shapes do not order against each other.
 

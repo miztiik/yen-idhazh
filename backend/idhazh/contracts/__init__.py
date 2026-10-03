@@ -64,6 +64,14 @@ from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.observation_index import ObservationIndexRow
+from idhazh.contracts.observation_lookup import (
+    ObservationBatch,
+    ObservationLookupPage,
+    ObservationLookupReceipt,
+    ObservationLookupRoot,
+    ObservationLookupTransaction,
+    ObservationPreparation,
+)
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
@@ -155,7 +163,13 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     MachinePanels,
     MachineShardRow,
     MergeLineHoldoutScore,
+    ObservationBatch,
     ObservationIndexRow,
+    ObservationLookupPage,
+    ObservationLookupReceipt,
+    ObservationLookupRoot,
+    ObservationLookupTransaction,
+    ObservationPreparation,
     PipelineTestsConfig,
     PublicRunDay,
     PublicTelemetryRow,

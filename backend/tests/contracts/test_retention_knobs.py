@@ -51,9 +51,8 @@ def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     assert isinstance(packed.monthly_window, ForeverWindow), (
         "config/gardener/compact-summary-quality-evals.json drops a month of eval rows"
     )
-    assert isinstance(tasks["summary-quality-evals-index"].window, ForeverWindow), (
-        "config/gardener/summary-quality-evals-index.json takes a day of the index the "
-        "dedupe reads"
+    assert "summary-quality-evals-index" not in tasks, (
+        "the exact evaluation lookup has no dated partitions to fold or prune"
     )
 
 

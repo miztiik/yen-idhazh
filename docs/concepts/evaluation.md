@@ -857,7 +857,7 @@ Coherence runs in the `work` shard, inside `to_eval_row`, because that is where 
 
 **Where a later plan would start.** [../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md) sketches a judge and names none of these four, which is the useful part - it hands over pieces rather than a design. The venue is [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md), which owns the workflow, the verbs and the tenancy protocol. The night's shape is: draw a sample, ask a model for a verdict on each item, turn the verdicts into one reading. **The label ledger and the review tree are the two that shape fits with nothing added**, because both already draw a sample and seat a person in the verdict chair; swapping the chair is the whole change. The validator and the faithfulness scorer fit it less well - both run on every item rather than on a draw, so a plan for either starts by measuring a model judge against the instrument already there. And where a reading has to move a number, [`../../backend/idhazh/contracts/fitted_similarity_threshold.py`](../../backend/idhazh/contracts/fitted_similarity_threshold.py) is the template that damps it, step-caps it and clamps it. Authority: nobody. This records what section 1a opened; each of the four is an owner decision that has not been asked for.
 
-**Every eval row is kept for ever, and nothing summarises a month.** The rows are the evidence behind every quality claim this project publishes. The month summary they replaced kept totals and distributions, and gave up item-level lookup, a late draw into the label queue, re-banding under new thresholds, an exact percentile and any slice its key did not name - and it existed only so that rows older than fourteen months could be deleted. Keeping the rows keeps all of that, and a chart that wants a monthly figure computes it from the rows when it draws. The cost is bytes, and parquet keeps them small: the eval ledger held 4,893,746 bytes, about 4.9 MB, on 2026-09-30, over 40 days of rows. One estimate put the growth at about 29 MB a year; those first 40 days grew at about 45 MB a year, and the committed size of `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` a year from now settles which is nearer. The `monthly_window` of `config/gardener/compact-summary-quality-evals.json` is `forever`, so the compaction may pack a month and never drops one, and the `summary-quality-evals-index` task keeps every ID the dedupe reads ([The ledger](#every-row-is-kept-and-nothing-summarises-a-month)).
+**Every eval row is kept for ever, and nothing summarises a month.** The rows are the evidence behind every quality claim this project publishes. The month summary they replaced kept totals and distributions, and gave up item-level lookup, a late draw into the label queue, re-banding under new thresholds, an exact percentile and any slice its key did not name - and it existed only so that rows older than fourteen months could be deleted. Keeping the rows keeps all of that, and a chart that wants a monthly figure computes it from the rows when it draws. The cost is bytes, and parquet keeps them small: the eval ledger held 4,893,746 bytes, about 4.9 MB, on 2026-09-30, over 40 days of rows. One estimate put the growth at about 29 MB a year; those first 40 days grew at about 45 MB a year, and the committed size of `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` a year from now settles which is nearer. The `monthly_window` of `config/gardener/compact-summary-quality-evals.json` is `forever`, so the compaction may pack a month and never drops one. The [observation lookup](../architecture/contracts/observation-lookup.md) keeps every measurement ID independently of that packing.
 
 ## Rejected alternatives
 
@@ -954,12 +954,10 @@ The row shape travels with the file. Every file records the version stamp of the
 
 **The ledger records measurements, not runs.** The writer files no row whose
 address, output words and scorer version all match a measurement
-the ledger already records. Nothing in that recorded measurement identity changed,
-so a second row would only inflate the denominator every rate is computed
-against. Article-input identity is not part of this de-duplication key, and the
-pipeline stamp left it on 2026-09-12: it stopped being written, so keeping it
-would have left a constant empty component in every digest.
-`item_id` is deliberately absent too: it is a slot on a page, not the item.
+the ledger already records. A second row would count the same measurement
+again. The [canonical key](../architecture/contracts/observation-lookup.md#measurement-identity)
+excludes pipeline version, date, run, article-input digest and item slot.
+A changed output or scorer is a new measurement.
 
 ### Every column is answered for by exactly one console panel
 
@@ -987,9 +985,8 @@ Authority: row 4 of
 [../../TODO/20260905-03-console-backfill-plan.md](../../TODO/20260905-03-console-backfill-plan.md),
 2026-09-06.
 
-Any of the four differing makes it a new measurement and it lands: different words under identical inputs is the determinism violation the ledger exists to catch, and the same words read by a different scorer is a reading worth keeping.
-
-Four rows written before this rule are still committed - four items on 2026-08-23 that a second day re-summarized because the published ledger had no record of the day before. They are honest history and stay. Anything counting the whole ledger de-duplicates on those four columns first.
+Historical duplicate rows are not rewritten by the lookup migration. It
+preserves their legacy IDs and adds their current three-part measurement keys.
 
 The 2026-08-23 repair kept positions stable. It measured `state/scores.csv` with Python's `csv` module: 33 header names and 19 data rows, all with 33 cells. Ten historical rows predated `score_ms`, so they now carry the contract default `0`. All 19 rows predated `evidential_density` and `speculative_density`, so those cells stay empty as CSV nulls.
 
@@ -1009,70 +1006,15 @@ nothing skips
 
 ### The dedupe is answered by an index, and an index can be wrong
 
-The writer does not read the score rows to answer *do we already hold this
-measurement*. It reads `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/`, which keeps one
-fixed-width digest a measurement beside the day file it describes - a read an order
-of magnitude smaller than the rows, exact, with nothing forgotten
-(Guardrail #12). Once a month is closed, the gardener
-settles its days into one `<YYYY>/<MM>/settled.csv`, which the dedupe reads as
-it reads a day. **It files by the ledger's own day since
-2026-09-13**, because the fill below takes a partition with no index and the rows
-beside it, so two grains in one relationship would be a mapping somebody
-maintains. Its rows carry no date, so the committed history was regenerated by
-`idhazh rebuild-summary-quality-evals-index` rather than split.
+The writer asks the [observation lookup](../architecture/contracts/observation-lookup.md)
+about supplied IDs without reading evaluation history. Its root, bounded
+routing nodes and SQLite leaves replace the per-day CSV index. Reads validate
+the nodes they touch, and a missing root with existing history fails rather
+than treating old measurements as new.
 
-**Nothing compares an index that exists against the rows beside it.** Comparing
-means reading those rows, which is the bill the index removes, so the writer
-fills a partition that has **no** index and leaves every other one alone. That is
-a deliberate trade and it leaves one hole: an index that drifted stands for
-ever, and the next dedupe admits a measurement the ledger already holds - which
-turns a count of measurements back into a count of times the pipeline looked,
-and that is the one thing this ledger promises it is not.
-
-Three things put an index out of step and all three are real. A fill a crash cut
-short leaves a file that exists and is short, which every later run skips. A
-shard grown behind the index's back - rows appended by a branch that merged a
-`main` older than the index - leaves digests missing. And an index left at a
-grain the ledger no longer uses is not read at all, because a partition name the
-rule does not recognise is ignored rather than refused
-([partitions.md](partitions.md)).
-
-**The repair is `idhazh rebuild-summary-quality-evals-index`, and it checks its own result.** For
-each day it is named it compares the index against the rows beside it in **both
-directions**, adds what the rows produce and the index lacks as one
-`repair-<stamp>.csv` in that day, then reads the index back and fails if a
-digest is still missing. Both directions, because a one-directional check passes
-on an index that only ever grows, and an index that only grows is what a
-repeated dedupe over a re-scored item looks like. A digest the index holds that
-the rows cannot produce is reported and kept: the dedupe reads the index as a
-set, so it costs one measurement that is never taken again, and taking it out
-would mean rewriting a committed file. It reports what each day had wrong before
-it added anything, so drift is named rather than quietly absorbed. **A month the
-gardener has settled into one file is compared as one month**, because an index
-row names no day: every row the month holds is read and compared with the
-month's file, and a digest it lacks is added to the day whose rows produce it,
-which the next fold settles in.
-
-It writes the file the partition rule names today and removes no other, so the
-third case above is the one it cannot repair on its own: a file at a grain no
-reader recognises is invisible to the comparison as well, and a change of grain
-has to take its own old files away.
-
-**It is never a step of a run**, for two reasons rather than one. It reads every
-score row of every month it is given, which is the read the index exists to
-avoid ([`../../CLAUDE.md`](../../CLAUDE.md) Guardrail #12) - so the cover is stated,
-never defaulted: `--month` names the months and `--every-shard` is the full pass
-over the archive, and the command refuses to run with neither, so a caller that
-named neither gets an error rather than the archive. And an index
-that repaired itself on a schedule would hide the drift it exists to reveal -
-the dedupe would go on being right while nobody learned that something had made
-it wrong. Authority: Fowler, 2026-09-12.
-
-A month with no committed shard exits non-zero rather than reporting a clean
-pass over nothing, and the refusal comes before any file is touched, so the
-months named beside a typo keep the index they had.
-
-**Every day's index can be rebuilt, because every row it describes is kept.**
+The same page owns local recovery and atomic publication of rows, IDs and batch
+receipts. Operators use the [explicit cutover and named-batch recovery procedure](../how-to/migrate-observation-lookup.md),
+not a routine full-history repair or an implicit writer fallback.
 
 ### Every row is kept, and nothing summarises a month
 
@@ -1089,12 +1031,8 @@ the [design rationale](#design-rationale) above.
 
 **The index the dedupe reads keeps every ID for the same reason.** An
 observation key carries no date, so an ID dropped would make its measurement
-new again, and a count over the ledger would stop being a count of items. The
-`summary-quality-evals-index` task that owns `state/summary-quality-evals-index/` has the window
-`forever` and takes nothing; its one live action is its fold, which settles
-each closed month into one file and each closed day of the open month into one
-file. The read grows by one file a closed month, plus the open month's days,
-which violates the fixed-size input rule in Guardrail #12.
+new again. The lookup has no age-deletion task or day/month fold. Membership
+work is bounded by the supplied IDs.
 
 **Every utility that needs an item-level row reaches every month.**
 `label_queue.py`, `reband_scores.py`, `data_wrangler.py refill` and

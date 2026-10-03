@@ -1,0 +1,17 @@
+{
+  "generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "key_fields": [
+    "url_key",
+    "output_digest",
+    "scorer_version"
+  ],
+  "node": {
+    "kind": "leaf",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "settings": {
+    "max_leaf_bytes": 16384,
+    "sqlite_page_bytes": 4096
+  },
+  "version": "2026-10-02"
+}

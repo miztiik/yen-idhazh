@@ -148,7 +148,7 @@ Three rules hold for all of them:
 - **The stage that can honestly answer is the stage that writes.** Assemble writes the published ledger, not Collect - until a digest is committed, nothing was published, and a run that dies mid-way must not leave a claim that it finished. It is also why the worker writes the item-health row for an item it settled, as soon as it settles: it can answer for that item, and by the time Assemble runs the answer may already have been thrown away with the run. A row is one planned item on one run, so the two writers cannot count the same item twice.
 - **Nothing under `state/` is ever served.** The console reads it at build time and bakes the numbers into the page. A reader gets the figures, never the file.
 
-**A ledger more than one job writes gives every writer its own file.** A
+**A row ledger more than one job writes gives every writer its own file.** A
 writer writes one file of its own inside the day directory its own rows name -
 a CSV named for its run, its attempt at that run, its job and its shard, or a
 raw file the ledger door names for it - so no two writers of one
@@ -158,14 +158,17 @@ to be folded first: the file a writer closes is already the ledger, and the
 reader decides what two rows of one key mean at read time -
 `day_shards.settled_rows` for a CSV day, the door's `settle_rows` for a raw one.
 
+Evaluation publication also updates a shared exact-ID lookup. Its
+[batch protocol](../architecture/contracts/observation-lookup.md#publication-across-jobs)
+replays original input against the winning root after a rejected push; separate
+raw files alone do not prevent two jobs from recording the same measurement.
+
 `state/host-fingerprint/` was the first ledger through it, from 2026-09-17. Ten
 jobs of one run each draw a machine and each record it, and on 2026-09-16 those
 ten pushes raced and left the day file with nothing but its header.
 
-The three item-grain ledgers followed on 2026-09-18 - `state/item-health/`,
-`state/scores/` and `state/score-index/`. Up to eight work shards and assemble
-all record the same day there, which is the same race with more writers in it,
-and the item census is the one where a repeat is visible to a reader: the count
+Work shards and assemble both write item-health and summary-quality evaluation
+rows for one day. The item census is where a repeat is visible to a reader: the count
 of rows in a day feeds a feed's share of the day and the day's own metrics.
 
 **A staging directory sat above all of them until 2026-09-22 and is gone.** A

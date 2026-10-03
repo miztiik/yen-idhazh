@@ -82,34 +82,22 @@ head, which left every ledger with one path two runs of one day both computed
 bytes for. The day directory is now the ledger itself, and `state/segments/` is
 gone.
 
-**There are two ways to lose the push race, and they need different answers.**
+**Writer-owned rows rebase; shared derived output must be prepared again.**
 
-The plan job only records what it saw, and so does a work shard. Every row they
-append has one writer: a shard's rows go to a CSV named
+The plan job and work shards write rows with one writer per file. A shard's rows
+go to a CSV named
 `state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, or through
 the ledger door to a raw file under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, and
-either name belongs to the one writer that can take it. Two sides of a lost race
-are therefore two different paths, and the rebase applies both whole.
+either name belongs to that writer. Those paths rebase independently.
 
-**No path in the plan job is a derived `state/` ledger any more, and that closes
-the exception this section used to carry.** A day head was derived from the
-segment ledger by a catch-up fold, so two jobs that folded the same segments
-wrote the same head from different bases - two derived versions of one file,
-which is the shape no rebase can settle and no merge rule should. The gap that
-made it possible is not a race at all: `actions/checkout` restores the commit
-the run was TRIGGERED at, and nothing bounds how far origin moves before the job
-starts. Run `35660521768` is the record. It was created at 22:02 and
-started here at 22:48, five commits behind, and one of those five was the run
-ahead's own fold. It re-folded segments that run had already folded and deleted,
-rewrote the five heads it had already written, and the rebase then held two
-versions of each with no way to choose. The whole day went at the push. **The
-head is what made that possible, and the head is gone.**
+Evaluation publication also changes a shared lookup root. Its raw rows and
+lookup must be prepared together against the winning root after a rejected
+push. The [observation lookup protocol](../contracts/observation-lookup.md#publication-across-jobs)
+owns that exception; file ownership alone does not prevent duplicate
+measurements across jobs. Work and assemble use the preparation hook below.
 
-That 46-minute gap was a wait in a concurrency group this workflow no longer has
-([below](#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them)).
-The gap itself did not go with it. It is now whatever a run working alongside
-this one has committed since the trigger, which is why the step below still
-runs.
+`actions/checkout` still starts from the trigger commit. Other runs can move
+the state before this job begins, so the plan job first takes a current base.
 
 The answer is a current base rather than a merge rule. The job runs
 [`backend/utilities/take_state_from_the_tip.py`](../../../backend/utilities/take_state_from_the_tip.py)
@@ -130,7 +118,7 @@ attempts writing the same row, and an appending stage cannot tell them apart: it
 filters against the file it checked out, and `actions/checkout` pins the job to
 the commit its run was triggered at. A settling pass ran after each rebase to
 take the repeats back out. Both are gone: the union driver is off every head, no
-commit step settles anything, and a second attempt that really does race its own
+commit step settles CSV day trees, and a second attempt that really does race its own
 first attempt now stops at the rebase instead of landing a row twice.
 `path_classes.UNION_SAFE` lists every tree that still keeps a union driver.
 `state/visual-prunes/**` lost its driver on 2026-09-28, and `state/published/**`
@@ -171,14 +159,12 @@ time. `frontend/public/telemetry/` is a full rewrite of a month of the
 item-health ledger, which is why it is regenerated and not unioned: a union of
 two rewrites is a file with every row twice.
 
-**Do not hand back writer-owned state files.** Item health, host fingerprints,
-summary-quality evaluations, their ID files, traces and the published ledger
-name one writer per file. Two writers do not compute different bytes for the
-same path, so there is nothing to regenerate, and handing one back would
-discard the file this run wrote.
+**Do not hand back unrelated writer-owned state files.** Item health, host
+fingerprints, traces and published raw files are not evaluation preparation outputs. Evaluation raw rows
+are the exception: the prepared-path list owns them together with the lookup,
+and immutable input batches let preparation recreate only the accepted rows.
 
-**`state/day-metrics` is the one that stays**, and it is the reason `hand_back`
-still touches a `state/` path at all. It is one whole-file-per-day JSON that
+**`state/day-metrics` remains a shared daily projection.** It is one whole-file-per-day JSON that
 assemble rewrites from the day's rows, so two runs of one day do land on one
 path, a text merge of two JSON objects is not JSON, and the rebuild answers the
 race in milliseconds. The closed-day fold stays for the same reason and is the
@@ -221,6 +207,34 @@ was Python: no attempt 2, no failure message, no day, and a checkout left
 mid-rebase. Every call passes `check=False` and its caller reads the return
 code, so a failure says what it was, leaves no rebase in progress, and ends on
 the caller's own message plus the attempt it reached.
+
+## Preparation names this attempt's derived files
+
+`PREPARE_COMMAND` and `PREPARED_PATHS_FILE` must be supplied together. They are
+independent of the existing `REFRESH_PATHS` and `REGENERATE_COMMAND` pair.
+Preparation runs before initial staging and again after a rejected push has
+restored the named outputs and rebased. When regeneration is configured, it
+runs before preparation on that retry. Command arguments are space-split and
+cannot contain spaces.
+
+The prepared-path file must be untracked, ignored and inside the checkout.
+Before each call the helper deletes the previous file. The command must write
+a fresh JSON array of literal repository-relative POSIX file paths, including
+deletions and files skipped by preparation. Missing or invalid output stops
+the commit; the helper never reuses a stale list. It rejects directories,
+linked paths, paths outside the checkout and Git metadata paths.
+
+On a rejected push, the helper restores the previous attempt's prepared paths
+alongside any refresh paths before rebasing. It then replaces that list with
+the new preparation result and stages the named files and deletions. A file
+that is both absent and untracked needs no staging.
+
+Evaluation preparation first makes the original input durable. After that inbox
+push succeeds, a failed final publication leaves a named pending batch or an
+applied receipt. The lookup page owns the
+[atomic publication guarantee](../contracts/observation-lookup.md#publication-across-jobs);
+the [operator procedure](../../how-to/migrate-observation-lookup.md#recover-a-named-pending-batch)
+gives the exact recovery command.
 
 ## A conflicted path is settled by who wrote it, never by which side it came from
 
@@ -276,9 +290,9 @@ the tip's copy leaves this job's *deletion* of a straggler file standing - a
 deletion is not a conflict, so git keeps it - and the straggler's rows then exist
 in no file at all, at exit 0.
 
-Two things were considered and neither is taken. A file listing what each job
-owns restates the identity the filename already carries and gives it somewhere
-to drift. A lock taken before the push is not a lock at all - two jobs both read
+For writer-owned rows, a second ownership catalogue would repeat the filename's
+identity. The prepared-path list instead names derived files that must be
+recreated together. A lock taken before the push is not a lock at all - two jobs both read
 "free" from their own stale checkouts and both take it, which is the same
 read-modify-write race that broke the shared heads. **The only compare-and-swap
 this platform offers is the ref update itself**, and the loop above already uses
