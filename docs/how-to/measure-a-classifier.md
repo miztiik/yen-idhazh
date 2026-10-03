@@ -180,5 +180,5 @@ into the stronger measurement.
 
 - [`../../CLAUDE.md`](../../CLAUDE.md) - Guardrail #10 for what a number owes, Guardrail #12 for the growing read, section 13 for why no test walks this set.
 - [`../concepts/evaluation.md`](../concepts/evaluation.md) - how quality is measured in this project, and what a judge may not do.
-- [`../concepts/growing-reads.md`](../concepts/growing-reads.md) - the escape hatch `plan` is taken under.
+- [`../../CLAUDE.md`](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [`fine-tune-a-model.md`](fine-tune-a-model.md) - `corpus/corpus.jsonl` and `corpus/holdout.txt`, the two collections this set must not overlap.

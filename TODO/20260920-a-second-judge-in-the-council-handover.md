@@ -156,4 +156,4 @@ Delete this handover when that plan-doc exists.
 - [`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md) - the merge line, its rationale and the alternatives already rejected.
 - [`docs/how-to/label-the-similarity-holdout.md`](../docs/how-to/label-the-similarity-holdout.md) - how the benchmark is drawn and labelled today.
 - [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) - where LLM-as-judge sits in this project.
-- [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - Guardrail #12's escape hatch, which a pair-harvesting path will meet.
+- [`CLAUDE.md`](../CLAUDE.md) - Guardrail #12's escape hatch, which a pair-harvesting path will meet.

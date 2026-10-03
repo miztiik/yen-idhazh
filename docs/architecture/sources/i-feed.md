@@ -910,7 +910,7 @@ to rerun live feed probes or the application suite to edit these documents.
 - [../publishing/autotune-feed-reliability.md](../publishing/autotune-feed-reliability.md) - **a feed's `tier` and `weight` are set by hand when it is added, and nothing re-reads them against how it has since behaved.** That page is where the automatic-tuning row above would be argued; it is a stub today.
 - [../../concepts/config.md](../../concepts/config.md) - configuration and generated contracts.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - existing article and summary measurements.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - bounded observations and retained state.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../../reference/i-feed-research.md](../../reference/i-feed-research.md) - supporting papers, assumptions and limits.
 - [discovery.md](discovery.md) - current admission, identity and selection behavior.
 - [health.md](health.md) - current health, warning and retirement behavior.
