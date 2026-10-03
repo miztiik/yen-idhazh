@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -43,7 +43,7 @@ Because the extension is data on the entry, a builder cannot emit the wrong one.
 
 ## A ledger under the two roots
 
-A ledger that goes through the ledger door files under two roots rather than one: what a writer wrote under `state/raw/`, and what compaction left under `state/compact/` ([persistence.md](persistence.md)). Its grain is `raw-and-compact`, the sixth. `gardener` is the first ledger born at it, `feed-retirements` and `visual-prunes` moved to it on 2026-09-28, `item-health`, `summary-quality-evals` and `host-fingerprint` followed through a one-time migration ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)), and `counterfactual-scores` and `candidate-models` moved after them, then `seen` and `published`.
+A ledger that goes through the ledger door files under two roots rather than one: what a writer wrote under `state/raw/`, and what compaction left under `state/compact/` ([persistence.md](persistence.md)). Its grain is `raw-and-compact`, the sixth. `gardener` is the first ledger born at it, `feed-retirements` and `visual-prunes` moved to it on 2026-09-28, `item-health`, `summary-quality-evals` and `host-fingerprint` followed through a one-time migration ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)), and `counterfactual-scores` and `candidate-models` moved after them, then `seen` and `published`, and `feed-health` last.
 
 **For this grain the `prefix` is the path inside each of the two roots.** Everywhere else it is the path from `state/`, but `["gardener"]` means `state/raw/gardener/` and `state/compact/gardener/`. The family check still passes, because the prefix still opens on the family's name, and the registry refuses any other prefix, because the root builders file the ledger under its own name.
 
@@ -53,18 +53,40 @@ A ledger that goes through the ledger door files under two roots rather than one
 
 ## Ledgers outside raw and compact
 
-[Telemetry intent](../../concepts/telemetry-intent.md) N1 and N11 still have the CSV ledgers below to move, and N6 still has the `merge=union` driver on five of them to retire. The evaluation ID lookup is also outside these roots, but uses JSON and SQLite rather than CSV.
+[Telemetry intent](../../concepts/telemetry-intent.md) N1 and N11 still have the seven CSV ledgers below to move, and N6 still has the `merge=union` driver on five of them to retire. The evaluation ID lookup is also outside these roots, but it is JSON and SQLite rather than CSV, so it has nothing to move. The last column says what has to happen before a ledger can move; the list under the table explains each term.
 
-| Ledger under `state/` | Writer, under `backend/idhazh/` | What reads its rows, besides upkeep: backend under `backend/idhazh/`, console under `frontend/src/lib/server/` | Two writers on one file |
+| Ledger under `state/` | Writer, under `backend/idhazh/` | What reads its rows, besides upkeep: backend under `backend/idhazh/`, console under `frontend/src/lib/server/` | Two writers on one file | What blocks its move |
+| --- | --- | --- | --- | --- |
+| `summary-quality-evals-index` | `evals/observation_batches.py`, reached through `evals/writer.py` and publication preparation | `evals/observation_lookup.py` | shared root: a rejected push replays original batches against the winner ([protocol](observation-lookup.md#publication-across-jobs)) | nothing: it is not CSV |
+| `item-health-summary` | `gardener/tasks/telemetry_aggregate.py` | nothing yet | cannot happen: one writer rewrites a month whole | a whole-month file |
+| `content-similarity-judge/scored-pairs` | `stages/count_verdicts.py` | `stages/set_merge_line.py` | the union driver keeps both | the nested folder name; three fixed-choice fields; `run_id` and `shard` |
+| `content-similarity-judge/fitted-thresholds` | `stages/set_merge_line.py` | `stages/set_merge_line.py`, `similarity/applied.py`, `similarity-ledger.ts` | the union driver keeps both | the nested folder name; two fixed-choice fields; `run_id` |
+| `content-similarity-judge/metrics` | `stages/count_verdicts.py` | nothing yet | the union driver keeps both | the nested folder name; two fixed-choice fields; `run_id` and `shard` |
+| `content-similarity-judge/merge-line-holdout-scores` | `stages/score_merge_line_holdout.py` | `similarity-holdout.ts` | the union driver keeps both | the nested folder name; one fixed-choice field; `run_id` |
+| `content-similarity-judge/holdout-pairs.csv` | a person, by hand | `similarity/holdout.py`, `similarity-holdout.ts` | `merge=text` stops the push for a person | nothing: it stays CSV while a person edits it by hand |
+| `llm-council/shard-outcomes` | `council/session.py` | nothing yet | the union driver keeps both | the nested folder name; `run_id` and `shard` |
+
+- **The nested folder name.** These ledgers sit one folder below their family, as in `content-similarity-judge/scored-pairs`. The door files a ledger under its own name, `raw/<ledger>/`, and the registry refuses any other prefix for the `raw-and-compact` grain, so it needs a rule for a nested name first.
+- **A fixed-choice field** is a field declared as `Literal[...]`, such as the judge's model name. The parquet column mapper, `ledger/arrow_schema.py`, refuses one until it learns a mapping for it.
+- **`run_id` and `shard`.** Every door file already records the `run_id` and `shard` of the job that wrote it. A row field with either name must mean the same thing, or be renamed, and a rename changes a persisted contract, which is a person's ruling (CLAUDE.md section 6, Level 5).
+- **A whole-month file.** One writer rewrites `item-health-summary`'s month file on every run, and the migrator reads only the two day layouts. It needs a month layout, or a ruling that the ledger stays CSV.
+
+### The shared CSV code, and when each piece goes
+
+Each piece goes with its last user. Two pieces have none left: no ledger has filed its rows as a day tree since feed health moved, and no retention declaration asks for a fold.
+
+| Piece | What it does | Its users now | It goes when |
 | --- | --- | --- | --- |
-| `summary-quality-evals-index` | `evals/observation_batches.py`, reached through `evals/writer.py` and publication preparation | `evals/observation_lookup.py` | shared root: a rejected push replays original batches against the winner ([protocol](observation-lookup.md#publication-across-jobs)) |
-| `item-health-summary` | `gardener/tasks/telemetry_aggregate.py` | nothing yet | cannot happen: one writer rewrites a month whole |
-| `content-similarity-judge/scored-pairs` | `stages/count_verdicts.py` | `stages/set_merge_line.py` | the union driver keeps both |
-| `content-similarity-judge/fitted-thresholds` | `stages/set_merge_line.py` | `stages/set_merge_line.py`, `similarity/applied.py`, `similarity-ledger.ts` | the union driver keeps both |
-| `content-similarity-judge/metrics` | `stages/count_verdicts.py` | nothing yet | the union driver keeps both |
-| `content-similarity-judge/merge-line-holdout-scores` | `stages/score_merge_line_holdout.py` | `similarity-holdout.ts` | the union driver keeps both |
-| `content-similarity-judge/holdout-pairs.csv` | a person, by hand | `similarity/holdout.py`, `similarity-holdout.ts` | `merge=text` stops the push for a person |
-| `llm-council/shard-outcomes` | `council/session.py` | nothing yet | the union driver keeps both |
+| `ledger.write_segment`, `ledger.extend_segment` and `ledger.day_shard_relpath` in `ledger/rows.py`, with `DAY_TREES` in `contracts/ledger_name.py` and `_TREE_SHAPES` in `ledger/keys.py` | write one writer's CSV file into a day tree | none: `DAY_TREES` is empty | now |
+| `gardener/closed_day_fold.py`, and the fold branch in `gardener/runner.py` | fold a closed day's writer files into one `settled.csv` | none: no retention declaration has a `fold` | now |
+| `day_shards.py` | read CSV day files and settle their rows | the migrator, the canary builder (`backend/utilities/build_canary_day.py`), the closed-day fold, the gardener's file walks (`gardener/named_trees.py`, `gardener/retention_files.py`), `path_classes.py` and `evals/observation_migration.py` | the migrator and the fold are gone |
+| `ledger.extend_ledger_file` in `ledger/csv_file.py` | append rows to one CSV day file | the writers of the five ledgers above with a union driver | those five have moved |
+| `readDayShards` in `frontend/src/lib/server/payload.ts` | read CSV day files when the site builds | `similarity-ledger.ts` and `similarity-holdout.ts` | `fitted-thresholds` and `merge-line-holdout-scores` have moved |
+| `backend/utilities/migrate_to_parquet.py` | move named months of a ledger's CSV onto the door | the next ledger to move | no ledger a program writes is left on CSV ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
+| the five `merge=union` lines in `.gitattributes`, and `path_classes.UNION_SAFE` | let two writers append to one CSV file | the five ledgers above with a union driver | each of those ledgers has moved |
+| `_TARGET_LEDGERS`, and the `summary-quality-evals-index` line of `REFUSED`, in `telemetry/prune.py` | name the CSV ledgers the prune verb reaches, and the one it refuses | the five ledgers above with a union driver, and the ID lookup | the five have moved, and a retention declaration can carry a `prune_refusal` |
+
+**Eight CSV files belong to no ledger.** Runs that started before the span summary retired (#1189) wrote four under `state/span-rollup/2026/10/02/`, and two in the `span-rollup` folder of each of two trial roots. Nothing reads or writes that folder now.
 
 `corpus/corpus.jsonl` and `corpus/corpus.meta.json` are not ledgers, have no merge driver of their own and carry no writer in their names, so a push race that conflicts on them stops the push: `backend/utilities/commit_and_push.py` keeps a conflicted file only when its name carries the job's own identity.
 
