@@ -35,6 +35,11 @@ Ledger import-order tests start a fresh interpreter for each order; they do not
 parse every package module to infer whether imports work. Budget-test config
 copies include only the model file selected by `idhazh.json`, not every model
 config stored beside it.
+Published-ledger tests check the answer and the named months requested by the
+real reader. They do not gate a merge on Python allocation peaks: two unchanged
+CI runs exceeded the old 10 percent margin without proving retained history.
+The repeated-address case uses two addresses across two months, not a memory
+benchmark with repeated reads.
 
 **A fixed fixture can still do needless work.** Per-item pipeline record and
 run-metadata tests limit the recorded plan to one item. Continuing after a
