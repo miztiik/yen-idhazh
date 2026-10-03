@@ -124,7 +124,6 @@ UNMARKED_MODULES: Final = frozenset(
         "test_model_runtime",
         "test_model_server_address",
         "test_night_plan",
-        "test_notebooks",
         "test_order_of_the_day",
         "test_pipeline_artifact_analyzer",
         "test_plan",

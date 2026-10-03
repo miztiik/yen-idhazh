@@ -259,7 +259,7 @@ def test_the_pairs_are_cross_source_and_ordered_by_their_own_contents() -> None:
     same-story pass never asks about. Ordered by the pair's own sha256, so a
     re-run reads the same pairs in the same order and nothing carries a seed.
     """
-    path = next((CONTRACT_FIXTURES_DIR / "digest-day").glob("*.json"))
+    path = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
     day = DigestDay.from_json(read_text(path))
 
     pairs = bench.pairs_from_day(day, limit=50)

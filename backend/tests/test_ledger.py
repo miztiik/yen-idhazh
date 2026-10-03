@@ -1759,7 +1759,12 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters(tmp_path:
     """
     state = tmp_path / "state"
     machines = []
-    for path in sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom")):
+    for path in (
+        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-0.prom",
+        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-1.prom",
+        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-2.prom",
+        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom",
+    ):
         tokens, seconds = silicon.server_prompt_totals(path.read_text(encoding="utf-8"))
         machines.append(
             HostFingerprintRow(
