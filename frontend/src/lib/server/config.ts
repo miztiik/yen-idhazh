@@ -234,10 +234,6 @@ export interface ConsoleConfig {
 	 * how many days are missing. It decides when the count is said, never what
 	 * it counts. */
 	completeness_grace_days: number;
-	/** Whether the strip draws its sixth tab, Records. Off until the page at
-	 * `/console/data-explorer/` exists; the change that ships that page deletes
-	 * this field. */
-	data_explorer_tab: boolean;
 	pan_days: number;
 	zoom_factor: number;
 	min_window_days: number;
@@ -323,6 +319,30 @@ export interface ConsoleConfig {
 	context_high_percentile: number;
 	/** The word the model server uses for a reply that ran out of room. */
 	context_cut_off_reason: string;
+}
+
+
+export interface ExplorerExample {
+	id: string;
+	title: string;
+	ledgers: string[];
+	days: number;
+	sql: string;
+}
+
+export interface ExplorerConfig {
+	row_page: number;
+	max_rows: number;
+	max_fetch_bytes: number;
+	query_max_chars: number;
+	rail_rem: number;
+	editor_lines: [number, number];
+	strip_shown: [number, number];
+	table_max_vh: number;
+	cell_max_ch: number;
+	bar_spread_share: number;
+	counter_from_share: number;
+	examples: ExplorerExample[];
 }
 
 /** One heading on a console route, and the panels under it, in drawn order.
@@ -528,7 +548,6 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	window_presets: [1, 7, 14, 30, 90],
 	today_anchor: 'right',
 	completeness_grace_days: 1,
-	data_explorer_tab: false,
 	pan_days: 7,
 	zoom_factor: 1.5,
 	min_window_days: 1,
@@ -563,6 +582,57 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	context_high_percentile: 99.0,
 	context_cut_off_reason: 'length'
 };
+const EXPLORER_DEFAULTS: ExplorerConfig = {
+	row_page: 50,
+	max_rows: 1000,
+	max_fetch_bytes: 67108864,
+	query_max_chars: 4000,
+	rail_rem: 14,
+	editor_lines: [8, 20],
+	strip_shown: [3, 6],
+	table_max_vh: 70,
+	cell_max_ch: 40,
+	bar_spread_share: 0.5,
+	counter_from_share: 0.9,
+	examples: [
+		{
+			id: 'published-counts',
+			title: 'Count published rows by day',
+			ledgers: ['published'],
+			days: 14,
+			sql: 'SELECT date, count(*) AS rows FROM "published" GROUP BY date ORDER BY date DESC'
+		},
+		{
+			id: 'health-by-state',
+			title: 'Count item health states',
+			ledgers: ['item-health'],
+			days: 14,
+			sql: 'SELECT status, count(*) AS rows FROM "item-health" GROUP BY status ORDER BY rows DESC'
+		},
+		{
+			id: 'summary-scores',
+			title: 'Average summary scores',
+			ledgers: ['summary-quality-evals'],
+			days: 14,
+			sql: 'SELECT date, count(*) AS rows FROM "summary-quality-evals" GROUP BY date ORDER BY date DESC'
+		},
+		{
+			id: 'host-runs',
+			title: 'Runs by machine',
+			ledgers: ['host-fingerprint'],
+			days: 14,
+			sql: 'SELECT cpu_model, count(*) AS runs FROM "host-fingerprint" GROUP BY cpu_model ORDER BY runs DESC'
+		},
+		{
+			id: 'all-published',
+			title: 'Rows in each published ledger',
+			ledgers: ['published', 'item-health'],
+			days: 14,
+			sql: `SELECT 'published' AS ledger, count(*) AS rows FROM "published" UNION ALL SELECT 'item-health' AS ledger, count(*) AS rows FROM "item-health"`
+		}
+	]
+};
+
 /** The running order a fresh clone draws, and the one the committed config
  * repeats. Four headings on Hardware, each naming a decision an operator takes
  * rather than a time grain, because a grain is a fact about one panel and the
@@ -616,6 +686,14 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 			id: 'what-the-model-spends',
 			title: 'What the model spends',
 			panels: ['article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost']
+		}
+	]
+	,
+	'data-explorer': [
+		{
+			id: 'data-explorer',
+			title: '',
+			panels: ['data-explorer-ask', 'data-explorer-rows']
 		}
 	]
 };
@@ -747,7 +825,7 @@ type DigestBlock = Partial<UiConfig> &
  * The block also carries `judged_panel_ids` and `plot_min_fill_share`, which
  * only the sufficiency specs read, straight from the file - so no type here
  * names them and `consoleConfig()` leaves them out too. */
-type ConsoleBlock = Partial<ConsoleConfig> & { panel_groups?: PanelGroups };
+type ConsoleBlock = Partial<ConsoleConfig> & { panel_groups?: PanelGroups } & Partial<Record<`explorer_${string}`, any>>;
 
 interface RawAppearance {
 	digest?: DigestBlock;
@@ -1032,6 +1110,25 @@ export function consoleConfig(): ConsoleConfig {
 		kept[key] = merged[key];
 	}
 	return kept as ConsoleConfig;
+}
+
+export function explorerConfig(): ExplorerConfig {
+	const consoleBlock = mergeLayers(CONSOLE_DEFAULTS, raw().console, appearance().console) as ConsoleBlock;
+	return {
+		...EXPLORER_DEFAULTS,
+		row_page: consoleBlock.explorer_row_page ?? EXPLORER_DEFAULTS.row_page,
+		max_rows: consoleBlock.explorer_max_rows ?? EXPLORER_DEFAULTS.max_rows,
+		max_fetch_bytes: consoleBlock.explorer_max_fetch_bytes ?? EXPLORER_DEFAULTS.max_fetch_bytes,
+		query_max_chars: consoleBlock.explorer_query_max_chars ?? EXPLORER_DEFAULTS.query_max_chars,
+		rail_rem: consoleBlock.explorer_rail_rem ?? EXPLORER_DEFAULTS.rail_rem,
+		editor_lines: (consoleBlock.explorer_editor_lines ?? EXPLORER_DEFAULTS.editor_lines) as [number, number],
+		strip_shown: (consoleBlock.explorer_strip_shown ?? EXPLORER_DEFAULTS.strip_shown) as [number, number],
+		table_max_vh: consoleBlock.explorer_table_max_vh ?? EXPLORER_DEFAULTS.table_max_vh,
+		cell_max_ch: consoleBlock.explorer_cell_max_ch ?? EXPLORER_DEFAULTS.cell_max_ch,
+		bar_spread_share: consoleBlock.explorer_bar_spread_share ?? EXPLORER_DEFAULTS.bar_spread_share,
+		counter_from_share: consoleBlock.explorer_counter_from_share ?? EXPLORER_DEFAULTS.counter_from_share,
+		examples: consoleBlock.explorer_examples ?? EXPLORER_DEFAULTS.examples
+	};
 }
 
 /** The groups one console route draws, in order, refusing a list it cannot draw.

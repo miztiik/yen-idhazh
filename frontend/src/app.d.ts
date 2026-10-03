@@ -31,6 +31,15 @@ declare global {
 	/** `ledger.engine_extension_repository`: where the query engine downloads its add-ons. */
 	const __ENGINE_EXTENSION_REPOSITORY__: string;
 
+	/** Console knobs for the Records route, injected by `vite.config.ts`. */
+	const __CONSOLE_CONFIG__: import('$lib/server/config').ConsoleConfig;
+
+	/** Records route knobs, injected by `vite.config.ts`. */
+	const __EXPLORER_CONFIG__: import('$lib/server/config').ExplorerConfig;
+
+	/** Ledgers published on this site, injected by `vite.config.ts`. */
+	const __PUBLISHED_LEDGERS__: string[];
+
 	/** The newest staged raw day listing per ledger. */
 	const __RAW_LISTED_THROUGH__: Partial<Record<string, string>>;
 

@@ -114,6 +114,10 @@ ledger now reaches the site whole, for the browser's query door, so `url_key`,
 data, out of a repository that was public all along
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
 
+## Records route
+
+The Records route fetches the ledger registry at `config/ledgers.json`, then uses the query door to fetch only the indexes and data files its chosen ledgers and days require. Its two panels are `data-explorer-ask` and `data-explorer-rows`; the chart panel is later work.
+
 ## Retention
 
 ## The producers
@@ -234,6 +238,10 @@ for the whole tree, which is the sweep `ci.yml` takes on a change that can move
 a contract. Data hygiene belongs there and not in pytest (`CLAUDE.md`
 section 13): it is the producer's own gate on what it just wrote, running where
 the payload is.
+
+## Records route
+
+The Records route fetches the ledger registry at `config/ledgers.json`, then uses the query door to fetch only the indexes and data files its chosen ledgers and days require. Its two panels are `data-explorer-ask` and `data-explorer-rows`; the chart panel is later work.
 
 ## Retention
 
