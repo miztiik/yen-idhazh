@@ -1,39 +1,19 @@
 """Does the council run green with every judge deleted from the repository?
 
-The dictum, made checkable: the council runs one judge or many - in sequence, in
-parallel, or chained - and depends on none of them. Three checks hold it. A static
-walk of what a council verb pulls in at import time; a second walk that keeps the
-one agreed exception from growing; and a whole night driven end to end against
-tenants this test wrote, with no judge anywhere in the call.
-
-The narrow half of the boundary - the council's own package naming a judge - is
-`test_a_council_module_names_no_judge` in `backend/tests/contracts/
-test_repo_structure.py`, beside the rule that holds `contracts/` at the bottom of
-the graph. This file starts where that one stops: at everything the package
-reaches through somebody else's module.
-
-**Static, and that is the point** (row #23, Fowler). A check that imports the
-council in a subprocess and reads `sys.modules` passes whenever the judge happens
-to be installed, which is always. Parsing the import statements is what catches
-the coupling on the commit that adds it, and it is what can see a CONTRACT
-arriving three modules away. The runtime probe in `test_session.py` is kept
-because it answers the one question parsing cannot - a module pulled in by name
-at run time, which no syntax tree resolves.
-
-Nothing in this file imports `idhazh.similarity` or any judge contract, and
-`test_this_file_names_no_judge_either` is what says so rather than the reader.
+The static import routes are read from a fixed list of named source files.
+An unlisted dependency fails before the reader opens it. A whole night then
+runs against tenants this test wrote, with no judge anywhere in the call.
 """
 
 from __future__ import annotations
 
-import ast
 import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT
+from conftest import CONFIG_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.council_shard_outcome import (
@@ -46,6 +26,8 @@ from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import night_plan, registry, run_identity, session
 
+from . import _imports
+from ._imports import imported_at_import_time, module_file, static_routes
 from ._tenants import a_belated_venue, a_venue, forget, written
 
 A_VENUE: Final = "a_judgeless_venue"
@@ -62,10 +44,6 @@ ANOTHER_SLUG: Final = "another-judgeless-tenant"
 TONIGHT: Final = "2026-09-26"
 
 A_PLATFORM_RUN: Final = "35534060762"
-
-#: Every module in the council's package, and therefore every verb: the three
-#: the router calls and the two the workflow runs with `python -m`.
-COUNCIL_PACKAGE: Final = REPO_ROOT / "backend" / "idhazh" / "council"
 
 #: The judge's own code, by package. A prefix is right here and nowhere else in
 #: this file: everything under it belongs to one judge by construction.
@@ -119,89 +97,14 @@ JUDGE_CONTRACTS_STILL_CROSSING: Final = frozenset(
 )
 
 
-def _module_file(dotted: str) -> Path | None:
-    """The file a dotted `idhazh` name resolves to, or `None` if it is not one."""
-    parts = dotted.split(".")
-    if parts[0] != "idhazh":
-        return None
-    base = REPO_ROOT.joinpath("backend", *parts)
-    if base.with_suffix(".py").is_file():
-        return base.with_suffix(".py")
-    if (base / "__init__.py").is_file():
-        return base / "__init__.py"
-    return None
-
-
-def _imported_at_import_time(path: Path, dotted: str) -> set[str]:
-    """Every `idhazh` name this module's own statements import when it loads.
-
-    A function body and a `TYPE_CHECKING` block are both skipped, because neither
-    runs when the module is imported - and a deferred import is the cut a row
-    takes deliberately, so counting one would report a seam that is closed as if
-    it were open.
-    """
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    package = dotted if path.name == "__init__.py" else dotted.rsplit(".", 1)[0]
-    found: set[str] = set()
-
-    def walk(body: list[ast.stmt]) -> None:
-        for node in body:
-            if isinstance(node, ast.Import):
-                found.update(a.name for a in node.names if a.name.startswith("idhazh"))
-            elif isinstance(node, ast.ImportFrom):
-                if node.level:
-                    above = package.split(".")[: -(node.level - 1)] if node.level > 1 else package.split(".")
-                    root = ".".join([*above, node.module]) if node.module else ".".join(above)
-                else:
-                    root = node.module or ""
-                if not root.startswith("idhazh"):
-                    continue
-                found.add(root)
-                found.update(f"{root}.{alias.name}" for alias in node.names)
-            elif isinstance(node, ast.If) and "TYPE_CHECKING" not in ast.unparse(node.test):
-                walk(node.body)
-                walk(node.orelse)
-            elif isinstance(node, ast.Try):
-                walk(node.body)
-                walk(node.orelse)
-                walk(node.finalbody)
-                for handler in node.handlers:
-                    walk(handler.body)
-
-    walk(tree.body)
-    return found
-
-
-def _closure() -> dict[str, tuple[str, ...]]:
-    """Every `idhazh` module a council verb reaches at import time, with its route.
-
-    **What it reads, and why it is bounded** (Guardrail #12): source files under
-    `backend/idhazh/`, which is code somebody wrote. It reads no ledger, no day
-    tree and no corpus, so it costs the same on the thousandth published day as
-    on the third.
-    """
-    seeds = sorted(f"idhazh.council.{path.stem}" for path in COUNCIL_PACKAGE.glob("*.py"))
-    routes: dict[str, tuple[str, ...]] = {seed: (seed,) for seed in seeds}
-    pending = list(seeds)
-    while pending:
-        dotted = pending.pop(0)
-        path = _module_file(dotted)
-        if path is None:
-            continue
-        for name in sorted(_imported_at_import_time(path, dotted)):
-            if name in routes or _module_file(name) is None:
-                continue
-            routes[name] = (*routes[dotted], name)
-            pending.append(name)
-    return routes
-
-
-def _judge_modules_reached() -> dict[str, tuple[str, ...]]:
-    """The judge modules in that closure, each with one route the council takes."""
-    routes = _closure()
+@pytest.fixture(scope="module")
+def reached() -> set[str]:
+    """Judge modules reached by the static imports in the named source inputs."""
+    routes = static_routes()
+    assert routes, "the reader found no imports, so it would pass on nothing"
     return {
-        name: route
-        for name, route in routes.items()
+        name
+        for name in routes
         if name == JUDGE_CODE_PACKAGE
         or name.startswith(f"{JUDGE_CODE_PACKAGE}.")
         or name in JUDGE_STAGE_MODULES
@@ -217,65 +120,30 @@ def test_every_judge_module_named_here_is_a_module_this_tree_has() -> None:
     is what makes them fail instead.
     """
     named = (JUDGE_CODE_PACKAGE, *JUDGE_STAGE_MODULES, *JUDGE_CONTRACT_MODULES)
-    missing = [name for name in named if _module_file(name) is None]
+    missing = [name for name in named if module_file(name) is None]
 
     assert not missing, f"the judge surface names modules this tree does not have: {missing}"
     assert JUDGE_CONTRACTS_STILL_CROSSING <= set(JUDGE_CONTRACT_MODULES)
 
 
-def test_no_council_verb_reaches_a_judges_code() -> None:
+def test_no_council_verb_reaches_a_judges_code(reached: set[str]) -> None:
     """The dictum: a judge deleted from the tree leaves every council verb running.
 
-    The seeds are every module of the council's package, so all five verbs are
-    covered - the three the router calls and the two the workflow runs with
-    `python -m`.
+    The named source inputs cover the council's verbs and their dependencies.
 
     What it cannot settle: whether a real judge works. That is what each
     judge-side row's own oracle is for.
     """
-    reached = _judge_modules_reached()
-    code = {
-        name: route
-        for name, route in reached.items()
-        if name not in JUDGE_CONTRACTS_STILL_CROSSING
-    }
-
-    assert _closure(), "the walk found no modules at all, so it would pass on nothing"
+    code = reached - JUDGE_CONTRACTS_STILL_CROSSING
     assert not code, (
         "a council verb reaches a judge at import time, so deleting that judge "
-        "would break the venue:\n"
-        + "\n".join(f"  {name}: " + " -> ".join(route) for name, route in sorted(code.items()))
-    )
-
-
-def test_the_judge_contracts_that_still_cross_cannot_grow() -> None:
-    """The exception is self-limiting, or it is an invitation.
-
-    Three judge contracts arrive through two modules both sides share, and the
-    owner ruled on 2026-09-21 that those three may cross while the routes are
-    priced. A list with no upper edge is one the next person extends, so what is
-    held here is the exact set: a fourth fails, and so does a third that was cut
-    without the list being cut with it.
-    """
-    crossing = set(_judge_modules_reached())
-
-    assert crossing == set(JUDGE_CONTRACTS_STILL_CROSSING), (
-        "the judge contracts a council verb reaches are no longer the three the "
-        "owner agreed to. Added: "
-        f"{sorted(crossing - JUDGE_CONTRACTS_STILL_CROSSING)}; gone: "
-        f"{sorted(JUDGE_CONTRACTS_STILL_CROSSING - crossing)}. A new one needs a "
-        "ruling, and one that left needs this list shortened in the same commit."
+        f"would break the venue: {sorted(code)}"
     )
 
 
 def test_this_file_names_no_judge_either() -> None:
-    """Asserted rather than assumed, because the run check below is the coupling risk.
-
-    Driving the night with a real judge is exactly the import this file exists to
-    refuse, written as a test. The names above are strings in a list, and this is
-    what keeps them from becoming imports.
-    """
-    mine = _imported_at_import_time(Path(__file__), "backend.tests.council.x")
+    """The run check must not import a real judge to exercise the venue."""
+    mine = imported_at_import_time(Path(__file__), "backend.tests.council.x")
     judges = [
         name
         for name in mine
@@ -284,9 +152,67 @@ def test_this_file_names_no_judge_either() -> None:
         or name in JUDGE_STAGE_MODULES
         or name in JUDGE_CONTRACT_MODULES
     ]
-
-    assert mine, "the reader found no imports at all, so it would pass on nothing"
+    assert mine, "the reader found no imports, so it would pass on nothing"
     assert not judges, f"this file imports {judges}"
+
+
+def test_an_unlisted_dependency_fails_before_its_source_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "backend" / "idhazh" / "council"
+    package.mkdir(parents=True)
+    (package / "session.py").write_text("import idhazh.unlisted\n", encoding="ascii")
+    (package.parent / "unlisted.py").write_text("this is not valid Python!\n", encoding="ascii")
+    monkeypatch.setattr(_imports, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(_imports, "MODULE_NAMES", ("idhazh.council.session",))
+
+    with pytest.raises(AssertionError, match=r"idhazh\.unlisted, outside the named import inputs"):
+        static_routes()
+
+
+def test_a_named_transitive_dependency_keeps_its_import_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "backend" / "idhazh" / "council"
+    package.mkdir(parents=True)
+    (package / "session.py").write_text("import idhazh.shared\n", encoding="ascii")
+    (package.parent / "shared.py").write_text("import idhazh.contract\n", encoding="ascii")
+    (package.parent / "contract.py").write_text(
+        "def deferred():\n    import idhazh.not_loaded\n", encoding="ascii"
+    )
+    monkeypatch.setattr(_imports, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        _imports, "MODULE_NAMES", ("idhazh.council.session", "idhazh.shared", "idhazh.contract")
+    )
+
+    routes = static_routes()
+
+    assert routes["idhazh.contract"] == (
+        "idhazh.council.session",
+        "idhazh.shared",
+        "idhazh.contract",
+    )
+    assert set(routes) == set(_imports.MODULE_NAMES)
+
+
+def test_the_judge_contracts_that_still_cross_cannot_grow(reached: set[str]) -> None:
+    """The exception is self-limiting, or it is an invitation.
+
+    Three judge contracts arrive through two modules both sides share, and the
+    owner ruled on 2026-09-21 that those three may cross while the routes are
+    priced. A list with no upper edge is one the next person extends, so what is
+    held here is the exact set: a fourth fails, and so does a third that was cut
+    without the list being cut with it.
+    """
+    crossing = reached & set(JUDGE_CONTRACT_MODULES)
+
+    assert crossing == set(JUDGE_CONTRACTS_STILL_CROSSING), (
+        "the judge contracts a council verb reaches are no longer the three the "
+        "owner agreed to. Added: "
+        f"{sorted(crossing - JUDGE_CONTRACTS_STILL_CROSSING)}; gone: "
+        f"{sorted(JUDGE_CONTRACTS_STILL_CROSSING - crossing)}. A new one needs a "
+        "ruling, and one that left needs this list shortened in the same commit."
+    )
 
 
 @pytest.fixture
