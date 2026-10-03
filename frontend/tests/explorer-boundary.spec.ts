@@ -1,4 +1,4 @@
-import { expect, type BrowserContext } from './support/browser';
+import { expect, type BrowserContext, type Page } from './support/browser';
 import { test } from './support/browser';
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -55,12 +55,50 @@ async function buildPage(): Promise<void> {
 	});
 }
 
-function watchExternal(context: BrowserContext): string[] {
-	const external: string[] = [];
+type RequestRecord = { url: string; failed: string | null; responded: boolean };
+
+function watchExternal(context: BrowserContext): RequestRecord[] {
+	const external: RequestRecord[] = [];
 	context.on('request', (request) => {
-		if (request.url().includes('example.invalid')) external.push(request.url());
+		if (request.url().includes('example.invalid')) external.push({ url: request.url(), failed: null, responded: false });
+	});
+	context.on('requestfailed', (request) => {
+		const found = external.find((entry) => entry.url === request.url() && entry.failed === null);
+		if (found) found.failed = request.failure()?.errorText ?? null;
+	});
+	context.on('response', (response) => {
+		const found = external.find((entry) => entry.url === response.url());
+		if (found) found.responded = true;
 	});
 	return external;
+}
+
+type Attached = { sessionId: string; targetInfo: { type: string } };
+type TargetMessage = { sessionId: string; message: string };
+
+async function watchWorkerLog(page: Page, context: BrowserContext): Promise<string[]> {
+	const session = await context.newCDPSession(page);
+	const workerSessions = new Set<string>();
+	const lines: string[] = [];
+	session.on('Target.attachedToTarget', (event: Attached) => {
+		if (event.targetInfo.type !== 'worker') return;
+		workerSessions.add(event.sessionId);
+		void session.send('Target.sendMessageToTarget', {
+			sessionId: event.sessionId,
+			message: JSON.stringify({ id: 1, method: 'Log.enable' })
+		});
+		void session.send('Target.sendMessageToTarget', {
+			sessionId: event.sessionId,
+			message: JSON.stringify({ id: 2, method: 'Network.enable' })
+		});
+	});
+	session.on('Target.receivedMessageFromTarget', (event: TargetMessage) => {
+		if (!workerSessions.has(event.sessionId)) return;
+		const message = JSON.parse(event.message) as { method?: string; params?: { entry?: { text?: string } } };
+		if (message.method === 'Log.entryAdded' && message.params?.entry?.text) lines.push(message.params.entry.text);
+	});
+	await session.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: false });
+	return lines;
 }
 
 test.describe('explorer boundary', () => {
@@ -78,8 +116,8 @@ test.describe('explorer boundary', () => {
 	});
 
 	test('the browser content policy refuses a statement fetch to an unlisted origin', async ({ page, context }) => {
-		const messages: string[] = [];
-		page.on('console', (message) => messages.push(message.text()));
+		// Playwright forwards console API calls from workers, but not worker log entries such as content-policy refusals.
+		const workerLog = await watchWorkerLog(page, context);
 		const external = watchExternal(context);
 		await page.goto(`${host.origin}/`);
 		await page.waitForFunction(() => window.explorerAsk !== undefined);
@@ -94,8 +132,11 @@ test.describe('explorer boundary', () => {
 		}));
 		await page.waitForTimeout(200);
 		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
-		expect(messages.join('\n')).toContain('connect-src');
-		expect(messages.join('\n')).toContain('https://example.invalid/x.csv');
-		expect(external).toEqual([]);
+		const text = workerLog.join('\n');
+		expect(text).toContain('connect-src');
+		expect(text).toContain('https://example.invalid/x.csv');
+		expect(external.length).toBeGreaterThan(0);
+		expect(external.every((request) => request.failed === 'csp')).toBe(true);
+		expect(external.every((request) => !request.responded)).toBe(true);
 	});
 });

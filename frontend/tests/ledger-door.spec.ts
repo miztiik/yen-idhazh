@@ -190,6 +190,7 @@ function askedCounts(asked: Asked[]): Record<string, number> {
 /** A fixture day file's path, and its bytes read from the fixture. */
 const dayFile = (covers: string): string => dataPath(LEDGER, 'daily', covers);
 const bytesOf = (relative: string): Uint8Array => new Uint8Array(readFileSync(path.join(STATE, ...relative.split('/'))));
+const expectedAnswer = (name: string): Record<string, string | null>[] => JSON.parse(readFileSync(path.join(FIXTURE, 'answers', `${name}.json`), 'utf8'));
 
 test('the engine starts while a whole file is still arriving', async () => {
 	const { fetcher } = recorded();
@@ -1212,6 +1213,62 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		const answer = await readAsk(freshPage(fetcher), { ...opts, maxFetchBytes: 1 }, {});
 		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'over-ceiling' } });
 		expect(dataAsked(asked)).toEqual([]);
+	});
+
+
+	test('additional written-question oracle cases match committed answers', async () => {
+		const page = freshPage(recorded().fetcher);
+		const cases = [
+			{ name: 'order-by-cap', sql: 'SELECT date, shard FROM "host-fingerprint" WHERE date=\'2026-09-01\' ORDER BY shard DESC', maxRows: 2 },
+			{ name: 'trailing-comment', sql: 'SELECT 1 AS one -- done', maxRows: 10 },
+			{ name: 'semicolon-comment', sql: 'SELECT 1 AS one; -- done', maxRows: 10 },
+			{ name: 'typed-values', sql: "SELECT sum(cores) AS total, 1.5 AS decimal_value, DATE '2026-09-01' AS day_value, [1,2] AS list_value, {'a':1} AS struct_value FROM \"host-fingerprint\"", maxRows: 10 },
+			{ name: 'summarize', sql: 'SUMMARIZE SELECT * FROM "host-fingerprint"', maxRows: 3 },
+			{ name: 'explain', sql: 'EXPLAIN SELECT 1 AS one', maxRows: 10 },
+			{ name: 'duplicate-id', sql: 'SELECT h.shard AS id, i.shard AS id FROM "host-fingerprint" h JOIN "item-health" i USING (date) ORDER BY h.shard, i.shard', maxRows: 3 }
+		];
+		for (const one of cases) {
+			const answer = await readAsk(page, { ...opts, sql: one.sql, maxRows: one.maxRows }, {});
+			expect(answer, one.name).toMatchObject({ state: 'ok' });
+			if (answer.state === 'ok') expect(answer.rows, one.name).toEqual(expectedAnswer(one.name));
+		}
+	});
+
+	test('a ledger with no file in the span can still answer through an empty view', async () => {
+		const answer = await readAsk(freshPage(recorded().fetcher), {
+			ledgers: ['host-fingerprint', 'item-health'],
+			from: '2026-09-06',
+			to: '2026-09-06',
+			sql: 'SELECT count(*) AS rows FROM "host-fingerprint"',
+			maxChars: 100,
+			maxRows: 10,
+			maxFetchBytes: 100_000_000
+		}, { 'item-health': '2026-09-06' });
+		expect(answer).toMatchObject({ state: 'ok' });
+		if (answer.state === 'ok') expect(answer.rows).toEqual([{ rows: '0' }]);
+	});
+
+	test('listed writer files do not make a packed day read twice', async () => {
+		const { fetcher, asked } = recorded();
+		const answer = await readAsk(freshPage(fetcher), { ...opts, ledgers: ['host-fingerprint'], from: '2026-09-01', to: '2026-09-01', sql: 'SELECT count(*) AS rows FROM "host-fingerprint"', maxRows: 10 }, { 'host-fingerprint': '2026-09-01' });
+		expect(answer).not.toEqual({ state: 'unreachable', ledger: 'host-fingerprint', at: '2026-09-01', fault: 'file-missing' });
+		expect(dataAsked(asked).some((path) => path.startsWith('raw/'))).toBe(false);
+	});
+
+	test('days after the newest listing are clamped away, and a missing listing inside the range is unreachable', async () => {
+		const quiet = await readAsk(freshPage(recorded().fetcher), { ...opts, ledgers: ['item-health'], from: '2026-09-07', to: '2026-09-07', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-06' });
+		expect(quiet).toMatchObject({ state: 'quiet' });
+		const missing = await readAsk(freshPage(recorded().fetcher), { ...opts, ledgers: ['item-health'], from: '2026-09-07', to: '2026-09-07', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-07' });
+		expect(missing).toEqual({ state: 'unreachable', ledger: 'item-health', at: '2026-09-07', fault: 'file-missing' });
+	});
+
+	test('a date in no tier is unreachable, and concurrent calls both answer', async () => {
+		const missing = await readAsk(freshPage(recorded().fetcher), { ...opts, from: '2026-07-30', to: '2026-07-30' }, {});
+		expect(missing).toMatchObject({ state: 'unreachable', at: '2026-07-30' });
+		const page = freshPage(recorded().fetcher);
+		const [one, two] = await Promise.all([readAsk(page, opts, {}), readAsk(page, opts, {})]);
+		expect(one.state).toBe('ok');
+		expect(two.state).toBe('ok');
 	});
 
 	test('a bad statement is refused before the engine starts', async () => {

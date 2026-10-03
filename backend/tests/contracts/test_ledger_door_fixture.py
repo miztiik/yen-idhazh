@@ -178,3 +178,28 @@ def test_answer_fixtures_are_recomputed_with_duckdb() -> None:
     columns = [column[0] for column in con.description]
     expected = json.loads((FIXTURE / "answers" / "raw-writer-day.json").read_text())
     assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
+
+
+def test_additional_answer_fixtures_are_recomputed_with_duckdb() -> None:
+    import duckdb
+
+    con = duckdb.connect()
+    host = (FIXTURE / "state" / "compact" / "host-fingerprint" / "daily" / "2026" / "09" / "01.parquet").as_posix()
+    item = (FIXTURE / "state" / "compact" / "item-health" / "daily" / "2026" / "09" / "01.parquet").as_posix()
+    con.execute(f"CREATE VIEW hf AS SELECT * FROM read_parquet('{host}', union_by_name=true)")
+    con.execute(f"CREATE VIEW ih AS SELECT * FROM read_parquet('{item}', union_by_name=true)")
+    cases = {
+        "order-by-cap": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT date, shard FROM hf WHERE date='2026-09-01' ORDER BY shard DESC) LIMIT 2",
+        "trailing-comment": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT 1 AS one -- done\n) LIMIT 11",
+        "semicolon-comment": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT 1 AS one\n) LIMIT 11",
+        "typed-values": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT sum(cores) AS total, 1.5 AS decimal_value, DATE '2026-09-01' AS day_value, [1,2] AS list_value, {'a':1} AS struct_value FROM hf) LIMIT 11",
+        "summarize": "SELECT COLUMNS(*)::VARCHAR FROM (SUMMARIZE SELECT * FROM hf) LIMIT 3",
+        "duplicate-id": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT h.shard AS id, i.shard AS id FROM hf h JOIN ih i USING (date) ORDER BY h.shard, i.shard) LIMIT 3",
+        "empty-view": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT count(*) AS rows FROM hf) LIMIT 11",
+        "explain": "EXPLAIN SELECT 1 AS one",
+    }
+    for name, sql in cases.items():
+        rows = con.execute(sql).fetchall()
+        columns = [column[0] for column in con.description]
+        expected = json.loads((FIXTURE / "answers" / f"{name}.json").read_text())
+        assert [dict(zip(columns, row, strict=True)) for row in rows] == expected

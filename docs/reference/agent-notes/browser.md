@@ -11,6 +11,8 @@ Checks before trusting a browser result. Follow the [browser smoke procedure](..
 
 ## Waiting and routing
 
+- **A worker content-policy refusal reads absent through `page.on('console')`, but exists in the worker log.** Playwright forwards worker `console.log`-style calls, not worker log entries such as CSP refusals. Open a CDP session, `Target.setAutoAttach`, enable `Log` on worker targets, and read `Target.receivedMessageFromTarget`; Playwright still emits `request` and `requestfailed` for the blocked request, with `failure().errorText === 'csp'`, and no `response`.
+
 - Wait for page readiness and enabled controls with retrying assertions. Assert the intended state positively; an absent element must not pass a state check.
 - Use fresh browser contexts for cold-load cases. Distinguish full navigation, client-side routing and fragment-only changes.
 - Prove that a failure test reached its target request. Account for service workers, caches and data already in the document; zero interceptions do not exercise a network failure.

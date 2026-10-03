@@ -116,6 +116,7 @@ export function writerDaysFor(
 	listedThrough: DateStamp | null
 ): DateStamp[] {
 	if (listedThrough === null) return [];
+	if (newestPacked !== null && to <= newestPacked) return [];
 	const start = newestPacked === null || from > newestPacked ? from : daysBetween(newestPacked, to)[1] ?? to;
 	if (start > to || start > listedThrough) return [];
 	const end = to < listedThrough ? to : listedThrough;
