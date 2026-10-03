@@ -38,6 +38,7 @@ import json
 import shutil
 import sqlite3
 import sys
+from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
@@ -45,18 +46,24 @@ from idhazh import day_partition, day_shards, ledger
 from idhazh.contracts.file_envelope import Format, Tier
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.ledgers import Grain
-from idhazh.contracts.observation_lookup import ObservationLookupNode, ObservationLookupRoot
+from idhazh.contracts.observation_lookup import (
+    ObservationLookupNode,
+    ObservationLookupPage,
+    ObservationLookupRoot,
+    ObservationPreparation,
+)
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
-from idhazh.evals.lookup_nodes import leaf_entries, node_path, read_node, read_page
-from idhazh.evals.observation_batches import lookup_root
-from idhazh.evals.observation_lookup import LOCK_NAME, ROOT_NAME, TRANSACTION_NAME
+from idhazh.evals.lookup_nodes import leaf_entries, node_path, read_node
+from idhazh.evals.observation_batches import input_root, lookup_root
+from idhazh.evals.observation_lookup import ROOT_NAME
+from utilities.named_inputs import day_files
 
 #: How deep a writer's file sits below a trial root: the ledger, a year, a month,
 #: a day, and the filename. A ledger row and a trace share the grammar, so they
 #: share the number.
 DAY_SHARD_PARTS = 5
 TRACES = "traces"
-
+LOOKUP_HANDOFF_DIR = ".evaluation-lookup-paths"
 
 
 def _roots(config_root: Path) -> list[str]:
@@ -180,34 +187,66 @@ def _refuse_trace(path: Path, relative: str) -> list[str]:
 
 
 def _lookup_files(root: Path) -> tuple[set[Path], list[str]]:
-    """Validate the trial lookup's referenced files without accepting an unrelated tree."""
-    directory = lookup_root(root)
-    if not directory.exists():
+    """Validate only changed lookup files named by a day's prepared batches."""
+    lookup = lookup_root(root)
+    handoff_path = root / LOOKUP_HANDOFF_DIR / "named-days.json"
+    if not handoff_path.is_file():
         return set(), []
-    root_path = directory / ROOT_NAME
-    accepted = {root_path}
+    accepted = {handoff_path}
+    found: list[str] = []
+    expected_root = (lookup / ROOT_NAME).relative_to(root).as_posix()
     try:
+        handoff = ObservationPreparation.read(handoff_path)
+        names = set(handoff.paths)
+        if not handoff.batches:
+            raise ValueError("the lookup handoff names no evaluation batches")
+        if names and expected_root not in names:
+            raise ValueError("the lookup handoff omits its root")
+        prefix = f"{lookup.relative_to(root).as_posix()}/nodes/"
+        if any(name != expected_root and not name.startswith(prefix) for name in names):
+            raise ValueError("the lookup handoff names a path outside its root and nodes")
+        accepted.update(root / name for name in names)
+        if not names:
+            return accepted, found
+        root_path = root / expected_root
+        if not root_path.is_file():
+            raise ValueError("the lookup handoff's root file is missing")
         manifest = ObservationLookupRoot.read(root_path)
         if manifest.key_fields != ledger.OBSERVATION_KEY:
             raise ValueError("the trial lookup uses another measurement key")
-
-        def read(node: ObservationLookupNode, prefix: str) -> None:
-            accepted.add(node_path(directory, node))
-            if node.kind == "leaf":
-                entries = leaf_entries(read_node(directory, node, manifest.settings.max_leaf_bytes))
-                if any(not key.startswith(prefix) for key in entries):
-                    raise ValueError("a trial lookup entry sits under another routing prefix")
+        root_node_path = node_path(lookup, manifest.node)
+        if root_node_path.relative_to(root).as_posix() not in names or not root_node_path.is_file():
+            raise ValueError("the lookup handoff omits its new root node")
+        for name in sorted(names - {expected_root}):
+            path = root / name
+            if not path.is_file():
+                continue
+            parts = path.relative_to(lookup).parts
+            if len(parts) != 3 or parts[0] != "nodes" or parts[1] != path.stem[:2]:
+                raise ValueError("a lookup node path does not match its digest")
+            if path.suffix == ".sqlite":
+                node = ObservationLookupNode(kind="leaf", sha256=path.stem)
+            elif path.suffix == ".json":
+                node = ObservationLookupNode(kind="page", sha256=path.stem)
             else:
-                page = read_page(directory, node, prefix, manifest.settings.max_leaf_bytes)
-                for digit, child in page.children.items():
-                    read(child, prefix + digit)
-
-        read(manifest.node, "")
+                raise ValueError("a lookup node has an unknown suffix")
+            if node_path(lookup, node) != path:
+                raise ValueError("a lookup node path does not match its digest")
+            data = read_node(lookup, node, manifest.settings.max_leaf_bytes)
+            if node.kind == "leaf":
+                leaf_entries(data)
+            else:
+                page = ObservationLookupPage.model_validate_json(data)
+                for child in page.children.values():
+                    child_path = node_path(lookup, child)
+                    child_name = child_path.relative_to(root).as_posix()
+                    if child_name in names and not child_path.is_file():
+                        raise ValueError("a changed lookup page names a missing child")
     except (OSError, ValueError, sqlite3.DatabaseError) as error:
-        return accepted, [
-            f"{root_path.relative_to(root).as_posix()} is not a valid trial lookup: {error}"
-        ]
-    return accepted, []
+        found.append(
+            f"{handoff_path.relative_to(root).as_posix()} is not a valid lookup handoff: {error}"
+        )
+    return accepted, found
 
 
 def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
@@ -247,33 +286,78 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
     return found
 
 
-def _local_lookup_files(directory: str, names: list[str]) -> set[str]:
-    path = Path(directory)
-    if path != lookup_root(path.parent.parent):
-        return set()
-    return {
-        name
-        for name in names
-        if name == TRANSACTION_NAME or name == LOCK_NAME or name.startswith(f"{LOCK_NAME}-")
-    }
-
-
-def gather(state: Path, tree: Path, *, roots: list[str]) -> list[str]:
-    """Copy every declared test case's trial root into one directory, and say which arrived.
+def gather(state: Path, tree: Path, *, roots: list[str], days: Sequence[str]) -> list[str]:
+    """Copy named UTC days from declared trial roots, and say which arrived.
 
     One fixed destination rather than a glob over `state/`, so the artifact's
-    root directory is the same whichever test cases produced a file.
+    root directory is the same whichever test cases produced a file. Each
+    copied directory holds one named day, never a trial root's accumulated days.
     """
+    dated = day_files(Path(), days, filename="")
     if tree.exists():
         shutil.rmtree(tree)
     tree.mkdir(parents=True)
     arrived = []
     for name in roots:
-        source = state / name
-        if not source.is_dir():
-            continue
-        shutil.copytree(source, tree / name, ignore=_local_lookup_files)
-        arrived.append(name)
+        root = state / name
+        bases = [ledger.tree_root(root, which) for which in DAY_TREES]
+        bases.append(root / TRACES)
+        bases.extend(
+            ledger.raw_root(root, which)
+            for which in LedgerName
+            if ledger.entry(which).grain is Grain.RAW_AND_COMPACT
+        )
+        copied = False
+        for base in bases:
+            for day in dated:
+                source = base / day
+                if source.is_dir():
+                    destination = tree / name / source.relative_to(root)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(source, destination)
+                    copied = True
+        lookup_names: set[str] = set()
+        batch_ids: set[str] = set()
+        lookup_prefix = f"{name}/{lookup_root(root).relative_to(root).as_posix()}/"
+        for named_day in days:
+            for raw_file in ledger.read_day_files(
+            root, LedgerName.SUMMARY_QUALITY_EVALS, named_day
+            ):
+                envelope = raw_file.envelope
+                identity = envelope.identity
+                job_manifest = (
+                    input_root(root)
+                    / identity.run_id
+                    / f"{identity.job.value}-{identity.shard}.json"
+                )
+                if not job_manifest.is_file():
+                    raise FileNotFoundError(
+                        f"evaluation input manifest is missing for {identity.run_id}"
+                    )
+                preparation = ObservationPreparation.read(job_manifest)
+                batch_ids.update(preparation.batches)
+                for path in preparation.paths:
+                    if not path.startswith(lookup_prefix):
+                        continue
+                    relative = path[len(name) + 1 :]
+                    lookup_names.add(relative)
+                    source = root.parent / path
+                    if source.is_file():
+                        destination = tree / name / relative
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(source, destination)
+        if lookup_names:
+            handoff_path = tree / name / LOOKUP_HANDOFF_DIR / "named-days.json"
+            handoff_path.parent.mkdir(parents=True, exist_ok=True)
+            handoff = ObservationPreparation.model_validate(
+                {"batches": sorted(batch_ids), "paths": sorted(lookup_names)}
+            )
+            handoff_path.write_text(
+                handoff.to_json() + "\n", encoding="ascii", newline="\n"
+            )
+            copied = True
+        if copied:
+            arrived.append(name)
     return arrived
 
 
@@ -291,7 +375,44 @@ def place(tree: Path, state: Path, *, roots: list[str]) -> list[str]:
         destination.mkdir(parents=True, exist_ok=True)
         source = tree / name
         if source.is_dir():
-            shutil.copytree(source, destination, dirs_exist_ok=True)
+            lookup_relative = (
+                Path(ledger.entry(LedgerName.SUMMARY_QUALITY_EVALS_INDEX).prefix[0]) / "lookup"
+            )
+
+            def ignore_transfer_metadata(
+                directory: str,
+                names: list[str],
+                *,
+                source_root: Path = source,
+                lookup_path: Path = lookup_relative,
+            ) -> set[str]:
+                relative = Path(directory).relative_to(source_root)
+                ignored: set[str] = set()
+                if relative == Path():
+                    ignored.add(LOOKUP_HANDOFF_DIR)
+                if relative == lookup_path.parent:
+                    ignored.add(lookup_path.name)
+                elif relative == lookup_path:
+                    ignored.update(names)
+                return ignored
+
+            shutil.copytree(
+                source, destination, dirs_exist_ok=True, ignore=ignore_transfer_metadata
+            )
+            handoff_path = source / LOOKUP_HANDOFF_DIR / "named-days.json"
+            if handoff_path.is_file():
+                handoff = ObservationPreparation.read(handoff_path)
+                for path in handoff.paths:
+                    relative = Path(path)
+                    if not relative.is_relative_to(lookup_relative):
+                        raise ValueError("a lookup handoff path leaves its trial lookup")
+                    source_file = source / relative
+                    destination_file = destination / relative
+                    if source_file.is_file():
+                        destination_file.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(source_file, destination_file)
+                    else:
+                        destination_file.unlink(missing_ok=True)
         staged.append(destination.as_posix())
     return staged
 
@@ -302,12 +423,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tree", type=Path, required=True)
     parser.add_argument("--state", type=Path, default=Path(ledger.STATE_DIRNAME))
     parser.add_argument("--config-root", type=Path, default=Path("config"))
+    parser.add_argument("--day", action="append", default=[], help="UTC day to gather; repeatable.")
     args = parser.parse_args(argv)
 
     roots = _roots(args.config_root)
 
     if args.verb == "gather":
-        for name in gather(args.state, args.tree, roots=roots):
+        if not args.day:
+            parser.error("gather requires at least one --day YYYY-MM-DD")
+        for name in gather(args.state, args.tree, roots=roots, days=args.day):
             print(f"gathered {name}", file=sys.stderr)
         if not any(args.tree.rglob("*")):
             print(

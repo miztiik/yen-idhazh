@@ -56,6 +56,14 @@ class EvaluationConfig(Model):
         ),
     )
     spot_checks_per_week: int = Field(default=10, ge=0)
+    canary_files: list[Slug] = Field(
+        default_factory=list,
+        description=(
+            "The exact planted-attack fixture names used by the live qualification gate. "
+            "Each name opens one file under tests/fixtures/canaries; adding a fixture does "
+            "not silently widen a model run."
+        ),
+    )
     labellers: list[Slug] = Field(
         default_factory=list,
         description=(

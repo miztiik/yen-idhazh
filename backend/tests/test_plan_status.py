@@ -32,12 +32,14 @@ from utilities.plan_status import (
     open_pull_notes,
     parse_depends,
     parse_plan,
-    read_plans,
     ready,
     status_word,
     stranded_rows,
     unmet,
     unrecorded_merges,
+)
+from utilities.plan_status import (
+    read_plans as read_named_plans,
 )
 
 ALPHA = """# Alpha
@@ -107,6 +109,27 @@ NOTES = """# Notes
 No table here at all, just a Status Reckoner mentioned in a sentence.
 """
 
+NAMED_PLANS = [
+    f"TODO/20260101-{number}-{name}-plan.md"
+    for number, name in ((31, "alpha"), (32, "beta"), (33, "gamma"), (34, "delta"))
+] + ["TODO/20260101-notes.md"]
+
+
+def read_plans(root: Path) -> list[Plan]:
+    return read_named_plans(root, NAMED_PLANS)
+
+
+def test_relative_repo_root_names_the_same_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    todo = tmp_path / "TODO"
+    todo.mkdir()
+    (todo / "alpha.md").write_text(ALPHA, encoding="ascii", newline="\n")
+    monkeypatch.chdir(tmp_path)
+    assert read_named_plans(Path(), ["TODO/alpha.md"]) == read_named_plans(
+        tmp_path, ["TODO/alpha.md"]
+    )
+
 
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
@@ -141,13 +164,14 @@ def test_discovery_finds_the_plans_and_skips_the_note(tree: Path) -> None:
     ]
 
 
-def test_a_sixth_plan_appears_with_no_code_change(tree: Path) -> None:
-    """Guardrail #6: discovery is a glob plus a table shape, never a list of names."""
+def test_an_unnamed_plan_is_read_only_when_named(tree: Path) -> None:
+    """Adding a document cannot expand a previous request."""
     before = len(read_plans(tree))
     (tree / "TODO" / "20260202-35-epsilon-plan.md").write_text(
         BETA.replace("Bravo", "Echo"), encoding="utf-8", newline="\n"
     )
-    after = read_plans(tree)
+    assert len(read_plans(tree)) == before
+    after = read_named_plans(tree, [*NAMED_PLANS, "TODO/20260202-35-epsilon-plan.md"])
     assert len(after) == before + 1
     assert after[-1].rows[0].title == "Echo one"
 
@@ -359,7 +383,9 @@ def test_a_clean_reckoner_finds_nothing(tree: Path) -> None:
 # -------------------------------------------- the rule that caught pull 608
 
 
-def merged(number: int, title: str, body: str = "", day: str = "2026-06-01T00:00:00Z") -> PullRequest:
+def merged(
+    number: int, title: str, body: str = "", day: str = "2026-06-01T00:00:00Z"
+) -> PullRequest:
     return PullRequest(
         number=number,
         state="MERGED",

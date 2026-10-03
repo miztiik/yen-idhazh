@@ -22,7 +22,7 @@ from typing import ClassVar, Final
 
 import pyarrow.parquet
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import FIXTURES_DIR, REPO_ROOT
 from pydantic import Field
 
 from idhazh import ledger
@@ -43,6 +43,8 @@ from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import filenames, json_lines, parquet
+
+from ._fixtures import fixture_rows
 
 pytestmark = pytest.mark.contract
 
@@ -124,9 +126,8 @@ def _every_column_rows() -> list[Contract]:
 
 
 def _fixture_rows(model: type[Contract]) -> list[Contract]:
-    """Every committed contract fixture of this model, as rows."""
-    directory = CONTRACT_FIXTURES_DIR / model.__schema_stem__
-    return [model.from_json(read_text(path)) for path in sorted(directory.glob("*.json"))]
+    """The named recorded examples of this model, as rows."""
+    return list(fixture_rows(model))
 
 
 def _identity(*, attempt: int = 1, job: ServerJob = ServerJob.ASSEMBLE) -> WriterIdentity:

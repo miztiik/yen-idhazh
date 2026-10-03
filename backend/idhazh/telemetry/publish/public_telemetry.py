@@ -32,7 +32,7 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, ledger
+from idhazh import config, ledger, month_partition
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_telemetry import FORBIDDEN_COLUMNS, PublicTelemetryRow
@@ -147,19 +147,16 @@ def publish(
     ensure_month: str | None = None,
     months: Collection[str] | None = None,
 ) -> list[Path]:
-    """Write a public telemetry shard for each item-health month that changed.
+    """Write only caller-named item-health months.
 
     A month is written only when its projected bytes differ from the shard
-    already on disk. The returned list is the shards this call wrote; a run that
-    re-derives every month byte-for-byte writes nothing and returns `[]`.
+    already on disk. An empty month list reads nothing; historical rebuilding
+    must name its month range explicitly.
 
     `months` names the months a caller believes changed. A month outside it is
-    skipped without being read, **unless its shard is missing** - so a fresh
-    clone, a deleted file or a month never published still lands whatever the
-    caller asked for. `None` reads every month and rebuilds the ones that
-    differ, which is what a migration and a backfill want; the daily caller
-    passes the one month it appended to, so it reads and writes that month
-    alone.
+    skipped without being read, even when its shard is missing. A fresh clone
+    or historical repair names the months to rebuild rather than discovering
+    them by scanning the ledger.
 
     Two freezes compose. The month filter keeps a closed month from being read
     at all; the byte comparison keeps a re-derived month from being rewritten
@@ -169,33 +166,23 @@ def publish(
     re-run does not.
 
     **The ledger files by day and this mirror files by month**, so a month is
-    read as that month's days - the months from `ledger.held_months`, each day
-    through `ledger.load_days` - and each of those days is settled on its own.
+    read as that month's days through `ledger.load_days`, each day settled on
+    its own.
     Settled rather than concatenated, because a day holds every writer's rows: a
     re-run's second attempt sits beside the first, and publishing both would show
     a reader one item twice. Its input is one month, so a named month reads at
     most 31 days.
 
-    Cover: the months the caller names. The daily caller passes the one month it
-    appended to, so an ordinary run reads one month's days whatever the ledger
-    holds. `None` is unbounded on purpose - a fresh clone has to rebuild a mirror
-    it never published, and a cover in months would leave it permanently short of
-    one. What bounds the ledger is retention rather than this read: the
-    item-health compaction deletes a month past the monthly window of
-    `config/gardener/compact-item-health.json`. That compaction is report-only
-    today, so nothing has been deleted and the unbounded case reads every
-    partition there has ever been. **The day grain makes that case about thirty
-    times wider in file handles and not one row wider**, and the listing behind
-    it grows by one directory entry a day rather than one a month.
+    The daily caller passes the one month it appended to, so an ordinary run
+    reads one month's days whatever the ledger holds. Historical rebuilding is
+    explicit and does not run as a side effect of daily publication.
     """
     public_root.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for month in ledger.held_months(state_root, LedgerName.ITEM_HEALTH):
+    for month in sorted(set(months or ())):
         target = shard_path(public_root, month)
-        if months is not None and month not in months and target.exists():
-            continue
         rows = _settled_days(state_root, ledger.month_days(month))
-        if _write_if_changed(target, rows):
+        if (rows or target.exists()) and _write_if_changed(target, rows):
             written.append(target)
     if ensure_month is not None and all(path.stem != ensure_month for path in written):
         target = shard_path(public_root, ensure_month)
@@ -205,21 +192,22 @@ def publish(
     return written
 
 
-def migrate(public_root: Path = DEFAULT_PUBLIC_ROOT) -> list[tuple[Path, int, bool]]:
-    """Rewrite every committed shard through the contract, and read it back.
+def migrate(
+    public_root: Path = DEFAULT_PUBLIC_ROOT, *, months: Collection[str] = ()
+) -> list[tuple[Path, int, bool]]:
+    """Rewrite named committed shards through the contract, and read them back.
 
     The publisher's own round trip rather than a utility of its own, because the
     pair that has to hold is the writer and the reader a run already uses. It
     never reads `state/`: a shard whose source month has been folded away still
     has to load.
 
-    Cover: -1, unbounded on purpose. Rewriting every shard is the job, and a
-    cover would leave the ones it skipped in the shape they were written in. It
-    is an operator command a person runs once on a contract change, never a
-    per-run cost.
+    An empty month list does no work. The operator names the range to migrate.
     """
     results: list[tuple[Path, int, bool]] = []
-    for path in sorted(public_root.glob("*.csv")):
+    for path in (shard_path(public_root, month) for month in sorted(set(months))):
+        if not path.is_file():
+            continue
         before = path.read_bytes()
         rows = read_shard(path)
         _write(path, rows)
@@ -233,6 +221,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state", type=Path, default=config.REPO_ROOT / ledger.STATE_DIRNAME)
     parser.add_argument("--public", type=Path, default=DEFAULT_PUBLIC_ROOT)
+    parser.add_argument("--from-month", required=True, help="First YYYY-MM month to read.")
+    parser.add_argument("--through-month", required=True, help="Last YYYY-MM month to read.")
     parser.add_argument("--ensure-month", help="Write an empty shard when this month has no rows.")
     parser.add_argument(
         "--migrate",
@@ -240,14 +230,18 @@ def main() -> None:
         help="Rewrite the committed shards through the contract instead of publishing.",
     )
     args = parser.parse_args()
+    months = month_partition.months_between(args.from_month, args.through_month)
     if args.migrate:
-        for path, rows, unchanged in migrate(args.public):
+        for path, rows, unchanged in migrate(args.public, months=months):
             state = "unchanged" if unchanged else "REWRITTEN"
             name = path.relative_to(config.REPO_ROOT).as_posix()
             print(f"{name} {rows} rows {path.stat().st_size} bytes {state}")
         return
     for path in publish(
-        state_root=args.state, public_root=args.public, ensure_month=args.ensure_month
+        state_root=args.state,
+        public_root=args.public,
+        ensure_month=args.ensure_month,
+        months=months,
     ):
         size = path.stat().st_size
         gzipped = len(gzip.compress(path.read_bytes()))

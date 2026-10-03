@@ -160,7 +160,7 @@ def test_the_check_passes_the_raw_files_a_test_case_run_files(
     assert ledger.list_raw_files(root, which), f"the door wrote no raw {which.value} file"
 
     gathered = tmp_path / "trial-ledgers"
-    pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots))
+    pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots), days=[DAY])
     assert pipeline_test_ledgers.refusals(gathered, roots=roots) == []
     if which is LedgerName.SUMMARY_QUALITY_EVALS:
         assert not input_root(root).is_relative_to(tree)
@@ -190,7 +190,7 @@ def test_the_trial_check_reads_split_lookup_pages_and_their_leaves(tmp_path: Pat
     ) == len(rows)
     assert ObservationLookupRoot.read(lookup_root(root) / ROOT_NAME).node.kind == "page"
     gathered = tmp_path / "trial-ledgers"
-    pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots))
+    pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots), days=[DAY])
 
     assert pipeline_test_ledgers.refusals(gathered, roots=roots) == []
 
@@ -205,7 +205,7 @@ def test_the_trial_check_refuses_invalid_or_unrelated_lookup_files(
     tree, root, roots = _a_trial_tree(tmp_path)
     assert _file_measurement(root)
     gathered = tmp_path / "trial-ledgers"
-    pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots))
+    pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots), days=[DAY])
     directory = lookup_root(gathered / root.name)
     root_path = directory / ROOT_NAME
     manifest = ObservationLookupRoot.read(root_path)

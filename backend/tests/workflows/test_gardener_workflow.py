@@ -100,6 +100,7 @@ def a_config_with_shards(root: Path, shards: int) -> Path:
         )
     knobs = json.loads(read_text(CONFIG_DIR / "idhazh_gardener.json"))
     knobs["shards"] = shards
+    knobs["task_names"] = [Path(filename).stem for filename in TASK_FILES]
     (config_dir / "idhazh_gardener.json").write_text(
         json.dumps(knobs), encoding="ascii", newline="\n"
     )

@@ -304,7 +304,7 @@ def load_gardener(config_dir: Path = DEFAULT_CONFIG_DIR) -> GardenerSettings:
     declaration, or with a knob in `config/idhazh.json` it has to outlive.
     """
     gardener = _gardener_config(config_dir)
-    tasks = _declarations(config_dir)
+    tasks = _declarations(config_dir, gardener.task_names)
     app = AppConfig.from_json((config_dir / _FILES[0]).read_text(encoding="utf-8"))
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
@@ -323,14 +323,15 @@ def _gardener_config(config_dir: Path) -> GardenerConfig:
         raise ValueError(f"config/{GARDENER_FILE} is refused: {error}") from error
 
 
-def _declarations(config_dir: Path) -> dict[str, TaskPolicy]:
-    """Every declaration, by name, in sorted order. No folder is no tasks, not a fault."""
+def _declarations(config_dir: Path, names: tuple[str, ...]) -> dict[str, TaskPolicy]:
+    """Only declarations named in the gardener config, in sorted order."""
     folder = config_dir / GARDENER_TASKS_DIR
-    if not folder.is_dir():
-        return {}
     found: dict[str, TaskPolicy] = {}
-    for path in sorted(folder.glob(f"*{DECLARATION_SUFFIX}")):
+    for name in sorted(names):
+        path = folder / f"{name}{DECLARATION_SUFFIX}"
         where = f"config/{GARDENER_TASKS_DIR}/{path.name}"
+        if not path.is_file():
+            raise ValueError(f"{where} is missing; config/{GARDENER_FILE} names it in task_names")
         if not _A_TASK_NAME.fullmatch(path.stem):
             raise ValueError(
                 f"{where} is refused: a task is named by its file, and {path.stem!r} is "

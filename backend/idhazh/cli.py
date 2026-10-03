@@ -14,7 +14,7 @@ the daily workflow calls. `record` is not among the three: the daily workflow
 runs it inside the worker job so a run that dies before it publishes still
 keeps what it measured.
 
-    idhazh backfill-vectors   re-encode closed days whose vectors are short
+    idhazh backfill-vectors   re-encode named closed days whose vectors are short
     idhazh derived-paths      print the committed paths a rebuild owns
 
 Neither is a stage. Nothing schedules the first; the second answers one question
@@ -444,10 +444,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=[],
         metavar="YYYY-MM-DD",
         help=(
-            "A day for `check-publication` to open, repeatable. Every committed day when "
-            "this is not given, which is what a contract change needs and nothing else "
-            "does - a published day is frozen, so only the shape it is read through can "
-            "invalidate it. A run that wrote one day names that day."
+            "A UTC day for `check-publication` or `backfill-vectors` to open, repeatable. "
+            "`check-publication` checks every committed day when this is not given; "
+            "`backfill-vectors` does no work without named days."
         ),
     )
     parser.add_argument(
@@ -681,13 +680,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return qualify_canaries.stage_qualify_canaries(settings=settings, date=date)
 
     if args.stage == "backfill-vectors":
-        # `--date` names the day this treats as still open, and it is clamped to
-        # today so a future date cannot bring the live day into scope. The live
-        # day is the one the scheduled pipeline is appending to.
         return backfill_vectors.stage_backfill_vectors(
             root=common.PUBLIC_ROOT,
             index_root=assemble_stage._index_root(),
             today=min(date, _today()),
+            dates=args.day,
             embedder=Embedder(config.REPO_ROOT, settings.app.assist),
         )
 

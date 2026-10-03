@@ -36,6 +36,21 @@ from utilities import widen_ledger_header
 DATE = "2026-09-18"
 TARGET = "content-similarity-judge-scored-pairs"
 
+
+def test_relative_state_root_refiles_the_named_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a_narrow_day(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    relative = widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=Path()
+    )
+    absolute = widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path
+    )
+    assert relative == absolute
+
+
 #: The day tree this drives end to end. Feed health is a day tree the widener
 #: names, and five of its columns are optional ones an older generation lacked,
 #: so a day file under the narrower header re-files and every row still reads.
@@ -74,7 +89,9 @@ NARROWER_TREE_HEADER: Final = (
 UNREGISTERED: Final = frozenset(
     {
         "-".join(ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).prefix),
-        "-".join(ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES).prefix),
+        "-".join(
+            ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES).prefix
+        ),
         "-".join(ledger.entry(LedgerName.SUMMARY_QUALITY_EVALS_INDEX).prefix),
     }
 )
@@ -163,7 +180,9 @@ def test_a_narrow_day_refuses_the_append_that_the_widened_one_takes(tmp_path: Pa
     with pytest.raises(ValueError, match="Migrate the ledger"):
         ledger.append_story_similarity_pairs(tmp_path, DATE, [fresh])
 
-    widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=True)
+    widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
+    )
 
     assert ledger.append_story_similarity_pairs(tmp_path, DATE, [fresh]) == 1
     assert ledger.read_header(path) == StorySimilarityPair.csv_columns()
@@ -184,7 +203,9 @@ def test_widening_keeps_every_cell_the_narrow_header_named(tmp_path: Path) -> No
     with path.open("r", encoding="utf-8", newline="") as handle:
         before = list(csv.DictReader(handle))
 
-    widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=True)
+    widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
+    )
 
     with path.open("r", encoding="utf-8", newline="") as handle:
         after = list(csv.DictReader(handle))
@@ -203,9 +224,13 @@ def test_a_second_pass_over_a_widened_store_writes_nothing(tmp_path: Path) -> No
     """A widener that cannot be run twice is a widener nobody can re-run after a failure."""
     path = a_narrow_day(tmp_path)
 
-    first = widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=True)
+    first = widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
+    )
     settled = path.read_bytes()
-    second = widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=True)
+    second = widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
+    )
 
     assert [entry.changed for entry in first] == [True]
     assert [entry.changed for entry in second] == [False]
@@ -229,7 +254,9 @@ def test_a_day_still_carrying_a_dropped_column_refuses_the_append_until_it_is_re
     with pytest.raises(ValueError, match="Migrate the ledger"):
         ledger.append_story_similarity_pairs(tmp_path, DATE, [fresh])
 
-    widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=True)
+    widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
+    )
 
     assert ledger.append_story_similarity_pairs(tmp_path, DATE, [fresh]) == 1
     assert ledger.read_header(path) == StorySimilarityPair.csv_columns()
@@ -275,7 +302,9 @@ def test_re_filing_a_dropped_column_away_keeps_every_cell_the_contract_still_nam
     with path.open("r", encoding="utf-8", newline="") as handle:
         before = list(csv.DictReader(handle))
 
-    widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=True)
+    widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
+    )
 
     with path.open("r", encoding="utf-8", newline="") as handle:
         after = list(csv.DictReader(handle))
@@ -290,7 +319,9 @@ def test_a_dry_run_reports_what_a_live_run_writes_and_writes_nothing(tmp_path: P
     path = a_narrow_day(tmp_path)
     untouched = path.read_bytes()
 
-    dry = widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=False)
+    dry = widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=False
+    )
 
     assert path.read_bytes() == untouched
     assert [(e.path, e.columns_before, e.columns_after, e.rows, e.changed) for e in dry] == [
@@ -303,7 +334,9 @@ def test_a_dry_run_reports_what_a_live_run_writes_and_writes_nothing(tmp_path: P
         )
     ]
 
-    live = widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=True)
+    live = widen_ledger_header.widen(
+        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
+    )
 
     assert live == dry
 
@@ -327,13 +360,15 @@ def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Pat
     day.write_text("version\n", encoding="utf-8", newline="")
 
     with pytest.raises(ValueError, match="names a reader for"):
-        widen_ledger_header.widen("-".join(ledger.entry(which).prefix), state_dir=tmp_path)
+        widen_ledger_header.widen(
+            "-".join(ledger.entry(which).prefix), names=["2026/09/18.csv"], state_dir=tmp_path
+        )
 
 
 def test_the_utility_refuses_a_word_that_is_not_a_store(tmp_path: Path) -> None:
     """A path is never a name here, and the refusal names the command that said no."""
     with pytest.raises(ValueError, match="re-files a ledger"):
-        widen_ledger_header.widen("scored-pairs", state_dir=tmp_path)
+        widen_ledger_header.widen("scored-pairs", names=["2026/09/18.csv"], state_dir=tmp_path)
 
 
 def test_the_store_a_prune_refuses_by_name_is_still_re_filable() -> None:
@@ -357,12 +392,12 @@ def test_a_store_with_no_file_yet_reports_nothing_and_raises_nothing(tmp_path: P
     """
     a_narrow_day(tmp_path)
 
-    assert (
+    with pytest.raises(FileNotFoundError):
         widen_ledger_header.widen(
-            "content-similarity-judge-fitted-thresholds", state_dir=tmp_path
+            "content-similarity-judge-fitted-thresholds",
+            names=["2026/09/18.csv"],
+            state_dir=tmp_path,
         )
-        == []
-    )
 
 
 def test_a_day_tree_re_files_onto_the_column_list_its_contract_holds_now(
@@ -385,7 +420,12 @@ def test_a_day_tree_re_files_onto_the_column_list_its_contract_holds_now(
     added = set(FeedHealthRow.csv_columns()) - set(ledger.read_header(path))
     assert added, "the fixture has to predate a column the contract names now"
 
-    report = widen_ledger_header.widen(TREE_TARGET, state_dir=tmp_path, write=True)
+    report = widen_ledger_header.widen(
+        TREE_TARGET,
+        names=[f"{TREE_DATE.replace('-', '/')}/{ledger.BEFORE_PARTITION_NAME}"],
+        state_dir=tmp_path,
+        write=True,
+    )
 
     assert [entry.changed for entry in report] == [True]
     assert [entry.rows for entry in report] == [len(before)]
@@ -421,7 +461,9 @@ def test_every_store_in_the_vocabulary_resolves_except_the_named_ledgers(
         day.parent.mkdir(parents=True, exist_ok=True)
         day.with_suffix(".csv").write_text("version\n", encoding="utf-8", newline="")
         try:
-            widen_ledger_header.widen(name, state_dir=tmp_path)
+            widen_ledger_header.widen(
+                name, names=[TREE_DATE.replace("-", "/") + ".csv"], state_dir=tmp_path
+            )
         except ValueError as refusal:
             assert "names a reader for" in str(refusal)
             refused.add(name)

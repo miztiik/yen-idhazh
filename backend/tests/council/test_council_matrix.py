@@ -8,7 +8,6 @@ is written by the test that uses it. Nothing in this file imports
 from __future__ import annotations
 
 import json
-import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -18,6 +17,7 @@ from conftest import CONFIG_DIR, read_text
 from idhazh.council import registry
 from utilities import council_matrix
 
+from ._config import copy_config
 from ._tenants import a_venue, forget
 
 A_VENUE = "a_paper_venue"
@@ -38,14 +38,8 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 
 
 def _config_registering(root: Path, *, slugs: tuple[str, ...], shards: int | None = None) -> Path:
-    """A whole `config/` in a temp directory, with those slugs registered.
-
-    The whole tree, because `config.load` reads five files and cross-checks two
-    of them - a config with one file written by hand cannot load for a reason
-    the test did not mean to ask about.
-    """
-    target = root / "config"
-    shutil.copytree(CONFIG_DIR, target)
+    """The loader's named config inputs, with those slugs registered."""
+    target = copy_config(root)
     raw = json.loads(read_text(target / "idhazh.json"))
     raw["council"]["tenants"] = list(slugs)
     if shards is not None:

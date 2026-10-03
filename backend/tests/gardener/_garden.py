@@ -26,10 +26,13 @@ import tarfile
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Final
+from uuid import uuid4
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR
+from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT
 from origin_template import copy_origin, template
+
+from idhazh.gardener.registry import TaskModule
 
 GARDENER_FIXTURES: Final = FIXTURES_DIR / "gardener"
 TASK_PACKAGES: Final = GARDENER_FIXTURES / "task_packages"
@@ -37,9 +40,69 @@ TASK_PACKAGES: Final = GARDENER_FIXTURES / "task_packages"
 #: The committed files a gardener config folder needs beside its declarations.
 COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.json")
 
+#: The task declarations these integration fixtures exercise, not a directory census.
+COMMITTED_DECLARATIONS: Final = (
+    "compact-candidate-models.json",
+    "compact-counterfactual-scores.json",
+    "compact-feed-retirements.json",
+    "compact-gardener.json",
+    "compact-host-fingerprint.json",
+    "compact-item-health.json",
+    "compact-published.json",
+    "compact-seen.json",
+    "compact-summary-quality-evals.json",
+    "compact-visual-prunes.json",
+    "corpus-squash.json",
+    "digest-fragments.json",
+    "feed-health.json",
+    "summary-quality-evals-index.json",
+    "telemetry-aggregate.json",
+    "traces.json",
+    "trials.json",
+    "visual-prune.json",
+    "workflow-artifacts.json",
+    "workflow-runs.json",
+)
+
+TASK_MODULES: Final = (
+    "collection",
+    "compaction",
+    "corpus_squash",
+    "digest_fragments",
+    "feed_health",
+    "summary_quality_evals_index",
+    "telemetry_aggregate",
+    "traces",
+    "trials",
+    "visual_prune",
+)
+
+FIXTURE_DECLARATIONS: Final = {
+    "garden": (
+        "compact-gardener.json",
+        "day-validations.json",
+        "feed-health.json",
+        "history.json",
+        "host-fingerprint.json",
+        "seen.json",
+        "summary-quality-evals-index.json",
+        "telemetry-aggregate.json",
+        "traces.json",
+        "trials.json",
+        "workflow-artifacts.json",
+    ),
+    "runner": ("compact-gardener.json", "old-days.json", "rehearsal.json"),
+    "breaks": ("broken.json", "old-days.json"),
+}
+
 #: Who the seed commits are by. Not the repository's identity, on purpose: a
 #: commit the gardener made is told from the seed by its author.
-SEED_IDENTITY: Final = ("-c", "user.name=Scripted Origin", "-c", "user.email=origin@example.invalid")
+SEED_IDENTITY: Final = (
+    "-c",
+    "user.name=Scripted Origin",
+    "-c",
+    "user.email=origin@example.invalid",
+)
 
 #: One download a partial clone starts for itself, as a `GIT_TRACE` log records
 #: it: a fetch handed the ids of the files it lacks on its input.
@@ -52,22 +115,68 @@ _TREE_ROUTE: Final = re.compile(r"git/trees/([0-9a-f]{40})\?recursive=1")
 def a_config(root: Path, *declarations: Path) -> Path:
     """A config folder under `root`: the committed files, plus these declarations.
 
-    Each argument is a declaration file, or a fixture folder whose every
-    declaration is copied.
+    Each argument is a declaration file, a fixture folder, or the committed
+    task folder, whose named integration inputs are copied.
     """
     config_dir = root / "config"
     (config_dir / "gardener").mkdir(parents=True, exist_ok=True)
     for name in COMMITTED_FILES:
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
+    names: set[str] = set()
     for given in declarations:
-        for source in sorted(given.glob("*.json")) if given.is_dir() else [given]:
+        if given == CONFIG_DIR / "gardener":
+            declared = json.loads(
+                (config_dir / "idhazh_gardener.json").read_text(encoding="utf-8")
+            )["task_names"]
+            sources = [given / f"{name}.json" for name in declared]
+        elif given.parent == GARDENER_FIXTURES:
+            sources = [given / name for name in FIXTURE_DECLARATIONS[given.name]]
+        elif given.is_dir():
+            sources = sorted(given.glob("*.json"))
+        else:
+            sources = [given]
+        for source in sources:
             shutil.copyfile(source, config_dir / "gardener" / source.name)
+            names.add(source.stem)
+    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
+    knobs["task_names"] = sorted(names)
+    knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
     return config_dir
 
 
 def task_package(name: str, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     """One fixture package, imported by its name from the fixture folder, for one test."""
     monkeypatch.syspath_prepend(str(TASK_PACKAGES))
+    return importlib.import_module(name)
+
+
+def named_task_modules() -> dict[str, TaskModule]:
+    """Import the named task implementations without discovering the source tree."""
+    modules: dict[str, TaskModule] = {}
+    for stem in TASK_MODULES:
+        module = importlib.import_module(f"idhazh.gardener.tasks.{stem}")
+        modules[stem] = TaskModule(stem=stem, kind=module.KIND, run=module.run)
+    return modules
+
+
+def named_task_package(root: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """Build a discoverable package from named real sources, never a source-tree walk."""
+    name = f"garden_tasks_{uuid4().hex}"
+    folder = root / name
+    folder.mkdir()
+    source = REPO_ROOT / "backend" / "idhazh" / "gardener" / "tasks"
+    for stem in (
+        "__init__",
+        "_compact_tree",
+        "_daily_period",
+        "_index_day",
+        "_monthly_period",
+        "_yearly_period",
+        *TASK_MODULES,
+    ):
+        shutil.copyfile(source / f"{stem}.py", folder / f"{stem}.py")
+    monkeypatch.syspath_prepend(str(root))
     return importlib.import_module(name)
 
 
