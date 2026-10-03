@@ -19,8 +19,6 @@ from utilities import gardener_publish
 
 from ._garden import GARDENER_FIXTURES, a_partial_clone, an_origin, quiet_git
 
-pytestmark = pytest.mark.slow
-
 #: The folder GitHub was asked about, and what it said.
 LISTED: Final = GARDENER_FIXTURES / "trees-api" / "listed"
 REPLY: Final = GARDENER_FIXTURES / "trees-api" / "reply.json"

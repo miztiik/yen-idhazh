@@ -7,8 +7,6 @@ import pytest
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals.hhem import chunks, dual_score, score_over_chunks
 
-pytestmark = pytest.mark.slow
-
 
 def test_a_short_premise_is_one_chunk() -> None:
     assert chunks("a b c", size=10, overlap=2) == ["a b c"]

@@ -61,7 +61,7 @@ from ._harness import (
     _triggers,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 WORKFLOW: str = "idhazh-pipeline-tests.yaml"
 

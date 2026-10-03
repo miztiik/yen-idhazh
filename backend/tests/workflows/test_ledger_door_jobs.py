@@ -18,7 +18,7 @@ import pytest
 from ._harness import _load_workflows, _stage_invocations
 from ._ledger_derivation import _persisted_by, _reachable_modules
 
-pytestmark = pytest.mark.workflow
+pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
 #: The flag a writing verb takes the commit on.
 COMMIT_FLAG: Final = "--commit"
