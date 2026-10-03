@@ -448,7 +448,7 @@ def _squash_as_declared(
     from idhazh import config, ledger
     from idhazh.contracts.base import RUN_ID_PATTERN, ServerJob
     from idhazh.contracts.knobs.gardener import HistoryPolicy, TaskKind
-    from idhazh.gardener import registry, runner
+    from idhazh.gardener import registry, runner, tasks
     from idhazh.gardener.context import TaskContext
     from idhazh.gardener.file_listing import FileListing
 
@@ -462,7 +462,11 @@ def _squash_as_declared(
         policy = settings.tasks[TASK_NAME]
         if not isinstance(policy, HistoryPolicy):
             raise ValueError(f"config/gardener/{TASK_NAME}.json is a {policy.kind} task")
-        held = registry.bind(TASK_NAME, TaskKind.HISTORY, registry.discover())
+        held = registry.bind(
+            TASK_NAME,
+            TaskKind.HISTORY,
+            registry.discover(tasks, {TASK_NAME: policy}),
+        )
     except (ValueError, registry.DiscoveryError) as refusal:
         print(f"nothing was rewritten: {refusal}", file=sys.stderr)
         return EXIT_CANNOT_REWRITE
@@ -480,8 +484,8 @@ def _squash_as_declared(
         job=ServerJob.HISTORY,
         shard=0,
         git_sha=_git(repo, "rev-parse", "HEAD").strip(),
-        owned_folders=tuple(policy.owns or ()),
-        listing=FileListing.from_disk(repo, policy.owns or ()),
+        owned_folders=tuple(policy.owns),
+        listing=FileListing.from_paths(repo, (), folders=policy.owns),
     )
 
     def record() -> tuple[str, ...]:

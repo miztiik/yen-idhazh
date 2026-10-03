@@ -1708,11 +1708,15 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
                 job=ServerJob.RUN_TASKS,
                 shard=SCORE_SHARD,
                 git_sha=FIXTURE_SHA,
-                owned_folders=(),
+                owned_folders=tuple(policy.owns),
                 # The declaration names `state/...` folders, and the canary's
                 # `state/` sits in its own tree rather than at the repository
                 # root, so the listing is read from the folder that holds it.
-                listing=FileListing.from_disk(state.parent, policy.owns or ()),
+                listing=FileListing.from_disk(
+                    state.parent,
+                    policy.owns,
+                    paths=(state.parent / folder for folder in policy.owns),
+                ),
             )
         )
         if outcome.resume_from is not None:

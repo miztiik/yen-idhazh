@@ -59,6 +59,16 @@ class VisualPruneRow(Contract):
     __schema_stem__: ClassVar[str] = "visual-prune-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-03T16:19",
+            change="Byte totals cover the named candidate window.",
+            why="A whole-tree total reads more files as the archive grows.",
+        ),
+        ChangelogEntry(
+            version="2026-10-03T15:00",
+            change="Candidates and oldest kept are limited to the named period window.",
+            why="A scheduled cleanup reads a fixed period window and names it in the report.",
+        ),
+        ChangelogEntry(
             version="2026-09-06T13:00",
             change="Initial shape: the policy in force, the cutoff it computed, what it found.",
             why="The cleanup counted what it deleted into a job log that GitHub keeps.",
@@ -92,8 +102,16 @@ class VisualPruneRow(Contract):
             "a disabled policy has no line and a stand-in date would read like one."
         ),
     )
+    window_start: DateStamp | None = Field(
+        default=None,
+        description="First expired UTC day included in this pass's fixed candidate window.",
+    )
+    window_end: DateStamp | None = Field(
+        default=None,
+        description="Last expired UTC day included in this pass's fixed candidate window.",
+    )
     candidates_found: int = Field(
-        ge=0, description="Rendered visuals older than the cutoff. The whole backlog."
+        ge=0, description="Rendered visuals in the named candidate window."
     )
     deleted: int = Field(ge=0, description="How many this run removed. Always 0 on a dry run.")
     skipped_by_fuse: int = Field(
@@ -110,20 +128,20 @@ class VisualPruneRow(Contract):
     oldest_kept: DateStamp | None = Field(
         default=None,
         description=(
-            "The oldest published day still carrying a rendered visual after this run. "
-            "Empty when the tree carries none at all. Read against `cutoff_date`, it "
-            "says whether the policy has caught up."
+            "Whether the first kept day carries a rendered visual after this run. Empty "
+            "when that named day carries none; this does not claim to describe older history."
         ),
     )
     payload_bytes_before: int = Field(
         ge=0,
         description=(
-            "The committed payload tree under `frontend/public/digest/`, before the "
-            "run. Never the built site - two trees, and one cannot stand in for the "
-            "other."
+            "The bytes under this pass's named candidate days, before cleanup. This "
+            "is not the whole committed tree or the built site."
         ),
     )
-    payload_bytes_after: int = Field(ge=0, description="The same tree, after the run.")
+    payload_bytes_after: int = Field(
+        ge=0, description="The same named candidate days, after cleanup."
+    )
 
     @model_validator(mode="after")
     def _the_arithmetic_holds(self) -> Self:
@@ -138,6 +156,14 @@ class VisualPruneRow(Contract):
             raise ValueError("fuse_tripped and skipped_by_fuse must say the same thing")
         if (self.policy_months < 0) != (self.cutoff_date is None):
             raise ValueError("a switched-off policy has no cutoff, and a live one has one")
+        if (self.window_start is None) != (self.window_end is None):
+            raise ValueError("the candidate window has both endpoints or neither")
+        if (
+            self.window_start is not None
+            and self.window_end is not None
+            and self.window_start > self.window_end
+        ):
+            raise ValueError("the candidate window starts after it ends")
         if self.payload_bytes_after > self.payload_bytes_before:
             raise ValueError("a cleanup cannot grow the tree it walks")
         if self.payload_bytes_before - self.payload_bytes_after != self.bytes_reclaimed:

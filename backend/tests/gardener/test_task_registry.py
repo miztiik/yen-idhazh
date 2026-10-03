@@ -1,9 +1,9 @@
-"""Does every declared task find exactly one module, and does every module serve a task?
+"""Does each configured task find the right module without listing the package?
 
-The registry has no list to keep in step: a task is a module in `tasks/` and a
-declaration in `config/gardener/`, and the runner's pre-flight holds the two
-against each other both ways before anything runs. Each way it can go wrong is
-driven here from a real package of real task modules under
+The registry imports only modules named by the configured declarations and
+their kinds. The runner's pre-flight holds declarations and modules against
+each other before anything runs. Each way it can go wrong is driven here from
+a real package of real task modules under
 `tests/fixtures/gardener/task_packages/`, and each one has to stop the shard -
 none may be caught and skipped, because a skipped task is a task that silently
 stopped deleting.
@@ -103,10 +103,15 @@ def test_finding_the_tasks_loads_no_heavy_library() -> None:
     """
     body = (
         "import importlib, sys\n"
+        "from pathlib import Path\n"
         "from idhazh.gardener import registry\n"
+        "from idhazh.contracts.knobs.gardener import TaskPolicy\n"
+        "from pydantic import TypeAdapter\n"
         f"for name in {TASK_MODULES!r}:\n"
         "    importlib.import_module('idhazh.gardener.tasks.' + name)\n"
-        "found = registry.discover(importlib.import_module('garden_tasks_ok'))\n"
+        "policy = TypeAdapter(TaskPolicy).validate_json(Path("
+        "'tests/fixtures/gardener/runner/old-days.json').read_text())\n"
+        "found = registry.discover(importlib.import_module('garden_tasks_ok'), {'old-days': policy})\n"
         "assert found, 'the fixture package declared no task, so this checks nothing'\n"
         f"heavy = {HEAVY!r}\n"
         "loaded = sorted(n for n in sys.modules for h in heavy if n == h or n.startswith(h + '.'))\n"
@@ -141,33 +146,38 @@ def test_a_task_binds_to_its_own_module_before_the_one_for_its_kind() -> None:
 
 
 def test_two_modules_that_would_serve_one_task_are_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`old-days.py` and `old_days.py` both answer to the task `old-days`. Neither wins."""
+    """Only the canonical module for this configured name is imported."""
     package = task_package("garden_tasks_two_names", monkeypatch)
-    with pytest.raises(DiscoveryError) as refusal:
-        registry.discover(package)
-    assert "old-days" in str(refusal.value) and "old_days" in str(refusal.value)
+    modules = registry.discover(
+        package, declared(GARDENER_FIXTURES / "runner" / "old-days.json")
+    )
+    assert set(modules) == {"old_days"}
+    assert "garden_tasks_two_names.old-days" not in sys.modules
 
 
 def test_a_module_that_raises_on_import_stops_discovery(monkeypatch: pytest.MonkeyPatch) -> None:
     """Re-raised with its own traceback attached, never skipped."""
     package = task_package("garden_tasks_bad_import", monkeypatch)
     with pytest.raises(DiscoveryError, match="raised while it was imported") as refusal:
-        registry.discover(package)
+        registry.discover(package, declared(GARDENER_FIXTURES / "runner" / "old-days.json"))
     assert isinstance(refusal.value.__cause__, ImportError)
 
 
 def test_a_module_that_declares_no_task_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     package = task_package("garden_tasks_no_task", monkeypatch)
-    with pytest.raises(DiscoveryError, match="helper declares no task"):
-        registry.discover(package)
+    modules = registry.discover(
+        package, declared(GARDENER_FIXTURES / "runner" / "old-days.json")
+    )
+    assert not modules
+    assert "garden_tasks_no_task.helper" not in sys.modules
 
 
 def test_a_module_whose_kind_disagrees_with_its_declaration_is_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A retention declaration handed to a compaction module would be read as the wrong shape."""
-    modules = registry.discover(task_package("garden_tasks_wrong_kind", monkeypatch))
     tasks = declared(GARDENER_FIXTURES / "breaks" / "old-days.json")
+    modules = registry.discover(task_package("garden_tasks_wrong_kind", monkeypatch), tasks)
     with pytest.raises(DiscoveryError, match=r"is a retention task and tasks/old_days\.py serves"):
         runner.preflight(tasks, modules)
 
@@ -176,8 +186,8 @@ def test_every_declaration_is_served_and_every_module_serves_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The two-way check, asserted both ways over a garden that passes it."""
-    modules = registry.discover(task_package("garden_tasks_ok", monkeypatch))
     tasks = runner_garden()
+    modules = registry.discover(task_package("garden_tasks_ok", monkeypatch), tasks)
 
     bound = runner.preflight(tasks, modules)
 
@@ -188,25 +198,25 @@ def test_every_declaration_is_served_and_every_module_serves_one(
 
 
 def test_a_declaration_no_module_serves_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    modules = registry.discover(task_package("garden_tasks_ok", monkeypatch))
     tasks = runner_garden() | declared(GARDENER_FIXTURES / "garden" / "history.json")
+    modules = registry.discover(task_package("garden_tasks_ok", monkeypatch), tasks)
     with pytest.raises(DiscoveryError, match=r"history\.json is served by no module"):
         runner.preflight(tasks, modules)
 
 
 def test_a_module_no_declaration_uses_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    modules = registry.discover(task_package("garden_tasks_ok", monkeypatch))
     tasks = declared(GARDENER_FIXTURES / "runner" / "old-days.json")
-    with pytest.raises(DiscoveryError, match=r"tasks/compaction\.py serves no active or paused"):
-        runner.preflight(tasks, modules)
+    modules = registry.discover(task_package("garden_tasks_ok", monkeypatch), tasks)
+    assert set(modules) == {"retention"}
+    assert set(runner.preflight(tasks, modules)) == {"old-days"}
 
 
 def test_a_retired_declaration_needs_no_module_and_keeps_none_in_use(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A retired task never runs, so it neither needs a module nor keeps one alive."""
-    modules = registry.discover(task_package("garden_tasks_ok", monkeypatch))
     garden = runner_garden()
+    modules = registry.discover(task_package("garden_tasks_ok", monkeypatch), garden)
     retired = garden["compact-gardener"].model_copy(
         update={"lifecycle_status": TaskLifecycleStatus.RETIRED}
     )

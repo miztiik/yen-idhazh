@@ -4,9 +4,8 @@ Read the way a wake reads it: a partial clone of a real origin, whose one task
 that reads content fetches the folder it owns, built to hold exactly the
 ceiling, one byte under it and one byte over it. The ceiling is an alarm rather
 than a gate: a shard over it still runs every task and lands its record, and
-then exits 1. Every row records what the shard's owned folders weighed at the
-commit and what it downloaded, so where a shard's bytes sit is answered by the
-record.
+then exits 1. Every row records what the shard downloaded. A scheduled pass
+does not read whole folders just to weigh them.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from utilities import gardener_publish
 
 from ._garden import (
     GARDENER_FIXTURES,
-    OriginTrees,
+    OriginBlobs,
     a_config,
     a_partial_clone,
     an_origin,
@@ -46,15 +45,15 @@ NAMES: Final = ("compact-gardener", "old-days", "rehearsal")
 CEILING_MB: Final = 1
 
 #: A day the live retention task takes by its name, which is never downloaded.
-AGED_DAY: Final = "state/old-days/2026-09-01.txt"
+AGED_DAY: Final = "state/old-days/2026/09/19/2026-09-19.txt"
 AGED_BYTES: Final = 600_000
 #: What the rehearsal owns, which it decides on by name as well.
-REHEARSED: Final = "state/rehearsal/2026-09-01.txt"
+REHEARSED: Final = "state/rehearsal/2026/09/19/2026-09-19.txt"
 #: The two files the compaction reads, one of them sized to put the download
 #: exactly at, under or over the ceiling.
-KEEP: Final = "state/compact/gardener/.keep"
+KEEP: Final = "state/compact/gardener/monthly/2025/08.json"
 KEEP_BYTES: Final = 100
-VARIED: Final = "state/compact/gardener/2026-09-01.bin"
+VARIED: Final = "state/compact/gardener/monthly/2025/08.parquet"
 
 
 def a_garden_downloading(
@@ -92,7 +91,7 @@ def landed(
         attempt=1,
         shard=0,
         package=a_package("garden_tasks_ok", monkeypatch),
-        trees=OriginTrees(origin),
+        trees=OriginBlobs(origin),
         clock=lambda: WAKE,
         say=said.append,
     )
@@ -116,8 +115,7 @@ def test_a_shard_at_under_and_over_its_ceiling(
     assert exit_code == code
     assert {row.task for row in rows} == set(NAMES), "a task did not run"
     assert {row.downloaded_bytes for row in rows} == {total}, "a row misses what was downloaded"
-    weighed = AGED_BYTES + len("rehearsed\n") + total
-    assert {row.cone_bytes for row in rows} == {weighed}, "a row misses what the folders weigh"
+    assert {row.cone_bytes for row in rows} == {None}, "a fixed-window shard reads no whole-tree weight"
     assert on_origin(origin, record) is not None, "the record did not land"
     assert on_origin(origin, AGED_DAY) is None, "the live task's deletion did not land"
     over = [line for line in said if "over max_downloaded_mb" in line]
@@ -143,7 +141,11 @@ def test_the_weight_is_read_off_the_commit_and_not_the_checkout(
     folders = ["state/compact/gardener", "state/old-days", "state/rehearsal"]
 
     listing = gardener_publish.read_the_listing(
-        gardener_publish.Checkout(checkout), checkout, folders, None
+        gardener_publish.Checkout(checkout),
+        checkout,
+        folders,
+        [AGED_DAY, KEEP],
+        None,
     )
 
     assert gardener_publish.folder_weights(listing, folders) == {

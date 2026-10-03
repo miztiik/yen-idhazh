@@ -271,6 +271,7 @@ def fold(state_dir: Path, date: str) -> closed_day_fold.Folded:
         now=datetime.combine(closed, time_type.min, tzinfo=UTC),
         after_days=after_days,
         dry_run=False,
+        period_paths=[ledger.tree_root(state_dir, tree) for tree in DAY_TREES],
     )
 
 

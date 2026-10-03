@@ -35,7 +35,7 @@ from idhazh.gardener.outcome import EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
 from .._garden import (
-    OriginTrees,
+    OriginBlobs,
     a_config,
     a_partial_clone,
     git,
@@ -135,7 +135,7 @@ def landed(
         run_id=RUN_ID,
         attempt=1,
         shard=0,
-        trees=OriginTrees(origin),
+        trees=OriginBlobs(origin),
         package=package,
         clock=lambda: WAKE,
         say=said.append,
@@ -177,8 +177,8 @@ def test_a_shard_that_checks_out_only_code_lands_what_a_full_checkout_lands(
     assert any(line.startswith("D\t") for line in changes), "nothing was deleted"
     assert any(line.startswith("A\tstate/compact/") for line in changes), "no compaction wrote"
     row = next(iter(lean_rows.values()))
-    assert row.cone_bytes is not None and row.downloaded_bytes is not None
-    assert 0 < row.downloaded_bytes < row.cone_bytes, "the lean shard downloaded every folder"
+    assert row.cone_bytes is None and row.downloaded_bytes is not None
+    assert row.downloaded_bytes > 0, "the lean shard read no named period files"
     assert {each.downloaded_bytes for each in whole_rows.values()} == {0}
 
 
