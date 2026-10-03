@@ -44,6 +44,7 @@ result certifies that selection, not every check the automatic selector chose:
 npm run test:changed -- --group logic
 npm run test:changed -- --group console
 npm run test:changed -- --spec archive.spec.ts
+npm run test:changed -- --spec whole-day.spec.ts
 npm run test:changed -- --mode real --spec reading-page.spec.ts
 ```
 
@@ -53,6 +54,7 @@ Choose group flags or spec flags for one invocation, not both. Several spec
 flags can select tests from different groups.
 A real-build run requires an explicitly supported reading or visual spec, so
 canary-dependent console assertions cannot accidentally run against real data.
+The whole-day spec runs alone against the fixed canary, never the real archive.
 Keep the section 12 browser smoke for a published-site change.
 
 The launcher checks the dependencies the selection needs before waiting for a
