@@ -9,6 +9,7 @@ import sqlite3
 import sys
 from collections.abc import Iterator, Sequence
 from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 from textwrap import dedent
 from typing import Final
@@ -191,19 +192,26 @@ def _a_writers_file(*, attempt: int) -> str:
     """One writer's own file inside a day directory, spelled by the producer.
 
     A test of what a rebase does to two committed names has to use names a run
-    can actually produce: the shard is two digits in a committed name, so a name
-    written by hand here would be a name no writer ever takes. The eval ledger's
-    ID folder is the tree a work shard files into, and the one that still keeps
-    a day as a folder of CSV files named for their writers.
+    can actually produce, so a name written by hand here would be a name no
+    writer ever takes. The name is minted as `ledger.persist` mints it: the work
+    unit from the ledger, the day, the run, the job and the shard, then the
+    attempt, so two attempts at one unit take two files in one raw day folder.
+    Feed health is the ledger the plan job files into.
     """
-    return ledger.day_shard_relpath(
-        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
-        date=SUBSTITUTED_DATE,
-        run_id=f"{SUBSTITUTED_DATE}-40000000001",
-        attempt=attempt,
-        job=ServerJob.WORK,
+    covers = SUBSTITUTED_DATE
+    unit = ledger.unit_id(
+        ledger=LedgerName.FEED_HEALTH.value,
+        covers=covers,
+        run_id=f"{covers}-40000000001",
+        job=ServerJob.PLAN.value,
         shard=0,
+        producer="tests.workflows",
     )
+    written_at = datetime.fromisoformat(covers).replace(tzinfo=UTC)
+    name = ledger.file_id(
+        unit=unit, attempt=attempt, written_at_ms=int(written_at.timestamp() * 1000)
+    )
+    return ledger.raw_path(Path("state"), LedgerName.FEED_HEALTH, covers, name).as_posix()
 
 
 def _stand_in_day(tree: str, date: str) -> str:
@@ -1137,8 +1145,8 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
 def test_a_new_file_in_a_drained_directory_still_rebases(tmp_path: Path) -> None:
     """Row 2's Oracle, run rather than read: the B6 shape, at exit 0.
 
-    One job drains a directory - which is what the closed-day fold does to a day
-    that can gain no more rows - while another writes a brand-new file into it.
+    One job drains a directory - which is what the compaction does to a raw day
+    once it has packed it - while another writes a brand-new file into it.
     Git reads the emptied directory as having been RENAMED to wherever its files
     went, and applies that guess to the arriving file, so the rebase stops with
     `CONFLICT (file location)` over a tree that was correct and the job loses

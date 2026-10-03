@@ -33,7 +33,6 @@ from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThresho
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
-from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -113,24 +112,6 @@ def _persist(state: Path) -> bool:
     )
 
 
-def _segment(state: Path, *, extend: bool) -> bool:
-    writer = ledger.extend_segment if extend else ledger.write_segment
-    row = _first(ObservationIndexRow)
-    return _wrote(
-        state,
-        lambda: writer(
-            state,
-            LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
-            [row],
-            run_id=A_RUN,
-            attempt=1,
-            job=ServerJob.WORK,
-            shard=0,
-            date=A_DAY,
-        ),
-    )
-
-
 def _collect_metrics(state: Path) -> bool:
     shipped = state.parent / "shipped"
     metrics_sink.ship_judge_metrics(
@@ -161,16 +142,6 @@ def _trace(state: Path) -> bool:
 #: digest fragment are driven through their stages in their own modules' tests.
 ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
     "persist": (LedgerName.VISUAL_PRUNES, 1, _persist),
-    "write_segment": (
-        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
-        1,
-        lambda s: _segment(s, extend=False),
-    ),
-    "extend_segment": (
-        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
-        1,
-        lambda s: _segment(s, extend=True),
-    ),
     "append_seen": (
         LedgerName.SEEN,
         1,

@@ -23,7 +23,6 @@ test('one generated run inventories named drawings and current ledger files', ()
 		write('publication.json', '{}');
 		write('telemetry/2026/08.json', '{}');
 		write('state/raw/feed-health/2026/08/20/01a10188-bb60-854b-8ec1-bd104a03b0d6.parquet', 'raw');
-		write('state/raw/feed-health/index/2026-08-20.json', '{}');
 		write('state/compact/feed-health/daily/2026/08/20.parquet', 'packed');
 		write('state/compact/feed-health/index/daily.json', '{}');
 		write('state/content-similarity-judge/fitted-thresholds/2026/08/20.csv', 'utc_date\n2026-08-20\n');
@@ -40,8 +39,7 @@ test('one generated run inventories named drawings and current ledger files', ()
 				'compact/feed-health/index/daily.json',
 				'content-similarity-judge/fitted-thresholds/2026/08/20.csv',
 				'content-similarity-judge/merge-line-holdout-scores/2026/08/20.csv',
-				'raw/feed-health/2026/08/20/01a10188-bb60-854b-8ec1-bd104a03b0d6.parquet',
-				'raw/feed-health/index/2026-08-20.json'
+				'raw/feed-health/2026/08/20/01a10188-bb60-854b-8ec1-bd104a03b0d6.parquet'
 			]
 		});
 	} finally {

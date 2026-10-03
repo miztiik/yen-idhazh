@@ -16,7 +16,7 @@ from conftest import FIXTURES_DIR, REPO_ROOT, read_text
 from idhazh import ledger, path_classes
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.ledger_name import LedgerName
+from idhazh.telemetry import traces
 from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
 from ._harness import (
@@ -115,20 +115,14 @@ def _as_this_job(settings: dict[str, str]) -> dict[str, str]:
 def _writer_file(run_id: str) -> str:
     """One writer's own file, from the grammar the writer itself uses.
 
-    Built through `ledger.day_shard_relpath` rather than spelled here, so a test
-    of the predicate that reads a filename cannot pass against a filename no
-    writer produces. The ID folder is the tree this job files into itself, and
-    a CSV day tree is where a filename carries its writer: a raw file of the
-    ledger door is named by a fresh id, so it never meets another file at one
-    path.
+    Built through `traces.committed_trace_relpath` rather than spelled here, so a
+    test of the predicate that reads a filename cannot pass against a filename no
+    writer produces. A job's trace is the file that carries its writer in its
+    name: a raw file of the ledger door is named by a fresh id, so it never meets
+    another file at one path.
     """
-    return ledger.day_shard_relpath(
-        LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
-        date=THE_DAY,
-        run_id=run_id,
-        attempt=THIS_ATTEMPT,
-        job=THIS_JOB,
-        shard=0,
+    return traces.committed_trace_relpath(
+        run_id=run_id, attempt=THIS_ATTEMPT, job=THIS_JOB, shard=0
     )
 
 
