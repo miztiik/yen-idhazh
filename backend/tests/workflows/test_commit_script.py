@@ -10,12 +10,13 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import read_text
+from conftest import CONFIG_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import LedgerName
 from utilities import commit_and_push
+from utilities.push_retry import PushRetry, load_retry
 
 from ._harness import (
     COMMIT_IDENTITY,
@@ -32,6 +33,8 @@ from ._harness import (
     _drop_command,
     _git,
     _isolated_env,
+    _load_workflows,
+    _mapping,
     _mid_rebase,
     _push_attempts,
     _race,
@@ -45,12 +48,125 @@ from ._harness import (
     _scripted_origin,
     _seed_ledger,
     _step_outputs,
+    _steps,
     _tracked,
     _write,
     requires_space_free_paths,
 )
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+
+
+def test_the_production_backoff_grows_and_caps() -> None:
+    retry = load_retry(CONFIG_DIR / "push-retry.json")
+    assert [retry.backoff_seconds(count) for count in range(1, 8)] == [1, 2, 4, 8, 8, 8, 8]
+    assert retry.deadline_for("work") == 120
+    assert retry.deadline_for("assemble") == 300
+    assert retry.deadline_for("a-new-job") == 300
+
+
+def test_every_deadline_override_names_a_job_that_runs_the_commit_program() -> None:
+    retry = load_retry(CONFIG_DIR / "push-retry.json")
+    committing_jobs = {
+        job
+        for filename, workflow in _load_workflows().items()
+        for job in _mapping(workflow.get("jobs"), f"{filename} jobs")
+        if any(
+            isinstance(script := step.get("run"), str) and "commit_and_push.py" in script
+            for step in _steps(workflow, job)
+        )
+    }
+    assert committing_jobs, "no committing workflow jobs were found"
+    stale = set(retry.deadline_seconds) - {"default"} - committing_jobs
+    assert not stale, f"deadline_seconds overrides name no committing workflow job: {sorted(stale)}"
+
+
+@pytest.mark.parametrize(
+    ("base", "ceiling", "after", "expected"),
+    [
+        (0.003, 0.024, 4, [0.003, 0.006, 0.012, 0.024, 0.024]),
+        (0.003, 0.010, 4, [0.003, 0.006, 0.010, 0.010, 0.010]),
+        (0.003, 0.024, 2, [0.003, 0.006, 0.012, 0.012, 0.012]),
+    ],
+)
+def test_each_backoff_knob_changes_the_real_step(
+    base: float, ceiling: float, after: int, expected: list[float]
+) -> None:
+    retry = PushRetry({"default": 300, "work": 120}, base, ceiling, after)
+    assert [retry.backoff_seconds(count) for count in range(1, 6)] == pytest.approx(expected)
+    assert retry.backoff_seconds(10**6) == pytest.approx(expected[-1])
+    with pytest.raises(ValueError, match="failures"):
+        retry.backoff_seconds(0)
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["deadline_seconds", "base_step_seconds", "ceiling_seconds", "ceiling_after"],
+)
+@pytest.mark.parametrize("invalid", [None, True, "1", 0, -1, float("inf"), float("nan")])
+def test_invalid_or_missing_retry_knobs_are_refused_by_name(
+    tmp_path: Path, key: str, invalid: object
+) -> None:
+    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    if invalid is None:
+        del config[key]
+    else:
+        config[key] = invalid
+    path = tmp_path / "retry.json"
+    _write(path, json.dumps(config) + "\n")
+    with pytest.raises(ValueError, match=key):
+        load_retry(path)
+
+
+@pytest.mark.parametrize("job", ["default", "work"])
+@pytest.mark.parametrize("invalid", [None, True, "1", 0, -1, float("inf"), float("nan")])
+def test_invalid_or_missing_job_deadlines_are_refused_by_name(
+    tmp_path: Path, job: str, invalid: object
+) -> None:
+    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    if invalid is None and job == "default":
+        del config["deadline_seconds"][job]
+    else:
+        config["deadline_seconds"][job] = invalid
+    path = tmp_path / "retry.json"
+    _write(path, json.dumps(config) + "\n")
+    with pytest.raises(ValueError, match=f"deadline_seconds.{job}"):
+        load_retry(path)
+
+
+def test_the_retry_config_accepts_fractional_seconds_and_refuses_a_falling_step(
+    tmp_path: Path,
+) -> None:
+    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
+    config["deadline_seconds"]["default"] = 0.05
+    path = tmp_path / "retry.json"
+    _write(path, json.dumps(config) + "\n")
+    retry = load_retry(path)
+    assert retry.deadline_for("plan") == 0.05
+    assert retry.backoff_seconds(1) == 0.003
+    config["ceiling_seconds"] = 0.001
+    _write(path, json.dumps(config) + "\n")
+    with pytest.raises(ValueError, match="base_step_seconds"):
+        load_retry(path)
+
+
+def test_a_bad_retry_config_stops_before_git_changes(tmp_path: Path) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    before = _git(origin, env, "rev-parse", "main").strip()
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nfresh\n")
+    retry_file = tmp_path / "invalid-retry.json"
+    _write(retry_file, "{}\n")
+    result = _run_commit_script(
+        runner, env, staged_paths, {**settings, "PUSH_RETRY_CONFIG": str(retry_file)}
+    )
+    assert result.returncode == 2
+    assert "deadline_seconds" in result.stderr
+    assert _git(origin, env, "rev-parse", "main").strip() == before
+    assert _git(runner, env, "rev-parse", "HEAD").strip() == before
+    assert _git(runner, env, "diff", "--cached", "--name-only").strip() == ""
 
 
 def _a_writers_file(*, attempt: int) -> str:
@@ -473,7 +589,6 @@ def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     # this number is also the worst case when the loop really is broken, and it
     # stops at the deadline the program itself defaults to.
     deadline = 300
-    settings = {**settings, "PUSH_DEADLINE_SECONDS": str(deadline)}
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
@@ -524,7 +639,7 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     it really reached - which is what a reader needs to tell a run that spent
     its budget from a run that stopped on the first conflict.
 
-    **How many attempts fit in three seconds is a fact about the machine.** This
+    **How many attempts fit before the deadline is a fact about the machine.** This
     asserted two until 2026-09-24, and failed on a box running several test
     suites at once: one rejected push there costs more than the whole deadline,
     so the loop gets a single attempt and the count is right rather than wrong.
@@ -536,7 +651,12 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     fast the push was.
     """
     staged_paths, settings = _commit_call("plan")
-    settings = {**settings, "PUSH_DEADLINE_SECONDS": "3"}
+    retry_file = tmp_path / "deadline-retry.json"
+    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
+    config["deadline_seconds"]["default"] = 0.05
+    _write(retry_file, json.dumps(config) + "\n")
+    settings = {**settings, "PUSH_RETRY_CONFIG": str(retry_file)}
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     before = _git(origin, env, "rev-parse", "main").strip()
@@ -551,7 +671,7 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     assert spent, "a run that gave up without attempting a push reports nothing to read"
     # The count it names is the count it printed, whether the box fitted one
     # attempt into the deadline or seven.
-    assert f"the push was given up on attempt {len(spent)} after 3s" in result.stderr
+    assert f"the push was given up on attempt {len(spent)} after 0.05s" in result.stderr
     assert [row["attempt"] for row in spent] == list(range(1, len(spent) + 1))
     assert all(row["outcome"] == "rejected" for row in spent)
     assert _git(origin, env, "rev-parse", "main").strip() == before
@@ -785,6 +905,7 @@ def test_a_rebuild_that_fails_spends_the_attempts_and_says_which(tmp_path: Path)
     assert result.returncode == 1
     assert "the rebuild failed against origin/main" in result.stderr
     assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
+    assert len(_push_attempts(result.stdout)) == 1
     assert _git(origin, env, "log", "-1", "--format=%s").strip() == (
         "Merge pull request #124 from someone/other"
     )

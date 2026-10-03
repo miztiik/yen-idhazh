@@ -14,12 +14,13 @@ because packing it would put the missing month in no period. A year's months run
 from January to December, except in the first year a ledger packs, whose months
 start at the oldest month the monthly index names.
 
-**Packing is five steps, in this order and no other**: the year file, the yearly
-index, the deletion of the month files it absorbed, the monthly index, and the
-yearly watermark last. A pass that stops before the yearly index leaves every
+**The pass writes all year files, then the final yearly and monthly indexes
+once, then deletes absorbed month files, then advances the yearly watermark
+once, last.** A pass that stops before the yearly index leaves every
 month file in place, so the next wake packs that year again from them. A pass
 that stops after it leaves a year the yearly index already names, so the next
-wake finishes it instead: it deletes the month files still there, rewrites the
+wake finishes it instead: it finds remaining month files by calendar month,
+deletes them, rewrites the
 monthly index and moves the watermark, and builds nothing. Either way no row is
 lost, and none is read twice, because a reader reads a month both indexes name
 from its year. The month files are joined as they are and never settled, because
@@ -135,12 +136,12 @@ def _pack(
         )
     tree.write(built.path, built.data)
     tree.yearly[year] = CompactEntry(covers=year, rows=built.rows, bytes=len(built.data))
-    tree.write_index(Period.YEARLY)
+    tree.mark_index(Period.YEARLY)
     for path in held:
         tree.delete(path)
     for month in months:
         del tree.monthly[month]
-    tree.write_index(Period.MONTHLY)
+    tree.mark_index(Period.MONTHLY)
     return ()
 
 
@@ -155,16 +156,16 @@ def _finish(tree: CompactTree, year: str) -> tuple[Stop, ...]:
             f"{where.name} names it and no yearly file holds it",
             ledger.LedgerFault.FILE_MISSING,
         )
-    left = [month for month in sorted(tree.monthly) if month[:4] == year]
+    tree.listing.fetch([tree.monthly_year_folder(year)])
+    left = months_of(year)
     for month in left:
         found = named_trees.compact_file(
             tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
         )
         if found is not None:
             tree.delete(found)
-        del tree.monthly[month]
-    if left:
-        tree.write_index(Period.MONTHLY)
+        tree.monthly.pop(month, None)
+    tree.mark_index(Period.MONTHLY)
     return ()
 
 

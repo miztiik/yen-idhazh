@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from _source_files import source_files
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.app_config import AppConfig
@@ -87,8 +88,11 @@ def door_calls(text: str) -> tuple[list[tuple[str, str]], list[str]]:
 def callers_under(root: Path) -> dict[str, tuple[list[tuple[str, str]], list[str]]]:
     """Every source file under `root` that names a ledger through the door, or tried to."""
     found: dict[str, tuple[list[tuple[str, str]], list[str]]] = {}
-    for path in sorted(root.rglob("*")):
-        if path.suffix not in {".ts", ".js", ".mjs", ".svelte"} or DOOR_DIRECTORY in path.parents:
+    for path in source_files(
+        roots=(root,),
+        suffixes=(".ts", ".js", ".mjs", ".svelte"),
+    ):
+        if DOOR_DIRECTORY in path.parents:
             continue
         calls, problems = door_calls(read_text(path))
         if calls or problems:

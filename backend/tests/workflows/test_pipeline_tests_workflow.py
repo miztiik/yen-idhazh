@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import os
 import re
@@ -28,7 +30,14 @@ from idhazh.contracts.pipeline_tests import (
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.llm.server import setting, window
 from idhazh.telemetry import traces
-from utilities import candidate_pointer, model_refs, pipeline_test_case, pipeline_test_ledgers
+from utilities import (
+    candidate_pointer,
+    model_refs,
+    pipeline_draw,
+    pipeline_test_case,
+    pipeline_test_case_config,
+    pipeline_test_ledgers,
+)
 
 from ._harness import (
     COMMIT_PROGRAM_CALL,
@@ -162,6 +171,12 @@ def _config_tree(root: Path, settings: PipelineTestsConfig) -> Path:
     shutil.copytree(CONFIG_DIR, root / "config")
     (root / "config" / "pipeline-tests.json").write_text(settings.to_json(), encoding="utf-8")
     return root / "config"
+
+
+def _write_the_settings(root: Path, settings: PipelineTestsConfig) -> None:
+    """Only the file the test case runner reads, under `root/config`."""
+    (root / "config").mkdir()
+    (root / "config" / "pipeline-tests.json").write_text(settings.to_json(), encoding="utf-8")
 
 
 def _recorded(
@@ -1025,7 +1040,30 @@ def test_the_pick_step_publishes_the_articles_the_plan_step_asks_for() -> None:
     assert published["feeds"] == " ".join(candidate.source_id for candidate in drawn)
 
 
-def test_every_test_case_config_the_workflow_writes_loads(tmp_path: Path) -> None:
+@pytest.fixture(scope="module")
+def written_test_cases(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
+    """Every test case's config root, written once by the shipped generator.
+
+    Two tests read the same output, so the program runs once for the module.
+    Nothing here is written to after the run.
+    """
+    root = tmp_path_factory.mktemp("test-cases")
+    scratch = _scratch(root, models_file=None)
+    printed = io.StringIO()
+    with contextlib.redirect_stdout(printed):
+        code = pipeline_test_case_config.main(
+            ["--config-root", scratch.as_posix(), "--test-cases-root", (root / "out").as_posix()]
+        )
+    assert code == 0
+    return {
+        key: Path(value)
+        for key, value in (line.split("=", 1) for line in printed.getvalue().splitlines())
+    }
+
+
+def test_every_test_case_config_the_workflow_writes_loads(
+    written_test_cases: dict[str, Path],
+) -> None:
     """Every declared test case's config root survives `config.load`, switched on or not.
 
     The work stage and the argv builder both open it. A test case that wrote a
@@ -1036,7 +1074,6 @@ def test_every_test_case_config_the_workflow_writes_loads(tmp_path: Path) -> Non
     Cut from the scratch root the step names, not from `config/`, so this drives
     the route a candidate dispatch really takes.
     """
-    scratch = _scratch(tmp_path, models_file=None)
     workflow = _load_workflows()[WORKFLOW]
     test_case_config = _script(
         _step(workflow, TEST_CASE_JOB, "name", TEST_CASE_CONFIG_STEP), "test case config"
@@ -1045,14 +1082,12 @@ def test_every_test_case_config_the_workflow_writes_loads(tmp_path: Path) -> Non
     assert f"--config-root {SCRATCH_CONFIG}" in test_case_config, (
         "the test cases are cut from the scratch copy, so a candidate reaches every one"
     )
-    written = _module_outputs(
-        ["--config-root", scratch.as_posix()], cwd=tmp_path, module=TEST_CASE_CONFIG_MODULE
-    )
+    written = written_test_cases
 
     settings = _settings()
     assert sorted(written) == sorted(test_case.id for test_case in settings.test_cases)
     for test_case in settings.test_cases:
-        loaded = config.load(tmp_path / written[test_case.id])
+        loaded = config.load(written[test_case.id])
         assert loaded.app.summarize.asks_for_a_visual_plan is test_case.asks_for_a_visual_plan
         if not test_case.asks_for_a_visual_plan:
             assert loaded.app.visuals.enabled_kinds == [], "no picture is reachable"
@@ -1064,7 +1099,7 @@ def test_every_test_case_config_the_workflow_writes_loads(tmp_path: Path) -> Non
         assert window(served) == (test_case.n_ctx or window(committed))
 
 
-def test_each_test_case_writes_its_own_trial_root(tmp_path: Path) -> None:
+def test_each_test_case_writes_its_own_trial_root(written_test_cases: dict[str, Path]) -> None:
     """Every test case its own root, and no two of them share a path.
 
     The dispatch runs one plan, so every test case shares a run id, a job and an
@@ -1075,14 +1110,9 @@ def test_each_test_case_writes_its_own_trial_root(tmp_path: Path) -> None:
     Read out of the config each test case really runs on, not out of the helper:
     the helper agreeing with itself says nothing about what `work` opens.
     """
-    scratch = _scratch(tmp_path, models_file=None)
-    written = _module_outputs(
-        ["--config-root", scratch.as_posix()], cwd=tmp_path, module=TEST_CASE_CONFIG_MODULE
-    )
-
     roots = {
-        test_case_id: config.load(tmp_path / relative).app.run.trial_state_dirname
-        for test_case_id, relative in written.items()
+        test_case_id: config.load(written).app.run.trial_state_dirname
+        for test_case_id, written in written_test_cases.items()
     }
     declared = {
         test_case.id: test_case.trial_state_dirname for test_case in _settings().test_cases
@@ -1118,19 +1148,25 @@ def test_a_parallel_test_case_keeps_the_window_the_gate_admits_articles_against(
         )
 
 
-def test_the_plan_step_writes_a_plan_the_work_stage_can_open(tmp_path: Path) -> None:
+def test_the_plan_step_writes_a_plan_the_work_stage_can_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """The one payload every runner reads, built by the shipped program.
 
     `RunPlan` refuses a list whose desk counts disagree with its items, and the
     program builds those counts itself because nothing read a feed. Asserting
     the shape by eye is how that is found on the runner instead of here.
     """
-    shutil.copytree(CONFIG_DIR, tmp_path / "config")
     seed = "34852763827"
     drawn = _settings().draw(seed)
 
-    published = _module_outputs(
+    # The step reads the committed config in place and writes under the working
+    # folder, so nothing is copied and the program runs in this process.
+    monkeypatch.chdir(tmp_path)
+    code = pipeline_draw.main(
         [
+            "--config-root",
+            CONFIG_DIR.as_posix(),
             "plan",
             "--addresses",
             " ".join(candidate.url for candidate in drawn),
@@ -1138,8 +1174,11 @@ def test_the_plan_step_writes_a_plan_the_work_stage_can_open(tmp_path: Path) -> 
             " ".join(candidate.source_id for candidate in drawn),
             "--execution",
             seed,
-        ],
-        cwd=tmp_path,
+        ]
+    )
+    assert code == 0
+    published = dict(
+        line.split("=", 1) for line in capsys.readouterr().out.splitlines() if "=" in line
     )
 
     written = tmp_path / pipeline_test_case.PLAN
@@ -1153,7 +1192,9 @@ def test_the_plan_step_writes_a_plan_the_work_stage_can_open(tmp_path: Path) -> 
     assert plan.feeds_read == 0, "this plan came off a config list, so no feed was asked"
 
 
-def _ran_a_test_case(tmp_path: Path, argv: list[str]) -> subprocess.CompletedProcess[str]:
+def _ran_a_test_case(
+    tmp_path: Path, argv: list[str], settings: PipelineTestsConfig | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run the shipped test case runner against a fixture tree (Guardrail #7).
 
     A fixture tree rather than the committed one, because what is being read is
@@ -1161,7 +1202,7 @@ def _ran_a_test_case(tmp_path: Path, argv: list[str]) -> subprocess.CompletedPro
     (CLAUDE.md section 13).
     """
     if not (tmp_path / "config").exists():
-        _config_tree(tmp_path, _settings())
+        _write_the_settings(tmp_path, settings or _settings())
     return subprocess.run(
         [sys.executable, str(TEST_CASE_RUNNER), *argv],
         cwd=tmp_path,
@@ -1232,7 +1273,9 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
     that ran and failed returns its own code, so a person reading the run page
     tells a typo in a test case id from a test case that really failed. Driven by
     handing the pipeline a config root with nothing in it, which is a real
-    failure of the real program rather than a stub that returns a number.
+    failure of the real program rather than a stub that returns a number. One
+    article is one shard, so the failure costs one `work` and one `record`
+    process and not two of each.
 
     The half-written run goes with it: a test case that failed leaves no `run`
     directory for the report to read as a result.
@@ -1243,7 +1286,11 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
     plan.parent.mkdir(parents=True)
     plan.write_text("{}", encoding="utf-8")
 
-    completed = _ran_a_test_case(tmp_path, ["run", _enabled_id(), "2026-09-14"])
+    one_shard = PipelineTestsConfig.model_validate(
+        {**_settings().model_dump(mode="json"), "articles_a_dispatch": 1}
+    )
+    assert one_shard.shard_count() == 1
+    completed = _ran_a_test_case(tmp_path, ["run", _enabled_id(), "2026-09-14"], one_shard)
     assert completed.returncode != 0, "a failed pipeline fails the step that ran it"
     assert completed.returncode != 2, (
         "2 is reserved for a call this program cannot serve, so a failed "

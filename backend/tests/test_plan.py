@@ -523,7 +523,9 @@ def test_the_safety_ceiling_is_a_crash_guard_not_a_reading_budget() -> None:
     assert _within_ceiling(every, ceiling=len(every) + 1) == every
 
 
-def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(caplog: pytest.LogCaptureFixture) -> None:
+def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """One address may arrive through two desks. It still gets one planned item."""
     energy = VerticalDef(id="energy", display_name="Energy", min_feeds=1, definition=DEFINITION)
     caplog.set_level("INFO", logger="idhazh")
@@ -537,7 +539,9 @@ def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(caplog: p
     matching = [item for item in built.items if item.canonical_url == MODEL_RELEASE]
     assert len(matching) == 1
     assert matching[0].source_id == "lab-blog", "the highest-ranked duplicate wins"
-    assert len(built.items) == 2, "dedupe happens before the ceiling, so a duplicate does not eat a slot"
+    assert len(built.items) == 2, (
+        "dedupe happens before the ceiling, so a duplicate does not eat a slot"
+    )
     assert len({item.url_key for item in built.items}) == len(built.items)
     assert built.verticals[0].planned == 2
     assert built.verticals[1].planned == 0
@@ -675,7 +679,9 @@ def test_a_cap_takes_the_best_of_each_vertical_and_leaves_the_ceiling_alone() ->
     assert plan([LAB, TRADE, COMMUNITY], cap=None).to_json() == full.to_json()
 
 
-def test_the_cap_flag_reaches_the_plan_stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_cap_flag_reaches_the_plan_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`--cap` was declared, parsed, and read by nothing at all.
 
     A validation run therefore planned a whole day and could outrun the job it
@@ -707,9 +713,7 @@ def test_the_cap_flag_reaches_the_plan_stage(tmp_path: Path, monkeypatch: pytest
 
     assert cli.main(["plan", "--date", DATE, "--config", str(config_dir), "--cap", "1"]) == 0
 
-    written = RunPlan.from_json(
-        (tmp_path / "run" / DATE / "plan.json").read_text(encoding="utf-8")
-    )
+    written = RunPlan.from_json((tmp_path / "run" / DATE / "plan.json").read_text(encoding="utf-8"))
     assert len(written.items) == 1
     assert len(plan([LAB, TRADE, COMMUNITY]).items) > 1, "the same day is bigger uncapped"
 
@@ -926,12 +930,11 @@ def test_a_date_too_far_ahead_is_labelled_as_our_clock_not_the_feeds() -> None:
     built = plan([FORWARD, TRADE], verticals=[pair])
     labelled = {item.title: item.time_source for item in built.items}
     assert (
-        labelled["Datacentre build announced for the northern corridor"]
-        is TimeSource.FIRST_SEEN
+        labelled["Datacentre build announced for the northern corridor"] is TimeSource.FIRST_SEEN
     ), "14 hours ahead is not a date - the time printed is ours"
-    assert (
-        labelled["Quarterly capex guidance raised on accelerator demand"] is TimeSource.FEED
-    ), "three hours ahead is clock skew, and the feed's time stands"
+    assert labelled["Quarterly capex guidance raised on accelerator demand"] is TimeSource.FEED, (
+        "three hours ahead is clock skew, and the feed's time stands"
+    )
 
 
 def test_an_item_id_survives_a_second_run_of_the_same_day() -> None:
@@ -1083,9 +1086,7 @@ def test_yesterdays_paywall_does_not_bind_today() -> None:
     first = plan([LAB, TRADE, COMMUNITY], state=state)
     blocked = first.items[0]
     yesterday = "2026-08-20"
-    seed_item_health(
-        state, yesterday, [_settled(blocked, FailureCode.PAYWALLED, date=yesterday)]
-    )
+    seed_item_health(state, yesterday, [_settled(blocked, FailureCode.PAYWALLED, date=yesterday)])
 
     again = plan([LAB, TRADE, COMMUNITY], state=state, run_n=2)
 
@@ -1100,9 +1101,9 @@ def test_an_empty_settled_code_list_plans_the_failure_again() -> None:
     seed_item_health(state, DATE, [_settled(blocked, FailureCode.PAYWALLED)])
 
     assert ledger.load_settled_failures(state, DATE, codes=()) == set()
-    assert ledger.load_settled_failures(
-        state, DATE, codes=(FailureCode.PAYWALLED,)
-    ) == {blocked.url_key}
+    assert ledger.load_settled_failures(state, DATE, codes=(FailureCode.PAYWALLED,)) == {
+        blocked.url_key
+    }
 
 
 # --- how much of a day one feed may hold -------------------------------------
@@ -1448,6 +1449,29 @@ def seed_gone(state: Path, feed: FeedDef, runs: int) -> None:
     )
 
 
+def seed_rest_skips(state: Path, feed: FeedDef, *, first_run: int, runs: int) -> None:
+    """Seed the exact skip count that makes a rest expire."""
+    seed_feed_health(
+        state,
+        DATE,
+        [
+            FeedHealthRow(
+                version=FeedHealthRow.schema_version(),
+                run_id=f"{DATE}-{first_run + offset}",
+                date=DATE,
+                feed_id=feed.id,
+                checked_at="2026-08-22T06:00:00Z",
+                outcome=FetchOutcome.SKIPPED,
+                status=None,
+                items=0,
+                endpoint_key=derive_endpoint_key(feed.url),
+            )
+            for offset in range(runs)
+        ],
+        run_id=f"{DATE}-{first_run}",
+    )
+
+
 def runs_to_retire() -> int:
     """The committed threshold, so this test moves when the config does."""
     return config.load().app.collect.feed_http_410_runs_before_retirement
@@ -1543,10 +1567,10 @@ def test_a_permanent_failure_that_is_not_gone_never_retires_an_address() -> None
                 items=0,
                 endpoint_key=derive_endpoint_key(TRADE_URL),
             )
-            for n in range(1, runs_to_retire() * 2 + 1)
+            for n in range(1, runs_to_retire() + 1)
         ],
     )
-    plan([LAB, TRADE, COMMUNITY], state=state, run_n=runs_to_retire() * 2 + 1)
+    plan([LAB, TRADE, COMMUNITY], state=state, run_n=runs_to_retire() + 1)
     assert ledger.load_retirements(state) == []
 
 
@@ -1566,29 +1590,24 @@ def test_retirement_never_touches_the_committed_source_list() -> None:
 def test_editing_the_configured_url_makes_the_feed_askable_again() -> None:
     """The reversal path, and it is one line of curated config.
 
-    This is `test_a_retirement_outranks_a_rest` with one URL edited, and the
-    opposite answer. Five `410` results are five availability strikes as well,
-    so either way the feed sits out a rest - but a rest ends, and a retirement
-    does not. A changed address inherits neither the retirement nor the strikes
-    against the old one.
+    The retirement and rest belong to the old address. After the exact skip
+    count that ends a rest, one run asks the changed address.
     """
     state = Path(tempfile.mkdtemp())
     retire_after_gone(state)
     moved = TRADE.model_copy(update={"url": QUIET_URL})
+    rest_skips = config.load().app.collect.availability_strikes_before_rest
+    first_skip_run = runs_to_retire() + 2
+    seed_rest_skips(state, TRADE, first_run=first_skip_run, runs=rest_skips)
 
-    asked = False
-    for run_n in range(runs_to_retire() + 2, runs_to_retire() * 4 + 2):
-        built = plan(
-            [LAB, moved, COMMUNITY, NOTICES],
-            fetcher=fetcher_over(LAB_URL, QUIET_URL, COMMUNITY_URL, NOTICES_URL),
-            state=state,
-            run_n=run_n,
-        )
-        if built.feeds_skipped == 0:
-            asked = True
-            break
+    built = plan(
+        [LAB, moved, COMMUNITY, NOTICES],
+        fetcher=fetcher_over(LAB_URL, QUIET_URL, COMMUNITY_URL, NOTICES_URL),
+        state=state,
+        run_n=first_skip_run + rest_skips,
+    )
 
-    assert asked, "the moved address is asked like any other"
+    assert built.feeds_skipped == 0, "the moved address is asked like any other"
     assert len(ledger.load_retirements(state)) == 1, "and no second row is filed"
 
 
@@ -1600,17 +1619,21 @@ def test_a_retirement_outranks_a_rest() -> None:
     decided. It is not.
     """
     state = Path(tempfile.mkdtemp())
-    seed_gone(state, TRADE, runs_to_retire())
-    asked = False
-    for run_n in range(runs_to_retire() + 1, runs_to_retire() * 4 + 2):
-        built = plan(
-            [LAB, TRADE, COMMUNITY, NOTICES],
-            fetcher=fetcher_over(LAB_URL, COMMUNITY_URL, NOTICES_URL),
-            state=state,
-            run_n=run_n,
-        )
-        asked = asked or built.feeds_skipped == 0
-    assert not asked, "a retired address must never be asked again"
+    retire_after_gone(state)
+    rest_skips = config.load().app.collect.availability_strikes_before_rest
+    first_skip_run = runs_to_retire() + 2
+    seed_rest_skips(state, TRADE, first_run=first_skip_run, runs=rest_skips)
+    built = plan(
+        [LAB, TRADE, COMMUNITY, NOTICES],
+        fetcher=fetcher_over(LAB_URL, COMMUNITY_URL, NOTICES_URL),
+        state=state,
+        run_n=first_skip_run + rest_skips,
+    )
+
+    retired_row = next(
+        row for row in health_after(state) if row.run_id == built.run_id and row.feed_id == TRADE.id
+    )
+    assert retired_row.detail == RETIRED_DETAIL, "retirement still skips after the rest expires"
 
 
 def test_a_history_with_no_endpoint_key_can_never_retire_anything() -> None:
@@ -1635,10 +1658,10 @@ def test_a_history_with_no_endpoint_key_can_never_retire_anything() -> None:
                 status=410,
                 items=0,
             )
-            for n in range(1, runs_to_retire() * 2 + 1)
+            for n in range(1, runs_to_retire() + 1)
         ],
     )
-    plan([LAB, TRADE, COMMUNITY], state=state, run_n=runs_to_retire() * 2 + 1)
+    plan([LAB, TRADE, COMMUNITY], state=state, run_n=runs_to_retire() + 1)
     assert ledger.load_retirements(state) == []
 
 

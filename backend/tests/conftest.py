@@ -6,7 +6,7 @@ import itertools
 import json
 import threading
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from datetime import time as time_type
@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
+import origin_template
 import pytest
 
 from idhazh import config, ledger
@@ -308,6 +309,13 @@ def llama_server_flags() -> frozenset[str]:
         for token in emitted
         if token.startswith("-") and token not in {"--model", "--threads"}
     )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _discard_origin_templates() -> Iterator[None]:
+    """Delete the built origins once the last test that copies one has run."""
+    yield
+    origin_template.discard()
 
 
 @pytest.fixture(autouse=True)

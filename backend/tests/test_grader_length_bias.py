@@ -185,7 +185,11 @@ class TestTheControl:
             tmp_path,
             [
                 an_item(a_premise(50), SUMMARY, name="short"),
-                an_item(a_premise(2000), SUMMARY, name="long"),
+                an_item(
+                    a_premise(2 * NARROW.chunk_words - NARROW.chunk_overlap_words + 1),
+                    SUMMARY,
+                    name="long",
+                ),
             ],
         )
         pairs = bias.load_pairs(tmp_path, tmp_path / "absent.csv")
@@ -203,21 +207,24 @@ class TestTheControl:
             tmp_path,
             [
                 an_item(a_premise(50), SUMMARY, name="short"),
-                an_item(a_premise(2000), SUMMARY, name="long"),
+                an_item(a_premise(NARROW.chunk_words + 1), SUMMARY, name="long"),
             ],
         )
         pairs = bias.load_pairs(tmp_path, tmp_path / "absent.csv")
 
         wide = bias.single_slice_geometry(pairs, NARROW)
 
-        assert wide.chunk_words == 2000
+        assert wide.chunk_words == NARROW.chunk_words + 1
         assert [bias.slices_under(pair.premise, wide) for pair in pairs] == [1, 1]
 
 
 class TestTheTwoDirectionsAreDistinguishable:
     def test_best_of_n_over_scoring_reads_positive(self, tmp_path: Path) -> None:
         """More windows is more draws, and the concentrated draw wins the max."""
-        a_package(tmp_path, [an_item(a_premise(2000), SUMMARY, name="long")])
+        a_package(
+            tmp_path,
+            [an_item(a_premise(NARROW.chunk_words + 1), SUMMARY, name="long")],
+        )
         pairs = bias.load_pairs(tmp_path, tmp_path / "absent.csv")
         wide = bias.single_slice_geometry(pairs, NARROW)
 
@@ -227,8 +234,8 @@ class TestTheTwoDirectionsAreDistinguishable:
 
     def test_the_mark_down_for_depth_reads_negative(self, tmp_path: Path) -> None:
         """No single window supports the whole summary, so every window is marked down."""
-        premise = "the plant closes " + " ".join(f"w{n}" for n in range(2000))
-        premise = premise + " and the ministry confirmed it"
+        filler = " ".join(f"w{n}" for n in range(NARROW.chunk_words - 6))
+        premise = f"the plant closes {filler} and the ministry confirmed it"
         a_package(tmp_path, [an_item(premise, SUMMARY, name="split")])
         pairs = bias.load_pairs(tmp_path, tmp_path / "absent.csv")
         wide = bias.single_slice_geometry(pairs, NARROW)

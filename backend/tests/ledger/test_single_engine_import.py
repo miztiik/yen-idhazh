@@ -12,6 +12,7 @@ import ast
 from typing import Final
 
 import pytest
+from _source_files import source_files
 from conftest import REPO_ROOT
 
 pytestmark = pytest.mark.contract
@@ -45,11 +46,10 @@ def _engine_imports(tree: ast.Module) -> list[int]:
 def _every_import_of_the_engine() -> dict[str, list[int]]:
     """Every module that imports the engine -> the lines where it does."""
     found: dict[str, list[int]] = {}
-    for root in WALKED:
-        for path in sorted(root.rglob("*.py")):
-            lines = _engine_imports(ast.parse(path.read_text(encoding="utf-8")))
-            if lines:
-                found[path.relative_to(REPO_ROOT).as_posix()] = lines
+    for path in source_files(roots=WALKED, suffixes=(".py",)):
+        lines = _engine_imports(ast.parse(path.read_text(encoding="utf-8")))
+        if lines:
+            found[path.relative_to(REPO_ROOT).as_posix()] = lines
     return found
 
 
