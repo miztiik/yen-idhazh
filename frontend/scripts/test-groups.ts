@@ -12,7 +12,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'appearance-config', 'archive-scope', 'asset-base', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
-		'glance-and-rank', 'holdout', 'holdout-domain', 'ledger-copy', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
+		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
 		'one-pass-reductions',
 		'platform-mix', 'preview-port',
 		'processor-lost', 'prompt-reuse',
@@ -24,7 +24,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	],
 	reader: [
 		'dated-day', 'day-states', 'filter-bar', 'footer-facts', 'item-card', 'item-meta',
-		'item-time', 'item-visual', 'item-zones', 'layout', 'layout-overflow', 'leading-stories',
+		'item-time', 'item-visual', 'item-zones', 'layout', 'leading-stories',
 		'lenses', 'manifest', 'payload-state', 'reading-page', 'readstate', 'source-mark',
 		'theme', 'tokens', 'topic-day', 'topics', 'whole-day'
 	],
