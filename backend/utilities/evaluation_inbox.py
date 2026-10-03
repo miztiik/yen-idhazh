@@ -21,8 +21,9 @@ from idhazh.contracts.observation_lookup import (
 from idhazh.evals.lookup_nodes import node_path, read_page
 from idhazh.evals.observation_batches import incoming_path, input_root, lookup_root, save_batch
 from idhazh.evals.observation_lookup import ROOT_NAME, ObservationLookup
+from utilities.push_retry import DEFAULT_CONFIG
 
-COMMIT_PROGRAM = Path(__file__).resolve().parents[2] / "utilities" / "commit_and_push.py"
+COMMIT_PROGRAM = Path(__file__).with_name("commit_and_push.py").resolve()
 _JOB_COMMANDS = frozenset(
     {
         "REGENERATE_COMMAND",
@@ -209,6 +210,7 @@ def publish_inputs(
         if name not in _JOB_COMMANDS and not name.startswith(("REFRESH", "PREPARE"))
     }
     repository = Path(_git(state_dir.parent, isolated, "rev-parse", "--show-toplevel"))
+    retry_config = (repository / isolated.get("PUSH_RETRY_CONFIG", str(DEFAULT_CONFIG))).resolve()
     origin = _git(repository, isolated, "remote", "get-url", "origin")
     push_origin = _git(repository, isolated, "remote", "get-url", "--push", "origin")
     _forward_checkout_credentials(repository, isolated)
@@ -275,6 +277,7 @@ def publish_inputs(
                 "COMMIT_MESSAGE": "Record pending evaluation inputs",
                 "NOTHING_STAGED_MESSAGE": "Evaluation inputs are already durable",
                 "PUSH_FAILED_MESSAGE": "Could not publish pending evaluation inputs",
+                "PUSH_RETRY_CONFIG": str(retry_config),
                 "PREPARE_COMMAND": " ".join(
                     [
                         sys.executable,

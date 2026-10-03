@@ -62,7 +62,20 @@ def incoming_path(state_dir: Path, batch_id: str) -> Path:
 
 
 def input_root(state_dir: Path) -> Path:
-    return state_dir.parent / "backend" / "var" / "evaluation-inputs"
+    state_root = next(
+        (
+            parent
+            for parent in (state_dir, *state_dir.parents)
+            if parent.name == ledger.STATE_DIRNAME
+        ),
+        state_dir,
+    )
+    runtime = state_root.parent / "backend" / "var" / "evaluation-inputs"
+    return (
+        runtime
+        if state_root == state_dir
+        else runtime / "trials" / state_dir.relative_to(state_root)
+    )
 
 
 def preparation_path(state_dir: Path, identity: WriterIdentity) -> Path:

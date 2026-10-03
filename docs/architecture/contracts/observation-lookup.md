@@ -51,7 +51,7 @@ counts and are also checked against the root's node byte limit when read.
 
 Python's standard-library SQLite adds no package dependency. A read copies a
 bounded leaf into SQLite memory. An update rebuilds the touched leaves and their
-ancestors; Git stores the changed SQLite files as binary blobs. This bounds
+ancestors; Git records the changed SQLite files as binary blobs. This bounds
 membership work for a fixed incoming batch, not repository size or all Git work.
 A full checkout or fetch can still grow with repository history.
 

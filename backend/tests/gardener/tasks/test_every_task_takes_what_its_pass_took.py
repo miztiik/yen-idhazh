@@ -51,14 +51,7 @@ _REPLACED_NO_PASS: Final[dict[str, str]] = {}
 
 #: Each recorded task that no longer does what its pass did to a tree it still
 #: owns, why, and the test file that holds what it does now.
-_NO_LONGER_ITS_PASS: Final = {
-    "summary-quality-evals-index": (
-        "the pass built a summary of each month from the CSV day files, then took the "
-        "index days that summary covered. Every eval row is kept for ever now and "
-        "nothing summarises a month, so the task writes nothing and takes no index day; "
-        "test_summary_quality_evals_index_task.py holds what it does now"
-    ),
-}
+_NO_LONGER_ITS_PASS: Final[dict[str, str]] = {}
 
 #: The ledgers whose CSV day trees moved onto the ledger door after the record
 #: was taken. Their rows sit under `state/raw/` and `state/compact/`, and each

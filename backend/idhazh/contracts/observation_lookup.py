@@ -1,4 +1,4 @@
-"""What an exact evaluation lookup stores in its root, pages and replay receipts."""
+"""What an exact evaluation lookup records in its root, pages and replay receipts."""
 
 from __future__ import annotations
 

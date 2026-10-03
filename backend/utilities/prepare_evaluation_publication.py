@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -31,6 +32,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if inputs is not None and not inputs.exists():
         return 0
 
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
     from idhazh.atomic_write import write_atomic
     from idhazh.config import load_observation_lookup
     from idhazh.contracts.base import canonical_json, derive_text_digest
@@ -42,7 +45,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         preparation_path,
         prepare,
     )
-    from idhazh.evals.observation_inbox import committed_receipts, prepare_inputs, publish_inputs
+    from utilities.evaluation_inbox import committed_receipts, prepare_inputs, publish_inputs
 
     if arguments.inbox_only:
         if inputs is None:

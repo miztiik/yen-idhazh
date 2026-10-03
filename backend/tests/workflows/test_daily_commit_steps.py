@@ -369,6 +369,13 @@ def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
         assert staged_paths == COMMIT_STAGED_PATHS[job_name]
         assert set(settings) == COMMIT_SCRIPT_ENV[job_name]
         assert all(value for value in settings.values())
+        if job_name in {"work", "assemble"}:
+            command = shlex.split(settings["PREPARE_COMMAND"])
+            assert command[:2] == ["python", "backend/utilities/prepare_evaluation_publication.py"]
+            assert command[command.index("--state-dir") + 1] == ledger.STATE_DIRNAME
+            assert command[command.index("--paths-file") + 1] == settings["PREPARED_PATHS_FILE"]
+            assert command[command.index("--inputs") + 1] != settings["PREPARED_PATHS_FILE"]
+            assert command[command.index("--attempt") + 1].isdigit()
 
     plan = _commit_call("plan")[1]
     assemble = _commit_call("assemble")[1]

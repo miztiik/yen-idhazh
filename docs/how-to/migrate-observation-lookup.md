@@ -1,10 +1,10 @@
 # Migrate the Observation Lookup
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 How to cut existing evaluation history over to the exact lookup and recover a
 named pending batch. This procedure is project-specific because it publishes
-the evaluation store described in [observation-lookup.md](../architecture/contracts/observation-lookup.md).
+the evaluation ledger described in [observation-lookup.md](../architecture/contracts/observation-lookup.md).
 
 ## Approve the live cutover first
 

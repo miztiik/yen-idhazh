@@ -29,8 +29,8 @@ from idhazh.evals.observation_batches import (
     row_digest,
     save_batch,
 )
-from idhazh.evals.observation_inbox import publish_inputs
 from idhazh.evals.observation_lookup import ObservationLookup
+from utilities.evaluation_inbox import publish_inputs
 
 from ._harness import (
     _git,
@@ -112,9 +112,16 @@ def _batch(
     )
 
 
-def test_inbox_publication_preserves_every_uncommitted_job_output(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "retry_config", [None, "config/push-retry.json"], ids=["default-config", "relative-config"]
+)
+def test_inbox_publication_preserves_every_uncommitted_job_output(
+    tmp_path: Path, retry_config: str | None
+) -> None:
     environment = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, environment, ["state/other"])
+    if retry_config is not None:
+        environment["PUSH_RETRY_CONFIG"] = retry_config
     _write(runner / ".git/info/exclude", "backend/var/\n")
     tracked = runner / "runner-noise.txt"
     untracked = runner / "state/new-result.json"
@@ -222,6 +229,27 @@ def test_a_missing_job_input_writes_fresh_paths_without_an_install(tmp_path: Pat
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert paths.read_text() == "[]\n"
+
+
+def test_inbox_preparation_imports_from_its_checkout_without_pythonpath(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    state.mkdir()
+    inputs = input_root(state) / "inbox.json"
+    _write(inputs, '{"batches":[],"paths":[]}\n')
+    result = subprocess.run(
+        [
+            sys.executable, "-I", str(PREPARE_PROGRAM), "--inbox-only",
+            "--state-dir", str(state), "--inputs", str(inputs),
+            "--paths-file", PREPARED_PATHS,
+        ],
+        cwd=tmp_path,
+        env={name: value for name, value in os.environ.items() if name != "PYTHONPATH"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / PREPARED_PATHS).read_text() == "[]\n"
 
 
 @pytest.mark.parametrize("additional_input", [False, True], ids=["consumed-only", "mixed-inputs"])

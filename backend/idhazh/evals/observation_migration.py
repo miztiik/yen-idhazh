@@ -119,9 +119,8 @@ def _legacy_ids(paths: list[Path], state: Path) -> tuple[set[str], int]:
                 if not (
                     path.name in (day_shards.SETTLED_NAME, ledger.BEFORE_PARTITION_NAME)
                     or ledger.is_repair(path.name)
-                    or ledger.SEGMENT_NAME.fullmatch(path.stem)
                 ):
-                    raise ValueError("not a declared legacy writer or reserved filename")
+                    ledger.parse_segment_name(path)
                 stamp = "-".join(parts[:3])
             else:
                 raise ValueError("expected a daily segment or a settled month")

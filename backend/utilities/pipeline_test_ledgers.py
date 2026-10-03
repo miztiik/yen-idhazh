@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sqlite3
 import sys
 from datetime import date
 from pathlib import Path
@@ -44,7 +45,11 @@ from idhazh import day_partition, day_shards, ledger
 from idhazh.contracts.file_envelope import Format, Tier
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.ledgers import Grain
+from idhazh.contracts.observation_lookup import ObservationLookupNode, ObservationLookupRoot
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.evals.lookup_nodes import leaf_entries, node_path, read_node, read_page
+from idhazh.evals.observation_batches import lookup_root
+from idhazh.evals.observation_lookup import LOCK_NAME, ROOT_NAME, TRANSACTION_NAME
 
 #: How deep a writer's file sits below a trial root: the ledger, a year, a month,
 #: a day, and the filename. A ledger row and a trace share the grammar, so they
@@ -174,6 +179,37 @@ def _refuse_trace(path: Path, relative: str) -> list[str]:
     return found
 
 
+def _lookup_files(root: Path) -> tuple[set[Path], list[str]]:
+    """Validate the trial lookup's referenced files without accepting an unrelated tree."""
+    directory = lookup_root(root)
+    if not directory.exists():
+        return set(), []
+    root_path = directory / ROOT_NAME
+    accepted = {root_path}
+    try:
+        manifest = ObservationLookupRoot.read(root_path)
+        if manifest.key_fields != ledger.OBSERVATION_KEY:
+            raise ValueError("the trial lookup uses another measurement key")
+
+        def read(node: ObservationLookupNode, prefix: str) -> None:
+            accepted.add(node_path(directory, node))
+            if node.kind == "leaf":
+                entries = leaf_entries(read_node(directory, node, manifest.settings.max_leaf_bytes))
+                if any(not key.startswith(prefix) for key in entries):
+                    raise ValueError("a trial lookup entry sits under another routing prefix")
+            else:
+                page = read_page(directory, node, prefix, manifest.settings.max_leaf_bytes)
+                for digit, child in page.children.items():
+                    read(child, prefix + digit)
+
+        read(manifest.node, "")
+    except (OSError, ValueError, sqlite3.DatabaseError) as error:
+        return accepted, [
+            f"{root_path.relative_to(root).as_posix()} is not a valid trial lookup: {error}"
+        ]
+    return accepted, []
+
+
 def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
     """Why this tree may not be pushed, one line each, or an empty list.
 
@@ -184,11 +220,18 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
     if not tree.is_dir():
         return []
     found: list[str] = []
+    lookup_files: set[Path] = set()
+    for name in sorted(roots):
+        accepted, invalid = _lookup_files(tree / name)
+        lookup_files.update(accepted)
+        found.extend(invalid)
     for path in sorted(entry for entry in tree.rglob("*") if entry.is_file()):
         relative = path.relative_to(tree).as_posix()
         parts = relative.split("/")
         if parts[0] not in roots:
             found.append(f"{relative} is filed under {parts[0]}, which no declared test case names")
+        elif path in lookup_files:
+            continue
         elif len(parts) < 3:
             found.append(f"{relative} sits directly under a trial root and names no ledger")
         elif parts[1] == TRACES:
@@ -202,6 +245,17 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
             else:
                 found += _refuse_segment(path, "/".join(parts[1:]), which)
     return found
+
+
+def _local_lookup_files(directory: str, names: list[str]) -> set[str]:
+    path = Path(directory)
+    if path != lookup_root(path.parent.parent):
+        return set()
+    return {
+        name
+        for name in names
+        if name == TRANSACTION_NAME or name == LOCK_NAME or name.startswith(f"{LOCK_NAME}-")
+    }
 
 
 def gather(state: Path, tree: Path, *, roots: list[str]) -> list[str]:
@@ -218,7 +272,7 @@ def gather(state: Path, tree: Path, *, roots: list[str]) -> list[str]:
         source = state / name
         if not source.is_dir():
             continue
-        shutil.copytree(source, tree / name)
+        shutil.copytree(source, tree / name, ignore=_local_lookup_files)
         arrived.append(name)
     return arrived
 

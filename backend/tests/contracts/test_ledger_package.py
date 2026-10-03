@@ -22,10 +22,12 @@ from typing import Final
 
 import pytest
 from _source_files import source_files
+from conftest import writer_identity
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.evals.observation_batches import preparation_path
 from idhazh.ledger import filenames, paths
 
 pytestmark = pytest.mark.contract
@@ -47,15 +49,15 @@ WRITTEN_INTO: Final[tuple[LedgerName, ...]] = tuple(
     sorted(DAY_TREES, key=lambda member: member.value)
 )
 
-#: The one module outside the package that mints a file name out of writer
-#: identity, and why it is not the ledger's to name.
+#: Modules naming ignored runtime files rather than a ledger file under state/.
 #:
-#: `backend/var/qualification/` is not under `state/` at all; it is a build
-#: artefact a reviewer reads. Every name under `state/` is minted inside the
-#: package, the digest fragment's included.
+#: Qualification artifacts and evaluation preparation manifests live under
+#: backend/var/. The latter's boundary is checked below.
 #:
-#: Written out so a SECOND one fails here rather than joining it unnoticed.
-MINTS_ITS_OWN_NAME: Final[frozenset[str]] = frozenset({"backend/idhazh/stages/qualify.py"})
+MINTS_ITS_OWN_NAME: Final[frozenset[str]] = frozenset({
+    "backend/idhazh/stages/qualify.py",
+    "backend/idhazh/evals/observation_batches.py",
+})
 
 #: Names whose whole point is that one module outside the package asks for them
 #: rather than carrying a copy. `path_classes` answers whether a committed path
@@ -162,6 +164,13 @@ def test_the_facade_names_its_exports_once() -> None:
     assert len(declared) == 1, f"the facade declares __all__ {len(declared)} times"
     for name in ledger.__all__:
         assert hasattr(ledger, name), f"__all__ names {name} and the facade does not bind it"
+
+
+def test_evaluation_job_manifests_live_outside_state(tmp_path: Path) -> None:
+    state = tmp_path / ledger.STATE_DIRNAME
+    manifest = preparation_path(state, writer_identity(A_RUN))
+    assert manifest.is_relative_to(tmp_path / "backend" / "var")
+    assert not manifest.is_relative_to(state)
 
 
 # --- every name a caller reaches is bound on the package ---------------------
