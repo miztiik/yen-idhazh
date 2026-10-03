@@ -570,7 +570,7 @@ def test_a_reader_only_searches_the_months_the_knob_names(tmp_path: Path) -> Non
     """
     directory = tmp_path / retrieval.INDEX_RELDIR
     directory.mkdir(parents=True)
-    shards = {
+    shards: dict[str, list[tuple[str, int | None]]] = {
         "2026-07": [("2026-07-01", 0)],
         "2026-08": [("2026-08-01", 0), ("2026-08-02", 0)],
         # A day with no vector is a day a reader cannot search, so it does not
