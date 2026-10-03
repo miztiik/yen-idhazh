@@ -89,8 +89,9 @@ run's named digests enter the inventory; stale drawings do not. The build copies
 its generated telemetry into the public root before measuring those files.
 The canary day keeps its eight named article inputs. Its site build uses the
 smaller initial item count in `config/canary.json` only when `CANARY_BUILD=1`;
-production keeps its normal initial count. The first and fifth items carry
-rendered charts, so the fifth chart loads after the fixture's initial shell.
+production keeps its normal initial count. The first and fourth items carry
+rendered charts. The fourth item sorts last by time and loads after the fixture's
+initial shell.
 This tests lazy content without opening a larger real published day.
 
 The plan stage registers its raw feed-health CSV files under the `state` root

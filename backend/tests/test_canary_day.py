@@ -77,11 +77,11 @@ def test_the_eight_item_day_has_a_rendered_chart_after_the_canary_seed(tmp_path:
     settings = config.load()
     day = build_canary_day.build(tmp_path / "digest", settings.app.evaluation, settings.app.visuals)
     assert len(day.items) == 8
-    item = next(item for item in day.items if item.item_id == "ai-05")
+    item = next(item for item in day.items if item.item_id == "ai-04")
     assert item.visual is not None
     assert item.visual.kind == "chart"
     assert item.visual.state == "rendered"
-    assert item.visual.data_path == "digest/2026/08/20/ai-05.json"
+    assert item.visual.data_path == "digest/2026/08/20/ai-04.json"
     assert (tmp_path / item.visual.data_path).is_file()
 
 
