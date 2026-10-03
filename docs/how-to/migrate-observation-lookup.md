@@ -8,12 +8,18 @@ the evaluation ledger described in [observation-lookup.md](../architecture/contr
 
 ## Approve the live cutover first
 
-Obtain operator approval for an interval that excludes older evaluation
-writers, their retries and evaluation compaction. Keep that exclusion across
-the final source snapshot, migration, publication of the migrated state and
-code merge. Old-revision replays must not write legacy CSV IDs afterward.
-An unknown set of running jobs is not a safe cutover condition. This procedure
-does not authorize pausing or cancelling them.
+The normal cutover excludes evaluation writers, their retries and evaluation
+compaction across the final snapshot, migration and publication. Do not replay
+an older run after migration; its CSV IDs would not reach the new lookup.
+
+**Owner ruling, miztiik, 2026-10-03:** an already-running digest may finish
+with its original code while this change is merged. Do not pause or cancel it.
+Wait for its work shards and assembly commit to finish, then migrate the latest
+committed state before the next evaluation writer starts. Confirm no compaction
+is active while the migration reads and publishes. The new writer refuses a
+missing lookup instead of scanning history; its sealed input remains recoverable
+from the committed incoming batch. This exception does not permit replay of the
+old run after migration or allow migration to overlap a writer.
 
 Use the approved code and a complete state snapshot, including legacy index
 CSVs and all raw and compact evaluation files and metadata. Run from the
@@ -40,9 +46,8 @@ membership work.
 
 Read the JSON result: it reports rows read, distinct IDs, the generation, and
 `written_paths` and `removed_paths` relative to the named state directory.
-Publish the lookup and legacy CSV removals together under the agreed cutover.
-Keep the writer and compaction exclusion until that publication and the code
-merge are complete.
+Publish the lookup and legacy CSV removals together. Resume evaluation writers
+only after that commit is on `main`.
 
 ## Resume interrupted CSV cleanup
 
