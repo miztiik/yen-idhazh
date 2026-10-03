@@ -208,6 +208,18 @@ mid-rebase. Every call passes `check=False` and its caller reads the return
 code, so a failure says what it was, leaves no rebase in progress, and ends on
 the caller's own message plus the attempt it reached.
 
+**The rebuild runs the tip's code, not the code this run started with.** The
+rebase brings in every commit that landed while the run worked, code included,
+so `REGENERATE_COMMAND` executes the newer producer. Two things follow. A staged
+path the tip retired is skipped rather than refused: the hand-back removed it to
+match the tip, nothing on disk or in the index holds it, and `git add` would
+stop the push on a pathspec that matches no file - run 36985028637 lost its day
+that way over `frontend/public/span-rollup`. And a code commit must read every
+state shape an older run can still push, because the rebuild is that code's
+first reader of it (CLAUDE.md section 11). Run 37130643074 failed because a
+reader that refused unmigrated evaluation history reached `main` before its
+migration did.
+
 ## Preparation names this attempt's derived files
 
 `PREPARE_COMMAND` and `PREPARED_PATHS_FILE` must be supplied together. They are
@@ -227,7 +239,8 @@ linked paths, paths outside the checkout and Git metadata paths.
 On a rejected push, the helper restores the previous attempt's prepared paths
 alongside any refresh paths before rebasing. It then replaces that list with
 the new preparation result and stages the named files and deletions. A file
-that is both absent and untracked needs no staging.
+that is both absent and untracked needs no staging. The same rule stages the
+job's own path list, so prepared and named paths go through one `git add`.
 
 Evaluation preparation first makes the original input durable. After that inbox
 push succeeds, a failed final publication leaves a named pending batch or an

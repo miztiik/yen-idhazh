@@ -576,15 +576,25 @@ def _prepare_outputs(command: Sequence[str], paths_file: str) -> list[str] | Non
         return None
 
 
-def _stage_prepared_paths(paths: Sequence[str]) -> bool:
-    """Stage named outputs and deletions, allowing files skipped by preparation."""
-    if not paths:
-        return True
-    listed = _git("--literal-pathspecs", "ls-files", "-z", "--", *paths, capture=True)
-    if listed.returncode != 0:
-        return False
-    tracked = set(listed.stdout.split("\0"))
-    present = [path for path in paths if Path(path).exists() or path in tracked]
+def _stage_named_paths(paths: Sequence[str]) -> bool:
+    """Stage every named path that carries a change: on disk, or tracked and deleted.
+
+    A path with neither has nothing to stage, and `git add` refuses it as a
+    pathspec that matches no file. That is a path the tip retired while this run
+    worked: the hand-back removed it to match the tip, and the tip's producer no
+    longer writes it. Run 36985028637 lost its day that way over
+    `frontend/public/span-rollup`. The index is asked only about paths missing
+    from disk, so a large present directory is never listed.
+    """
+    present = []
+    for path in dict.fromkeys(paths):
+        if not Path(path).exists():
+            listed = _git("--literal-pathspecs", "ls-files", "-z", "--", path, capture=True)
+            if listed.returncode != 0:
+                return False
+            if not listed.stdout:
+                continue
+        present.append(path)
     return not present or _git("--literal-pathspecs", "add", "--", *present).returncode == 0
 
 
@@ -678,8 +688,8 @@ def main(argv: Sequence[str]) -> int:
     publication_delta: PublicationDelta | None = None
     publication_delta_captured = False
     prepared_paths = _prepare_outputs(prepare, prepared_paths_file)
-    # `all` over a generator stops at the first failure, which is what `set -e`
-    # did for these three. A `git add` that failed and was not read would reach
+    # `and` and `all` stop at the first failure, which is what `set -e` did for
+    # these steps. A `git add` that failed and was not read would reach
     # the check below, find nothing staged, and report success over work that
     # was never staged at all.
     prepared = (
@@ -689,10 +699,9 @@ def main(argv: Sequence[str]) -> int:
             for command in (
                 ("config", "user.name", COMMITTER_NAME),
                 ("config", "user.email", COMMITTER_EMAIL),
-                ("add", *staged_paths),
             )
         )
-        and _stage_prepared_paths(prepared_paths)
+        and _stage_named_paths([*staged_paths, *prepared_paths])
     )
     if not prepared or prepared_paths is None:
         _warn("could not stage what this job produced")
@@ -782,10 +791,7 @@ def main(argv: Sequence[str]) -> int:
                 break
             # The drops above are worktree deletions, which no index knows about
             # yet.
-            if (
-                _git("add", *staged_paths).returncode != 0
-                or not _stage_prepared_paths(prepared_paths)
-            ):
+            if not _stage_named_paths([*staged_paths, *prepared_paths]):
                 _warn("could not stage the refreshed paths")
                 break
             if _git("commit", "--amend", "--no-edit", "--allow-empty").returncode != 0:
@@ -843,7 +849,7 @@ def main(argv: Sequence[str]) -> int:
             break
         prepared_paths = prepared_again
         stamps.rebuild_ms = _elapsed_ms(step_started)
-        if _git("add", *staged_paths).returncode != 0 or not _stage_prepared_paths(prepared_paths):
+        if not _stage_named_paths([*staged_paths, *prepared_paths]):
             _warn("could not stage the rebuilt paths")
             break
         if _git("diff", "--cached", "--quiet").returncode == 0:
