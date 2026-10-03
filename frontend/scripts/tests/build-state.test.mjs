@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -192,8 +192,15 @@ test('a failed or still-running build cannot reuse the previous build record', (
 	const root = fixture();
 	try {
 		recordBuild(root, 'real');
+		writeFileSync(join(root, 'frontend/build.publication.json'), '{}\n');
+		writeFileSync(join(root, 'frontend/build/stale.html'), 'stale\n');
 		beginBuild(root, 'real');
 		assert.throws(() => assertBuild(root, 'real'), /No verified real build/);
+		assert.equal(existsSync(join(root, 'frontend/build.publication.json')), false);
+		assert.equal(existsSync(join(root, 'frontend/build/stale.html')), false);
+		assert.throws(() => completeBuild(root, 'real'), /output is missing/);
+		mkdirSync(join(root, 'frontend/build'));
+		writeFileSync(join(root, 'frontend/build/index.html'), '<h1>A fresh build</h1>\n');
 		completeBuild(root, 'real');
 		assert.doesNotThrow(() => assertBuild(root, 'real'));
 		assert.throws(() => completeBuild(root, 'real'), /no start record/);
@@ -204,8 +211,27 @@ test('source changes during compilation do not certify old output as current', (
 	const root = fixture();
 	try {
 		beginBuild(root, 'real');
+		mkdirSync(join(root, 'frontend/build'));
+		writeFileSync(join(root, 'frontend/build/index.html'), '<h1>A fresh build</h1>\n');
 		writeFileSync(join(root, 'frontend/src/page.ts'), 'export const value = 2;\n');
 		assert.throws(() => completeBuild(root, 'real'), /changed during compilation/);
 		assert.throws(() => assertBuild(root, 'real'), /No verified real build/);
+	} finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('failed inventory finalization cannot certify a successful build', () => {
+	const root = fixture();
+	try {
+		beginBuild(root, 'real');
+		mkdirSync(join(root, 'frontend/build'));
+		writeFileSync(join(root, 'frontend/build/index.html'), '<h1>A fresh build</h1>\n');
+		assert.throws(
+			() => completeBuild(root, 'real', process.env, () => {
+				readFileSync(join(root, 'missing-inventory-input'));
+			}),
+			/ENOENT/
+		);
+		assert.throws(() => assertBuild(root, 'real'), /No verified real build/);
+		assert.equal(existsSync(join(root, 'backend/var/checks/build-start.json')), true);
 	} finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -737,8 +737,14 @@ def published_days_on_dates(root: Path, dates: Iterable[str]) -> list[Path]:
 
 
 def published_days(root: Path) -> list[Path]:
-    """Every committed day payload under `frontend/public/digest/`, oldest first."""
-    return sorted(root.glob("*/*/*/digest.json"))
+    """The source inventory's named day payloads, oldest first, without discovery."""
+    from idhazh.publication import read_inventory
+
+    inventory = read_inventory(root.parent)
+    return [
+        assemble.day_dir(root, value) / "digest.json"
+        for value in reversed(inventory.dates)
+    ]
 
 
 def _plan_path(date: str) -> Path:
