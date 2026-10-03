@@ -435,6 +435,15 @@ Every persisted payload is written by one function: **sorted keys, two-space ind
 
 `CompactIndex` uses the same helper for every ledger's daily, monthly and yearly index. Each entry's bytes, covered period and row count stay together on one line, with no space after commas. Both compaction and pruning call this contract's writer. Older field-per-line files still load; they take the new layout when rewritten. Fields and version stamps do not change. Other program-written payloads keep their own layout.
 
+The helper also accepts explicitly selected record-list keys. `DigestDay` puts
+stories, leads, run references and verticals on one line each. `RunManifest`
+keeps runs and model settings expanded, and puts configuration digests and
+vertical counts on one line each. The published day-metrics month encoder
+keeps days expanded, and puts sources, instruments and stage timings on one
+line each. The state day-metrics writer is unchanged. Existing helper callers
+keep their layout. All three producers preserve fields, values and stamps;
+older layouts load normally and take the new layout when rewritten.
+
 **The layout is held still by a test, because nothing else can hold it.** Every layout parses to the same payload, so a hand edit that indents one record across ten lines is invisible to a schema and to every reader. `backend/tests/contracts/test_curated_registries.py` asserts the committed bytes are what the contract's own writer produces, and separately counts the record lines in the file - the first catches a drifting edit, the second catches the day the writer itself changes shape. Both are parametrized over one mapping, so a fourth curated registry is one entry rather than a fourth pair of tests. A field is spelled out even when it holds its default, so what a curator reads is what the model holds.
 
 Timestamps are pinned as text - UTC, second precision, `Z` - rather than as a date type, for the same reason: one spelling, no offset ambiguity, and no serializer whose formatting can drift underneath a committed file.

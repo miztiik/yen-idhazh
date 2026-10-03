@@ -30,6 +30,7 @@ from idhazh.contracts.base import (
     Sha256,
     Slug,
     Timestamp,
+    records_json,
     without_retired_keys,
 )
 from idhazh.contracts.fingerprint import PipelineInputs
@@ -341,6 +342,13 @@ class RunManifest(Contract):
 
     date: DateStamp
     runs: list[RunRecord] = Field(min_length=1)
+
+    def to_json(self) -> str:
+        """Keep runs and model settings expanded, with short records on one line."""
+        return records_json(
+            self.model_dump(mode="json"),
+            record_lists=frozenset({"config_digests", "verticals"}),
+        )
 
     @model_validator(mode="after")
     def _runs_are_append_only_and_addressed_by_date(self) -> Self:
