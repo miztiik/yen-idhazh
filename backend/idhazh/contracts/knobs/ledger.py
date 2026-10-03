@@ -21,7 +21,7 @@ origin for that the page's `connect-src` admits.
 
 from __future__ import annotations
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.file_envelope import Compression, Format
@@ -83,37 +83,24 @@ class LedgerConfig(Model):
         ),
     )
 
-    @field_validator("engine_extension_repository")
+    @field_validator("engine_extension_repository", "archive_base_url")
     @classmethod
-    def _the_repository_is_a_prefix_the_engine_joins_onto(cls, value: str) -> str:
-        """An absolute `https://` prefix with no trailing slash, whitespace or quote.
-
-        The engine appends `/<version>/<platform>/<name>` itself, and the value is
-        written into a `SET` statement, so a slash or a quote here breaks the
-        address or the statement rather than failing the build.
-        """
-        if not value.startswith("https://"):
-            raise ValueError("ledger.engine_extension_repository begins with https://")
-        if value.endswith("/"):
-            raise ValueError("ledger.engine_extension_repository carries no trailing slash")
-        if any(character in value for character in " \t?#'\""):
-            raise ValueError(
-                "ledger.engine_extension_repository carries no whitespace, quote, query or fragment"
-            )
-        return value
-
-    @field_validator("archive_base_url")
-    @classmethod
-    def _the_archive_is_an_empty_or_https_prefix(cls, value: str) -> str:
-        """An empty value, or an absolute `https://` prefix with no trailing slash."""
-        if value == "":
+    def _browser_reachable_prefix_is_https(cls, value: str, info: ValidationInfo) -> str:
+        """An absolute `https://` prefix with no trailing slash, whitespace or quote."""
+        field = info.field_name or "ledger prefix"
+        if field == "archive_base_url" and value == "":
             return value
         if not value.startswith("https://"):
-            raise ValueError("ledger.archive_base_url is empty or begins with https://")
+            hint = (
+                " is empty or begins with https://"
+                if field == "archive_base_url"
+                else " begins with https://"
+            )
+            raise ValueError(f"ledger.{field}{hint}")
         if value.endswith("/"):
-            raise ValueError("ledger.archive_base_url carries no trailing slash")
+            raise ValueError(f"ledger.{field} carries no trailing slash")
         if any(character in value for character in " \t?#'\""):
             raise ValueError(
-                "ledger.archive_base_url carries no whitespace, quote, query or fragment"
+                f"ledger.{field} carries no whitespace, quote, query or fragment"
             )
         return value

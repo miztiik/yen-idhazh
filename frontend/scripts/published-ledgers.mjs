@@ -9,8 +9,8 @@
  *
  * **The indexes are the list, and no directory is walked.** A reader asks only
  * for files an index names, so a file no index names is bytes nobody fetches.
- * The copy is capped from each ledger's newest packed day rather than the build
- * clock, so a canary build keeps publishing the same fixture files next month.
+ * The copy is capped from each ledger's newest packed period rather than the
+ * build clock, so a canary build keeps publishing the same fixture files next month.
  * Reading the list rather than the tree also keeps `daily/watermark.json`, the
  * gardener's own marker, and any stray file off the site with no list of things
  * to leave out.
@@ -203,21 +203,43 @@ function filesNamedIn(text, ledger, period, firstDay, lastDay) {
 /**
  * @param {string} stateRoot
  * @param {string} ledger
+ * @param {string} [rootName]
+ * @returns {number | null}
  */
-function newestPackedDay(stateRoot, ledger) {
-	const at = join(stateRoot, 'compact', ledger, 'index', 'daily.json');
-	if (!existsSync(at)) return null;
-	let index;
-	try {
-		index = JSON.parse(readFileSync(at, 'utf8'));
-	} catch {
-		return null;
-	}
-	if (index === null || typeof index !== 'object' || !Array.isArray(index.entries)) return null;
+export function newestPackedDay(stateRoot, ledger, rootName = 'state') {
 	let newest = null;
-	for (const entry of index.entries) {
-		const day = entry !== null && typeof entry === 'object' ? dayNumber(entry.covers) : null;
-		if (day !== null && (newest === null || day > newest)) newest = day;
+	for (const period of PERIODS) {
+		const index = `compact/${ledger}/index/${period}.json`;
+		const at = join(stateRoot, ...index.split('/'));
+		let parsed;
+		try {
+			parsed = JSON.parse(readFileSync(at, 'utf8'));
+		} catch {
+			throw new Error(`${ledger}: ${rootName}/${index} is not JSON`);
+		}
+		if (parsed === null || typeof parsed !== 'object') {
+			throw new Error(`${ledger}: ${rootName}/${index} is not an index`);
+		}
+		const held = /** @type {{ledger?: unknown, period?: unknown, entries?: unknown}} */ (parsed);
+		if (held.ledger !== ledger || held.period !== period) {
+			throw new Error(
+				`${ledger}: ${rootName}/${index} describes ${String(held.ledger)} ${String(held.period)}, not ${ledger} ${period}`
+			);
+		}
+		if (!Array.isArray(held.entries)) {
+			throw new Error(`${ledger}: ${rootName}/${index} has no list of entries`);
+		}
+		for (const entry of held.entries) {
+			const covers = entry !== null && typeof entry === 'object' ? entry.covers : undefined;
+			const range = entryRange(period, covers);
+			if (range === null) {
+				const unit = period === 'daily' ? 'day' : period === 'monthly' ? 'month' : 'year';
+				throw new Error(
+					`${ledger}: ${rootName}/${index} names ${JSON.stringify(covers)}, which is not a UTC ${unit}`
+				);
+			}
+			if (newest === null || range.last > newest) newest = range.last;
+		}
 	}
 	return newest;
 }
@@ -261,9 +283,20 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state') {
 			}
 			continue;
 		}
-		const newest = newestPackedDay(stateRoot, ledger);
+		let newest;
+		try {
+			newest = newestPackedDay(stateRoot, ledger, rootName);
+		} catch (error) {
+			copy.refused.push(error instanceof Error ? error.message : String(error));
+			continue;
+		}
 		if (newest === null) {
-			copy.refused.push(`${ledger}: ${rootName}/compact/${ledger}/index/daily.json names no packed day`);
+			for (const period of PERIODS) {
+				const index = `compact/${ledger}/index/${period}.json`;
+				copy.indexes[index] = readFileSync(join(stateRoot, ...index.split('/')), 'utf8');
+				files.add(index);
+			}
+			console.log(`published ledgers: ${ledger} has three empty indexes; staged the indexes and no data.`);
 			continue;
 		}
 		const firstDay = newest - spanDays + 1;

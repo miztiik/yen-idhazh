@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { publishedLedgers } from '../scripts/published-ledgers.mjs';
+import { newestPackedDay, publishedLedgers } from '../scripts/published-ledgers.mjs';
 import { COMPACT_PERIODS, readIndex } from '../src/lib/data/compact-index';
 import { dataPath, indexPath } from '../src/lib/data/slice-reader';
 import type { LedgerName } from '../src/lib/data/slice-shapes';
@@ -123,14 +123,15 @@ test('every published index is capped to the widest console span, anchored on it
 	const appearance = JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8'));
 	const widest = Math.max(...appearance.console.window_presets);
 	for (const ledger of publishedLedgers() as LedgerName[]) {
-		const daily = readIndex(
-			JSON.parse(readFileSync(at(indexPath(ledger, 'daily')), 'utf8')),
-			ledger,
-			'daily'
-		);
-		expect('index' in daily && daily.index.entries.length, `${ledger} has no newest day`).toBeTruthy();
-		if (!('index' in daily)) continue;
-		const newest = Math.max(...daily.index.entries.map((entry) => dayNumber(entry.covers)));
+		const newest = newestPackedDay(STATE, ledger);
+		if (newest === null) {
+			for (const period of COMPACT_PERIODS) {
+				const reading = readIndex(JSON.parse(readFileSync(at(indexPath(ledger, period)), 'utf8')), ledger, period);
+				expect('index' in reading, `${ledger} ${period} index is refused`).toBeTruthy();
+				if ('index' in reading) expect(reading.index.entries).toEqual([]);
+			}
+			continue;
+		}
 		const first = newest - widest + 1;
 		for (const period of COMPACT_PERIODS) {
 			const reading = readIndex(JSON.parse(readFileSync(at(indexPath(ledger, period)), 'utf8')), ledger, period);

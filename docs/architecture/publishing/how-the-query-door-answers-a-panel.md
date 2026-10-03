@@ -261,8 +261,7 @@ staged tree.
   published wrongly. The whole site waits, reading pages included, until the
   ledger is whole again or leaves `ledger.published`.
 - **The cap is the widest console span, anchored on the ledger's data.** On
-  2026-10-02 that span is 90 UTC days. It is counted back from the newest day the
-  ledger's `daily.json` names, never from the build clock. A period is copied
+  2026-10-02 that span is 90 UTC days. It is counted back from the newest packed period: the newest day in `daily.json`, else the last day of the newest month in `monthly.json`, else the last day of the newest year in `yearly.json`, never from the build clock. A period is copied
   whole when it overlaps that span, so a month or year can make the oldest
   reachable day older than 90 days, and nothing older than that overlapping
   period is named.
@@ -299,9 +298,15 @@ the runner's reading, because zlib-ng, which some local Python builds use, reads
 the same index about 4 percent smaller. **The data files carry no ceiling, and no
 gate yet weighs what one span reads.**
 
-Measured 2026-10-02 on a real build from the committed `state/`, the whole built
-site weighed TODO bytes beside the 1,073,741,824-byte Pages cap. That reading is
-not a gate; `idhazh site-weight` is the gate and the cap is the platform limit.
+Measured 2026-10-03 on this shared Windows machine from a real build of the
+committed `state/`, the whole built site weighed 155,716,481 bytes, or 148.5 MB,
+beside the 1,073,741,824-byte Pages cap. That leaves 875 MB before GitHub Pages
+refuses the deploy. The staged ledger files under `build/state/compact/` weighed
+15,417,159 bytes, or 15.42 MB, in all: `candidate-models` 43,737 bytes,
+`counterfactual-scores` 782,471 bytes, `host-fingerprint` 340,930 bytes,
+`item-health` 4,190,954 bytes, `published` 926,603 bytes, `seen` 4,453,977 bytes
+and `summary-quality-evals` 4,678,487 bytes. That reading is not a gate; `idhazh
+site-weight` is the gate and the cap is the platform limit.
 
 ## How a year file is read by byte range
 

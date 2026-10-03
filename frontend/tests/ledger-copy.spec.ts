@@ -114,6 +114,43 @@ test('the copy is capped from the newest packed day and trims each index to the 
 	expect(JSON.parse(copy.indexes['compact/item-health/index/yearly.json']).entries).toEqual([]);
 });
 
+test('an empty daily index anchors on the newest month and copies that month file', () => {
+	const tree = {
+		'compact/candidate-models/index/daily.json': anIndex('candidate-models', 'daily', []),
+		'compact/candidate-models/index/monthly.json': anIndex('candidate-models', 'monthly', ['2026-06']),
+		'compact/candidate-models/index/yearly.json': anIndex('candidate-models', 'yearly', ['2025']),
+		'compact/candidate-models/monthly/2026/06.parquet': 'PAR1',
+		'compact/candidate-models/yearly/2025/2025.parquet': 'PAR1'
+	};
+	const copy = ledgerCopy(aStateTree(tree), ['candidate-models']);
+	expect(copy.refused).toEqual([]);
+	expect(copy.files).toEqual([
+		'compact/candidate-models/index/daily.json',
+		'compact/candidate-models/index/monthly.json',
+		'compact/candidate-models/index/yearly.json',
+		'compact/candidate-models/monthly/2026/06.parquet'
+	]);
+	expect(coversIn(copy.indexes['compact/candidate-models/index/daily.json'])).toEqual([]);
+	expect(coversIn(copy.indexes['compact/candidate-models/index/monthly.json'])).toEqual(['2026-06']);
+	expect(coversIn(copy.indexes['compact/candidate-models/index/yearly.json'])).toEqual([]);
+});
+
+test('a ledger with three empty indexes stages the indexes and no data', () => {
+	const tree = {
+		'compact/candidate-models/index/daily.json': anIndex('candidate-models', 'daily', []),
+		'compact/candidate-models/index/monthly.json': anIndex('candidate-models', 'monthly', []),
+		'compact/candidate-models/index/yearly.json': anIndex('candidate-models', 'yearly', [])
+	};
+	const copy = ledgerCopy(aStateTree(tree), ['candidate-models']);
+	expect(copy.refused).toEqual([]);
+	expect(copy.missing).toEqual([]);
+	expect(copy.files).toEqual([
+		'compact/candidate-models/index/daily.json',
+		'compact/candidate-models/index/monthly.json',
+		'compact/candidate-models/index/yearly.json'
+	]);
+});
+
 for (const period of ['daily', 'monthly', 'yearly']) {
 	test(`a ledger missing its ${period} index stops the build, naming the ledger and the file`, () => {
 		const tree = aWholeLedger('summary-quality-evals');
@@ -145,9 +182,7 @@ test('an index that is not this ledger\'s, or names a path rather than a day, st
 	tree['compact/summary-quality-evals/index/yearly.json'] = anIndex('summary-quality-evals', 'yearly', ['../../escape']);
 	const copy = ledgerCopy(aStateTree(tree), ['summary-quality-evals']);
 	expect(copy.refused).toEqual([
-		'summary-quality-evals: state/compact/summary-quality-evals/index/daily.json describes item-health daily, not summary-quality-evals daily',
-		'summary-quality-evals: state/compact/summary-quality-evals/index/monthly.json names "../../../escape", which is not a UTC month',
-		'summary-quality-evals: state/compact/summary-quality-evals/index/yearly.json names "../../escape", which is not a UTC year'
+		'summary-quality-evals: state/compact/summary-quality-evals/index/daily.json describes item-health daily, not summary-quality-evals daily'
 	]);
 	expect(copy.files).toEqual([]);
 });
