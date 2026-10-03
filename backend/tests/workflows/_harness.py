@@ -829,6 +829,10 @@ SUBSTITUTED_DAY_DIR: Final = "frontend/public/digest/2026/08/25"
 
 SUBSTITUTED_SHA: Final = "0" * 40
 
+SUBSTITUTED_EXECUTION: Final = "40000000001"
+
+SUBSTITUTED_ATTEMPT: Final = "1"
+
 SUBSTITUTED_SHARD: Final = "3"
 
 SUBSTITUTED_SHARDS: Final = "8"
@@ -866,6 +870,8 @@ EXPRESSION_VALUES: Final = {
     # exists to remove.
     "steps.derived.outputs.refresh_paths": path_classes.refresh_paths(day_dir=SUBSTITUTED_DAY_DIR),
     "github.sha": SUBSTITUTED_SHA,
+    "github.run_id": SUBSTITUTED_EXECUTION,
+    "github.run_attempt": SUBSTITUTED_ATTEMPT,
     "matrix.shard": SUBSTITUTED_SHARD,
     "matrix.shards": SUBSTITUTED_SHARDS,
     "matrix.tenant": SUBSTITUTED_TENANT,
@@ -2022,7 +2028,13 @@ def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     # whether two runs that both appended are in conflict, so a scripted origin
     # without it would test a different repository.
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    _git(seed, env, "add", ".gitattributes", "docs", "runner-noise.txt", *staged_paths)
+    for relative in (".gitignore", "backend/utilities/prepare_evaluation_publication.py"):
+        _write(seed / relative, read_text(REPO_ROOT / relative))
+    _git(
+        seed, env, "add", ".gitattributes", ".gitignore",
+        "backend/utilities/prepare_evaluation_publication.py", "docs", "runner-noise.txt",
+        *staged_paths,
+    )
     _git(seed, env, "commit", "-m", "seed")
     _git(seed, env, "push", "-u", "origin", "main")
 

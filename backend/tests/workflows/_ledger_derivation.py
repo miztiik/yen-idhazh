@@ -181,7 +181,7 @@ def _period(grain: Grain, date: str) -> str | None:
     month it falls in, or a stamp taken during it - and two dates have to give two
     addresses, or the prefix they share would be the whole path.
     """
-    if grain is Grain.FLAT:
+    if grain in {Grain.FLAT, Grain.LOOKUP}:
         return None
     if grain is Grain.MONTH_FILE:
         return date[: len("YYYY-MM")]
@@ -522,9 +522,8 @@ def _persisted_ledgers() -> dict[str, set[str]]:
 def _reachable_modules() -> dict[str, set[ModuleType]]:
     """CLI verb -> the modules its own branch enters, and the ones those call.
 
-    One hop past the dispatched stage, because a stage that hands the writing to a
-    helper module still owes the run the rows: the fold writes its months through
-    `retention`, and the probe writes its row through `telemetry.silicon`.
+    Follow called modules until none remain. A helper can delegate writing again,
+    and the dispatching stage still owes the run every resulting ledger.
 
     A verb that enters the gardener's runner also enters every shipped task. The
     runner finds a task by walking its package rather than by importing it by
@@ -535,15 +534,20 @@ def _reachable_modules() -> dict[str, set[ModuleType]]:
     reachable: dict[str, set[ModuleType]] = {}
     for verb, dispatched in _dispatched_modules().items():
         entered: set[ModuleType] = set()
-        for module in dispatched:
+        pending = set(dispatched)
+        while pending:
+            module = pending.pop()
+            if module in entered:
+                continue
             entered.add(module)
-            entered |= _calls_into(module)
-        if gardener_runner in entered:
-            entered |= {
-                task_module
-                for task in gardener_registry.discover().values()
-                if (task_module := inspect.getmodule(task.run)) is not None
-            }
+            pending.update(_calls_into(module) - entered)
+            if module is gardener_runner:
+                pending.update(
+                    task_module
+                    for task in gardener_registry.discover().values()
+                    if (task_module := inspect.getmodule(task.run)) is not None
+                    and task_module not in entered
+                )
         reachable[verb] = entered
     return reachable
 

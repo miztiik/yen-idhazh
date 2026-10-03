@@ -220,9 +220,10 @@ def test_the_scores_are_filed_by_the_pipelines_writer(tmp_path: Path) -> None:
     assert build_canary_day.file_scores(tmp_path, published(), evaluation()) == len(rows)
 
     assert filed_rows(tmp_path) == rows
-    assert writer.indexed_observations(tmp_path) == {
+    candidates = {
         writer.observation_digest(row.model_dump(mode="json")) for row in rows
     }
+    assert writer.recorded_observations(tmp_path, candidates) == candidates
 
 
 def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:

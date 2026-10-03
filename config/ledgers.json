@@ -83,7 +83,7 @@
       "ledgers": [
         {
           "name": "summary-quality-evals-index",
-          "grain": "tree",
+          "grain": "lookup",
           "prefix": ["summary-quality-evals-index"],
           "stem": null,
           "suffix": null

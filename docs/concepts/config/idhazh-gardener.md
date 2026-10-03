@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -27,8 +27,8 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/seen.json` declares the task
-`seen`. A missing `config/gardener/` means no tasks. Twenty ship today: eleven
-`retention` tasks, two `collection` tasks, six `compaction` tasks (below) and
+`seen`. A missing `config/gardener/` means no tasks. Eighteen ship today: seven
+`retention` tasks, two `collection` tasks, eight `compaction` tasks (below) and
 `corpus-squash`, the one `history` task (below).
 **There is no index file and no `name` key**, so a task can never be listed under
 one name and filed under another.
@@ -60,23 +60,20 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 Each deletes what it owns past its window, and each ships `dry_run: true`. The
 windows were keys in `config/idhazh.json` until 2026-09-28 and moved here with
 no value changed, because each task is the only thing that reads its number.
-Two of them also fold the closed days of the CSV day trees they own, and that
-fold ships live, `fold.dry_run: false`: `summary-quality-evals-index`, the eval
-ledger's ID folder,
-and `feed-health`. The item-health, eval, host-fingerprint,
+`feed-health` also folds the closed days of its CSV day tree, and that fold
+ships live, `fold.dry_run: false`. The item-health, eval, host-fingerprint,
 counterfactual-score and candidate-model rows moved to the ledger door, so no
 fold reads them.
 The digest workflow ran that same fold live on every run until the gardener
-took it over, and a fold changes no answer a reader gets. The ID folder's fold
-also settles each closed month whole, `fold.settles_months: true`, under the
-same live switch.
+took it over, and a fold changes no answer a reader gets. No current task sets
+`fold.settles_months`. The [evaluation ID lookup](../../architecture/contracts/observation-lookup.md)
+has no retention declaration: its IDs never expire, and it has no day/month fold.
 Why each tree gets the age it has is
 [retention-ages.md](retention-ages.md#every-tree-names-its-own-cleanup-age).
 
 | Task | Owns | Window | Why that window |
 | --- | --- | --- | --- |
 | `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health` and `state/compact/item-health`, which `compact-item-health` owns, so it finds its due months whichever shard it lands in |
-| `summary-quality-evals-index` | `state/summary-quality-evals-index` | forever | the index a run dedupes against, and an observation key carries no date, so a dropped day would make every measurement in it new again. Every eval row is kept for ever and nothing summarises a month, so the task takes nothing; it exists so the index's closed months become one file each, and the open month's closed days one file each |
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
 | `seen` | `state/seen` | 90 days | at least `collect.seen_window_days`, the days the collector reads |
 | `traces` | `state/traces` | 7 days | an item inspection reads recent trace detail; item health keeps its stage measurements |
@@ -211,7 +208,7 @@ fold's as well as the task's own, and every compaction's
 beside it: `corpus-squash`'s `dry_run`, the `dry_run` and the
 `monthly_window_dry_run` of `compact-item-health` and
 `compact-host-fingerprint`, the `dry_run` of `compact-counterfactual-scores` and
-`compact-candidate-models`, and the two `fold.dry_run` switches above. A task
+`compact-candidate-models`, and `feed-health`'s `fold.dry_run`. A task
 earns its first deletion from a person reading its records, so turning one live
 is an edit to that list, never a side effect of the change that added the task.
 
@@ -231,7 +228,7 @@ names the file an operator edits and the rule it broke.
 | A task's `window` that differs from its `full-grain` series, or a ceiling on a task that keeps series | One number is spelled once; a ceiling could stop a month's summary part way through |
 | An `aggregate` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |
 | A `public-copy` series that is not equal to the `full-grain` series | The copy is the browser's copy of that ledger |
-| The declaration that governs `feed-health` or `summary-quality-evals-index`, a `full-grain` series or a `public-copy` series keeping fewer month files than the widest console read selects | A panel blanks for a month that ran |
+| The declaration that governs `feed-health`, a `full-grain` series or a `public-copy` series keeping fewer month files than the widest console read selects | A panel blanks for a month that ran |
 | The declaration that governs the host-fingerprint ledger - its compaction - keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from that ledger, so a source month deleted while its published month is kept is a shard nothing can rebuild |
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |

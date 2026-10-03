@@ -67,6 +67,7 @@ class Grain(StrEnum):
     FLAT = "flat"
     DAY_FILE = "day"
     DAY_TREE = "tree"
+    LOOKUP = "lookup"
     MONTH_FILE = "month"
     STAMPED = "stamp"
     RAW_AND_COMPACT = "raw-and-compact"
@@ -79,6 +80,7 @@ _NEEDS_A_STEM: dict[Grain, bool] = {
     Grain.FLAT: True,
     Grain.DAY_FILE: False,
     Grain.DAY_TREE: False,
+    Grain.LOOKUP: False,
     Grain.MONTH_FILE: False,
     Grain.STAMPED: False,
     Grain.RAW_AND_COMPACT: False,
@@ -87,6 +89,7 @@ _NEEDS_A_SUFFIX: dict[Grain, bool] = {
     Grain.FLAT: True,
     Grain.DAY_FILE: True,
     Grain.DAY_TREE: False,
+    Grain.LOOKUP: False,
     Grain.MONTH_FILE: True,
     Grain.STAMPED: True,
     Grain.RAW_AND_COMPACT: False,

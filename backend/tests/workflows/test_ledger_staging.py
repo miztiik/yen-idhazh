@@ -158,6 +158,11 @@ LEDGERS_NO_RUN_FILLS: Final[Mapping[str, str]] = MappingProxyType(
 # writer this derivation can follow fails too.
 LEDGERS_AN_OWNER_WRITES: Final[Mapping[str, str]] = MappingProxyType(
     {
+        "state/summary-quality-evals-index": (
+            "idhazh.evals.observation_batches and observation_lookup write exact lookup "
+            "nodes; the work and assemble preparation hooks publish their named paths, "
+            "as test_observation_publication verifies against real Git repositories"
+        ),
         "state/day-metrics": (
             "idhazh.telemetry.publish.day_metrics, one JSON record per published day, "
             "written by `python -m idhazh assemble`"

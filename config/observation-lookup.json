@@ -1,0 +1,4 @@
+{
+  "max_leaf_bytes": 262144,
+  "sqlite_page_bytes": 4096
+}

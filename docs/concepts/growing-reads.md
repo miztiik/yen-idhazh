@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-02
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -21,8 +21,8 @@ this page adds: the escape hatch now has an address.**
 a layout obliges a **writer** to do. This one says what a growing collection
 obliges a **reader** to declare. Why a collection partitions at all is
 [the shard rule](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window),
-and the two compose: a cover is what makes a partition worth having, because a
-read with no cover opens every shard anyway.
+and the two compose: a read saves work when its input selects the partitions
+to open. That input may be exact keys rather than dates.
 
 ## Deciding it for a collection this page does not list
 
@@ -93,22 +93,12 @@ Sometimes a clock would answer a different question from the one asked. Then the
 answer is a cheaper cover, not a shorter memory. Three shapes, all in service
 today.
 
-**The files this run staged.** The settlement that ran after a push race is the
-worked example, and it is history rather than code: `stage_dedupe_ledgers` went
-with the union merge driver on 2026-09-19, because a writer that owns its own
-segment leaves nothing for a merge to stack. What it did while it lived is the
-shape worth keeping. A run appends only to the shard its own date routes to, so a
-repeat could only be in a file that run wrote; the ordinary pass read **six files
-whether the archive held one month or sixty**, where it used to glob every
-feed-health, item-health and score shard and find nothing, because a finished
-month was settled when it was written. Nothing there was a clock: an older month
-was skipped because this run did not write it, not because it was old, so the
-bound did not weaken when a run ran long or crossed midnight.
-
-`idhazh rebuild-summary-quality-evals-index` carries the live copy of the same shape. `--month`
-names what to rewrite, `--every-shard` is the operator's full pass, and the
-command **refuses to run with neither flag** - a step that named neither would
-get the unbounded pass by accident.
+**The inputs and files this job owns.** Evaluation publication takes a named
+batch manifest and the paths prepared from it. A push retry replays those
+original batches, not all recorded measurements. The
+[publication protocol](../architecture/contracts/observation-lookup.md#publication-across-jobs)
+owns the durable input and prepared-path rules. Its bound is the supplied work,
+not a date window; this does not bound a full Git checkout or fetch.
 
 **One run, or one date.** `ledger.load_settled_failures` and
 `ledger.load_source_counts` take a date and read that one day through
@@ -118,39 +108,20 @@ ledger the same way, because a run id already names its date.
 by construction - the input never had a clock, and putting one on it could only
 lose work the run just did.
 
-**An identity set cheaper than the rows.** `evals.writer.recorded_observations`
-answers *do we already hold this measurement*. `OBSERVATION_KEY` is address,
-output digest and scorer version, and it carries **no date, deliberately** - the
-same address, output and scorer is the same measurement whenever it is re-taken.
-A cover in days would let a January
-observation back in February and turn *how many measurements do we hold* into
-*how many times did the pipeline look*, which is the one thing the eval ledger
-promises it is not. So the memory stayed complete and the representation got
-cheaper: `state/summary-quality-evals-index/<YYYY>/<MM>/<DD>/` holds one 76-byte digest an
-observation beside the day file it describes. Counted over the committed shards on
-2026-09-07 - 7,636 measurements, 819.6 bytes a row - that is 566.8 KB against
-6,111.8 KB, so the read is **10.8 times smaller and 90.7 percent of it is gone**,
-exact, with nothing forgotten. Counting committed bytes is deterministic, so the
-spread is zero.
+**The candidate identities themselves.** `evals.writer.recorded_observations`
+takes the supplied digests and asks which are already present. The
+[observation lookup](../architecture/contracts/observation-lookup.md) reads one
+fixed root, the bounded routes selected by those keys and capped SQLite leaves.
+It uses the leaf's primary-key index. It does not reconstruct the historical ID
+set, open unrelated leaves or scan evaluation rows. IDs never expire, so a
+measurement does not become new merely because it was last recorded long ago.
 
-**What that read costs in file handles is declared rather than hidden.**
-`indexed_observations` opens one file a partition, and when the index moved from
-month files to day files with the ledger it describes on 2026-09-13, **2 opens
-became 23, and it gained about 365 a year**. **No ID is ever dropped**: every
-eval row is kept for ever and nothing summarises a month, and an ID dropped would
-make its measurement new again. So the gardener's fold now settles each closed
-month of the ID folder into one file (`fold.settles_months`), and the read opens
-one file a closed month plus the open month's days. At about 16 ms a file, a
-measured rate, one file a day would cost a digest run about 6 seconds at one year
-and about a minute at ten; one file a closed month is about 43 files at one year,
-67 at three and 151 at ten, under a second at one year and about 2.4 seconds at
-ten (estimates counted from the calendar, against 365, 1,095 and 3,650). The
-bytes do not move: every measurement ever taken is still read, about 76 bytes
-each. The read is still [unbounded](#unbounded-and-it-says-so), and listed there.
-A cover was rejected rather than overlooked, for the reason the paragraph above
-gives. `fingerprint.append_new` is the same shape one size down: it
-carries digests rather than built rows, and the set stops growing when the inputs
-stop changing.
+The one-time [migration](../how-to/migrate-observation-lookup.md) reads all legacy
+IDs and raw and compact evaluation rows explicitly. It is not a fallback in the
+routine writer and is listed under [unbounded](#unbounded-and-it-says-so).
+
+`fingerprint.append_new` carries digests rather than built rows, and the set
+stops growing when the inputs stop changing.
 
 ### 3. Unbounded, on purpose, and it says so
 
@@ -245,13 +216,13 @@ reads are here and not how many. These are `backend/`'s;
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `evals.writer.recorded_observations` | `state/summary-quality-evals-index/` | every observation identity, as 76-byte digests. That bounds the bytes a measurement costs, not the number of files: every ID is kept, so the file count grows by one a closed month, plus the open month's days, and `indexed_observations` is listed under [unbounded](#unbounded-and-it-says-so) for it |
+| `evals.writer.recorded_observations` | the fixed lookup root, candidate-selected routing pages and capped SQLite leaves | the supplied candidate digests; routing depth and leaf bytes are bounded independently of retained history ([lookup bounds](../architecture/contracts/observation-lookup.md#bounds-and-costs)) |
 | `ledger.persist` on `LedgerName.COUNTERFACTUAL_SCORES` | one raw file of `state/raw/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day, through `ledger.load_days` | one date |
 | `ledger.load_story_similarity_pairs` | one day file of `state/content-similarity-judge/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
 | `ledger.load_source_counts` | one item-health day, through `ledger.load_days` | one date |
 | `telemetry.silicon`'s clock step | the host-fingerprint raw files of one day, through `ledger.list_raw_files` | one date: it reads back the row its own probe filed |
-| `ledger.held_days`, `ledger.held_months` | the compact indexes of one door ledger and the names of its raw day folders, never a data file | the days and months the ledger holds. It grows by one name a raw day until a compaction packs it, and by one index entry a packed day, month or year. `source_health._recent_item_health`, `machine.publish`, `public_telemetry.publish`, `run_timeline.publish`, the `telemetry-aggregate` task and `idhazh rebuild-summary-quality-evals-index` ask it which days or months exist. `idhazh telemetry prune` on a door ledger asks it how many days lie outside its range, and reads the same indexes through `ledger.find_holding_files` to find the files that hold the range |
+| `ledger.held_days`, `ledger.held_months` | the compact indexes of one door ledger and the names of its raw day folders, never a data file | the days and months the ledger holds. It grows by one name a raw day until a compaction packs it, and by one index entry a packed day, month or year. `source_health._recent_item_health`, `machine.publish`, `public_telemetry.publish`, `run_timeline.publish` and the `telemetry-aggregate` task ask it which days or months exist. `idhazh telemetry prune` on a door ledger asks it how many days lie outside its range, and reads the same indexes through `ledger.find_holding_files` to find the files that hold the range |
 | `similarity.holdout.score_marks` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date its rows name | the length of the hand-marked file, and nothing else. The verb that calls it is typed by a person; another year of archive adds no read, and a day nothing marks is never opened. This is the backend twin of `similarity-holdout.holdoutReading` below, and it has the same cover for the same reason |
 | `corpus.scored_from_items` | one run's items directory | one run |
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
@@ -280,8 +251,8 @@ reads are here and not how many. These are `backend/`'s;
 | `measure_retrieval.report` | every published day and every committed month shard | it asks whether the index names every published item. A window would compare the days inside it and say nothing about the ones outside, which is the only place a dropped item can hide. It is a verb a person types, off the daily path, and it was a gated test until 2026-09-22 |
 | `ledger_families.listing` | every file under every ledger's folder in `state/` | the question is how many files each ledger holds, and only a listing answers it. It is a verb a person types, off the daily path, and its test drives it from a registry and a state tree the test writes (2026-09-27) |
 | the gardener's `run-tasks` listing, `gardener_publish.read_the_listing` | the name and size of every file under the folders one shard's tasks own or read, from one `git ls-tree -r -l` over the commit, and for a file the clone never downloaded one GitHub trees API request per listed folder. No file content | a task deletes what its window no longer keeps, so it has to see every name it owns. What still grows is the number of names listed, one entry a file: measured 2026-09-30, the whole repository held 3,493 files and 980 of them under `state/`. What no longer grows with the tree is what the shard downloads: its checkout holds only code and config, and a task fetches only the day or month folders it reads. Every row carries that as `downloaded_bytes` beside the owned folders' weight as `cone_bytes`, and a shard over `max_downloaded_mb` - committed at 128, an estimate - exits 1 once its record has landed ([the reasoning](../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
-| `evals.writer.indexed_observations`, which `recorded_observations` calls every time a work shard or assemble files a measurement | one `settled.csv` a closed month of `state/summary-quality-evals-index/`, then every file of the open month's days | **Declared, and it grows by a file a month.** An observation key carries no date, so a window would let a measurement re-taken outside it read as new, and no bounded input answers "do we already hold this one?". Every eval row is kept for ever and nothing summarises a month, so no ID is ever dropped. The gardener's fold settles each closed month into one file, so the read opens about 43 files at one year, 67 at three and 151 at ten, where one a day would be 365, 1,095 and 3,650 (estimates counted from the calendar), and still sees every measurement ever taken |
-| `evals.writer.records` | every row of the eval ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row and `grader_length_bias.py` joins every row. Each is a verb a person types, off the daily path |
+| `backend/utilities/migrate_observation_lookup.py`, through `evals.observation_migration.migrate` | all legacy index CSVs and all raw and compact evaluation files and metadata in the explicitly named state directory | the one-time cutover must preserve every legacy ID and add current keys recomputed from all retained rows; a date range cannot recover a legacy ID's missing date. Cost grows with those files and rows. Source validation precedes CSV removal; evaluation bytes are never rewritten. It requires the [approved cutover procedure](../how-to/migrate-observation-lookup.md), not a routine writer call |
+| `evals.writer.records` | every row of the eval ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row, `grader_length_bias.py` joins every row, and the explicit lookup migration checks settled-row semantics. Each is an operator pass, off the daily path |
 | `data_wrangler.py refill`'s score read, `measure_ledgers.py`, and `server_memory_mark.py` when it names no day | every row of the ledger each one reads, through `ledger.load_ledger_rows` | each is an operator verb whose question is the whole history; none runs on the daily path |
 | `backend/utilities/migrate_to_parquet.py` | every CSV day left of each ledger it is given, under the folder its table `CSV_LEDGERS` names for that ledger, in each state root it is given: `state/`, and any trial run's tree inside it | a migration moves every day there is, once, and a CSV file that lands later is moved by running it again. The table, the program and its tests are deleted when no ledger is left on CSV: every entry in `config/ledgers.json` is `raw-and-compact`, and `--check` finds no CSV file under any root |
 
