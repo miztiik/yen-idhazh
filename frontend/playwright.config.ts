@@ -87,11 +87,13 @@ const PORT = previewPort(dirname(fileURLToPath(import.meta.url)), process.env);
  * are discovered rather than copied here.
  *
  * Skipping is opt-in through the environment and never the default: a bare
- * `npm run test:browser` runs all browser groups. The build-independent group
- * runs separately through `npm run test:logic` without starting a server.
+ * `npm run test:browser` runs all browser groups. CI separately declines bulk
+ * review pictures through `SKIP_PANEL_CAPTURES`; panel assertions still run.
+ * The build-independent group runs through `npm run test:logic` without a server.
  */
 const SKIP_CONSOLE = (process.env.SKIP_CONSOLE_SUITE ?? '').trim() === 'true';
 const SKIP_PANELS = (process.env.SKIP_PANELS_SUITE ?? '').trim() === 'true';
+const SKIP_CAPTURES = (process.env.SKIP_PANEL_CAPTURES ?? '').trim() === 'true';
 const GROUPS = groupedSpecs(fileURLToPath(new URL('./tests/', import.meta.url)));
 
 /** A group's own spec files, as the patterns `testIgnore` skips them by.
@@ -118,6 +120,17 @@ function specsOf(group: FrontendGroup): string[] {
  */
 const WHOLE_DAY = /whole-day\.spec\.ts$/;
 
+export function ignoredBrowserSpecs(
+	skipConsole: boolean, skipPanels: boolean, skipCaptures: boolean
+): (string | RegExp)[] {
+	return [
+		WHOLE_DAY,
+		...(skipConsole ? specsOf('console') : []),
+		...(skipPanels ? specsOf('panels') : []),
+		...(skipCaptures ? ['**/panel-captures.spec.ts'] : [])
+	];
+}
+
 /** How many spec files run at once.
  *
  * One by default, four in CI, and the two machines disagree about which is
@@ -142,11 +155,7 @@ export default defineConfig({
 	testDir: 'tests',
 	globalSetup: './tests/support/check-addons.ts',
 	outputDir: 'test-results/browser',
-	testIgnore: [
-		WHOLE_DAY,
-		...(SKIP_CONSOLE ? specsOf('console') : []),
-		...(SKIP_PANELS ? specsOf('panels') : [])
-	],
+	testIgnore: ignoredBrowserSpecs(SKIP_CONSOLE, SKIP_PANELS, SKIP_CAPTURES),
 	fullyParallel: false,
 	forbidOnly: Boolean(process.env.CI),
 	retries: 0,
