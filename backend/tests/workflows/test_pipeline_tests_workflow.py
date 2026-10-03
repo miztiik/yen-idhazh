@@ -880,6 +880,8 @@ def test_the_gather_verb_prints_nothing_a_step_could_mistake_for_output(
             str(state),
             "--config-root",
             str(CONFIG_DIR),
+            "--day",
+            TEST_CASE_DATE,
         ],
         cwd=tmp_path,
         env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")},

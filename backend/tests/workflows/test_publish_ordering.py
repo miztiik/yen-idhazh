@@ -27,7 +27,7 @@ pytestmark = pytest.mark.workflow
 
 def _checks_publication(step: dict[str, object]) -> bool:
     return any(
-        tuple(shlex.split(line)[:4]) == CHECK_PUBLICATION_CALL
+        tuple(line.split()[:4]) == CHECK_PUBLICATION_CALL
         for line in str(step.get("run", "")).splitlines()
     )
 

@@ -1,4 +1,4 @@
-"""Resolve only the files and UTC days an operator named."""
+"""Resolve only the files, UTC days and UTC months an operator named."""
 
 from __future__ import annotations
 
@@ -32,4 +32,17 @@ def named_files(root: Path, names: Sequence[str]) -> list[Path]:
         path = (root / name).resolve()
         path.relative_to(root)
         paths.append(path)
+    return paths
+
+
+def month_directories(root: Path, months: Sequence[str]) -> list[Path]:
+    """Build the directories for explicit UTC calendar months."""
+    if not months:
+        raise ValueError("name at least one UTC month")
+    paths: list[Path] = []
+    for named in sorted(set(months)):
+        parsed = date.fromisoformat(f"{named}-01")
+        if parsed.isoformat()[:7] != named:
+            raise ValueError(f"UTC month must be YYYY-MM: {named!r}")
+        paths.append(root / f"{parsed.year:04}" / f"{parsed.month:02}")
     return paths

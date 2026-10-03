@@ -1025,9 +1025,7 @@ def _inline_programs(script: str) -> list[str]:
     Both spellings index the config, so both are in scope. A step that carries
     neither contributes nothing and is not an error.
     """
-    programs: list[str] = re.findall(
-        r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL
-    )
+    programs: list[str] = re.findall(r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL)
     programs.extend(re.findall(r"python3?\s+-c\s+'([^']*)'", script))
     return programs
 
@@ -1067,9 +1065,7 @@ def _reads_the_environment(node: ast.AST) -> bool:
 
 def _names(node: ast.AST, name: str) -> bool:
     """Whether an expression reads a given name anywhere inside itself."""
-    return any(
-        isinstance(inner, ast.Name) and inner.id == name for inner in ast.walk(node)
-    )
+    return any(isinstance(inner, ast.Name) and inner.id == name for inner in ast.walk(node))
 
 
 def _own_nodes(scope: ast.AST) -> list[ast.AST]:
@@ -1174,9 +1170,7 @@ def _config_key_paths(program: str) -> list[tuple[str, tuple[str, ...]]]:
     tree = ast.parse(program)
     scopes: list[ast.AST] = [tree]
     scopes.extend(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
     )
     found: list[tuple[str, tuple[str, ...]]] = []
     for scope in scopes:
@@ -1269,7 +1263,9 @@ def _declared_steps(workflow: dict[str, object], job_name: str) -> list[dict[str
     """
     raw_steps = _job(workflow, job_name).get("steps")
     assert isinstance(raw_steps, list), f"job {job_name} steps must contain a YAML list"
-    assert all(isinstance(step, dict) for step in raw_steps), f"job {job_name} steps must be mappings"
+    assert all(isinstance(step, dict) for step in raw_steps), (
+        f"job {job_name} steps must be mappings"
+    )
     return cast(list[dict[str, object]], raw_steps)
 
 
@@ -1281,8 +1277,7 @@ def _action_call(workflow: dict[str, object], job_name: str, uses: str) -> dict[
     if given is None:
         return {}
     return {
-        name: str(value)
-        for name, value in _mapping(given, f"job {job_name} {uses} 'with'").items()
+        name: str(value) for name, value in _mapping(given, f"job {job_name} {uses} 'with'").items()
     }
 
 
@@ -1311,9 +1306,7 @@ def _steps(workflow: dict[str, object], job_name: str) -> list[dict[str, object]
     return resolved
 
 
-def _step(
-    workflow: dict[str, object], job_name: str, key: str, value: str
-) -> dict[str, object]:
+def _step(workflow: dict[str, object], job_name: str, key: str, value: str) -> dict[str, object]:
     matches = [step for step in _steps(workflow, job_name) if step.get(key) == value]
     assert len(matches) == 1, f"job {job_name} must have one step with {key}={value}"
     return matches[0]
@@ -1461,10 +1454,7 @@ def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> 
         "exit 1",
         "fi",
     ]
-    matrix_line = (
-        'echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" '
-        '>> "$GITHUB_OUTPUT"'
-    )
+    matrix_line = 'echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"'
 
     assert [line for line in lines if line.startswith("SHARD_PATTERN=")] == [pattern_line]
     assert lines.count(input_line) == 1
@@ -1734,9 +1724,7 @@ def _decide_script(step: dict[str, object]) -> str:
     the date has to arrive as a variable, or the pattern below it is reading a
     script somebody else already edited.
     """
-    script = _script(step, "digest.yml/plan/decide").replace(
-        _expression("inputs.faithfulness"), ""
-    )
+    script = _script(step, "digest.yml/plan/decide").replace(_expression("inputs.faithfulness"), "")
     assert "${{" not in script, "the decide step reads the dispatch date by name, not by paste"
     return script
 
@@ -1873,6 +1861,7 @@ def _bash() -> str | None:
             candidates.append(Path(root) / "Git" / "bin" / "bash.exe")
     return next((str(path) for path in candidates if path.is_file()), None)
 
+
 requires_bash: Final = pytest.mark.skipif(
     _bash() is None,
     reason="no bash on this host to execute the shell a workflow inlines",
@@ -1882,11 +1871,10 @@ requires_bash: Final = pytest.mark.skipif(
 # own value expects, so a harness that has to name an interpreter needs a path
 # without one.
 requires_space_free_paths: Final = pytest.mark.skipif(
-    " " in sys.executable
-    or " " in str(REBUILD_STAND_IN)
-    or " " in str(DROP_ENTRY_POINT),
+    " " in sys.executable or " " in str(REBUILD_STAND_IN) or " " in str(DROP_ENTRY_POINT),
     reason="REGENERATE_COMMAND is word-split on spaces",
 )
+
 
 def _isolated_env(tmp_path: Path) -> dict[str, str]:
     """Git with no machine identity and no machine config to fall back on.

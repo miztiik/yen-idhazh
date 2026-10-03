@@ -37,6 +37,24 @@ TASK_PACKAGES: Final = GARDENER_FIXTURES / "task_packages"
 #: The committed files a gardener config folder needs beside its declarations.
 COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.json")
 
+FIXTURE_DECLARATIONS: Final = {
+    "garden": (
+        "compact-gardener",
+        "day-validations",
+        "feed-health",
+        "history",
+        "host-fingerprint",
+        "seen",
+        "summary-quality-evals-index",
+        "telemetry-aggregate",
+        "traces",
+        "trials",
+        "workflow-artifacts",
+    ),
+    "runner": ("compact-gardener", "old-days", "rehearsal"),
+    "breaks": ("old-days",),
+}
+
 #: Who the seed commits are by. Not the repository's identity, on purpose: a
 #: commit the gardener made is told from the seed by its author.
 SEED_IDENTITY: Final = (
@@ -66,7 +84,18 @@ def a_config(root: Path, *declarations: Path) -> Path:
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
     names: set[str] = set()
     for given in declarations:
-        for source in sorted(given.glob("*.json")) if given.is_dir() else [given]:
+        if given.is_dir():
+            declared = (
+                json.loads((config_dir / "idhazh_gardener.json").read_text(encoding="utf-8"))[
+                    "task_names"
+                ]
+                if given == CONFIG_DIR / "gardener"
+                else FIXTURE_DECLARATIONS[given.relative_to(GARDENER_FIXTURES).as_posix()]
+            )
+            sources = [given / f"{name}.json" for name in declared]
+        else:
+            sources = [given]
+        for source in sources:
             shutil.copyfile(source, config_dir / "gardener" / source.name)
             names.add(source.stem)
     knobs_path = config_dir / "idhazh_gardener.json"
