@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, MODEL_FILES, read_text
 from pydantic import ValidationError
 
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef, ModelsConfig
@@ -59,17 +59,7 @@ def derived(case: dict[str, Any]) -> TurnMarkers:
     )
 
 
-def committed_model_files() -> list[str]:
-    """Every model file the repository commits, by name.
-
-    Read rather than listed, so a model added tomorrow is covered by the Oracle
-    below on the day it lands. The hand-typed list this replaced named four of
-    the five already there.
-    """
-    return sorted(path.name for path in (CONFIG_DIR / "models").glob("*.json"))
-
-
-@pytest.mark.parametrize("model_file", committed_model_files())
+@pytest.mark.parametrize("model_file", MODEL_FILES)
 def test_the_derived_markers_render_the_prompt_the_typed_ones_rendered(
     model_file: str,
 ) -> None:

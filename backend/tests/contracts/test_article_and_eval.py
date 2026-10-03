@@ -17,12 +17,22 @@ from idhazh.contracts.item_health import FailureCode, ItemHealthRow
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.visual_decision import VisualDecision
+from idhazh.fingerprint import text_digest
 
 from ._fixtures import (
     mutate,
 )
 
 pytestmark = pytest.mark.contract
+
+
+def test_the_recorded_premise_digest_names_the_article_fixture() -> None:
+    """A populated source digest must be reproducible from its sanitized article."""
+    source = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    scored = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "premise-recorded.json"))
+
+    assert scored.source_digest == text_digest(source.text or "")
+    assert scored.source_digest != scored.output_digest
 
 
 def test_url_key_is_rebuilt_not_trusted() -> None:

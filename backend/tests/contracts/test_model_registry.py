@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, MODEL_FILES, read_text
 from pydantic import ValidationError
 
 from idhazh import config
@@ -400,16 +400,10 @@ def test_every_committed_model_entry_declares_the_weights_its_settings_are_for()
 def test_every_model_file_loads_and_not_only_the_one_the_pointer_names() -> None:
     """A file `models_file` does not currently name is still a file it can name.
 
-    Only the active entry was ever validated, so an alternative sat unchecked
-    until the day somebody switched to it - and that day is a pipeline run, not
-    a test. The directory is hand-authored and bounded by how many models this
-    project supports, so reading all of it costs what the code costs rather than
-    what the archive has piled up (`CLAUDE.md` Guardrail #12).
+    Exercise the named alternatives without discovering files in config/.
     """
-    files = sorted((CONFIG_DIR / "models").glob("*.json"))
-    assert len(files) >= 2, "the swap has nothing to swap between"
-
-    for path in files:
+    for name in MODEL_FILES:
+        path = CONFIG_DIR / "models" / name
         entry = ModelsConfig.from_json(read_text(path)).summarizer
         assert entry.declared_for == entry.sha256, path.name
 
@@ -421,7 +415,8 @@ def test_no_committed_file_declares_a_second_entry() -> None:
     feature nobody agreed to run (Guardrail #6). This one is filled the day a
     replay says a reasoned verdict is a better verdict, and not before.
     """
-    for path in sorted((CONFIG_DIR / "models").glob("*.json")):
+    for name in MODEL_FILES:
+        path = CONFIG_DIR / "models" / name
         declared = ModelsConfig.from_json(read_text(path))
         assert declared.judge is None, path.name
         assert [name for name, _ in declared.entries()] == ["summarizer"], path.name

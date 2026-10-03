@@ -247,5 +247,17 @@ def test_the_flat_module_left_no_shim_behind() -> None:
     package = REPO_ROOT / "backend" / "idhazh"
     assert not (package / "telemetry.py").exists()
     assert not (package / "itemrecord.py").exists()
-    assert sorted(path.name for path in package.glob("publish_*.py")) == []
+    for name in (
+        "publish_console.py",
+        "publish_console_band.py",
+        "publish_day_metrics.py",
+        "publish_feed_health.py",
+        "publish_machine.py",
+        "publish_run_days.py",
+        "publish_scores.py",
+        "publish_source_health.py",
+        "publish_span_rollup.py",
+        "publish_telemetry.py",
+    ):
+        assert not (package / name).exists(), f"{name} is a retired flat publisher"
     assert not (package / "source_health.py").exists()

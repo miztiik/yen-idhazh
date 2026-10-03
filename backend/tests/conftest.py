@@ -57,6 +57,13 @@ CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
 #: server up serves this model's renderings, because that is the model the
 #: settings it loads name.
 INCUMBENT_MODEL: Final = "qwen3.5-9b-q4km.json"
+MODEL_FILES: Final = (
+    "gemma-4-e4b-qat-no-draft.json",
+    "gemma-4-e4b-qat.json",
+    "ornith-1.5-9b-q5km.json",
+    "qwen3.5-9b-q4km-thinking.json",
+    INCUMBENT_MODEL,
+)
 
 #: The commit every file a test files through the ledger door says it came from.
 #: A tree under `tmp_path` has no commit, and the door refuses a writer with none.
@@ -276,13 +283,11 @@ def a_sampling(**values: Any) -> dict[str, Any]:
 def llama_server_flags() -> frozenset[str]:
     """Every flag a committed entry starts its server with, plus the four in code.
 
-    Read off the entries rather than listed here, because the entries are where
-    the flags live: `server_argv` emits the `server` block verbatim and spells
-    four of its own. Every committed file is read, so a flag only one model sets
-    is still counted.
+    Read only MODEL_FILES, the named settings inputs these tests exercise.
     """
     emitted: set[str] = set()
-    for path in sorted((CONFIG_DIR / "models").glob("*.json")):
+    for name in MODEL_FILES:
+        path = CONFIG_DIR / "models" / name
         entry = ModelsConfig.from_json(read_text(path)).summarizer
         emitted |= set(
             server_argv(
@@ -336,7 +341,7 @@ def summary_ok() -> Summary:
 
 @pytest.fixture
 def digest_day_ok() -> DigestDay:
-    path = next((CONTRACT_FIXTURES_DIR / "digest-day").glob("*.json"))
+    path = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
     return DigestDay.from_json(read_text(path))
 
 

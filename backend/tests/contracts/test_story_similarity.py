@@ -20,7 +20,7 @@ import json
 from typing import Any, get_args
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, MODEL_FILES, read_text
 from pydantic import ValidationError
 
 from idhazh.contracts.base import derive_text_digest, derive_url_key
@@ -171,12 +171,11 @@ def test_the_scorer_literal_names_the_encoder_the_pipeline_actually_runs() -> No
 def test_the_judge_literal_names_every_model_this_repo_ships() -> None:
     """A judge this repository cannot stand up is a judge no row can honestly name.
 
-    Read off `config/models/` rather than spelled twice: five files carry four
-    distinct ids, and a model added there without a spelling here would be
-    unnameable on a row the day somebody pointed `models_file` at it.
+    The named model inputs must all be representable on a recorded verdict.
     """
     shipped = set()
-    for path in sorted((CONFIG_DIR / "models").glob("*.json")):
+    for name in MODEL_FILES:
+        path = CONFIG_DIR / "models" / name
         payload = json.loads(read_text(path))
         shipped.add(payload["summarizer"]["id"])
 

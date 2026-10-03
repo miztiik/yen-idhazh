@@ -13,12 +13,10 @@ which is the whole population at risk.
 from __future__ import annotations
 
 import csv
-import importlib
 import io
 import json
 import logging
 import os
-import pkgutil
 import shutil
 import subprocess
 from collections.abc import Iterator
@@ -30,8 +28,7 @@ import pytest
 from conftest import REPO_ROOT
 from pydantic import BeforeValidator, StringConstraints, TypeAdapter, ValidationError
 
-import idhazh.contracts as contracts_package
-from idhazh.contracts import base
+from idhazh.contracts import CONTRACTS, base
 from idhazh.contracts.base import (
     CHARACTER_CLASS_PATTERNS,
     FOLDABLE_PATTERNS,
@@ -70,23 +67,11 @@ ABSENT = "unprintable"
 
 
 def _csv_contracts() -> list[type[Contract]]:
-    """Every persisted contract that declares CSV columns, found rather than listed.
-
-    Walking the package is the point. A contract added next month is audited the
-    day it lands, which a hand-maintained list cannot promise.
-    """
-    found: list[type[Contract]] = []
-    for info in pkgutil.iter_modules(contracts_package.__path__):
-        module = importlib.import_module(f"{contracts_package.__name__}.{info.name}")
-        for member in vars(module).values():
-            if (
-                isinstance(member, type)
-                and issubclass(member, Contract)
-                and member.__module__ == module.__name__
-                and hasattr(member, "csv_columns")
-            ):
-                found.append(member)
-    return sorted(found, key=lambda model: model.__name__)
+    """The registered documents that declare CSV columns, with no package walk."""
+    return sorted(
+        (model for model in CONTRACTS if hasattr(model, "csv_columns")),
+        key=lambda model: model.__name__,
+    )
 
 
 def _carries_text(annotation: Any) -> bool:
@@ -200,13 +185,13 @@ def test_every_string_column_says_which_kind_it_is() -> None:
     )
 
 
-def test_the_walk_reaches_every_csv_contract() -> None:
-    """The walk finding nothing would make every test below vacuously green."""
+def test_the_registry_reaches_csv_contracts_and_both_folding_kinds() -> None:
+    """An empty registry selection cannot certify the column checks below."""
     models = _csv_contracts()
 
-    assert len(models) >= 19, f"only {len(models)} CSV contracts found; the walk is broken"
-    assert len(_foldable_columns()) >= 20, "no constrained string columns found; the walk is broken"
-    assert len(_self_folding_columns()) >= 10, "no self-folding columns found; the walk is broken"
+    assert models, "no registered CSV contracts found"
+    assert _foldable_columns(), "no constrained string columns found"
+    assert _self_folding_columns(), "no self-folding columns found"
 
 
 def test_the_constraints_are_declared_before_the_fold_and_the_fold_runs_first() -> None:

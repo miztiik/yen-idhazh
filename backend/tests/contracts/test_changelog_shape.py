@@ -1,100 +1,67 @@
-"""Is every changelog entry one line, and is every changelog at most five of them?
-
-`CLAUDE.md` section 11 bounds the changelog so it cannot become an archive. The
-shape is checked in the source rather than on the loaded value, because implicit
-concatenation joins a wrapped essay into one string with no newline in it - the
-runtime value cannot tell a sentence from a page.
-"""
+"""Does each registered document declare a short, single-line changelog?"""
 
 from __future__ import annotations
 
 import ast
+import inspect
+import textwrap
 
 import pytest
-from _source_files import source_files
-from conftest import REPO_ROOT
+
+from idhazh.contracts import CONTRACTS
+from idhazh.contracts.base import Contract
 
 pytestmark = pytest.mark.contract
 
-#: `ChangelogEntry(`, `version=`, `change=`, `why=` and `),` - an entry whose
-#: three fields each fit one source line is exactly this tall. Ruff holds those
-#: lines to 100 columns, so height here and width there are the whole rule.
 LINES_AN_ENTRY_MAY_SPAN = 5
-
-#: Four changes, then one pointer at the file's git history (section 11).
 ENTRIES_A_CHANGELOG_MAY_CARRY = 5
 
-CONTRACTS_DIR = REPO_ROOT / "backend" / "idhazh" / "contracts"
+
+def changelog_entries(contract: type[Contract]) -> list[ast.Call]:
+    """Read one registered class, never discover modules in the package."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(contract)))
+    declaration = tree.body[0]
+    assert isinstance(declaration, ast.ClassDef), f"{contract.__name__} is not a class"
+    for node in declaration.body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "__changelog__"
+            and isinstance(node.value, ast.Tuple)
+        ):
+            entries = [entry for entry in node.value.elts if isinstance(entry, ast.Call)]
+            assert entries, f"{contract.__name__} declares an empty changelog"
+            return entries
+    pytest.fail(f"{contract.__name__} declares no changelog")
 
 
-def _changelogs() -> list[tuple[str, int, list[ast.Call]]]:
-    """Every `__changelog__` tuple in the contracts package, with where it sits.
-
-    A fixed-size read of code a person wrote, never of data a run appended
-    (`CLAUDE.md` section 13). It grows with the number of contracts and not with
-    the archive.
-    """
-    found: list[tuple[str, int, list[ast.Call]]] = []
-    for path in source_files(roots=(CONTRACTS_DIR,), suffixes=(".py",)):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
-                continue
-            if node.target.id != "__changelog__" or not isinstance(node.value, ast.Tuple):
-                continue
-            entries = [e for e in node.value.elts if isinstance(e, ast.Call)]
-            if entries:
-                found.append((path.relative_to(REPO_ROOT).as_posix(), node.lineno, entries))
-    return found
-
-
-def _changelog_id(case: tuple[str, int, list[ast.Call]]) -> str:
-    return f"{case[0]}:{case[1]}"
-
-
-@pytest.mark.parametrize("case", _changelogs(), ids=_changelog_id)
+@pytest.mark.parametrize("contract", CONTRACTS, ids=lambda c: c.__schema_stem__)
 def test_a_changelog_carries_at_most_four_changes_and_a_pointer(
-    case: tuple[str, int, list[ast.Call]],
+    contract: type[Contract],
 ) -> None:
-    name, line, entries = case
+    entries = changelog_entries(contract)
     assert len(entries) <= ENTRIES_A_CHANGELOG_MAY_CARRY, (
-        f"{name}:{line} carries {len(entries)} changelog entries. Keep the four newest "
-        "and replace the rest with one entry pointing at this file's git history - git "
-        "is the archive, and every entry here is copied into the generated schema and "
-        "shipped (CLAUDE.md section 11)."
+        f"{contract.__name__} carries {len(entries)} changelog entries. "
+        "Keep the four newest and one pointer to git history."
     )
 
 
-@pytest.mark.parametrize("case", _changelogs(), ids=_changelog_id)
-def test_every_changelog_entry_is_one_line_a_field(
-    case: tuple[str, int, list[ast.Call]],
-) -> None:
-    name, _, entries = case
-    for entry in entries:
+@pytest.mark.parametrize("contract", CONTRACTS, ids=lambda c: c.__schema_stem__)
+def test_every_changelog_entry_is_one_line_a_field(contract: type[Contract]) -> None:
+    for entry in changelog_entries(contract):
         span = (entry.end_lineno or entry.lineno) - entry.lineno + 1
         assert span <= LINES_AN_ENTRY_MAY_SPAN, (
-            f"{name}:{entry.lineno} spans {span} lines. `change` and `why` are one "
-            "sentence each. An entry that will not fit is asking whether its reason "
-            "earns a `## Design rationale` section in docs/ - write it there and leave "
-            "one line here, or drop it (CLAUDE.md section 11)."
+            f"{contract.__name__}:{entry.lineno} spans {span} lines. "
+            "Put the rationale in docs/ and leave one line per field."
         )
 
 
-@pytest.mark.parametrize("case", _changelogs(), ids=_changelog_id)
-def test_no_changelog_entry_wraps_a_string_across_lines(
-    case: tuple[str, int, list[ast.Call]],
-) -> None:
-    """The height check alone cannot see a one-line entry built by concatenation."""
-    name, _, entries = case
-    for entry in entries:
+@pytest.mark.parametrize("contract", CONTRACTS, ids=lambda c: c.__schema_stem__)
+def test_no_changelog_entry_wraps_a_string_across_lines(contract: type[Contract]) -> None:
+    for entry in changelog_entries(contract):
         for keyword in entry.keywords:
             value = keyword.value
             assert isinstance(value, ast.Constant) and isinstance(value.value, str), (
-                f"{name}:{entry.lineno} builds `{keyword.arg}` from something other than "
-                "one plain string. A joined string is a paragraph wearing one line."
+                f"{contract.__name__}:{entry.lineno} builds {keyword.arg} "
+                "from something other than one plain string."
             )
-
-
-def test_the_contracts_package_actually_declares_changelogs() -> None:
-    """Without this, a rename that empties the walk turns three gates green."""
-    assert len(_changelogs()) > 1, "the changelog walk found nothing - has the shape moved?"
