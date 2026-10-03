@@ -95,7 +95,7 @@ def stage_site_weight(
     day anybody wanted to first learn the date.
     """
     cap_mb = config.pages_hard_cap_mb
-    size = site_weight.measure(tree, published_items=site_weight.count_published_items(tree))
+    size = site_weight.measure(tree)
     if size.files == 0:
         LOG.error(
             "site-weight measured 0 files under %s - build the site first. "
