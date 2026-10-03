@@ -33,7 +33,7 @@ from idhazh.gardener import shards
 from idhazh.gardener.outcome import EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
-from .._garden import OriginTrees, a_config, a_partial_clone, git, quiet_git
+from .._garden import COMMITTED_DECLARATIONS, OriginTrees, a_config, a_partial_clone, git, quiet_git
 from ._oracle_tree import RUN_ID, build
 
 pytestmark = pytest.mark.slow
@@ -53,12 +53,12 @@ _OWN_TO_THE_RUN: Final = {"downloaded_bytes", "duration_ms"}
 
 
 def a_live_garden(root: Path, **changed: dict[str, Any]) -> GardenerSettings:
-    """Every committed declaration with its deletions and its fold turned on.
+    """The named committed declarations with their deletions and fold turned on.
 
     `changed` replaces fields of one declaration, by its name.
     """
     config_dir = a_config(root)
-    for source in sorted((CONFIG_DIR / "gardener").glob("*.json")):
+    for source in (CONFIG_DIR / "gardener" / name for name in COMMITTED_DECLARATIONS):
         declared = json.loads(source.read_text(encoding="utf-8"))
         declared["dry_run"] = False
         if isinstance(declared.get("fold"), dict):

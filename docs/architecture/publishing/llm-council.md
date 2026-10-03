@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-10-03
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -124,13 +124,19 @@ checked rather than reviewed. Three checks, each failing on a different mistake.
 | The check | Where | What it refuses |
 | --- | --- | --- |
 | directory | [../../../backend/tests/contracts/test_repo_structure.py](../../../backend/tests/contracts/test_repo_structure.py) | any statement in `backend/idhazh/council/` naming the judge's package, its four stage modules or any judge contract |
-| closure | [../../../backend/tests/council/test_council_runs_without_a_judge.py](../../../backend/tests/council/test_council_runs_without_a_judge.py) | a judge module reached at import time from any council module, by any route |
+| named import inputs | [../../../backend/tests/council/test_council_runs_without_a_judge.py](../../../backend/tests/council/test_council_runs_without_a_judge.py) | a judge module reached by static imports from the named council modules, through any named dependency |
 | run | the same file | a night that cannot be driven end to end against tenants the test wrote |
 
 **The directory check alone would have proved nothing.** Both couplings that
 really existed lived outside that directory: the command router imported four of
 the judge's stage modules, and the composed application config imported the
 judge's knob block. A check scoped to one directory reads green over both.
+
+The static check reads only the source files named in
+`backend/tests/council/_imports.py`. An unlisted dependency fails before it is
+read; adding a council module requires adding its name to the test inputs.
+The fresh-interpreter checks in `test_session.py` cover dynamically loaded
+judge code without enumerating source files.
 
 **Three judge CONTRACTS still cross, and the list cannot grow.** Measured by a
 fresh walk on 2026-09-21: `story_similarity_pair` and
