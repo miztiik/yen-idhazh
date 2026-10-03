@@ -242,6 +242,6 @@ CLAUDE.md section 11 does not apply to this file. It is a config file this proje
 - [schemas.md](schemas.md) - the shape of a row, and the rule that decides whether a ledger partitions.
 - [../publishing/retention.md](../publishing/retention.md) - the passes that age old rows out, whatever a family's lifecycle status.
 - [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) - the one pattern every tree under `state/` is moving to, and why `Grain` is transitional.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection costs, which is why no walk over `state/` decides which ledgers exist.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input, so no walk over `state/` decides which ledgers exist.
 - [../../concepts/glossary.md](../../concepts/glossary.md) - family and ledger, each in one line.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #12, sections 2, 4, 8 and 11.
