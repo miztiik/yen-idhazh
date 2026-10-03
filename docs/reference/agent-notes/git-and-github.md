@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 Checks for agents using Git and GitHub. Follow the
 [PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#8-git-hygiene).
@@ -53,6 +53,11 @@ Confirm the keyring account first; do not change shared global authentication.
 - Match checks to the candidate commit and inspect individual jobs. Skipped jobs are not passes, even when the run summary is green.
 - Check job status, log availability and verbosity before treating missing output as proof that something did not run.
 - A GitHub Actions re-run keeps the original commit and ref. Start a new run on the target branch to verify a merged fix, then check its `headSha`. Passing PR checks alone do not verify the next production run.
+- **One CI run of the browser step reads as a speed change; it is noise.** On
+  2026-10-03, three `ubuntu-latest` runs of nearly the same suite (1,425 to
+  1,445 tests) took 5.0, 6.4 and 7.5 minutes. So one reading cannot show a
+  change smaller than about 2.5 minutes. Judge a cut by what it removed - tests,
+  page loads, fixed waits - or by paired runs on one commit.
 - An active writer can publish removed files from its old checkout after a merge. Check the retired paths after that run completes. Permission to merge during a run does not authorize cancelling it.
 
 ## See also
