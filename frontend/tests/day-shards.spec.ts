@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { dayShardFiles, readDayShards } from '../src/lib/server/payload';
+import type { PublicationInventory } from '../src/lib/server/publication';
 
 /**
  * The server-side day walk: a day is a `<DD>/` directory of writer-owned files,
@@ -30,6 +31,16 @@ function day(root: string, date: string, rows: string[]): void {
 		[COLUMNS, ...rows].join('\n'),
 		'utf8'
 	);
+	register(root, `state/item-health/${date.replaceAll('-', '/')}/${date}-1-1-work-00.csv`);
+}
+
+function register(root: string, file: string): void {
+	const path = join(root, 'publication.json');
+	const entries = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')).entries : [];
+	entries.push({ root: 'state', path: file.slice('state/'.length), bytes: 0, items: 0 });
+	writeFileSync(path, JSON.stringify({
+		version: '2026-10-03', changelog: [], dates: [], entries, total_bytes: 0, total_items: 0
+	}) + '\n');
 }
 
 function row(date: string, itemId: string): string {
@@ -102,13 +113,14 @@ test('dayShardFiles reads every writer file of a day as one recorded day', () =>
 	]);
 });
 
-test('a day directory with no readable file stops the read rather than drawing nothing', () => {
+test('a missing named writer file stops the read rather than drawing nothing', () => {
 	const root = mkdtempSync(join(tmpdir(), 'day-shards-'));
 	try {
 		// Not in the committed fixture, because git carries no empty directory.
 		mkdirSync(join(root, 'item-health', '2026', '09', '18'), { recursive: true });
+		register(root, 'state/item-health/2026/09/18/missing.csv');
 		expect(() => dayShardFiles(join(root, 'item-health'), -1)).toThrow(
-			/day directory with no readable \.csv file/
+			/missing ledger file/
 		);
 		// A stray anywhere else is still skipped: the producer refuses it at write
 		// time, and a throw here would white-screen a page over one file.
@@ -116,6 +128,64 @@ test('a day directory with no readable file stops the read rather than drawing n
 		mkdirSync(join(root, 'scores', '2026', '09'), { recursive: true });
 		writeFileSync(join(root, 'scores', '2026', '09', 'notes.txt'), '', 'utf8');
 		expect(dayShardFiles(join(root, 'scores'), -1)).toEqual([]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('readDayShards reads a named ledger from a separate publication root', () => {
+	const root = mkdtempSync(join(tmpdir(), 'day-shards-roots-'));
+	try {
+		const publicRoot = join(root, 'public');
+		const stateRoot = join(root, 'state');
+		const relativePath = 'feed-health/2026/09/18/run.csv';
+		const ledger = join(stateRoot, ...relativePath.split('/'));
+		mkdirSync(join(stateRoot, 'feed-health', '2026', '09', '18'), { recursive: true });
+		mkdirSync(publicRoot, { recursive: true });
+		writeFileSync(ledger, 'date,run_id,feed_id\n2026-09-18,run-1,feed-1\n');
+
+		const templatePath = resolve(
+			process.cwd(),
+			'..',
+			'tests',
+			'fixtures',
+			'contracts',
+			'publication-inventory',
+			'published.json'
+		);
+		const template = JSON.parse(readFileSync(templatePath, 'utf8')) as PublicationInventory;
+		const entry = {
+			root: 'state' as const,
+			path: relativePath,
+			bytes: statSync(ledger).size,
+			items: 0
+		};
+		const inventory: PublicationInventory = {
+			...template,
+			dates: [],
+			entries: [entry],
+			total_bytes: 0,
+			total_items: 0
+		};
+		writeFileSync(join(publicRoot, 'publication.json'), `${JSON.stringify(inventory)}\n`);
+
+		expect(
+			readDayShards(join(stateRoot, 'feed-health'), -1, stateRoot, publicRoot).rows
+		).toEqual([{ date: '2026-09-18', run_id: 'run-1', feed_id: 'feed-1' }]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('nested state series read the inventory at the named state root', () => {
+	const root = mkdtempSync(join(tmpdir(), 'nested-day-shards-'));
+	try {
+		const dir = join(root, 'content-similarity-judge', 'fitted-thresholds');
+		const relative = 'content-similarity-judge/fitted-thresholds/2026/09/18/run.csv';
+		mkdirSync(join(dir, '2026', '09', '18'), { recursive: true });
+		writeFileSync(join(root, ...relative.split('/')), `${COLUMNS}\n${row('2026-09-18', 'fitted')}\n`);
+		register(root, `state/${relative}`);
+		expect(readDayShards(dir, 1, root).rows.map((entry) => entry.item_id)).toEqual(['fitted']);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "ChangelogEntry": {
+      "additionalProperties": false,
+      "description": "One recorded change to a persisted shape.",
+      "properties": {
+        "change": {
+          "title": "Change",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+          "title": "Version",
+          "type": "string"
+        },
+        "why": {
+          "title": "Why",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "change",
+        "why"
+      ],
+      "title": "ChangelogEntry",
+      "type": "object"
+    },
+    "PublicationEntry": {
+      "additionalProperties": false,
+      "description": "The measured bytes and published item count of one named file.",
+      "properties": {
+        "bytes": {
+          "description": "Bytes in the named file, excluding the inventory itself.",
+          "minimum": 0,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "items": {
+          "description": "Published items in a digest.json; zero for other files.",
+          "minimum": 0,
+          "title": "Items",
+          "type": "integer"
+        },
+        "path": {
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "root": {
+          "default": "public",
+          "enum": [
+            "public",
+            "state"
+          ],
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "bytes",
+        "items"
+      ],
+      "title": "PublicationEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The named inventory at the public root, beside the digest directory.",
+  "properties": {
+    "changelog": {
+      "description": "Shape changes, newest first, with the version this inventory carries.",
+      "items": {
+        "$ref": "#/$defs/ChangelogEntry"
+      },
+      "title": "Changelog",
+      "type": "array"
+    },
+    "dates": {
+      "description": "Published UTC days, newest first and unique.",
+      "items": {
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "type": "string"
+      },
+      "title": "Dates",
+      "type": "array"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/PublicationEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "total_bytes": {
+      "default": 0,
+      "description": "Bytes across all inventoried files.",
+      "minimum": 0,
+      "title": "Total Bytes",
+      "type": "integer"
+    },
+    "total_items": {
+      "default": 0,
+      "description": "Published items across all digest entries.",
+      "minimum": 0,
+      "title": "Total Items",
+      "type": "integer"
+    },
+    "version": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "dates"
+  ],
+  "title": "PublicationInventory",
+  "type": "object"
+}

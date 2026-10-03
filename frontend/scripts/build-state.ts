@@ -9,7 +9,10 @@ export type BuildMode = 'canary' | 'real';
 export type BuildRecord = { mode: BuildMode | 'custom'; inputs: string; output: string };
 
 export function buildEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
-	return { BASE_PATH: env.BASE_PATH ?? '', BUILD_VERSION: env.BUILD_VERSION ?? '' };
+	return {
+		BASE_PATH: env.BASE_PATH ?? '', BUILD_VERSION: env.BUILD_VERSION ?? '',
+		CANARY_BUILD: env.CANARY_BUILD ?? ''
+	};
 }
 
 export function writeRecord(file: string, record: unknown): void {
@@ -19,7 +22,8 @@ export function writeRecord(file: string, record: unknown): void {
 	renameSync(temporary, file);
 }
 
-export function filesUnder(root: string): string[] {
+/** Enumerate one generated build or canary run directory, never a committed tree. */
+function filesUnder(root: string): string[] {
 	if (!existsSync(root)) return [];
 	return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
 		const path = join(root, entry.name);
@@ -50,38 +54,6 @@ function hashFiles(root: string, paths: string[]): string {
 	return hash.digest('hex');
 }
 
-export function treeFingerprint(root: string): string {
-	return hashFiles(root, filesUnder(root));
-}
-
-/** Whether a path's content can change what a run is certifying.
- *
- * **The rule, written down so the next file of this kind needs no second
- * visit.** An input is any tracked or untracked file that a program in this
- * repository reads. Exactly two kinds are not, and the list below holds nothing
- * else. One is a tree this tooling itself writes: `backend/var/`, and the
- * installed, built, reported and compiled trees under `frontend/`. The other is
- * prose no program reads: `docs/`, `TODO/`, the authored agent material, and the
- * three markdown files at the root. A `build` run drops a third kind - the tests
- * and the harness that selects and runs them, neither of which can change the
- * built site, so a test edit must not cost a rebuild.
- *
- * **A ledger under `state/` is an input under this rule and stays one**, because
- * the console pages are prerendered from `state/`. So a run that finds one
- * changed underneath it is not being told a lie by this list; it has a producer
- * writing where it should not, and the answer belongs at that producer. That was
- * defect 20, and the producer was a publication gate filing rows about a scratch
- * digest tree into a tracked ledger. `changedInputNote` names the
- * file so the next one costs a line rather than an afternoon.
- */
-function isInput(path: string, purpose: 'build' | 'checks'): boolean {
-	if (/^(backend\/var\/|frontend\/(node_modules|build|test-results|\.svelte-kit)\/)/.test(path)) return false;
-	if (/^(docs\/|TODO\/|\.claude\/|\.github\/(agents|prompts|instructions|skills)\/)/.test(path)) return false;
-	if (purpose === 'build' && /^(frontend\/tests\/|frontend\/scripts\/tests\/|backend\/tests\/)/.test(path)) return false;
-	if (purpose === 'build' && /^frontend\/(playwright(?:\.logic)?\.config\.ts|scripts\/(test-(groups|scope|results)|run-checks|verified-preview)\.ts)$/.test(path)) return false;
-	return !/^(README|AGENTS|CLAUDE)\.md$/.test(path);
-}
-
 function gitPaths(root: string, args: string[]): string[] {
 	const listed = execFileSync('git', ['-C', root, ...args, '-z'], {
 		encoding: 'utf8', maxBuffer: 64 * 1024 * 1024
@@ -89,51 +61,20 @@ function gitPaths(root: string, args: string[]): string[] {
 	return listed.split('\0').filter(Boolean);
 }
 
-/** Every tracked path against the hash git already holds for its content.
- *
- * Git hashed each of these when it staged them, so asking the index is the same
- * answer as reading the file - `core.autocrlf` is false and `.gitattributes`
- * pins these paths to LF, so the bytes on disk are the bytes git hashed.
- */
-function indexDigests(root: string): Map<string, string> {
-	const found = new Map<string, string>();
-	for (const entry of gitPaths(root, ['ls-files', '--stage'])) {
-		const tab = entry.indexOf('\t');
-		const blob = entry.slice(0, tab).split(' ')[1];
-		if (tab > 0 && blob) found.set(entry.slice(tab + 1), blob);
-	}
-	return found;
-}
-
-/** What the build was made from, as one hash.
- *
- * The cost follows the working tree's diff, not the repository's size. A tracked
- * file git reports unchanged contributes the hash from the index and is never
- * opened; only what is modified, deleted or untracked is read. That matters
- * because `frontend/public/digest/` is tracked and gains a payload and its
- * pictures on every run, so reading every named path charged this check for the
- * whole archive on a change that touched one file.
- *
- * A file modified and then reverted reads as changed until git refreshes its
- * stat cache, which costs one rebuild and never a wrong certification.
- */
-export function inputFingerprint(root: string, purpose: 'build' | 'checks' = 'checks'): string {
-	const index = indexDigests(root);
-	const unread = new Set(gitPaths(root, ['ls-files', '--modified', '--deleted', '--others', '--exclude-standard']));
-	const paths = [...new Set([...index.keys(), ...unread])].filter((path) => isInput(path, purpose));
-	const hash = createHash('sha256');
-	for (const path of paths.sort()) {
+/** Hash Git's named committed tree, working diff and non-ignored untracked files.
+ * Git supplies object identity; this code never lists the committed repository.
+ * Build and check records use the same complete set of inputs. */
+export function inputFingerprint(root: string, _purpose: 'build' | 'checks' = 'checks'): string {
+	const options = { encoding: 'utf8' as const, maxBuffer: 64 * 1024 * 1024 };
+	const tree = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD^{tree}'], options).trim();
+	const diff = execFileSync('git', ['-C', root, 'diff', 'HEAD', '--binary', '--no-ext-diff'], options);
+	const hash = createHash('sha256').update(tree).update('\0').update(diff).update('\0');
+	for (const path of gitPaths(root, ['ls-files', '--others', '--exclude-standard']).sort()) {
 		hash.update(path);
 		hash.update('\0');
-		const staged = unread.has(path) ? undefined : index.get(path);
-		if (staged !== undefined) {
-			hash.update('staged\0');
-			hash.update(staged);
-		} else {
-			const content = contentOf(join(root, path));
-			hash.update(content ? 'present\0' : 'missing\0');
-			if (content) hash.update(content);
-		}
+		const content = contentOf(join(root, path));
+		hash.update(content ? 'present\0' : 'missing\0');
+		if (content) hash.update(content);
 		hash.update('\0');
 	}
 	return hash.digest('hex');
@@ -141,18 +82,12 @@ export function inputFingerprint(root: string, purpose: 'build' | 'checks' = 'ch
 
 /** The fingerprinted paths git reports as changed, as a sentence or as nothing.
  *
- * A stale fingerprint is a fact about every input at once, which is the least
- * useful shape a true statement can have: the reader is told the tree moved and
- * left to find out where. This names the files. It runs only on the failure
- * path, so it costs one `git status` in a run that has already failed.
+ * This runs only after certification fails and names Git's current changes.
  *
- * It reports the working tree as it stands rather than a diff against the moment
- * the fingerprint was taken, which is why the sentence says `changed in the
- * working tree` - a tree that was already dirty is listed too. And a diagnostic
- * may never turn a clear failure into an obscure one, so a git that will not
- * answer says nothing at all.
+ * A tree already dirty at capture is listed too. A failed diagnostic must not
+ * replace the build failure, so an unavailable Git omits this optional note.
  */
-export function changedInputNote(root: string, purpose: 'build' | 'checks' = 'checks'): string {
+export function changedInputNote(root: string, _purpose: 'build' | 'checks' = 'checks'): string {
 	let reported = '';
 	try {
 		reported = execFileSync('git', ['-C', root, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], {
@@ -170,7 +105,7 @@ export function changedInputNote(root: string, purpose: 'build' | 'checks' = 'ch
 		// A rename or a copy spends a second field on the name it came from.
 		if (/^[RC]/.test(entry)) index += 1;
 	}
-	const named = [...new Set(changed)].filter((path) => isInput(path, purpose)).sort();
+	const named = [...new Set(changed)].sort();
 	if (named.length === 0) return '';
 	const shown = named.slice(0, 10).join(', ');
 	const rest = named.length > 10 ? `, and ${named.length - 10} more` : '';
@@ -178,8 +113,9 @@ export function changedInputNote(root: string, purpose: 'build' | 'checks' = 'ch
 }
 
 function buildInputs(root: string, mode: BuildRecord['mode'], env: NodeJS.ProcessEnv): string {
+	const buildEnv = mode === 'canary' ? { ...env, CANARY_BUILD: '1' } : env;
 	const hash = createHash('sha256').update(inputFingerprint(root, 'build')).update(process.version)
-		.update(JSON.stringify(buildEnvironment(env)));
+		.update(JSON.stringify(buildEnvironment(buildEnv)));
 	if (mode === 'canary') {
 		const canary = join(root, 'backend/var/canary');
 		hash.update(hashFiles(canary, filesUnder(canary)));

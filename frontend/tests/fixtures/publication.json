@@ -1,0 +1,27 @@
+{
+  "version": "2026-10-03T13:33",
+  "changelog": [],
+  "dates": [],
+  "entries": [
+    {
+      "root": "public",
+      "path": "telemetry/2026-05.csv",
+      "bytes": 2244,
+      "items": 0
+    },
+    {
+      "root": "public",
+      "path": "telemetry/2026-06.csv",
+      "bytes": 2187,
+      "items": 0
+    },
+    {
+      "root": "public",
+      "path": "telemetry/2026-07.csv",
+      "bytes": 788,
+      "items": 0
+    }
+  ],
+  "total_bytes": 5219,
+  "total_items": 0
+}

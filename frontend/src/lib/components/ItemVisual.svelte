@@ -55,6 +55,7 @@
 	 * which is the shape two stories in three already have.
 	 */
 	import { base } from '$app/paths';
+	import { navigating } from '$app/state';
 	import { publishedVisualData, refusedVisualData } from '$lib/payload/drawing';
 	import type { SeededVisual, VisualData } from '$lib/payload/types';
 	import { whenNear } from '$lib/reveal';
@@ -75,6 +76,8 @@
 
 	/** What the fetch brought back, or null while it has not run or did not work. */
 	let arrived = $state<VisualData | null>(null);
+	let near = $state(false);
+	let settledFile: string | null = null;
 	/** How much room the card gives the drawing, or 0 before it has been measured. */
 	let room = $state(0);
 	const drawing = $derived<Drawing | null>(
@@ -144,19 +147,26 @@
 	 * the watch and aborts the fetch, so a reader scrolling fast is not still
 	 * downloading marks for stories that are gone, and an answer that was already
 	 * on its way is not written into a component nobody is reading.
+	 * Navigation also pauses new requests and aborts pending ones, so the page
+	 * being left cannot compete with the destination's first payload.
 	 */
-	function askWhenNear(node: Element, file: string): { destroy: () => void } {
+	$effect(() => {
+		const file = wanted;
+		if (!near || !file || navigating.to !== null || settledFile === file) return;
 		const request = new AbortController();
-		const forget = whenNear(node, () => {
-			void read(file, request.signal).then((data) => {
-				if (!request.signal.aborted) arrived = data;
-			});
-		});
-		return {
-			destroy: () => {
-				request.abort();
-				forget();
+		void read(file, request.signal).then((data) => {
+			if (!request.signal.aborted) {
+				settledFile = file;
+				arrived = data;
 			}
+		});
+		return () => request.abort();
+	});
+
+	function askWhenNear(node: Element): { destroy: () => void } {
+		const forget = whenNear(node, () => { near = true; });
+		return {
+			destroy: forget
 		};
 	}
 	/** Follow the card's own content box, and redraw whenever it moves.
@@ -211,7 +221,7 @@
 	     border, no height. It exists so the fetch can wait until the story is
 	     nearly on screen, and a story whose marks never arrive keeps exactly the
 	     height it has now. -->
-	<div class="slot" use:askWhenNear={wanted}></div>
+	<div class="slot" use:askWhenNear></div>
 {/if}
 
 <style>
@@ -270,4 +280,3 @@
 		height: 0;
 	}
 </style>
-

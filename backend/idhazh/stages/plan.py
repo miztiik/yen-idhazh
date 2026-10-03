@@ -12,7 +12,7 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, config, discover, fetch, ledger, rank, run_context, tag
+from idhazh import assemble, config, discover, fetch, ledger, publication, rank, run_context, tag
 from idhazh.contracts.base import ServerJob, fit_field
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import (
@@ -207,6 +207,15 @@ def stage_plan(
         run_id=run_id,
         attempt=run_context.run_attempt(),
         job=ServerJob.PLAN,
+        shard=PLAN_SHARD,
+    )
+    publication.record_feed_health(
+        common.PUBLIC_ROOT.parent,
+        state,
+        dates=[row.date for row in health],
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.PLAN.value,
         shard=PLAN_SHARD,
     )
     published_on = ledger.load_published(

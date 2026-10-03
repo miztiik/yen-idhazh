@@ -75,7 +75,7 @@ type LedgerRow = FeedEvent;
 
 function ledger(): LedgerRow[] {
 	const dir = join(CANARY, 'state', 'feed-health');
-	return readDayShards(dir, -1).rows.map((row) => ({
+	return readDayShards(dir, -1, undefined, CANARY).rows.map((row) => ({
 		date: row.date ?? '',
 		runId: row.run_id ?? '',
 		checkedAt: row.checked_at ?? '',

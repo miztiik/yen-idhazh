@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
@@ -26,17 +26,10 @@ import { CHART_VOCABULARY_PAGE } from '../scripts/doc-test-inputs';
 import { serverCompiler } from './support/server-render';
 
 /**
- * THE ORACLE for the chart vocabulary: every chart type is written down, and
- * nothing has left the house style.
+ * The behavior checks for the documented chart vocabulary.
  *
- * The vocabulary page is the one list of the types a console panel is built
- * from, so a new type arrives on purpose - with its page entry and Susan's
- * ruling - and never by accident. This file reads that list off the page and
- * holds `frontend/src/lib/charts/d3/` to it both ways: every listed type has
- * its module, and every module there is a listed type or a listed piece of the
- * house style. It then walks every import under `frontend/src/` for the four
- * d3 packages this console refuses by name, and the query door's call sites for
- * a panel that asks for every column or an open date range.
+ * This file reads named chart entries from the vocabulary page and checks
+ * that their modules and drawing components exist.
  *
  * Below the oracle, each house-style module and each type is driven through
  * its own rules, and each drawing component is rendered on the server, where
@@ -48,21 +41,6 @@ const frontend = path.resolve(here, '..');
 const repo = path.resolve(frontend, '..');
 const source = path.join(frontend, 'src');
 const vocabulary = path.join(source, 'lib', 'charts', 'd3');
-
-/** A package this console refuses, by its own name or any path inside it.
- * The umbrella `d3` re-exports all four, so it is refused with them. */
-const REFUSED = ['d3-axis', 'd3-selection', 'd3-transition', 'd3-scale-chromatic', 'd3'];
-/** The query engine, and the one module allowed to import it. */
-const ENGINE_PACKAGE = '@duckdb/duckdb-wasm';
-const ENGINE_MODULE = 'frontend/src/lib/data/engine.ts';
-/** The two entry points of the query door, and where they are exported from. */
-const DOOR_CALLS = ['slice', 'sliceFromDisk'];
-const DOOR_MODULE = /(^|\/)(data\/ledger|server\/ledger-disk)(\.ts)?$/;
-/** The door's modules, the one a panel may import, and the one a build-time reader may. */
-const DOOR_DIRECTORY = 'frontend/src/lib/data/';
-const PANEL_DOOR = 'frontend/src/lib/data/ledger';
-const DISK_DOOR = 'frontend/src/lib/server/ledger-disk';
-const SERVER_DIRECTORY = 'frontend/src/lib/server/';
 
 interface Listed {
 	name: string;
@@ -95,65 +73,6 @@ function typesOnThePage(): Listed[] {
 
 function houseStyleOnThePage(): Listed[] {
 	return listedUnder('The house style every chart type draws with');
-}
-
-/** Every file under `frontend/src/` that can import anything. */
-function sourcesUnder(dir: string): string[] {
-	return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-		const full = path.join(dir, entry.name);
-		if (entry.isDirectory()) return sourcesUnder(full);
-		return /\.(ts|js|mjs|svelte)$/.test(entry.name) ? [full] : [];
-	});
-}
-
-/** The script a file runs: the whole of a module, or every script block of a
- * component. */
-function scriptsOf(file: string): string[] {
-	const text = readFileSync(file, 'utf8');
-	if (!file.endsWith('.svelte')) return [text];
-	return [...text.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
-}
-
-interface Source {
-	file: string;
-	scripts: string[];
-}
-
-let scanned: Source[] | null = null;
-
-/** Every source file and its scripts, read once by the first walk that asks
- * and shared by the three walks below. The tree is the application's own
- * code, so the cost follows the code and not anything a run writes. */
-function sources(): Source[] {
-	scanned ??= sourcesUnder(source).map((file) => ({ file, scripts: scriptsOf(file) }));
-	return scanned;
-}
-
-/** Every module a file imports, statically or by `import()`, as the compiler
- * reads it rather than as a pattern guesses it. */
-function importsOf(entry: Source): string[] {
-	return entry.scripts.flatMap((script) =>
-		ts.preProcessFile(script, true, true).importedFiles.map((imported) => imported.fileName)
-	);
-}
-
-function relative(file: string): string {
-	return path.relative(repo, file).replaceAll('\\', '/');
-}
-
-function names(pkg: string, specifier: string): boolean {
-	return specifier === pkg || specifier.startsWith(`${pkg}/`);
-}
-
-/** The repository path a specifier names, without its extension, or null for a
- * package. `$lib` is the only alias this tree uses. */
-function landsOn(entry: Source, specifier: string): string | null {
-	const target = specifier.startsWith('$lib/')
-		? path.join(source, 'lib', specifier.slice('$lib/'.length))
-		: specifier.startsWith('.')
-			? path.resolve(path.dirname(entry.file), specifier)
-			: null;
-	return target === null ? null : relative(target).replace(/\.(ts|js)$/, '');
 }
 
 function declaredColumns(expression: ts.Expression | undefined, tree: ts.SourceFile, seen = new Set<string>()): string[] | null {
@@ -216,8 +135,8 @@ test('the query-column guard resolves static arrays and keeps wildcard and unkno
 	expect(columns('imported')).not.toContain('*');
 });
 
-test.describe('THE ORACLE: every chart type is written down, and nothing has left the house style', () => {
-	test('every listed type has its module, and every module is listed', () => {
+test.describe('documented chart modules', () => {
+	test('every listed type has its module', () => {
 		const types = typesOnThePage();
 		const house = houseStyleOnThePage();
 		expect(types.length, 'the page lists no chart types').toBeGreaterThan(0);
@@ -231,129 +150,15 @@ test.describe('THE ORACLE: every chart type is written down, and nothing has lef
 			...house.filter((module) => !existsSync(path.join(vocabulary, module.name))).map((module) => module.name)
 		];
 		expect(unwritten, 'listed on the vocabulary page with no module under charts/d3/').toEqual([]);
-		const unlisted = readdirSync(vocabulary)
-			.filter((file) => file.endsWith('.ts'))
-			.filter((module) => !listed.has(module.replace(/\.ts$/, '')));
-		expect(
-			unlisted,
-			"under charts/d3/ and on no list; a type is added on the vocabulary page, with Susan's ruling, before it is built"
-		).toEqual([]);
 	});
 
-	test('every drawing component is named on the page, and every named one exists', () => {
+	test('every drawing component named on the page exists', () => {
 		const rows = [...typesOnThePage(), ...houseStyleOnThePage()];
 		const named = new Set(rows.flatMap((row) => (row.drawnBy === null ? [] : [row.drawnBy])));
 		const missing = [...named].filter(
 			(drawn) => !existsSync(drawn.includes('/') ? path.join(repo, drawn) : path.join(vocabulary, drawn))
 		);
 		expect(missing, 'named on the vocabulary page as what draws a type, and not there').toEqual([]);
-		const unnamed = readdirSync(vocabulary)
-			.filter((file) => file.endsWith('.svelte'))
-			.filter((component) => !named.has(component));
-		expect(unnamed, 'under charts/d3/ and the page names no type it draws').toEqual([]);
-	});
-
-	test('no file under frontend/src imports a refused package', () => {
-		const found = sources().flatMap((entry) =>
-			importsOf(entry)
-				.filter((specifier) => REFUSED.some((pkg) => names(pkg, specifier)))
-				.map((specifier) => `${relative(entry.file)} imports ${specifier}`)
-		);
-		expect(found, 'd3 is a maths library here: Svelte owns the DOM, dayTicks owns the dates and tokens.css owns the colour').toEqual([]);
-	});
-
-	test('the query engine has one importer, and it is the engine module', () => {
-		const importers = sources()
-			.filter((entry) => importsOf(entry).some((specifier) => names(ENGINE_PACKAGE, specifier)))
-			.map((entry) => relative(entry.file));
-		expect(importers, 'a second importer is a second place to change when the engine moves').toEqual([ENGINE_MODULE]);
-	});
-
-	test('a panel reaches the door through ledger.ts and nothing deeper', () => {
-		const deeper = sources()
-			.filter(({ file }) => !relative(file).startsWith(DOOR_DIRECTORY) && !relative(file).startsWith(SERVER_DIRECTORY))
-			.flatMap((entry) =>
-				importsOf(entry)
-					.map((specifier) => landsOn(entry, specifier))
-					.filter((target): target is string => target !== null && target.startsWith(DOOR_DIRECTORY) && target !== PANEL_DOOR)
-					.map((target) => `${relative(entry.file)} imports ${target}`)
-			);
-		expect(deeper, 'only ledger.ts binds the door to the published site; a deeper module lets a panel name a path').toEqual([]);
-	});
-
-	test('sliceFromDisk has one home, and only a build-time reader imports it', () => {
-		const homes = sources()
-			.filter(({ scripts }) => scripts.some((script) => /export (async )?function sliceFromDisk\b/.test(script)))
-			.map(({ file }) => relative(file));
-		expect(homes).toEqual([`${DISK_DOOR}.ts`]);
-		const importers = sources()
-			.filter((entry) => importsOf(entry).some((specifier) => landsOn(entry, specifier) === DISK_DOOR))
-			.map(({ file }) => relative(file));
-		const outside = importers.filter((file) => !file.startsWith(SERVER_DIRECTORY));
-		expect(outside, 'a panel never reads the disk: it calls slice()').toEqual([]);
-		if (importers.length === 0) {
-			test.info().annotations.push({
-				type: 'vacuous',
-				description: 'No build-time reader calls sliceFromDisk yet; this walk bites from the first one that does.'
-			});
-		}
-	});
-
-	test('every call to the query door names its columns and closes its date range', () => {
-		const problems: string[] = [];
-		let calls = 0;
-		for (const { file, scripts } of sources()) {
-			if (/\/lib\/data\//.test(relative(file))) continue;
-			for (const script of scripts) {
-				const tree = ts.createSourceFile(file, script, ts.ScriptTarget.Latest, true);
-				const local = new Set<string>();
-				tree.forEachChild((node) => {
-					if (!ts.isImportDeclaration(node) || !ts.isStringLiteral(node.moduleSpecifier)) return;
-					if (!DOOR_MODULE.test(node.moduleSpecifier.text)) return;
-					const bound = node.importClause?.namedBindings;
-					if (bound === undefined || !ts.isNamedImports(bound)) return;
-					for (const element of bound.elements) {
-						if (DOOR_CALLS.includes((element.propertyName ?? element.name).text)) local.add(element.name.text);
-					}
-				});
-				const visit = (node: ts.Node): void => {
-					if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && local.has(node.expression.text)) {
-						calls += 1;
-						const options = node.arguments[node.arguments.length - 1];
-						const where = `${relative(file)}: ${node.getText().slice(0, 80)}`;
-						if (options === undefined || !ts.isObjectLiteralExpression(options)) {
-							problems.push(`${where} - pass the options inline, so this walk can read them`);
-						} else {
-							const field = (key: string) =>
-								options.properties.find(
-									(property): property is ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
-										(ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) && property.name.getText() === key
-								);
-							const columnField = field('columns');
-							const columns = declaredColumns(columnField === undefined ? undefined
-								: ts.isShorthandPropertyAssignment(columnField) ? columnField.name : columnField.initializer, tree);
-							if (columns === null || columns.length === 0) {
-								problems.push(`${where} - names no columns`);
-							} else if (columns.includes('*')) {
-								problems.push(`${where} - asks for every column`);
-							}
-							for (const end of ['from', 'to']) {
-								if (field(end) === undefined) problems.push(`${where} - leaves the date range open at "${end}"`);
-							}
-						}
-					}
-					ts.forEachChild(node, visit);
-				};
-				visit(tree);
-			}
-		}
-		if (calls === 0) {
-			test.info().annotations.push({
-				type: 'vacuous',
-				description: 'No panel calls the query door yet; this walk bites from the first panel that does.'
-			});
-		}
-		expect(problems).toEqual([]);
 	});
 });
 

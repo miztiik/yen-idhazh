@@ -43,11 +43,11 @@ export function options(args: string[]): Options {
 	if (!['canary', 'real'].includes(values.mode)) throw new Error('--mode must be canary or real.');
 	const specs = values.spec.map((name) => name.replace(/^tests\//, ''));
 	if (values.group.length && specs.length) throw new Error('Choose --group or --spec, not both.');
-	if (specs.includes('whole-day.spec.ts') && (values.mode !== 'real' || specs.length !== 1)) {
-		throw new Error('The whole-day spec must run alone with --mode real.');
+	if (specs.includes('whole-day.spec.ts') && (values.mode !== 'canary' || specs.length !== 1)) {
+		throw new Error('The whole-day spec must run alone with --mode canary.');
 	}
-	if (values.mode === 'real' && (!specs.length || specs.some((name) => !/^(reading-page|whole-day|item-visual)\.spec\.ts$/.test(name)))) {
-		throw new Error('A real-build run requires --spec for reading-page, whole-day or item-visual.');
+	if (values.mode === 'real' && (!specs.length || specs.some((name) => !/^(reading-page|item-visual)\.spec\.ts$/.test(name)))) {
+		throw new Error('A real-build run requires --spec for reading-page or item-visual.');
 	}
 	return { base: values.base, groups: values.group, specs, mode: values.mode as BuildMode,
 		list: values.list, fresh: values.fresh, status: values.status, inside: values['inside-lock'],

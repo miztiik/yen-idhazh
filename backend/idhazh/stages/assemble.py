@@ -12,7 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, atomic_write, config, ledger, rank, run_context, telemetry
+from idhazh import assemble, atomic_write, config, ledger, publication, rank, run_context, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_run_fragment import DigestRunFragment
@@ -191,6 +191,7 @@ def stage_assemble(
     denominator taken from those rows could not disagree with them, and
     disagreeing is the only thing the cell is for.
     """
+    publication.read_inventory(common.PUBLIC_ROOT.parent)
     items_dir = _run_dir(plan.date) / "items"
     names = assemble.source_names(settings.sources)
     kinds = assemble.source_kinds(settings.sources)
@@ -394,6 +395,8 @@ def stage_assemble(
     )
     _report_prose_change(recorded_inputs, previous_manifest)
     atomic_write.write_atomic(target / "run.json", manifest.to_json())
+    publication.record_day(common.PUBLIC_ROOT.parent, day)
+    publication.record_month(common.PUBLIC_ROOT.parent, assemble.month_of(plan.date))
     # This job's own raw files, never another writer's. A work shard recorded the
     # same items hours ago on another runner, and each files its own file through
     # the ledger door; the settlement keeps one row an item. `assemble` runs once

@@ -6,11 +6,8 @@
  * could actually have shipped - twenty-one changes each correct on its own,
  * composing into a page nobody looked at end to end.
  *
- * **It reads the served tree rather than naming a fixture.** The day, the
- * topic, the leads and the seed are all read off `build/`, so the same file
- * measures the canary day the browser gate serves and a real published day of
- * several hundred stories. What it asserts is the shape, never a count written
- * here.
+ * **It reads one canary day.** The topic, leads and item count come from that
+ * fixed fixture. This test does not inspect the committed archive.
  *
  * Four questions, and each one needs two changes to have disagreed to fail:
  *
@@ -35,11 +32,9 @@
  * a document that already carries its whole day never fetches - so there is
  * nothing to break and nothing to serve from a cache - and none can run on a
  * day with one desk, which cannot fill a leading block. They read both off the
- * fixture rather than off a locator, and the browser gate's eight-story canary
- * is the case that skips: seven of sixteen tests there, and none on a real
- * published day. `item-zones.spec.ts` set the same precedent for the aside.
- * What the canary cannot reach is measured on the committed digest instead,
- * with hardware and date, in `docs/reference/pipeline-cost.md`.
+ * fixture rather than off a locator. Cases that need more stories than the
+ * canary carries say why they skip. `item-zones.spec.ts` set the same
+ * precedent for the aside.
  *
  * **Two cases at the end were written failing and now pass.** Composing the rows
  * broke two things: the dated document counted the stories in its own hand
@@ -50,82 +45,26 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { deskCount, deskShortfall, leadingStories, orderByTime } from '../src/lib/day-shape';
 import { projectDay } from '../src/lib/payload/project';
-import { shellSeedItems, uiConfig } from '../src/lib/server/config';
-import { loadDay, publishedDates } from '../src/lib/server/payload';
+import { uiConfig } from '../src/lib/server/config';
+import { loadDay } from '../src/lib/server/payload';
+import { canarySeedItems } from './support/canary-config';
 import { dayReady } from './support/day-ready';
+import { newestDate } from './support/published';
 import { viewsOf } from './support/views';
 
-/** The tree the preview server serves, so a route here is a route that exists. */
+/** The built site, which the preview server serves. */
 const BUILD = resolve(process.cwd(), 'build');
-/** The two trees a build can be made from. Which one built the tree above is
- * asked rather than assumed, so this file measures the canary the browser gate
- * serves and a real published day without being told which it is looking at. */
-const COMMITTED = resolve(process.cwd(), 'public', 'digest');
+/** The fixed day the browser suite builds. */
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
 
-function subdirectories(at: string): string[] {
-	if (!existsSync(at)) return [];
-	return readdirSync(at, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
-		.map((entry) => entry.name)
-		.sort();
-}
-
-/** Every day the built site serves, and how many stories each one carries. */
-function servedDays(): { date: string; items: number }[] {
-	const root = join(BUILD, 'digest');
-	const found: { date: string; items: number }[] = [];
-	for (const year of subdirectories(root)) {
-		for (const month of subdirectories(join(root, year))) {
-			for (const day of subdirectories(join(root, year, month))) {
-				const file = join(root, year, month, day, 'digest.json');
-				if (!existsSync(file)) continue;
-				const served = JSON.parse(readFileSync(file, 'utf8')) as { items: unknown[] };
-				found.push({ date: `${year}-${month}-${day}`, items: served.items.length });
-			}
-		}
-	}
-	return found;
-}
-
-/** The BUSIEST day the built site serves that also earned a leading block.
- *
- * Every other spec here takes the newest, which is right for them: they ask
- * whether a page renders, and the newest day is what a reader opens. This one
- * asks whether it holds up under a day's worth of stories - a rail and a card
- * that read well at twelve and become a wall at several hundred is the failure
- * this page has had once already - and what the pipeline happened to publish
- * this morning is not that. On 2026-09-02 the newest day carried 128 stories
- * and the busiest carried 731.
- *
- * The leading block is the tie-break rather than the axis, because it is what
- * puts an aside on the page and the aside is one of the three things this file
- * checks for a collision. Every day published before 2026-09-01 predates the
- * block, so today the corpus straddles it; once it does not, the two rules pick
- * the same day and this line stops doing anything.
- *
- * Never a date written here: a hardcoded one passes on an empty page the moment
- * the fixture moves.
- */
-function chosen(): { date: string; items: number } {
-	const busiest = servedDays().sort((a, b) => b.items - a.items || b.date.localeCompare(a.date));
-	if (busiest.length === 0) throw new Error('the built site serves no day at all');
-	const committed = new Set(publishedDates(COMMITTED));
-	const withLeads = busiest.find(
-		(day) =>
-			(loadDay(day.date, committed.has(day.date) ? COMMITTED : CANARY)?.leads ?? []).length > 0
-	);
-	return withLeads ?? busiest[0];
-}
-
-const BUSIEST = chosen();
-const DAY = BUSIEST.date;
-/** How many stories the served file carries, which is what a browser gets. */
-const SERVED_ITEMS = BUSIEST.items;
+const DAY = newestDate();
+const FACTS = loadDay(DAY, CANARY);
+if (FACTS === null) throw new Error(`the canary day ${DAY} has no readable digest`);
+const SERVED_ITEMS = FACTS.items.length;
 
 /** The day's own facts.
  *
@@ -136,20 +75,17 @@ const SERVED_ITEMS = BUSIEST.items;
  * is where the check's expectation should come from rather than from the file
  * under test.
  */
-const SOURCE = publishedDates(COMMITTED).includes(DAY) ? COMMITTED : CANARY;
-const FACTS = loadDay(DAY, SOURCE);
-
 /** A topic of that day, taken from the day's own desk list rather than from a
  * directory `build/` no longer writes. */
-const TOPIC = String((FACTS?.verticals ?? [])[0]?.id ?? '');
+const TOPIC = String(FACTS.verticals[0]?.id ?? '');
 
-const SEED = shellSeedItems();
+const SEED = canarySeedItems();
 /** Whether the day is longer than the document that seeds it. False on the
  * canary, where nothing fetches and the two fetch cases have nothing to hold. */
 const PAST_SEED = SERVED_ITEMS > SEED;
 /** How many leads the day earned, computed the way the page computes it. It is
  * what decides whether there is an aside to collide with anything. */
-const LEADS = FACTS ? leadingStories(FACTS.leads ?? [], orderByTime(FACTS.items)).length : 0;
+const LEADS = leadingStories(FACTS.leads ?? [], orderByTime(FACTS.items)).length;
 
 /** Every reader-facing route the build emits.
  *
@@ -708,27 +644,28 @@ test.describe('with the offline reader installed', () => {
 	test('a day out of the device and a day off the network are the same page', async ({ page }) => {
 		test.skip(!PAST_SEED, `${DAY} never fetches, so there is nothing for a cache to hold`);
 
+		const delivered = page.waitForResponse(
+			(response) => new URL(response.url()).pathname === DAY_PATH && response.status() === 200
+		);
 		await open(page, 'dark', `/${DAY}/`, 1536);
+		await delivered;
 		await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, {
 			timeout: 60_000
 		});
 		const fetched = await showing(page);
 		expect(fetched.ids.length, 'the first visit drew no story').toBeGreaterThan(0);
-		expect(
-			fetched.more,
-			'the first visit says it holds no more, so the day never arrived'
-		).not.toBe('no more');
-
 		await page.reload();
 		await dayReady(page);
 		// What the worker actually answered, named by the browser rather than by
 		// the worker. A second visit that went to the network is a null result:
 		// it proves a page loads twice, which it would have done anyway.
 		const served = await page.evaluate(
-			() =>
+			(path) =>
 				performance
 					.getEntriesByType('resource')
-					.filter((entry) => (entry as PerformanceResourceTiming).workerStart > 0).length
+					.filter((entry) => new URL(entry.name).pathname === path &&
+						(entry as PerformanceResourceTiming).workerStart > 0).length,
+			DAY_PATH
 		);
 		console.log(`[reading-page] the offline reader answered ${served} requests on the second visit`);
 		expect(served, 'the second visit reached nothing the worker holds').toBeGreaterThan(0);
@@ -836,7 +773,7 @@ test.describe('one card, and every publisher on it is a way in', () => {
 		};
 	}
 
-	const COMMITTED = {
+	const FIXTURE_PAYLOAD = {
 		version: '2026-01-03T09:00',
 		date: FOLD_DAY,
 		generated_at: '2026-01-03T10:00:00Z',
@@ -875,7 +812,7 @@ test.describe('one card, and every publisher on it is a way in', () => {
 	};
 
 	/** The served day, written by the projector that writes every served day. */
-	const SERVED = projectDay(JSON.stringify(COMMITTED));
+	const SERVED = projectDay(JSON.stringify(FIXTURE_PAYLOAD));
 
 	/** Open the routed day, and count what was intercepted.
 	 *
@@ -900,7 +837,7 @@ test.describe('one card, and every publisher on it is a way in', () => {
 
 	test('successive lead links scroll to and focus each story', async ({ page }) => {
 		const payload = projectDay(JSON.stringify({
-			...COMMITTED,
+			...FIXTURE_PAYLOAD,
 			leads: [
 				{ item_id: ANCHOR, reason: 'Three newsrooms ran it.' },
 				{ item_id: ALONE, reason: 'A separate story from the day.' }

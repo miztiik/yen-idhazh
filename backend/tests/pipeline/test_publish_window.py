@@ -429,9 +429,7 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     run_plan = plan()
-    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-    monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
+    isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
     items_dir.mkdir(parents=True)
     (items_dir / f"{run_plan.items[0].item_id}.article.json").write_text(

@@ -5,6 +5,7 @@ import { publishedVisualData, refusedVisualData } from '../src/lib/payload/drawi
 import { drawBars } from '../src/lib/visual/bar';
 import type { VisualData } from '../src/lib/payload/types';
 import { dayReady } from './support/day-ready';
+import { revealDayDrawings } from './support/day-drawings';
 
 /**
  * The reader's browser draws the chart, and the pipeline never draws one.
@@ -119,22 +120,7 @@ async function wearing(page: Page, theme: string): Promise<void> {
 async function drawnDay(page: Page, route = DAY): Promise<void> {
 	await page.goto(route);
 	await dayReady(page);
-	await page.evaluate(async () => {
-		for (let at = 0; at < document.body.scrollHeight; at += window.innerHeight) {
-			window.scrollTo(0, at);
-			await new Promise((wake) => setTimeout(wake, 60));
-		}
-		window.scrollTo(0, 0);
-	});
-	let settled = -1;
-	await expect
-		.poll(async () => {
-			const now = await page.locator('main article figure svg').count();
-			const same = now === settled;
-			settled = now;
-			return same;
-		})
-		.toBe(true);
+	await revealDayDrawings(page);
 }
 
 /** Every marks file the canary day declares, in payload order.
@@ -309,6 +295,7 @@ test.describe('THE ORACLE: one set of marks draws one picture', () => {
 
 		await page.reload();
 		await dayReady(page);
+		await revealDayDrawings(page);
 		await expect(page.locator('main article figure svg rect.bar').first()).toBeVisible();
 
 		expect(await drawnBars(page)).toEqual(first);

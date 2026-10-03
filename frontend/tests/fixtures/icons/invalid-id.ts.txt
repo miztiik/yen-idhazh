@@ -1,0 +1,5 @@
+import type { IconId } from "__ICON_TYPES__";
+const valid: IconId = "band-high";
+const invalid: IconId = "__not-a-named-icon__";
+void valid;
+void invalid;

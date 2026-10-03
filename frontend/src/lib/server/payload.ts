@@ -13,8 +13,9 @@
  * and before every publish.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, join, relative, resolve } from 'node:path';
+import { publicFiles, stateFiles } from './publication';
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
 // where no Vite alias exists to resolve one.
 import { dayKey, toDay } from '../charts/viewport';
@@ -91,8 +92,6 @@ export const PUBLIC_ROOT = process.env.DIGEST_ROOT
 	? resolve(process.env.DIGEST_ROOT, '..')
 	: join(process.cwd(), 'public');
 
-const DATE_PART = /^\d{2,4}$/;
-
 const DAY_MS = 86_400_000;
 
 /** The cover every read over the archive takes when its caller names none.
@@ -165,54 +164,20 @@ function unbounded(cover: number): boolean {
 	return cover < 1;
 }
 
-/** Published dates newest first, back as far as `windowDays` from the newest one.
- *
- * The walk descends newest first and stops at the cutoff, so it opens the year,
- * month and day directories the window reaches and no others. Adding another
- * published day adds another directory this call never lists once the window has
- * been filled (`CLAUDE.md` Guardrail #12). Pass `-1` to read the whole tree, and say
- * beside the call why (`docs/concepts/growing-reads.md`).
- *
- * **The window is anchored on the newest day found, never on today.** Anchored
- * on the clock, a corpus that stopped publishing three months ago would answer
- * with nothing at all, and `latestDate` - which is this function's first entry -
- * would take the whole site down with it. This is the same anchoring `seedCutoff`
- * takes below and for the same reason.
- *
- * One listing of the root is unavoidable and it is the honest residue: it names
- * one directory a year, and finding the newest year is what the anchor needs.
- */
+/** Dates named by the producer, newest first, within the requested day span. */
 export function publishedDates(
 	root: string = DIGEST_ROOT,
 	windowDays: number = ARCHIVE_WINDOW_DAYS
 ): string[] {
-	if (!existsSync(root)) return [];
-	const found: string[] = [];
-	let cutoff: string | null = null;
-	for (const year of dirsIn(root).reverse()) {
-		if (cutoff !== null && year < cutoff.slice(0, 4)) break;
-		for (const month of dirsIn(join(root, year)).reverse()) {
-			if (cutoff !== null && `${year}-${month}` < cutoff.slice(0, 7)) break;
-			for (const day of dirsIn(join(root, year, month)).reverse()) {
-				const date = `${year}-${month}-${day}`;
-				if (cutoff !== null && date < cutoff) break;
-				if (!existsSync(join(root, year, month, day, 'digest.json'))) continue;
-				found.push(date);
-				if (cutoff === null && !unbounded(windowDays)) {
-					cutoff = dayKey(new Date(toDay(date).getTime() - (windowDays - 1) * DAY_MS));
-				}
-			}
-		}
-	}
-	return found;
-}
-
-function dirsIn(path: string): string[] {
-	if (!existsSync(path)) return [];
-	return readdirSync(path, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory() && DATE_PART.test(entry.name))
-		.map((entry) => entry.name)
-		.sort();
+	const found = publicFiles(resolve(root, '..'))
+		.flatMap((file) => {
+			const date = /^digest\/(\d{4})\/(\d{2})\/(\d{2})\/digest\.json$/.exec(file);
+			return date && existsSync(join(root, date[1], date[2], date[3], 'digest.json'))
+				? [`${date[1]}-${date[2]}-${date[3]}`] : [];
+		}).sort().reverse();
+	if (unbounded(windowDays) || found.length === 0) return found;
+	const cutoff = dayKey(new Date(toDay(found[0]).getTime() - (windowDays - 1) * DAY_MS));
+	return found.filter((date) => date >= cutoff);
 }
 
 /** A day, or null when that date was never published or its payload cannot be
@@ -509,29 +474,9 @@ export function readCsv(path: string): CsvTable {
 	return { rows, columns };
 }
 
-/** The newest `months` `<YYYY-MM>.csv` shards of a series, oldest first, as one table.
- *
- * The published mirrors file by month and they wanted this loop. The columns
- * come from the first shard that has any, so an empty month cannot blank the
- * header. Every `state/` ledger that used to come here files by day now, and is
- * read either from its packed files through the query door (`ledger-rows.ts`)
- * or through `readDayShards`.
- *
- * **This is where the bound has to sit.** It is exported, so bounding only the
- * callers would leave the next one reading every month a run ever wrote.
- * Adding another month adds a file this call does not open once the cover is
- * filled (`CLAUDE.md` Guardrail #12); pass `-1` to open all of them.
- *
- * The listing itself still names every shard, and that is the honest residue:
- * one directory entry a month, read to find which the newest are. Deriving the
- * newest stem from today's date instead would answer nothing at all for a
- * series whose last run was two months ago.
- */
+/** Read the newest named CSV shards of one published series, oldest first. */
 export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): CsvTable {
-	if (!existsSync(dir)) return { rows: [], columns: [] };
-	const shards = readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.sort();
+	const shards = seriesFiles(dir, '.csv');
 	const kept = unbounded(months) ? shards : shards.slice(Math.max(0, shards.length - months));
 	const rows: Record<string, string>[] = [];
 	let columns: string[] = [];
@@ -540,35 +485,27 @@ export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): 
 		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
 		rows.push(...table.rows);
 	}
+
+	function seriesFiles(dir: string, suffix: string): string[] {
+		const prefix = `${basename(dir)}/`;
+		return publicFiles(resolve(dir, '..'))
+			.filter((file) => file.startsWith(prefix) && file.endsWith(suffix))
+			.map((file) => file.slice(prefix.length))
+			.sort();
+	}
 	return { rows, columns };
 }
 
-/** The newest `days` `<YYYY>/<MM>/<DD>/` day directories of a ledger, oldest first, as one table.
- *
- * The day-grain twin of `readShards`, and the bound sits here for the same
- * reason: it is exported, so bounding only `feedResults` would leave the next
- * caller reading every day a run ever wrote. Pass `-1` to open all of them and
- * say beside the call why (`docs/concepts/growing-reads.md`).
- *
- * The newest `days` RECORDED days, not the newest `days` calendar days. A day
- * nothing ran on has no directory, so counting directories never starves a panel
- * of a day it should have drawn - which is the property `shardMonths` bought by
- * rounding up, obtained here for nothing.
- *
- * The listing is the honest residue, and it is bigger than it was: the walk names
- * one entry a recorded day where the month tree named one a month. It opens no
- * file it does not need, and deriving the newest day from today's date instead
- * would answer nothing at all for a ledger whose last run was two months ago.
- *
- * A name it cannot place is skipped rather than refused, which is where this
- * differs from `day_partition.day_files`. The producer refuses one at write time
- * and at every backend read, so nothing reaches here that CI has not already
- * stopped - and a refusal here would white-screen a page over a stray file.
- */
-export function readDayShards(dir: string, days: number = LEDGER_WINDOW_DAYS): CsvTable {
+/** Read the newest recorded days named by the producer, oldest first. */
+export function readDayShards(
+	dir: string,
+	days: number = LEDGER_WINDOW_DAYS,
+	stateRoot: string = resolve(dir, '..'),
+	publicationRoot?: string
+): CsvTable {
 	const rows: Record<string, string>[] = [];
 	let columns: string[] = [];
-	for (const shard of dayShardFiles(dir, days)) {
+	for (const shard of dayShardFiles(dir, days, stateRoot, publicationRoot)) {
 		const table = readCsv(shard.path);
 		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
 		rows.push(...table.rows);
@@ -586,65 +523,29 @@ export interface DayShard {
 	path: string;
 }
 
-/** The shards of a day-grain ledger the cover reaches, oldest first.
- *
- * The walk `readDayShards` reads with, exported because a file is a fact its
- * rows cannot carry: a day the ledger wrote a file for and kept no row of is a
- * measurement that did not survive, and a day with no file at all is a day the
- * instrument did not run. Rows alone cannot tell those two apart.
- *
- * **A day is a directory.** `<DD>/` holds every `.csv` a writer left that day,
- * read in name order. A `<DD>.csv` beside it is a name no writer spells, so it
- * is skipped with every other stray.
- *
- * **The cover counts days, not files.** A day directory holding five writer
- * files is one day, so `days` keeps meaning the newest `days` recorded days
- * whatever the ledger holds.
- *
- * Bounded exactly as `readDayShards` is, and by the same call, so a caller
- * asking which days exist and a caller asking what they hold cannot answer over
- * two different sets. Pass `-1` to list all of them and say beside the call why
- * (`docs/concepts/growing-reads.md`).
- *
- * **A day directory with no readable file throws, and a stray file is still
- * skipped.** The two are different failures. A name at any other level is a
- * stray the producer already refuses at write time and at every backend read,
- * and refusing it here would white-screen a page over it. An empty day
- * directory is not a stray: it is a day the walk would report as recorded and
- * hand back zero rows for, and the console routes that read the day-filed
- * ledgers would draw nothing on a passing build. A prerender failure is where
- * that belongs.
- */
-export function dayShardFiles(dir: string, days: number = LEDGER_WINDOW_DAYS): DayShard[] {
-	if (!existsSync(dir)) return [];
-	const named = (at: string, pattern: RegExp) =>
-		readdirSync(at, { withFileTypes: true })
-			.filter((entry) => pattern.test(entry.name))
-			.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-	const recorded: DayShard[][] = [];
-	for (const year of named(dir, /^\d{4}$/)) {
-		for (const month of named(join(dir, year.name), /^\d{2}$/)) {
-			const under = join(dir, year.name, month.name);
-			for (const entry of named(under, /^\d{2}$/)) {
-				if (!entry.isDirectory()) continue;
-				const date = `${year.name}-${month.name}-${entry.name}`;
-				const day = join(under, entry.name);
-				const shards = readdirSync(day)
-					.filter((name) => name.endsWith('.csv'))
-					.sort()
-					.map((name) => ({ date, path: join(day, name) }));
-				if (shards.length === 0) {
-					throw new Error(
-						`${day} is a day directory with no ` +
-							'readable .csv file in it. A day nothing wrote has no directory, so this is a ' +
-							'writer that made the directory and lost its rows - reading it as a day that ' +
-							'recorded nothing would draw an empty panel on a passing build.'
-					);
-				}
-				recorded.push(shards);
-			}
-		}
+/** Named writer files grouped by recorded day, oldest first.
+ * The cover counts days, not files. A missing named file fails the build. */
+export function dayShardFiles(
+	dir: string,
+	days: number = LEDGER_WINDOW_DAYS,
+	stateRoot: string = resolve(dir, '..'),
+	publicationRoot?: string
+): DayShard[] {
+	const inventoryRoot = publicationRoot ?? (stateRoot === STATE_ROOT ? PUBLIC_ROOT : stateRoot);
+	const prefix = `${relative(stateRoot, dir).replaceAll('\\', '/')}/`;
+	const grouped = new Map<string, DayShard[]>();
+	for (const file of stateFiles(inventoryRoot).sort()) {
+		if (!file.startsWith(prefix)) continue;
+		const name = /^(\d{4})\/(\d{2})\/(\d{2})\/[^/]+\.csv$/.exec(file.slice(prefix.length));
+		if (!name) continue;
+		const date = `${name[1]}-${name[2]}-${name[3]}`;
+		const path = join(stateRoot, ...file.split('/'));
+		if (!existsSync(path)) throw new Error(`Publication inventory names missing ledger file ${file}.`);
+		const shards = grouped.get(date) ?? [];
+		shards.push({ date, path });
+		grouped.set(date, shards);
 	}
+	const recorded = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, files]) => files);
 	const kept = unbounded(days) ? recorded : recorded.slice(Math.max(0, recorded.length - days));
 	return kept.flat();
 }
@@ -826,9 +727,10 @@ export function telemetryMonths(
 	root: string = TELEMETRY_ROOT,
 	months: number = LEDGER_WINDOW_MONTHS
 ): string[] {
-	if (!existsSync(root)) return [];
-	const found = readdirSync(root)
-		.filter((name) => /^\d{4}-\d{2}\.csv$/.test(name))
+	const inventoryRoot = root === TELEMETRY_ROOT ? PUBLIC_ROOT : resolve(root, '..');
+	const found = publicFiles(inventoryRoot)
+		.filter((file) => /^telemetry\/\d{4}-\d{2}\.csv$/.test(file))
+		.map((file) => file.slice('telemetry/'.length))
 		.map((name) => name.slice(0, 7))
 		.sort();
 	return unbounded(months) ? found : found.slice(Math.max(0, found.length - months));
@@ -846,9 +748,9 @@ export function indexMonths(
 	root: string = INDEX_ROOT,
 	months: number = LEDGER_WINDOW_MONTHS
 ): string[] {
-	if (!existsSync(root)) return [];
-	const found = readdirSync(root)
-		.filter((name) => /^\d{4}-\d{2}\.json$/.test(name))
+	const found = publicFiles(resolve(root, '..', '..'))
+		.filter((file) => /^assist\/index\/\d{4}-\d{2}\.json$/.test(file))
+		.map((file) => file.slice('assist/index/'.length))
 		.map((name) => name.slice(0, 7))
 		.sort()
 		.reverse();

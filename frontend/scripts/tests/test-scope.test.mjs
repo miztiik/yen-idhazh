@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,38 +11,38 @@ import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-test('every frontend spec belongs to exactly one group', () => {
-	const groups = groupedSpecs(join(FRONTEND, 'tests'));
-	const assigned = Object.values(groups).flat();
-	const discovered = readdirSync(join(FRONTEND, 'tests'), { recursive: true })
-		.filter((name) => name.endsWith('.spec.ts')).map((name) => name.replaceAll('\\', '/')).sort();
-	assert.deepEqual(assigned.toSorted(), discovered);
-	assert.equal(new Set(assigned).size, discovered.length);
+test('named frontend specs map to their declared groups', () => {
 	assert.equal(groupForSpec('console-machine-data.spec.ts'), 'console');
 	assert.equal(groupForSpec('frame.spec.ts'), 'logic');
 	assert.equal(groupForSpec('panel-captures.spec.ts'), 'panels');
 	assert.equal(groupForSpec('panel-sufficiency.spec.ts'), 'panels');
+	assert.equal(groupForSpec('new-feature.spec.ts'), undefined);
 });
 
-test('a new unowned spec fails the inventory instead of disappearing', () => {
+test('grouped specs follow only the explicit inventory', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'idhazh-groups-'));
 	try {
-		writeFileSync(join(directory, 'new-feature.spec.ts'), '');
-		assert.throws(() => groupedSpecs(directory), /No test group owns/);
+		const expected = groupedSpecs(join(FRONTEND, 'tests'));
+		for (const names of Object.values(expected)) {
+			for (const filename of names) writeFileSync(join(directory, filename), '');
+		}
+		writeFileSync(join(directory, 'unlisted-feature.spec.ts'), '');
+		assert.deepEqual(groupedSpecs(directory), expected);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
 	}
 });
 
-test('nested specs are included in the inventory and require an owner', () => {
-	const directory = mkdtempSync(join(tmpdir(), 'idhazh-nested-groups-'));
+test('a missing named spec fails explicitly', () => {
+	const directory = mkdtempSync(join(tmpdir(), 'idhazh-groups-'));
 	try {
-		mkdirSync(join(directory, 'nested'));
-		writeFileSync(join(directory, 'nested', 'console-extra.spec.ts'), '');
-		assert.deepEqual(groupedSpecs(directory).console, ['nested/console-extra.spec.ts']);
-		writeFileSync(join(directory, 'nested', 'new-feature.spec.ts'), '');
-		assert.throws(() => groupedSpecs(directory), /No test group owns nested\/new-feature/);
-	} finally { rmSync(directory, { recursive: true, force: true }); }
+		assert.throws(
+			() => groupedSpecs(directory),
+			/Declared test .* is missing; update scripts\/test-groups\.ts\./
+		);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
 });
 
 test('shared styles, layouts and dependencies include console coverage', () => {

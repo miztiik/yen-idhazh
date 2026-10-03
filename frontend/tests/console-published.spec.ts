@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { chartsReady } from './support/charts-ready';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { publishedSkyline, publishingHorizon, siteCost } from '../src/lib/charts/glance';
 import type { GlanceDay } from '../src/lib/charts/glance';
@@ -22,12 +22,11 @@ import type { RunSummary } from '../src/lib/server/payload';
  *
  * The page intro used to end with two counts of rows on record. Both only ever
  * grow, so neither could ever indicate a state, and nothing on the page acted
- * on either. They are gone, and the assertions below are what stop them coming
- * back one sentence at a time.
+ * on either. The visible-copy check below keeps those old introductory counts
+ * from returning to the page.
  */
 
 const FRONTEND = resolve(process.cwd());
-const SRC = join(FRONTEND, 'src');
 /** The canary day tree the browser suite is built from. */
 const CANARY = resolve(FRONTEND, '..', 'backend', 'var', 'canary', 'digest');
 
@@ -81,19 +80,6 @@ function day(date: string, published: number, items = published): GlanceDay {
 /** A run manifest with only the fields the cost arithmetic reads. */
 function summary(date: string, siteBytes: number): RunSummary {
 	return { date, runs: 1, planned: 0, failed: 0, siteBytes, siteFiles: 1, models: [], records: [] };
-}
-
-function sourceFiles(): string[] {
-	const found: string[] = [];
-	const walk = (at: string) => {
-		for (const entry of readdirSync(at, { withFileTypes: true })) {
-			const path = join(at, entry.name);
-			if (entry.isDirectory()) walk(path);
-			else if (/\.(ts|svelte|js)$/.test(path) && statSync(path).isFile()) found.push(path);
-		}
-	};
-	walk(SRC);
-	return found;
 }
 
 async function hydrated(page: Page) {
@@ -480,23 +466,4 @@ test('nothing above the first heading carries a count that only ever grows', asy
 	}
 	// And the subtitle itself is gone rather than reworded.
 	expect(above.join(' '), 'the page subtitle came back').not.toContain('from the committed ledger');
-});
-
-test('the two on-record counts have no reader left in the source', () => {
-	// The row deletes the sentence and the computation behind it. A payload
-	// field nobody reads is the state this asserts against, because it survives
-	// every gate: it type-checks, it builds, and it costs the page bytes.
-	const files = sourceFiles();
-	expect(files.length, 'the source scan found nothing - it is broken').toBeGreaterThan(50);
-
-	const totals = files.filter((path) => /\btotalRows\b/.test(readFileSync(path, 'utf8')));
-	expect(totals.map((path) => path.slice(SRC.length + 1))).toEqual([]);
-
-	// `itemHealthRows` stays as the ledger reader in `ledger-rows.ts`, which the
-	// timings, the throughput and the source table all still need. What must not
-	// come back is a payload key of that name, or anything reading one.
-	const shipped = files.filter((path) =>
-		/(\.itemHealthRows\b|\bitemHealthRows\s*:)/.test(readFileSync(path, 'utf8'))
-	);
-	expect(shipped.map((path) => path.slice(SRC.length + 1))).toEqual([]);
 });

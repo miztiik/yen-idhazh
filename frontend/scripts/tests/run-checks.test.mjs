@@ -28,10 +28,10 @@ test('ambiguous group/spec selection is rejected before preparation', () => {
 		['frame.spec.ts', 'archive.spec.ts']);
 });
 
-test('whole-day checks cannot be mixed with canary or other spec selections', () => {
-	assert.throws(() => options(['--spec', 'whole-day.spec.ts']), /alone with --mode real/);
-	assert.throws(() => options(['--mode', 'real', '--spec', 'whole-day.spec.ts', '--spec', 'reading-page.spec.ts']), /alone with --mode real/);
-	assert.deepEqual(options(['--mode', 'real', '--spec', 'whole-day.spec.ts']).specs, ['whole-day.spec.ts']);
+test('whole-day checks use the canary and cannot be mixed with other spec selections', () => {
+	assert.throws(() => options(['--mode', 'real', '--spec', 'whole-day.spec.ts']), /alone with --mode canary/);
+	assert.throws(() => options(['--spec', 'whole-day.spec.ts', '--spec', 'reading-page.spec.ts']), /alone with --mode canary/);
+	assert.deepEqual(options(['--spec', 'whole-day.spec.ts']).specs, ['whole-day.spec.ts']);
 });
 
 test('an explicit all selection includes the tooling checks', () => {

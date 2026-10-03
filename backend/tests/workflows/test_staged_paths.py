@@ -132,7 +132,7 @@ def test_the_corpus_is_committed_but_never_rebuilt() -> None:
 def test_the_plan_stages_the_state_root_not_selected_ledger_files() -> None:
     """Compaction can write new heads and delete segments in the same run."""
     named, _ = _commit_call("plan")
-    assert named == [ledger.STATE_DIRNAME]
+    assert named == [ledger.STATE_DIRNAME, "frontend/public/publication.json"]
 
 
 def test_the_corpus_is_not_union_merged() -> None:

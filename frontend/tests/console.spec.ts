@@ -762,7 +762,8 @@ const MIN_ATTEMPTS =
  */
 function feedLedger(root: string): FeedRecord[] {
 	const dir = join(root, 'state', 'feed-health');
-	return readDayShards(dir, -1).rows.map((row) => ({
+	const inventoryRoot = root === CANARY ? root : undefined;
+	return readDayShards(dir, -1, undefined, inventoryRoot).rows.map((row) => ({
 		date: row.date ?? '',
 		runId: row.run_id ?? '',
 		outcome: row.outcome ?? '',
@@ -2299,4 +2300,3 @@ test('the plot reads the cut off two lengths, so no ledger stamp can change what
 	expect(older.kind === 'point' && older.point.source_words).toBe(880);
 	expect(older.kind === 'point' && 'source_seen_words' in older.point).toBe(false);
 });
-

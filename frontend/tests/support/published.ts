@@ -7,10 +7,8 @@
  * all, and a spec that took its fixture day from there got `undefined` - which
  * reads as a broken loader rather than as a tree that stopped holding dates.
  *
- * The digest tree is the right source anyway, and it always was. It is what the
- * page renders from, so a date taken from it is a date the site has something to
- * say about - where a date taken from `build/` only ever meant a build wrote a
- * directory.
+ * The canary digest is a fixed fixture. It is what the browser suite builds
+ * from, so its day and topics are stable test inputs rather than archive data.
  *
  * **A date is never written into a spec.** A hardcoded one passes on an empty
  * page the moment the fixture moves, which is the failure this file exists to
@@ -29,9 +27,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * wrong place - see `docs/reference/agent-notes.md`. */
 export const CANARY = resolve(HERE, '..', '..', '..', 'backend', 'var', 'canary', 'digest');
 
-/** The committed tree, for a real-mode spec. */
-export const COMMITTED = resolve(HERE, '..', '..', 'public', 'digest');
-
 function dirs(at: string): string[] {
 	return readdirSync(at, { withFileTypes: true })
 		.filter((entry) => entry.isDirectory())
@@ -39,12 +34,12 @@ function dirs(at: string): string[] {
 		.sort();
 }
 
-/** Every date the tree published, oldest first. */
-export function publishedDates(root: string = CANARY): string[] {
+/** Every date in the fixed canary fixture, oldest first. */
+export function publishedDates(): string[] {
 	const found: string[] = [];
-	for (const year of dirs(root)) {
-		for (const month of dirs(join(root, year))) {
-			for (const day of dirs(join(root, year, month))) {
+	for (const year of dirs(CANARY)) {
+		for (const month of dirs(join(CANARY, year))) {
+			for (const day of dirs(join(CANARY, year, month))) {
 				found.push(`${year}-${month}-${day}`);
 			}
 		}
@@ -52,17 +47,17 @@ export function publishedDates(root: string = CANARY): string[] {
 	return found.sort();
 }
 
-/** The newest date the tree published. */
-export function newestDate(root: string = CANARY): string {
-	const dates = publishedDates(root);
-	if (dates.length === 0) throw new Error(`no day is published under ${root}`);
+/** The newest date in the fixed canary fixture. */
+export function newestDate(): string {
+	const dates = publishedDates();
+	if (dates.length === 0) throw new Error(`the canary fixture has no published day under ${CANARY}`);
 	return dates[dates.length - 1];
 }
 
 /** The payload of one day, as JSON. */
-export function payloadOf(date: string, root: string = CANARY): Record<string, unknown> {
+export function payloadOf(date: string): Record<string, unknown> {
 	const [year, month, day] = date.split('-');
-	return JSON.parse(readFileSync(join(root, year, month, day, 'digest.json'), 'utf8'));
+	return JSON.parse(readFileSync(join(CANARY, year, month, day, 'digest.json'), 'utf8'));
 }
 
 /** The topics that day published stories under, in the payload's own order.
@@ -71,8 +66,8 @@ export function payloadOf(date: string, root: string = CANARY): Record<string, u
  * story the day then published elsewhere is not in here. A route for one of
  * those answers `Not here`, which is what the page does on purpose - a pill
  * leading to an empty room is a dead end rather than a way in. */
-export function topicsOf(date: string, root: string = CANARY): string[] {
-	const verticals = payloadOf(date, root).verticals;
+export function topicsOf(date: string): string[] {
+	const verticals = payloadOf(date).verticals;
 	if (!Array.isArray(verticals)) return [];
 	return verticals
 		.filter((ref) => {
@@ -83,8 +78,8 @@ export function topicsOf(date: string, root: string = CANARY): string[] {
 }
 
 /** One topic of that day. Which one is the fixture's business. */
-export function topicOf(date: string, root: string = CANARY): string {
-	const topics = topicsOf(date, root);
+export function topicOf(date: string): string {
+	const topics = topicsOf(date);
 	if (topics.length === 0) throw new Error(`${date} published no topic`);
 	return topics[0];
 }

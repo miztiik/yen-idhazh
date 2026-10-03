@@ -695,6 +695,7 @@ COMMIT_STAGED_PATHS: Final = {
     # segment deletions while leaving the heads behind.
     "plan": [
         "state",
+        "frontend/public/publication.json",
     ],
     # `state` whole since 2026-09-22, where this was `state/traces` and
     # `state/segments` named one at a time. Every tree a shard writes now names

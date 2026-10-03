@@ -69,6 +69,18 @@ MODEL_FILES: Final = (
 #: A tree under `tmp_path` has no commit, and the door refuses a writer with none.
 SEED_COMMIT: Final = "0" * 40
 
+
+def seed_publication_inventory(public_root: Path) -> None:
+    """Initialize an explicitly new fixture publication tree before its writers run."""
+    from idhazh.contracts.publication_inventory import PublicationInventory
+    from idhazh.publication import initialize_inventory
+
+    initialize_inventory(
+        public_root,
+        seed=PublicationInventory(version=PublicationInventory.schema_version(), dates=[]),
+    )
+
+
 #: Numbers each `seed_item_health` call, so every call is a writer of its own.
 _SEED_CALLS: Final = itertools.count(1)
 

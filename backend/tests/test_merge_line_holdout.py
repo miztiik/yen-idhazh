@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR
+from conftest import CONFIG_DIR, seed_publication_inventory
 
 from idhazh import assemble, config, ledger
 from idhazh.contracts.digest_day import (
@@ -167,6 +167,7 @@ def a_marked_tree(tmp_path: Path) -> tuple[Path, Path]:
     cells are non-zero and a swapped cell fails rather than reading as a zero.
     """
     state, digest = tmp_path / "state", tmp_path / "digest"
+    seed_publication_inventory(digest.parent)
     first = [item(f"world-0{n}", outlet=f"paper-{n}") for n in range(1, 5)]
     second = [item(f"world-0{n}", outlet=f"paper-{n}") for n in range(5, 9)]
     # 0 degrees against 15 degrees is a cosine of 0.9659, and against 25 degrees

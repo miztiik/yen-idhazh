@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import read_text
+from conftest import read_text, seed_publication_inventory
 from test_same_story import at, block, item, unit
 from test_similarity_selection import MANIFEST_FIXTURE
 
@@ -566,6 +566,7 @@ def a_published_day(root: Path, *, date: str = DATE) -> None:
         items=items,
         embeddings=block({one.item_id: unit(index * 12.0) for index, one in enumerate(items)}),
     )
+    seed_publication_inventory(root.parent)
     target = assemble.day_dir(root, date)
     atomic_write.write_atomic(target / "digest.json", day.to_json())
     atomic_write.write_atomic(target / "run.json", manifest.to_json())
