@@ -1,0 +1,12 @@
+[
+  {
+    "date": "2026-09-06",
+    "run_id": "raw-1",
+    "hostile": "<script>alert(1)</script>"
+  },
+  {
+    "date": "2026-09-06",
+    "run_id": "raw-2",
+    "hostile": "https://example.invalid/x"
+  }
+]
