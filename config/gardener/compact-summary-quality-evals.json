@@ -18,7 +18,6 @@
     "state/compact/summary-quality-evals"
   ],
   "prune_refusal": "every eval row is kept for ever - nothing summarises a month of it and nothing deletes one of its rows, so no range of its days may be taken out of it",
-  "raw_index_keep_days": 90,
   "window": {
     "unit": "forever"
   }

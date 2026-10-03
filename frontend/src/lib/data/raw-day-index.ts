@@ -2,7 +2,7 @@
 
 import type { DateStamp, LedgerName } from './slice-shapes';
 
-export const RAW_DAY_INDEX_STAMP = '2026-10-02';
+export const RAW_DAY_INDEX_STAMP = '2026-10-03';
 
 export interface RawDayIndex {
 	version?: string;

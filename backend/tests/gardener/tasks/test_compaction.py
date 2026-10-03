@@ -22,6 +22,7 @@ import json
 import logging
 import shutil
 from datetime import UTC, date, datetime, time, timedelta
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Final
 
@@ -33,7 +34,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import MonthsWindow
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -174,8 +175,7 @@ def test_a_first_pass_starts_on_the_first_of_the_month_and_a_quiet_day_still_get
 
     assert daily_covers(root) == days("2026-09-01", "2026-09-21")
     assert compact_rows(root, Period.DAILY, "2026-09-05") == []
-    listing = ledger.raw_index_path(state(root), VISUALS, "2026-09-05")
-    assert json.loads(listing.read_text(encoding="ascii"))["files"] == []
+    assert not ledger.raw_index_path(state(root), VISUALS, "2026-09-05").exists()
 
 
 def test_after_every_pass_the_newest_day_the_daily_index_names_is_the_daily_watermark(
@@ -625,7 +625,7 @@ def test_a_re_run_into_a_day_whose_packed_file_is_gone_is_refused_as_file_missin
 
 
 def test_a_catch_up_pass_never_writes_a_path_it_deletes(tmp_path: Path) -> None:
-    """Old listings and eligible months are both due at once, and neither may stall the shard."""
+    """Eligible months and many days are due at once, and none may stall the shard."""
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-05-10"))
 
@@ -633,7 +633,34 @@ def test_a_catch_up_pass_never_writes_a_path_it_deletes(tmp_path: Path) -> None:
 
     assert all(disjoint(outcome) for outcome in passes)
     assert watermark(root, Period.MONTHLY) == "2026-08"
-    assert ledger.listed_days(state(root), VISUALS)[0] > "2026-07-21"
+    assert ledger.listed_days(state(root), VISUALS) == []
+
+
+def test_a_pass_deletes_every_raw_listing_an_earlier_build_left(tmp_path: Path) -> None:
+    """Nothing reads a committed listing, so a pass removes it and never writes one."""
+    root = tmp_path / "checkout"
+    filed(root, a_pass("2026-09-20"))
+    left = ledger.raw_index_path(state(root), VISUALS, "2026-08-02")
+    left.parent.mkdir(parents=True, exist_ok=True)
+    left.write_text(
+        RawDayIndex(
+            version=RawDayIndex.schema_version(),
+            ledger=VISUALS,
+            date="2026-08-02",
+            files=[],
+            content_sha256=sha256(b"").hexdigest(),
+            listed_at="2026-08-03T00:00:00Z",
+        ).to_json(),
+        encoding="ascii",
+        newline="\n",
+    )
+
+    outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
+
+    assert not left.exists()
+    assert left.relative_to(root).as_posix() in outcome.taken
+    assert ledger.listed_days(state(root), VISUALS) == []
+    assert disjoint(outcome)
 
 
 def a_month_file(root: Path, month: str) -> Path:

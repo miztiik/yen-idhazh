@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -138,14 +138,13 @@ person reads holds every number a pass runs with.
 | --- | --- | --- |
 | 1 | `dry_run` | Whether a pass changes any file. `true` reports every path a live pass would write and delete, and changes nothing |
 | 2 | `monthly_window_dry_run` | Whether a live pass only reports what `monthly_window` would delete. `true` keeps every month file past the window and every raw day in a month past it, and packs those days and months like the rest; the pass's record counts the kept files in `selected` and not in `deleted`. `false` lets the window delete them |
-| 3 | `raw_index_keep_days` | How many days after a UTC day ends its raw listing survives. Never fewer than `daily_keep_days` |
-| 4 | `daily_keep_days` | How many days after a UTC month ends it is absorbed into its month file. At least 31 |
-| 5 | `monthly_window` | How long a month file survives once its month is absorbed: `{unit: months, value}`, `{unit: days, value}` or `{unit: forever}` |
-| 6 | `monthly_keep_days` | How many whole days after a UTC year ends its month files are packed into one year file, kept for ever. `null` packs no year. Set, it needs a `monthly_window` of forever and at least `daily_keep_days` plus 32 |
-| 7 | `max_periods_per_run` | The most days, and separately the most months and the most years, one pass packs |
-| 8 | `max_raw_files_per_period` | The most raw files one period is built from in one pass. A day holding more is refused and kept |
-| 9 | `compact_after_days` | How many whole days after a UTC day ends before it may be packed, counted from 00:00 UTC on the day after it |
-| 10 | `prune_refusal` | Whether `idhazh telemetry prune` may take a range of days out of the ledger. `null` lets it; a sentence refuses the ledger, and the command prints that sentence as the reason. `compact-summary-quality-evals` gives one, because every eval row is kept for ever ([how the prune reads it](../../how-to/prune-a-collection.md)) |
+| 3 | `daily_keep_days` | How many days after a UTC month ends it is absorbed into its month file. At least 31 |
+| 4 | `monthly_window` | How long a month file survives once its month is absorbed: `{unit: months, value}`, `{unit: days, value}` or `{unit: forever}` |
+| 5 | `monthly_keep_days` | How many whole days after a UTC year ends its month files are packed into one year file, kept for ever. `null` packs no year. Set, it needs a `monthly_window` of forever and at least `daily_keep_days` plus 32 |
+| 6 | `max_periods_per_run` | The most days, and separately the most months and the most years, one pass packs |
+| 7 | `max_raw_files_per_period` | The most raw files one period is built from in one pass. A day holding more is refused and kept |
+| 8 | `compact_after_days` | How many whole days after a UTC day ends before it may be packed, counted from 00:00 UTC on the day after it |
+| 9 | `prune_refusal` | Whether `idhazh telemetry prune` may take a range of days out of the ledger. `null` lets it; a sentence refuses the ledger, and the command prints that sentence as the reason. `compact-summary-quality-evals` gives one, because every eval row is kept for ever ([how the prune reads it](../../how-to/prune-a-collection.md)) |
 
 **Two switches, because packing loses no row and the monthly window does.** A
 pass packs a raw day into a day file, a month of day files into a month file
@@ -242,7 +241,6 @@ names the file an operator edits and the rule it broke.
 | A compaction not called `compact-<ledger>` | One compaction a ledger, found by name |
 | A compaction that leaves out any key in [the table above](#the-keys-of-a-compaction) | Nothing fills a setting in from code, so a missing one is named rather than guessed |
 | A collection task not called `<collection>.json`, or whose `window` is not whole days | One task a collection, found by name; a pass counts a member's age in days |
-| `raw_index_keep_days` below `daily_keep_days` | The daily period may still need the index to rebuild a file |
 | A compaction whose `window` is not `{unit: forever}`, or whose `max_deletes_per_run` is not `null` | Its two periods are how far back it keeps and `max_periods_per_run` is its budget. A second window would be a number nothing reads, and a ceiling could stop a month half absorbed |
 | `daily_keep_days` below 31 | GitHub lets a failed run be re-run for 30 days, into the day it first wrote, so a month absorbed sooner could still be reached by one |
 | `monthly_keep_days` set beside a `monthly_window` that is not forever | The window would delete a month file before its year is packed, and the year file would miss that month's rows |

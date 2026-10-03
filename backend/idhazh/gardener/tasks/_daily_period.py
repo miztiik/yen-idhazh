@@ -1,4 +1,4 @@
-"""Which raw days one ledger's compaction takes into daily files, and which raw listings it drops.
+"""Which raw days one ledger's compaction takes into daily files, and which raw files it drops.
 
 **A day is taken once `compact_after_days` whole days have passed since it
 ended**, measured from 00:00 UTC on the day after it, so every wake of one UTC
@@ -7,7 +7,7 @@ day finds the same newest day. At one, a wake on the 25th takes days up to the
 
 **Days are taken in order, each on its own, at most `max_periods_per_run` a
 pass.** For each day: list its raw folder and read every file in it, settle the
-rows, and plan the day's listing and its compact file. The pass writes its
+rows, and plan the day's compact file. The pass writes its
 final daily index once, then deletes raw files, and advances its watermark
 once, last. Before the index lands, raw files survive; after it lands, the
 next wake rebuilds from the indexed day and any raw files left.
@@ -44,10 +44,12 @@ month the window no longer keeps are past the ledger's reach, and are dropped.
 record, and the pass takes those days like any other, a first run starting as if
 the window kept every month.
 
-**A listing outlives its day by `raw_index_keep_days`**, counted from the day's
-end. It goes only once its day is compacted and its raw folder is empty, so a
-day that is waiting to be taken again keeps the listing it will replace. It goes
-whether the window reports or not, because its day's rows are in a daily file.
+**The compaction writes no raw listing, and deletes every one it finds.** A
+listing under `state/raw/<ledger>/index/` named the raw files a packed day was
+built from. Nothing read it: a day taken again is rebuilt from its daily file
+and the new raw files, and the site build writes its own listings into the
+staged site for days not packed yet. Listings an earlier build wrote go at the
+next pass, whether the window reports or not, because they hold no row.
 """
 
 from __future__ import annotations
@@ -64,24 +66,15 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry
 from idhazh.gardener import named_trees, schedule
-from idhazh.gardener.tasks import _index_day
 from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
 
 logger = logging.getLogger(__name__)
 
 
-def drop_listings(
-    tree: CompactTree, policy: CompactionPolicy, *, now: datetime
-) -> tuple[Stop, ...]:
-    """Listings past `raw_index_keep_days` whose day is compacted and holds no raw file."""
-    waiting = set(tree.raw_days)
+def drop_listings(tree: CompactTree) -> tuple[Stop, ...]:
+    """Every raw listing an earlier build left under `index/`. Nothing reads one."""
     for day in named_trees.listed_days(tree.listing, tree.state_dir, tree.ledger):
-        if tree.daily_through is None or day > tree.daily_through or day in waiting:
-            continue
-        if schedule.is_eligible(
-            date.fromisoformat(day), now=now, after_days=policy.raw_index_keep_days
-        ):
-            tree.delete(ledger.raw_index_path(tree.state_dir, tree.ledger, day))
+        tree.delete(ledger.raw_index_path(tree.state_dir, tree.ledger, day))
     return ()
 
 
@@ -227,11 +220,6 @@ def _take[C: Contract](
         covers=day,
         identity=identity,
         built_from=len(files) + (existing is not None),
-    )
-    listing = _index_day.listing(files, ledger=tree.ledger, day=day, listed_at=stamp)
-    tree.write(
-        ledger.raw_index_path(tree.state_dir, tree.ledger, day),
-        listing.to_json().encode("ascii"),
     )
     if existing is not None and existing != built.path:
         tree.delete(existing)
