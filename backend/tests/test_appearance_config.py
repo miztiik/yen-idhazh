@@ -305,7 +305,7 @@ def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() 
     resolved = AppConfig.model_validate(legacy)
     assert resolved.ui.archive_page_size >= 1
     assert resolved.console.default_window_days in resolved.console.window_presets
-    assert 0.0 < resolved.assist.recall_min <= 1.0
+    assert resolved.assist.result_limit >= 1
 
 
 def test_the_archive_may_not_list_more_than_a_month_of_days_as_rows() -> None:
