@@ -1,6 +1,7 @@
 """What every feed did, on every run.
 
-One row per feed per run, appended to `state/feed-health/<YYYY>/<MM>/<DD>.csv`.
+One row per feed per run, filed through the ledger door by the plan stage under
+`state/raw/feed-health/` and packed later under `state/compact/feed-health/`.
 It is written whether the run publishes or not, because the days a source is
 worth measuring on are the days the run went badly.
 
@@ -278,9 +279,10 @@ def supersedes(later: FeedHealthRow, kept: FeedHealthRow) -> bool:
 
     One feed read once in one run is one event, so two rows under one
     `(run_id, feed_id)` are two accounts of the same event and one of them has
-    to win. They exist because a second attempt at a run cannot see what the
-    first attempt pushed after its checkout, appends its own answer, and the
-    union merge keeps both lines.
+    to win. On the ledger door a re-run's file replaces its first try's whole,
+    so two accounts meet here only when two writers that are not attempts at one
+    work unit file one run's verdict, or when a late CSV file is folded onto the
+    rows the door already holds.
 
     A read that carried entries wins, whichever row is newer. The attempt that
     got articles is the attempt that happened, and a later empty retry against

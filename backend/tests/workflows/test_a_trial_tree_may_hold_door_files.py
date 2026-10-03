@@ -31,7 +31,6 @@ from conftest import (
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
@@ -229,31 +228,11 @@ def test_the_trial_check_refuses_invalid_or_unrelated_lookup_files(
     assert pipeline_test_ledgers.refusals(gathered, roots=roots)
 
 
-def test_a_day_shard_and_a_trace_still_pass_beside_the_door_files(tmp_path: Path) -> None:
-    """The two older shapes are read as they were, in a tree that also holds raw files."""
+def test_a_trace_still_passes_beside_the_door_files(tmp_path: Path) -> None:
+    """A trace remains allowed beside raw ledger files."""
     tree, root, roots = _a_trial_tree(tmp_path)
     assert _file_census(root)
     assert _file_machine(root)
-    assert ledger.write_segment(
-        root,
-        LedgerName.FEED_HEALTH,
-        [
-            FeedHealthRow(
-                version=FeedHealthRow.schema_version(),
-                date=DAY,
-                run_id=RUN_ID,
-                feed_id="example-feed",
-                checked_at=f"{DAY}T06:00:00Z",
-                outcome=FetchOutcome.OK,
-                status=200,
-                items=2,
-            )
-        ],
-        run_id=RUN_ID,
-        attempt=1,
-        job=ServerJob.WORK,
-        shard=0,
-    ), "no day shard was written"
     trace = traces.committed_trace_path(
         root, run_id=RUN_ID, attempt=1, job=ServerJob.WORK, shard=0
     )
@@ -317,9 +296,12 @@ def _under_another_door_ledger(root: Path, filed: Path) -> Path:
 
 
 def _under_a_day_tree_ledger(root: Path, filed: Path) -> Path:
-    """A copy under `raw/feed-health/`, a ledger that files day trees, never door files."""
+    """A copy under `raw/summary-quality-evals-index/`, a ledger that files day trees."""
     return _copied(
-        filed, ledger.raw_path(root, LedgerName.FEED_HEALTH, DAY, uuid.UUID(filed.stem))
+        filed,
+        ledger.raw_path(
+            root, LedgerName.SUMMARY_QUALITY_EVALS_INDEX, DAY, uuid.UUID(filed.stem)
+        ),
     )
 
 

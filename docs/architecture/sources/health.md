@@ -48,31 +48,29 @@ HUMAN SOURCE REVIEW (after at least 30 days of evidence)
 
 ## Every feed, every run, one row
 
-`state/feed-health/<YYYY>/<MM>/<DD>/`, appended by the Collect stage. One row per feed per run, carrying the run id, the date, the feed id, the outcome, the HTTP status, how many items came back, and a short detail.
+`state/raw/feed-health/<YYYY>/<MM>/<DD>/`, one raw file a run, filed by the plan job through the ledger door ([../contracts/persistence.md](../contracts/persistence.md)) and packed by the upkeep wake into day and month files under `state/compact/feed-health/`. One row per feed per run, carrying the run id, the date, the feed id, the outcome, the HTTP status, how many items came back, and a short detail.
 
 It is written **whether the run publishes or not**. The days a source is worth measuring on are the days the run went badly, and a ledger that only records good runs measures nothing.
 
-Monthly shards, because a read looks back 31 days - just enough that a quarantine decided on the first of the month can still see the failures that caused it.
+The plan stage reads back the newest 31 days the ledger holds - just enough that a quarantine decided on the first of the month can still see the failures that caused it - and the door opens only those days.
 
 ## A month past its age is deleted, and no summary replaces it
 
-The gardener's `feed-health` task keeps 14 months, the window in `config/gardener/feed-health.json`, and unlinks a shard older than that. Nothing is folded first, and that is the decision rather than an omission: the quarantine reads 31 days and the console reaches at most `console.max_window_days` (366), so no total over a month fourteen months back has a reader - and writing one would persist a shape nothing consumes, for ever. Fourteen for the same reason the item-health window is: a 366-day read walks 367 inclusive days and those days can fall in fourteen calendar month files.
+`config/gardener/compact-feed-health.json` governs the ledger. Its packing runs live: a finished day becomes one daily file the day after it ends, and a month one monthly file 45 days after it ends. Its monthly window keeps 14 months. Nothing is folded into a total first, and that is the decision rather than an omission: the quarantine reads 31 days and the console reaches at most `console.max_window_days` (366), so no total over a month fourteen months back has a reader - and writing one would persist a shape nothing consumes, for ever. Fourteen for the same reason the item-health window is: a 366-day read walks 367 inclusive days and those days can fall in fourteen calendar month files, and the gardener's loader refuses a compaction that reaches back less than that.
 
-**Older than the oldest month kept, never merely outside a window.** `--date` takes whatever it is handed, so a run given a date in the past draws a smaller window and every shard since falls outside it. Deleting below the window's floor instead means a back-dated run deletes less rather than deleting the shard the next quarantine reads.
+**`state/raw/feed-retirements/` is never a candidate.** It is a ledger of its own with its own compaction, and it carries no time window at all: one row is one address a server reported permanently gone. The evidence that retired an address lives in days this ledger's window is entitled to delete, so the record has to outlive them - a run that forgot it would start asking a dead address again on the day the last 410 row aged out.
 
-**`state/raw/feed-retirements/` is never a candidate.** It is not in this directory, and it carries no time window at all: one row is one address a server reported permanently gone. The evidence that retired an address lives in shards this prune is entitled to delete, so the record has to outlive them - a run that forgot it would start asking a dead address again on the day the last 410 row aged out.
-
-**The step ships in dry run.** It logs every file a live run would remove and removes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit taken after a scheduled run has printed the list. Measured on this checkout on 2026-09-02: a live run removes nothing today, and the first files it would take are the day files under `state/feed-health/2026/08/` on **2027-10-01**. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
+**The window ships reporting.** `monthly_window_dry_run` is true, so a wake logs every month file a live window would delete and deletes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit a person makes after a scheduled wake has printed the list. Worked out from `first_kept_month` in `backend/idhazh/gardener/tasks/_monthly_period.py` on 2026-10-02: the first month a live window would take is August 2026, at the first wake on or after 2027-12-16. It is arithmetic on a fixed calendar, so there is no spread.
 
 ## One row per feed per run, enforced rather than assumed
 
 `(run_id, feed_id)` is what makes two rows the same record - `ledger.FEED_HEALTH_KEY`. A feed is read once in a run, so two rows under one key are two accounts of one event.
 
-**Two runs are entitled to a row each and always get one**, because a run id carries the identity of the execution that made it. What repeats the key is one execution attempted twice: the second attempt writes against a checkout frozen at the commit its run was triggered at, so it cannot see what the first attempt pushed. Until 2026-09-19 a union merge driver on `state/**/*.csv` then concatenated the two rather than conflicting, and counted raw, one bad run read as two failures and a five-strike rest arrived in three runs.
+**Two runs are entitled to a row each and always get one**, because a run id carries the identity of the execution that made it. What repeats the key is one execution attempted twice. Until 2026-09-19 a union merge driver on `state/**/*.csv` then concatenated the two attempts' rows rather than conflicting, and counted raw, one bad run read as two failures and a five-strike rest arrived in three runs.
 
-`ledger.write_segment` puts each writer's rows in its own file under the day, and `day_shards.settled_rows` settles the day against `FEED_HEALTH_KEY` at read time. That settlement is what this ledger gets, and it is enough because the union driver is gone: a second attempt that races its own first attempt stops at the rebase instead of landing a second row. This read-time settlement does not rewrite the older feed-health files.
+**On the ledger door a re-run replaces its first try.** Two attempts of one plan job are one work unit, and the door keeps the file of the higher attempt whole ([../contracts/persistence.md](../contracts/persistence.md#reading-a-raw-ledger)): the re-run read every feed again, so its account of a feed is the one on record, even where the first try carried articles and the re-run came back empty. The packing settles a day the same way, so a packed day holds one row per feed per run.
 
-**Where two accounts conflict, the read that carried entries wins**, whichever row is newer: the attempt that got articles is the attempt that happened, and an empty retry against an address that had just delivered describes the retry rather than the feed. Between two rows that agree on that, the later `checked_at` wins. A tie leaves the row already on record. The rule is `contracts.feed_health.supersedes`, and it is the one key here settled by a rule instead of by arrival order - everywhere else a repeat is one attempt written down twice, so the two rows agree.
+**Where two writers that are not attempts at one work unit file one run's verdict on a feed, the read that carried entries wins**, whichever row is newer: an account that got articles is the read that happened, and an empty one against an address that had just delivered describes that read rather than the feed. Between two rows that agree on that, the later `checked_at` wins. A tie leaves the row already on record. The rule is `contracts.feed_health.supersedes`, reached through `ledger.FEED_HEALTH_RULE`, and it is the one key here settled by a rule instead of by arrival order. On the door that meeting happens when a day the migration filed from the committed CSV meets a later raw file of the same run.
 
 Measured on this developer checkout, 2026-09-02, over the committed shards: 6,577 rows carried 6,022 distinct `(run_id, feed_id)` keys, so **555 rows were a second account of an event already on record** - 8.4 percent of the ledger - and 37 of those keys held rows that disagreed about what the feed did. Four keys were settled in favour of the later attempt, each because that attempt carried articles the earlier one had not. Reading a committed file is deterministic, so the spread is zero.
 
@@ -573,10 +571,10 @@ cannot disagree about what a failure is. Three facts it settles:
 - **A polite refusal is not a failure**, here as everywhere else. A source
  honouring its own `robots.txt` has not broken. It has not delivered either,
  which is the other half and the half that was missing.
-- **The span is the shards the widest window preset reaches, and the sentence
+- **The span is the days the widest window preset reaches, and the sentence
  says so.** The console hands `reliability` the rows from
- `feedResults(shardMonths(widest))`, which is five month shards at a widest
- preset of 90 days. The streak beside each feed is read over those same rows,
+ `feedResults(shardDays(widest))`, the newest packed days a widest preset of
+ 90 days reaches. The streak beside each feed is read over those same rows,
  because two spans in one section is the defect the shared window exists to
  remove. Until 2026-09-09 the sentence said the feeds "have never failed",
  which claims every run there has been over a read that opens a bounded set of

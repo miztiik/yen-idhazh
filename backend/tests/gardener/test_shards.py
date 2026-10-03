@@ -47,8 +47,8 @@ def test_the_split_is_round_robin_over_sorted_names(tmp_path: Path) -> None:
 
     assert planned.shard_count == 5
     assert [shard.task_names for shard in planned.shards] == [
-        ("compact-gardener", "trials"),
-        ("feed-health", "workflow-artifacts"),
+        ("compact-feed-health", "trials"),
+        ("compact-gardener", "workflow-artifacts"),
         ("seen",),
         ("telemetry-aggregate",),
         ("traces",),

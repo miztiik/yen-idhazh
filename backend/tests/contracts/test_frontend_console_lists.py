@@ -3,10 +3,11 @@
 Eight console modules carry a value that has to match what a Pydantic contract
 declares - the eval panel's column map, the settings vocabulary, the doubt
 reasons, the bandwidth margin, the prompt-reuse column grammar, the date the
-busy share stopped holding the stolen half, the article record's column list,
-and the routes the strip draws. A copy that has fallen behind its contract draws
-a panel with a column missing from it, names a column no run writes, or prints a
-correction for the wrong day, and none of those shows up as an error anywhere.
+busy share stopped holding the stolen half, the article and feed records'
+column lists, and the routes the strip draws. A copy that has fallen behind its
+contract draws a panel with a column missing from it, names a column no run
+writes, or prints a correction for the wrong day, and none of those shows up as
+an error anywhere.
 
 **These six moved here from the browser suite on 2026-09-23**, where each read
 the generated `schemas/<stem>.schema.json`, or the TypeScript generated beside
@@ -28,6 +29,7 @@ from conftest import REPO_ROOT, read_text
 
 from idhazh.contracts.console_band import RouteId
 from idhazh.contracts.eval_row import BandReason, EvalRow
+from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -103,6 +105,24 @@ def test_the_article_record_asks_for_every_column_the_contract_declares_in_its_o
         f"Missing: {[name for name in declared if name not in asked]}. "
         f"Not declared: {[name for name in asked if name not in declared]}. "
         "If both are empty, only the order differs: write them in the contract's order."
+    )
+
+
+def test_the_feed_record_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
+    """The Voices page reads part of the feed record, so its list is a part, in order.
+
+    `ledger-rows.ts` spells the `FeedHealthRow` columns the page reads, because
+    the door never offers every column. A column the contract renames or drops
+    would reach the page as an empty reading rather than as an error.
+    """
+    asked = quoted_strings(read_text(SERVER / "ledger-rows.ts"), "FEED_HEALTH_COLUMNS")
+    declared = list(FeedHealthRow.csv_columns())
+
+    assert asked, "FEED_HEALTH_COLUMNS in ledger-rows.ts names no column"
+    assert [name for name in declared if name in asked] == asked, (
+        "FEED_HEALTH_COLUMNS in ledger-rows.ts is not part of FeedHealthRow's columns in "
+        f"order. Not declared: {[name for name in asked if name not in declared]}. "
+        "If that is empty, only the order differs: write them in the contract's order."
     )
 
 

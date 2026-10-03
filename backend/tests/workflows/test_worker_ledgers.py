@@ -402,9 +402,9 @@ def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_u
 
     Every tree under `state/` carried a union driver until 2026-09-19, which is
     what let a second attempt at one job stack a row the first attempt had
-    already pushed. `state/feed-health` is the tree that shows why the
+    already pushed. `state/feed-health` was the tree that showed why the
     written-once name replaced it: two plan jobs of one night can hold different
-    verdicts on one feed, and a union there keeps both and makes the
+    verdicts on one feed, and a union there kept both and made the
     disagreement quiet.
 
     No path has to exist. `check-attr` matches a name against the rules and

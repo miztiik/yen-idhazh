@@ -325,7 +325,7 @@ Two knobs, both under `collect`, both bounded so the factor can only ever reduce
 - `reliability_window_days` (30) is the trailing window. A feed publishes a few times a day at most, so thirty days is dozens of reads - enough that one bad afternoon cannot set the factor. The read is bounded by this window and never the whole ledger (Guardrail #12).
 - `reliability_floor` (0.5) is the lowest the factor may reach. A feed with a record of nothing but dead reads scores 0.0 raw and is clamped up to 0.5, so the worst its record can do is **halve its authority - a two-to-one cut, never more**. That is why this factor alone can never empty a desk: a `min_feeds` floor counts configured feeds, and a multiplier scales a score without removing a feed from the count.
 
-A feed with no evidence-bearing read in the window - brand new, or only ever rested and politely refused - scores 1.0. **Unknown is not the same as bad**, so an untested feed is never punished; it simply carries its tier until it has a record. The map of factors is built once per run by `telemetry.source_health.reliability` off the committed feed-health shards and read inside `authority`; a feed absent from the map reads 1.0.
+A feed with no evidence-bearing read in the window - brand new, or only ever rested and politely refused - scores 1.0. **Unknown is not the same as bad**, so an untested feed is never punished; it simply carries its tier until it has a record. The map of factors is built once per run by `telemetry.source_health.reliability` off the feed-health days the ledger door holds, and read inside `authority`; a feed absent from the map reads 1.0.
 
 ## The same story at two addresses is planned once
 

@@ -37,8 +37,8 @@ from idhazh.telemetry import source_health
 RESTING_DETAIL: Final = "resting after repeated failures"
 
 #: The plan runs once for the whole day, so its writer files are shard 0 of one.
-#: A number rather than nothing, because the grammar every tree shares names a
-#: shard and a stage with one of them still has to say which.
+#: A number rather than nothing, because every writer's identity names a shard
+#: and a stage with one of them still has to say which.
 PLAN_SHARD: Final = 0
 
 #: The name a file this stage writes through the ledger door carries as its
@@ -106,8 +106,9 @@ def stage_plan(
     does not ask for it plans exactly what it planned before.
 
     `commit_sha` is the commit this run checked out. Every file this run writes
-    through the ledger door - a retirement, the first sights, the counterfactual
-    scores - names it, so the file can be traced to the code that decided it.
+    through the ledger door - a retirement, the first sights, the feed verdicts,
+    the counterfactual scores - names it, so the file can be traced to the code
+    that decided it.
     """
     read_url = fetcher or common.live_fetcher(settings)
     clock = now or assemble.utc_now
@@ -195,29 +196,15 @@ def stage_plan(
         _first_sights(candidates, first_seen, generated_at, run_id),
         identity=identity,
     )
-    # This job's own file, never a day file two plan jobs would share. A night
-    # runs the plan more than once and each run has a verdict on every feed, so
-    # one shared path made them conflict - and a conflict here killed the job,
-    # which meant `assemble` never ran at all. The plan runs once for the whole
-    # day, so it is shard 0 of one.
-    ledger.write_segment(
-        state,
-        LedgerName.FEED_HEALTH,
-        health,
-        run_id=run_id,
-        attempt=run_context.run_attempt(),
-        job=ServerJob.PLAN,
-        shard=PLAN_SHARD,
+    feed_files = ledger.persist(
+        state, health, ledger=LedgerName.FEED_HEALTH, covers=date, identity=identity
     )
-    publication.record_feed_health(
-        common.PUBLIC_ROOT.parent,
-        state,
-        dates=[row.date for row in health],
-        run_id=run_id,
-        attempt=run_context.run_attempt(),
-        job=ServerJob.PLAN.value,
-        shard=PLAN_SHARD,
-    )
+    if state.resolve() == (config.REPO_ROOT / ledger.STATE_DIRNAME).resolve():
+        publication.record_feed_health(
+            common.PUBLIC_ROOT.parent,
+            state,
+            paths=[path.relative_to(state).as_posix() for path in feed_files],
+        )
     published_on = ledger.load_published(
         state, today=date, within_days=collect.published_window_days
     )

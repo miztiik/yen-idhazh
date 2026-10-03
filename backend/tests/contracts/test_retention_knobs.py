@@ -77,7 +77,7 @@ def test_the_committed_config_no_longer_emits_a_removed_name() -> None:
 #: Every cleanup knob that moved into a gardener declaration, and the file it went to.
 MOVED_TO_A_DECLARATION = [
     ("observability", "trace_window_days", "config/gardener/traces.json"),
-    ("observability", "feed_health_keep_months", "config/gardener/feed-health.json"),
+    ("observability", "feed_health_keep_months", "config/gardener/compact-feed-health.json"),
     (
         "observability",
         "host_fingerprint_keep_months",

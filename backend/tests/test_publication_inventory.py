@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_inventory import PublicationEntry, PublicationInventory
 from idhazh.publication import (
@@ -299,7 +300,7 @@ def test_state_entry_does_not_change_public_totals_or_disappear_on_public_update
     public = tmp_path / "public"
     state = tmp_path / "state"
     empty_inventory(public)
-    name = "feed-health/2026/08/20/writer.csv"
+    name = "raw/feed-health/2026/08/20/writer.parquet"
     put(state, name, "row\n")
     record_state_files(public, state, paths=[name])
     put(public, "telemetry/2026-08.csv", "abc")
@@ -318,31 +319,40 @@ def test_state_entry_does_not_change_public_totals_or_disappear_on_public_update
 def test_state_seed_reads_only_named_state_files(tmp_path: Path) -> None:
     public = tmp_path / "public"
     state = tmp_path / "state"
-    name = "feed-health/2026/08/20/writer.csv"
+    name = "raw/feed-health/2026/08/20/writer.parquet"
     put(state, name)
-    put(state, "feed-health/old-unlisted.csv")
+    put(state, "raw/feed-health/old-unlisted.parquet")
     inventory = initialize_from_paths(public, paths=[], state_root=state, state_paths=[name])
     assert paths(inventory, "state") == [name]
     assert paths(inventory, "public") == []
     assert inventory.total_bytes == 0
 
 
-def test_feed_health_registers_exact_writer_filename(tmp_path: Path) -> None:
+def test_feed_health_registers_the_raw_file_returned_by_the_ledger(tmp_path: Path) -> None:
+    from idhazh import ledger
+
     public = tmp_path / "public"
     state = tmp_path / "state"
     empty_inventory(public)
-    name = "feed-health/2026/08/20/2026-08-20-1-1-plan-00.csv"
-    put(state, name)
-    inventory = record_feed_health(
-        public,
+    row = FeedHealthRow.read(CONTRACT_FIXTURES_DIR / "feed-health-row" / "answered.json")
+    files = ledger.persist(
         state,
-        dates=["2026-08-20"],
-        run_id="2026-08-20-1",
-        attempt=1,
-        job="plan",
-        shard=0,
+        [row],
+        ledger=LedgerName.FEED_HEALTH,
+        covers=row.date,
+        identity=WriterIdentity(
+            run_id=row.run_id,
+            attempt=1,
+            job=ServerJob.PLAN,
+            shard=0,
+            producer="tests.publication_inventory",
+            git_sha="a" * 40,
+        ),
     )
-    assert paths(inventory, "state") == [name]
+    names = [path.relative_to(state).as_posix() for path in files]
+    inventory = record_feed_health(public, state, paths=names)
+    assert paths(inventory, "state") == names
+    assert names[0].startswith("raw/feed-health/2026/08/23/")
 
 
 def test_measured_inventory_without_roots_upgrades_by_its_named_list(tmp_path: Path) -> None:
@@ -375,25 +385,27 @@ def test_feed_health_registration_happens_after_real_writer_creates_rows(tmp_pat
     public, state = tmp_path / "public", tmp_path / "state"
     empty_inventory(public)
     row = FeedHealthRow.read(CONTRACT_FIXTURES_DIR / "feed-health-row" / "answered.json")
-    before = record_feed_health(
-        public, state, dates=[row.date], run_id=row.run_id, attempt=1, job="plan", shard=0
-    )
+    before = record_feed_health(public, state, paths=[])
     assert paths(before, "state") == []
-    ledger.write_segment(
+    files = ledger.persist(
         state,
-        LedgerName.FEED_HEALTH,
         [row],
-        run_id=row.run_id,
-        attempt=1,
-        job=ServerJob.PLAN,
-        shard=0,
+        ledger=LedgerName.FEED_HEALTH,
+        covers=row.date,
+        identity=WriterIdentity(
+            run_id=row.run_id,
+            attempt=1,
+            job=ServerJob.PLAN,
+            shard=0,
+            producer="tests.publication_inventory",
+            git_sha="a" * 40,
+        ),
     )
-    inventory = record_feed_health(
-        public, state, dates=[row.date], run_id=row.run_id, attempt=1, job="plan", shard=0
-    )
+    names = [path.relative_to(state).as_posix() for path in files]
+    inventory = record_feed_health(public, state, paths=names)
     assert len(paths(inventory, "state")) == 1
     name = paths(inventory, "state")[0]
-    assert name.startswith("feed-health/2026/08/23/")
+    assert name.startswith("raw/feed-health/2026/08/23/")
     assert (state / name).is_file()
     assert inventory.entries[0].bytes == (state / name).stat().st_size
     assert inventory.total_bytes == 0
@@ -403,7 +415,10 @@ def test_concurrent_public_and_state_writers_preserve_all_entries(tmp_path: Path
     public, state = tmp_path / "public", tmp_path / "state"
     empty_inventory(public)
     public_names = ["telemetry/2026-08.csv", "machine/2026-08.csv"]
-    state_names = ["feed-health/2026/08/20/one.csv", "feed-health/2026/08/20/two.csv"]
+    state_names = [
+        "raw/feed-health/2026/08/20/one.parquet",
+        "raw/feed-health/2026/08/20/two.parquet",
+    ]
     for name in public_names:
         put(public, name)
     for name in state_names:

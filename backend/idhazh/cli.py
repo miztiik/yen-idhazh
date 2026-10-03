@@ -555,6 +555,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.day,
                 state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
                 run_id=args.run_id,
+                commit_sha=args.commit,
             )
         except PublicationCheckError as error:
             logging.getLogger(__name__).error("check-publication is mis-wired: %s", error)

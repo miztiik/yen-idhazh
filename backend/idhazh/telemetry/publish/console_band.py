@@ -18,7 +18,7 @@ owns it, never re-derived from a wider one:
 - the runs, the site size and the day's article count come from the run-day
   shards this run just wrote, because re-reducing five months of day payloads is
   exactly the walk those shards exist to remove (Guardrail #12);
-- the feed trouble comes from `state/feed-health/` through `discover.settled`,
+- the feed trouble comes from the feed-health ledger through `discover.settled`,
   `discover.streak` and `discover.resting`, because those are the reducers the
   pipeline itself rested a feed by, and a page that ran its own would contradict
   the run that produced it;
@@ -1316,8 +1316,8 @@ def publish(
 
     - the newest `shard_months(widest)` run-day shards, for the runs, the size
       and the article counts;
-    - `state/feed-health/` over the widest span, through `ledger.load_health`,
-      which opens the day files that span names and no others;
+    - the feed-health days the widest span reaches, through `ledger.load_health`,
+      which opens the files of the newest days the ledger holds and no others;
     - the newest day's item-health rows through `ledger.load_days`, which opens
       that one day's files, and its day-metrics record, one file;
     - the host rows for the days the widest span reaches, through

@@ -13,12 +13,12 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text, seed_item_health
 from pydantic import ValidationError
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.pipeline_tests import (
     MINIMUM_CANDIDATES,
@@ -760,31 +760,29 @@ TEST_CASE_TRACE: str = ledger.segment_name(
 
 
 def _a_downloaded_tree(root: Path, *, test_case: str) -> Path:
-    """One test case's ledgers as the artifact carries them: a day shard and a trace.
+    """One test case's ledgers as the artifact carries them: a raw census file and a trace.
 
     Both paths are built by the producers a test case run uses, so a grammar that
     moves takes this fixture with it rather than leaving it green against a
     shape nothing writes.
     """
-    row = FeedHealthRow.model_validate(
-        {
-            "date": TEST_CASE_DATE,
-            "run_id": TEST_CASE_RUN_ID,
-            "feed_id": "example-feed",
-            "checked_at": f"{TEST_CASE_DATE}T06:00:00Z",
-            "outcome": "ok",
-            "status": 200,
-            "items": 2,
-        }
-    )
-    ledger.write_segment(
+    seed_item_health(
         root / test_case,
-        LedgerName.FEED_HEALTH,
-        [row],
-        run_id=TEST_CASE_RUN_ID,
-        attempt=TEST_CASE_ATTEMPT,
-        job=TEST_CASE_JOB_KIND,
-        shard=TEST_CASE_SHARD,
+        TEST_CASE_DATE,
+        [
+            ItemHealthRow(
+                version=ItemHealthRow.schema_version(),
+                date=TEST_CASE_DATE,
+                run_id=TEST_CASE_RUN_ID,
+                item_id="ai-0000000001",
+                url_key=f"{1:064x}",
+                canonical_url="https://example.com/items/1",
+                vertical="ai",
+                source_id="a-source",
+                stage=ItemStage.PUBLISH,
+                outcome=ItemOutcome.OK,
+            )
+        ],
     )
     trace = traces.committed_trace_path(
         root / test_case,
@@ -799,7 +797,7 @@ def _a_downloaded_tree(root: Path, *, test_case: str) -> Path:
 
 
 def test_the_check_passes_the_two_shapes_a_test_case_really_writes(tmp_path: Path) -> None:
-    """A day shard and a trace, filed under a declared test case's own trial root."""
+    """A raw census file and a trace, filed under a declared test case's own trial root."""
     test_case = _settings().test_cases[0]
     tree = _a_downloaded_tree(tmp_path / "trial-ledgers", test_case=test_case.trial_state_dirname)
 
@@ -817,7 +815,7 @@ def test_the_check_has_nothing_to_refuse_when_nothing_arrived(tmp_path: Path) ->
     ("relative", "because"),
     [
         (
-            f"a-tenant/feed-health/{TEST_CASE_DAY_PATH}/{TEST_CASE_WRITER}",
+            f"a-tenant/summary-quality-evals-index/{TEST_CASE_DAY_PATH}/{TEST_CASE_WRITER}",
             "no declared test case",
         ),
         (
@@ -920,8 +918,8 @@ def test_every_declared_test_case_is_placed_whether_or_not_it_wrote_anything(
     assert len(staged) == len(test_cases)
     for test_case in test_cases:
         assert (state / test_case.trial_state_dirname).is_dir()
-    assert ledger.tree_root(
-        state / test_cases[0].trial_state_dirname, LedgerName.FEED_HEALTH
+    assert ledger.raw_root(
+        state / test_cases[0].trial_state_dirname, LedgerName.ITEM_HEALTH
     ).is_dir()
 
 

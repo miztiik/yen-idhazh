@@ -290,7 +290,6 @@ class _TreeShape(NamedTuple):
 #: declared table rather than a rule a reader re-derives: the key is a fact about
 #: the ledger and a second copy of it is how two readers start disagreeing.
 _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
-    LedgerName.FEED_HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
 }
 
 

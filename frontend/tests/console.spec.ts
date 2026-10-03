@@ -11,7 +11,8 @@ import { axisLabels, centreOffset, spanLabel } from '../src/lib/charts/run-histo
 import { dayKey, monthsInWindow, panWindow, toDay, windowOfDays } from '../src/lib/charts/viewport';
 import { shortDate } from '../src/lib/format';
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
-import { readCsv, readDayShards, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
+import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
+import { feedHealthRows } from '../src/lib/server/ledger-rows';
 import { failing, preserves, reliability, type FeedRecord } from '../src/lib/feed-health';
 import { canaryArticleRows, canaryScoreRows, heldRows } from './support/canary-records';
 import { telemetryRow } from './support/telemetry-row';
@@ -757,13 +758,12 @@ const MIN_ATTEMPTS =
  * The CANARY tree, because that is what `build:canary` built the site from.
  * Reading `state/` here would compare the page to a ledger it never saw.
  *
- * Through `readDayShards`, the reader the page's own server uses, so a grain
+ * Through `feedHealthRows`, the reader the page's own server uses, so a grain
  * change cannot pass here and fail there.
  */
-function feedLedger(root: string): FeedRecord[] {
-	const dir = join(root, 'state', 'feed-health');
-	const inventoryRoot = root === CANARY ? root : undefined;
-	return readDayShards(dir, -1, undefined, inventoryRoot).rows.map((row) => ({
+async function feedLedger(root: string): Promise<FeedRecord[]> {
+	const table = await feedHealthRows(-1, join(root, 'state'));
+	return table.rows.map((row) => ({
 		date: row.date ?? '',
 		runId: row.run_id ?? '',
 		outcome: row.outcome ?? '',
@@ -807,7 +807,7 @@ function recordByHand(rows: FeedRecord[]) {
 test('THE ORACLE: the feed headline carries its own denominator and span', async ({ page }) => {
 	await page.goto('/console/voices/');
 
-	const byHand = recordByHand(feedLedger(CANARY));
+	const byHand = recordByHand(await feedLedger(CANARY));
 	// Read against a fact the fixture owns, never against a locator count: a
 	// renamed attribute would make every number zero and switch this off.
 	expect(byHand.checked, 'the canary ledger asked no feed at all').toBeGreaterThan(0);
@@ -839,7 +839,7 @@ test('THE ORACLE: the disclosed names are exactly the feeds that did not fail', 
 }) => {
 	await page.goto('/console/voices/');
 
-	const byHand = recordByHand(feedLedger(CANARY));
+	const byHand = recordByHand(await feedLedger(CANARY));
 	const named = await page
 		.locator('[data-feed-clean-name]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-clean-name') ?? ''));
@@ -857,7 +857,7 @@ test('THE ORACLE: the failure list is capped and its tail counts the remainder',
 }) => {
 	await page.goto('/console/voices/');
 
-	const byHand = recordByHand(feedLedger(CANARY));
+	const byHand = recordByHand(await feedLedger(CANARY));
 	const table = page.locator('[data-feeds="table"]');
 	const drawn = Number(await table.getAttribute('data-feeds-drawn'));
 	const hidden = Number(await table.getAttribute('data-feeds-hidden'));
@@ -912,11 +912,12 @@ test('a record too shallow for a rate says so instead of printing one', () => {
 	expect(withRest.clean.length + withRest.failed).toBe(withRest.checked);
 });
 
-test('the committed ledger is deeper than the cap, so the tail sentence has work to do', () => {
+test('the committed ledger is deeper than the cap, so the tail sentence has work to do', async () => {
 	// The canary cannot show a capped list, so the numbers the production build
 	// prints are pinned here off the ledger the production build reads. The
 	// click-through is the section-12 smoke.
-	const real = recordByHand(feedLedger(resolve(process.cwd(), '..')));
+	const committed = await feedLedger(resolve(process.cwd(), '..'));
+	const real = recordByHand(committed);
 	expect(real.checked, 'no committed feed-health ledger - the read is broken').toBeGreaterThan(0);
 	expect(
 		real.broken.length,
@@ -925,7 +926,7 @@ test('the committed ledger is deeper than the cap, so the tail sentence has work
 	expect(real.runs).toBeGreaterThanOrEqual(MIN_ATTEMPTS);
 	expect(real.clean.length + real.broken.length).toBe(real.checked);
 
-	const measured = reliability(feedLedger(resolve(process.cwd(), '..')));
+	const measured = reliability(committed);
 	expect(measured.clean).toEqual(real.clean);
 	expect(measured.checked).toBe(real.checked);
 	expect(measured.runs).toBe(real.runs);

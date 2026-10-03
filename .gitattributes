@@ -6,25 +6,26 @@
 # change the hash the run manifest records for it.
 config/*.json text eol=lf
 
-# The committed run state: the eval ledger, the fingerprints and the
-# feed-health record. Rows are appended by CI on Linux and read by a developer
-# on Windows; a CRLF rewrite would show every historical row as changed.
-# `*.csv text eol=lf` near the bottom of this file is what pins them, so none
-# of them needs a line of its own for that.
+# The committed run state still filed as CSV: the eval ledger's ID folder and
+# the judge's and the council's day files. Rows are appended by CI on Linux and
+# read by a developer on Windows; a CRLF rewrite would show every historical row
+# as changed. `*.csv text eol=lf` near the bottom of this file is what pins them,
+# so none of them needs a line of its own for that.
 #
-# Every one of those files carried `merge=union` until 2026-09-19, and that is
+# Every CSV file under `state/` took `merge=union` until 2026-09-19, and that is
 # what a lost push race used to stack. A job's checkout is pinned to the commit
 # that triggered its run, so a second attempt could not see the rows the first
 # attempt pushed, appended them again, and the union kept both - a key twice in
-# a file every reader of it assumes holds each key once. Each writer now takes
-# its own file inside the day directory, named for its run, attempt, job and
-# shard, so there is nothing for a union to settle and nothing to sweep up
-# after one.
+# a file every reader of it assumes holds each key once. A tree with more than
+# one writer now gives each writer its own file inside the day directory, named
+# for its run, attempt, job and shard, so there is nothing for a union to settle
+# and nothing to sweep up after one. Only the trees below keep the driver,
+# because two of their writers appending never disagree.
 #
-# `state/feed-health/` is the one that deliberately takes NO union driver. Two
-# plan jobs of one night each hold a verdict on every feed, and those two
-# verdicts can disagree - so a union there would keep both and make the conflict
-# quiet rather than remove it. The written-once name removes it.
+# The feed-health record took NO union driver from that day on. Two plan jobs of
+# one night each hold a verdict on every feed, and those two verdicts can
+# disagree - so a union there would have kept both and made the conflict quiet
+# rather than removed it. It has since moved under `state/raw/`.
 #
 # `state/feed-retirements.csv` and `state/visual-prunes/` carried a union driver
 # until 2026-09-28, when both moved under `state/raw/`: every file there has one

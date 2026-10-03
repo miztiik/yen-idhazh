@@ -24,6 +24,7 @@ import { settled } from '../feed-health';
 import { publishedVisual, refusedDrawing } from '../payload/drawing';
 import { dropVectors, coverageOf } from '../payload/project';
 import type { DigestDay, DigestItem, SeededVisual } from '$lib/payload/types';
+import { feedHealthRows } from './ledger-rows';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
 export const REPO_ROOT = resolve(process.cwd(), '..');
@@ -831,32 +832,33 @@ export interface FeedResult {
 	detail: string;
 }
 
-/** Feed results from the newest `days` day files, one per feed per run, oldest first.
+/** Feed results from the newest `days` packed days, one per feed per run, oldest first.
  *
- * Filed by day under `state/feed-health/<YYYY>/<MM>/<DD>.csv`, so this reads a
- * tree rather than a file - through `readDayShards`, so the cover is the one
- * every day-filed ledger takes. Absent is the ordinary state of a fresh clone:
- * no run has written a record yet, and no record is exactly what an empty list
- * says.
+ * Read from the feed record's packed files through `feedHealthRows`, so it
+ * stops at the newest packed day as the console's other packed records do. A
+ * record not packed yet is the ordinary state of a fresh clone, and no record
+ * is exactly what an empty list says.
  *
  * Settled here, at the one read every console panel shares, rather than in each
- * panel. A repeat is a second attempt at one run writing a second account of
- * one event, and a panel that counted both would count that run twice. Doing it
- * once is also what stops two panels disagreeing about the same feed.
+ * panel. A packed day already holds one row per feed per run, settled under the
+ * ledger's own preference, so on a packed read this keeps every row; it is the
+ * same rule, and doing it here once is what stops two panels disagreeing about
+ * the same feed.
  */
-export function feedResults(days: number = LEDGER_WINDOW_DAYS): FeedResult[] {
-	const found: FeedResult[] = readDayShards(join(STATE_ROOT, 'feed-health'), days).rows.map(
-		(row) => ({
-			runId: row.run_id ?? '',
-			date: row.date ?? '',
-			feedId: row.feed_id ?? '',
-			checkedAt: row.checked_at ?? '',
-			outcome: row.outcome ?? '',
-			status: row.status ? Number(row.status) : null,
-			items: Number(row.items ?? 0) || 0,
-			detail: row.detail ?? ''
-		})
-	);
+export async function feedResults(
+	days: number = LEDGER_WINDOW_DAYS,
+	root: string = STATE_ROOT
+): Promise<FeedResult[]> {
+	const found: FeedResult[] = (await feedHealthRows(days, root)).rows.map((row) => ({
+		runId: row.run_id ?? '',
+		date: row.date ?? '',
+		feedId: row.feed_id ?? '',
+		checkedAt: row.checked_at ?? '',
+		outcome: row.outcome ?? '',
+		status: row.status ? Number(row.status) : null,
+		items: Number(row.items ?? 0) || 0,
+		detail: row.detail ?? ''
+	}));
 	return settled(found);
 }
 

@@ -23,7 +23,7 @@
       "ledgers": [
         {
           "name": "feed-health",
-          "grain": "tree",
+          "grain": "raw-and-compact",
           "prefix": ["feed-health"],
           "stem": null,
           "suffix": null

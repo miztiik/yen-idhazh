@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { canaryFiles } from '../canary-inventory.mjs';
 
-test('one generated run inventories named drawings and state shards, not stale drawings', () => {
+test('one generated run inventories named drawings and current ledger files', () => {
 	const root = mkdtempSync(join(tmpdir(), 'idhazh-canary-inventory-'));
 	function write(name, value) {
 		const path = join(root, ...name.split('/'));
@@ -22,7 +22,9 @@ test('one generated run inventories named drawings and state shards, not stale d
 		write('digest/2026/08/20/ai-16.json', '{}');
 		write('publication.json', '{}');
 		write('telemetry/2026/08.json', '{}');
-		write('state/feed-health/2026/08/20.csv', 'utc_date\n2026-08-20\n');
+		write('state/raw/feed-health/2026/08/20/01a10188-bb60-854b-8ec1-bd104a03b0d6.parquet', 'raw');
+		write('state/compact/feed-health/daily/2026/08/20.parquet', 'packed');
+		write('state/compact/feed-health/index/daily.json', '{}');
 		write('state/content-similarity-judge/fitted-thresholds/2026/08/20.csv', 'utc_date\n2026-08-20\n');
 		write('state/content-similarity-judge/merge-line-holdout-scores/2026/08/20.csv', 'utc_date\n2026-08-20\n');
 		write('state/unrelated/2026/08/20.csv', 'utc_date\n2026-08-20\n');
@@ -33,9 +35,11 @@ test('one generated run inventories named drawings and state shards, not stale d
 				'telemetry/2026/08.json'
 			],
 			stateFiles: [
+				'compact/feed-health/daily/2026/08/20.parquet',
+				'compact/feed-health/index/daily.json',
 				'content-similarity-judge/fitted-thresholds/2026/08/20.csv',
 				'content-similarity-judge/merge-line-holdout-scores/2026/08/20.csv',
-				'feed-health/2026/08/20.csv'
+				'raw/feed-health/2026/08/20/01a10188-bb60-854b-8ec1-bd104a03b0d6.parquet'
 			]
 		});
 	} finally {

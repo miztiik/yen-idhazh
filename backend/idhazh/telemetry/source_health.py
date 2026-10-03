@@ -349,7 +349,7 @@ def feed_reliability(rows: Iterable[FeedHealthRow], *, floor: float) -> float:
 def reliability(state_dir: Path, *, today: str, within_days: int, floor: float) -> dict[str, float]:
     """Each feed's reliability over the trailing window, keyed by feed id.
 
-    Reads the same health shards `load_health` reads, groups them by feed, and
+    Reads the rows `load_health` returns, groups them by feed, and
     reduces each feed's rows through `feed_reliability`. The read is bounded by
     `within_days` (Guardrail #12): it is the feeds' recent record, never the whole
     ledger. A feed absent from the map had no evidence-bearing read in the

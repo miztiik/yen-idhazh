@@ -40,7 +40,9 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
         "public_telemetry_keep_months": (
             "series.public-copy.value in config/gardener/telemetry-aggregate.json"
         ),
-        "feed_health_keep_months": "window.value in config/gardener/feed-health.json",
+        "feed_health_keep_months": (
+            "monthly_window.value in config/gardener/compact-feed-health.json"
+        ),
         "host_fingerprint_keep_months": (
             "monthly_window.value in config/gardener/compact-host-fingerprint.json"
         ),
@@ -406,8 +408,8 @@ class ObservabilityConfig(Model):
 
         `public_scores_keep_months` and `public_feed_health_keep_months` have no
         successor because the trees they bounded are gone. They pruned published
-        copies of `state/scores/` and `state/feed-health/` that nothing ever
-        fetched; the ledgers stay and keep their own ages.
+        copies of the eval and feed-health ledgers that nothing ever fetched; the
+        ledgers stay and keep their own ages.
 
         `runtime_counters_scrape` has no successor either. It switched off a row
         in `state/runtime-counters.csv`, and that ledger is gone: the four cells a
