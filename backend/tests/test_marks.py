@@ -91,6 +91,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_elements",
         "test_embed",
         "test_embedding_metrics",
+        "test_entity_gap",
         "test_eval_ledger",
         "test_eval_row",
         "test_evals",
