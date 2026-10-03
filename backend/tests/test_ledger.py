@@ -859,17 +859,16 @@ def feed_row(feed_id: str) -> FeedHealthRow:
 
 
 def a_feed_file(state: Path, rows: list[FeedHealthRow]) -> Path:
-    """The plan job's feed verdicts for `DATE`, filed by the real writer, and where they landed."""
-    assert seed_feed_health(state, DATE, rows) == len(rows)
-    return ledger.day_shard_path(
-        state,
-        LedgerName.FEED_HEALTH,
-        date=DATE,
-        run_id=RUN_ID,
-        attempt=1,
-        job=ServerJob.PLAN,
-        shard=0,
-    )
+    """A feed-health CSV file under the header this checkout's contract names.
+
+    The ledger now files through the ledger door, so no writer here makes this
+    file any more. It stands for the committed CSV a migration still reads, which
+    is why it is built from the contract's own columns and nothing else.
+    """
+    path = state / "feed-health" / f"{RUN_ID}.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(a_generation(FeedHealthRow.csv_columns(), rows), encoding="utf-8", newline="")
+    return path
 
 
 def test_the_older_generation_is_refiled_whichever_block_the_merge_put_first(
@@ -885,8 +884,7 @@ def test_the_older_generation_is_refiled_whichever_block_the_merge_put_first(
     rebasing. The other order is a merge nobody has made here yet, so it is
     built rather than waited for.
     """
-    path = ledger.path(tmp_path / "state", LedgerName.FEED_HEALTH, DATE)
-    path = path / ledger.BEFORE_PARTITION_NAME
+    path = tmp_path / "state" / "feed-health" / ledger.BEFORE_PARTITION_NAME
     path.parent.mkdir(parents=True)
     stranded, settled = feed_row("older-feed"), feed_row("newer-feed")
     path.write_text(
@@ -1654,18 +1652,11 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
         a_day.setdefault(row.date, []).append(row)
     for date_read, day_rows in a_day.items():
         seed_feed_health(day_tree, date_read, day_rows)
-    month_root = ledger.tree_root(tmp_path / "month" / "state", LedgerName.FEED_HEALTH)
+    month_root = tmp_path / "month" / "state" / "feed-health"
     month_grain_tree(month_root, rows)
 
     window = PARITY_WINDOW_DAYS
-    recorded = sorted(
-        {
-            day_shards.date_of(shard)
-            for shard in day_shards.shard_files(
-                ledger.tree_root(day_tree, LedgerName.FEED_HEALTH), days=UNBOUNDED_WINDOW
-            )
-        }
-    )
+    recorded = ledger.held_days(day_tree, LedgerName.FEED_HEALTH)
     named = set(recorded[-window:])
     from_days = ledger.load_health(day_tree, today=today, within_days=window)
     from_months = month_grain_read(month_root, today=today, within_days=window)
@@ -1700,10 +1691,9 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
 def test_a_second_attempt_at_one_run_leaves_one_row_per_feed(tmp_path: Path) -> None:
     """The write-side half. A run is one read of one feed, however often it is run.
 
-    A second attempt at one execution writes its own file, so both attempts are
-    on disk and neither had to see the other. What settles them is the read, and
-    the later attempt wins - which is the answer the appender used to reach by
-    rewriting the file the first attempt wrote.
+    A second attempt at one execution files its own raw file, so both attempts
+    are on disk and neither had to see the other. Both are one work unit of the
+    ledger door, so the read keeps the higher attempt's file whole.
     """
     assert seed_feed_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT)]) == 1
     retry = [account(FetchOutcome.TRANSIENT, at="07:00:00")]
@@ -1714,20 +1704,43 @@ def test_a_second_attempt_at_one_run_leaves_one_row_per_feed(tmp_path: Path) -> 
     assert rows[0].checked_at == f"{DATE}T07:00:00Z"
 
 
-def test_the_attempt_that_carried_articles_wins_however_late_it_ran(tmp_path: Path) -> None:
+def test_a_re_run_replaces_its_first_try_whichever_carried_articles(tmp_path: Path) -> None:
+    """The door's rule for every ledger: the higher attempt's file is the unit's answer.
+
+    A re-run reads every feed again and files its whole read, so its account of
+    a feed replaces the first try's even where the first try carried articles.
+    The preference below never sees the first try's row.
+    """
+    seed_feed_health(tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")])
+    seed_feed_health(
+        tmp_path, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2
+    )
+    assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 0)]
+
+
+def test_between_two_writers_of_one_run_the_read_that_carried_articles_wins(
+    tmp_path: Path,
+) -> None:
     """A retry that got nothing describes the retry, not the feed.
 
-    This is the one ledger here that cannot settle by arrival order. Keeping the
-    first row would leave a failure on record for a run that recovered; keeping
-    the last would throw the recovery away when the retry came back empty.
+    Two writers that are not attempts at one work unit can each file one run's
+    verdict on a feed - a day the migration filed from the committed CSV, and a
+    later raw file of the same run. This is the one ledger here that cannot
+    settle that by arrival order: keeping the first row would leave a failure on
+    record for a run that recovered; keeping the last would throw the recovery
+    away when the later file came back empty.
     """
-    seed_feed_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")])
-    seed_feed_health(tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="07:00:00")], attempt=2)
+    seed_feed_health(
+        tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")], job=ServerJob.MIGRATE
+    )
+    seed_feed_health(tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="07:00:00")])
     assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 9)]
 
     later = tmp_path / "later"
-    seed_feed_health(later, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")])
-    seed_feed_health(later, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2)
+    seed_feed_health(
+        later, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")], job=ServerJob.MIGRATE
+    )
+    seed_feed_health(later, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")])
     assert [(row.outcome, row.items) for row in health_rows(later)] == [(FetchOutcome.OK, 9)]
 
 

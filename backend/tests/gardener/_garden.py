@@ -44,6 +44,7 @@ COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.jso
 COMMITTED_DECLARATIONS: Final = (
     "compact-candidate-models.json",
     "compact-counterfactual-scores.json",
+    "compact-feed-health.json",
     "compact-feed-retirements.json",
     "compact-gardener.json",
     "compact-host-fingerprint.json",
@@ -54,7 +55,6 @@ COMMITTED_DECLARATIONS: Final = (
     "compact-visual-prunes.json",
     "corpus-squash.json",
     "digest-fragments.json",
-    "feed-health.json",
     "telemetry-aggregate.json",
     "traces.json",
     "trials.json",
@@ -68,7 +68,6 @@ TASK_MODULES: Final = (
     "compaction",
     "corpus_squash",
     "digest_fragments",
-    "feed_health",
     "telemetry_aggregate",
     "traces",
     "trials",
@@ -78,8 +77,8 @@ TASK_MODULES: Final = (
 FIXTURE_DECLARATIONS: Final = {
     "garden": (
         "compact-gardener.json",
+        "compact-feed-health.json",
         "day-validations.json",
-        "feed-health.json",
         "history.json",
         "host-fingerprint.json",
         "seen.json",

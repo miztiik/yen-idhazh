@@ -327,15 +327,15 @@ def test_the_eval_ledger_is_refused_through_the_router_with_its_declaration_s_re
 def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
     """The instrument files at two grains, and a listing that sees one is half blind.
 
-    A day is `<ledger>/<YYYY>/<MM>/<DD>` in a writer-owned tree and one or two
-    folders deeper under the ledger door - `raw/<ledger>/<YYYY>/<MM>/<DD>/` for
-    the files a run filed, `compact/<ledger>/daily/<YYYY>/<MM>/<DD>` once the
-    day is packed - and a month fold is `<ledger>/<YYYY-MM>`: a different
-    depth, not a different suffix. A single glob finds one of them, and the one
-    it misses is silently absent rather than reported empty. Every path is asked
-    of the ledger rather than spelled here, so a ledger that moves takes this
-    with it. The listing reads names alone, so the packed day and the month fold
-    are placed as files and never opened.
+    A day is one or two folders deep under the ledger door -
+    `raw/<ledger>/<YYYY>/<MM>/<DD>/` for the files a run filed,
+    `compact/<ledger>/daily/<YYYY>/<MM>/<DD>` once the day is packed - and a
+    month fold is `<ledger>/<YYYY-MM>`: a different depth, not a different
+    suffix. A single glob finds one of them, and the one it misses is silently
+    absent rather than reported empty. Every path is asked of the ledger rather
+    than spelled here, so a ledger that moves takes this with it. The listing
+    reads names alone, so the packed day and the month fold are placed as files
+    and never opened.
     """
     state_root, _digest_root, date = _a_published_day(tmp_path)
     packed = ledger.compact_path(state_root, LedgerName.ITEM_HEALTH, Period.DAILY, date)
@@ -354,10 +354,6 @@ def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
     assert raw_files, "the built day filed no census, so the listing proves nothing about it"
     for relpath in raw_files:
         assert relpath in report, f"a raw day file is missing from the listing: {report}"
-    feed_day = ledger.path(state_root, LedgerName.FEED_HEALTH, date).relative_to(state_root)
-    assert f"{feed_day.as_posix()}/" in report, (
-        f"the writer-owned day is missing from the listing: {report}"
-    )
     assert packed.relative_to(state_root).as_posix() in report, (
         f"the packed day is missing from the listing: {report}"
     )

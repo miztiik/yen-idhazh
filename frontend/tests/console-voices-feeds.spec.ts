@@ -13,7 +13,7 @@ import {
 	type FeedRead
 } from '../src/lib/feed-health';
 import { axisLabels, denseCellFor, ROW_STRIP_PX } from '../src/lib/charts/run-history';
-import { readDayShards } from '../src/lib/server/payload';
+import { feedHealthRows } from '../src/lib/server/ledger-rows';
 
 /**
  * The feed section answers one question: which feed is about to be dropped.
@@ -65,17 +65,17 @@ function tickDensity(): number {
 }
 
 /** The ledger the page read, read again independently. Nothing is mocked:
- * these are the CSVs `build_canary_day.py` wrote.
+ * these are the rows `build_canary_day.py` filed and packed.
  *
- * Through `readDayShards`, the reader the page's own server uses, so a grain
- * change cannot pass here and fail there. `-1` is the whole canary tree, which
- * is a fixture of fixed size rather than a collection a run appends to.
+ * Through `feedHealthRows`, the reader the page's own server uses, so a grain
+ * change cannot pass here and fail there. `-1` is every packed canary day,
+ * which is a fixture of fixed size rather than a collection a run appends to.
  */
 type LedgerRow = FeedEvent;
 
-function ledger(): LedgerRow[] {
-	const dir = join(CANARY, 'state', 'feed-health');
-	return readDayShards(dir, -1, undefined, CANARY).rows.map((row) => ({
+async function ledger(): Promise<LedgerRow[]> {
+	const table = await feedHealthRows(-1, join(CANARY, 'state'));
+	return table.rows.map((row) => ({
 		date: row.date ?? '',
 		runId: row.run_id ?? '',
 		checkedAt: row.checked_at ?? '',
@@ -319,7 +319,7 @@ test('THE ORACLE: the printed count is the run the pipeline rests on', async ({ 
 	await page.goto('/console/voices/');
 
 	const rows = await drawn(page);
-	const recomputed = byFeed(ledger());
+	const recomputed = byFeed(await ledger());
 
 	// Read against a fact the fixture owns, never against a locator count: a
 	// renamed attribute would make the count zero and switch this off silently.
@@ -609,7 +609,7 @@ function unreadByHand(rows: LedgerRow[]): string[] {
 test('THE ORACLE: a source we were only ever refused by is in neither count', async ({
 	page
 }) => {
-	const rows = ledger();
+	const rows = await ledger();
 	const unread = unreadByHand(rows);
 	// The claim only means something if the fixture holds one. It does: a feed
 	// whose every result is a robots answer, and one the run only ever rested.
@@ -658,7 +658,7 @@ test('the two counts still add up to the denominator beside them', async ({ page
 	expect(clean + listed + hidden).toBe(checked);
 	expect(unread).toBeGreaterThan(0);
 	expect(clean + listed + hidden + unread).toBe(
-		new Set(ledger().map((row) => row.feedId)).size
+		new Set((await ledger()).map((row) => row.feedId)).size
 	);
 });
 

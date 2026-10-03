@@ -43,13 +43,13 @@ from idhazh.contracts.item_health import DROPPED_CELLS, MACHINE_CELLS_RENAMED, I
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import Grain
+from idhazh.contracts.ledgers import Grain, LedgerEntry
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.gardener import schedule
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
-from idhazh.ledger import json_lines, parquet, render_file
+from idhazh.ledger import json_lines, parquet, paths, render_file
 from utilities import migrate_to_parquet as migration
 
 pytestmark = pytest.mark.contract
@@ -77,7 +77,9 @@ ROWS: Final[dict[LedgerName, type[Any]]] = {
     LedgerName.SEEN: SeenRow,
     LedgerName.PUBLISHED: PublishedRow,
 }
-#: A ledger the registry still files as CSV, whose CSV tree a case builds.
+#: The ledger the two cases about a ledger still on CSV put back there, filed the
+#: way the registry filed it before it moved. Every ledger in the table is on the
+#: door now, so no committed registry holds that case any more.
 ON_CSV: Final = LedgerName.FEED_HEALTH
 
 type Cells = dict[str, str]
@@ -276,6 +278,17 @@ def _beside(state: Path) -> Path:
     config_dir = a_config(state.parent, CONFIG_DIR / "gardener")
     (config_dir / "ledgers.json").write_bytes((CONFIG_DIR / "ledgers.json").read_bytes())
     return config_dir
+
+
+def _back_on_csv(which: LedgerName) -> dict[str, Any]:
+    """The registry entry a ledger had before its writers moved to the door."""
+    return {
+        "name": which.value,
+        "grain": Grain.DAY_TREE.value,
+        "prefix": [which.value],
+        "stem": None,
+        "suffix": None,
+    }
 
 
 def _day_file_config(state: Path, which: Sequence[LedgerName]) -> Path:
@@ -610,14 +623,13 @@ def test_every_moved_ledger_keeps_its_old_window() -> None:
     assert short == []
 
 
-def test_a_ledger_still_on_csv_is_refused(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """A run naming a ledger the registry still files as CSV exits 1 and writes nothing.
+def test_a_ledger_still_on_csv_is_refused(tmp_path: Path) -> None:
+    """A run naming a ledger the registry still files as CSV is refused and writes nothing.
 
     Its writers still write CSV, so a door copy of its rows is one no reader
     opens. A door ledger named beside it does not move either: the whole run is
-    refused before its first file is read.
+    refused before its first file is read. The registry beside this tree files
+    one ledger the way it was filed before it moved, without its compaction.
     """
     state = tmp_path / "state"
     _csv(state, ON_CSV, OLD, _writer(OLD, 1, ServerJob.PLAN), [_feed(OLD).csv_row()])
@@ -628,16 +640,36 @@ def test_a_ledger_still_on_csv_is_refused(
         _writer(OLD, 1, ServerJob.WORK),
         [_item(OLD, "ai-01", machine=True).csv_row()],
     )
+    config_dir = _beside(state)
+    registry_path = config_dir / "ledgers.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    for family in registry["families"]:
+        family["ledgers"] = [
+            _back_on_csv(ON_CSV) if held["name"] == ON_CSV.value else held
+            for held in family["ledgers"]
+        ]
+    registry_path.write_text(json.dumps(registry), encoding="ascii")
+    (config_dir / "gardener" / f"compact-{ON_CSV.value}.json").unlink()
+    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs = json.loads(knobs_path.read_text(encoding="ascii"))
+    knobs["task_names"].remove(f"compact-{ON_CSV.value}")
+    knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
     before = _hashes(tmp_path)
-    argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT]
 
-    code = migration.main([*MONTH_ARGS, *[*argv, "--ledger", ITEM.value, "--ledger", ON_CSV.value]])
+    with pytest.raises(
+        migration.RefusedError,
+        match=f"config/ledgers.json files {ON_CSV.value} as {Grain.DAY_TREE.value},",
+    ):
+        migration.migrate(
+            state,
+            [ITEM, ON_CSV],
+            run_id=RUN,
+            git_sha=SEED_COMMIT,
+            today=TODAY,
+            config_dir=config_dir,
+            months=MONTHS,
+        )
 
-    assert code == migration.EXIT_NOT_PROVEN
-    assert (
-        f"refused, nothing written: config/ledgers.json files {ON_CSV.value} as "
-        f"{Grain.DAY_TREE.value}," in capsys.readouterr().err
-    )
     assert _hashes(tmp_path) == before
 
 
@@ -690,18 +722,28 @@ def test_a_door_ledger_whose_compaction_cannot_hold_its_csv_is_refused(
 
 
 def test_check_reads_moved_ledgers_unless_named(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With no `--ledger`, a check reads the table ledgers the registry files through the door.
 
     A ledger still on CSV writes a CSV file on every run, so a check that read
-    it unasked could never pass. Named, it is read, and `--ledger` repeats.
+    it unasked could never pass: handed a registry entry that files one ledger
+    the way it was filed before it moved, the check leaves that ledger's file
+    alone. Named, it is read, and `--ledger` repeats.
     """
     state = tmp_path / "state"
     feed = _csv(state, ON_CSV, OLD, _writer(OLD, 1, ServerJob.PLAN), [_feed(OLD).csv_row()])
     argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT, "--check"]
 
-    assert migration.main([*MONTH_ARGS, *argv]) == migration.EXIT_MIGRATED
+    assert migration.main([*MONTH_ARGS, *argv]) == migration.EXIT_NOT_PROVEN
+    assert capsys.readouterr().out.splitlines() == [
+        f"{migration._shown(state, feed)} is still a CSV",
+        "1 CSV file(s) left",
+    ]
+
+    with monkeypatch.context() as patched:
+        patched.setitem(paths._REGISTRY, ON_CSV, LedgerEntry.model_validate(_back_on_csv(ON_CSV)))
+        assert migration.main([*MONTH_ARGS, *argv]) == migration.EXIT_MIGRATED
     assert capsys.readouterr().out.splitlines() == ["0 CSV file(s) left"]
 
     item = _csv(

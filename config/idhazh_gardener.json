@@ -5,6 +5,7 @@
   "task_names": [
     "compact-candidate-models",
     "compact-counterfactual-scores",
+    "compact-feed-health",
     "compact-feed-retirements",
     "compact-gardener",
     "compact-host-fingerprint",
@@ -15,7 +16,6 @@
     "compact-visual-prunes",
     "corpus-squash",
     "digest-fragments",
-    "feed-health",
     "telemetry-aggregate",
     "traces",
     "trials",

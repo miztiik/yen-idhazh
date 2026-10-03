@@ -74,7 +74,6 @@ frontend/static/index/
 frontend/static/console/
 frontend/static/config/
 frontend/static/scores/
-frontend/static/feed-health/
 frontend/static/run-days/
 frontend/static/day-metrics/
 frontend/static/machine/

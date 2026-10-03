@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import seed_feed_health, seed_item_health
+from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health
 from ledger._every_tier import (
     CENSUS,
     FILED_DAYS,
@@ -48,13 +48,12 @@ from ledger._every_tier import (
     a_census_in_every_tier,
 )
 
-from idhazh import atomic_write, config, day_shards, ledger
+from idhazh import atomic_write, config, day_partition, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
@@ -109,7 +108,6 @@ DAY_PATHS: Final[dict[str, LedgerName]] = {
     "-".join(ledger.entry(name).prefix): name
     for name in (
         LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-        LedgerName.FEED_HEALTH,
         LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
@@ -128,41 +126,33 @@ DAYS: Final = tuple(
 )
 
 
-def a_feed_record(state_root: Path, days: Iterable[str] = DAYS) -> Path:
-    """One feed-health day per day, written through the plan job's own producer.
+#: The ledger every range test below prunes: one `<DD>.csv` a day, filed by the
+#: judge's own writer, and the name an operator types for it.
+THRESHOLDS: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
+TARGET: Final = "-".join(ledger.entry(THRESHOLDS).prefix)
+
+
+def a_threshold_record(state_root: Path, days: Iterable[str] = DAYS) -> Path:
+    """One fitted-threshold day per day, written through the judge's own writer.
 
     Real rows rather than invented text: the prune walks a ledger the pipeline
     writes, and a tree assembled by hand could be a shape no run produces.
     """
-    for number, day in enumerate(days):
-        seed_feed_health(
-            state_root,
-            day,
-            [
-                FeedHealthRow(
-                    version=FeedHealthRow.schema_version(),
-                    run_id=f"{day}-1",
-                    date=day,
-                    feed_id=f"example-{number:02d}",
-                    checked_at=f"{day}T06:00:00Z",
-                    outcome=FetchOutcome.OK,
-                    status=200,
-                    items=3,
-                    detail=None,
-                )
-            ],
+    fixture = CONTRACT_FIXTURES_DIR / "fitted-similarity-threshold"
+    base = FittedSimilarityThreshold.from_json(
+        read_text(fixture / "the-record-is-too-small-to-fit-on.json")
+    )
+    for day in days:
+        row = FittedSimilarityThreshold.model_validate(
+            {**base.model_dump(), "date": day, "run_id": f"{day}-1"}
         )
+        ledger.append_fitted_thresholds(state_root, day, [row])
     return state_root
 
 
-def the_feed_file(day: str) -> str:
-    """The one file `a_feed_record` leaves in a day directory, POSIX and relative.
-
-    A day is a directory of writer-owned files and the prune removes files, so a
-    test that named the directory would name something the prune never reports.
-    """
-    name = ledger.segment_name(run_id=f"{day}-1", attempt=1, job=ServerJob.PLAN, shard=0)
-    return f"{ledger.relpath(LedgerName.FEED_HEALTH, day)}/{name}"
+def the_day_file(day: str) -> str:
+    """The one file `a_threshold_record` leaves for a day, POSIX and relative."""
+    return ledger.relpath(THRESHOLDS, day)
 
 
 def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
@@ -196,35 +186,19 @@ def fingerprints(root: Path) -> dict[str, str]:
 
 
 def a_day_on_disk(name: LedgerName, state_root: Path, day: str) -> Path:
-    """Put one file where the registry says the day goes, and name it.
-
-    A ledger that files a `<DD>.csv` names the file itself. A ledger that files a
-    day directory names a day whose files each carry a writer's name, so the file
-    goes inside it under the identity grammar.
-    """
+    """Put one file where the registry says the day goes, and name it."""
     where = ledger.path(state_root, name, day)
-    if where.suffix == day_shards.SUFFIX:
-        where.parent.mkdir(parents=True, exist_ok=True)
-        where.write_text("version\n", encoding="utf-8", newline="\n")
-        return where
-    where.mkdir(parents=True, exist_ok=True)
-    inside = where / ledger.segment_name(run_id=f"{day}-1", attempt=1, job=ServerJob.PLAN, shard=0)
-    inside.write_text("version\n", encoding="utf-8", newline="\n")
-    return inside
+    where.parent.mkdir(parents=True, exist_ok=True)
+    where.write_text("version\n", encoding="utf-8", newline="\n")
+    return where
 
 
-def dates_on_disk(state_root: Path, target: str) -> list[str]:
-    """Which days the ledger still holds, through the pipeline's own walk.
-
-    One entry a day, however many writers reached it, because the question here
-    is which days survived and not how many files each one holds.
-    """
-    seen: list[str] = []
-    for shard in day_shards.shard_files(state_root / target, days=UNBOUNDED_WINDOW):
-        recorded = day_shards.date_of(shard)
-        if not seen or seen[-1] != recorded:
-            seen.append(recorded)
-    return seen
+def dates_on_disk(state_root: Path) -> list[str]:
+    """Which days the pruned ledger still holds, through the prune's own walk."""
+    return [
+        day_partition.date_of(path)
+        for path in day_partition.day_files(ledger.tree_root(state_root, THRESHOLDS))
+    ]
 
 
 # --- The range -----------------------------------------------------------------
@@ -237,24 +211,24 @@ def test_both_ends_of_the_range_are_named(tmp_path: Path) -> None:
     went, and every day outside it is still there. A count would pass a prune
     that removed the right NUMBER of the wrong files.
     """
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
     since, until = DAYS[2], DAYS[4]
 
     outcome = prune_range(
         state,
-        target=LedgerName.FEED_HEALTH,
+        target=TARGET,
         since=since,
         until=until,
         dry_run=False,
     )
 
     assert [
-        the_feed_file(day) for day in (DAYS[2], DAYS[3], DAYS[4])
+        the_day_file(day) for day in (DAYS[2], DAYS[3], DAYS[4])
     ] == sorted(outcome.removed), (
         "the removed list is not exactly the three days the range names: "
         f"{outcome.removed}"
     )
-    assert dates_on_disk(state, LedgerName.FEED_HEALTH) == [
+    assert dates_on_disk(state) == [
         DAYS[0],
         DAYS[1],
         DAYS[5],
@@ -265,19 +239,19 @@ def test_both_ends_of_the_range_are_named(tmp_path: Path) -> None:
 
 def test_one_day_is_a_range_of_itself(tmp_path: Path) -> None:
     """`--since X --until X` removes exactly X, which is what inclusive means."""
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
 
     outcome = prune_range(
         state,
-        target=LedgerName.FEED_HEALTH,
+        target=TARGET,
         since=DAYS[3],
         until=DAYS[3],
         dry_run=False,
     )
 
-    assert outcome.removed == (the_feed_file(DAYS[3]),)
-    assert DAYS[3] not in dates_on_disk(state, LedgerName.FEED_HEALTH)
-    assert len(dates_on_disk(state, LedgerName.FEED_HEALTH)) == len(DAYS) - 1
+    assert outcome.removed == (the_day_file(DAYS[3]),)
+    assert DAYS[3] not in dates_on_disk(state)
+    assert len(dates_on_disk(state)) == len(DAYS) - 1
 
 
 def test_every_sibling_outside_the_range_is_byte_identical(tmp_path: Path) -> None:
@@ -288,13 +262,13 @@ def test_every_sibling_outside_the_range_is_byte_identical(tmp_path: Path) -> No
     census beside it holds the same days, so a walk keyed on the day alone would
     reach it too.
     """
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
     a_census(state)
 
     before = fingerprints(state)
     outcome = prune_range(
         state,
-        target=LedgerName.FEED_HEALTH,
+        target=TARGET,
         since=DAYS[1],
         until=DAYS[2],
         dry_run=False,
@@ -309,18 +283,18 @@ def test_every_sibling_outside_the_range_is_byte_identical(tmp_path: Path) -> No
 
 def test_a_backwards_range_names_no_day(tmp_path: Path) -> None:
     """An operator who swapped the two ends is told, rather than deleting nothing."""
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
 
     with pytest.raises(ValueError, match="is after --until"):
         prune_range(
             state,
-            target=LedgerName.FEED_HEALTH,
+            target=TARGET,
             since=DAYS[4],
             until=DAYS[1],
             dry_run=False,
         )
 
-    assert dates_on_disk(state, LedgerName.FEED_HEALTH) == list(DAYS)
+    assert dates_on_disk(state) == list(DAYS)
 
 
 @pytest.mark.parametrize("value", ["2026-8-4", "20260804", "yesterday", "2026-13-01"])
@@ -331,14 +305,12 @@ def test_a_day_that_is_not_a_day_is_refused(tmp_path: Path, value: str) -> None:
     is how every date comparison in this tree works - would then put that day
     outside every range it belongs in.
     """
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
 
     with pytest.raises(ValueError, match="YYYY-MM-DD"):
-        prune_range(
-            state, target=LedgerName.FEED_HEALTH, since=value, until=DAYS[4], dry_run=False
-        )
+        prune_range(state, target=TARGET, since=value, until=DAYS[4], dry_run=False)
 
-    assert dates_on_disk(state, LedgerName.FEED_HEALTH) == list(DAYS)
+    assert dates_on_disk(state) == list(DAYS)
 
 
 def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
@@ -347,13 +319,11 @@ def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
     `DAYS` crosses a month end, so a range that takes July whole leaves August
     standing - which is what says the drop is scoped to what emptied.
     """
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
 
-    prune_range(
-        state, target=LedgerName.FEED_HEALTH, since=DAYS[0], until=DAYS[2], dry_run=False
-    )
+    prune_range(state, target=TARGET, since=DAYS[0], until=DAYS[2], dry_run=False)
 
-    ledger_root = ledger.tree_root(state, LedgerName.FEED_HEALTH)
+    ledger_root = ledger.tree_root(state, THRESHOLDS)
     assert not (ledger_root / "2026" / "07").exists(), "an emptied month directory was left behind"
     assert (ledger_root / "2026" / "08").is_dir(), "the month that still holds days was removed"
 
@@ -408,7 +378,7 @@ def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: st
     """
     assert set(prune.REFUSED) == {LedgerName.SUMMARY_QUALITY_EVALS_INDEX}
     reasons = {**prune.REFUSED, **prune.door_refusals(committed_tasks())}
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
     before = fingerprints(state)
 
     with pytest.raises(ValueError) as refusal:
@@ -423,9 +393,9 @@ def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: st
 @pytest.mark.parametrize(
     "target",
     [
-        "state/feed-health",
-        "../feed-health",
-        "feed-health/2026/07/29",
+        "state/content-similarity-judge/fitted-thresholds",
+        "../content-similarity-judge-fitted-thresholds",
+        "content-similarity-judge-fitted-thresholds/2026/07/29",
         "/etc/passwd",
         "traces",
         "day-metrics",
@@ -442,7 +412,7 @@ def test_a_target_outside_the_vocabulary_is_refused(tmp_path: Path, target: str)
     Each names a ledger the vocabulary does take, so a refusal here is a refusal
     of the path and never of the ledger.
     """
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
     before = fingerprints(state)
 
     with pytest.raises(ValueError) as refusal:
@@ -461,19 +431,15 @@ def test_a_dry_run_names_every_file_and_removes_none(tmp_path: Path) -> None:
     The same list on both sides: what a dry run prints has to be what a live run
     removes, file for file, or reading it settles nothing.
     """
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
     before = fingerprints(state)
 
-    reported = prune_range(
-        state, target=LedgerName.FEED_HEALTH, since=DAYS[1], until=DAYS[3]
-    )
+    reported = prune_range(state, target=TARGET, since=DAYS[1], until=DAYS[3])
 
     assert reported.dry_run is True
     assert fingerprints(state) == before, "a dry run moved a file"
 
-    removed = prune_range(
-        state, target=LedgerName.FEED_HEALTH, since=DAYS[1], until=DAYS[3], dry_run=False
-    )
+    removed = prune_range(state, target=TARGET, since=DAYS[1], until=DAYS[3], dry_run=False)
     assert removed.removed == reported.removed
     assert removed.bytes_freed == reported.bytes_freed
 
@@ -499,7 +465,7 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
     stopped reads which files went and which one to retry, where a rollback only
     ever told them to start again.
     """
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
     deletes = 0
     real_delete = prune._delete
 
@@ -515,7 +481,7 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
     with pytest.raises(prune.PruneInterruptedError) as stop:
         prune_range(
             state,
-            target=LedgerName.FEED_HEALTH,
+            target=TARGET,
             since=DAYS[1],
             until=DAYS[4],
             dry_run=False,
@@ -523,13 +489,13 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
 
     assert deletes == 3, "the prune kept deleting after a failure"
     assert stop.value.so_far.taken == (
-        the_feed_file(DAYS[1]),
-        the_feed_file(DAYS[2]),
+        the_day_file(DAYS[1]),
+        the_day_file(DAYS[2]),
     )
-    assert stop.value.so_far.resume_from == the_feed_file(DAYS[3]), (
+    assert stop.value.so_far.resume_from == the_day_file(DAYS[3]), (
         "the next pass has to retry the day that failed"
     )
-    assert dates_on_disk(state, LedgerName.FEED_HEALTH) == [
+    assert dates_on_disk(state) == [
         DAYS[0],
         DAYS[3],
         DAYS[4],
@@ -545,11 +511,11 @@ def test_a_ceiling_stops_a_pass_and_names_the_day_to_resume_at(tmp_path: Path) -
     collection of 612 artifacts: one command, a bounded cost, and a record that
     says whether there is more.
     """
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
 
     outcome = prune_range(
         state,
-        target=LedgerName.FEED_HEALTH,
+        target=TARGET,
         since=DAYS[0],
         until=DAYS[4],
         dry_run=False,
@@ -557,12 +523,12 @@ def test_a_ceiling_stops_a_pass_and_names_the_day_to_resume_at(tmp_path: Path) -
     )
 
     assert outcome.removed == (
-        the_feed_file(DAYS[0]),
-        the_feed_file(DAYS[1]),
+        the_day_file(DAYS[0]),
+        the_day_file(DAYS[1]),
     )
     assert outcome.more_to_do
-    assert outcome.resume_from == the_feed_file(DAYS[2])
-    assert dates_on_disk(state, LedgerName.FEED_HEALTH) == list(DAYS[2:])
+    assert outcome.resume_from == the_day_file(DAYS[2])
+    assert dates_on_disk(state) == list(DAYS[2:])
     assert any("run it again" in line for line in prune.report(outcome))
 
 
@@ -572,36 +538,30 @@ def test_the_range_an_operator_typed_is_its_own_ceiling(tmp_path: Path) -> None:
     A real bound rather than a number somebody picked: the arithmetic is the
     operator's own, so the default cannot silently take less than was asked for.
     """
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
 
-    outcome = prune_range(
-        state, target=LedgerName.FEED_HEALTH, since=DAYS[0], until=DAYS[6], dry_run=False
-    )
+    outcome = prune_range(state, target=TARGET, since=DAYS[0], until=DAYS[6], dry_run=False)
 
     assert len(outcome.removed) == len(DAYS)
     assert outcome.resume_from is None, "the range was taken whole, so nothing is left"
-    assert dates_on_disk(state, LedgerName.FEED_HEALTH) == []
+    assert dates_on_disk(state) == []
 
 
 def test_nothing_is_left_under_state_for_a_commit_to_pick_up(tmp_path: Path) -> None:
     """No scratch directory, because there is no longer a phase that needs one."""
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
 
-    prune_range(
-        state, target=LedgerName.FEED_HEALTH, since=DAYS[0], until=DAYS[1], dry_run=False
-    )
+    prune_range(state, target=TARGET, since=DAYS[0], until=DAYS[1], dry_run=False)
 
-    assert [entry.name for entry in state.iterdir()] == [LedgerName.FEED_HEALTH]
+    assert [entry.name for entry in state.iterdir()] == [ledger.entry(THRESHOLDS).prefix[0]]
     assert not list(state.glob(".prune-*")), "a scratch directory appeared from somewhere"
 
 
 def test_a_range_with_no_day_in_it_says_so(tmp_path: Path) -> None:
     """A range that names nothing is not a failure, and the report says which."""
-    state = a_feed_record(tmp_path / "state")
+    state = a_threshold_record(tmp_path / "state")
 
-    outcome = prune_range(
-        state, target=LedgerName.FEED_HEALTH, since="2025-01-01", until="2025-01-31"
-    )
+    outcome = prune_range(state, target=TARGET, since="2025-01-01", until="2025-01-31")
 
     assert outcome.removed == ()
     assert outcome.kept == len(DAYS)
@@ -612,7 +572,7 @@ def test_a_store_that_has_never_been_written_prunes_nothing(tmp_path: Path) -> N
     """A fresh clone has no history, which is not a fault."""
     outcome = prune_range(
         tmp_path / "state",
-        target=LedgerName.FEED_HEALTH,
+        target=TARGET,
         since=DAYS[0],
         until=DAYS[6],
         dry_run=False,
