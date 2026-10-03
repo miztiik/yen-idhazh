@@ -44,9 +44,8 @@ def test_a_file_the_shard_never_downloaded_is_sized_from_githubs_reply(
 ) -> None:
     quiet_git(tmp_path, monkeypatch)
     files = {
-        f"{FOLDER}/{path.relative_to(LISTED).as_posix()}": path.read_text(encoding="ascii")
-        for path in sorted(LISTED.rglob("*"))
-        if path.is_file()
+        f"{FOLDER}/{name}": LISTED.joinpath(*name.split("/")).read_text(encoding="ascii")
+        for name in ("2026-09-01.txt", "nested/2026-09-02.txt")
     }
     origin, _ = an_origin(tmp_path, files)
     shard = a_partial_clone(tmp_path, origin, "config")

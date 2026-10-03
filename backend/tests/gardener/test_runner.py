@@ -44,13 +44,21 @@ RUN_ID = "2026-09-27-18012345678"
 #: A day the three-day window has aged out, and one it has not.
 AGED, FRESH = "2026-09-01.txt", "2026-09-26.txt"
 
+DECLARATIONS = {
+    "runner": ("compact-gardener.json", "old-days.json", "rehearsal.json"),
+    "breaks": ("broken.json", "old-days.json"),
+    "wander": ("wanderer.json",),
+    "report": ("astray.json", "late.json", "reporter.json"),
+}
+
 
 def a_garden(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fixture: str, files: dict[str, str]
 ) -> tuple[Path, Path, GardenerSettings]:
     quiet_git(tmp_path, monkeypatch)
     origin, checkout = an_origin(tmp_path, files)
-    return origin, checkout, config.load_gardener(a_config(checkout, GARDENER_FIXTURES / fixture))
+    declarations = (GARDENER_FIXTURES / fixture / name for name in DECLARATIONS[fixture])
+    return origin, checkout, config.load_gardener(a_config(checkout, *declarations))
 
 
 def ran(
@@ -123,7 +131,9 @@ def test_a_shard_runs_its_tasks_writes_one_record_and_lands_it(
     assert on_origin(origin, f"state/rehearsal/{AGED}") == "aged\n", "a dry run deleted a file"
     assert on_origin(origin, "state/compact/gardener/2026-09-27.summary") is not None
     assert outcome.record is not None
-    assert outcome.record.parent == checkout.joinpath("state", "raw", "gardener", "2026", "09", "27")
+    assert outcome.record.parent == checkout.joinpath(
+        "state", "raw", "gardener", "2026", "09", "27"
+    )
     recorded = outcome.record.relative_to(checkout).as_posix()
     assert on_origin(origin, recorded) is not None, "the record was written and never landed"
     assert commits_on(origin)[0].endswith(f": gardener: {', '.join(names)} on 2026-09-27")
@@ -284,9 +294,7 @@ def test_without_the_commit_a_missing_folder_is_skipped_rather_than_failed(
     _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
     shutil.rmtree(checkout / "state" / "rehearsal")
 
-    outcome, _ = ran(
-        ("rehearsal",), settings, checkout, "garden_tasks_ok", monkeypatch, land=False
-    )
+    outcome, _ = ran(("rehearsal",), settings, checkout, "garden_tasks_ok", monkeypatch, land=False)
 
     assert outcome.exit_code == EXIT_OK
     assert rows_of(outcome.record)["rehearsal"].stopped_because is StopReason.EXHAUSTED
@@ -359,7 +367,9 @@ def test_a_history_task_named_to_the_runner_is_refused_and_nothing_runs(
     """
     quiet_git(tmp_path, monkeypatch)
     origin, checkout = an_origin(tmp_path, {"corpus/corpus.jsonl": "{}\n"})
-    settings = config.load_gardener(a_config(checkout, GARDENER_FIXTURES / "garden" / "history.json"))
+    settings = config.load_gardener(
+        a_config(checkout, GARDENER_FIXTURES / "garden" / "history.json")
+    )
     before = commits_on(origin)
 
     outcome, said = ran(
@@ -382,7 +392,9 @@ def test_the_complement_owns_nothing_another_task_or_a_ledger_claims(tmp_path: P
     """
     settings = config.load_gardener(a_config(tmp_path, GARDENER_FIXTURES / "garden"))
     named = {
-        name: tuple(policy.owns) for name, policy in settings.tasks.items() if policy.owns is not None
+        name: tuple(policy.owns)
+        for name, policy in settings.tasks.items()
+        if policy.owns is not None
     }
     folders = [(name, folder) for name, owned in named.items() for folder in owned]
     for index, (first, one) in enumerate(folders):

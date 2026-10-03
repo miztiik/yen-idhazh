@@ -24,6 +24,7 @@ from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.one_at_a_time import Pass
 
+from .._garden import COMMITTED_DECLARATIONS, named_task_modules
 from ._oracle_tree import REMOVALS, RUN_ID, TODAY
 
 #: A commit the record names. No test here reads git.
@@ -33,20 +34,22 @@ _POLICY: Final[TypeAdapter[TaskPolicy]] = TypeAdapter(TaskPolicy)
 
 
 def declared() -> dict[str, TaskPolicy]:
-    """Every committed declaration, by name."""
+    """The named committed declarations the integration fixtures exercise."""
     folder = CONFIG_DIR / "gardener"
     return {
         path.stem: _POLICY.validate_json(path.read_text(encoding="utf-8"))
-        for path in sorted(folder.glob("*.json"))
+        for path in (folder / name for name in COMMITTED_DECLARATIONS)
     }
 
 
 def committed_folders(root: Path, tasks: dict[str, TaskPolicy]) -> frozenset[str]:
     """What `git ls-tree` would list for this tree: each named folder, and every child of state."""
     state = root / ledger.STATE_DIRNAME
-    children = {
-        child.relative_to(root).as_posix() for child in state.iterdir() if child.is_dir()
-    } if state.is_dir() else set()
+    children = (
+        {child.relative_to(root).as_posix() for child in state.iterdir() if child.is_dir()}
+        if state.is_dir()
+        else set()
+    )
     named = {
         folder
         for policy in tasks.values()
@@ -88,7 +91,7 @@ def context_for(
 def run_task(name: str, root: Path, *, today: date = TODAY, **changed: Any) -> Pass:
     """Run one shipped task, found the way the runner finds it."""
     policy = declared()[name]
-    held = registry.bind(name, policy.kind, registry.discover())
+    held = registry.bind(name, policy.kind, named_task_modules())
     return held.run(context_for(name, root, today=today, **changed))
 
 

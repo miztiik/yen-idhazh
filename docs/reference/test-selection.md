@@ -20,6 +20,18 @@ growing. It became [CLAUDE.md](../../CLAUDE.md) Guardrail #12 and section 13,
 and it is why a per-item rule is driven from a fixture rather than from a loop
 over whatever the archive happens to hold.
 
+Gardener integration fixtures copy the declarations named in
+`backend/tests/gardener/_garden.py`, and import its named task modules.
+Adding an unrelated declaration or source module does not expand those inputs.
+Full shard and fold-landing fixtures copy those named real task sources into a
+temporary package, so discovery reads only the package the test built.
+The producer's preflight still checks its live registry. Council command-line
+fixtures copy the five config inputs and the active model file, not `config/`.
+Their static import check reads the named inputs in `council/_imports.py` and
+refuses an unlisted dependency before opening it.
+Visual-retention fixtures use sparse boundary days and a two-file deletion cap,
+so month and year skipping and an unfinished deletion run need no large archive.
+
 **A fixed fixture can still do needless work.** Per-item pipeline record and
 run-metadata tests limit the recorded plan to one item. Continuing after a
 failure, ordering and sibling totals need two. The

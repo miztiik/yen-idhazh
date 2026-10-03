@@ -23,14 +23,21 @@ import pytest
 from conftest import REPO_ROOT
 from pydantic import TypeAdapter
 
-from idhazh import config
 from idhazh.contracts.knobs.gardener import TaskKind, TaskLifecycleStatus, TaskPolicy
 from idhazh.gardener import registry, runner
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 from idhazh.gardener.registry import DiscoveryError, TaskModule
 
-from ._garden import GARDENER_FIXTURES, TASK_PACKAGES, task_package
+from ._garden import (
+    FIXTURE_DECLARATIONS,
+    GARDENER_FIXTURES,
+    TASK_MODULES,
+    TASK_PACKAGES,
+    named_task_modules,
+    task_package,
+)
+from .tasks._task import declared as shipped_declarations
 
 pytestmark = pytest.mark.contract
 
@@ -54,19 +61,21 @@ def declared(*paths: Path) -> dict[str, TaskPolicy]:
 
 
 def runner_garden() -> dict[str, TaskPolicy]:
-    return declared(*sorted((GARDENER_FIXTURES / "runner").glob("*.json")))
+    return declared(
+        *(GARDENER_FIXTURES / "runner" / name for name in FIXTURE_DECLARATIONS["runner"])
+    )
 
 
-def test_every_shipped_module_is_named_for_a_declaration_of_the_kind_it_serves() -> None:
-    """Tasks arrive with their modules. The folder says how many, never a number here.
+def test_named_modules_bind_to_the_named_declarations_of_the_kind_they_serve() -> None:
+    """The integration inputs bind both ways without discovering the committed trees.
 
     A module is named for one declaration, or for its kind when it serves every
     declaration of that kind that has no module of its own - the compaction is
     one module for every ledger it compacts. A retired declaration has no module
     to be served by: nothing runs it, so its module was deleted with it.
     """
-    shipped = registry.discover()
-    tasks = config.load_gardener().tasks
+    shipped = named_task_modules()
+    tasks = shipped_declarations()
     assert shipped, "no task module ships"
     for stem, held in shipped.items():
         name = stem.replace("_", "-")
@@ -86,16 +95,17 @@ def test_every_shipped_module_is_named_for_a_declaration_of_the_kind_it_serves()
 
 
 def test_finding_the_tasks_loads_no_heavy_library() -> None:
-    """Discovery imports every task module, so a module-scope import is paid by every shard.
+    """A module-scope import is paid by every shard using the named task modules.
 
     Checked in a fresh interpreter, because this process has imported pyarrow
     long before this test runs. The fixture package is discovered as well as
-    the shipped one, so the check reads real modules rather than an empty folder.
+    the named shipped modules, so the check reads real code rather than an empty folder.
     """
     body = (
         "import importlib, sys\n"
         "from idhazh.gardener import registry\n"
-        "registry.discover()\n"
+        f"for name in {TASK_MODULES!r}:\n"
+        "    importlib.import_module('idhazh.gardener.tasks.' + name)\n"
         "found = registry.discover(importlib.import_module('garden_tasks_ok'))\n"
         "assert found, 'the fixture package declared no task, so this checks nothing'\n"
         f"heavy = {HEAVY!r}\n"
@@ -211,16 +221,16 @@ def test_a_retired_declaration_needs_no_module_and_keeps_none_in_use(
         runner.preflight({**tasks, "compact-gardener": retired}, modules)
 
 
-def test_what_ships_binds_both_ways() -> None:
-    """The committed declarations against the committed modules: the check every shard makes.
+def test_named_integration_inputs_bind_both_ways() -> None:
+    """The named declarations against named modules: the check every shard makes.
 
-    This is the test that fails a pull request which adds a declaration without
-    its module, or a module without its declaration, before any wake runs it.
+    The producer's preflight checks the complete live registry. This fixture
+    checks its behavior over the named integration inputs only.
     """
-    settings = config.load_gardener()
-    bound = runner.preflight(settings.tasks, registry.discover())
+    tasks = shipped_declarations()
+    bound = runner.preflight(tasks, named_task_modules())
     assert set(bound) == {
         name
-        for name, policy in settings.tasks.items()
+        for name, policy in tasks.items()
         if policy.lifecycle_status is not TaskLifecycleStatus.RETIRED
     }

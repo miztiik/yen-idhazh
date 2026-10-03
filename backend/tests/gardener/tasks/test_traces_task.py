@@ -27,7 +27,7 @@ def window_days() -> int:
     return window.value
 
 
-def a_trace(root: Path, run_id: str, *, spans: int = 45) -> Path:
+def a_trace(root: Path, run_id: str) -> Path:
     """One shard's committed trace at the real path, with real span records in it."""
     path = telemetry.committed_trace_path(
         root / ledger.STATE_DIRNAME, run_id=run_id, attempt=1, job=ServerJob.WORK, shard=0
@@ -44,7 +44,7 @@ def a_trace(root: Path, run_id: str, *, spans: int = 45) -> Path:
         attributes={"run_id": run_id, "shard": 0, "url_key": "a" * 64},
     ).as_record()
     line = json.dumps(record, sort_keys=True, separators=(",", ":"))
-    path.write_text("\n".join([line] * spans) + "\n", encoding="utf-8")
+    path.write_text(line + "\n", encoding="utf-8")
     return path
 
 
@@ -69,9 +69,9 @@ def test_a_trace_past_the_window_goes_and_a_recent_one_stays(tmp_path: Path) -> 
 
 
 def test_the_window_bounds_the_tree_by_construction(tmp_path: Path) -> None:
-    """The bound is a number: one run a day for a month collapses to the window's days."""
+    """One run per kept day and one expired run prove the window's size bound."""
     per_run = 0
-    for back in range(30):
+    for back in range(window_days() + 1):
         run_day = TRACE_TODAY - timedelta(days=back)
         per_run = max(per_run, a_trace(tmp_path, f"{run_day.isoformat()}-1").stat().st_size)
 

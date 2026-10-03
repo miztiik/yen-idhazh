@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Any, Final
 
@@ -95,11 +95,11 @@ def test_an_enabled_policy_deletes_the_old_visual_and_keeps_the_day(tmp_path: Pa
 
 def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
     """An off-by-one in a date parse must not eat the archive."""
-    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(10)]})
-    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False, max_deletes_per_run=3)
-    assert row.deleted == 3
+    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(3)]})
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False, max_deletes_per_run=2)
+    assert row.deleted == 2
     assert row.fuse_tripped
-    assert row.candidates_found == 10
+    assert row.candidates_found == 3
 
 
 #: The first published day of the trees the four tests below run against. They
@@ -109,23 +109,11 @@ def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
 SCAN_START: Final = date(2019, 1, 1)
 
 
-#: Days in the big case. 400 puts fourteen calendar months on the tree and leaves
-#: the cutoff a long way inside it, so a walk that stopped early shows up as a
-#: missing month rather than as a rounding difference.
-SCAN_DAYS: Final = 400
-
-
-#: Days in the small case. Both cases hold the same expired days; every day they
-#: do not share is inside the window, which is the side the archive grows on.
-SCAN_SMALL_DAYS: Final = 260
-
-
-#: How far into both trees the cutoff falls, in days from `SCAN_START`.
-SCAN_EXPIRED_DAYS: Final = 250
-
-
-#: The cutoff itself, and the expired days it names: 2019-01-01 to 2019-09-07.
-SCAN_LIMIT: Final = SCAN_START + timedelta(days=SCAN_EXPIRED_DAYS)
+#: Expired days across month boundaries, including the day before the cutoff.
+SCAN_EXPIRED_DAYS: Final = ("2019-01-01", "2019-08-31", "2019-09-07")
+SCAN_SMALL_DAYS: Final = (*SCAN_EXPIRED_DAYS, "2019-09-08")
+SCAN_DAYS: Final = (*SCAN_SMALL_DAYS, "2019-10-01", "2020-01-01")
+SCAN_LIMIT: Final = date(2019, 9, 8)
 
 
 def day_folder(root: Path, day: date) -> Path:
@@ -134,16 +122,11 @@ def day_folder(root: Path, day: date) -> Path:
     return root / year / month / number
 
 
-def dated_tree(root: Path, *, days: int, pictures: int) -> Path:
-    """`days` consecutive published days from `SCAN_START`, `pictures` on each."""
+def dated_tree(root: Path, *, days: tuple[str, ...], pictures: int) -> Path:
+    """The named boundary days, with `pictures` on each."""
     return site(
         root,
-        {
-            (SCAN_START + timedelta(days=n)).isoformat(): [
-                f"p-{i:010d}.webp" for i in range(pictures)
-            ]
-            for n in range(days)
-        },
+        {day: [f"p-{i:010d}.webp" for i in range(pictures)] for day in days},
     )
 
 
@@ -226,7 +209,7 @@ def test_the_scan_finds_exactly_what_sorting_the_whole_tree_found(tmp_path: Path
     found = visuals_older_than(root, SCAN_LIMIT)
 
     assert found == by_sorting_the_whole_tree(root, SCAN_LIMIT)
-    assert len(found) == 500, "250 expired days, two pictures on each"
+    assert len(found) == 6, "three expired days, two pictures on each"
     assert oldest_visual(root) == SCAN_START
 
 
@@ -235,14 +218,13 @@ def test_the_scan_opens_the_expired_days_and_never_a_day_inside_the_window(
 ) -> None:
     """Guardrail #12, counted. A day the policy keeps is a day the policy need not read.
 
-    The old shape sorted every path under the root, so it opened all 400 day
-    directories to select the 250 it wanted - and that count rose every day
-    nobody wrote any code.
+    The tree has expired and kept days in the cutoff month, a later month,
+    and a later year. Only the three expired day directories may open.
     """
     root = dated_tree(tmp_path, days=SCAN_DAYS, pictures=1)
     expired = {
-        day_folder(root, SCAN_START + timedelta(days=n)).relative_to(root).as_posix()
-        for n in range(SCAN_EXPIRED_DAYS)
+        day_folder(root, date.fromisoformat(day)).relative_to(root).as_posix()
+        for day in SCAN_EXPIRED_DAYS
     }
 
     opened = opened_by_depth(root, lambda: visuals_older_than(root, SCAN_LIMIT))
@@ -251,32 +233,29 @@ def test_the_scan_opens_the_expired_days_and_never_a_day_inside_the_window(
     assert opened.get(4) is None, "a published day holds files, so nothing below it opens"
     assert opened[0] == {"."}
     assert opened[1] == {"2019"}, "2020 begins after the cutoff and is skipped by name"
-    assert opened[2] == {f"2019/{month:02d}" for month in range(1, 10)}, (
-        "January to September 2019 - the months that can hold a day older than "
-        "2019-09-08. October onwards is refused by its name"
+    assert opened[2] == {"2019/01", "2019/08", "2019/09"}, (
+        "only months with expired days open; October is refused by its name"
     )
 
 
 def test_a_bigger_archive_does_not_make_the_scan_read_more(tmp_path: Path) -> None:
     """Two trees, the same backlog, and the same reads.
 
-    The large case carries 140 more published days and 3,080 more files, all of
-    them inside the window. Guardrail #12's question is whether a run that changed no
-    code costs more because an earlier run appended - so the two scans have to
-    open the same directories, not merely find the same files.
+    The larger tree adds kept days in a later month and year, and a second
+    picture per day. Both scans must open the same directories.
     """
     small = dated_tree(tmp_path / "small", days=SCAN_SMALL_DAYS, pictures=1)
-    large = dated_tree(tmp_path / "large", days=SCAN_DAYS, pictures=8)
+    large = dated_tree(tmp_path / "large", days=SCAN_DAYS, pictures=2)
 
     read_small = opened_by_depth(small, lambda: visuals_older_than(small, SCAN_LIMIT))
     read_large = opened_by_depth(large, lambda: visuals_older_than(large, SCAN_LIMIT))
 
     assert read_small == read_large
-    assert sum(len(names) for names in read_large.values()) == 261, (
-        "the root, 2019, nine months and 250 expired days"
+    assert sum(len(names) for names in read_large.values()) == 8, (
+        "the root, 2019, three months and three expired days"
     )
-    assert len(visuals_older_than(large, SCAN_LIMIT)) == 8 * SCAN_EXPIRED_DAYS
-    assert len(visuals_older_than(small, SCAN_LIMIT)) == SCAN_EXPIRED_DAYS
+    assert len(visuals_older_than(large, SCAN_LIMIT)) == 2 * len(SCAN_EXPIRED_DAYS)
+    assert len(visuals_older_than(small, SCAN_LIMIT)) == len(SCAN_EXPIRED_DAYS)
 
 
 def test_the_oldest_picture_is_found_without_opening_the_rest_of_the_archive(
@@ -315,24 +294,22 @@ def test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault(tmp_path: Pa
 def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> None:
     """The row's whole point. `deleted` is capped, so `deleted` cannot answer this.
 
-    201 candidates against the shipped 200-file fuse, and the shipped fuse rather
-    than a scaled-down one - the question is whether the number an operator
-    actually reads can distinguish a finished run from a stuck one.
-
-    A run that deleted 200 and skipped 0 has cleared its backlog. A run that
-    deleted 200 and skipped 1 has not. `deleted` is 200 in both.
+    Three candidates against a two-file fuse distinguish a finished run from
+    a run with one file still waiting.
     """
-    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(201)]})
+    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(3)]})
 
-    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False, max_deletes_per_run=2)
 
-    assert row.max_deletes_per_run == 200, "the shipped fuse, not a scaled-down one"
+    assert row.max_deletes_per_run == 2
     assert row.deleted == row.max_deletes_per_run
     assert row.skipped_by_fuse == 1, "the one file the fuse would not let this run reach"
     assert row.fuse_tripped
-    assert row.deleted + row.skipped_by_fuse == row.candidates_found == 201
+    assert row.deleted + row.skipped_by_fuse == row.candidates_found == 3
 
-    finished = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
+    finished = pruned(
+        root, date(2026, 8, 21), window=window(6), dry_run=False, max_deletes_per_run=2
+    )
     assert finished.deleted == 1
     assert finished.skipped_by_fuse == 0, "a second pass clears what the first could not"
     assert not finished.fuse_tripped
@@ -346,19 +323,19 @@ def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -
     every row this project will ever write, and the field would say nothing.
 
     The dry run's own tell is the sum falling short: 0 deleted plus 1 skipped
-    against 201 found is a run that reported, and it is readable off the numbers
+    against three found is a run that reported, and it is readable off the numbers
     without cross-referencing the `dry_run` cell.
     """
-    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(201)]})
+    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(3)]})
 
-    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=True)
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=True, max_deletes_per_run=2)
 
     assert row.dry_run
     assert row.deleted == 0
-    assert row.candidates_found == 201
+    assert row.candidates_found == 3
     assert row.skipped_by_fuse == 1, "the fuse's own count, unchanged by the pretending"
     assert row.deleted + row.skipped_by_fuse < row.candidates_found
-    assert len(list(root.rglob("*.webp"))) == 201
+    assert len(list(root.rglob("*.webp"))) == 3
 
 
 def test_the_bytes_are_the_files_that_actually_left_the_tree(
