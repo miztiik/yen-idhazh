@@ -90,7 +90,7 @@ export type FileShortfall =
  *  called once the call's query has ended, answered or not; or the first file
  *  that could not be had, and why, with nothing of this call's left open. */
 export type Holding =
-	| { engine: QueryEngine; names: string[]; done(): Promise<void> }
+	| { engine: QueryEngine; names: string[]; fetched: boolean[]; done(): Promise<void> }
 	| { failed: number; shortfall: FileShortfall };
 
 /** What one page keeps, and the three things a caller asks of it. */
@@ -203,14 +203,17 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 		key: string,
 		address: string | null,
 		arrival: Arrival | null
-	): Promise<Registration> {
+	): { registration: Promise<Registration>; fetched: boolean } {
 		const named = names.get(key);
-		if (named !== undefined) return named;
-		if (address !== null) return fetchedLate(engine, file, key);
+		if (named !== undefined) return { registration: named, fetched: false };
+		if (address !== null) return { registration: fetchedLate(engine, file, key), fetched: true };
 		if (arrival === null || !('bytes' in arrival)) {
-			return Promise.reject(new Error(`${key} was being registered by another call, and that registration failed`));
+			return {
+				registration: Promise.reject(new Error(`${key} was being registered by another call, and that registration failed`)),
+				fetched: false
+			};
 		}
-		return handOver(engine, key, arrival.bytes);
+		return { registration: handOver(engine, key, arrival.bytes), fetched: true };
 	}
 
 	async function hold(files: readonly WantedFile[]): Promise<Holding> {
@@ -243,10 +246,18 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 				if (opened.length > 0) await engine.drop(opened);
 			};
 			let held: Registration[];
+			const fetched: boolean[] = [];
 			try {
-				held = await Promise.all(
-					files.map((file, at) => opening[at] ?? registration(engine, file, keys[at], addresses[at], arrived[at]))
-				);
+				const registrations = files.map((file, at) => {
+					if (opening[at] !== null) {
+						fetched[at] = true;
+						return opening[at]!;
+					}
+					const one = registration(engine, file, keys[at], addresses[at], arrived[at]);
+					fetched[at] = one.fetched;
+					return one.registration;
+				});
+				held = await Promise.all(registrations);
 			} catch (error) {
 				await done();
 				throw error;
@@ -259,7 +270,7 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 				}
 				named.push(one.name);
 			}
-			return { engine, names: named, done };
+			return { engine, names: named, fetched, done };
 		} finally {
 			// Bytes wait here only until the engine has them, and never past the call that fetched them.
 			arriving.forEach((one, at) => {

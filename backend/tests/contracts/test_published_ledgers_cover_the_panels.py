@@ -11,8 +11,8 @@ It reads the calls as text, so a call it cannot read is refused by name rather
 than skipped: a ledger passed through a variable, a door loaded with `import()`,
 or the door re-exported from another module would each hide a ledger from it.
 The door's own modules under `frontend/src/lib/data/` pass a ledger through, and
-are not callers. The door's closed set of ledger names, which is what a panel
-can name at all, is held to the same list.
+are not callers. The written-question page may name unpublished ledgers and then
+answer `missing`, so only panel calls are held to the published list.
 """
 
 from __future__ import annotations
@@ -125,22 +125,6 @@ def test_every_ledger_a_panel_asks_the_door_for_is_published() -> None:
         "names it where this test cannot read it. Add the ledger to ledger.published in "
         f"config/idhazh.json (published now: {sorted(published)}), or change the call:\n"
         + "\n".join(faults)
-    )
-
-
-def test_every_ledger_the_door_can_be_asked_for_is_published() -> None:
-    """A name in the door's closed set is one a panel can pass, and the type check lets it.
-
-    This bites before any panel calls the door: a ledger added to the set without
-    being published is a call that compiles and then answers 404.
-    """
-    found = re.search(r"export const LEDGER_NAMES = \[(.*?)\] as const;", read_text(SHAPES), re.DOTALL)
-    assert found, f"{SHAPES.name} no longer declares LEDGER_NAMES as a frozen array"
-    names = set(re.findall(r"'([^']*)'", found[1]))
-    assert names, f"{SHAPES.name} names no ledger"
-    assert names <= published_ledgers(), (
-        f"{SHAPES.name} lets a panel ask for {sorted(names - published_ledgers())}, which "
-        "config/idhazh.json does not publish. Publish it, or take it out of LEDGER_NAMES."
     )
 
 

@@ -55,16 +55,32 @@ export function firstNamed(
 	monthly: readonly CompactEntry[],
 	yearly: readonly CompactEntry[]
 ): DateStamp {
-	let first = daily[0].covers;
-	const coarser: [Exclude<Period, 'daily'>, readonly CompactEntry[]][] = [
-		['monthly', monthly],
-		['yearly', yearly]
-	];
-	for (const [period, entries] of coarser) {
-		const oldest = entries.length > 0 ? FIRST_DAY[period](entries[0].covers) : null;
-		if (oldest !== null && oldest < first) first = oldest;
-	}
-	return first;
+	const named = [
+		daily[0]?.covers ?? null,
+		monthly[0] ? FIRST_DAY.monthly(monthly[0].covers) : null,
+		yearly[0] ? FIRST_DAY.yearly(yearly[0].covers) : null
+	].filter((day): day is DateStamp => day !== null);
+	if (named.length === 0) throw new Error('firstNamed needs at least one named period');
+	return named.sort()[0];
+}
+
+function lastDayOfMonth(month: string): DateStamp {
+	const [year, oneBased] = month.split('-').map(Number);
+	return new Date(Date.UTC(year ?? 0, oneBased ?? 0, 0)).toISOString().slice(0, 10);
+}
+
+/** The newest day any index names; a month counts through its last UTC day and a year through 31 December. */
+export function newestNamed(
+	daily: readonly CompactEntry[],
+	monthly: readonly CompactEntry[],
+	yearly: readonly CompactEntry[]
+): DateStamp | null {
+	const named = [
+		daily.at(-1)?.covers ?? null,
+		monthly.at(-1) ? lastDayOfMonth(monthly.at(-1)!.covers) : null,
+		yearly.at(-1) ? `${yearly.at(-1)!.covers}-12-31` : null
+	].filter((day): day is DateStamp => day !== null);
+	return named.length === 0 ? null : named.sort().at(-1)!;
 }
 
 /** The files that answer every day from `from` to `to`, one file a day. */
@@ -89,4 +105,19 @@ export function filesFor(
 		if (!chosen.has(key)) chosen.set(key, { period, entry, firstDay: day });
 	}
 	return { files: [...chosen.values()] };
+}
+
+/** The days after the newest packed day that the staged site listed for a ledger. */
+export function writerDaysFor(
+	from: DateStamp,
+	to: DateStamp,
+	newestPacked: DateStamp | null,
+	listedThrough: DateStamp | null
+): DateStamp[] {
+	if (listedThrough === null) return [];
+	if (newestPacked !== null && to <= newestPacked) return [];
+	const start = newestPacked === null || from > newestPacked ? from : daysBetween(newestPacked, to)[1] ?? to;
+	if (start > to || start > listedThrough) return [];
+	const end = to < listedThrough ? to : listedThrough;
+	return daysBetween(start, end);
 }

@@ -1,4 +1,4 @@
-"""One compacted ledger, laid out as the committed tree is, for the query door.
+"""Two compacted ledgers and one day of writer files, laid out as the committed tree is, for the query door.
 
 `state/` is a state root: `compact/host-fingerprint/index/daily.json` and
 `index/monthly.json`, the compact files they name, and an `index/yearly.json`
@@ -50,4 +50,23 @@ What the packed year holds:
 
 Regenerating the files changes their bytes, because each envelope records when
 it was written; the indexes have to be rebuilt from the new files with them.
+
+The second ledger, `item-health`, exists so a written question can join two
+ledgers. In both roots it is a byte copy of `host-fingerprint`'s compact files,
+filed under `item-health`'s paths, with indexes that name `item-health`. Its
+envelopes still name `host-fingerprint`. The door reads indexes and rows and
+never an envelope, so the copy answers a join exactly as a second compacted
+ledger would; no backend reader opens it as `item-health`.
+
+`raw/item-health/index/2026-09-06.json` lists one day not packed yet, the way
+the site build stages one: two writer files under `raw/item-health/2026/09/06/`,
+with each file's size in `bytes`. Their `hostile` cells hold a script tag and an
+address, which must reach an answer as text and as nothing else.
+
+`answers/<case>.json` holds the rows each written-question case in
+`ledger-door.spec.ts` must return, as the engine's text. `test_ledger_door_fixture.py`
+recomputes every one with DuckDB in Python, so a regenerated fixture that moves an
+answer fails until the answer is regenerated with it. Each case has exactly one
+right answer: its statement orders its rows completely, or ties only rows that
+read the same, because rows that tie may come back in any order.
 """

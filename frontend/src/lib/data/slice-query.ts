@@ -65,7 +65,7 @@ const quoted = (column: string): string => `"${column}"`;
 
 /** The SQL list naming every file, in the order given. The engine minted every
  *  name, and each is still quoted as a string literal rather than trusted. */
-function listOf(names: readonly string[]): string {
+export function listOf(names: readonly string[]): string {
 	return `[${names.map((name) => `'${name.replaceAll("'", "''")}'`).join(', ')}]`;
 }
 

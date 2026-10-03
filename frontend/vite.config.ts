@@ -4,6 +4,7 @@ import { defineConfig } from 'vite';
 import { assetBaseUrl, encoderSource } from './asset-base.js';
 import { assistConfig, engineExtensionRepository, uiConfig } from './src/lib/server/config';
 import { queryEngineAssetModule } from './scripts/query-engine-assets';
+import { rawListedThrough } from './scripts/raw-listed-through.mjs';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), queryEngineAssetModule()],
@@ -57,6 +58,7 @@ export default defineConfig({
 		// measured against, and out of its `__data.json` twin.
 		__ENCODER_SOURCE__: JSON.stringify(encoderSource()),
 		// Where the query engine downloads its add-ons; `connect-src` admits the same origin.
-		__ENGINE_EXTENSION_REPOSITORY__: JSON.stringify(engineExtensionRepository())
+		__ENGINE_EXTENSION_REPOSITORY__: JSON.stringify(engineExtensionRepository()),
+		__RAW_LISTED_THROUGH__: JSON.stringify(rawListedThrough())
 	}
 });

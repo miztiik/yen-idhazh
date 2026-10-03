@@ -18,6 +18,7 @@ Then read the one page that owns the thing you are changing.
 | What you are changing | What owns it |
 | --- | --- |
 | A persisted shape - a payload, a ledger, a config, a schema | `CLAUDE.md` section 11, then the model under `backend/idhazh/contracts/` |
+| The query door running an operator-written ledger question | [`../architecture/publishing/how-the-query-door-answers-a-written-question.md`](../architecture/publishing/how-the-query-door-answers-a-written-question.md) |
 | A published page | [`../concepts/design-system.md`](../concepts/design-system.md), and the surface's own code |
 | Whether two items are the same story, or why one ran twice | [`../architecture/publishing/autotune-content-similarity.md`](../architecture/publishing/autotune-content-similarity.md) - the flowchart near the top is the whole rule |
 | A prompt, or anything fetched text reaches | `CLAUDE.md` Guardrail #11, then `docs/architecture/summarize/` |

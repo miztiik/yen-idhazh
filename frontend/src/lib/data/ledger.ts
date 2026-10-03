@@ -20,13 +20,14 @@
 
 import { base } from '$app/paths';
 import { fetchedBytes } from './fetched-bytes';
+import { readAsk, readAskCost, type RawListedThrough } from './ask-reader';
 import { readReach, type LedgerReach } from './ledger-reach';
 import { pageKeeper, type PageKeeper } from './page-keeper';
 import { readSlice } from './slice-reader';
-import type { LedgerName, SliceOptions, SliceResult } from './slice-shapes';
+import type { AskOptions, AskResult, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
 
 export type { LedgerReach } from './ledger-reach';
-export type { DateStamp, LedgerFault, LedgerName, Predicate, Row, SliceOptions, SliceResult } from './slice-shapes';
+export type { AskFault, AskOptions, AskRefusal, AskResult, Column, DateStamp, FetchCost, LedgerFault, LedgerName, Predicate, Row, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
 
 let kept: PageKeeper | null = null;
 
@@ -50,4 +51,16 @@ export function slice(ledger: LedgerName, options: SliceOptions): Promise<SliceR
  *  indexes name. Reads nothing else and starts no engine. */
 export function ledgerReach(ledger: LedgerName): Promise<LedgerReach> {
 	return readReach(keeper(), ledger);
+}
+
+const rawListedThrough = (__RAW_LISTED_THROUGH__ ?? {}) as RawListedThrough;
+
+/** Run one read-only statement over chosen ledgers and days. */
+export function ask(options: AskOptions): Promise<AskResult> {
+	return readAsk(keeper(), options, rawListedThrough);
+}
+
+/** What a written question would fetch before it runs. */
+export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> {
+	return readAskCost(keeper(), ledgers, from, to, rawListedThrough);
 }

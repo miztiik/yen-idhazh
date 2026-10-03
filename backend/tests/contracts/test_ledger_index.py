@@ -258,3 +258,39 @@ def test_a_watermark_refuses_a_run_id_that_is_only_the_run_number() -> None:
     error = _refusal(Watermark, payload | {"run_id": bare})
 
     assert (error["type"], error["loc"]) == ("string_pattern_mismatch", ("run_id",))
+
+
+def test_a_raw_day_index_accepts_one_size_per_file() -> None:
+    payload = _sample("raw-day-index", "a-populated-day")
+    sizes = list(range(len(payload["files"])))
+
+    index = RawDayIndex.model_validate(payload | {"bytes": sizes})
+
+    assert index.bytes == sizes
+
+
+def test_a_raw_day_index_accepts_no_sizes_for_an_old_compaction_listing() -> None:
+    payload = _sample("raw-day-index", "a-populated-day")
+    payload.pop("bytes", None)
+
+    index = RawDayIndex.model_validate(payload)
+
+    assert index.bytes is None
+
+
+def test_a_raw_day_index_refuses_a_size_count_that_differs_by_ledger_and_day() -> None:
+    payload = _sample("raw-day-index", "a-populated-day")
+
+    error = _refusal(RawDayIndex, payload | {"bytes": [1]})
+
+    _names_the_file(error, payload["ledger"], payload["date"], "sizes")
+
+
+def test_a_raw_day_index_refuses_a_negative_size() -> None:
+    payload = _sample("raw-day-index", "a-populated-day")
+    sizes = [0 for _ in payload["files"]]
+    sizes[0] = -1
+
+    error = _refusal(RawDayIndex, payload | {"bytes": sizes})
+
+    _names_the_file(error, payload["ledger"], payload["date"], "negative")

@@ -8,11 +8,12 @@ import { fileURLToPath } from 'node:url';
 import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type Period } from '../src/lib/data/compact-index';
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
+import { readAsk, readAskCost } from '../src/lib/data/ask-reader';
 import { readReach } from '../src/lib/data/ledger-reach';
 import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper, type WantedFile } from '../src/lib/data/page-keeper';
-import { daysBetween, filesFor } from '../src/lib/data/slice';
+import { daysBetween, filesFor, newestNamed } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
-import { dataPath, indexPath, readSlice } from '../src/lib/data/slice-reader';
+import { dataPath, indexPath, rawIndexPath, readSlice } from '../src/lib/data/slice-reader';
 import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository } from '../src/lib/server/config';
 import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
@@ -189,6 +190,7 @@ function askedCounts(asked: Asked[]): Record<string, number> {
 /** A fixture day file's path, and its bytes read from the fixture. */
 const dayFile = (covers: string): string => dataPath(LEDGER, 'daily', covers);
 const bytesOf = (relative: string): Uint8Array => new Uint8Array(readFileSync(path.join(STATE, ...relative.split('/'))));
+const expectedAnswer = (name: string): Record<string, string | null>[] => JSON.parse(readFileSync(path.join(FIXTURE, 'answers', `${name}.json`), 'utf8'));
 
 test('the engine starts while a whole file is still arriving', async () => {
 	const { fetcher } = recorded();
@@ -222,6 +224,19 @@ test('the engine starts while a whole file is still arriving', async () => {
 		await reading;
 		await keeper.release();
 	}
+});
+
+test.describe('newest day any index names', () => {
+	const entry = (covers: string): CompactEntry => ({ covers, rows: 1, bytes: 1 });
+
+	test('daily, month and year entries count through the day they cover', () => {
+		expect(newestNamed([entry('2026-09-02')], [], [])).toBe('2026-09-02');
+		expect(newestNamed([], [entry('2026-09')], [])).toBe('2026-09-30');
+		expect(newestNamed([], [], [entry('2026')])).toBe('2026-12-31');
+		expect(newestNamed([entry('2026-09-02')], [entry('2026-10')], [])).toBe('2026-10-31');
+		expect(newestNamed([], [entry('2028-02')], [])).toBe('2028-02-29');
+		expect(newestNamed([], [], [])).toBeNull();
+	});
 });
 
 test.describe('which files a range needs', () => {
@@ -606,6 +621,26 @@ test.describe('THE ORACLE through the engine, at both entry points', () => {
 });
 
 test.describe('what a page keeps', () => {
+	test('reports which wanted files were fetched and which were already held', async () => {
+		const { fetcher } = recorded();
+		const engine = counted();
+		const page = freshPage(fetcher, engine);
+		const entry = fixtureEntries('daily').find((one) => one.covers === '2026-09-01');
+		expect(entry).toBeDefined();
+		const file = {
+			path: dayFile('2026-09-01'),
+			version: `${entry?.rows}-${entry?.bytes}`,
+			bytes: bytesOf(dayFile('2026-09-01')).byteLength,
+			byRange: false
+		};
+		const first = await page.hold([file]);
+		expect(first).toMatchObject({ fetched: [true] });
+		if (!('failed' in first)) await first.done();
+		const second = await page.hold([file]);
+		expect(second).toMatchObject({ fetched: [false] });
+		if (!('failed' in second)) await second.done();
+	});
+
 	const MONTH_FILE = dataPath(LEDGER, 'monthly', '2026-08');
 	/** Both indexes and every file a span from 2026-08-30 to 2026-09-02 reads, each once. */
 	const ONCE_EACH = {
@@ -1129,5 +1164,186 @@ test.describe('an empty monthly.json or yearly.json is a gap the design expects:
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
+	});
+});
+
+test.describe('THE ORACLE for ask(): a written question over chosen ledgers', () => {
+	const opts = {
+		ledgers: ['host-fingerprint', 'item-health'] as const,
+		from: '2026-09-01',
+		to: '2026-09-01',
+		sql: 'SELECT h.date, h.job, i.job AS item_job FROM "host-fingerprint" h JOIN "item-health" i USING (date) ORDER BY h.shard, i.shard, h.job, i.job',
+		maxChars: 1000,
+		maxRows: 3,
+		maxFetchBytes: 100_000_000
+	};
+
+	test('a join over two selected ledgers returns exactly the committed rows, capped', async () => {
+		const { fetcher } = recorded();
+		const answer = await readAsk(freshPage(fetcher), opts, {});
+		expect(answer).toMatchObject({ state: 'ok', capped: true });
+		if (answer.state !== 'ok') return;
+		expect(answer.columns.map((column) => column.name)).toEqual(['date', 'job', 'item_job']);
+		expect(answer.rows).toEqual(expectedAnswer('join-two-ledgers'));
+		expect(answer.rows).toHaveLength(opts.maxRows);
+	});
+
+	test('the next call drops the unselected ledger view', async () => {
+		const page = freshPage(recorded().fetcher);
+		expect((await readAsk(page, opts, {})).state).toBe('ok');
+		const answer = await readAsk(page, { ...opts, ledgers: ['host-fingerprint'], sql: 'SELECT * FROM "item-health"', maxRows: 10 }, {});
+		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
+	});
+
+	test('the writers tier is priced from its listing and read once when listed through', async () => {
+		const page = freshPage(recorded().fetcher);
+		const cost = await readAskCost(page, ['item-health'], '2026-09-06', '2026-09-06', { 'item-health': '2026-09-06' });
+		expect(cost.files).toBe(2);
+		expect(cost.unpackedDays).toEqual(['2026-09-06']);
+		const answer = await readAsk(page, { ledgers: ['item-health'], from: '2026-09-06', to: '2026-09-06', sql: 'SELECT date, run_id, hostile FROM "item-health" ORDER BY run_id', maxChars: 200, maxRows: 10, maxFetchBytes: 100_000_000 }, { 'item-health': '2026-09-06' });
+		expect(answer).toMatchObject({ state: 'ok', unpackedDays: ['2026-09-06'] });
+		if (answer.state === 'ok') expect(answer.rows).toEqual(expectedAnswer('raw-writer-day'));
+	});
+
+	test('a byte ceiling refuses before any data file is fetched', async () => {
+		const { fetcher, asked } = recorded();
+		const answer = await readAsk(freshPage(fetcher), { ...opts, maxFetchBytes: 1 }, {});
+		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'over-ceiling' } });
+		expect(dataAsked(asked)).toEqual([]);
+	});
+
+	test('additional written-question oracle cases match committed answers', async () => {
+		const page = freshPage(recorded().fetcher);
+		const cases = [
+			{ name: 'order-by-cap', sql: 'SELECT date, shard FROM "host-fingerprint" WHERE date=\'2026-09-01\' ORDER BY shard DESC', maxRows: 2 },
+			{ name: 'trailing-comment', sql: 'SELECT 1 AS one -- done', maxRows: 10 },
+			{ name: 'semicolon-comment', sql: 'SELECT 1 AS one; -- done', maxRows: 10 },
+			{ name: 'typed-values', sql: "SELECT sum(cores) AS total, 1.5 AS decimal_value, DATE '2026-09-01' AS day_value, [1,2] AS list_value, {'a':1} AS struct_value FROM \"host-fingerprint\"", maxRows: 10 },
+			{ name: 'summarize', sql: 'SUMMARIZE SELECT * FROM "host-fingerprint"', maxRows: 3 },
+			{ name: 'explain', sql: 'EXPLAIN SELECT 1 AS one', maxRows: 10 },
+			{ name: 'duplicate-id', sql: 'SELECT h.shard AS id, i.shard AS id FROM "host-fingerprint" h JOIN "item-health" i USING (date) ORDER BY h.shard, i.shard', maxRows: 3 }
+		];
+		for (const one of cases) {
+			const answer = await readAsk(page, { ...opts, sql: one.sql, maxRows: one.maxRows }, {});
+			expect(answer, one.name).toMatchObject({ state: 'ok' });
+			if (answer.state === 'ok') expect(answer.rows, one.name).toEqual(expectedAnswer(one.name));
+		}
+	});
+
+	test('a ledger with no file in the span can still answer through an empty view', async () => {
+		const answer = await readAsk(freshPage(recorded().fetcher), {
+			ledgers: ['host-fingerprint', 'item-health'],
+			from: '2026-09-06',
+			to: '2026-09-06',
+			sql: 'SELECT count(*) AS rows FROM "host-fingerprint"',
+			maxChars: 100,
+			maxRows: 10,
+			maxFetchBytes: 100_000_000
+		}, { 'item-health': '2026-09-06' });
+		expect(answer).toMatchObject({ state: 'ok' });
+		if (answer.state === 'ok') expect(answer.rows).toEqual([{ rows: '0' }]);
+	});
+
+	test('a zero-row answer is quiet and still names every column and its type', async () => {
+		const page = freshPage(recorded().fetcher);
+		const one = { ...opts, ledgers: ['host-fingerprint'] as const, maxRows: 1 };
+		const full = await readAsk(page, { ...one, sql: 'SELECT * FROM "host-fingerprint"' }, {});
+		const none = await readAsk(page, { ...one, sql: 'SELECT * FROM "host-fingerprint" WHERE false' }, {});
+		expect(full.state).toBe('ok');
+		expect(none.state).toBe('quiet');
+		if (full.state !== 'ok' || none.state !== 'quiet') return;
+		expect(none.columns.map((column) => column.name)).toEqual(expect.arrayContaining([...columns]));
+		expect(none.columns).toEqual(full.columns);
+	});
+
+	test('a date both packed and listed is read once, from its packed file', async () => {
+		const listed = decoded(readFileSync(path.join(STATE, ...rawIndexPath('item-health', '2026-09-06').split('/'))));
+		const { fetcher, asked } = recorded({
+			[rawIndexPath('item-health', '2026-09-05')]: { status: 200, body: encoded({ ...listed, date: '2026-09-05' }) }
+		});
+		const daily = readIndex(JSON.parse(readFileSync(path.join(STATE, ...indexPath('item-health', 'daily').split('/')), 'utf8')), 'item-health', 'daily');
+		if (!('index' in daily)) throw new Error(`the fixture's item-health daily index is refused: ${JSON.stringify(daily)}`);
+		const packed = daily.index.entries.find((entry) => entry.covers === '2026-09-05');
+		expect(packed, 'the fixture packs item-health on 2026-09-05').toBeDefined();
+		const answer = await readAsk(freshPage(fetcher), { ...opts, ledgers: ['item-health'], from: '2026-09-05', to: '2026-09-05', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-06' });
+		expect(answer).toMatchObject({ state: 'ok', rows: [{ rows: String(packed?.rows) }] });
+		expect(asked.filter((one) => one.path.startsWith('raw/'))).toEqual([]);
+	});
+
+	test('days after the newest listing are clamped away, and a missing listing inside the range is unreachable', async () => {
+		const quiet = await readAsk(freshPage(recorded().fetcher), { ...opts, ledgers: ['item-health'], from: '2026-09-07', to: '2026-09-07', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-06' });
+		expect(quiet).toMatchObject({ state: 'quiet' });
+		const missing = await readAsk(freshPage(recorded().fetcher), { ...opts, ledgers: ['item-health'], from: '2026-09-07', to: '2026-09-07', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-07' });
+		expect(missing).toEqual({ state: 'unreachable', ledger: 'item-health', at: '2026-09-07', fault: 'file-missing' });
+	});
+
+	test('a date in no tier is unreachable at that date', async () => {
+		const missing = await readAsk(freshPage(recorded().fetcher), { ...opts, from: '2026-07-30', to: '2026-07-30' }, {});
+		expect(missing).toMatchObject({ state: 'unreachable', at: '2026-07-30' });
+	});
+
+	test('two calls made at once over different ledgers run one after the other', async () => {
+		const page = freshPage(recorded().fetcher);
+		const count = (ledger: 'host-fingerprint' | 'item-health') =>
+			readAsk(page, { ...opts, ledgers: [ledger], sql: `SELECT count(*) AS rows FROM "${ledger}"`, maxRows: 10 }, {});
+		const [host, item] = await Promise.all([count('host-fingerprint'), count('item-health')]);
+		expect(host.state).toBe('ok');
+		expect(item.state).toBe('ok');
+	});
+
+	test('a ledger the call did not select names no table', async () => {
+		const answer = await readAsk(freshPage(recorded().fetcher), { ...opts, ledgers: ['host-fingerprint'], sql: 'SELECT * FROM "summary-quality-evals"', maxRows: 10 }, {});
+		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
+		if (answer.state === 'refused' && answer.because.kind === 'engine-error') {
+			expect(answer.because.message).toContain('summary-quality-evals');
+		}
+	});
+
+	test('empty published ledger is missing, and broken coarser indexes are unreachable', async () => {
+		const empty = { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'daily', entries: [] };
+		const missing = await readAsk(freshPage(recorded({
+			[DAILY_INDEX]: { status: 200, body: encoded(empty) },
+			[MONTHLY_INDEX]: { status: 200, body: encoded({ ...empty, period: 'monthly' }) },
+			[YEARLY_INDEX]: { status: 200, body: encoded({ ...empty, period: 'yearly' }) }
+		}).fetcher), { ...opts, ledgers: ['host-fingerprint', 'item-health'] }, {});
+		expect(missing).toEqual({ state: 'missing', ledger: 'host-fingerprint' });
+
+		const absent = await readAsk(freshPage(recorded({ [MONTHLY_INDEX]: { status: 404 } }).fetcher), opts, {});
+		expect(absent).toMatchObject({ state: 'unreachable', ledger: 'host-fingerprint', at: '2026-09-01', fault: 'index-missing' });
+		const refused = await readAsk(freshPage(recorded({ [MONTHLY_INDEX]: reshaped({ version: '2099-01-01' }) }).fetcher), opts, {});
+		expect(refused).toMatchObject({ state: 'unreachable', ledger: 'host-fingerprint', at: '2026-09-01', fault: 'index-missing' });
+	});
+
+	test('a raw listing naming a non-parquet file is unreachable at its day', async () => {
+		const listing = decoded(readFileSync(path.join(STATE, 'raw', 'item-health', 'index', '2026-09-06.json')));
+		const bad = { ...listing, files: ['00000000-0000-8000-8000-000000000001.json'], bytes: [(listing.bytes as number[])[0]] };
+		const answer = await readAsk(freshPage(recorded({ [rawIndexPath('item-health', '2026-09-06')]: { status: 200, body: encoded(bad) } }).fetcher), {
+			ledgers: ['item-health'],
+			from: '2026-09-06',
+			to: '2026-09-06',
+			sql: 'SELECT count(*) AS rows FROM "item-health"',
+			maxChars: 100,
+			maxRows: 10,
+			maxFetchBytes: 100_000_000
+		}, { 'item-health': '2026-09-06' });
+		expect(answer).toEqual({ state: 'unreachable', ledger: 'item-health', at: '2026-09-06', fault: 'index-missing' });
+	});
+
+	test('a bad statement is refused before the engine starts', async () => {
+		const engine = counted();
+		const page = freshPage(recorded().fetcher, engine);
+		expect(await readAsk(page, { ...opts, sql: 'SELECT 1; DROP VIEW "host-fingerprint"' }, {})).toEqual({
+			state: 'refused',
+			because: { kind: 'statements', count: 2 }
+		});
+		expect(await readAsk(page, { ...opts, sql: 'CREATE TABLE t AS SELECT 1' }, {})).toEqual({
+			state: 'refused',
+			because: { kind: 'not-read-only', word: 'CREATE' }
+		});
+		expect(await readAsk(page, { ...opts, sql: 'SELECT 12345', maxChars: 6 }, {})).toEqual({
+			state: 'refused',
+			because: { kind: 'too-long', chars: 12, max: 6 }
+		});
+		expect(engine.opened()).toBe(0);
 	});
 });

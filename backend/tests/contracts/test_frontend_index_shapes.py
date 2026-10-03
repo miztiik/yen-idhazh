@@ -26,7 +26,7 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh.contracts.file_envelope import Period
-from idhazh.contracts.ledger_index import CompactIndex
+from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.keys import DATE_CELL
@@ -143,12 +143,21 @@ def test_the_periods_are_the_contract_s_own() -> None:
 
 
 def test_every_ledger_the_door_may_query_is_a_ledger() -> None:
-    """A name in the door's closed set that no ledger carries is a panel that can never draw."""
+    """The written-question door names every declared ledger, and no other."""
     shapes = DOOR / "slice-shapes.ts"
     names = constant_list(read_text(shapes), "LEDGER_NAMES", shapes)
-    unknown = sorted(set(names) - {ledger.value for ledger in LedgerName})
-    assert names, f"{shapes.name} names no ledger"
-    assert not unknown, f"{shapes.name} names ledgers LedgerName does not declare: {unknown}"
+    expected = [ledger.value for ledger in LedgerName]
+    assert names == expected, f"{shapes.name} names {names}, and LedgerName declares {expected}"
+
+
+def test_the_raw_day_index_copy_names_the_contract_fields_and_requires_bytes() -> None:
+    """The browser copy requires bytes because the site build fills them before it stages a listing."""
+    copy = DOOR / "raw-day-index.ts"
+    fields = copied_cells(read_text(copy), "RawDayIndex")
+    schema = contract_cells(RawDayIndex.json_schema())
+    assert fields["bytes"] == "bytes: number[]"
+    assert set(fields) == set(schema)
+    assert constant(read_text(copy), "RAW_DAY_INDEX_STAMP", copy) == RawDayIndex.schema_version()
 
 
 def test_the_door_filters_days_on_the_ledger_s_own_date_cell() -> None:

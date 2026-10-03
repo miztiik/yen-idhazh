@@ -514,8 +514,7 @@ and not scripts, so it cannot see a package either way. Authority: owner,
 2026-09-28, overturning Fowler, Susan and Carmack's ruling of 2026-09-27 that the
 layout be written here.
 
-**A floor missed is "too few", never "refused".** "Refused" and `unreachable`
-already mean a fetch that did not come back, and a floor missed is not a failure:
+**A floor missed is "too few", never "refused".** `unreachable` means a fetch that did not come back, and `refused` means a question the page or the engine would not run, and a floor missed is not a failure:
 the rows are real and there are too few of them for the shape to mean anything.
 So it has its own word in `waiting.ts` beside the other nothings, and its sentence
 names the floor from the value the panel passed in. `paired` applies its floor

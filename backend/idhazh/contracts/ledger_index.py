@@ -70,12 +70,18 @@ def _first_descent(values: list[str]) -> tuple[str, str] | None:
 class RawDayIndex(Contract):
     """Which raw files exist for one day of one ledger.
 
-    Written when the compaction takes that day, and again only if a re-run's
-    raw files make it take the day again.
+    Written when the compaction takes that day, and staged by the site build for
+    days not packed yet. A compaction listing may omit `bytes`; a staged listing
+    carries it so the browser can price the files before it fetches them.
     """
 
     __schema_stem__: ClassVar[str] = "raw-day-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-02",
+            change="bytes is an optional size for each listed file, filled by the site build.",
+            why="A browser prices and checks writer files before it fetches them.",
+        ),
         ChangelogEntry(
             version="2026-10-01T16:50",
             change="Remove the retired aggregate from the ledger vocabulary.",
@@ -113,10 +119,18 @@ class RawDayIndex(Contract):
             "digests the empty string."
         )
     )
+    bytes: list[int] | None = Field(
+        default=None,
+        description=(
+            "The size in bytes of each file in `files`, in the same order. The "
+            "compaction listing may omit it; the site build fills it for days not "
+            "packed yet so the browser can price and check each file before it fetches it."
+        ),
+    )
     listed_at: Timestamp = Field(
         description=(
-            "When the compaction task last listed the day's directory, UTC, to the whole "
-            "second: the moment this index last agreed with the tree."
+            "When the compaction task or site build last listed the day's directory, UTC, "
+            "to the whole second: the moment this index last agreed with the tree."
         )
     )
 
@@ -133,6 +147,13 @@ class RawDayIndex(Contract):
                 f"{where} lists its files out of order: {descent[0]!r} comes before "
                 f"{descent[1]!r}, and the names must ascend"
             )
+        if self.bytes is not None and len(self.bytes) != len(self.files):
+            raise ValueError(
+                f"{where} lists {len(self.files)} files and {len(self.bytes)} sizes; "
+                "bytes must match files one for one"
+            )
+        if self.bytes is not None and any(size < 0 for size in self.bytes):
+            raise ValueError(f"{where} bytes contains negative sizes")
         return self
 
 
