@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { chartsReady } from './support/charts-ready';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { publishedSkyline, publishingHorizon, siteCost } from '../src/lib/charts/glance';
@@ -345,7 +346,7 @@ test('THE ORACLE: the cost panel says what it is for, and its chart fills its fr
 	// with nothing to hold it against.
 	await page.goto('/console/');
 	await page.setViewportSize({ width: 1440, height: 1000 });
-	await page.waitForTimeout(1200);
+	await chartsReady(page);
 
 	const panel = page.locator('[data-windowed="site-cost-per-item"]');
 	await expect(panel).toContainText('How long we can keep publishing');

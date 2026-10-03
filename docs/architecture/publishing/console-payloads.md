@@ -344,8 +344,8 @@ Which tab is lit is read off the route rather than passed in by each page.
 
 The guardrail is **2,000 bytes over the wire**, and it lives in
 `page_weight.payload_ceilings_bytes` in `config/idhazh.json` and nowhere else.
-`bundle-gate.mjs` applies it to the built payload and `console-band.spec.ts`
-reads the same key rather than restating it. Measured 2026-09-10, node 24.12.0,
+`bundle-gate.mjs` applies it to the built payload, and nothing else restates it.
+Measured 2026-09-10, node 24.12.0,
 on the committed payload: **777 gzipped bytes from 1,799 raw - 38.9 percent of
 the guardrail.**
 
@@ -384,6 +384,11 @@ century model was replaced by the retention bound above, because a century of
 months was never reachable. The gate's number did not move: at 2.47 times the
 bounded payload it was already a guardrail under the ruling of that day
 ([../../reference/site-weight.md](../../reference/site-weight.md#page-and-payload-guardrails)).
+On 2026-10-03 the spec's two size checks were deleted as well. Both read the
+payload each pipeline run rewrites, so a run alone could turn them red, and
+both answers already have a home: the bundle gate measures the built file
+against the key, and `backend/tests/test_console_payloads_producer.py` holds
+each series to its own retention setting.
 
 ### The band is the second payload, not the first, and the reason is not ours
 
@@ -556,7 +561,7 @@ decision 2's cold-load ceiling. Measured 2026-09-09.
  existed, and how its shards are frozen.
 - [../../concepts/partitions.md](../../concepts/partitions.md) - what
  closes a month, and what a late arrival does to a closed one.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - the
- property behind every window on this page.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have
+ a fixed-size input.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #11 for the trust boundary,
  Guardrail #12 for the ages, section 11 for the stamps.

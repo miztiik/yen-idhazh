@@ -39,8 +39,6 @@ from utilities.entity_gap import (
     unregistered_ids,
 )
 
-pytestmark = pytest.mark.slow
-
 WATCHLIST: Final = config.load(CONFIG_DIR).watchlist
 ENTITY_IDS: Final = [entity.id for entity in WATCHLIST.entities]
 MATCHER: Final = rematched(WATCHLIST.entity_terms())
@@ -248,10 +246,13 @@ def test_the_report_names_every_denominator_it_divides_by(tree: Path) -> None:
     assert row == ["openai", "4", "2.0", "4", "4", "2.0", "4"]
 
 
-def test_two_runs_over_one_tree_print_the_same_bytes() -> None:
-    """The Oracle. A pure function of the committed tree, so a re-run is a check."""
-    assert day_paths(REPO_ROOT), "the committed record is what this row measures"
-    assert report(REPO_ROOT, WATCHLIST) == report(REPO_ROOT, WATCHLIST)
+def test_two_runs_over_one_tree_print_the_same_bytes(tree: Path) -> None:
+    """The Oracle. A pure function of the tree it reads, so a re-run is a check.
+
+    Read over the fixture tree: the whole committed archive answered the same
+    question at a cost that grew with every published day (Guardrail #12).
+    """
+    assert report(tree, WATCHLIST) == report(tree, WATCHLIST)
 
 
 def test_only_a_committed_day_payload_is_read(tree: Path) -> None:

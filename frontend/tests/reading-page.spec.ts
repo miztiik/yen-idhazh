@@ -57,6 +57,7 @@ import { projectDay } from '../src/lib/payload/project';
 import { shellSeedItems, uiConfig } from '../src/lib/server/config';
 import { loadDay, publishedDates } from '../src/lib/server/payload';
 import { dayReady } from './support/day-ready';
+import { viewsOf } from './support/views';
 
 /** The tree the preview server serves, so a route here is a route that exists. */
 const BUILD = resolve(process.cwd(), 'build');
@@ -152,8 +153,7 @@ const LEADS = FACTS ? leadingStories(FACTS.leads ?? [], orderByTime(FACTS.items)
 
 /** Every reader-facing route the build emits.
  *
- * `/404` is not one of them, for the reason `layout-overflow.spec.ts` gives:
- * that document is the adapter's fallback shell rather than a rendered route,
+ * `/404` is not one of them: that document is the adapter's fallback shell rather than a rendered route,
  * and `vite preview` serves it as a plain file - so SvelteKit's data fetch for
  * it 404s and hydration throws. That is a preview artefact and not a fact about
  * the page, so it is driven by hand in the section 12 smoke instead.
@@ -231,56 +231,69 @@ async function open(page: Page, theme: string, route: string, width: number): Pr
 }
 
 test.describe('every reader route, at every width, in both themes', () => {
-	for (const theme of THEMES) {
-		for (const width of WIDTHS) {
-			test(`${theme} at ${width}px: nothing errors, nothing 404s, nothing scrolls sideways`, async ({
-				page
-			}) => {
-				const faults = watch(page);
+	for (const { width, theme } of viewsOf(WIDTHS, THEMES)) {
+		test(`${theme} at ${width}px: nothing errors, nothing 404s, nothing scrolls sideways`, async ({
+			page
+		}) => {
+			const faults = watch(page);
 
-				for (const route of ROUTES) {
-					await open(page, theme, route, width);
+			for (const route of ROUTES) {
+				await open(page, theme, route, width);
 
-					const measured = await page.evaluate(() => {
-						const root = document.documentElement;
-						return {
-							scrollWidth: root.scrollWidth,
-							clientWidth: root.clientWidth,
-							// A blank page passes every check below for free, so the
-							// checks are only worth running on a page that rendered.
-							rendered: document.querySelectorAll('.frame *').length,
-							stories: document.querySelectorAll('article.item').length
-						};
-					});
-
-					expect(
-						measured.rendered,
-						`${theme} ${route} at ${width}px rendered nothing`
-					).toBeGreaterThan(10);
-					expect(
-						measured.scrollWidth,
-						`${theme} ${route} at ${width}px scrolls sideways by ` +
-							`${measured.scrollWidth - measured.clientWidth}px with ` +
-							`${measured.stories} stories drawn out of the day's ${SERVED_ITEMS}`
-					).toBeLessThanOrEqual(measured.clientWidth);
-				}
+				const measured = await page.evaluate(() => {
+					const root = document.documentElement;
+					const limit = root.clientWidth;
+					// The elements past the right edge, so a failure names what
+					// to fix rather than only how far the page overflows.
+					const over = Array.from(document.querySelectorAll('*'))
+						.map((el) => ({ el, box: el.getBoundingClientRect() }))
+						.filter(({ box }) => box.right + window.scrollX > limit + 0.5)
+						.map(
+							({ el, box }) =>
+								`${el.tagName.toLowerCase()}.${String(el.getAttribute('class') ?? '')
+									.split(' ')
+									.slice(0, 2)
+									.join('.')} ends at ${Math.round(box.right + window.scrollX)}`
+						);
+					return {
+						scrollWidth: root.scrollWidth,
+						clientWidth: limit,
+						over: over.slice(0, 4),
+						// A blank page passes every check below for free, so the
+						// checks are only worth running on a page that rendered.
+						rendered: document.querySelectorAll('.frame *').length,
+						stories: document.querySelectorAll('article.item').length
+					};
+				});
 
 				expect(
-					faults.errors,
-					`${theme} at ${width}px logged an error on the ${SERVED_ITEMS}-story day ` +
-						`of ${DAY}:\n${faults.errors.join('\n')}`
-				).toEqual([]);
+					measured.rendered,
+					`${theme} ${route} at ${width}px rendered nothing`
+				).toBeGreaterThan(10);
 				expect(
-					faults.failed,
-					`${theme} at ${width}px asked for something that is not there:\n` +
-						faults.failed.join('\n')
-				).toEqual([]);
-				expect(
-					faults.notOk,
-					`${theme} at ${width}px was answered with an error status:\n` + faults.notOk.join('\n')
-				).toEqual([]);
-			});
-		}
+					measured.scrollWidth,
+					`${theme} ${route} at ${width}px scrolls sideways by ` +
+						`${measured.scrollWidth - measured.clientWidth}px with ` +
+						`${measured.stories} stories drawn out of the day's ${SERVED_ITEMS}: ` +
+						measured.over.join('; ')
+				).toBeLessThanOrEqual(measured.clientWidth);
+			}
+
+			expect(
+				faults.errors,
+				`${theme} at ${width}px logged an error on the ${SERVED_ITEMS}-story day ` +
+					`of ${DAY}:\n${faults.errors.join('\n')}`
+			).toEqual([]);
+			expect(
+				faults.failed,
+				`${theme} at ${width}px asked for something that is not there:\n` +
+					faults.failed.join('\n')
+			).toEqual([]);
+			expect(
+				faults.notOk,
+				`${theme} at ${width}px was answered with an error status:\n` + faults.notOk.join('\n')
+			).toEqual([]);
+		});
 	}
 });
 

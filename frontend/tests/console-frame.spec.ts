@@ -1,4 +1,5 @@
 import { expect, test } from './support/browser';
+import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -78,7 +79,7 @@ test.describe('the console frame', () => {
 	test('nothing scrolls sideways on a desktop', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/console/');
-		await page.waitForTimeout(600);
+		await chartsReady(page);
 
 		const overflowing = await page.evaluate(() => {
 			const bad: string[] = [];
@@ -106,7 +107,7 @@ test.describe('the console frame', () => {
 	test('every chart you read a value off is drawn wide enough to read it', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/console/');
-		await page.waitForTimeout(800);
+		await chartsReady(page);
 
 		const charts = await page.evaluate(() =>
 			[...document.querySelectorAll('figure svg, [data-glance-chart] svg, [data-timing="plot"]')]
@@ -146,7 +147,7 @@ test.describe('the console frame', () => {
 		// nothing in a screenshot or a byte gate would show it.
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/console/');
-		await page.waitForTimeout(800);
+		await chartsReady(page);
 
 		const charts = await page.evaluate(() => {
 			const describe = (node: Element): string => {
@@ -357,7 +358,7 @@ test.describe('the console frame', () => {
 		// squares with it, and every arithmetic test still passes.
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/console/');
-		await page.waitForTimeout(800);
+		await chartsReady(page);
 
 		const measured = await page.evaluate(() => {
 			const square = document.querySelector('[data-health]');

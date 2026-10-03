@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { loadDay, publishedDates } from '../src/lib/server/payload';
+import { viewsOf } from './support/views';
 
 /**
  * Row #14's oracle: the three screens a reader meets on a bad day.
@@ -173,30 +174,28 @@ function watchErrors(page: Page): string[] {
 }
 
 test.describe('a day with nothing on it', () => {
-	for (const theme of THEMES) {
-		for (const width of WIDTHS) {
-			test(`the quiet-day panel is the item's card in ${theme} at ${width}`, async ({ page }) => {
-				const errors = watchErrors(page);
-				await open(page, theme, `/${quietDay()}/`, width);
+	for (const { width, theme } of viewsOf(WIDTHS, THEMES)) {
+		test(`the quiet-day panel is the item's card in ${theme} at ${width}`, async ({ page }) => {
+			const errors = watchErrors(page);
+			await open(page, theme, `/${quietDay()}/`, width);
 
-				const surface = await resolved(page, 'background-color', 'var(--color-surface)');
-				const edge = await resolved(page, 'border-top-color', 'var(--item-edge)');
-				const radius = await resolved(page, 'border-top-left-radius', 'var(--radius-lg)');
+			const surface = await resolved(page, 'background-color', 'var(--color-surface)');
+			const edge = await resolved(page, 'border-top-color', 'var(--item-edge)');
+			const radius = await resolved(page, 'border-top-left-radius', 'var(--radius-lg)');
 
-				const painted = await card(page, '[data-empty-day]');
-				expect(painted.background, 'the empty panel keeps the item surface').toBe(surface);
-				expect(painted.border, 'the empty panel keeps the item hairline').toBe(edge);
-				expect(painted.borderWidth).toBe('1px');
-				expect(painted.radius, 'the empty panel keeps the item corner').toBe(radius);
+			const painted = await card(page, '[data-empty-day]');
+			expect(painted.background, 'the empty panel keeps the item surface').toBe(surface);
+			expect(painted.border, 'the empty panel keeps the item hairline').toBe(edge);
+			expect(painted.borderWidth).toBe('1px');
+			expect(painted.radius, 'the empty panel keeps the item corner').toBe(radius);
 
-				const notice = await card(page, 'section[aria-label="About today"]');
-				expect(notice.background, 'the edition header is not a second card').toBe('rgba(0, 0, 0, 0)');
-				expect(notice.borderWidth).toBe('0px');
-				expect(notice.radius).toBe('0px');
+			const notice = await card(page, 'section[aria-label="About today"]');
+			expect(notice.background, 'the edition header is not a second card').toBe('rgba(0, 0, 0, 0)');
+			expect(notice.borderWidth).toBe('0px');
+			expect(notice.radius).toBe('0px');
 
-				expect(errors, `console errors on a quiet day:\n${errors.join('\n')}`).toEqual([]);
-			});
-		}
+			expect(errors, `console errors on a quiet day:\n${errors.join('\n')}`).toEqual([]);
+		});
 	}
 
 	test('the quiet day says what happened and offers two ways on', async ({ page }) => {
@@ -245,28 +244,26 @@ test.describe('a day whose payload is not there', () => {
 		).toBe(false);
 	});
 
-	for (const theme of THEMES) {
-		for (const width of WIDTHS) {
-			test(`the missing-day screen is designed in ${theme} at ${width}`, async ({ page }) => {
-				const errors = watchErrors(page);
-				await asStaticHost(page, MISSING_ROUTE);
-				await open(page, theme, MISSING_ROUTE, width);
+	for (const { width, theme } of viewsOf(WIDTHS, THEMES)) {
+		test(`the missing-day screen is designed in ${theme} at ${width}`, async ({ page }) => {
+			const errors = watchErrors(page);
+			await asStaticHost(page, MISSING_ROUTE);
+			await open(page, theme, MISSING_ROUTE, width);
 
-				const screen = page.locator('[data-error-screen]');
-				await expect(screen, 'no designed screen for a day that is not there').toBeVisible();
-				await expect(screen.locator('h1')).toHaveText('Not here');
-				// A day that went wrong must not look like a site that is gone.
-				await expect(screen.locator('a[href]')).toHaveCount(2);
+			const screen = page.locator('[data-error-screen]');
+			await expect(screen, 'no designed screen for a day that is not there').toBeVisible();
+			await expect(screen.locator('h1')).toHaveText('Not here');
+			// A day that went wrong must not look like a site that is gone.
+			await expect(screen.locator('a[href]')).toHaveCount(2);
 
-				const surface = await resolved(page, 'background-color', 'var(--color-surface)');
-				const edge = await resolved(page, 'border-top-color', 'var(--item-edge)');
-				const painted = await card(page, '[data-error-screen]');
-				expect(painted.background, 'the failed screen is not on the item surface').toBe(surface);
-				expect(painted.border, 'the failed screen has no hairline').toBe(edge);
+			const surface = await resolved(page, 'background-color', 'var(--color-surface)');
+			const edge = await resolved(page, 'border-top-color', 'var(--item-edge)');
+			const painted = await card(page, '[data-error-screen]');
+			expect(painted.background, 'the failed screen is not on the item surface').toBe(surface);
+			expect(painted.border, 'the failed screen has no hairline').toBe(edge);
 
-				expect(errors, `console errors on a missing day:\n${errors.join('\n')}`).toEqual([]);
-			});
-		}
+			expect(errors, `console errors on a missing day:\n${errors.join('\n')}`).toEqual([]);
+		});
 	}
 
 	test('the screen is a page, not a blank document', async ({ page }) => {

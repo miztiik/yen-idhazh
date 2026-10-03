@@ -30,8 +30,6 @@ from utilities import commit_and_push, gardener_publish
 
 from ._garden import a_hook, an_origin, commits_on, git, on_origin, quiet_git, write
 
-pytestmark = pytest.mark.slow
-
 RECORD = "state/raw/gardener/2026/09/27/record.json"
 AGED = "state/old/2026-01-01.txt"
 KEPT = "state/old/2026-09-26.txt"

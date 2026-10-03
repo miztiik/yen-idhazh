@@ -51,8 +51,6 @@ from ._garden import (
 )
 from ._garden import task_package as a_package
 
-pytestmark = pytest.mark.slow
-
 #: A wake on the 28th. The 27th ended at its first instant, so it is still open;
 #: the three closed September days closed weeks ago.
 WAKE: Final = datetime(2026, 9, 28, 0, 40, tzinfo=UTC)

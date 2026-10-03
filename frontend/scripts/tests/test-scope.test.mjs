@@ -94,10 +94,18 @@ test('the data mapping preserves broader mixed edits and the unknown-path fallba
 	assert.deepEqual(selectPaths(['frontend/src/lib/database/query.ts']).groups, [...FRONTEND_GROUPS]);
 });
 
-test('unknown inputs and backend subpackages fail toward full coverage', () => {
-	for (const path of ['new-area/module.ts', 'backend/idhazh/render/write.py', '.github/workflows/ci.yml']) {
+test('unknown inputs and backend contracts fail toward full coverage', () => {
+	for (const path of ['new-area/module.ts', 'backend/idhazh/contracts/article.py', '.github/workflows/ci.yml']) {
 		assert.deepEqual(selectPaths([path]).groups, ['backend', ...FRONTEND_GROUPS], path);
 		assert.equal(selectPaths([path]).backendFiles, null);
+	}
+});
+
+test('an unmapped backend module buys the whole backend suite and no browser', () => {
+	for (const path of ['backend/idhazh/assemble.py', 'backend/idhazh/render/write.py']) {
+		assert.deepEqual(selectPaths([path]).groups, ['backend'], path);
+		assert.equal(selectPaths([path]).backendFiles, null, path);
+		assert.equal(ciAnswer([path], true).browser, false, path);
 	}
 });
 
@@ -216,7 +224,6 @@ const PULL_REQUEST_SCOPE = [
 	['config/idhazh.json', true, false, false],
 	['backend/idhazh/contracts/item_health.py', true, false, false],
 	['backend/utilities/build_canary_day.py', true, false, false],
-	['backend/idhazh/render/write.py', true, false, false],
 	['backend/idhazh/sanitize.py', true, false, false],
 	['tests/fixtures/canaries/fake-system-delimiter.json', true, false, false],
 	['unknown-area/module.ts', true, false, false],
@@ -225,6 +232,8 @@ const PULL_REQUEST_SCOPE = [
 	['docs/reference/pipeline-cost.md', false, false, false],
 	['backend/tests/test_discover.py', false, false, false],
 	['backend/idhazh/discover.py', false, false, false],
+	// Reaches a page only through the canary build; the merge push settles it.
+	['backend/idhazh/render/write.py', false, false, false],
 	['TODO/some-plan.md', false, false, false]
 ];
 

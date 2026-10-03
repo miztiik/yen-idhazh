@@ -17,7 +17,7 @@
 export type DateStamp = string;
 
 /** The ledgers the console may query. A closed set: a panel names a ledger, never a path. */
-export const LEDGER_NAMES = ['feed-health', 'host-fingerprint', 'item-health', 'summary-quality-evals'] as const;
+export const LEDGER_NAMES = ['seen', 'feed-health', 'item-health', 'host-fingerprint', 'summary-quality-evals', 'summary-quality-evals-index', 'candidate-models', 'item-health-summary', 'published', 'feed-retirements', 'visual-prunes', 'counterfactual-scores', 'scored-pairs', 'fitted-thresholds', 'holdout-pairs', 'score-distribution', 'archive', 'shard-outcomes', 'metrics', 'merge-line-holdout-scores', 'traces', 'day-metrics', 'digest-fragments', 'gardener'] as const;
 
 export type LedgerName = (typeof LEDGER_NAMES)[number];
 
@@ -145,3 +145,47 @@ export function checkedRequest(options: SliceOptions): Required<SliceOptions> {
 	}
 	return { columns, from: options.from, to: options.to, where: (options.where ?? []).map(checkedPredicate) };
 }
+
+/** One column of an answer, as the engine describes it. */
+export type Column = { name: string; type: string };
+
+/** What the keeper fetched for this call.
+ *
+ * A whole file counts at the bytes that arrived. A file read by byte range counts
+ * at its whole indexed length, because the page cannot see which ranges the
+ * engine read and that length is the most the read can cost. */
+export type FetchCost = { files: number; bytes: number; alreadyHeld: number; ms: number };
+
+/** What a span will cost before it is paid, and how far each selected ledger reaches. */
+export type SpanCost = {
+	files: number;
+	bytes: number;
+	unpackedDays: readonly DateStamp[];
+	through: Readonly<Partial<Record<LedgerName, DateStamp>>>;
+};
+
+export type AskOptions = {
+	ledgers: readonly LedgerName[];
+	from: DateStamp;
+	to: DateStamp;
+	sql: string;
+	maxChars: number;
+	maxRows: number;
+	maxFetchBytes: number;
+};
+
+export type AskFault = Exclude<LedgerFault, 'not-packed'> | 'engine' | null;
+
+export type AskRefusal =
+	| { kind: 'statements'; count: number }
+	| { kind: 'not-read-only'; word: string }
+	| { kind: 'too-long'; chars: number; max: number }
+	| { kind: 'over-ceiling'; bytes: number; files: number; max: number }
+	| { kind: 'engine-error'; message: string };
+
+export type AskResult =
+	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[] }
+	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost }
+	| { state: 'missing'; ledger: LedgerName }
+	| { state: 'unreachable'; ledger: LedgerName | null; at: DateStamp | null; fault: AskFault }
+	| { state: 'refused'; because: AskRefusal };

@@ -11,7 +11,8 @@ It reads the calls as text, so a call it cannot read is refused by name rather
 than skipped: a ledger passed through a variable, a door loaded with `import()`,
 or the door re-exported from another module would each hide a ledger from it.
 The door's own modules under `frontend/src/lib/data/` pass a ledger through, and
-are not callers.
+are not callers. The written-question page may name unpublished ledgers and then
+answer `missing`, so only panel calls are held to the published list.
 """
 
 from __future__ import annotations

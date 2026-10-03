@@ -102,9 +102,9 @@ def _a_published_day(tmp_path: Path) -> tuple[Path, Path, str]:
     CLAUDE.md section 13). The payloads are the real contract fixtures, so the
     day that publishes here is the shape a run writes.
     """
-    day = DigestDay.from_json(read_text(next((CONTRACT_FIXTURES_DIR / "digest-day").glob("*.json"))))
+    day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
     manifest = RunManifest.from_json(
-        read_text(next((CONTRACT_FIXTURES_DIR / "run-manifest").glob("*.json")))
+        read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json")
     )
     assert day.date == manifest.date, (
         "the digest-day and run-manifest fixtures are about different days, so a "
@@ -120,7 +120,7 @@ def _a_published_day(tmp_path: Path) -> tuple[Path, Path, str]:
 
     state_root = tmp_path / "state"
     item = ItemHealthRow.from_json(
-        read_text(next((CONTRACT_FIXTURES_DIR / "item-health-row").glob("*.json")))
+        read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json")
     )
     seed_item_health(
         state_root, day.date, [item.model_copy(update={"date": day.date, "run_id": run_id})]

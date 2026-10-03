@@ -136,8 +136,8 @@ frozen day, so a bounded input would answer the question for only some of them.
 Measured 2026-09-08 on a developer machine: 18 committed days, 19.87 MB, 0.45 s
 - about 44 MB/s. At the 727-day horizon the 1 GB Pages cap sets, that is roughly
 645 MB, which reads in about 15 s on a laptop and 30-60 s on the 4-vCPU runner,
-against a 6 h job. The growth is declared rather than removed
-([growing-reads.md](../../concepts/growing-reads.md)).
+against a 6 h job. The read violates the fixed-size input rule in
+[../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12.
 
 ## Design rationale
 
@@ -170,6 +170,6 @@ hands over the commit each door file names.
 ## See also
 
 - [frontend.md](frontend.md) - why a broken day can no longer be caught by building.
-- [growing-reads.md](../../concepts/growing-reads.md) - the sweep's entry in the inventory.
+- [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [run-the-gates.md](../../how-to/run-the-gates.md) - running the verb yourself.
 - [github-actions.md](../../reference/github-actions.md) - which job runs it, and where in the order.

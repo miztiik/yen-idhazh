@@ -132,6 +132,13 @@ dev = [
     # measured 2026-08-23 on Windows 11, Python 3.12: 728341 installed bytes.
     # One observation, so no spread. Beneficiary: workflow routing regression gate.
     "PyYAML>=6.0",
+    # Recomputes the ledger-door fixture's answer files with the same engine
+    # family the page runs, so a committed answer cannot be wrong in the same
+    # way as the TypeScript reader. Dev-only. Measured 2026-10-02 on Windows 11,
+    # Python 3.14, from the configured proxy feed: the cp314 wheel is 13,691,858
+    # bytes; installing that local wheel into a fresh venv took 30.189 s and
+    # installed 1,097,117 bytes.
+    "duckdb>=1.5.5",
     "ruff>=0.9",
 ]
 # The faithfulness scorer. A 250M cross-encoder, but transformers plus torch is

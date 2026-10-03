@@ -1143,9 +1143,12 @@ test('the timing chart draws one unit per CSS pixel at every width', async ({ pa
 	// the chart occupies, every declared font-size and stroke-width comes out at
 	// some other number - 0.87x at 380px before this was fixed.
 	const measured: { viewport: number; declared: number; rendered: number }[] = [];
+	// Loaded once: the first width drives the mount-time measure, the other two
+	// the resize path, which is the one a reader turning a tablet takes.
+	await page.setViewportSize({ width: 380, height: 1000 });
+	await page.goto('/console/');
 	for (const viewport of [380, 768, 1400]) {
 		await page.setViewportSize({ width: viewport, height: 1000 });
-		await page.goto('/console/');
 		const plot = page.locator('[data-timing="plot"]');
 		await expect(plot).toBeVisible();
 		await expect

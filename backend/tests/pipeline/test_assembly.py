@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
 
@@ -23,8 +22,6 @@ from ._builders import (
     captured_article_fetch,
     plan,
 )
-
-pytestmark = pytest.mark.slow
 
 
 def test_the_counterweights_alone_never_claim_the_top_band() -> None:
