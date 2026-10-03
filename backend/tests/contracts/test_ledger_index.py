@@ -172,6 +172,16 @@ def test_a_compact_index_accepts_an_ordered_daily_monthly_and_yearly_index(
     assert [entry.covers for entry in index.entries] == [e["covers"] for e in payload["entries"]]
 
 
+def test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote() -> None:
+    index = CompactIndex.model_validate(_sample("compact-index", "a-daily-index"))
+
+    text = index.to_json()
+
+    entry_lines = [line for line in text.splitlines() if line.strip().startswith('{"')]
+    assert len(entry_lines) == len(index.entries)
+    assert CompactIndex.from_json(text).to_json() == text
+
+
 def test_a_daily_index_refuses_an_entry_that_covers_a_month_by_ledger_and_period() -> None:
     """A stamp may be a day or a month, so the index is what says which one it lists."""
     payload = _sample("compact-index", "a-daily-index")

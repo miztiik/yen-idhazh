@@ -44,6 +44,7 @@ import { KIND_WORTH_SAYING, SOURCE_KINDS } from '../src/lib/bands';
 import { itemTime } from '../src/lib/format';
 import { loadDay } from '../src/lib/server/payload';
 import { CANARY, newestDate } from './support/published';
+import { dayReady } from './support/day-ready';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The tree the preview server serves, so a route here is a route that exists. */
@@ -67,6 +68,7 @@ const WIDTHS = [360];
  * fetch lands checks the seed and reports a pass over stories it never saw.
  */
 async function everyItem(page: Page, expected: number): Promise<void> {
+	await dayReady(page);
 	for (let guard = 0; guard <= expected; guard += 1) {
 		const more = page.getByRole('button', { name: /^Show \d+ more$/ });
 		if ((await more.count()) === 0) break;

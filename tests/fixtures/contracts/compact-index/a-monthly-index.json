@@ -1,15 +1,7 @@
 {
   "entries": [
-    {
-      "bytes": 1174208,
-      "covers": "2026-07",
-      "rows": 6412
-    },
-    {
-      "bytes": 1231872,
-      "covers": "2026-08",
-      "rows": 6789
-    }
+    {"bytes": 1174208,"covers": "2026-07","rows": 6412},
+    {"bytes": 1231872,"covers": "2026-08","rows": 6789}
   ],
   "ledger": "item-health",
   "period": "monthly",
