@@ -360,7 +360,7 @@ def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -
     assert isinstance(tasks["history"], HistoryPolicy)
     compaction = tasks["compact-gardener"]
     assert isinstance(compaction, CompactionPolicy)
-    assert (compaction.daily_keep_days, compaction.raw_index_keep_days) == (45, 90)
+    assert compaction.daily_keep_days == 45
 
 
 def test_a_key_that_belongs_to_another_member_is_refused_by_name(tmp_path: Path) -> None:
@@ -760,13 +760,6 @@ def test_a_collection_outside_the_vocabulary_is_refused(tmp_path: Path) -> None:
     assert "config/gardener/workflow-artifacts.json is refused" in refused(
         a_garden(tmp_path, workflow_artifacts=declared)
     )
-
-
-def test_a_compaction_keeps_its_raw_listings_as_long_as_its_daily_period(tmp_path: Path) -> None:
-    config_dir = a_garden(
-        tmp_path, compact_gardener=a_compaction("gardener", raw_index_keep_days=30)
-    )
-    assert "raw index must outlive the daily period" in refused(config_dir)
 
 
 @pytest.mark.parametrize(

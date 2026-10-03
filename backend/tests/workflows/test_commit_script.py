@@ -482,6 +482,27 @@ def test_preparation_follows_regeneration_on_retry(tmp_path: Path) -> None:
 
 
 @requires_space_free_paths
+def test_a_path_the_tip_retired_does_not_stop_the_retry(tmp_path: Path) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _write(runner / "retired/summary.json", "this run's copy\n")
+    _race(tmp_path, env, "unrelated.txt", "winning")
+    settings = {
+        **settings,
+        "REFRESH_PATHS": "retired/summary.json",
+        "REGENERATE_COMMAND": f"{sys.executable} -c pass",
+    }
+
+    result = _run_commit_script(runner, env, [*staged_paths, "retired"], settings)
+
+    assert result.returncode == 0, result.stderr
+    assert "did not match any files" not in result.stderr
+    assert not _tracked(origin, env, "retired/summary.json")
+    assert _git(origin, env, "show", "main:unrelated.txt") == "winning"
+
+
+@requires_space_free_paths
 def test_preparation_restores_replacements_deletions_and_literal_names(tmp_path: Path) -> None:
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)

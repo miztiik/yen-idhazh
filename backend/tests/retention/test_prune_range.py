@@ -55,7 +55,7 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.telemetry import door_prune, prune
@@ -610,11 +610,36 @@ def the_range() -> list[str]:
     return [(first + timedelta(days=step)).isoformat() for step in range((last - first).days + 1)]
 
 
+def a_left_listing(state: Path, day: str) -> None:
+    """A raw listing for one packed day, as an older compaction left it."""
+    path = ledger.raw_index_path(state, CENSUS, day)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        RawDayIndex(
+            version=RawDayIndex.schema_version(),
+            ledger=CENSUS,
+            date=day,
+            files=[],
+            content_sha256=hashlib.sha256(b"").hexdigest(),
+            listed_at="2026-03-05T00:00:00Z",
+        ).to_json(),
+        encoding="ascii",
+        newline="\n",
+    )
+
+
 @pytest.fixture(scope="module")
 def every_tier(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """One census in every kind of file, built once for this module and copied by each test."""
+    """One census in every kind of file, built once for this module and copied by each test.
+
+    Each packed day of the range also keeps the listing an older compaction left,
+    because the prune still deletes the listing of a day it takes.
+    """
     root = tmp_path_factory.mktemp("every-tier")
-    a_census_in_every_tier(root)
+    state = a_census_in_every_tier(root)
+    for day in the_range():
+        if day not in RAW_DAYS:
+            a_left_listing(state, day)
     return root
 
 
