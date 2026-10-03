@@ -18,7 +18,6 @@
     "state/compact/published"
   ],
   "prune_refusal": "it is the guard against publishing one story twice and it has no window at all - collect.published_window_days is -1, so every row in it is a row that must never be deleted. A ledger that forgets cannot be that guard",
-  "raw_index_keep_days": 90,
   "window": {
     "unit": "forever"
   }
