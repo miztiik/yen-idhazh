@@ -1,10 +1,6 @@
 {
   "entries": [
-    {
-      "bytes": 14102336,
-      "covers": "2025",
-      "rows": 78114
-    }
+    {"bytes": 14102336,"covers": "2025","rows": 78114}
   ],
   "ledger": "item-health",
   "period": "yearly",
