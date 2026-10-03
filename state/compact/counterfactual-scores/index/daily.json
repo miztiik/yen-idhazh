@@ -149,9 +149,14 @@
       "bytes": 46979,
       "covers": "2026-09-30",
       "rows": 900
+    },
+    {
+      "bytes": 46182,
+      "covers": "2026-10-01",
+      "rows": 900
     }
   ],
   "ledger": "counterfactual-scores",
   "period": "daily",
-  "version": "2026-10-01"
+  "version": "2026-10-01T16:50"
 }
