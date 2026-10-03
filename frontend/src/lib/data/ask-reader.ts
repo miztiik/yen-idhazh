@@ -1,6 +1,6 @@
 /** How does the written-question door turn selected ledgers and days into one answer? */
 
-import type { CompactEntry, Period } from './compact-index';
+import { COMPACT_PERIODS, type CompactEntry, type Period } from './compact-index';
 import type { PageKeeper, WantedFile } from './page-keeper';
 import { filesFor, firstNamed, newestNamed, writerDaysFor, type ChosenFile } from './slice';
 import { listOf, type QueryEngine } from './slice-query';
@@ -11,6 +11,7 @@ import {
 	rawIndexPath,
 	explainRefusal,
 	faultLine,
+	LOG_PREFIX,
 	readIndexFrom,
 	RANGED_PERIODS
 } from './slice-reader';
@@ -111,32 +112,30 @@ async function rawListing(
 	};
 }
 
-async function compactIndexes(keeper: PageKeeper, ledger: LedgerName, from: DateStamp): Promise<Indexes | AskResult> {
-	const daily = await readIndexFrom(keeper, ledger, 'daily');
-	if (daily === null) return { state: 'missing', ledger };
-	if ('refused' in daily) {
-		keeper.warn(`${faultLine(ledger, { fault: 'index-missing', period: 'monthly' }).replace('monthly.json', 'daily.json')} ${explainRefusal('daily', daily.refused)}`);
-		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+/** A ledger's three compact indexes, or the answer that says why the question cannot run.
+ *  The build refuses to publish a ledger that lacks any of the three, so on the site an
+ *  absent or refused index is a broken deploy, and none is ever read as an empty list. */
+async function compactIndexes(
+	keeper: PageKeeper,
+	ledger: LedgerName,
+	from: DateStamp,
+	to: DateStamp
+): Promise<Indexes | AskResult> {
+	const indexes: Indexes = { daily: [], monthly: [], yearly: [] };
+	for (const period of COMPACT_PERIODS) {
+		const reading = await readIndexFrom(keeper, ledger, period);
+		if (reading === null) {
+			if (period === 'daily') return { state: 'missing', ledger };
+			keeper.warn(faultLine(ledger, { fault: 'index-missing', period }));
+			return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+		}
+		if ('refused' in reading) {
+			keeper.warn(`${LOG_PREFIX} ${ledger} ${from} to ${to}: ${explainRefusal(period, reading.refused)}, so the question did not run`);
+			return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+		}
+		indexes[period] = reading.index.entries;
 	}
-	const monthly = await readIndexFrom(keeper, ledger, 'monthly');
-	if (monthly === null) {
-		keeper.warn(faultLine(ledger, { fault: 'index-missing', period: 'monthly' }));
-		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
-	}
-	if ('refused' in monthly) {
-		keeper.warn(`${faultLine(ledger, { fault: 'index-missing', period: 'monthly' })} ${explainRefusal('monthly', monthly.refused)}`);
-		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
-	}
-	const yearly = await readIndexFrom(keeper, ledger, 'yearly');
-	if (yearly === null) {
-		keeper.warn(faultLine(ledger, { fault: 'index-missing', period: 'yearly' }));
-		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
-	}
-	if ('refused' in yearly) {
-		keeper.warn(`${faultLine(ledger, { fault: 'index-missing', period: 'yearly' })} ${explainRefusal('yearly', yearly.refused)}`);
-		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
-	}
-	return { daily: daily.index.entries, monthly: monthly.index.entries, yearly: yearly.index.entries };
+	return indexes;
 }
 
 function compactSelection(
@@ -171,11 +170,10 @@ async function filesForDay(
 ): Promise<{ files: WantedFile[]; metas: FileMeta[] }> {
 	if ((rawListed[ledger] ?? '') >= day) {
 		const raw = await rawListing(keeper, ledger, day);
-		if (!('state' in raw)) return { files: raw.files, metas: raw.metas.map((one) => ({ ...one })) };
+		if (!('state' in raw)) return raw;
 	}
 	const compact = compactSelection(ledger, day, day, indexes);
-	if ('state' in compact) return { files: [], metas: [] };
-	return { files: compact.files, metas: compact.metas.map((one) => ({ ...one })) };
+	return 'state' in compact ? { files: [], metas: [] } : compact;
 }
 
 async function planLedger(
@@ -185,7 +183,7 @@ async function planLedger(
 	to: DateStamp,
 	rawListed: RawListedThrough
 ): Promise<LedgerPlan> {
-	const indexed = await compactIndexes(keeper, ledger, from);
+	const indexed = await compactIndexes(keeper, ledger, from, to);
 	if ('state' in indexed) {
 		return { ledger, through: null, files: [], metas: [], emptySource: [], emptyMetas: [], unpackedDays: [], unreachable: indexed };
 	}
@@ -217,7 +215,10 @@ async function planLedger(
 		metas.push(...listed.metas);
 	}
 
-	const empty = through === null ? { files: [], metas: [] } : await filesForDay(keeper, ledger, through, indexed, rawListed);
+	// A ledger with no file in the span is read through an empty view over its newest day's
+	// files, so only such a ledger needs that day planned, and its listing fetched.
+	const needsEmptyView = files.length === 0 && unreachable === null && through !== null;
+	const empty = needsEmptyView ? await filesForDay(keeper, ledger, through, indexed, rawListed) : { files: [], metas: [] };
 	return {
 		ledger,
 		through,

@@ -107,7 +107,6 @@ export function filesFor(
 	return { files: [...chosen.values()] };
 }
 
-
 /** The days after the newest packed day that the staged site listed for a ledger. */
 export function writerDaysFor(
 	from: DateStamp,

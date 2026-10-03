@@ -164,7 +164,7 @@ def test_answer_fixtures_are_recomputed_with_duckdb() -> None:
     item = (FIXTURE / "state" / "compact" / "item-health" / "daily" / "2026" / "09" / "01.parquet").as_posix()
     rows = con.execute(
         f"SELECT h.date, h.job, i.job AS item_job FROM read_parquet('{host}') h "
-        f"JOIN read_parquet('{item}') i USING (date) ORDER BY h.shard, i.shard LIMIT 3"
+        f"JOIN read_parquet('{item}') i USING (date) ORDER BY h.shard, i.shard, h.job, i.job LIMIT 3"
     ).fetchall()
     columns = [column[0] for column in con.description]
     expected = json.loads((FIXTURE / "answers" / "join-two-ledgers.json").read_text())

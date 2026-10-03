@@ -53,7 +53,6 @@ export function ledgerReach(ledger: LedgerName): Promise<LedgerReach> {
 	return readReach(keeper(), ledger);
 }
 
-
 const rawListedThrough = (__RAW_LISTED_THROUGH__ ?? {}) as RawListedThrough;
 
 /** Run one read-only statement over chosen ledgers and days. */

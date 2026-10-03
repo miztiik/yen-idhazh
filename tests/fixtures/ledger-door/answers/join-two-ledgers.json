@@ -2,16 +2,16 @@
   {
     "date": "2026-09-01",
     "job": "plan",
+    "item_job": "plan"
+  },
+  {
+    "date": "2026-09-01",
+    "job": "plan",
     "item_job": "work"
   },
   {
     "date": "2026-09-01",
     "job": "work",
-    "item_job": "work"
-  },
-  {
-    "date": "2026-09-01",
-    "job": "plan",
     "item_job": "plan"
   }
 ]

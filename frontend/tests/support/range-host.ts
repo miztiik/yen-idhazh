@@ -94,7 +94,6 @@ export function addonCache(repository: string): string {
 	return path.join(os.homedir(), '.duckdb', 'extensions', last);
 }
 
-
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The file `relative` names inside `dir`, or null when it would leave `dir`. */

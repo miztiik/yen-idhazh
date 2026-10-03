@@ -275,12 +275,7 @@ test.describe('THE ORACLE: every chart type is written down, and nothing has lef
 			.flatMap((entry) =>
 				importsOf(entry)
 					.map((specifier) => landsOn(entry, specifier))
-					.filter((target): target is string =>
-						target !== null &&
-						target.startsWith(DOOR_DIRECTORY) &&
-						target !== PANEL_DOOR &&
-						!(relative(entry.file) === 'frontend/src/lib/console/waiting.ts' && target === 'frontend/src/lib/data/slice-shapes')
-					)
+					.filter((target): target is string => target !== null && target.startsWith(DOOR_DIRECTORY) && target !== PANEL_DOOR)
 					.map((target) => `${relative(entry.file)} imports ${target}`)
 			);
 		expect(deeper, 'only ledger.ts binds the door to the published site; a deeper module lets a panel name a path').toEqual([]);
