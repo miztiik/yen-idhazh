@@ -19,7 +19,6 @@
     "state/compact/seen"
   ],
   "prune_refusal": "it is what the planner remembers having already seen, so removing a day from it lets the next run rediscover every address it holds - one operator command becomes a loop",
-  "raw_index_keep_days": 90,
   "window": {
     "unit": "forever"
   }

@@ -10,12 +10,12 @@ The pass side was recorded once, before the passes were deleted, into
 `tests/fixtures/gardener/prune-oracle/removals.json`; this builder is what that
 record was taken over, so changing a file here changes what the record means.
 
-Since then five ledgers - item-health, scores, host-fingerprint, the
-counterfactual scores and the first sights - moved off CSV onto the ledger door,
-so this tree files their rows under `state/raw/`, the way their writers file
-them now. The record's paths under their old trees name files this tree no
-longer holds, and `test_every_task_takes_what_its_pass_took.py` says what that
-leaves each task answering for.
+Since then six ledgers - item-health, scores, host-fingerprint, the
+counterfactual scores, the first sights and feed health - moved off CSV onto
+the ledger door, so this tree files their rows under `state/raw/`, the way
+their writers file them now. The record's paths under their old trees name
+files this tree no longer holds, and `test_every_task_takes_what_its_pass_took.py`
+says what that leaves each task answering for.
 """
 
 from __future__ import annotations
@@ -91,14 +91,14 @@ VISUAL_DAYS: Final = {
 #: path: 90 days back is past the window, 89 is inside it, an undated name is
 #: kept, a month head is dated by its last day, and a day ahead of `TODAY` stays.
 TRIAL_FILES: Final = (
-    "pipeline-tests/seen/2027/08/17.csv",
-    "pipeline-tests/seen/2027/08/18.csv",
-    "pipeline-tests/segments/item-health/2027-08-01-1-1-work-0.csv",
-    "pipeline-tests/traces/2027/11/10-0001-0.jsonl",
-    "pipeline-tests/item-health/2027-07.csv",
-    "pipeline-tests/notes.txt",
-    "pipeline-tests/seen/2027/12/01.csv",
-    "old-trial/seen/2026/01/01.csv",
+    "pipeline-tests-production-settings/seen/2027/08/17.csv",
+    "pipeline-tests-production-settings/seen/2027/08/18.csv",
+    "pipeline-tests-production-settings/segments/item-health/2027-08-01-1-1-work-0.csv",
+    "pipeline-tests-production-settings/traces/2027/11/10-0001-0.jsonl",
+    "pipeline-tests-production-settings/item-health/2027-07.csv",
+    "pipeline-tests-production-settings/notes.txt",
+    "pipeline-tests-production-settings/seen/2027/12/01.csv",
+    "pipeline-tests-no-visual-plan/seen/2026/01/01.csv",
 )
 
 #: The browser's copies of the item-health months, and one whose source month is
@@ -202,9 +202,8 @@ def _trace(state: Path, run_id: str) -> None:
 
 def _feed_health(state: Path, month: str, index: int) -> None:
     day = f"{month}-11"
-    ledger.write_segment(
+    ledger.persist(
         state,
-        LedgerName.FEED_HEALTH,
         [
             FeedHealthRow(
                 version=FeedHealthRow.schema_version(),
@@ -218,10 +217,9 @@ def _feed_health(state: Path, month: str, index: int) -> None:
                 detail=None,
             )
         ],
-        run_id=f"{day}-1",
-        attempt=1,
-        job=ServerJob.PLAN,
-        shard=0,
+        ledger=LedgerName.FEED_HEALTH,
+        covers=day,
+        identity=writer_identity(f"{day}-1", job=ServerJob.PLAN, producer=plan.PRODUCER),
     )
 
 

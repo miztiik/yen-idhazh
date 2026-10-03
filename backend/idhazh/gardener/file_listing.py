@@ -7,16 +7,13 @@ folders its declaration owns or reads. A task never walks the disk to learn
 what is there.
 
 **Three builders make the same listing.** `from_paths` weighs only supplied
-files and never discovers siblings. The migration uses it for named months.
-`from_commit` takes what
-`git ls-tree -r -l` printed for the commit the shard checked out. A file's size
-is git's own where the clone holds the file, and GitHub's trees API's where the
-clone never downloaded it: a blob id is a hash of the blob's size and bytes, so
-one id has one size wherever it is read. `backend/utilities/gardener_publish.py`
-runs git and calls it, because nothing under `backend/idhazh/` starts a process.
-`from_disk` walks the folders as the checkout holds them, for
-`idhazh gardener run-task`, which reads no commit, and for tests that build
-plain fixture files.
+files and never discovers siblings. `from_commit` takes what `git ls-tree -r
+-l` printed for named period paths in the commit the shard checked out. A
+file's size is git's own where the clone holds the file, and GitHub's blob API's
+where the clone never downloaded it. `backend/utilities/gardener_publish.py`
+runs git and calls it, because nothing under `backend/idhazh/` starts a
+process. `from_disk` walks only the named day, month, or run-directory paths
+passed to it, for `idhazh gardener run-task` and tests that build fixtures.
 
 **A folder outside the listing is refused, never read as empty.** A task that
 asks for the names under a folder its declaration neither owns nor reads has a
@@ -55,10 +52,10 @@ class FileNotFetchedError(Exception):
 
 
 class TreeReader(Protocol):
-    """The one call the size reader makes of GitHub: a GET, decoded."""
+    """The one call the size reader makes of GitHub: a GET for one blob."""
 
     def read(self, path: str) -> dict[str, Any]:
-        """One GET under the repository, such as `git/trees/<id>?recursive=1`."""
+        """One GET under the repository, such as `git/blobs/<id>`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,25 +82,20 @@ def parse_tree(printed: str) -> list[TreeEntry]:
     return entries
 
 
-def sizes_from_github(api: TreeReader, trees: Iterable[str]) -> dict[str, int]:
-    """Every file's size under these trees, by blob id, as GitHub's trees API reports it.
-
-    One request a tree, each listing everything under it. A reply GitHub marks
-    `truncated` left files out, so it is refused rather than read as complete.
-    """
+def sizes_from_github(api: TreeReader, blobs: Iterable[str]) -> dict[str, int]:
+    """The size of each named blob, without reading any sibling paths."""
     sizes: dict[str, int] = {}
-    for tree in trees:
-        if not _OBJECT_ID.fullmatch(tree):
-            raise ValueError(f"{tree!r} is not a git tree id, and it would go into an API address")
-        reply = api.read(f"git/trees/{tree}?recursive=1")
-        if reply.get("truncated"):
-            raise ValueError(
-                f"GitHub truncated its listing of tree {tree}, so some files have no size. "
-                "A shard lists fewer folders, or the sizes are read another way"
-            )
-        for item in reply.get("tree", []):
-            if item.get("type") == "blob":
-                sizes[str(item["sha"])] = int(item["size"])
+    for blob in sorted(set(blobs)):
+        if not _OBJECT_ID.fullmatch(blob):
+            raise ValueError(f"{blob!r} is not a git blob id, and it would go into an API address")
+        reply = api.read(f"git/blobs/{blob}")
+        try:
+            size = int(reply["size"])
+        except (KeyError, TypeError, ValueError) as refusal:
+            raise ValueError(f"GitHub did not report a size for blob {blob}") from refusal
+        if size < 0:
+            raise ValueError(f"GitHub reported a negative size for blob {blob}")
+        sizes[blob] = size
     return sizes
 
 
@@ -166,15 +158,30 @@ class FileListing:
         )
 
     @classmethod
-    def from_disk(cls, repo_root: Path, folders: Iterable[str]) -> FileListing:
-        """Every file under these folders as the checkout holds them, weighed on disk."""
+    def from_disk(
+        cls, repo_root: Path, folders: Iterable[str], *, paths: Iterable[Path]
+    ) -> FileListing:
+        """Every file under these named period paths, weighed on disk."""
         chosen = tuple(sorted({_folder(folder) for folder in folders}))
         sizes: dict[str, int] = {}
-        for folder in chosen:
-            root = repo_root / folder
-            if not root.is_dir():
+        for root in sorted(set(paths)):
+            try:
+                name = root.relative_to(repo_root).as_posix()
+            except ValueError as refusal:
+                raise ValueError(f"{root} is outside the checkout") from refusal
+            if not any(_inside(name, folder) for folder in chosen):
+                raise ValueError(f"{name} is outside the listing's declared folders")
+            if root.is_symlink():
+                raise ValueError(f"{root} is a symlink inside a named period path")
+            if root.is_file():
+                candidates: Iterable[Path] = (root,)
+            elif root.is_dir():
+                candidates = root.rglob("*")
+            else:
                 continue
-            for path in root.rglob("*"):
+            for path in candidates:
+                if path.is_symlink():
+                    raise ValueError(f"{path} is a symlink inside a named period path")
                 if path.is_file():
                     sizes[path.relative_to(repo_root).as_posix()] = path.stat().st_size
         return cls(
@@ -208,7 +215,7 @@ class FileListing:
             if size is None:
                 raise ValueError(
                     f"{entry.path} has no size: this clone never downloaded blob {entry.blob}, "
-                    "and GitHub's trees API did not report it"
+                    "and GitHub's blob API did not report it"
                 )
             sizes[entry.path] = size
         return cls(

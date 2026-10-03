@@ -27,7 +27,6 @@ from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.day_metrics import DayMetrics
-from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import Period, RowIdentity, Tier, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
@@ -113,23 +112,6 @@ def _persist(state: Path) -> bool:
     )
 
 
-def _segment(state: Path, *, extend: bool) -> bool:
-    writer = ledger.extend_segment if extend else ledger.write_segment
-    row = _first(FeedHealthRow)
-    return _wrote(
-        state,
-        lambda: writer(
-            state,
-            LedgerName.FEED_HEALTH,
-            [row],
-            run_id=A_RUN,
-            attempt=1,
-            job=ServerJob.WORK,
-            shard=0,
-        ),
-    )
-
-
 def _collect_metrics(state: Path) -> bool:
     shipped = state.parent / "shipped"
     metrics_sink.ship_judge_metrics(
@@ -160,8 +142,6 @@ def _trace(state: Path) -> bool:
 #: digest fragment are driven through their stages in their own modules' tests.
 ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
     "persist": (LedgerName.VISUAL_PRUNES, 1, _persist),
-    "write_segment": (LedgerName.FEED_HEALTH, 1, lambda s: _segment(s, extend=False)),
-    "extend_segment": (LedgerName.FEED_HEALTH, 1, lambda s: _segment(s, extend=True)),
     "append_seen": (
         LedgerName.SEEN,
         1,
@@ -293,7 +273,7 @@ def test_the_plan_stage_with_seen_paused_still_lands_feed_health_and_counterfact
 
     assert built.items, "the stage planned nothing, so this proves nothing"
     assert not ledger.raw_root(state, LedgerName.SEEN).exists()
-    assert list(ledger.tree_root(state, LedgerName.FEED_HEALTH).rglob("*.csv"))
+    assert ledger.list_raw_files(state, LedgerName.FEED_HEALTH)
     assert ledger.list_raw_files(state, LedgerName.COUNTERFACTUAL_SCORES)
     skipped = [r.getMessage() for r in caplog.records if SKIPPED in r.getMessage()]
     assert len(skipped) == 1

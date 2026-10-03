@@ -23,14 +23,14 @@ the file system. A path argument would be a deletion primitive pointed at the
 repository, and fetched text may never become a file path (Guardrail #11) - so
 there is no argument here a path could travel through.
 
-**Two kinds of ledger, one verb.** A CSV ledger files one `<DD>.csv` a day, or
-a day folder of writer files, and this walks its day tree and deletes those
-files one at a time, below. A ledger the registry files as `raw-and-compact`,
-through the ledger door under `state/raw/` and `state/compact/`, keeps a day's
-rows in the raw files its writers left or in a daily, monthly or yearly file
-that holds other days as well, so `door_prune` takes the day out of each of
-those instead. Whether this may take any day of such a ledger is its compaction
-declaration's `prune_refusal`, beside the windows a person reads in
+**Two kinds of ledger, one verb.** A CSV ledger files one `<DD>.csv` a day, and
+this walks its day tree and deletes those files one at a time, below. A ledger
+the registry files as `raw-and-compact`, through the ledger door under
+`state/raw/` and `state/compact/`, keeps a day's rows in the raw files its
+writers left or in a daily, monthly or yearly file that holds other days as
+well, so `door_prune` takes the day out of each of those instead. Whether this
+may take any day of such a ledger is its compaction declaration's
+`prune_refusal`, beside the windows a person reads in
 `config/gardener/compact-<ledger>.json`: null lets it, and a sentence refuses
 the ledger with that sentence. A live pass there rewrites files, and each names
 the run and the commit that wrote it, so `--no-dry-run` there needs `--run-id`
@@ -75,12 +75,11 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final
 
-from idhazh import day_partition, day_shards, ledger
+from idhazh import day_partition, ledger
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN, ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.gardener import one_at_a_time
 from idhazh.telemetry import door_prune
@@ -107,14 +106,14 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the ledgers refused below.
 #: `state/day-metrics/` and `state/traces/` are day-shaped and are deliberately
 #: absent - they file `.json` and `.jsonl`, which
-#: `day_shards.shard_files` refuses, and a second walker here would be a second
+#: `day_partition.day_files` refuses, and a second walker here would be a second
 #: answer to what a day file is. Bringing either in means teaching that one
 #: walker its suffix, which is where the question belongs. A ledger leaves this
 #: list in the change that moves it under `state/raw/` through the ledger door,
 #: as `visual-prunes`, `item-health`, `summary-quality-evals`, `host-fingerprint`,
-#: `counterfactual-scores` and `candidate-models` have: a target that walked its
-#: old folder would select nothing for ever, and on the door it is a target of the
-#: other kind.
+#: `counterfactual-scores`, `candidate-models` and `feed-health` have: a target
+#: that walked its old folder would select nothing for ever, and on the door it is
+#: a target of the other kind.
 #:
 #: **`summary-quality-evals-index` left too, and is refused by name below.** It is
 #: what the eval writer reads to refuse a measurement it already holds, and once a
@@ -137,7 +136,6 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: it is filed, never what executed it.
 _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-    LedgerName.FEED_HEALTH,
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
@@ -431,44 +429,30 @@ def _relpath(state_root: Path, day: Path) -> str:
     return f"{ledger.STATE_DIRNAME}/{day.relative_to(state_root).as_posix()}"
 
 
-#: The ledgers here whose day is a directory of writer-owned files. Read off
-#: `DAY_TREES` rather than listed again, so a tree that moves its
-#: writer joins this set in the row that moves it and nothing here is a second
-#: list to keep in step.
-WRITER_OWNED_LEDGERS: Final = frozenset(tree.value for tree in DAY_TREES)
-
-
 def day_collection(state_root: Path, ledger: str) -> one_at_a_time.Collection[Path]:
     """One ledger's day tree, as the three callables the core deletes through.
 
-    **The walk follows the ledger's own shape, and the ledger says which.**
-    `DAY_TREES` is the closed set of trees a writer files its own file
-    in, so a day there is a `<DD>/` directory read by `day_shards.shard_files`.
-    Every other ledger here still files one `<DD>.csv` a day and is read by
-    `day_partition.day_files`. Both are generators, so a ledger of any size is
-    walked one path at a time and never held, and both refuse a name they cannot
-    place - which means a ledger holding something the walk cannot read stops the
-    pass at that file rather than deleting round it.
+    Every ledger here files one `<DD>.csv` a day and is read by
+    `day_partition.day_files`, a generator, so a ledger of any size is walked one
+    path at a time and never held. It refuses a name it cannot place - a day
+    folder of writer files included - which means a ledger holding something the
+    walk cannot read stops the pass at that file rather than deleting round it.
 
     Unbounded because the range an operator typed is the cover: the walk finds
     what the range names, and a window over it would hide the older half of the
     range the operator asked for (Guardrail #12).
     """
-    writer_owned = ledger in WRITER_OWNED_LEDGERS
 
     def describe(day: Path) -> one_at_a_time.Member:
         return one_at_a_time.Member(
             id=_relpath(state_root, day),
-            day=day_shards.date_of(day) if writer_owned else day_partition.date_of(day),
+            day=day_partition.date_of(day),
             size_bytes=day.stat().st_size,
             label=day.name,
         )
 
     def listing() -> Iterator[Path]:
-        root = state_root / ledger
-        if writer_owned:
-            return day_shards.shard_files(root, days=UNBOUNDED_WINDOW)
-        return day_partition.day_files(root)
+        return day_partition.day_files(state_root / ledger)
 
     return one_at_a_time.Collection(
         name=ledger,

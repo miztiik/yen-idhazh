@@ -29,12 +29,19 @@ import logging
 import re
 import sys
 from collections.abc import Sequence
+from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import config
+from idhazh import config, month_partition
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN
+from idhazh.contracts.knobs.gardener import (
+    CompactionPolicy,
+    DaysWindow,
+    MonthsWindow,
+    RetentionPolicy,
+)
 from idhazh.gardener import listing, runner, shards
 from idhazh.gardener.outcome import EXIT_INTEGRITY
 
@@ -118,7 +125,56 @@ def _parser() -> argparse.ArgumentParser:
         required=True,
         help="The commit this checkout is at, which the record names: git rev-parse HEAD.",
     )
+    ran.add_argument(
+        "--from",
+        dest="from_period",
+        help="Inclusive UTC date or month for a one-task backlog pass.",
+    )
+    ran.add_argument(
+        "--to",
+        dest="to_period",
+        help="Inclusive UTC date or month for a one-task backlog pass.",
+    )
     return parser
+
+
+def period_range(
+    settings: GardenerSettings, args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> tuple[str, str] | None:
+    """Validate a named inclusive range against the one task's period grain."""
+    start = args.from_period
+    end = args.to_period
+    if start is None and end is None:
+        return None
+    if start is None or end is None:
+        parser.error("--from and --to must be supplied together")
+    if args.name is None:
+        parser.error("--from and --to are available only with one named task")
+    policy = settings.tasks[args.name]
+    if isinstance(policy, CompactionPolicy) or isinstance(
+        policy.window, MonthsWindow
+    ) or (
+        isinstance(policy, RetentionPolicy)
+        and policy.fold is not None
+        and policy.fold.settles_months
+    ):
+        if not month_partition.is_month_stem(start) or not month_partition.is_month_stem(end):
+            parser.error("--from and --to must be real YYYY-MM months for this task")
+        if start > end:
+            parser.error("--from must not be later than --to")
+        return start, end
+    if isinstance(policy, RetentionPolicy) and isinstance(policy.window, DaysWindow):
+        try:
+            first = date.fromisoformat(start)
+            last = date.fromisoformat(end)
+        except ValueError:
+            parser.error("--from and --to must be YYYY-MM-DD dates for this task")
+        if first.isoformat() != start or last.isoformat() != end:
+            parser.error("--from and --to must be YYYY-MM-DD dates for this task")
+        if first > last:
+            parser.error("--from must not be later than --to")
+        return start, end
+    parser.error("this task has no date- or month-based backlog range")
 
 
 def main(argv: Sequence[str] | None) -> int:
@@ -139,9 +195,9 @@ def main(argv: Sequence[str] | None) -> int:
     if not re.fullmatch(COMMIT_SHA_PATTERN, args.git_sha):
         parser.error(f"--git-sha takes the forty hex digits of a commit, not {args.git_sha!r}")
     names, shard = chosen(settings, args, parser)
+    selected_range = period_range(settings, args, parser)
     # No commit listing: this package starts no process, so a task lists its
-    # folders as the checkout holds them, a complement task is refused, and the
-    # record says the shard's weight was not read.
+    # configured period paths as the checkout holds them.
     outcome = runner.run(
         names,
         settings=settings,
@@ -153,6 +209,7 @@ def main(argv: Sequence[str] | None) -> int:
         committed_folders=None,
         cone_bytes=None,
         listing=None,
+        period_range=selected_range,
     )
     if outcome.record is not None:
         written = outcome.record.relative_to(args.repo_root).as_posix()

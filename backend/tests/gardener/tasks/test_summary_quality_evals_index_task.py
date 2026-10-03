@@ -17,7 +17,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.evals import writer
-from idhazh.gardener import closed_day_fold, registry, runner
+from idhazh.gardener import closed_day_fold, registry, runner, tasks
 
 from ._oracle_tree import files_under
 from ._task import declared
@@ -63,7 +63,7 @@ def an_old_index(state: Path) -> list[EvalRow]:
 
 def test_the_index_has_no_calendar_task() -> None:
     assert NAME not in declared(), "the observation lookup has no CSV days or months to fold"
-    modules = registry.discover()
+    modules = registry.discover(tasks, declared())
     assert "summary_quality_evals_index" not in modules
     runner.preflight(declared(), modules)
 
@@ -94,6 +94,7 @@ def test_folding_leaves_every_historical_candidate_and_every_lookup_file_unchang
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=dry_run,
         settles_months=True,
+        period_paths=[],
     )
 
     assert (folded.days, folded.months) == ((), ())

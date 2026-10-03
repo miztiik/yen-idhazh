@@ -79,7 +79,7 @@ def test_the_committed_window_selects_only_rendered_visuals_past_its_cutoff(
     )
 
     row = pruned(root, WINDOW_TODAY)
-    candidates = visuals_older_than(root, limit)
+    candidates = visuals_older_than(root, [expired])
     print(f"candidates={len(candidates)} cutoff={limit.isoformat()}")
 
     assert len(candidates) == row.candidates_found == 2, "an empty list proves nothing"

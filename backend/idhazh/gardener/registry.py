@@ -1,38 +1,34 @@
-"""Which module runs each gardener task, found by name in one folder and never listed?
+"""Which named module runs each configured gardener task?
 
-Two functions and nothing else. `discover` imports every module in
-`idhazh.gardener.tasks` and keeps the ones that declare a task. `bind` answers
-which of them runs one declaration, in two lookups: the module named for the
-task, else the one named for its kind.
+`discover` imports only each active or paused declaration's named module and
+the module for its kind as a fallback. `bind` selects the named module first.
+No task-package directory is listed.
 
-**There is no list of tasks to keep in step.** A task joins the gardener when
-its module lands in `tasks/` and its declaration lands in `config/gardener/`,
-and the runner's pre-flight refuses either one arriving without the other.
+**The committed config names the task set.** A task runs only when its name is
+in `config/idhazh_gardener.json` and its declaration validates. The runner's
+pre-flight refuses a declaration that has no module.
 
 **A config value never names a module.** The folder is fixed in code and the
 names that choose inside it are closed words - a task's name and a `TaskKind` -
 so text from a file cannot choose which code runs (Guardrail #11).
 
-**Every fault stops the shard before anything runs.** A module that raises on
-import, one that declares no task, two modules that would serve one name, a
-declaration nothing serves, and a module whose kind disagrees with the
-declaration it serves are each raised as `DiscoveryError`, and the runner exits 2
-on it. None is caught and skipped, because a skipped task is a task that
-silently stopped deleting.
+**Every fault stops the shard before anything runs.** A named module that
+raises on import, a declaration nothing serves, and a module whose kind
+disagrees with the declaration it serves are each raised as `DiscoveryError`,
+and the runner exits 2 on it. None is caught and skipped, because a skipped
+task is a task that silently stopped deleting.
 """
 
 from __future__ import annotations
 
 import importlib
-import pkgutil
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import cache
 from types import MappingProxyType, ModuleType
 from typing import Final
 
-from idhazh.contracts.knobs.gardener import TaskKind
-from idhazh.gardener import tasks as shipped_tasks
+from idhazh.contracts.knobs.gardener import TaskKind, TaskLifecycleStatus, TaskPolicy
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 
@@ -62,46 +58,59 @@ def _module_name(task: str) -> str:
     return task.replace("-", "_")
 
 
-def discover(package: ModuleType = shipped_tasks) -> Mapping[str, TaskModule]:
-    """Every task module in the package, by stem, in sorted order. Imported once a process.
+def discover(
+    package: ModuleType, tasks: Mapping[str, TaskPolicy]
+) -> Mapping[str, TaskModule]:
+    """Import only the modules named by active or paused task declarations.
 
-    The package is a parameter so a test can hand in a package of its own. Nothing
-    in config or on a command line reaches it.
+    The package is a parameter so a test can hand in a package of its own.
+    A declaration names the only task module to try and its kind names the
+    shared fallback. No package directory is listed.
     """
-    return _discovered(package.__name__)
+    declarations = tuple(
+        sorted(
+            (
+                (name, policy.kind.value)
+                for name, policy in tasks.items()
+                if policy.lifecycle_status is not TaskLifecycleStatus.RETIRED
+            )
+        )
+    )
+    return _discovered(package.__name__, declarations)
 
 
 @cache
-def _discovered(package_name: str) -> Mapping[str, TaskModule]:
-    package = importlib.import_module(package_name)
+def _discovered(
+    package_name: str, declarations: tuple[tuple[str, str], ...]
+) -> Mapping[str, TaskModule]:
     found: dict[str, TaskModule] = {}
-    serves: dict[str, str] = {}
-    for info in sorted(pkgutil.iter_modules(package.__path__), key=lambda info: info.name):
-        stem = info.name
-        if stem.startswith(PRIVATE_PREFIX) or info.ispkg:
-            continue
-        name = _module_name(stem)
-        if name in serves:
-            raise DiscoveryError(
-                f"{package_name}.{serves[name]} and {package_name}.{stem} would both serve "
-                f"a task called {name}. Rename one: two modules may not serve one name"
-            )
-        try:
-            module = importlib.import_module(f"{package_name}.{stem}")
-        except Exception as error:
-            raise DiscoveryError(
-                f"{package_name}.{stem} raised while it was imported, so no task in this "
-                "shard runs until it imports cleanly"
-            ) from error
-        kind = getattr(module, KIND_NAME, None)
-        run = getattr(module, RUN_NAME, None)
-        if not isinstance(kind, TaskKind) or not callable(run):
-            raise DiscoveryError(
-                f"{package_name}.{stem} declares no task. A task module holds {KIND_NAME}, a "
-                f"TaskKind, and {RUN_NAME}, which takes a TaskContext and returns a Pass"
-            )
-        serves[name] = stem
-        found[stem] = TaskModule(stem=stem, kind=kind, run=run)
+    for task_name, kind_name in declarations:
+        for stem in dict.fromkeys((_module_name(task_name), kind_name)):
+            if stem.startswith(PRIVATE_PREFIX):
+                continue
+            qualified = f"{package_name}.{stem}"
+            try:
+                module = importlib.import_module(qualified)
+            except ModuleNotFoundError as error:
+                if error.name == qualified:
+                    continue
+                raise DiscoveryError(
+                    f"{qualified} raised while it was imported, so no task in this shard runs "
+                    "until it imports cleanly"
+                ) from error
+            except Exception as error:
+                raise DiscoveryError(
+                    f"{qualified} raised while it was imported, so no task in this shard runs "
+                    "until it imports cleanly"
+                ) from error
+            kind = getattr(module, KIND_NAME, None)
+            run = getattr(module, RUN_NAME, None)
+            if not isinstance(kind, TaskKind) or not callable(run):
+                raise DiscoveryError(
+                    f"{qualified} declares no task. A task module holds {KIND_NAME}, a "
+                    f"TaskKind, and {RUN_NAME}, which takes a TaskContext and returns a Pass"
+                )
+            found[stem] = TaskModule(stem=stem, kind=kind, run=run)
     return MappingProxyType(found)
 
 

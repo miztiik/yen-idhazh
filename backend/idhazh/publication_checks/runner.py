@@ -31,8 +31,9 @@ from typing import Final
 from pydantic import ValidationError
 
 from idhazh import ledger, run_context
-from idhazh.contracts.base import ServerJob
+from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.publication_checks.registry import (
     CheckScope,
@@ -97,18 +98,33 @@ def _parse_committed_days(paths: Sequence[Path]) -> tuple[list[CommittedDay], li
 def _file_rows(
     state_dir: Path,
     name: LedgerName,
-    rows: tuple[ledger.CsvRecord, ...],
+    rows: tuple[Contract, ...],
+    *,
+    check: str,
     run_id: str,
+    commit_sha: str,
 ) -> None:
-    """One check's rows into its declared ledger, through the ledger facade."""
-    ledger.write_segment(
+    """One check's rows into its declared ledger, through the ledger door.
+
+    A row that names its own day is filed under that day, and the run's own day
+    is the day for a row that names none. The check's name is part of the
+    producer: the door keeps one file per writer, so two checks filing one
+    ledger in one run would otherwise be one writer, and the second file would
+    replace the first.
+    """
+    ledger.persist(
         state_dir,
-        name,
         rows,
-        run_id=run_id,
-        attempt=run_context.run_attempt(),
-        job=ServerJob.ASSEMBLE,
-        shard=WHOLE_ARCHIVE_SHARD,
+        ledger=name,
+        covers=run_id[:10],
+        identity=WriterIdentity(
+            run_id=run_id,
+            attempt=run_context.run_attempt(),
+            job=ServerJob.ASSEMBLE,
+            shard=WHOLE_ARCHIVE_SHARD,
+            producer=f"{__name__}:{check}",
+            git_sha=commit_sha,
+        ),
     )
 
 
@@ -118,6 +134,7 @@ def run_publication_checks(
     *,
     state_dir: Path | None = None,
     run_id: str | None = None,
+    commit_sha: str | None = None,
 ) -> int:
     """Every check on disk against the committed days, and what it costs to fail.
 
@@ -136,9 +153,11 @@ def run_publication_checks(
     gate that checked nothing prints the same line as one that checked every
     day.
 
-    A check that declares a ledger has its rows filed only when this run is
-    day-scoped and has a state directory to write into, so a contract-change
-    sweep over the whole archive re-reports without re-filing.
+    A check that declares a ledger has its rows filed through the ledger door
+    only when this run is day-scoped and has a state directory to write into,
+    so a contract-change sweep over the whole archive re-reports without
+    re-filing. Each file names the run and the commit that wrote it, so a
+    filing run needs both.
 
     Returns 0 when nothing is wrong, 1 when something is. A wiring fault raises
     `PublicationCheckError`, which the CLI reports as exit 2.
@@ -187,7 +206,19 @@ def run_publication_checks(
                 f"{check.name} files rows into {check.ledger.value} and this run has no "
                 f"--run-id, so nothing would say which run wrote them"
             )
-        _file_rows(filing, check.ledger, result.rows, run_id)
+        if commit_sha is None:
+            raise PublicationCheckError(
+                f"{check.name} files rows into {check.ledger.value} and this run has no "
+                f"--commit, so nothing would say which commit wrote them"
+            )
+        _file_rows(
+            filing,
+            check.ledger,
+            result.rows,
+            check=check.name,
+            run_id=run_id,
+            commit_sha=commit_sha,
+        )
 
     for fault in faults:
         LOG.error("check-publication %s", fault)

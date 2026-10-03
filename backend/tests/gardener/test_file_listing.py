@@ -35,8 +35,16 @@ def a_checkout(root: Path) -> Path:
     return root
 
 
+def disk_listing(root: Path, folders: Sequence[str]) -> FileListing:
+    """Read named fixture folders built by this test."""
+    return FileListing.from_disk(
+        root, folders, paths=(root / folder for folder in folders)
+    )
+
+
 def test_a_listing_read_off_the_disk_names_every_file_with_its_size(tmp_path: Path) -> None:
-    listing = FileListing.from_disk(a_checkout(tmp_path), ["state/days", "state/traces/"])
+    root = a_checkout(tmp_path)
+    listing = disk_listing(root, ["state/days", "state/traces/"])
 
     assert dict(listing.sizes) == {
         "state/days/2026/09/01.csv": 1,
@@ -68,7 +76,7 @@ def test_named_paths_ignore_unlisted_neighbours(tmp_path: Path) -> None:
 def test_a_folder_the_task_did_not_declare_is_refused_and_never_read_as_empty(
     tmp_path: Path,
 ) -> None:
-    listing = FileListing.from_disk(a_checkout(tmp_path), ["state/days", "state/other"])
+    listing = disk_listing(a_checkout(tmp_path), ["state/days", "state/other"])
     task = listing.within(["state/days"])
 
     for ask in (
@@ -84,7 +92,7 @@ def test_a_folder_the_task_did_not_declare_is_refused_and_never_read_as_empty(
 
 
 def test_a_declared_folder_the_commit_does_not_hold_answers_empty(tmp_path: Path) -> None:
-    listing = FileListing.from_disk(a_checkout(tmp_path), ["state/days", "state/not-yet"])
+    listing = disk_listing(a_checkout(tmp_path), ["state/days", "state/not-yet"])
 
     assert listing.files_under("state/not-yet") == []
     assert not listing.holds("state/not-yet/2026-09.csv")
@@ -171,7 +179,7 @@ def test_a_folder_whose_files_are_on_disk_is_not_widened_for(tmp_path: Path) -> 
 
 def test_a_later_task_sees_what_an_earlier_one_deleted_and_wrote(tmp_path: Path) -> None:
     """A deleted file is gone from the listing; a written one is there, weighed on disk."""
-    listing = FileListing.from_disk(a_checkout(tmp_path), ["state/days"])
+    listing = disk_listing(a_checkout(tmp_path), ["state/days"])
     written = tmp_path / "state/days/2026/09/03.csv"
     written.write_text("eeeee", encoding="ascii")
     elsewhere = tmp_path / "state/other/y.csv"

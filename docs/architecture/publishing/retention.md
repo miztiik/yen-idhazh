@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 What the app may delete, what must survive, and the safeguards before deletion.
 [layout.md](layout.md) owns publication. The [gardener](idhazh-gardener.md)
@@ -11,6 +11,8 @@ own the active windows, deletion ceilings and dry-run settings.
 
 - Read retention policy from config. A site-size warning is not permission to delete data, and a size forecast is not a deletion schedule.
 - Use UTC boundaries. Decide age from the period being retained, not when the job woke. Delete only below the retention floor, so a pass using a past date cannot delete newer data.
+- A scheduled pass reads the period that just expired and the configured number of earlier periods. Its report describes only that fixed window, not the full backlog. Use `idhazh gardener run-task` with inclusive `--from` and `--to` dates or months to drain older periods.
+- If a backlog exists when a fixed window is introduced, drain it once with a known inclusive range. The scheduled task does not scan the archive to find older periods.
 - Keep every period a supported reader can request. Compare calendar windows at their actual partition boundaries; do not approximate every month as thirty days.
 - Respect each task's ownership, lifecycle status, dry-run setting and deletion ceiling. Do not assume all tasks have the same mode.
 - Review the dry-run list before enabling deletion. Enabling a task is an explicit configuration decision, not a side effect of adding it.
@@ -116,8 +118,8 @@ guarantee is in [atomic deletes](../../concepts/atomic-deletes.md).
 
 Every visual-prune pass writes a `VisualPruneRow`, including dry runs and passes
 with no candidates. It records the policy, cutoff, candidates, deletions,
-`skipped_by_fuse`, remaining visual coverage and the walked tree's before-and-after
-size. The report is written through the shared ledger writer under
+`skipped_by_fuse`, remaining visual coverage and the named candidate window's
+before-and-after byte totals. The report is written through the shared ledger writer under
 `state/raw/visual-prunes/`; the task declares that report in `appends_to`.
 
 `skipped_by_fuse` counts candidates held back by the deletion ceiling, on both
@@ -125,9 +127,12 @@ live and dry runs. It is not every file left after a dry run. On a live pass,
 `deleted + skipped_by_fuse` equals `candidates_found`; on a dry run, the
 difference is what a live pass would have deleted. The contract validates this.
 
-Report the tree actually measured, not the built site's size. Commit removals
-with their report so the repository does not retain files the pass says it
-deleted. Run cleanup through the gardener, separately from digest assembly.
+`candidates_found` and the byte totals cover only the named candidate days;
+`oldest_kept` checks only the first day still kept. Older backlog is not counted
+on every wake. Use an explicit inclusive date range to drain it. Commit
+removals with their report so the repository does not retain files the pass
+says it deleted. Run cleanup through the gardener, separately from digest
+assembly.
 
 ## External visual assets
 
@@ -162,6 +167,8 @@ and the collection's cleanup policy, within GitHub's supported limits.
 ## Design rationale
 
 - Retention follows reader needs and declared age windows, not old size snapshots or predicted cap dates.
+- Scheduled cleanup reads a fixed window: the latest expired period plus its configured lookback. A report counts that window; an operator names an inclusive range to drain older backlog, rather than making every wake scan it.
+- Visual-prune byte totals and coverage describe its named candidate days, and `oldest_kept` reads the first day in the kept window. This keeps the report cost fixed as the archive grows.
 - Summaries are verified before deletion because the history rewrite can make a mistaken deletion permanent.
 - Preserving observation identities prevents archival from turning repeat measurements into new evidence.
 - Dry runs, deletion ceilings and progress reports let an operator inspect and finish bounded cleanup.

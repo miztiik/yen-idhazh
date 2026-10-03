@@ -33,7 +33,7 @@ from conftest import (
     writer_identity,
 )
 
-from idhazh import cli, config, day_shards, fetch, ledger
+from idhazh import cli, config, fetch, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -1238,6 +1238,19 @@ def test_every_feed_gets_a_row_whether_it_answered_or_not() -> None:
     assert dead.failing
 
 
+def test_an_alternate_state_root_does_not_update_the_site_inventory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state = tmp_path / "state"
+    public = tmp_path / "public"
+    monkeypatch.setattr(common, "PUBLIC_ROOT", public / "digest")
+
+    plan([LAB], state=state)
+
+    assert health_after(state)
+    assert not (public / "publication.json").exists()
+
+
 def test_a_feed_that_answered_with_nothing_is_recorded_as_failing() -> None:
     """200 with an empty body is the failure that killed eight real feeds quietly."""
     state = Path(tempfile.mkdtemp())
@@ -1289,9 +1302,10 @@ def test_two_runs_on_one_day_both_leave_a_record() -> None:
 def test_the_same_run_planned_twice_still_leaves_one_row_per_feed() -> None:
     """Two runs are two records; one run run twice is one record written down twice.
 
-    A job that is re-run keeps its `run_id`, so its second attempt appends a
-    second verdict for every feed it read. Counted raw, that turns one bad run
-    into two failures and a five-failure rest arrives after three runs.
+    A job that is re-run keeps its `run_id`, and its second try files its own
+    verdict for every feed it read. Both tries are one work unit of the ledger
+    door, so the reader keeps the later file whole. Counted raw, one bad run
+    would read as two failures and a five-failure rest would arrive after three.
     """
     state = Path(tempfile.mkdtemp())
     plan([LAB, TRADE, COMMUNITY], state=state, run_n=1)
@@ -1299,10 +1313,11 @@ def test_the_same_run_planned_twice_still_leaves_one_row_per_feed() -> None:
     rows = health_after(state)
     assert len(rows) == 3
     assert sorted(row.feed_id for row in rows) == ["community", "lab-blog", "trade-press"]
-    for path in day_shards.one_day(ledger.tree_root(state, LedgerName.FEED_HEALTH), DATE):
-        assert ledger.repeated_keys(path, ledger.FEED_HEALTH_KEY) == {}, (
-            f"{path.name} holds one feed's verdict twice"
-        )
+    filed = ledger.list_raw_files(state, LedgerName.FEED_HEALTH, days=[DATE])
+    assert len(filed) == 2, "each try files a raw file of its own"
+    for held in filed:
+        keys = [(row.run_id, row.feed_id) for row in ledger.load([held.path], model=FeedHealthRow)]
+        assert len(keys) == len(set(keys)), f"{held.path.name} holds one feed's verdict twice"
 
 
 def test_reading_a_history_that_was_never_written_is_empty_not_an_error() -> None:
@@ -1331,20 +1346,16 @@ def a_failed_read(feed_id: str, run_n: int) -> FeedHealthRow:
 def seed_failures(state: Path, feed_id: str, runs: int) -> None:
     """A history of nothing but failed reads, filed the way the runs that made it would.
 
-    One run writes one file holding every feed it read, so a second feed's
-    history joins the runs already on disk rather than replacing them.
+    One run writes one file holding every feed it read, and a second write under
+    that run's identity replaces the first, so a second feed's history joins the
+    rows already on disk for that run rather than replacing them.
     """
     for run_n in range(1, runs + 1):
         run_id = f"{DATE}-{run_n}"
         already = [
-            FeedHealthRow.from_csv_row(cells)
-            for cells in day_shards.settled_day(
-                ledger.tree_root(state, LedgerName.FEED_HEALTH),
-                DATE,
-                ledger.FEED_HEALTH_KEY,
-                FeedHealthRow,
-            )
-            if cells["run_id"] == run_id
+            row
+            for row in ledger.load_days(state, LedgerName.FEED_HEALTH, [DATE], model=FeedHealthRow)
+            if row.run_id == run_id
         ]
         seed_feed_health(state, DATE, [*already, a_failed_read(feed_id, run_n)], run_id=run_id)
 

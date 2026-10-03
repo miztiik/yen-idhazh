@@ -18,7 +18,7 @@ owns it, never re-derived from a wider one:
 - the runs, the site size and the day's article count come from the run-day
   shards this run just wrote, because re-reducing five months of day payloads is
   exactly the walk those shards exist to remove (Guardrail #12);
-- the feed trouble comes from `state/feed-health/` through `discover.settled`,
+- the feed trouble comes from the feed-health ledger through `discover.settled`,
   `discover.streak` and `discover.resting`, because those are the reducers the
   pipeline itself rested a feed by, and a page that ran its own would contradict
   the run that produced it;
@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -70,7 +70,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.source_health_view import SourceHealthRow
-from idhazh.month_partition import month_files
+from idhazh.month_partition import month_files, months_between, oldest_month_kept
 from idhazh.telemetry.publish import (
     day_metrics,
     machine,
@@ -1316,8 +1316,8 @@ def publish(
 
     - the newest `shard_months(widest)` run-day shards, for the runs, the size
       and the article counts;
-    - `state/feed-health/` over the widest span, through `ledger.load_health`,
-      which opens the day files that span names and no others;
+    - the feed-health days the widest span reaches, through `ledger.load_health`,
+      which opens the files of the newest days the ledger holds and no others;
     - the newest day's item-health rows through `ledger.load_days`, which opens
       that one day's files, and its day-metrics record, one file;
     - the host rows for the days the widest span reaches, through
@@ -1342,7 +1342,10 @@ def publish(
     months = months_a_window_can_touch(widest)
     day_root = series.series_root(digest_root, run_days.DIRNAME)
     available = series.published_months(
-        digest_root, run_days.DIRNAME, run_days.SUFFIX
+        digest_root,
+        run_days.DIRNAME,
+        run_days.SUFFIX,
+        months_between(oldest_month_kept(today, months), today.isoformat()[:7]),
     )
     days: list[PublicRunDay] = []
     for month in available[-months:]:
@@ -1373,7 +1376,13 @@ def publish(
         record=record,
         machine_rows=machine_rows,
         planned_shards=_planned_shards(digest_root, newest_date),
-        months=fetchable_months(digest_root, telemetry_root),
+        months=fetchable_months(
+            digest_root,
+            telemetry_root,
+            months=months_between(
+                oldest_month_kept(today, months), today.isoformat()[:7]
+            ),
+        ),
         run=run,
         collect=collect,
         sources=sources,
@@ -1409,7 +1418,12 @@ FETCHED_SERIES: Final[tuple[tuple[str, str], ...]] = (
 )
 
 
-def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> list[str]:
+def fetchable_months(
+    digest_root: Path,
+    telemetry_root: Path | None = None,
+    *,
+    months: Iterable[str],
+) -> list[str]:
     """Every month a shard the console fetches exists for, oldest first.
 
     The union across all five series and not the run-day months alone. A
@@ -1433,11 +1447,11 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
     """
     found: set[str] = set()
     for dirname, suffix in FETCHED_SERIES:
-        found.update(series.published_months(digest_root, dirname, suffix))
+        found.update(series.published_months(digest_root, dirname, suffix, months))
     shards = telemetry_root or series.series_root(
         digest_root, public_telemetry.PUBLIC_TELEMETRY_DIRNAME
     )
-    found.update(path.stem for path in month_files(shards, ".csv"))
+    found.update(path.stem for path in month_files(shards, ".csv", months))
     return sorted(found)
 
 
