@@ -135,7 +135,8 @@ FIXTURE_ROW_LEDGERS: Final[dict[LedgerName, tuple[type[FixtureRow], tuple[str, .
 }
 
 #: The ledgers the console reads from packed files, so the fixture packs them.
-PACKED_LEDGERS: Final = tuple(config.load().app.ledger.published)
+#: Feed health is read at build time and never published, so it is added by name.
+PACKED_LEDGERS: Final = (*config.load().app.ledger.published, LedgerName.FEED_HEALTH)
 
 #: The UTC day the fixture's packing pass runs on: two days after the attack
 #: day, the first day the declared rule admits it. A fixed day rather than the
@@ -1103,21 +1104,27 @@ def _health_rows() -> list[FeedHealthRow]:
 
 
 def health(state: Path) -> int:
-    """Write the canary's feed results, one writer file a date.
+    """File the canary's feed results through the ledger door, one raw file a date.
 
     Through the same call the plan stage makes, so the fixture is in the shape a
-    reader meets in production rather than in a shape only this file writes.
+    reader meets in production rather than in a shape only this file writes. The
+    console reads them once they are packed, which `pack_fixture_ledgers` does.
     """
     rows = _health_rows()
     for date in (YESTERDAY, DATE):
-        ledger.write_segment(
+        ledger.persist(
             state,
-            LedgerName.FEED_HEALTH,
             [row for row in rows if row.date == date],
-            run_id=f"{date}-1",
-            attempt=1,
-            job=ServerJob.PLAN,
-            shard=0,
+            ledger=LedgerName.FEED_HEALTH,
+            covers=date,
+            identity=WriterIdentity(
+                run_id=f"{date}-1",
+                attempt=1,
+                job=ServerJob.PLAN,
+                shard=0,
+                producer=PRODUCER,
+                git_sha=FIXTURE_SHA,
+            ),
         )
     return len(rows)
 
@@ -1851,7 +1858,10 @@ def main() -> int:
     print(f"wrote {(day_dir(args.out, DATE) / 'digest.json').as_posix()}")
     print(f"wrote {(day_dir(args.out, DATE) / 'run.json').as_posix()}: {len(runs.runs)} runs")
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
-    print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
+    print(
+        f"filed {checks} feed results into {LedgerName.FEED_HEALTH.value} "
+        "through the ledger door"
+    )
     marked = ledger.path(args.state, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
     print(f"wrote {marked.as_posix()}: {marks} hand-marked pairs")
     print(

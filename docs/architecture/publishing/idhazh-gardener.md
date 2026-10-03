@@ -731,13 +731,13 @@ the files it read. It changes no answer a reader gets
 ([../../concepts/partitions.md](../../concepts/partitions.md)).
 
 **The retention task that owns each tree folds it**, when its declaration
-carries a `fold` block. The current task is `feed-health`.
-Which trees a task folds is read off the folders it walks, so
-one job writes each tree a wake and no tree is checked out twice. The
-item-health, summary-quality-evals, host-fingerprint, counterfactual-scores and
-candidate-models ledgers are not CSV day trees any more, so no fold reads them:
-their compaction packs them. The [evaluation ID lookup](../contracts/observation-lookup.md)
-has no day/month fold or age-deletion task.
+carries a `fold` block. No current task carries one: feed-health now uses the
+ledger door, and the [evaluation ID lookup](../contracts/observation-lookup.md)
+uses JSON and SQLite. Neither is a CSV day tree. A future fold can run only for
+a ledger registered in `DAY_TREES`, and the task that owns that tree must own
+its folder. Which trees a task folds is read from the folders it walks, so one
+job writes each tree a wake and no tree is checked out twice. Other ledgers
+under `state/raw/` are packed by their own compaction tasks.
 
 **A task may settle a closed month whole.** With `fold.settles_months`, once a
 month's last day is closed - `fold.after_days` whole days after the month ends -

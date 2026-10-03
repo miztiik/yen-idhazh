@@ -6,8 +6,6 @@ import json
 from datetime import date
 from pathlib import Path
 
-from conftest import CONFIG_DIR
-
 from idhazh import ledger, month_partition
 from idhazh.contracts.knobs.gardener import CompactionPolicy, RetentionPolicy
 from idhazh.gardener.period_inputs import paths_for_task, periods_in_range, scheduled_range
@@ -21,8 +19,17 @@ def _compaction_policy() -> CompactionPolicy:
 
 
 def _monthly_fold_policy() -> RetentionPolicy:
-    path = CONFIG_DIR / "gardener" / "feed-health.json"
-    return RetentionPolicy.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    return RetentionPolicy.model_validate(
+        {
+            "kind": "retention",
+            "lifecycle_status": "active",
+            "dry_run": True,
+            "max_deletes_per_run": None,
+            "owns": ["state/candidate-models"],
+            "window": {"unit": "forever"},
+            "fold": {"after_days": 1, "dry_run": False, "settles_months": True},
+        }
+    )
 
 
 def test_compaction_range_uses_its_configured_month_lookback() -> None:
@@ -70,7 +77,7 @@ def test_monthly_fold_also_lists_its_fixed_closed_day_window(tmp_path: Path) -> 
         update={"fold": policy.fold.model_copy(update={"settles_months": True})}
     )
     today = date(2026, 10, 1)
-    period_range = scheduled_range("feed-health", policy, today)
+    period_range = scheduled_range("candidate-models", policy, today)
 
     assert period_range is not None
     months = month_partition.months_between(*period_range)
@@ -78,12 +85,12 @@ def test_monthly_fold_also_lists_its_fixed_closed_day_window(tmp_path: Path) -> 
 
     paths = paths_for_task(
         tmp_path,
-        "feed-health",
+        "candidate-models",
         policy,
         period_range,
         today=today,
     )
-    root = tmp_path / "state" / "feed-health"
+    root = tmp_path / "state" / "candidate-models"
     assert root / "2026" / "08" in paths
     assert root / "2026" / "09" / "29" in paths
     assert root / "2026" / "09" / "21" not in paths

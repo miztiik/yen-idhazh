@@ -97,19 +97,19 @@
       "root": "public"
     },
     {
-      "bytes": 281856,
+      "bytes": 309888,
       "items": 0,
       "path": "assist/index/2026-10.bin",
       "root": "public"
     },
     {
-      "bytes": 124193,
+      "bytes": 136468,
       "items": 0,
       "path": "assist/index/2026-10.json",
       "root": "public"
     },
     {
-      "bytes": 2894,
+      "bytes": 2981,
       "items": 0,
       "path": "console/band.json",
       "root": "public"
@@ -127,7 +127,7 @@
       "root": "public"
     },
     {
-      "bytes": 44062,
+      "bytes": 45272,
       "items": 0,
       "path": "day-metrics/2026-10.json",
       "root": "public"
@@ -637,13 +637,13 @@
       "root": "public"
     },
     {
-      "bytes": 306326,
-      "items": 142,
+      "bytes": 465751,
+      "items": 215,
       "path": "digest/2026/10/03/digest.json",
       "root": "public"
     },
     {
-      "bytes": 12790,
+      "bytes": 19141,
       "items": 0,
       "path": "digest/2026/10/03/run.json",
       "root": "public"
@@ -661,7 +661,7 @@
       "root": "public"
     },
     {
-      "bytes": 9514,
+      "bytes": 10279,
       "items": 0,
       "path": "machine/2026-10.csv",
       "root": "public"
@@ -679,7 +679,7 @@
       "root": "public"
     },
     {
-      "bytes": 5316,
+      "bytes": 5699,
       "items": 0,
       "path": "run-days/2026-10.json",
       "root": "public"
@@ -691,13 +691,13 @@
       "root": "public"
     },
     {
-      "bytes": 113751,
+      "bytes": 123176,
       "items": 0,
       "path": "run-timeline/2026-10.csv",
       "root": "public"
     },
     {
-      "bytes": 384258,
+      "bytes": 384265,
       "items": 0,
       "path": "source-health.json",
       "root": "public"
@@ -715,7 +715,7 @@
       "root": "public"
     },
     {
-      "bytes": 310797,
+      "bytes": 336644,
       "items": 0,
       "path": "telemetry/2026-10.csv",
       "root": "public"
@@ -811,301 +811,31 @@
       "root": "state"
     },
     {
-      "bytes": 25672,
+      "bytes": 22290,
       "items": 0,
-      "path": "feed-health/2026/08/23/settled.csv",
+      "path": "raw/feed-health/2026/10/02/01a100a8-85f3-8d9f-9871-3bd9fa761649.parquet",
       "root": "state"
     },
     {
-      "bytes": 64890,
+      "bytes": 21253,
       "items": 0,
-      "path": "feed-health/2026/08/24/settled.csv",
+      "path": "raw/feed-health/2026/10/03/01a10188-bb60-854b-8ec1-bd104a03b0d6.parquet",
       "root": "state"
     },
     {
-      "bytes": 65206,
+      "bytes": 21761,
       "items": 0,
-      "path": "feed-health/2026/08/25/settled.csv",
+      "path": "raw/feed-health/2026/10/03/01a10261-2c87-8247-b6ff-7a25f3b29269.parquet",
       "root": "state"
     },
     {
-      "bytes": 65318,
+      "bytes": 21947,
       "items": 0,
-      "path": "feed-health/2026/08/26/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 39137,
-      "items": 0,
-      "path": "feed-health/2026/08/27/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 13251,
-      "items": 0,
-      "path": "feed-health/2026/08/28/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 39375,
-      "items": 0,
-      "path": "feed-health/2026/08/29/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 65234,
-      "items": 0,
-      "path": "feed-health/2026/08/30/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 72381,
-      "items": 0,
-      "path": "feed-health/2026/08/31/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 72337,
-      "items": 0,
-      "path": "feed-health/2026/09/01/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 74077,
-      "items": 0,
-      "path": "feed-health/2026/09/02/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 128570,
-      "items": 0,
-      "path": "feed-health/2026/09/03/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 128593,
-      "items": 0,
-      "path": "feed-health/2026/09/04/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 128709,
-      "items": 0,
-      "path": "feed-health/2026/09/05/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 128691,
-      "items": 0,
-      "path": "feed-health/2026/09/06/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 130592,
-      "items": 0,
-      "path": "feed-health/2026/09/07/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 104501,
-      "items": 0,
-      "path": "feed-health/2026/09/08/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 159203,
-      "items": 0,
-      "path": "feed-health/2026/09/09/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 134919,
-      "items": 0,
-      "path": "feed-health/2026/09/10/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 135036,
-      "items": 0,
-      "path": "feed-health/2026/09/11/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 135000,
-      "items": 0,
-      "path": "feed-health/2026/09/12/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140110,
-      "items": 0,
-      "path": "feed-health/2026/09/13/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 172534,
-      "items": 0,
-      "path": "feed-health/2026/09/14/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 143709,
-      "items": 0,
-      "path": "feed-health/2026/09/15/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140275,
-      "items": 0,
-      "path": "feed-health/2026/09/16/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140551,
-      "items": 0,
-      "path": "feed-health/2026/09/17/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 84284,
-      "items": 0,
-      "path": "feed-health/2026/09/18/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28207,
-      "items": 0,
-      "path": "feed-health/2026/09/19/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140279,
-      "items": 0,
-      "path": "feed-health/2026/09/20/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 112290,
-      "items": 0,
-      "path": "feed-health/2026/09/21/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 112447,
-      "items": 0,
-      "path": "feed-health/2026/09/22/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140453,
-      "items": 0,
-      "path": "feed-health/2026/09/23/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140345,
-      "items": 0,
-      "path": "feed-health/2026/09/24/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140428,
-      "items": 0,
-      "path": "feed-health/2026/09/25/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140483,
-      "items": 0,
-      "path": "feed-health/2026/09/26/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140330,
-      "items": 0,
-      "path": "feed-health/2026/09/27/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140456,
-      "items": 0,
-      "path": "feed-health/2026/09/28/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140542,
-      "items": 0,
-      "path": "feed-health/2026/09/29/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140350,
-      "items": 0,
-      "path": "feed-health/2026/09/30/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 140362,
-      "items": 0,
-      "path": "feed-health/2026/10/01/settled.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28182,
-      "items": 0,
-      "path": "feed-health/2026/10/02/2026-10-02-36985028637-1-plan-00.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28209,
-      "items": 0,
-      "path": "feed-health/2026/10/02/2026-10-02-37008240270-1-plan-00.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28123,
-      "items": 0,
-      "path": "feed-health/2026/10/02/2026-10-02-37032840412-1-plan-00.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28206,
-      "items": 0,
-      "path": "feed-health/2026/10/02/2026-10-02-37053771021-1-plan-00.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28195,
-      "items": 0,
-      "path": "feed-health/2026/10/02/2026-10-02-37071896799-1-plan-00.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28179,
-      "items": 0,
-      "path": "feed-health/2026/10/03/2026-10-03-37108956194-1-plan-00.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28195,
-      "items": 0,
-      "path": "feed-health/2026/10/03/2026-10-03-37120581652-1-plan-00.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28207,
-      "items": 0,
-      "path": "feed-health/2026/10/03/2026-10-03-37130643074-1-plan-00.csv",
-      "root": "state"
-    },
-    {
-      "bytes": 28123,
-      "items": 0,
-      "path": "feed-health/2026/10/03/2026-10-03-37142589247-1-plan-00.csv",
+      "path": "raw/feed-health/2026/10/03/01a1030a-6a0c-84e2-8501-d82b7640cf41.parquet",
       "root": "state"
     }
   ],
-  "total_bytes": 51613721,
-  "total_items": 14581,
+  "total_bytes": 51857528,
+  "total_items": 14654,
   "version": "2026-10-03T13:33"
 }

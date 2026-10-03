@@ -79,8 +79,8 @@ SHARD_TREES: Final = {
 @pytest.mark.parametrize("shape", sorted(SHARD_TREES))
 def test_the_writer_files_of_a_day_tree_are_the_disk_walks(tmp_path: Path, shape: str) -> None:
     """A closed month's own settled file is a member of both walks, beside its days."""
-    root = plant(tmp_path / "state" / "feed-health", SHARD_TREES[shape])
-    listing = listing_of(tmp_path, "state/feed-health")
+    root = plant(tmp_path / "state" / "summary-quality-evals-index", SHARD_TREES[shape])
+    listing = listing_of(tmp_path, "state/summary-quality-evals-index")
 
     on_disk = walked(lambda: day_shards.shard_files(root, days=UNBOUNDED_WINDOW))
     by_name = walked(lambda: named_trees.shard_files(listing, root))

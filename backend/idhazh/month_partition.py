@@ -12,13 +12,12 @@ then DELETED in `state/scores/` - one name, two dispositions, and the
 destructive one landing on the ledger that holds the evidence behind every
 published quality claim.
 
-**`state/feed-health/` files by day now**, so it walks through `day_partition`
-instead and the month rule no longer reaches it. The item-health, scores and
-first-sight ledgers are filed by day through the ledger door under `state/raw/`,
-so it does not reach them either. The feed-health prune and the item-health
-compaction still take a month at a time, because a keep-months knob is a month
-boundary whatever the files below it are - and that boundary is arithmetic on a
-date rather than a filename, so it needs nothing from here.
+**The item-health, scores, first-sight and feed-health ledgers are filed by day
+through the ledger door under `state/raw/`**, so the month rule no longer
+reaches them. Their compactions still take a month at a time, because a
+keep-months knob is a month boundary whatever the files below it are - and that
+boundary is arithmetic on a date rather than a filename, so it needs nothing
+from here.
 
 **The rule is a real calendar month, spelled in ASCII, seven characters wide.**
 `str.isdigit` and `int` both accept another script's numerals, so a stem in

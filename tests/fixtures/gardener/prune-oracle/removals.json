@@ -7,14 +7,6 @@
     ],
     "written": []
   },
-  "feed-health": {
-    "dry_written": [],
-    "removed": [
-      "state/feed-health/2026/08/11/2026-08-11-1-1-plan-00.csv",
-      "state/feed-health/2026/09/11/2026-09-11-1-1-plan-00.csv"
-    ],
-    "written": []
-  },
   "summary-quality-evals-index": {
     "dry_written": [],
     "removed": [

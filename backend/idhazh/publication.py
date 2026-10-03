@@ -208,31 +208,9 @@ def record_feed_health(
     public_root: Path,
     state_root: Path,
     *,
-    dates: Iterable[str],
-    run_id: str,
-    attempt: int,
-    job: str,
-    shard: int,
+    paths: Iterable[str],
 ) -> PublicationInventory:
-    """Register this feed-health writer's paths, derived only from its known UTC days."""
-    from idhazh.contracts.base import ServerJob
-    from idhazh.contracts.ledger_name import LedgerName
-    from idhazh.ledger.rows import day_shard_path
-
-    paths = [
-        day_shard_path(
-            state_root,
-            LedgerName.FEED_HEALTH,
-            date=day,
-            run_id=run_id,
-            attempt=attempt,
-            job=ServerJob(job),
-            shard=shard,
-        )
-        .relative_to(state_root)
-        .as_posix()
-        for day in sorted(set(dates))
-    ]
+    """Register the raw feed-health paths returned by the ledger door."""
     return record_state_files(public_root, state_root, paths=paths)
 
 

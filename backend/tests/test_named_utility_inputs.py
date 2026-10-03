@@ -167,7 +167,7 @@ def test_trial_gather_copies_only_named_days(tmp_path: Path) -> None:
     state = tmp_path / "state"
     root = "pipeline-tests-fixture"
     wanted = (
-        f"{root}/feed-health/2026/09/01/a.csv",
+        f"{root}/raw/feed-health/2026/09/01/a.parquet",
         f"{root}/traces/2026/09/01/a.jsonl",
         f"{root}/raw/published/2026/09/01/a.parquet",
     )
@@ -175,7 +175,7 @@ def test_trial_gather_copies_only_named_days(tmp_path: Path) -> None:
         path = state / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("one day", encoding="ascii")
-    other = state / root / "feed-health/2026/09/02/a.csv"
+    other = state / root / "raw/feed-health/2026/09/02/a.parquet"
     other.parent.mkdir(parents=True)
     other.write_bytes(b"\xff")
     tree = tmp_path / "artifact"
