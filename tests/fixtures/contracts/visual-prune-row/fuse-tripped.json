@@ -13,5 +13,7 @@
   "policy_months": 12,
   "run_id": "2026-09-06-33301000001",
   "skipped_by_fuse": 100,
-  "version": "2026-09-06T13:00"
+  "version": "2026-09-06T13:00",
+  "window_end": null,
+  "window_start": null
 }

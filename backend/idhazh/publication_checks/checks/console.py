@@ -26,10 +26,14 @@ a console with no verdict at all.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import ValidationError
 
+from idhazh import config
+from idhazh.contracts.knobs.windows import months_a_window_can_touch
+from idhazh.month_partition import months_between, oldest_month_kept
 from idhazh.publication_checks.registry import Check, CheckResult, CheckScope, TreeContext
 from idhazh.telemetry.publish import (
     console_band,
@@ -42,6 +46,13 @@ from idhazh.telemetry.publish import (
 
 
 def _faults(root: Path, months: frozenset[str] | None) -> list[str]:
+    if months is None:
+        settings = config.load()
+        today = datetime.now(UTC).date()
+        count = months_a_window_can_touch(settings.appearance.console.max_window_days)
+        months = frozenset(
+            months_between(oldest_month_kept(today, count), today.isoformat()[:7])
+        )
     faults: list[str] = []
     readers: tuple[tuple[str, str, Callable[[Path], object]], ...] = (
         (machine.DIRNAME, machine.SUFFIX, machine.read_shard),
@@ -54,9 +65,7 @@ def _faults(root: Path, months: frozenset[str] | None) -> list[str]:
         (public_telemetry.PUBLIC_TELEMETRY_DIRNAME, ".csv", public_telemetry.read_shard),
     )
     for dirname, suffix, read in readers:
-        for month in series.published_months(root, dirname, suffix):
-            if months is not None and month not in months:
-                continue
+        for month in series.published_months(root, dirname, suffix, months):
             path = series.month_path(root, dirname, month, suffix)
             try:
                 read(path)

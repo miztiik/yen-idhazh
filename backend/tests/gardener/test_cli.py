@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from idhazh import cli, config
+from idhazh.gardener import cli as gardener_cli
 from idhazh.gardener import listing
 from idhazh.gardener.outcome import EXIT_INTEGRITY
 from utilities import gardener_publish, gardener_shards
@@ -56,7 +57,9 @@ def test_list_tasks_prints_one_line_a_task(
     printed = capsys.readouterr().out.splitlines()
     assert len(printed) == len(list((config_dir / "gardener").glob("*.json")))
     assert (
-        "trials: active retention, keeps 90 days, reports only, owns everything else under state"
+        "trials: active retention, keeps 90 days, reports only, owns "
+        "state/pipeline-tests-production-settings, state/pipeline-tests-no-visual-plan, "
+        "state/pipeline-tests-parallel-summarization"
         in printed
     )
 
@@ -85,7 +88,7 @@ def test_an_empty_garden_lists_nothing_and_plans_nothing(tmp_path: Path) -> None
     assert listing.tasks(settings) == ["no task is declared: config/gardener/ holds no declaration"]
 
 
-def test_a_config_the_loader_refuses_exits_2_naming_the_file(
+def test_an_unconfigured_declaration_is_not_read(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     config_dir = the_garden(tmp_path)
@@ -120,6 +123,29 @@ def test_a_run_task_line_the_router_cannot_run_is_refused(
         cli.main(["gardener", "run-task", *line, "--config", str(config_dir)])
     assert stopped.value.code == 2
     assert refusal in capsys.readouterr().err
+
+
+def test_run_task_accepts_an_inclusive_month_range_for_one_task(tmp_path: Path) -> None:
+    config_dir = the_garden(tmp_path)
+    settings = config.load_gardener(config_dir)
+    parser = gardener_cli._parser()
+    args = parser.parse_args(
+        [
+            "run-task",
+            "telemetry-aggregate",
+            *RUN,
+            "--git-sha",
+            SHA,
+            "--from",
+            "2025-01",
+            "--to",
+            "2025-02",
+            "--config",
+            str(config_dir),
+        ]
+    )
+
+    assert gardener_cli.period_range(settings, args, parser) == ("2025-01", "2025-02")
 
 
 def test_a_task_no_shipped_module_serves_exits_2_before_it_runs(

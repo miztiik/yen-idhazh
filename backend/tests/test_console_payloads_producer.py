@@ -33,6 +33,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.run import RunConfig
+from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.run_manifest import (
     ModelRole,
@@ -48,6 +49,7 @@ from idhazh.contracts.source_health_view import (
 )
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.gardener import closed_day_fold
+from idhazh.month_partition import months_between, oldest_month_kept
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
@@ -478,7 +480,7 @@ def test_every_series_is_pruned_to_its_own_knob(
     state, digest = tree
     _publish_all(state, digest, months=set(MONTHS))
 
-    kept = series.published_months(digest, dirname, suffix)
+    kept = series.published_months(digest, dirname, suffix, MONTHS[-14:])
 
     assert kept == list(MONTHS[-14:]), kept
 
@@ -572,7 +574,11 @@ def test_the_band_names_the_newest_day_in_every_sentence(tree: tuple[Path, Path]
     assert band.verdict.sentence.startswith(f"{NEWEST_DAY} ran 1 run and published 3 of 4")
     assert band.verdict.health is Health.AMBER
     assert [square.label for square in band.verdict.runs] == ["Run 1 is worth a look"]
-    assert band.months == list(MONTHS[-14:])
+    window_months = months_a_window_can_touch(max(CONSOLE.window_presets))
+    named_months = months_between(
+        oldest_month_kept(TODAY, window_months), TODAY.isoformat()[:7]
+    )
+    assert band.months == [month for month in MONTHS if month in named_months]
 
 
 def test_a_failed_run_outranks_a_resting_feed_at_the_same_severity(
@@ -1163,6 +1169,7 @@ def _band_after_folding(state: Path, digest: Path) -> Any:
         now=datetime.combine(date.fromisoformat(NEWEST_DAY), time.min, tzinfo=UTC),
         after_days=7,
         dry_run=False,
+        period_paths=[ledger.tree_root(state, tree) for tree in DAY_TREES],
     )
     _publish_all(state, digest, months=set(MONTHS))
     console_band.publish(

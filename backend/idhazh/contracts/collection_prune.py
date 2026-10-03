@@ -97,6 +97,11 @@ class CollectionPruneRow(Contract):
     __schema_stem__: ClassVar[str] = "collection-prune-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-03T18:00",
+            change="candidates_seen describes the fixed named period window.",
+            why="Scheduled cleanup reads a window; older backlog uses an explicit range.",
+        ),
+        ChangelogEntry(
             version="2026-10-01",
             change="folded_months, additive: closed months a fold settled into one file each.",
             why="A task may settle a closed month into one file, and says how many it settled.",
@@ -110,11 +115,6 @@ class CollectionPruneRow(Contract):
             version="2026-09-28T22:07",
             change="fold_dry_run, folded_days, folded_files, additive; empty with no fold.",
             why="A task folds its closed days on its own switch, and says what it folded.",
-        ),
-        ChangelogEntry(
-            version="2026-09-28",
-            change="cone_bytes, additive: what the shard's owned folders weighed; None if unread.",
-            why="A shard's checkout is bounded, and the record says what each one weighed.",
         ),
         ChangelogEntry(
             version="2026-09-17",
@@ -175,8 +175,9 @@ class CollectionPruneRow(Contract):
     candidates_seen: int = Field(
         ge=0,
         description=(
-            "Members the listing yielded before the pass stopped. Never the size of the "
-            "collection: a pass that stops on its ceiling stops listing too."
+            "Members the listing yielded before the pass stopped, within its named period "
+            "range. Never the size of the collection: a pass that stops on its ceiling "
+            "stops listing too."
         ),
     )
     selected: int = Field(

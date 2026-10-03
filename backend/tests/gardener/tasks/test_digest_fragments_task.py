@@ -55,7 +55,13 @@ def test_every_block_of_a_day_past_the_window_goes_and_the_first_kept_day_stays(
 def test_a_dry_run_names_every_block_and_leaves_it(tmp_path: Path) -> None:
     old = a_block(tmp_path, first_kept() - timedelta(days=400))
 
-    outcome = run_task(NAME, tmp_path, today=TODAY)
+    old_day = old.parent.name
+    old_month = old.parent.parent.name
+    old_year = old.parent.parent.parent.name
+    stamp = f"{old_year}-{old_month}-{old_day}"
+    outcome = run_task(
+        NAME, tmp_path, today=TODAY, period_range=(stamp, stamp)
+    )
 
     assert outcome.dry_run, "digest-fragments ships in dry run"
     assert outcome.taken == (old.relative_to(tmp_path).as_posix(),)

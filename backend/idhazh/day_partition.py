@@ -196,3 +196,13 @@ def days_in_window(today: str, within_days: int) -> list[str]:
     """
     end = date_type.fromisoformat(today)
     return [(end - timedelta(days=offset)).isoformat() for offset in range(within_days + 1)]
+
+
+def days_before(first_kept: date_type, lookback: int) -> list[date_type]:
+    """The `lookback` days immediately before an exclusive boundary, oldest first."""
+    if lookback < 1:
+        raise ValueError("day lookback must be at least one")
+    return [
+        first_kept - timedelta(days=offset)
+        for offset in range(lookback, 0, -1)
+    ]

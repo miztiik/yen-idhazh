@@ -1,10 +1,7 @@
-"""Does a shard size a file it never downloaded from GitHub's own answer, matched by blob id?
+"""Does a shard size a file it never downloaded from GitHub's named blob endpoint?
 
-The reply beside the folder `tests/fixtures/gardener/trees-api/listed/` was
-recorded once from GitHub's trees API, after that folder was pushed. A partial
-clone of an origin holding the same bytes holds the same tree, because a tree id
-is a hash of the names and blobs inside it, so the recorded reply answers for it
-exactly as GitHub would, with no network.
+The fixture records names and blob ids for a small test tree. The fake API
+returns only the size of the requested blob, with no network.
 """
 
 from __future__ import annotations
@@ -27,16 +24,21 @@ REPLY: Final = GARDENER_FIXTURES / "trees-api" / "reply.json"
 FOLDER: Final = "state/listed"
 
 
-class RecordedTrees:
-    """GitHub's trees API as it answered once, for the one tree it was asked about."""
+class RecordedBlobs:
+    """GitHub's blob API as it answers for the named files in the fixture."""
 
     def __init__(self) -> None:
         self.reply: dict[str, Any] = json.loads(REPLY.read_text(encoding="utf-8"))
+        self.sizes = {
+            item["sha"]: {"size": item["size"]}
+            for item in self.reply["tree"]
+            if item.get("type") == "blob"
+        }
         self.asked: list[str] = []
 
     def read(self, path: str) -> dict[str, Any]:
         self.asked.append(path)
-        return self.reply
+        return self.sizes[path.rsplit("/", 1)[-1]]
 
 
 def test_a_file_the_shard_never_downloaded_is_sized_from_githubs_reply(
@@ -50,15 +52,13 @@ def test_a_file_the_shard_never_downloaded_is_sized_from_githubs_reply(
     origin, _ = an_origin(tmp_path, files)
     shard = a_partial_clone(tmp_path, origin, "config")
     checkout = gardener_publish.Checkout(shard)
-    trees = RecordedTrees()
-    assert checkout.folder_trees([FOLDER]) == {FOLDER: trees.reply["sha"]}, (
-        "the fixture folder changed since GitHub's reply was recorded: push it and record "
-        "the reply again"
+    blobs = RecordedBlobs()
+
+    listing = gardener_publish.read_the_listing(
+        checkout, shard, [FOLDER], [FOLDER], blobs
     )
 
-    listing = gardener_publish.read_the_listing(checkout, shard, [FOLDER], trees)
-
-    assert trees.asked == [f"git/trees/{trees.reply['sha']}?recursive=1"]
+    assert blobs.asked == [f"git/blobs/{blob}" for blob in sorted(blobs.sizes)]
     assert dict(listing.sizes) == {name: len(text.encode("ascii")) for name, text in files.items()}
     assert not (shard / "state").exists(), "a file was downloaded to be sized"
 
@@ -69,11 +69,27 @@ def test_a_full_clone_is_sized_by_git_and_never_asks_github(
     """Every file is in the clone, so git prints every size and nothing is asked."""
     quiet_git(tmp_path, monkeypatch)
     _, checkout = an_origin(tmp_path, {f"{FOLDER}/a.txt": "abc\n"})
-    trees = RecordedTrees()
+    blobs = RecordedBlobs()
 
     listing = gardener_publish.read_the_listing(
-        gardener_publish.Checkout(checkout), checkout, [FOLDER], trees
+        gardener_publish.Checkout(checkout), checkout, [FOLDER], [FOLDER], blobs
     )
 
     assert dict(listing.sizes) == {f"{FOLDER}/a.txt": 4}
-    assert trees.asked == []
+    assert blobs.asked == []
+
+
+def test_many_named_period_paths_are_split_before_git_is_called(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    _, checkout = an_origin(tmp_path, {})
+
+    listed = gardener_publish.Checkout(checkout).list_files(
+        [
+            f"state/old-days/2026/09/01/run-{item:08d}-recorded-period-file.csv"
+            for item in range(1200)
+        ]
+    )
+
+    assert listed == []

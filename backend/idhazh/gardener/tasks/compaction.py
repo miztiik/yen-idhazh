@@ -65,6 +65,7 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     from datetime import UTC, datetime, time
     from pathlib import Path
 
+    from idhazh import month_partition
     from idhazh.contracts.collection_prune import StopReason
     from idhazh.contracts.file_envelope import WriterIdentity
     from idhazh.contracts.knobs.gardener import CompactionPolicy
@@ -85,6 +86,8 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
         producer=__name__.partition(".")[2],
         git_sha=context.git_sha,
     )
+    if context.period_range is not None:
+        months = frozenset(month_partition.months_between(*context.period_range))
     tree = CompactTree.read(context.state_dir, policy.ledger, context.listing, months=months)
     first_kept = _monthly_period.first_kept_month(
         now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
@@ -118,10 +121,16 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     stop = next((held for held in stops if held.because is StopReason.FAILED), None) or next(
         (held for held in stops if held.because is StopReason.CEILING), None
     )
+    if context.period_range is None:
+        date_range = None
+        until = schedule.newest_eligible(now=now, after_days=policy.compact_after_days).isoformat()
+    else:
+        date_range = month_partition.day_bounds(*context.period_range)
+        until = date_range[1]
     outcome = Pass(
         collection=policy.ledger.value,
-        since=None,
-        until=schedule.newest_eligible(now=now, after_days=policy.compact_after_days).isoformat(),
+        since=None if date_range is None else date_range[0],
+        until=until,
         ceiling=None,
         dry_run=policy.dry_run,
         seen=tree.seen(),

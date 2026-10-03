@@ -133,7 +133,12 @@ def test_a_dry_run_names_what_the_pass_removed_and_wrote_and_touches_nothing(
     before = files_under(root)
     recorded = _answered_for(name)
 
-    outcome = run_task(name, root, dry_run=True)
+    outcome = run_task(
+        name,
+        root,
+        dry_run=True,
+        period_range=("2026-01-01", "2027-08-17") if name == "trials" else None,
+    )
 
     after = files_under(root)
     appended = sorted(_normal(path) for path in set(after) - set(before))
@@ -153,7 +158,12 @@ def test_a_live_run_removes_and_writes_exactly_what_the_pass_did(
     before = files_under(root)
     recorded = _answered_for(name)
 
-    outcome = run_task(name, root, dry_run=False)
+    outcome = run_task(
+        name,
+        root,
+        dry_run=False,
+        period_range=("2026-01-01", "2027-08-17") if name == "trials" else None,
+    )
 
     after = files_under(root)
     removed = sorted(set(before) - set(after))

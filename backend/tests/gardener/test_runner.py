@@ -42,7 +42,7 @@ from ._garden import task_package as a_package
 WAKE = datetime(2026, 9, 27, 0, 40, tzinfo=UTC)
 RUN_ID = "2026-09-27-18012345678"
 #: A day the three-day window has aged out, and one it has not.
-AGED, FRESH = "2026-09-01.txt", "2026-09-26.txt"
+AGED, FRESH = "2026/09/19/2026-09-19.txt", "2026/09/26/2026-09-26.txt"
 
 DECLARATIONS = {
     "runner": ("compact-gardener.json", "old-days.json", "rehearsal.json"),
@@ -113,7 +113,7 @@ RUNNER_FILES = {
     f"state/old-days/{AGED}": "aged\n",
     f"state/old-days/{FRESH}": "fresh\n",
     f"state/rehearsal/{AGED}": "aged\n",
-    "state/compact/gardener/.keep": "",
+    "state/compact/gardener/monthly/2025/08.parquet": "compacted\n",
 }
 
 
@@ -311,26 +311,26 @@ def a_garden_with_the_complement(
     return checkout, config.load_gardener(declared)
 
 
-def test_a_complement_task_with_no_commit_to_read_is_refused_before_anything_runs(
+def test_a_named_trial_root_runs_without_discovering_state_children(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """What the complement owns is what nothing else claims, and only the commit says that."""
+    """The declaration names its roots, so the runner needs no child-directory discovery."""
     checkout, settings = a_garden_with_the_complement(tmp_path, monkeypatch, RUNNER_FILES)
 
-    outcome, said = ran(
-        ("old-days", "trials"), settings, checkout, "garden_tasks_ok", monkeypatch, land=False
+    outcome, _ = ran(
+        ("trials",), settings, checkout, "garden_tasks_ok", monkeypatch, land=False
     )
 
-    assert (outcome.exit_code, outcome.record) == (EXIT_INTEGRITY, None)
-    assert any("trials owns everything else under state" in line for line in said)
-    assert (checkout / "state" / "old-days" / AGED).is_file(), "a task ran before the refusal"
+    assert outcome.exit_code == EXIT_OK
+    assert rows_of(outcome.record)["trials"].selected == 0
+    assert (checkout / "state" / "old-days" / AGED).is_file()
 
 
-def test_a_complement_task_walks_the_folders_the_commit_holds_that_nothing_claims(
+def test_a_named_trial_root_selects_its_period_and_ignores_unconfigured_children(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A folder somebody left in the checkout and never committed is not the sweep's to take."""
-    stray = "state/a-trial-run/2026-05-01.txt"
+    """Only a configured trial root and a named date are in the pass's listing."""
+    stray = "state/pipeline-tests-production-settings/seen/2026/06/25/2026-06-25.txt"
     checkout, settings = a_garden_with_the_complement(
         tmp_path, monkeypatch, {**RUNNER_FILES, stray: "aged\n"}
     )
@@ -384,17 +384,15 @@ def test_a_history_task_named_to_the_runner_is_refused_and_nothing_runs(
     assert git(checkout, "status", "--porcelain", "--", "corpus", "state") == ""
 
 
-def test_the_complement_owns_nothing_another_task_or_a_ledger_claims(tmp_path: Path) -> None:
-    """Every pair of named tasks is disjoint, and the complement reaches none of them.
+def test_trials_owns_only_its_configured_roots(tmp_path: Path) -> None:
+    """The trial task neither claims nor discovers any other state directory.
 
-    What the complement does own is a stray folder under `state/` that no task
-    and no ledger family claims, which is the trial tree it exists to sweep.
+    Its configured roots are disjoint from other tasks and ledger families.
     """
     settings = config.load_gardener(a_config(tmp_path, GARDENER_FIXTURES / "garden"))
     named = {
         name: tuple(policy.owns)
         for name, policy in settings.tasks.items()
-        if policy.owns is not None
     }
     folders = [(name, folder) for name, owned in named.items() for folder in owned]
     for index, (first, one) in enumerate(folders):
@@ -403,9 +401,15 @@ def test_the_complement_owns_nothing_another_task_or_a_ledger_claims(tmp_path: P
                 continue
             assert not (one == other or one.startswith(f"{other}/") or other.startswith(f"{one}/"))
 
+    owns = settings.tasks["trials"].owns
+    assert set(owns) == {
+        "state/pipeline-tests-production-settings",
+        "state/pipeline-tests-no-visual-plan",
+        "state/pipeline-tests-parallel-summarization",
+    }
     sweeps = runner.owner_of("trials", settings.tasks)
-    assert not [folder for _, folder in folders if sweeps(folder) or sweeps(f"{folder}/x.csv")]
+    assert all(sweeps(folder) and sweeps(f"{folder}/x.csv") for folder in owns)
     for claimed in sorted(ledger.claimed_roots()):
         assert not sweeps(f"{ledger.STATE_DIRNAME}/{claimed}/2026/09/27/x.csv"), claimed
-    assert sweeps(f"{ledger.STATE_DIRNAME}/a-trial-run/2026-09-01.json")
-    assert not sweeps(ledger.STATE_DIRNAME), "the complement owns the root itself"
+    assert not sweeps(f"{ledger.STATE_DIRNAME}/a-trial-run/2026-09-01.json")
+    assert not sweeps(ledger.STATE_DIRNAME), "the task does not own the state root"

@@ -34,7 +34,7 @@ def day_files(context: TaskContext, folders: Sequence[str]) -> Pass:
             yield from (
                 path
                 for path in listing.paths_under(folder)
-                if path.parent == root / folder and path.suffix == ".txt"
+                if path.suffix == ".txt"
             )
 
     def describe(path: Path) -> Member:

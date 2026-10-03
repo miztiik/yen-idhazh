@@ -39,7 +39,12 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh.month_partition import month_files, oldest_month_kept
+from idhazh.month_partition import (
+    expired_months,
+    month_files,
+    months_between,
+    oldest_month_kept,
+)
 
 #: The band, which is one file rather than a month series.
 CONSOLE_DIRNAME: Final = "console"
@@ -125,15 +130,14 @@ def relpath(dirname: str, name: str) -> str:
     return f"frontend/public/{dirname}/{name}"
 
 
-def published_months(digest_root: Path, dirname: str, suffix: str) -> list[str]:
-    """The months already on disk for one series, oldest first.
-
-    One directory listing, and the directory is bounded by its own retention
-    knob - so this costs at most `keep_months` entries however long the project
-    runs. `month_partition` decides what counts as a month name, so a stem this
-    does not recognise is left alone rather than deleted.
-    """
-    return [path.stem for path in month_files(series_root(digest_root, dirname), suffix)]
+def published_months(
+    digest_root: Path, dirname: str, suffix: str, months: Iterable[str]
+) -> list[str]:
+    """The existing files for these named months, oldest first."""
+    return [
+        path.stem
+        for path in month_files(series_root(digest_root, dirname), suffix, months)
+    ]
 
 
 def months_to_write(
@@ -193,8 +197,9 @@ def prune_months(
     *,
     keep_months: int,
     today: date,
+    lookback: int = 2,
 ) -> tuple[str, ...]:
-    """Delete every published month past its own configured age.
+    """Delete the configured fixed window of expired published months.
 
     Without this a producer is the growing cost Guardrail #12 refuses: a directory
     that gains a file every month and loses none. With it the directory holds at
@@ -208,12 +213,9 @@ def prune_months(
     deleted while a window preset can still reach it blanks that panel silently -
     a month with no file reads exactly like a month with no runs.
     """
-    boundary = oldest_month_kept(today, keep_months)
     root = series_root(digest_root, dirname)
     deleted: list[str] = []
-    for path in month_files(root, suffix):
-        if path.stem >= boundary:
-            continue
+    for path in month_files(root, suffix, expired_months(today, keep_months, lookback)):
         path.unlink()
         deleted.append(path.stem)
     return tuple(deleted)
@@ -261,6 +263,9 @@ def publish_series(
     """
     written: list[Path] = []
     oldest = oldest_month_kept(today, keep_months)
+    current_month = today.isoformat()[:7]
+    retained_months = months_between(oldest, current_month)
+    available = tuple(month for month in available if month in retained_months)
     wanted = months_to_write(
         available,
         digest_root=digest_root,

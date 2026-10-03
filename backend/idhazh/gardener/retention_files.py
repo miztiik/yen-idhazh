@@ -168,9 +168,18 @@ def take_files(
         item.path.unlink(missing_ok=True)
         after_delete(item.path)
 
+    if context.period_range is None:
+        span = Span(until=(first_kept - timedelta(days=1)).isoformat())
+    else:
+        start, end = context.period_range
+        if month_partition.is_month_stem(start):
+            first_day, last_day = month_partition.day_bounds(start, end)
+            span = Span(since=first_day, until=last_day)
+        else:
+            span = Span(since=start, until=end)
     return take(
         Collection(name=collection, listing=lambda: aged, describe=describe, delete=delete),
-        window=Span(until=(first_kept - timedelta(days=1)).isoformat()),
+        window=span,
         ceiling=context.policy.max_deletes_per_run,
         dry_run=context.policy.dry_run,
     )

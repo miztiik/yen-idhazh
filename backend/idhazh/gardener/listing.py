@@ -19,9 +19,7 @@ def _window(window: Window) -> str:
 
 
 def _owns(policy: TaskPolicy) -> str:
-    if policy.owns is not None:
-        return ", ".join(policy.owns) or "no folder"
-    return f"everything else under {', '.join(policy.owns_everything_else_under or ())}"
+    return ", ".join(policy.owns) or "no folder"
 
 
 def tasks(settings: GardenerSettings) -> list[str]:

@@ -27,7 +27,7 @@ from utilities import gardener_publish
 
 from ._garden import (
     GARDENER_FIXTURES,
-    OriginTrees,
+    OriginBlobs,
     a_config,
     a_partial_clone,
     an_origin,
@@ -41,12 +41,12 @@ WAKE: Final = datetime(2026, 9, 27, 0, 40, tzinfo=UTC)
 RUN_ID: Final = "2026-09-27-18012345678"
 
 #: A day `old-days` has aged out, and one it keeps.
-AGED: Final = "state/old-days/2026-09-01.txt"
-FRESH: Final = "state/old-days/2026-09-26.txt"
-#: A folder no declaration names and no ledger claims, so the complement sweeps it.
-STRAY: Final = "state/a-trial-run/2026-05-01.txt"
+AGED: Final = "state/old-days/2026/09/19/2026-09-19.txt"
+FRESH: Final = "state/old-days/2026/09/26/2026-09-26.txt"
+#: A configured trial root and period, both named by the declaration and the wake.
+STRAY: Final = "state/pipeline-tests-production-settings/seen/2026/06/25/2026-06-25.txt"
 #: What the fixture compaction reads before it writes its summary.
-COMPACTED: Final = "state/compact/gardener/2026-09-20.summary"
+COMPACTED: Final = "state/compact/gardener/monthly/2025/08.parquet"
 
 #: Every file holds different bytes: git keeps equal files as one object, and a
 #: file outside the checkout whose bytes matched one inside it would be in the
@@ -56,7 +56,7 @@ FILES: Final = {
     ".gitattributes": "* text=auto eol=lf\n",
     AGED: "aged\n",
     FRESH: "fresh\n",
-    "state/rehearsal/2026-09-01.txt": "rehearsed\n",
+    "state/rehearsal/2026/09/19/2026-09-19.txt": "rehearsed\n",
     STRAY: "a trial run\n",
     COMPACTED: "compacted before this wake\n",
 }
@@ -94,7 +94,7 @@ def landed(
         attempt=1,
         shard=0,
         package=a_package("garden_tasks_ok", monkeypatch),
-        trees=OriginTrees(origin),
+        trees=OriginBlobs(origin),
         clock=lambda: WAKE,
         say=said.append,
     )
@@ -126,9 +126,8 @@ def test_a_shard_that_decides_from_names_downloads_nothing_and_its_deletion_land
     assert not (shard / "state" / "old-days").exists(), "a folder was checked out"
     assert (rows["trials"].stopped_because, rows["trials"].selected) == (StopReason.EXHAUSTED, 1)
     assert (rows["rehearsal"].dry_run, rows["rehearsal"].deleted) == (True, 1)
-    owned = ("state/old-days/", "state/rehearsal/", "state/a-trial-run/")
-    weighed = sum(len(text) for name, text in FILES.items() if name.startswith(owned))
-    assert {(row.cone_bytes, row.downloaded_bytes) for row in rows.values()} == {(weighed, 0)}
+    assert {row.cone_bytes for row in rows.values()} == {None}
+    assert {row.downloaded_bytes for row in rows.values()} == {0}
 
 
 def test_a_task_that_reads_its_folder_downloads_it_in_one_fetch(
@@ -156,9 +155,9 @@ def test_a_listing_github_cannot_size_runs_no_task_and_exits_1(
     """A size nobody can give is refused rather than read as nothing, so no task runs on it."""
     origin, shard, settings = a_shard(tmp_path, monkeypatch)
 
-    class Truncated(OriginTrees):
+    class MissingSize(OriginBlobs):
         def read(self, path: str) -> dict[str, Any]:
-            return {**super().read(path), "truncated": True}
+            return {}
 
     said: list[str] = []
     outcome = gardener_publish.run_and_land(
@@ -169,14 +168,15 @@ def test_a_listing_github_cannot_size_runs_no_task_and_exits_1(
         attempt=1,
         shard=0,
         package=a_package("garden_tasks_ok", monkeypatch),
-        trees=Truncated(origin),
+        trees=MissingSize(origin),
         clock=lambda: WAKE,
         say=said.append,
     )
 
     assert (outcome.exit_code, outcome.record, outcome.landing) == (EXIT_TASK_FAILED, None, None)
     assert any(
-        "could not be listed, so no task ran" in line and "truncated" in line for line in said
+        "could not be listed, so no task ran" in line and "did not report a size" in line
+        for line in said
     ), said
     assert on_origin(origin, AGED) == FILES[AGED]
 
@@ -189,7 +189,8 @@ def test_a_deletion_the_commit_never_listed_lands_nothing(
     origin, checkout = an_origin(tmp_path, FILES)
     declared = a_config(checkout, GARDENER_FIXTURES / "runner" / "old-days.json")
     settings = config.load_gardener(declared)
-    (checkout / "state" / "old-days" / "2026-08-01.txt").write_text("left here\n", encoding="ascii")
+    uncommitted = checkout / "state" / "old-days" / "2026-09-18.txt"
+    uncommitted.write_text("left here\n", encoding="ascii")
 
     said: list[str] = []
     outcome = gardener_publish.run_and_land(
@@ -206,7 +207,7 @@ def test_a_deletion_the_commit_never_listed_lands_nothing(
 
     assert outcome.exit_code == EXIT_INTEGRITY
     assert (
-        "shard 0: state/old-days/2026-08-01.txt was deleted, and the commit this shard read "
+        "shard 0: state/old-days/2026-09-18.txt was deleted, and the commit this shard read "
         "lists no such file. Nothing lands"
     ) in said
     assert on_origin(origin, AGED) == FILES[AGED], "a deletion landed"

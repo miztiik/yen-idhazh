@@ -3,6 +3,7 @@
   "kind": "retention",
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
+  "lookback": 26,
   "owns": [
     "state/old-days"
   ],

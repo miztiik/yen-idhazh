@@ -42,7 +42,7 @@ def run(context: TaskContext) -> Pass:
     import dataclasses
     import logging
 
-    from idhazh import config, day_partition, ledger, retention
+    from idhazh import config, day_partition, ledger, month_partition, retention
     from idhazh.config import FULL_GRAIN
     from idhazh.contracts.file_envelope import Period
     from idhazh.contracts.item_health import ItemHealthRow
@@ -59,6 +59,23 @@ def run(context: TaskContext) -> Pass:
     )
     public_from = retention_files.first_kept_month(series.get("public-copy", never), context.today)
     aggregate_from = retention_files.first_kept_month(series.get("aggregate", never), context.today)
+    def expired(first_kept: str | None) -> list[str]:
+        if first_kept is None:
+            return []
+        if context.period_range is None:
+            return month_partition.months_before(first_kept, policy.lookback_periods + 1)
+        start, end = context.period_range
+        requested = month_partition.months_between(start, end)
+        if requested[-1] >= first_kept:
+            raise ValueError(
+                f"backlog range {start} through {end} must end before the kept-month "
+                f"boundary {first_kept}"
+            )
+        return requested
+
+    expired_full_grain = expired(keep_from)
+    expired_public = expired(public_from)
+    expired_aggregate = expired(aggregate_from)
     state = context.state_dir
     listing = context.listing
     folds = retention_files.owned_tree(
@@ -67,11 +84,13 @@ def run(context: TaskContext) -> Pass:
     copies_root = public_telemetry.DEFAULT_PUBLIC_ROOT.relative_to(config.REPO_ROOT)
     public = retention_files.owned_tree(context, context.repo_root / copies_root)
 
+    held_item_health_months = set(
+        named_trees.held_months(listing, state, LedgerName.ITEM_HEALTH)
+    )
     due = [
         month
-        for month in named_trees.held_months(listing, state, LedgerName.ITEM_HEALTH)
-        if keep_from is not None
-        and month < keep_from
+        for month in expired_full_grain
+        if month in held_item_health_months
         and not listing.holds(ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, month))
     ]
     if due:
@@ -116,16 +135,16 @@ def run(context: TaskContext) -> Pass:
                     f"{ledger.relpath(LedgerName.ITEM_HEALTH_SUMMARY, month)} did not read "
                     "back as it was written"
                 )
-    copies = [
-        copy
-        for copy in (named_trees.month_files(listing, public, ".csv") if public is not None else [])
-        if public_from is not None and copy.stem < public_from
-    ]
-    old_folds = [
-        fold
-        for fold in (named_trees.month_files(listing, folds, ".csv") if folds is not None else [])
-        if aggregate_from is not None and fold.stem < aggregate_from
-    ]
+    copies = (
+        named_trees.month_files(listing, public, ".csv", expired_public)
+        if public is not None
+        else []
+    )
+    old_folds = (
+        named_trees.month_files(listing, folds, ".csv", expired_aggregate)
+        if folds is not None
+        else []
+    )
     aged = [
         *(retention_files.Aged(path=copy, day=f"{copy.stem}-01") for copy in copies),
         *(retention_files.Aged(path=fold, day=f"{fold.stem}-01") for fold in old_folds),

@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -70,7 +70,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.source_health_view import SourceHealthRow
-from idhazh.month_partition import month_files
+from idhazh.month_partition import month_files, months_between, oldest_month_kept
 from idhazh.telemetry.publish import (
     day_metrics,
     machine,
@@ -1342,7 +1342,10 @@ def publish(
     months = months_a_window_can_touch(widest)
     day_root = series.series_root(digest_root, run_days.DIRNAME)
     available = series.published_months(
-        digest_root, run_days.DIRNAME, run_days.SUFFIX
+        digest_root,
+        run_days.DIRNAME,
+        run_days.SUFFIX,
+        months_between(oldest_month_kept(today, months), today.isoformat()[:7]),
     )
     days: list[PublicRunDay] = []
     for month in available[-months:]:
@@ -1373,7 +1376,13 @@ def publish(
         record=record,
         machine_rows=machine_rows,
         planned_shards=_planned_shards(digest_root, newest_date),
-        months=fetchable_months(digest_root, telemetry_root),
+        months=fetchable_months(
+            digest_root,
+            telemetry_root,
+            months=months_between(
+                oldest_month_kept(today, months), today.isoformat()[:7]
+            ),
+        ),
         run=run,
         collect=collect,
         sources=sources,
@@ -1409,7 +1418,12 @@ FETCHED_SERIES: Final[tuple[tuple[str, str], ...]] = (
 )
 
 
-def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> list[str]:
+def fetchable_months(
+    digest_root: Path,
+    telemetry_root: Path | None = None,
+    *,
+    months: Iterable[str],
+) -> list[str]:
     """Every month a shard the console fetches exists for, oldest first.
 
     The union across all five series and not the run-day months alone. A
@@ -1433,11 +1447,11 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
     """
     found: set[str] = set()
     for dirname, suffix in FETCHED_SERIES:
-        found.update(series.published_months(digest_root, dirname, suffix))
+        found.update(series.published_months(digest_root, dirname, suffix, months))
     shards = telemetry_root or series.series_root(
         digest_root, public_telemetry.PUBLIC_TELEMETRY_DIRNAME
     )
-    found.update(path.stem for path in month_files(shards, ".csv"))
+    found.update(path.stem for path in month_files(shards, ".csv", months))
     return sorted(found)
 
 

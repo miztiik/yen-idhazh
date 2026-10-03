@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Collection, Iterator
+from collections.abc import Collection, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -122,7 +122,7 @@ def _refuse_a_dated(parts: tuple[str, ...], expected: str) -> NoReturn:
 
 
 def dated_days(
-    listing: FileListing, root: Path, *, before: date | None = None
+    listing: FileListing, root: Path, days: Iterable[date]
 ) -> Iterator[DatedDay]:
     """Every `YYYY/MM/DD/` day folder of a published tree, oldest first, read out of its name.
 
@@ -131,44 +131,15 @@ def dated_days(
     not a month or a day is refused; a year or month that cannot hold a day
     before `before` is never looked inside, so nothing in it is refused either.
     """
-    rows = _below(listing, root)
-    for year_name in sorted({parts[0] for parts in rows if len(parts) > 1}):
-        if not day_partition.is_segment(year_name, day_partition.YEAR_WIDTH):
-            continue
-        year = int(year_name)
-        try:
-            opens = date(year, 1, 1)
-        except ValueError:
-            continue
-        if before is not None and opens >= before:
-            continue
-        in_year = [parts[1:] for parts in rows if parts[0] == year_name]
-        for month_name in sorted({parts[0] for parts in in_year}):
-            in_month = [parts[1:] for parts in in_year if parts[0] == month_name]
-            if not day_partition.is_segment(month_name, day_partition.SEGMENT_WIDTH) or any(
-                not parts for parts in in_month
-            ):
-                _refuse_a_dated((year_name, month_name), "month")
-            month = int(month_name)
-            if not 1 <= month <= 12:
-                _refuse_a_dated((year_name, month_name), "month")
-            if before is not None and date(year, month, 1) >= before:
-                continue
-            for day_name in sorted({parts[0] for parts in in_month}):
-                in_day = [parts[1:] for parts in in_month if parts[0] == day_name]
-                where = (year_name, month_name, day_name)
-                if not day_partition.is_segment(day_name, day_partition.SEGMENT_WIDTH) or any(
-                    not parts for parts in in_day
-                ):
-                    _refuse_a_dated(where, "day")
-                try:
-                    published = date(year, month, int(day_name))
-                except ValueError:
-                    _refuse_a_dated(where, "day")
-                if before is None or published < before:
-                    folder = root.joinpath(*where)
-                    files = tuple(folder / parts[0] for parts in in_day if len(parts) == 1)
-                    yield DatedDay(published=published, folder=folder, files=files)
+    for published in sorted(set(days)):
+        folder = root / f"{published:%Y}" / f"{published:%m}" / f"{published:%d}"
+        files = tuple(
+            listing.repo_root / path
+            for path in listing.files_under(folder)
+            if Path(path).parent.as_posix() == folder.relative_to(listing.repo_root).as_posix()
+        )
+        if files:
+            yield DatedDay(published=published, folder=folder, files=files)
 
 
 def _visuals_in(day: DatedDay, without: Collection[Path] = ()) -> list[Path]:
@@ -180,16 +151,18 @@ def _visuals_in(day: DatedDay, without: Collection[Path] = ()) -> list[Path]:
     ]
 
 
-def visuals_older_than(listing: FileListing, root: Path, limit: date) -> list[Path]:
+def visuals_older_than(
+    listing: FileListing, root: Path, days: Iterable[date]
+) -> list[Path]:
     """Every picture in a day folder older than `limit`, in path order.
 
     The twin of `retention.visuals_older_than`.
     """
-    return [path for day in dated_days(listing, root, before=limit) for path in _visuals_in(day)]
+    return [path for day in dated_days(listing, root, days) for path in _visuals_in(day)]
 
 
 def oldest_visual(
-    listing: FileListing, root: Path, *, without: Collection[Path] = ()
+    listing: FileListing, root: Path, day: date, *, without: Collection[Path] = ()
 ) -> date | None:
     """The published day of the oldest picture the tree holds, or None.
 
@@ -197,10 +170,13 @@ def oldest_visual(
     it is looked at. `without` is what a pass has just deleted, which the
     listing, read before the pass, still names.
     """
-    for day in dated_days(listing, root):
-        if _visuals_in(day, without):
-            return day.published
-    return None
+    folder = root / f"{day:%Y}" / f"{day:%m}" / f"{day:%d}"
+    files = tuple(
+        listing.repo_root / path
+        for path in listing.files_under(folder)
+        if Path(path).parent.as_posix() == folder.relative_to(listing.repo_root).as_posix()
+    )
+    return day if _visuals_in(DatedDay(day, folder, files), without) else None
 
 
 def measure(listing: FileListing, root: Path) -> SiteSize:
@@ -218,19 +194,29 @@ def measure(listing: FileListing, root: Path) -> SiteSize:
     return SiteSize(sum(by_directory.values()), files, by_directory)
 
 
-def month_files(listing: FileListing, folder: Path, suffix: str) -> list[Path]:
+def measure_days(listing: FileListing, root: Path, days: Iterable[date]) -> int:
+    """The bytes in these named days, including every file inside each day."""
+    return sum(
+        listing.size_of(path)
+        for day in sorted(set(days))
+        for path in listing.files_under(root / f"{day:%Y}" / f"{day:%m}" / f"{day:%d}")
+    )
+
+
+def month_files(
+    listing: FileListing, folder: Path, suffix: str, months: Iterable[str]
+) -> list[Path]:
     """Every `<YYYY-MM><suffix>` directly inside one folder, oldest first, and nothing else.
 
     The twin of `month_partition.month_files`.
     """
     found = [
-        folder / parts[0]
-        for parts in _below(listing, folder)
-        if len(parts) == 1
-        and parts[0].endswith(suffix)
-        and month_partition.is_month_stem(parts[0].removesuffix(suffix))
+        folder / f"{month}{suffix}"
+        for month in sorted(set(months))
+        if month_partition.is_month_stem(month)
+        and listing.holds(folder / f"{month}{suffix}")
     ]
-    return sorted(found, key=lambda path: path.name)
+    return found
 
 
 def files_named(listing: FileListing, root: Path, suffix: str | None = None) -> list[Path]:

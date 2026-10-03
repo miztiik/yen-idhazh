@@ -53,7 +53,7 @@ def committed_folders(root: Path, tasks: dict[str, TaskPolicy]) -> frozenset[str
     named = {
         folder
         for policy in tasks.values()
-        for folder in (*(policy.owns or ()), *policy.reads)
+        for folder in (*policy.owns, *policy.reads)
         if (root / folder).is_dir()
     }
     return frozenset(children | named)
@@ -64,6 +64,7 @@ def context_for(
     root: Path,
     *,
     today: date = TODAY,
+    period_range: tuple[str, str] | None = None,
     **changed: Any,
 ) -> TaskContext:
     """The context the runner would hand this task over `root`, with these knobs changed."""
@@ -84,15 +85,30 @@ def context_for(
         shard=0,
         git_sha=GIT_SHA,
         owned_folders=folders.walk,
-        listing=FileListing.from_disk(root, runner.listed_folders(policy, folders)),
+        listing=FileListing.from_disk(
+            root,
+            runner.listed_folders(policy, folders),
+            paths=(
+                root / folder
+                for folder in runner.listed_folders(policy, folders)
+            ),
+        ),
+        period_range=period_range,
     )
 
 
-def run_task(name: str, root: Path, *, today: date = TODAY, **changed: Any) -> Pass:
+def run_task(
+    name: str,
+    root: Path,
+    *,
+    today: date = TODAY,
+    period_range: tuple[str, str] | None = None,
+    **changed: Any,
+) -> Pass:
     """Run one shipped task, found the way the runner finds it."""
     policy = declared()[name]
     held = registry.bind(name, policy.kind, named_task_modules())
-    return held.run(context_for(name, root, today=today, **changed))
+    return held.run(context_for(name, root, today=today, period_range=period_range, **changed))
 
 
 def oracle() -> dict[str, Any]:

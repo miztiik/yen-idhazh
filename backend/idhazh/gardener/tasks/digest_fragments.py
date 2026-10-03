@@ -25,7 +25,7 @@ KIND = TaskKind.RETENTION
 
 def run(context: TaskContext) -> Pass:
     """Take every block of every day before the first day the window keeps, oldest day first."""
-    from datetime import timedelta
+    from datetime import date, timedelta
 
     from idhazh import day_partition, ledger
     from idhazh.contracts.ledger_name import LedgerName
@@ -38,11 +38,32 @@ def run(context: TaskContext) -> Pass:
     )
     which = LedgerName.DIGEST_FRAGMENTS
     tree = retention_files.owned_tree(context, ledger.tree_root(context.state_dir, which))
+    candidate_days = (
+        day_partition.days_before(first_kept, context.policy.lookback_periods + 1)
+        if context.period_range is None and first_kept is not None
+        else []
+    )
+    if context.period_range is not None:
+        start, end = context.period_range
+        first, last = date.fromisoformat(start), date.fromisoformat(end)
+        if first > last:
+            raise ValueError("digest-fragments backlog range starts after it ends")
+        if first_kept is None or last >= first_kept:
+            raise ValueError(
+                "digest-fragments backlog range must end before the kept-day boundary"
+            )
+        candidate_days = [
+            first + timedelta(days=offset) for offset in range((last - first).days + 1)
+        ]
     aged = [
         retention_files.Aged(path=path, day=day.published.isoformat())
         for day in (
-            named_trees.dated_days(context.listing, tree, before=first_kept)
-            if tree is not None and first_kept is not None
+            named_trees.dated_days(
+                context.listing,
+                tree,
+                candidate_days,
+            )
+            if tree is not None
             else ()
         )
         for path in day.files
