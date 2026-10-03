@@ -20,6 +20,7 @@ from idhazh.contracts.knobs.gardener import CollectionTaskPolicy
 from idhazh.gardener import github_collections, registry
 from idhazh.gardener.tasks import collection
 
+from .._garden import named_task_modules
 from ..test_github_collections import RecordedApi
 from ._task import context_for, declared
 
@@ -34,7 +35,7 @@ PAGES = FIXTURES_DIR / "github-collections"
 def test_both_collections_ship_as_tasks_the_one_module_serves() -> None:
     """Each collection is a declaration named for it, and neither has a module of its own."""
     tasks = declared()
-    shipped = registry.discover()
+    shipped = named_task_modules()
     for name in ("workflow-artifacts", "workflow-runs"):
         policy = tasks[name]
         assert isinstance(policy, CollectionTaskPolicy)

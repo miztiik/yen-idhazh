@@ -356,7 +356,7 @@ def opened(tmp_path: Path) -> Iterator[list[str]]:
     yield from _handles(tmp_path)
 
 
-def _publish_all(state: Path, digest: Path, *, months: set[str] | None) -> None:
+def _publish_all(state: Path, digest: Path, *, months: set[str]) -> None:
     machine.publish(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
@@ -393,7 +393,7 @@ def test_the_second_run_opens_only_its_named_month(
     because the run knows which month it just wrote.
     """
     state, digest = three_month_tree
-    _publish_all(state, digest, months=None)
+    _publish_all(state, digest, months=set(THREE_MONTHS))
     _OPENED.clear()
 
     _publish_all(state, digest, months={NEWEST})
@@ -413,7 +413,7 @@ def test_the_first_run_reads_every_month_and_the_second_writes_nothing(
         digest_root=digest,
         keep_months=len(THREE_MONTHS),
         today=TODAY,
-        months=None,
+        months=set(THREE_MONTHS),
     )
     assert len(first) == len(THREE_MONTHS)
 
@@ -422,7 +422,7 @@ def test_the_first_run_reads_every_month_and_the_second_writes_nothing(
         digest_root=digest,
         keep_months=len(THREE_MONTHS),
         today=TODAY,
-        months=None,
+        months=set(THREE_MONTHS),
     )
 
     assert again == []
@@ -442,7 +442,7 @@ def test_a_missing_target_is_written_even_when_its_month_was_not_named(
         digest_root=digest,
         keep_months=len(THREE_MONTHS),
         today=TODAY,
-        months=None,
+        months=set(THREE_MONTHS),
     )
     first_month = THREE_MONTHS[0]
     machine.shard_path(digest, first_month).unlink()
@@ -475,7 +475,7 @@ def test_every_series_is_pruned_to_its_own_knob(
     """A producer that wrote without pruning would be the growing cost Guardrail #12
     refuses: a directory that gains a file a month and loses none."""
     state, digest = tree
-    _publish_all(state, digest, months=None)
+    _publish_all(state, digest, months=set(MONTHS))
 
     kept = series.published_months(digest, dirname, suffix)
 
@@ -498,7 +498,7 @@ def test_a_published_shard_reads_back_as_it_was_written(tree: tuple[Path, Path])
     source month is folded away, so reading it back is what says it still
     loads rather than merely still parses."""
     state, digest = tree
-    _publish_all(state, digest, months=None)
+    _publish_all(state, digest, months=set(MONTHS))
 
     assert len(machine.read_shard(machine.shard_path(digest, NEWEST))) == 2
     assert len(run_days.read_shard(run_days.shard_path(digest, NEWEST))) == 1
@@ -515,7 +515,7 @@ def test_the_run_day_row_counts_the_page_and_not_the_planner(
     to the page. A chart whose render failed is a visual and is not a published
     chart."""
     state, digest = tree
-    _publish_all(state, digest, months=None)
+    _publish_all(state, digest, months=set(MONTHS))
 
     row = run_days.read_shard(run_days.shard_path(digest, NEWEST))[0]
 
@@ -536,7 +536,7 @@ def test_a_day_with_no_manifest_costs_the_month_that_day_and_no_more(
         _day(f"{NEWEST}-02", items=1, charts=0).to_json(), encoding="utf-8"
     )
 
-    run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months=None)
+    run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months={NEWEST})
 
     rows = run_days.read_shard(run_days.shard_path(digest, NEWEST))
     assert [row.date for row in rows] == [NEWEST_DAY]
@@ -545,8 +545,8 @@ def test_a_day_with_no_manifest_costs_the_month_that_day_and_no_more(
 # --- the band ----------------------------------------------------------------
 
 
-def _band(state: Path, digest: Path) -> Any:
-    _publish_all(state, digest, months=None)
+def _band(state: Path, digest: Path, *, months: set[str] | None = None) -> Any:
+    _publish_all(state, digest, months=set(MONTHS) if months is None else months)
     console_band.publish(
         state_root=state,
         digest_root=digest,
@@ -910,7 +910,7 @@ def test_a_tree_with_no_run_says_so_rather_than_printing_a_zero(tmp_path: Path) 
     digest = tmp_path / "frontend" / "public" / "digest"
     digest.mkdir(parents=True)
 
-    band = _band(state, digest)
+    band = _band(state, digest, months=set())
 
     assert band.verdict.date is None
     assert band.verdict.health is Health.AMBER
@@ -1019,7 +1019,7 @@ def test_a_shard_that_filed_no_host_row_is_counted_against_the_plan(
 
 def test_the_band_is_written_only_when_its_bytes_move(tree: tuple[Path, Path]) -> None:
     state, digest = tree
-    _publish_all(state, digest, months=None)
+    _publish_all(state, digest, months=set(MONTHS))
     stamp = f"{NEWEST_DAY}T19:00:00Z"
     first = console_band.publish(
         state_root=state,
@@ -1098,7 +1098,7 @@ def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
     """A month of days is fetched as one file, and every row in it validates
     against its own schema (`CLAUDE.md` section 11)."""
     state, digest = tree
-    _publish_all(state, digest, months=None)
+    _publish_all(state, digest, months=set(MONTHS))
 
     payload = json.loads(run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8"))
 
@@ -1163,7 +1163,7 @@ def _band_after_folding(state: Path, digest: Path) -> Any:
         after_days=7,
         dry_run=False,
     )
-    _publish_all(state, digest, months=None)
+    _publish_all(state, digest, months=set(MONTHS))
     console_band.publish(
         state_root=state,
         digest_root=digest,

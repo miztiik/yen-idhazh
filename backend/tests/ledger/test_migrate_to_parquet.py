@@ -28,6 +28,7 @@ from typing import Any, Final, cast
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, SEED_COMMIT
 from gardener._garden import a_config
+from gardener.tasks._task import declared as task_declarations
 
 from idhazh import config, day_shards, ledger
 from idhazh.contracts.base import ServerJob
@@ -596,7 +597,7 @@ def test_every_moved_ledger_keeps_its_old_window() -> None:
     Read off the committed declarations, so a change that shortens one fails
     here rather than at the first live pass that deletes those days.
     """
-    tasks = config.load_gardener().tasks
+    tasks = task_declarations()
     moved = migration.door_ledgers()
     short: list[str] = []
     for name in moved:
@@ -1062,7 +1063,7 @@ def _packed(state: Path, which: LedgerName) -> _Packed:
 
 def _live(root: Path, which: LedgerName, today: date) -> TaskContext:
     """What the gardener hands this ledger's declared compaction over `root`, turned live."""
-    declared = config.load_gardener(CONFIG_DIR).tasks[f"compact-{which.value}"]
+    declared = task_declarations()[f"compact-{which.value}"]
     assert isinstance(declared, CompactionPolicy)
     return TaskContext(
         state_dir=root / ledger.STATE_DIRNAME,
