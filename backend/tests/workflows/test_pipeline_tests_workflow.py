@@ -7,7 +7,6 @@ import io
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -45,6 +44,7 @@ from ._harness import (
     PINNED_LLAMA_BUILD,
     WORKFLOWS_DIR,
     _action_call,
+    _copy_config,
     _declared_dispatch_inputs,
     _isolated_env,
     _job,
@@ -167,7 +167,7 @@ def _switched(settings: PipelineTestsConfig, *, on: Sequence[str]) -> PipelineTe
 
 def _config_tree(root: Path, settings: PipelineTestsConfig) -> Path:
     """A copy of `config/` holding this pipeline-tests config, under `root/config`."""
-    shutil.copytree(CONFIG_DIR, root / "config")
+    _copy_config(root / "config")
     (root / "config" / "pipeline-tests.json").write_text(settings.to_json(), encoding="utf-8")
     return root / "config"
 
@@ -1307,13 +1307,13 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
 def _scratch(tmp_path: Path, *, models_file: str | None) -> Path:
     """The scratch config root the composite action builds, built the same way.
 
-    The committed tree is copied and the shipped program moves the pointer, so a
+    The named config inputs are copied and the shipped program moves the pointer, so a
     test that passes here is a test of the bytes the action runs (Guardrail #7).
     `None` means an empty dispatch, which is the committed pointer.
     """
     scratch = tmp_path / "backend" / "var" / "candidate-config"
     scratch.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(CONFIG_DIR, scratch)
+    _copy_config(scratch, models_file=models_file)
     named = models_file or json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
     candidate_pointer.point_at(named, scratch=scratch, trial_state=TRIAL_STATE)
     return scratch
@@ -1351,11 +1351,7 @@ def test_a_named_candidate_moves_one_line_and_leaves_the_committed_config_alone(
     one line and nothing else.
     """
     committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    named = next(
-        path.relative_to(CONFIG_DIR).as_posix()
-        for path in sorted((CONFIG_DIR / "models").glob("*.json"))
-        if path.relative_to(CONFIG_DIR).as_posix() != committed["models_file"]
-    )
+    named = "models/fixture-candidate.json"
 
     scratch = _scratch(tmp_path, models_file=named)
     written = json.loads(read_text(scratch / "idhazh.json"))
