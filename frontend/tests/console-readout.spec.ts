@@ -270,149 +270,142 @@ function dayOf(owner: Locator): Locator {
 
 test.describe('the readout is the default', () => {
 	for (const route of ALL_ROUTES) {
-		test(`THE ORACLE: every chart on ${route} declares its columns, its records or says why not`, async ({
+		// One load per route: the five checks below read the same settled page,
+		// so opening it once for each was five loads where one answers them all.
+		test(`THE ORACLE: every chart on ${route} declares its readout, and every strip reads right`, async ({
 			page
 		}) => {
 			await open(page, route);
-			const charts = await chartsOn(page);
+			await test.step('every chart declares its columns, its records or says why not', async () => {
+				const charts = await chartsOn(page);
 
-			expect(charts.length, 'no chart found - the scan is broken').toBeGreaterThan(0);
+				expect(charts.length, 'no chart found - the scan is broken').toBeGreaterThan(0);
 
-			expect(
-				charts.filter((chart) => chart.partition === 'undeclared').map((chart) => chart.where),
-				'these charts declare neither a column, a record nor a reason for having none'
-			).toEqual([]);
+				expect(
+					charts.filter((chart) => chart.partition === 'undeclared').map((chart) => chart.where),
+					'these charts declare neither a column, a record nor a reason for having none'
+				).toEqual([]);
 
-			// A chart with a column or a record has the strip, and it has it in its
-			// own markup rather than somewhere else on the page.
-			expect(
-				charts
-					.filter((chart) => chart.partition === 'columns' && chart.strips !== 1)
-					.map((chart) => `${chart.where} holds ${chart.strips} strips`),
-				'a chart with a shared column resolves exactly one readout strip'
-			).toEqual([]);
-			expect(
-				charts
-					.filter((chart) => chart.partition === 'records' && chart.strips < 1)
-					.map((chart) => chart.where),
-				'a chart that reads records prints no strip'
-			).toEqual([]);
+				// A chart with a column or a record has the strip, and it has it in its
+				// own markup rather than somewhere else on the page.
+				expect(
+					charts
+						.filter((chart) => chart.partition === 'columns' && chart.strips !== 1)
+						.map((chart) => `${chart.where} holds ${chart.strips} strips`),
+					'a chart with a shared column resolves exactly one readout strip'
+				).toEqual([]);
+				expect(
+					charts
+						.filter((chart) => chart.partition === 'records' && chart.strips < 1)
+						.map((chart) => chart.where),
+					'a chart that reads records prints no strip'
+				).toEqual([]);
 
-			// The strip is the legend. Nothing else in a column chart may draw a
-			// swatch. A record chart keeps its own key: one record shows only its
-			// own colours, so the key is the one place every colour is named.
-			expect(
-				charts
-					.filter((chart) => chart.partition === 'columns' && chart.legend.length > 0)
-					.map((chart) => `${chart.where}: ${chart.legend.join(' ')}`),
-				'these charts draw a key as well as a strip'
-			).toEqual([]);
-		});
+				// The strip is the legend. Nothing else in a column chart may draw a
+				// swatch. A record chart keeps its own key: one record shows only its
+				// own colours, so the key is the one place every colour is named.
+				expect(
+					charts
+						.filter((chart) => chart.partition === 'columns' && chart.legend.length > 0)
+						.map((chart) => `${chart.where}: ${chart.legend.join(' ')}`),
+					'these charts draw a key as well as a strip'
+				).toEqual([]);
+			});
+			await test.step('every chart that has no readout says why, and who agreed', async () => {
+				const declared = await declarationsOn(page);
 
-		test(`every chart on ${route} that has no readout says why, and who agreed`, async ({
-			page
-		}) => {
-			await open(page, route);
-			const declared = await declarationsOn(page);
-
-			// A reason, not a token. "none" and "n/a" pass an attribute check and
-			// tell a reader nothing about what was decided - and a chart somebody
-			// decided needs no hover looks the same as one where it was forgotten,
-			// so the exception names who agreed it.
-			expect(
-				declared
-					.filter((one) => one.reason.trim().split(/\s+/).length < 5)
-					.map((one) => `${one.where}: "${one.reason}"`),
-				'these reasons are too short to be a reason'
-			).toEqual([]);
-			expect(
-				declared
-					.filter((one) => !one.reason.trim().endsWith('; agreed with Susan'))
-					.map((one) => `${one.where}: "${one.reason}"`),
-				'these exceptions do not say who agreed them'
-			).toEqual([]);
-		});
-
-		test(`no mark inside a chart on ${route} carries a native tooltip`, async ({ page }) => {
-			// A `title` is the browser's own tooltip: no key reaches it, no thumb
-			// reaches it and no theme styles it. Every one a chart carried moved
-			// into that chart's strip. An SVG `<title>` element is the same tooltip
-			// under another name, so it is counted too. A title outside a chart - a
-			// link, a badge - is not a mark, and is not this rule's business.
-			await open(page, route);
-			const titled = await page.evaluate(
-				(OWNER) =>
-					[...document.querySelectorAll(OWNER)].flatMap((owner) => [
-						...[owner, ...owner.querySelectorAll('[title]')]
-							.filter((node) => node.hasAttribute('title'))
-							.map((node) => `${node.tagName.toLowerCase()}: ${node.getAttribute('title')}`),
-						...[...owner.querySelectorAll('title')].map(
-							(node) => `svg <title>: ${(node.textContent ?? '').trim()}`
-						)
-					]),
-				OWNER
-			);
-			expect(titled, 'these chart marks still carry a native tooltip').toEqual([]);
-		});
-
-		test(`every strip on ${route} heads a day the way a reader spells it`, async ({ page }) => {
-			// A strip heads its column with the reader's spelling of a day, `27 Sep
-			// 2026`, never the ledger's, `2026-09-27`. A run id opens with a date and
-			// is not one, so `2026-09-27-1` passes.
-			await open(page, route);
-			const headings = await page
-				.locator('[data-surface="operator"] [data-readout] [data-readout-day]')
-				.evaluateAll((nodes) => nodes.map((node) => (node.textContent ?? '').trim()));
-			expect(
-				headings.filter((heading) => /^\d{4}-\d{2}-\d{2}(?![-\d])/.test(heading)),
-				'these strips head a day in the ledger spelling'
-			).toEqual([]);
-		});
-
-		test(`every mark a strip reads on ${route} has every word of its name in that strip`, async ({
-			page
-		}) => {
-			// The witness that nothing a tooltip said was lost. The sentence a mark's
-			// tooltip carried stays on the mark as its accessible name, so a screen
-			// reader keeps it; pointing at the mark must then put every figure and
-			// every word of four letters or more of that sentence in the strip.
-			await open(page, route);
-			const owners = page.locator(
-				'[data-surface="operator"] [data-readout-columns], [data-surface="operator"] [data-readout-records]'
-			);
-			const lost: string[] = [];
-			for (let at = 0; at < (await owners.count()); at += 1) {
-				const owner = owners.nth(at);
-				const marks = owner.locator('[role="img"][aria-label], [data-readout-at][aria-label]');
-				const count = Math.min(await marks.count(), 40);
-				for (let index = 0; index < count; index += 1) {
-					const mark = marks.nth(index);
-					// The chart's own frame, a whole drawing, a mark that holds other
-					// marks, and a mark of a chart nested inside this one are not one of
-					// this chart's marks: pointing at them reads whatever sits there.
-					const leaf = await mark.evaluate(
-						(node, OWNER) =>
-							node.tagName.toLowerCase() !== 'svg' &&
-							!node.hasAttribute('tabindex') &&
-							node.querySelector('[aria-label], [role="img"]') === null &&
-							node.parentElement?.closest(OWNER) === node.closest(OWNER) &&
-							node.closest(OWNER)?.hasAttribute('data-readout-none') === false &&
-							node.getBoundingClientRect().width > 0,
-						OWNER
-					);
-					if (!leaf) continue;
-					await mark.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
-					const box = await mark.boundingBox();
-					if (box === null) continue;
-					await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-					await page.waitForTimeout(60);
-					const name = (await mark.getAttribute('aria-label')) ?? '';
-					const strip = (await owner.locator('[data-readout]').first().innerText()).toLowerCase();
-					const missing = significant(name).filter((word) => !strip.includes(word));
-					if (missing.length > 0) lost.push(`${name} -> missing ${missing.join(', ')}`);
+				// A reason, not a token. "none" and "n/a" pass an attribute check and
+				// tell a reader nothing about what was decided - and a chart somebody
+				// decided needs no hover looks the same as one where it was forgotten,
+				// so the exception names who agreed it.
+				expect(
+					declared
+						.filter((one) => one.reason.trim().split(/\s+/).length < 5)
+						.map((one) => `${one.where}: "${one.reason}"`),
+					'these reasons are too short to be a reason'
+				).toEqual([]);
+				expect(
+					declared
+						.filter((one) => !one.reason.trim().endsWith('; agreed with Susan'))
+						.map((one) => `${one.where}: "${one.reason}"`),
+					'these exceptions do not say who agreed them'
+				).toEqual([]);
+			});
+			await test.step('no mark inside a chart carries a native tooltip', async () => {
+				// A `title` is the browser's own tooltip: no key reaches it, no thumb
+				// reaches it and no theme styles it. Every one a chart carried moved
+				// into that chart's strip. An SVG `<title>` element is the same tooltip
+				// under another name, so it is counted too. A title outside a chart - a
+				// link, a badge - is not a mark, and is not this rule's business.
+				const titled = await page.evaluate(
+					(OWNER) =>
+						[...document.querySelectorAll(OWNER)].flatMap((owner) => [
+							...[owner, ...owner.querySelectorAll('[title]')]
+								.filter((node) => node.hasAttribute('title'))
+								.map((node) => `${node.tagName.toLowerCase()}: ${node.getAttribute('title')}`),
+							...[...owner.querySelectorAll('title')].map(
+								(node) => `svg <title>: ${(node.textContent ?? '').trim()}`
+							)
+						]),
+					OWNER
+				);
+				expect(titled, 'these chart marks still carry a native tooltip').toEqual([]);
+			});
+			await test.step('every strip heads a day the way a reader spells it', async () => {
+				// A strip heads its column with the reader's spelling of a day, `27 Sep
+				// 2026`, never the ledger's, `2026-09-27`. A run id opens with a date and
+				// is not one, so `2026-09-27-1` passes.
+				const headings = await page
+					.locator('[data-surface="operator"] [data-readout] [data-readout-day]')
+					.evaluateAll((nodes) => nodes.map((node) => (node.textContent ?? '').trim()));
+				expect(
+					headings.filter((heading) => /^\d{4}-\d{2}-\d{2}(?![-\d])/.test(heading)),
+					'these strips head a day in the ledger spelling'
+				).toEqual([]);
+			});
+			// Last, because pointing at a mark is the one step that changes the page.
+			await test.step('every mark a strip reads has every word of its name in that strip', async () => {
+				// The witness that nothing a tooltip said was lost. The sentence a mark's
+				// tooltip carried stays on the mark as its accessible name, so a screen
+				// reader keeps it; pointing at the mark must then put every figure and
+				// every word of four letters or more of that sentence in the strip.
+				const owners = page.locator(
+					'[data-surface="operator"] [data-readout-columns], [data-surface="operator"] [data-readout-records]'
+				);
+				const lost: string[] = [];
+				for (let at = 0; at < (await owners.count()); at += 1) {
+					const owner = owners.nth(at);
+					const marks = owner.locator('[role="img"][aria-label], [data-readout-at][aria-label]');
+					const count = Math.min(await marks.count(), 40);
+					for (let index = 0; index < count; index += 1) {
+						const mark = marks.nth(index);
+						// The chart's own frame, a whole drawing, a mark that holds other
+						// marks, and a mark of a chart nested inside this one are not one of
+						// this chart's marks: pointing at them reads whatever sits there.
+						const leaf = await mark.evaluate(
+							(node, OWNER) =>
+								node.tagName.toLowerCase() !== 'svg' &&
+								!node.hasAttribute('tabindex') &&
+								node.querySelector('[aria-label], [role="img"]') === null &&
+								node.parentElement?.closest(OWNER) === node.closest(OWNER) &&
+								node.closest(OWNER)?.hasAttribute('data-readout-none') === false &&
+								node.getBoundingClientRect().width > 0,
+							OWNER
+						);
+						if (!leaf) continue;
+						await mark.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
+						const box = await mark.boundingBox();
+						if (box === null) continue;
+						await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+						await page.waitForTimeout(60);
+						const name = (await mark.getAttribute('aria-label')) ?? '';
+						const strip = (await owner.locator('[data-readout]').first().innerText()).toLowerCase();
+						const missing = significant(name).filter((word) => !strip.includes(word));
+						if (missing.length > 0) lost.push(`${name} -> missing ${missing.join(', ')}`);
+					}
 				}
-			}
-			expect(lost, 'these marks name facts their strip does not print').toEqual([]);
+				expect(lost, 'these marks name facts their strip does not print').toEqual([]);
+			});
 		});
 	}
 

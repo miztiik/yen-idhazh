@@ -1,53 +1,20 @@
 /**
- * Row #3's oracle: no reader-facing page scrolls sideways, at any width, in
- * either theme.
+ * The topic row folds instead of scrolling sideways.
  *
- * `document.documentElement.scrollWidth <= document.documentElement.clientWidth`
- * is the whole check, and it is the only thing that gives the owner's
- * 2026-08-31 ruling a memory. A horizontal scrollbar on a reading surface is a
- * control that hides its own contents: it says nothing about how much is behind
- * it, it is invisible until a pointer arrives, and on a phone it competes with
- * the gesture that moves between pages.
+ * A horizontal scrollbar on a reading surface is a control that hides its own
+ * contents: it says nothing about how much is behind it, it is invisible until
+ * a pointer arrives, and on a phone it competes with the gesture that moves
+ * between pages (owner ruling 2026-08-31). The row of topic pills is the one
+ * part of a reader page whose width grows with the day, so its fold is decided
+ * by `splitPills` and driven here as a pure function, with no build and no page.
  *
- * Measured on this suite's own build before the fix: `/archive/` reported 368px
- * of document inside a 360px viewport, in both themes. Every other route was
- * already clean, which is why this file is a gate rather than a fix list - the
- * next 8px arrives in a component nobody is looking at.
- *
- * Two things this file is deliberately not:
- *
- * - **Not the console.** A sibling plan holds those routes and five live
- *   defects there are recorded in that plan. `console-frame.spec.ts` already
- *   asserts the same property per element there.
- * - **Not `/404`.** That document is the adapter's fallback shell rather than a
- *   rendered route, and `vite preview` serves it as a plain file - so
- *   SvelteKit's data fetch for it 404s and hydration throws, which is a preview
- *   artefact and not a layout fact. It is measured by hand in the section 12
- *   smoke instead.
+ * Whether any reader route scrolls sideways, at every width, is measured on the
+ * built page by `reading-page.spec.ts`, which names the elements that overflow.
  */
 
 import { expect, test } from '@playwright/test';
 import { splitPills } from '../src/lib/day-shape';
 import type { DigestVerticalRef } from '../src/lib/payload/types';
-import { newestDate, topicOf } from './support/published';
-
-/** The newest published day, and one of its topics. Read off the digest tree
- * rather than out of `build/`: since 2026-09-09 a build writes no dated
- * directory, so a listing there finds nothing at all. Never a date written
- * here - a hardcoded one passes on an empty page the moment the fixture moves. */
-const DAY = newestDate();
-const TOPIC = topicOf(DAY);
-
-/** Every reader-facing route kind the build emits. */
-const ROUTES = ['/', `/${DAY}/`, `/${DAY}/${TOPIC}/`, '/archive/', '/evals/'];
-
-/** A phone, the gap between two breakpoints, and a wide desktop.
- * `frame.breakpoints_px` is [640, 1024, 1400]; 801 is where a layout that was
- * only ever tested at a breakpoint breaks. */
-const WIDTHS = [360, 801, 1536];
-
-/** Dark is the base and light is the stored override, so both are driven. */
-const THEMES = ['dark', 'light'] as const;
 
 function ref(id: string, count: number): DigestVerticalRef {
 	return { id, display_name: id.toUpperCase(), count };
@@ -141,57 +108,4 @@ test.describe('the topic row folds instead of scrolling', () => {
 		]);
 		expect(split.folded.map((v) => v.id)).toEqual(['tech', 'health', 'science', 'sport']);
 	});
-});
-
-test.describe('no reader-facing page scrolls sideways', () => {
-	for (const theme of THEMES) {
-		test(`${theme}: every route, at every width`, async ({ page }) => {
-			await page.addInitScript(`localStorage.setItem('idhazh:theme', '${theme}')`);
-
-			for (const route of ROUTES) {
-				for (const width of WIDTHS) {
-					await page.setViewportSize({ width, height: 900 });
-					await page.goto(route);
-					// A locator assertion rather than a polled `page.evaluate`: the
-					// second one races the client router's own first navigation and
-					// fails with `Execution context was destroyed` on a page that is
-					// perfectly fine.
-					await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-
-					const measured = await page.evaluate(() => {
-						const root = document.documentElement;
-						const limit = root.clientWidth;
-						const over = Array.from(document.querySelectorAll('*'))
-							.map((el) => ({ el, box: el.getBoundingClientRect() }))
-							.filter(({ box }) => box.right + window.scrollX > limit + 0.5)
-							.map(
-								({ el, box }) =>
-									`${el.tagName.toLowerCase()}.${String(el.getAttribute('class') ?? '')
-										.split(' ')
-										.slice(0, 2)
-										.join('.')} ends at ${Math.round(box.right + window.scrollX)}`
-							);
-						return {
-							scrollWidth: root.scrollWidth,
-							clientWidth: limit,
-							// A blank page passes the oracle for free, so the oracle is
-							// only worth running on a page that rendered.
-							rendered: document.querySelectorAll('.frame *').length,
-							over: over.slice(0, 4)
-						};
-					});
-
-					expect(
-						measured.rendered,
-						`${theme} ${route} at ${width}px rendered nothing, so the check below proves nothing`
-					).toBeGreaterThan(10);
-					expect(
-						measured.scrollWidth,
-						`${theme} ${route} at ${width}px scrolls sideways by ` +
-							`${measured.scrollWidth - measured.clientWidth}px: ${measured.over.join('; ')}`
-					).toBeLessThanOrEqual(measured.clientWidth);
-				}
-			}
-		});
-	}
 });

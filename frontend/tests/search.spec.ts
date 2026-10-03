@@ -11,10 +11,10 @@ import { longDate } from '../src/lib/format';
  * id: ids shift the moment a canary is added, and a test that has to be
  * renumbered gets renumbered wrong.
  *
- * The bar is deliberately loose. A missed result costs a reader a convenience.
- * The tight bars belong on the canary suite, where a failure costs trust, and
- * the real instrument is `backend/idhazh/evals/retrieval.py`, which runs the
- * same ranking over sixty labelled queries with no browser and no download.
+ * One labelled query is checked here, to prove the browser ranks rather than
+ * merely returns. Recall over the labelled set is an evaluation, and its
+ * instrument is `backend/idhazh/evals/retrieval.py`, which runs the same ranking
+ * over sixty labelled queries with no browser and no download.
  *
  * What this file adds now that the box is a field rather than an offer: the one
  * gesture, the stop, the retry, and each model-state sentence a reader can
@@ -31,7 +31,6 @@ const WEIGHTS = /\/assist\/models\/.*\.onnx$/;
 const TOKENIZER = /\/assist\/models\/.*\/tokenizer\.json$/;
 
 interface Gold {
-	pass_bar: { minimum: number };
 	queries: { query: string; expect_canary: string }[];
 }
 
@@ -110,37 +109,21 @@ test('one click downloads the encoder and answers the question already typed', a
 	await expect(page.locator('[data-search-state]')).toContainText('The first search downloads');
 	await expect(page.locator('h2').first()).toHaveText('Stories');
 
-	await ask(page, gold.queries[0]!.query);
+	const { query, expect_canary } = gold.queries[0]!;
+	await ask(page, query);
 	await answered(page);
 
 	await expect(page.locator('h2').first()).toHaveText('Search results');
-	expect((await titles(page)).length, 'the one click returned nothing').toBeGreaterThan(0);
+	// One labelled query proves the browser ranks, not merely returns. Recall
+	// over the whole labelled set is an evaluation, and `evals/retrieval.py`
+	// measures it with no browser and no download.
+	const top = (await titles(page)).slice(0, 3).join(' | ');
+	// The title is truncated in the fixture only by our own layout, so match on
+	// its opening words rather than the whole string.
+	const wanted = titleOf(expect_canary).replace(/<[^>]*>/g, '').split(' ').slice(0, 4).join(' ');
+	expect(top, `${query} -> wanted "${wanted}" in the top three`).toContain(wanted);
 	// Paid for, and the sentence says so rather than asking again.
 	await expect(page.locator('[data-search-state]')).toContainText('The download is done');
-});
-
-test('the retrieval bar, on hand-labelled queries', async ({ page }) => {
-	await page.goto('/archive/');
-
-	const misses: string[] = [];
-	for (const { query, expect_canary } of gold.queries) {
-		await ask(page, query);
-		await answered(page);
-
-		const top = (await titles(page)).slice(0, 3).join(' | ');
-		// The title is truncated in the fixture only by our own layout, so match
-		// on its opening words rather than the whole string.
-		const wanted = titleOf(expect_canary)
-			.replace(/<[^>]*>/g, '')
-			.split(' ')
-			.slice(0, 4)
-			.join(' ');
-		if (!top.includes(wanted)) misses.push(`${query} -> wanted "${wanted}", got: ${top || '(none)'}`);
-	}
-
-	const recall = (gold.queries.length - misses.length) / gold.queries.length;
-	console.log(`top-3 recall: ${recall.toFixed(2)} over ${gold.queries.length} labelled queries`);
-	expect(recall, `misses:\n${misses.join('\n')}`).toBeGreaterThanOrEqual(gold.pass_bar.minimum);
 });
 
 test('the page says how far back it searched, before anything is downloaded', async ({ page }) => {

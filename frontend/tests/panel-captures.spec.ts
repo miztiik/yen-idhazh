@@ -7,14 +7,16 @@ import { KILL_FILE } from '../src/lib/offline';
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT, type ConsoleWidth } from './support/console-widths';
 import { fillShare, readPanel } from './support/panel-gates';
+import { viewsOf } from './support/views';
 
 /**
  * THE CAPTURE: every console panel, pictured the way a reviewer needs to see
  * it, and written where a run can hand it over.
  *
- * Every panel id in `console.panel_groups` is pictured at the three console
- * widths in both themes, and once more at the narrowest width in dark with
- * every data request its route made answered 503 - the one way to see a
+ * Every panel id in `console.panel_groups` is pictured at every console width
+ * in light and at the narrowest in dark (`viewsOf`), and that dark picture is
+ * taken once more with every data request its route made answered 503 - the
+ * one way to see a
  * panel's broken-fetch picture without a second build. The list is the config,
  * never an array written here, so a panel added to the console without a
  * picture fails this file rather than shipping unseen. The one exception is a
@@ -289,69 +291,67 @@ test('the broken load refuses every data request the loaded page made, and the p
 const PICTURED = Object.keys(CONSOLE_ROUTE_PATHS).filter((route) => !DRAWS_NO_PANEL_ID.has(route));
 
 for (const route of PICTURED) {
-	for (const width of CONSOLE_WIDTHS) {
-		for (const theme of THEMES) {
-			const broken = width === BROKEN_WIDTH && theme === BROKEN_THEME;
-			test(`every ${route} panel, pictured at ${width} in ${theme}`, async ({ page }) => {
-				const started = Date.now();
-				const listed = consolePanels().routes.find((one) => one.key === route);
-				if (listed === undefined) throw new Error(`console.panel_groups no longer names the ${route} route`);
-				mkdirSync(OUT, { recursive: true });
-				const notes = [`route=${route} address=${listed.address} width=${width} theme=${theme}`];
+	for (const { width, theme } of viewsOf(CONSOLE_WIDTHS, THEMES)) {
+		const broken = width === BROKEN_WIDTH && theme === BROKEN_THEME;
+		test(`every ${route} panel, pictured at ${width} in ${theme}`, async ({ page }) => {
+			const started = Date.now();
+			const listed = consolePanels().routes.find((one) => one.key === route);
+			if (listed === undefined) throw new Error(`console.panel_groups no longer names the ${route} route`);
+			mkdirSync(OUT, { recursive: true });
+			const notes = [`route=${route} address=${listed.address} width=${width} theme=${theme}`];
 
-				const asked = recorded(page);
+			const asked = recorded(page);
+			await opened(page, listed.address, width, theme);
+			await walked(page, listed.panels);
+			await expect
+				.poll(() => waiting(page, listed.panels), { timeout: 20_000, message: 'these panels never finished drawing' })
+				.toEqual([]);
+			const loaded: Shot[] = [];
+			for (const id of listed.panels) loaded.push(await shot(page, id, `${id}--${width}--${theme}--loaded.png`));
+			notes.push(...loaded.map(line));
+
+			// A route that reads no rows after it arrives has no fetch to fail, and
+			// its broken picture would be the healthy page under another name. So
+			// the broken pictures are taken only where the page asked for data,
+			// and the notes say which case this was.
+			if (broken && asked.size === 0) {
+				notes.push('', `the ${route} route asked for no data once it arrived, so there is no broken fetch to picture`);
+			}
+			if (broken && asked.size > 0) {
+				const first = new Set(asked);
+				const refused = await refusing(page, first);
+				await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
 				await opened(page, listed.address, width, theme);
 				await walked(page, listed.panels);
-				await expect
-					.poll(() => waiting(page, listed.panels), { timeout: 20_000, message: 'these panels never finished drawing' })
-					.toEqual([]);
-				const loaded: Shot[] = [];
-				for (const id of listed.panels) loaded.push(await shot(page, id, `${id}--${width}--${theme}--loaded.png`));
-				notes.push(...loaded.map(line));
-
-				// A route that reads no rows after it arrives has no fetch to fail, and
-				// its broken picture would be the healthy page under another name. So
-				// the broken pictures are taken only where the page asked for data,
-				// and the notes say which case this was.
-				if (broken && asked.size === 0) {
-					notes.push('', `the ${route} route asked for no data once it arrived, so there is no broken fetch to picture`);
+				// Every request the first load made has to be made and refused again,
+				// or a picture filed as broken could be the healthy page.
+				await allRefused(first, refused);
+				const deadline = Date.now() + REFUSED_SETTLE_MS;
+				while ((await waiting(page, listed.panels)).length > 0 && Date.now() < deadline) {
+					await page.waitForTimeout(250);
 				}
-				if (broken && asked.size > 0) {
-					const first = new Set(asked);
-					const refused = await refusing(page, first);
-					await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
-					await opened(page, listed.address, width, theme);
-					await walked(page, listed.panels);
-					// Every request the first load made has to be made and refused again,
-					// or a picture filed as broken could be the healthy page.
-					await allRefused(first, refused);
-					const deadline = Date.now() + REFUSED_SETTLE_MS;
-					while ((await waiting(page, listed.panels)).length > 0 && Date.now() < deadline) {
-						await page.waitForTimeout(250);
-					}
-					const broke: Shot[] = [];
-					for (const id of listed.panels) broke.push(await shot(page, id, `${id}--${width}--${theme}--unreachable.png`));
-					notes.push(
-						'',
-						`with every data request refused (${refused.size}: ${[...refused].map((url) => new URL(url).pathname).join(' ')}):`
-					);
-					notes.push(...broke.map(line));
-					const before = new Map(loaded.map((one) => [one.id, one.state]));
-					const unexplained = broke.filter((one) => ['loading', 'quiet', 'missing'].includes(one.state));
-					notes.push(
-						'',
-						unexplained.length === 0
-							? 'every panel drew the unreachable state or what it already held'
-							: 'drew a nothing other than unreachable when every fetch it made failed:'
-					);
-					for (const one of unexplained) {
-						notes.push(`  ${one.id}: ${before.get(one.id)} on the loaded page, ${one.state} with every fetch refused`);
-					}
+				const broke: Shot[] = [];
+				for (const id of listed.panels) broke.push(await shot(page, id, `${id}--${width}--${theme}--unreachable.png`));
+				notes.push(
+					'',
+					`with every data request refused (${refused.size}: ${[...refused].map((url) => new URL(url).pathname).join(' ')}):`
+				);
+				notes.push(...broke.map(line));
+				const before = new Map(loaded.map((one) => [one.id, one.state]));
+				const unexplained = broke.filter((one) => ['loading', 'quiet', 'missing'].includes(one.state));
+				notes.push(
+					'',
+					unexplained.length === 0
+						? 'every panel drew the unreachable state or what it already held'
+						: 'drew a nothing other than unreachable when every fetch it made failed:'
+				);
+				for (const one of unexplained) {
+					notes.push(`  ${one.id}: ${before.get(one.id)} on the loaded page, ${one.state} with every fetch refused`);
 				}
+			}
 
-				notes.push('', `elapsed=${((Date.now() - started) / 1000).toFixed(1)} s`);
-				writeFileSync(path.join(OUT, `_notes--${route}--${width}--${theme}.txt`), `${notes.join('\n')}\n`, 'utf8');
-			});
-		}
+			notes.push('', `elapsed=${((Date.now() - started) / 1000).toFixed(1)} s`);
+			writeFileSync(path.join(OUT, `_notes--${route}--${width}--${theme}.txt`), `${notes.join('\n')}\n`, 'utf8');
+		});
 	}
 }

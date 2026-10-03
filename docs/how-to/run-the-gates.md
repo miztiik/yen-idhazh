@@ -44,7 +44,7 @@ result certifies that selection, not every check the automatic selector chose:
 npm run test:changed -- --group logic
 npm run test:changed -- --group console
 npm run test:changed -- --spec archive.spec.ts
-npm run test:changed -- --mode real --spec reading-page.spec.ts --spec layout-overflow.spec.ts
+npm run test:changed -- --mode real --spec reading-page.spec.ts
 ```
 
 `--group browser` selects all frontend groups; `--group all` adds the backend
@@ -142,7 +142,8 @@ the pictures' own specs, fixture and helpers. The browser job sets
 `panel-captures` artefact on a pass or a fail - a picture that exists only on a
 red run is one nobody can read on the run a reviewer is asked to approve. The
 pictures land in `frontend/test-results/panels/` as
-`<panel-id>--<width>--<theme>--<state>.png`, and each capture test writes one
+`<panel-id>--<width>--<theme>--<state>.png` - every width in light and the
+narrowest in dark, since width moves layout and theme moves colour - and each capture test writes one
 `_notes--<route>--<width>--<theme>.txt` beside them naming each panel's state,
 the share of the panel's width its plots cover, and the test's own run time. The
 argument for the wider set is in
@@ -601,7 +602,7 @@ figure as a runner figure.
 install --with-deps chromium` spends much of its time in `apt-get`, and every
 package it downloads there is a font: Japanese, Chinese, Thai, Cyrillic and
 Unifont, plus the X font utilities. The digest publishes English, so they look
-removable. They are not: `layout-overflow.spec.ts` measures text against its
+removable. They are not: `reading-page.spec.ts` measures text against its
 container, and a missing font changes what fontconfig substitutes and therefore
 what the browser measures. What that risks is a check that goes on passing in CI
 while disagreeing with a developer box. Nobody has measured the swap, so it
@@ -622,7 +623,7 @@ their feature group. Both configurations use the existing Playwright runner.
 
 **One spec asks a question the canary day cannot answer, and says so.**
 `reading-page.spec.ts` reads the reading surface whole - every reader route at
-360, 801 and 1536 CSS px in both themes, the story's own time against the day's
+360, 801 and 1536 CSS px in dark and at 360 in light, the story's own time against the day's
 zone caption, the aside against the sticky filter panel, and a day whose stories
 are broken at the network. Four of its cases need a day longer than
 `ui.shell_seed_items`, because a document that already carries its whole day
@@ -632,7 +633,7 @@ skip here on a fact the served payload owns and run against the real digest:
 ```powershell
 npm run build
 $env:IDHAZH_TEST_BUILD = 'real'
-npx playwright test tests/reading-page.spec.ts tests/layout-overflow.spec.ts
+npx playwright test tests/reading-page.spec.ts
 Remove-Item Env:IDHAZH_TEST_BUILD
 ```
 
