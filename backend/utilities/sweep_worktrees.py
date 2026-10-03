@@ -124,9 +124,7 @@ def decide(facts: Facts) -> Verdict:
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args], cwd=repo, capture_output=True, text=True, check=False
-    )
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=False)
 
 
 def read_worktrees(repo: Path) -> list[Worktree]:
@@ -241,7 +239,7 @@ def remove(repo: Path, tree: Worktree) -> list[Path]:
         shutil.rmtree(tree.path, ignore_errors=True)
     if not tree.path.exists():
         return []
-    return sorted(path for path in tree.path.rglob("*") if path.is_file())
+    return [tree.path]
 
 
 def sweep(

@@ -43,7 +43,7 @@ looks the number up.
 
 Usage, from the root of a checkout:
 
-    python backend/utilities/entity_gap.py
+    python backend/utilities/entity_gap.py --day 2026-09-01 --day 2026-09-02
 
 Exit code 1 when no committed day is there to read, so a shell can tell "nothing
 to read" from "read it, here are the numbers".
@@ -78,13 +78,15 @@ Vocabulary = Mapping[str, Sequence[str]]
 Seen = Callable[[DigestItem], Iterable[str]]
 
 
-def day_paths(root: Path) -> list[Path]:
-    """Every committed day payload, oldest first."""
-    return sorted((root / DIGEST_RELDIR).glob("*/*/*/digest.json"))
+def day_paths(root: Path, days: Sequence[str]) -> list[Path]:
+    """Only named UTC day payloads, oldest first."""
+    from utilities.named_inputs import day_files
+
+    return day_files(root / DIGEST_RELDIR, days)
 
 
-def read_days(root: Path) -> list[DigestDay]:
-    return [DigestDay.from_json(path.read_text(encoding="utf-8")) for path in day_paths(root)]
+def read_days(root: Path, days: Sequence[str]) -> list[DigestDay]:
+    return [DigestDay.from_json(path.read_text(encoding="utf-8")) for path in day_paths(root, days)]
 
 
 def as_published(item: DigestItem) -> Iterable[str]:
@@ -232,8 +234,10 @@ def _gap_cells(row: Appearances) -> tuple[str, str, str]:
 def _table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> list[str]:
     widths = [max(len(str(cell)) for cell in column) for column in zip(header, *rows, strict=True)]
     ruled = [header, ["-" * width for width in widths], *rows]
-    return ["  ".join(cell.ljust(width) for cell, width in zip(line, widths, strict=True)).rstrip()
-            for line in ruled]
+    return [
+        "  ".join(cell.ljust(width) for cell, width in zip(line, widths, strict=True)).rstrip()
+        for line in ruled
+    ]
 
 
 def _record_lines(days: Sequence[DigestDay], watchlist: Watchlist) -> list[str]:
@@ -270,9 +274,9 @@ def _case_lines(
     )
 
 
-def report(root: Path, watchlist: Watchlist) -> str:
+def report(root: Path, watchlist: Watchlist, named_days: Sequence[str]) -> str:
     """The whole measurement as text. A pure function of the tree, so a re-run is a check."""
-    days = read_days(root)
+    days = read_days(root, named_days)
     if not days:
         raise ValueError(f"no committed days under {DIGEST_RELDIR}")
     vocabulary = watchlist.entity_terms()
@@ -365,11 +369,12 @@ def report(root: Path, watchlist: Watchlist) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=REPO_ROOT, help="Repository root to read.")
+    parser.add_argument(
+        "--day", action="append", required=True, help="UTC day, YYYY-MM-DD. Repeatable."
+    )
     args = parser.parse_args()
     root: Path = args.root
-    if not day_paths(root):
-        parser.error(f"no committed days under {DIGEST_RELDIR}")
-    print(report(root, config.load(root / "config").watchlist))
+    print(report(root, config.load(root / "config").watchlist, args.day))
     return 0
 
 

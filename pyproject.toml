@@ -246,8 +246,8 @@ addopts = "-q -n auto --strict-markers --durations=25"
 # 3,498. Each is a module-level `pytestmark`, so a module that is renamed or
 # moved keeps its mark. CI still runs the whole suite - a mark is a developer's
 # shortcut, never the thing that decides what a merge is checked against.
-# `backend/tests/test_marks.py` holds the four against every test module, so a
-# module in no subset is named rather than silently never run.
+# `backend/tests/test_marks.py` checks mark parsing on named fixtures. The
+# slow-mark audit checks only modules represented in one JUnit report.
 markers = [
     "contract: the persisted shapes - generated schemas, config contracts, the ledgers, the committed digest tree",
     "visual: the visual planner, its validator, the spec compiler and the two renderers",

@@ -49,6 +49,17 @@ def a_garden(tmp_path: Path, **declarations: dict[str, Any] | None) -> Path:
             path.unlink()
         else:
             path.write_text(json.dumps(declared), encoding="ascii")
+    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
+    names = set(knobs["task_names"])
+    for name, declared in declarations.items():
+        slug = name.replace("_", "-")
+        if declared is None:
+            names.discard(slug)
+        else:
+            names.add(slug)
+    knobs["task_names"] = sorted(names)
+    knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
     return config_dir
 
 
@@ -69,11 +80,14 @@ def a_retention(owns: list[str], window: dict[str, Any], status: str = "active")
 
 
 def a_compaction(ledger: str, **changes: Any) -> dict[str, Any]:
-    return fixture(
-        "compact-gardener",
-        ledger=ledger,
-        owns=[f"state/raw/{ledger}", f"state/compact/{ledger}"],
-    ) | changes
+    return (
+        fixture(
+            "compact-gardener",
+            ledger=ledger,
+            owns=[f"state/raw/{ledger}", f"state/compact/{ledger}"],
+        )
+        | changes
+    )
 
 
 MONTHS = {"unit": "months", "value": 14}
@@ -345,9 +359,9 @@ def test_a_month_settles_only_beside_a_window_that_keeps_whole_months(
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
-    GardenerConfig(version="2026-09-27", attempts=6, shards=5)
+    GardenerConfig(version="2026-09-27", attempts=6, shards=5, task_names=())
     with pytest.raises(ValidationError, match="attempts is 5 and shards is 5"):
-        GardenerConfig(version="2026-09-27", attempts=5, shards=5)
+        GardenerConfig(version="2026-09-27", attempts=5, shards=5, task_names=())
 
 
 def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -> None:
@@ -477,7 +491,9 @@ def test_a_window_a_reader_still_opens_is_not_deleted_under_it(
 ) -> None:
     """Days against months are compared at the fewest days the months can hold."""
     owns = [f"state/{name}"]
-    config_dir = a_garden(tmp_path, **{name.replace("-", "_"): fixture("seen", owns=owns, window=window)})
+    config_dir = a_garden(
+        tmp_path, **{name.replace("-", "_"): fixture("seen", owns=owns, window=window)}
+    )
     if loads:
         config.load_gardener(config_dir)
     else:

@@ -24,6 +24,10 @@ name: Vector backfill
 on:
   workflow_dispatch:
     inputs:
+      days:
+        description: 'UTC days to repair, separated by spaces (YYYY-MM-DD).'
+        type: string
+        required: true
       commit:
         description: 'Commit the repaired days. Off reports what would change and commits nothing.'
         type: boolean
@@ -58,14 +62,24 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      - name: Re-encode every closed day whose vectors are wrong
-        run: python -m idhazh backfill-vectors
-
-      - name: Say what changed
+      - name: Re-encode named days and say what changed
+        env:
+          DAYS: ${{ inputs.days }}
         run: |
           set -euo pipefail
+          read -r -a days <<< "${DAYS//$'\n'/ }"
+          if [ "${#days[@]}" -eq 0 ]; then
+            echo "Name at least one UTC day" >&2
+            exit 1
+          fi
+          args=()
+          for day in "${days[@]}"; do
+            args+=(--day "$day")
+          done
+          python -m idhazh backfill-vectors "${args[@]}"
           git diff --stat -- frontend/public/digest/
-          python3 backend/utilities/backfill_report.py
+          python3 backend/utilities/backfill_report.py "${args[@]}"
+          python -m idhazh check-publication "${args[@]}"
 
       - uses: actions/setup-node@v7
         with:
@@ -87,12 +101,9 @@ jobs:
       # that find one run BEFORE the commit and stop them. The weight ratchet
       # runs after. See ../../docs/architecture/publishing/layout.md.
       #
-      # `check-publication` is the one that opens every story. A reading document
+      # `check-publication` above opens the named days' stories. A reading document
       # carries a seed since 2026-09-01, so the build below never reads the
       # stories past it and cannot fail on one.
-      - name: Every committed day still matches its contracts
-        run: python -m idhazh check-publication
-
       - name: Build the site
         working-directory: frontend
         run: npm run build

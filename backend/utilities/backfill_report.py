@@ -6,21 +6,26 @@ import argparse
 import json
 from pathlib import Path
 
+from utilities.named_inputs import day_files
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--digest-root", type=Path, default=Path("frontend/public/digest"))
+    parser.add_argument(
+        "--day", action="append", required=True, help="UTC day, YYYY-MM-DD. Repeatable."
+    )
     args = parser.parse_args(argv)
 
     items = vectors = 0
-    for path in sorted(args.digest_root.glob("*/*/*/digest.json")):
+    for path in day_files(args.digest_root, args.day):
         day = json.loads(path.read_text(encoding="utf-8"))
         drawn = len((day.get("embeddings") or {}).get("vectors", {}))
         held = len(day["items"])
         items += held
         vectors += drawn
         print(f"{day['date']}  items={held:>5}  vectors={drawn:>5}")
-    print(f"corpus: {vectors} vectors over {items} items")
+    print(f"named days: {vectors} vectors over {items} items")
     return 0
 
 

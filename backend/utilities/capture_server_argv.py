@@ -5,7 +5,7 @@ holds every committed entry to the exact process it stands up. The list is
 built from the committed entry rather than from a literal, so a flag that
 reaches the server reaches the golden file too.
 
-    python backend/utilities/capture_server_argv.py
+    python backend/utilities/capture_server_argv.py config/models/<name>.json
 
 The golden is a mapping from flag to value rather than the flat list, because
 what llama-server runs is the set of flags and their values - the order they
@@ -15,6 +15,7 @@ mirrors, the `server` block of the model file.
 
 from __future__ import annotations
 
+import argparse
 import json
 from collections.abc import Sequence
 from pathlib import Path
@@ -23,7 +24,6 @@ from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.llm.server import server_argv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MODELS_DIR = REPO_ROOT / "config" / "models"
 GOLDEN_DIR = REPO_ROOT / "tests" / "fixtures" / "server-argv"
 
 #: Fixed inputs, so the only thing that moves between two captures is the entry
@@ -85,9 +85,12 @@ def command_line(config: ModelsConfig) -> dict[str, str | None]:
     return flags
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("models", nargs="+", type=Path, help="Named model config files.")
+    args = parser.parse_args(argv)
     GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
-    for path in sorted(MODELS_DIR.glob("*.json")):
+    for path in sorted(set(args.models)):
         config = ModelsConfig.model_validate_json(path.read_text(encoding="utf-8"))
         written = GOLDEN_DIR / path.name
         written.write_text(

@@ -76,6 +76,16 @@ class GardenerConfig(Model):
     version: DateStamp = Field(
         description="The UTC day this file's shape was last changed, as YYYY-MM-DD."
     )
+    task_names: tuple[Slug, ...] = Field(
+        description="The explicit list of declaration names to read under config/gardener/."
+    )
+
+    @model_validator(mode="after")
+    def refuse_repeated_tasks(self) -> GardenerConfig:
+        if len(self.task_names) != len(set(self.task_names)):
+            raise ValueError("task_names repeats a task")
+        return self
+
     attempts: int = Field(
         ge=1,
         description=(

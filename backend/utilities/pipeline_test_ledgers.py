@@ -37,6 +37,7 @@ import argparse
 import json
 import shutil
 import sys
+from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
@@ -45,13 +46,13 @@ from idhazh.contracts.file_envelope import Format, Tier
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from utilities.named_inputs import day_files
 
 #: How deep a writer's file sits below a trial root: the ledger, a year, a month,
 #: a day, and the filename. A ledger row and a trace share the grammar, so they
 #: share the number.
 DAY_SHARD_PARTS = 5
 TRACES = "traces"
-
 
 
 def _roots(config_root: Path) -> list[str]:
@@ -204,22 +205,38 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
     return found
 
 
-def gather(state: Path, tree: Path, *, roots: list[str]) -> list[str]:
-    """Copy every declared test case's trial root into one directory, and say which arrived.
+def gather(state: Path, tree: Path, *, roots: list[str], days: Sequence[str]) -> list[str]:
+    """Copy named UTC days from declared trial roots, and say which arrived.
 
     One fixed destination rather than a glob over `state/`, so the artifact's
-    root directory is the same whichever test cases produced a file.
+    root directory is the same whichever test cases produced a file. Each
+    copied directory holds one named day, never a trial root's accumulated days.
     """
+    dated = day_files(Path(), days, filename="")
     if tree.exists():
         shutil.rmtree(tree)
     tree.mkdir(parents=True)
     arrived = []
     for name in roots:
-        source = state / name
-        if not source.is_dir():
-            continue
-        shutil.copytree(source, tree / name)
-        arrived.append(name)
+        root = state / name
+        bases = [ledger.tree_root(root, which) for which in DAY_TREES]
+        bases.append(root / TRACES)
+        bases.extend(
+            ledger.raw_root(root, which)
+            for which in LedgerName
+            if ledger.entry(which).grain is Grain.RAW_AND_COMPACT
+        )
+        copied = False
+        for base in bases:
+            for day in dated:
+                source = base / day
+                if source.is_dir():
+                    destination = tree / name / source.relative_to(root)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(source, destination)
+                    copied = True
+        if copied:
+            arrived.append(name)
     return arrived
 
 
@@ -248,12 +265,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tree", type=Path, required=True)
     parser.add_argument("--state", type=Path, default=Path(ledger.STATE_DIRNAME))
     parser.add_argument("--config-root", type=Path, default=Path("config"))
+    parser.add_argument("--day", action="append", default=[], help="UTC day to gather; repeatable.")
     args = parser.parse_args(argv)
 
     roots = _roots(args.config_root)
 
     if args.verb == "gather":
-        for name in gather(args.state, args.tree, roots=roots):
+        if not args.day:
+            parser.error("gather requires at least one --day YYYY-MM-DD")
+        for name in gather(args.state, args.tree, roots=roots, days=args.day):
             print(f"gathered {name}", file=sys.stderr)
         if not any(args.tree.rglob("*")):
             print(

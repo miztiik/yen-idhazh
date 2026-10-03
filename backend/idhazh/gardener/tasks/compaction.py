@@ -59,7 +59,7 @@ from idhazh.gardener.one_at_a_time import Pass
 KIND = TaskKind.COMPACTION
 
 
-def run(context: TaskContext) -> Pass:
+def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     """Drop, or only name, what the window no longer keeps; pack years and months; take days."""
     import logging
     from datetime import UTC, datetime, time
@@ -85,7 +85,7 @@ def run(context: TaskContext) -> Pass:
         producer=__name__.partition(".")[2],
         git_sha=context.git_sha,
     )
-    tree = CompactTree.read(context.state_dir, policy.ledger, context.listing)
+    tree = CompactTree.read(context.state_dir, policy.ledger, context.listing, months=months)
     first_kept = _monthly_period.first_kept_month(
         now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
     )

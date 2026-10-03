@@ -1,4 +1,4 @@
-"""Which families does the ledger registry hold, and how many files does each ledger hold?
+"""Which ledger families own the files an operator named?
 
 An operator listing, run by hand from the repository root:
 
@@ -9,12 +9,7 @@ lifecycle status, the UTC day it was onboarded and the one line saying what it
 holds, then each ledger in it with the number of files that ledger holds under
 the state tree. In a clean checkout those are the committed files.
 
-**This is a growing read, and it is the one this file owns.** Counting a
-ledger's files means listing its folder, so what this costs rises with every
-file a run commits (CLAUDE.md Guardrail #12). Nothing bounded can answer "how
-many files does this ledger hold". A person types it; nothing in the pipeline
-calls it, and its test drives it from a registry and a state tree the test
-writes, never from the committed ones.
+Counts cover only the named input files, never every file a ledger holds.
 
 The registry is read through its own contract, so a registry the build would
 refuse is refused here too, with the same message. A ledger's folder comes from
@@ -29,6 +24,7 @@ what compaction has kept of it. A name that opens on a dot, such as a
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from pathlib import Path
 
 from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
@@ -38,30 +34,39 @@ from idhazh.ledger import paths
 THE_TWO_ROOTS = (paths.RAW_DIRNAME, paths.COMPACT_DIRNAME)
 
 
-def _files_in(root: Path) -> int:
-    if not root.is_dir():
-        return 0
-    return sum(1 for found in root.rglob("*") if found.is_file() and not found.name.startswith("."))
+def _files_in(root: Path, files: Sequence[Path]) -> int:
+    return sum(
+        1
+        for found in files
+        if found.is_relative_to(root) and found.is_file() and not found.name.startswith(".")
+    )
 
 
-def files_held(state_dir: Path, held: LedgerEntry) -> int:
-    """How many files this ledger holds under the state tree. Zero for one never written."""
+def files_held(state_dir: Path, held: LedgerEntry, files: Sequence[Path]) -> int:
+    """Count only the named files that belong to this ledger."""
     if held.grain is Grain.FLAT:
-        return int(state_dir.joinpath(*held.prefix, f"{held.stem}{held.suffix}").is_file())
+        path = state_dir.joinpath(*held.prefix, f"{held.stem}{held.suffix}")
+        return int(path in files and path.is_file())
     if held.grain is Grain.RAW_AND_COMPACT:
-        return sum(_files_in(state_dir.joinpath(root, *held.prefix)) for root in THE_TWO_ROOTS)
-    return _files_in(state_dir.joinpath(*held.prefix))
+        return sum(
+            _files_in(state_dir.joinpath(root, *held.prefix), files) for root in THE_TWO_ROOTS
+        )
+    return _files_in(state_dir.joinpath(*held.prefix), files)
 
 
 def _counted(count: int) -> str:
     return f"{count} file{'' if count == 1 else 's'}"
 
 
-def listing(config_dir: Path, state_dir: Path) -> list[str]:
+def listing(config_dir: Path, state_dir: Path, names: Sequence[str]) -> list[str]:
     """One block of lines per family, in the order the registry lists them."""
     registry = LedgersConfig.from_json(
         (config_dir / paths.REGISTRY_FILENAME).read_text(encoding="utf-8")
     )
+    from utilities.named_inputs import named_files
+
+    state_dir = state_dir.resolve()
+    files = named_files(state_dir, names)
     lines: list[str] = []
     for family in registry.families:
         lines.append(
@@ -72,10 +77,10 @@ def listing(config_dir: Path, state_dir: Path) -> list[str]:
         for held in family.ledgers:
             if held.grain is Grain.RAW_AND_COMPACT:
                 for root in THE_TWO_ROOTS:
-                    count = _files_in(state_dir.joinpath(root, *held.prefix))
+                    count = _files_in(state_dir.joinpath(root, *held.prefix), files)
                     lines.append(f"  - {held.name.value} under {root}/: {_counted(count)}")
                 continue
-            lines.append(f"  - {held.name.value}: {_counted(files_held(state_dir, held))}")
+            lines.append(f"  - {held.name.value}: {_counted(files_held(state_dir, held, files))}")
     return lines
 
 
@@ -83,8 +88,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("config"))
     parser.add_argument("--state", type=Path, default=Path(paths.STATE_DIRNAME))
+    parser.add_argument(
+        "--file", action="append", required=True, help="Named path relative to state/."
+    )
     args = parser.parse_args(argv)
-    print("\n".join(listing(args.config, args.state)))
+    print("Counts cover named files only.")
+    print("\n".join(listing(args.config, args.state, args.file)))
     return 0
 
 

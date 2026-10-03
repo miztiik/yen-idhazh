@@ -1,4 +1,4 @@
-"""Hold every page against the documentation standard, and print what it says.
+"""Hold named pages against the documentation standard, and print what they say.
 
 The standard has two halves and they need opposite treatment. Its three tests -
 split, merge, delete - are judgement, so this tool hands them numbers and no
@@ -11,31 +11,24 @@ faults rather than as measurements.
 reason it has no length limit, and a fault printed beside the page that carries
 it is what the rule was ever going to get.
 
-Run it with no arguments from the repository root:
-
-    python backend/utilities/doc_load.py
-
-Or name the pages a change touched, which is what CI does, so the numbers reach
+Name the pages a change touched, which is what CI does, so the numbers reach
 the person reviewing the change rather than only the person who went looking:
 
-    python backend/utilities/doc_load.py --changed docs/concepts/config.md
+    python backend/utilities/doc_load.py docs/concepts/config.md
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 STANDARD = "docs/reference/documentation-structure.md"
 
 #: Held before a line of code is read, because the harness injects them.
 ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md")
-
-#: The routing table sends you to one page, not one of each. The worst case is
-#: the heaviest page it can send you to. A plan-doc is not on it: `TODO/` is
-#: read when a task names a plan, never because an agent started work.
-ROUTED_TO = ("docs/architecture", "docs/concepts", "docs/how-to")
 
 #: A section a later one corrects reads like one of these. A hit is a candidate.
 SUPERSEDED = re.compile(
@@ -82,13 +75,12 @@ def prose(text: str) -> list[str]:
 def is_there(target: Path) -> bool:
     """Does this path exist, spelled exactly like this?
 
-    `Path.exists()` is case-insensitive on Windows and on macOS, so a link whose
-    capitals are wrong passes on the machine that wrote it and 404s on GitHub -
-    a break nobody local can see. Matching the name against what the directory
-    actually holds is the only answer that agrees on every platform.
+    Resolve this one address, not a listing of its parent. On Windows realpath
+    obtains the stored spelling from the file handle.
     """
     try:
-        return target.name in {entry.name for entry in target.parent.iterdir()}
+        actual = Path(os.path.realpath(target, strict=True))
+        return actual.name == target.name
     except OSError:
         return False
 
@@ -130,28 +122,23 @@ Row = tuple[int, str, int, int, int, int]
 HEADINGS = f"  {'page':<52} {'~tok':>6} {'h2':>4} {'top h2':>7} {'from':>5} {'super':>6}"
 
 
-def pages_under(root: Path) -> list[Path]:
-    """Every page the standard governs, docs tree first and the roots after."""
-    return sorted(root.glob("docs/**/*.md")) + [
-        root / f for f in ("CLAUDE.md", "AGENTS.md", "README.md") if (root / f).exists()
-    ]
+def pages_under(root: Path, named: Sequence[str]) -> list[Path]:
+    """Existing named Markdown pages. Deleted paths and code inputs are skipped."""
+    paths: list[Path] = []
+    for name in sorted(set(named)):
+        path = root / name
+        if path.suffix != ".md" or not path.is_file():
+            continue
+        relative = path.resolve().relative_to(root.resolve()).as_posix()
+        if relative.startswith("docs/") or relative in (*ALWAYS_LOADED, "README.md"):
+            paths.append(path.resolve())
+    return paths
 
 
-def measure(root: Path) -> list[Row]:
-    """Every page with the five numbers the three tests read, heaviest first.
-
-    The whole tree every time, including in the changed-paths mode: `from`
-    counts inbound links, and a page cannot know who links to it by reading
-    itself. 87 pages is a few megabytes and the walk is the cheap half of this
-    tool.
-
-    **The root is resolved first, and that is load-bearing.** A link target is
-    resolved to compare it, so a relative root makes every comparison fail and
-    every page read as one nobody links to - a wrong answer that looks like a
-    finding rather than like a fault.
-    """
+def measure(root: Path, named: Sequence[str]) -> list[Row]:
+    """Named pages and links between those pages, heaviest first."""
     root = root.resolve()
-    pages = pages_under(root)
+    pages = pages_under(root, named)
     text = {p: p.read_text(encoding="utf-8") for p in pages}
 
     # Who links to whom, so a page reachable from one place only can be seen.
@@ -184,17 +171,16 @@ def legend() -> None:
     print("\n  top h2  the largest section as a share of the page. A section holding most")
     print("          of a page usually holds several answers - open it and apply the")
     print("          SPLIT TEST: can you act on one section without another?")
-    print("  from    how many other pages link here. 1 means one page is the only way")
-    print("          in, so the MERGE TEST asks whether that page owns this as a")
-    print("          section. 0 on a page nobody links is the same question, louder.")
+    print("  from    links from other named pages only, not from the whole repository.")
+    print("          This count cannot prove that a page has no other inbound links.")
     print("  super   sections saying a later one corrects them. Each is a DELETE TEST")
     print("          candidate, never a verdict: keep the correction whose trap a")
     print("          reader can still walk into, cut the one the correction closed.")
     print(f"\nRead the three tests in full at {STANDARD}.")
 
 
-def faults(root: Path) -> dict[str, list[str]]:
-    """Every page under `docs/` that is missing something the standard requires.
+def faults(root: Path, named: Sequence[str]) -> dict[str, list[str]]:
+    """Named pages under `docs/` that lack something the standard requires.
 
     Only `docs/` is held to this. `CLAUDE.md` and `README.md` are the contract
     and the front door rather than pages the placement rules route to, and the
@@ -206,7 +192,9 @@ def faults(root: Path) -> dict[str, list[str]]:
     the anchor links cannot reach.
     """
     root = root.resolve()
-    pages = sorted(root.glob("docs/**/*.md"))
+    pages = [
+        p for p in pages_under(root, named) if p.relative_to(root).as_posix().startswith("docs/")
+    ]
     text = {p: p.read_text(encoding="utf-8") for p in pages}
     here = {p.resolve(): anchors(body) for p, body in text.items()}
 
@@ -242,6 +230,8 @@ def faults(root: Path) -> dict[str, list[str]]:
             if "<" in href:
                 continue
             target = (page.parent / href).resolve()
+            if target not in here and is_there(page.parent / href):
+                here[target] = anchors(target.read_text(encoding="utf-8"))
             if target in here and fragment not in here[target]:
                 found.append(f"links to a section that is not there: {href}#{fragment}")
 
@@ -265,76 +255,21 @@ def report_faults(flagged: dict[str, list[str]], scope: str) -> None:
 
 
 def changed(root: Path, named: list[str]) -> None:
-    """The rows for the pages one change touched, and nothing else.
-
-    A path this tool does not govern is skipped in silence rather than refused:
-    the caller is a CI step handing over whatever the diff listed, and a change
-    that touched no page has nothing to answer for.
-
-    `rank` is the row's place among every page by weight. It is the one number
-    here the whole-tree table cannot give you about your own page, and it is the
-    one that says whether the section you just added made a heavy page heavier.
-    """
-    rows = measure(root)
-    place = {name: index for index, (_, name, *_) in enumerate(rows, 1)}
-    wanted = {Path(name).as_posix() for name in named}
-    mine = [row for row in rows if row[1] in wanted]
+    """Report only named pages, plus direct link targets needed to check anchors."""
+    mine = measure(root, named)
     if not mine:
         return
 
     print(f"The standard is {STANDARD}.")
     print("This tool measures. It decides nothing, and no number below is a threshold.\n")
     print("PAGES THIS CHANGE TOUCHED")
-    print(f"{HEADINGS} {'rank':>7}")
-    for tok, name, h2, share, from_n, sup in mine:
-        rank = f"{place[name]}/{len(rows)}"
-        print(
-            f"  {name:<52} {tok:>6,} {h2:>4} {str(share) + '%':>7} {from_n:>5} {sup:>6} {rank:>7}"
-        )
-    legend()
-    report_faults({k: v for k, v in faults(root).items() if k in wanted}, "Every page you touched")
-    print("\nThe page you add to pays first. Apply the SPLIT TEST to any page above")
-    print("that already answers two questions; one addition buys at most one cut.")
-
-
-def whole(root: Path) -> None:
-    """Every page, heaviest first, with the bootstrap load above it."""
-    rows = measure(root)
-
-    print(f"The standard is {STANDARD}.")
-    print("This tool measures. It decides nothing, and no number below is a threshold.")
-    print("A token count is about four characters a token - an estimate, not a measurement.\n")
-
-    print("BOOTSTRAP LOAD - held before a line of code is read")
-    total = 0
-    for name in ALWAYS_LOADED:
-        path = root / name
-        if path.exists():
-            n = tokens(path.read_text(encoding="utf-8"))
-            total += n
-            print(f"  {name:<52} ~{n:>6,}")
-    routed = [
-        p
-        for folder in ROUTED_TO
-        if (root / folder).exists()
-        for p in (root / folder).glob("**/*.md")
-    ]
-    if routed:
-        worst = max(routed, key=lambda p: len(p.read_text(encoding="utf-8")))
-        n = tokens(worst.read_text(encoding="utf-8"))
-        total += n
-        label = "the routed page, heaviest: " + worst.relative_to(root).as_posix()
-        print(f"  {label:<52} ~{n:>6,}")
-    print(f"  {'worst-case total':<52} ~{total:>6,}\n")
-    print("  The test: does that leave room for the working set - the files you came")
-    print("  to change, plus what you must read to change them?\n")
-
-    print("PAGES, heaviest first")
     print(HEADINGS)
-    for tok, name, h2, share, from_n, sup in rows[:20]:
+    for tok, name, h2, share, from_n, sup in mine:
         print(f"  {name:<52} {tok:>6,} {h2:>4} {str(share) + '%':>7} {from_n:>5} {sup:>6}")
     legend()
-    report_faults(faults(root), "Every page under docs/")
+    report_faults(faults(root, named), "Every page you touched")
+    print("\nThe page you add to pays first. Apply the SPLIT TEST to any page above")
+    print("that already answers two questions; one addition buys at most one cut.")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -342,17 +277,14 @@ def main(argv: list[str] | None = None) -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
-        "--changed",
-        nargs="*",
+        "paths",
+        nargs="+",
         metavar="PATH",
-        help="print only the rows for these pages, and their rank among all of them",
+        help="print only these pages; inbound counts cover this named set",
     )
     args = parser.parse_args(argv)
     root = Path.cwd()
-    if args.changed is None:
-        whole(root)
-    else:
-        changed(root, args.changed)
+    changed(root, args.paths)
 
 
 if __name__ == "__main__":

@@ -1,16 +1,7 @@
-"""Which test modules does each pytest mark declared in `pyproject.toml` select?
+"""Which pytest marks do the named test source files declare?
 
-Read from source with `ast` rather than bought by collecting the suite
-(`docs/reference/benchmarks/what-the-suite-costs.md`): reading `pytestmark` off
-every module under `backend/tests` costs about 2 s, where asking pytest to
-collect and resolve marks itself cost 29 s for the same answer.
-
-Shared by two readers. `backend/tests/test_marks.py` holds every declared mark
-against every module, so a module outside all of them is named rather than
-silently never run. `backend/utilities/slow_mark_audit.py` checks the `slow`
-mark specifically against a measured reading of how long each module's tests
-actually took. Both need the same two facts - which modules exist, and which
-marks each one declares - so this module is the one place that reads them.
+Read only the supplied source paths. The slow-mark audit gets those paths from
+one JUnit report, not from discovering modules in the committed test tree.
 """
 
 from __future__ import annotations
@@ -18,7 +9,7 @@ from __future__ import annotations
 import ast
 import re
 import tomllib
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -43,12 +34,14 @@ def declared_marks(pyproject_path: Path = PYPROJECT_PATH) -> tuple[str, ...]:
     return tuple(str(entry).split(":", 1)[0].strip() for entry in declared)
 
 
-def modules(tests_dir: Path = TESTS_DIR) -> list[Path]:
-    """Every test module, including the ones that sit inside a package."""
-    found = sorted(tests_dir.rglob("test_*.py"))
-    # A census of nothing would make every assertion over it vacuous, which
-    # reads exactly like a pass.
-    assert len(found) > 100, f"found {len(found)} test modules, so the walk did not walk"
+def modules(named: Sequence[Path]) -> list[Path]:
+    """Validate and sort a named list of test module files."""
+    found = sorted(set(named))
+    if not found:
+        raise ValueError("name at least one test module")
+    for path in found:
+        if not path.is_file() or not path.name.startswith("test_") or path.suffix != ".py":
+            raise ValueError(f"not a test module file: {path.name}")
     return found
 
 

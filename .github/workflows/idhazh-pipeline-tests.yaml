@@ -317,10 +317,12 @@ jobs:
       # depth from another's.
       - name: Gather the ledgers the test case wrote
         if: always()
+        env:
+          RUN_DATE: ${{ needs.plan.outputs.date }}
         run: |
           set -euo pipefail
           python3 backend/utilities/pipeline_test_ledgers.py gather \
-            --tree backend/var/trial-ledgers
+            --tree backend/var/trial-ledgers --day "$RUN_DATE"
 
       - name: Upload the ledgers the test case wrote
         if: always()

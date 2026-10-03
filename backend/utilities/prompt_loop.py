@@ -194,9 +194,7 @@ class Judge(Protocol):
     a disagreement is always resolved in the scorers' favour.
     """
 
-    def revise(
-        self, prompt: str, rubric: str, scores: Scorecard, round_index: int
-    ) -> str: ...
+    def revise(self, prompt: str, rubric: str, scores: Scorecard, round_index: int) -> str: ...
 
     def prefers_candidate(self, incumbent: str, candidate: str, rubric: str) -> bool: ...
 
@@ -353,11 +351,7 @@ class LiveSummarizer:
                 brief=article.brief,
                 thinking=entry.thinks,
             )
-            produced.append(
-                ItemSummary(
-                    key=item.key, summary=draft.summary
-                )
-            )
+            produced.append(ItemSummary(key=item.key, summary=draft.summary))
         return produced
 
 
@@ -434,9 +428,7 @@ class ModelJudge:
             ),
             schema_name=schema_name,
         )
-        completion = post(
-            payload, endpoint=self._endpoint, timeout=request_timeout_seconds(entry)
-        )
+        completion = post(payload, endpoint=self._endpoint, timeout=request_timeout_seconds(entry))
         parsed = json.loads(completion.content)
         if not isinstance(parsed, dict):
             raise ValueError("the judge returned a non-object reply")
@@ -451,17 +443,20 @@ def _article_key(article: Article) -> str:
     return str(article.source_url)
 
 
-def load_frozen_articles(directory: Path) -> tuple[list[Article], list[FrozenItem]]:
+def load_frozen_articles(
+    directory: Path, names: Sequence[str]
+) -> tuple[list[Article], list[FrozenItem]]:
     """Read committed `Article` payloads into a frozen set.
 
     Only articles that fetched and carry body text are kept: a fetch failure or an
     empty body is not something a summariser prompt can be scored on. The set is a
-    fixed, committed directory, so the loop reads a bounded input and never a
-    collection that grows with the archive (Guardrail #12).
+    supplied list of named files, so adding another file cannot expand the read.
     """
     articles: list[Article] = []
     items: list[FrozenItem] = []
-    for path in sorted(directory.glob("*.json")):
+    from utilities.named_inputs import named_files
+
+    for path in named_files(directory, names):
         article = Article.from_json(path.read_bytes().decode("utf-8"))
         if article.status is not ArticleStatus.OK or not article.text:
             continue
@@ -543,6 +538,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--max-items", type=int, default=0, help="Cap the frozen set (0 means all)."
     )
+    parser.add_argument(
+        "--article", action="append", required=True, help="Named file inside --frozen-set."
+    )
     parser.add_argument("--seed", type=int, default=0, help="Recorded, for reproducibility.")
     parser.add_argument(
         "--out",
@@ -554,7 +552,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     endpoint: str = args.endpoint or resolve_endpoint(settings.app.model_server.base_url)
 
-    articles, items = load_frozen_articles(args.frozen_set)
+    articles, items = load_frozen_articles(args.frozen_set, args.article)
     if args.max_items > 0:
         articles, items = articles[: args.max_items], items[: args.max_items]
     if not items:

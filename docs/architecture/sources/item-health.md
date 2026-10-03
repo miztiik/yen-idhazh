@@ -43,13 +43,12 @@ six days in September 2026 without any surface reporting it.
 Run these from the repository root when investigating a field:
 
 ```text
-python backend/utilities/item_health_provenance.py
-python backend/utilities/empty_column_census.py
+python backend/utilities/item_health_provenance.py --source <Python-file> --ledger <ledger-file>
 ```
 
-The first reports producers and recorded values. The second checks populated
-columns against the contracts' reader maps. Both read committed history, so their
-cost grows with the data; run them on demand, not as tests. Do not paste their
+Repeat `--source` and `--ledger` to name more files. Source paths are relative
+to the repository root. Ledger paths are relative to `state/`. The report opens
+only those files and describes only their rows. Do not paste its
 dated output into architecture docs. A static producer scan cannot prove a value
 reaches the row or is correct, and a blank cell is not evidence of zero work.
 

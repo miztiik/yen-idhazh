@@ -49,6 +49,19 @@ def test_workflow_names_and_trigger_classes_are_pinned() -> None:
         assert set(_triggers(workflow)) == trigger_classes
 
 
+def test_backfill_and_report_receive_the_same_named_days() -> None:
+    workflow = _load_workflows()["backfill.yml"]
+    steps = _steps(workflow, "backfill")
+    repairing = next(step for step in steps if "backfill-vectors" in str(step.get("run", "")))
+    env = _mapping(repairing.get("env"), "the named-day repair environment")
+    assert env["DAYS"] == "${{ inputs.days }}"
+    body = str(repairing["run"])
+    assert 'args+=(--day "$day")' in body
+    assert 'python -m idhazh backfill-vectors "${args[@]}"' in body
+    assert 'python3 backend/utilities/backfill_report.py "${args[@]}"' in body
+    assert 'python -m idhazh check-publication "${args[@]}"' in body
+
+
 def test_content_refresh_runs_at_the_five_approved_utc_hours() -> None:
     """Five one-slot lines, not one five-hour line, and the difference is load-bearing.
 
@@ -290,7 +303,9 @@ def _render_concurrency_group(group: str, dispatched: dict[str, str]) -> str:
         assert matched, f"a concurrency group this test cannot evaluate: ${{{{{span}}}}}"
         name = matched.group("input")
         assert name in dispatched, f"the group names an input the dispatch form has no {name}"
-        rendered = rendered.replace(f"${{{{{span}}}}}", dispatched[name] or matched.group("fallback"))
+        rendered = rendered.replace(
+            f"${{{{{span}}}}}", dispatched[name] or matched.group("fallback")
+        )
     return rendered
 
 

@@ -1,8 +1,4 @@
-"""Does the docs measurement answer for one change, and not just for the tree?
-
-The whole-tree report has always existed and nobody read it at the moment it
-mattered. `--changed` is the same measurement narrowed to the pages a change
-touched, so CI can put it in front of a reviewer.
+"""Does the docs measurement read only the pages a change names?
 
 Every fixture here is a built tree under `tmp_path`. Nothing reads the real
 `docs/`, which grows, so nothing here costs more as it does (CLAUDE.md
@@ -13,7 +9,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from utilities import doc_load
+
+
+def test_cli_requires_named_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as refused:
+        doc_load.main([])
+    assert refused.value.code == 2
+
+
+NAMED = ["docs/concepts/heavy.md", "docs/reference/light.md", "docs/reference/orphan.md"]
 
 
 def tree(root: Path) -> None:
@@ -45,7 +53,7 @@ def test_a_page_carries_the_five_numbers_the_tests_read(tmp_path: Path) -> None:
     """Each column is an input to a named test, so each has to be filled."""
     tree(tmp_path)
 
-    rows = {name: row for row in doc_load.measure(tmp_path) for name in [row[1]]}
+    rows = {name: row for row in doc_load.measure(tmp_path, NAMED) for name in [row[1]]}
 
     assert rows["docs/concepts/heavy.md"][2] == 2, "two h2 sections"
     assert rows["docs/reference/light.md"][4] == 1, "the heavy page links to it"
@@ -57,7 +65,7 @@ def test_the_heaviest_page_is_first(tmp_path: Path) -> None:
     """The caller ranks by this order, so the order is the contract."""
     tree(tmp_path)
 
-    rows = doc_load.measure(tmp_path)
+    rows = doc_load.measure(tmp_path, NAMED)
 
     assert rows[0][1] == "docs/concepts/heavy.md"
     assert rows[0][0] > rows[-1][0]
@@ -72,7 +80,7 @@ def test_changed_prints_only_the_pages_named_and_their_rank(tmp_path: Path, caps
     printed = capsys.readouterr().out  # type: ignore[attr-defined]
     assert "docs/reference/light.md" in printed
     assert "docs/concepts/heavy.md" not in printed
-    assert "2/3" in printed, "second of three pages by weight"
+    assert "rank" not in printed, "a named set cannot rank the repository"
     assert "The page you add to pays first" in printed
 
 
@@ -105,7 +113,7 @@ def test_a_relative_root_counts_the_same_inbound_links_as_an_absolute_one(
     tree(tmp_path)
     monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
 
-    here = {row[1]: row[4] for row in doc_load.measure(Path())}
+    here = {row[1]: row[4] for row in doc_load.measure(Path(), NAMED)}
 
     assert here["docs/reference/light.md"] == 1, "the heavy page still links to it"
 
@@ -139,14 +147,14 @@ def test_a_page_carrying_every_required_element_raises_nothing(tmp_path: Path) -
     """The clean case has to be silent, or the noisy one says nothing either."""
     page(tmp_path, "docs/concepts/clean.md", WELL_FORMED)
 
-    assert doc_load.faults(tmp_path) == {}
+    assert doc_load.faults(tmp_path, ["docs/concepts/clean.md"]) == {}
 
 
 def test_each_missing_element_is_named_on_the_page_missing_it(tmp_path: Path) -> None:
     """A fault has to say which element, or the reader re-derives it per page."""
     page(tmp_path, "docs/concepts/bare.md", "# One\n\n# Two\n\nNo stamp, no way out.\n")
 
-    found = doc_load.faults(tmp_path)["docs/concepts/bare.md"]
+    found = doc_load.faults(tmp_path, ["docs/concepts/bare.md"])["docs/concepts/bare.md"]
 
     assert any("2 H1 titles" in f for f in found)
     assert any("Last Updated" in f for f in found)
@@ -163,14 +171,14 @@ def test_a_hash_inside_a_code_fence_is_a_comment_and_not_a_title(tmp_path: Path)
         "## See also\n\n- [the neighbour](neighbour.md)\n",
     )
 
-    assert doc_load.faults(tmp_path) == {}
+    assert doc_load.faults(tmp_path, ["docs/how-to/do-a-thing.md"]) == {}
 
 
 def test_a_stamp_that_is_not_a_date_does_not_count(tmp_path: Path) -> None:
     """A date nobody can compare prices no staleness, so it is the same as none."""
     page(tmp_path, "docs/concepts/vague.md", WELL_FORMED.replace("2026-09-20", "recently"))
 
-    found = doc_load.faults(tmp_path)["docs/concepts/vague.md"]
+    found = doc_load.faults(tmp_path, ["docs/concepts/vague.md"])["docs/concepts/vague.md"]
 
     assert any("Last Updated" in f for f in found)
 
@@ -185,7 +193,9 @@ def test_a_link_to_a_page_that_is_not_there_is_found(tmp_path: Path) -> None:
     )
     (tmp_path / "CLAUDE.md").write_text("# C\n", encoding="utf-8", newline="\n")
 
-    found = doc_load.faults(tmp_path)["docs/reference/benchmarks/other-run.md"]
+    found = doc_load.faults(tmp_path, ["docs/reference/benchmarks/other-run.md"])[
+        "docs/reference/benchmarks/other-run.md"
+    ]
 
     assert found == ["links to a page that is not there: ../../CLAUDE.md"]
 
@@ -198,7 +208,7 @@ def test_a_placeholder_in_a_worked_example_names_no_page(tmp_path: Path) -> None
         WELL_FORMED.replace("- nothing", "- `[title](docs/concepts/<slug>.md)` - the form"),
     )
 
-    assert doc_load.faults(tmp_path) == {}
+    assert doc_load.faults(tmp_path, ["docs/how-to/distil.md"]) == {}
 
 
 def test_a_see_also_carrying_no_link_is_the_same_dead_end(tmp_path: Path) -> None:
@@ -210,7 +220,9 @@ def test_a_see_also_carrying_no_link_is_the_same_dead_end(tmp_path: Path) -> Non
         "## See also\n\n- `docs/concepts/other.md` - not a link\n",
     )
 
-    found = doc_load.faults(tmp_path)["docs/concepts/looks-fine.md"]
+    found = doc_load.faults(tmp_path, ["docs/concepts/looks-fine.md"])[
+        "docs/concepts/looks-fine.md"
+    ]
 
     assert any("carries no link" in f for f in found)
 
@@ -224,7 +236,7 @@ def test_a_link_whose_capitals_are_wrong_is_found(tmp_path: Path) -> None:
         WELL_FORMED.replace("- nothing", "- [shouty](Target.md)"),
     )
 
-    found = doc_load.faults(tmp_path)["docs/reference/source.md"]
+    found = doc_load.faults(tmp_path, ["docs/reference/source.md"])["docs/reference/source.md"]
 
     assert found == ["links to a page that is not there: Target.md"]
 
@@ -241,7 +253,7 @@ def test_a_link_to_a_section_that_is_not_there_is_found(tmp_path: Path) -> None:
         ),
     )
 
-    found = doc_load.faults(tmp_path)["docs/reference/source.md"]
+    found = doc_load.faults(tmp_path, ["docs/reference/source.md"])["docs/reference/source.md"]
 
     assert found == ["links to a section that is not there: target.md#a-deleted-heading"]
 
@@ -264,6 +276,13 @@ def test_a_page_nested_too_deep_is_two_topics(tmp_path: Path) -> None:
     """The depth rule is the split test made mechanical, so the tool can see it."""
     page(tmp_path, "docs/architecture/publishing/console/charts.md", WELL_FORMED)
 
-    found = doc_load.faults(tmp_path)["docs/architecture/publishing/console/charts.md"]
-
+    found = doc_load.faults(tmp_path, ["docs/architecture/publishing/console/charts.md"])[
+        "docs/architecture/publishing/console/charts.md"
+    ]
     assert any("two topics" in f for f in found)
+
+
+def test_unnamed_pages_are_not_read(tmp_path: Path) -> None:
+    tree(tmp_path)
+    (tmp_path / "docs/concepts/heavy.md").write_bytes(b"\xff")
+    assert len(doc_load.measure(tmp_path, ["docs/reference/light.md"])) == 1

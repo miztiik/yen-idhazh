@@ -218,59 +218,14 @@ Authority: Fowler, 2026-09-22.
 
 ## How a collection changes grain
 
-**One utility moves a ledger to a finer grain, and it refuses to write a tree it
-cannot read back.** `backend/utilities/migrate_to_day_shards.py` takes
-`--directory`, the ledger, `--shape`, the move, and `--date-column`, the cell
-that says which day a row belongs to. Each ledger's own change runs it once on
-its own directory; committing the utility migrates nothing.
+Move only named files or periods. Build their new layout in a temporary run
+directory, read it through the production reader, and compare every row by its
+UTC day before replacing the source. An invalid date stops the move. A failed
+read-back leaves the source intact. Delete a completed one-off utility and its
+tests when no current operation needs it; git keeps the cutover code.
 
-**Four shapes, because a ledger arrives at the day directory from four places.**
-`month-to-day` splits `<YYYY-MM>.csv` into `<YYYY>/<MM>/<DD>.csv`.
-`day-to-directory` turns each of those day files into a `<DD>/` directory
-holding one `before-partition.csv`. `flat-to-day-directory` does both at once
-for a ledger that was one file for the whole archive, and it names the ledger the
-file becomes, so `--directory state/x` reads
-`state/x.csv`. `traces` splits a day prefix off a trace filename
-and leaves the rest of the name alone, because a trace carries no date cell to
-file by.
-
-It builds the whole new tree in a temporary directory beside the ledger, walks it
-with the pipeline's own reader rather than a second opinion - `day_files` for a
-day-file tree, `day_shards.shard_files` for a day-directory tree,
-`telemetry.trace_date` for a trace - and compares it **row for row, keyed by
-day**, against what came out of the old heads. Keyed rather than pooled: a
-partition that filed every row under one day would pass a check over the lines
-alone. Only then does it rename the year directories into place and unlink the
-source. **A migration that writes an empty tree and unlinks its source is a
-delete with exit 0**, so the read-back is the point and the ordering is the
-guarantee. On any fault the parked years are renamed back.
-
-**A row it cannot place stops the run before a byte is written.** An empty date cell and
-a date cell that is not a date are what a real ledger eventually holds - a run
-interrupted mid-append, a header migration half applied - and a skipped row is a
-measurement that stops having happened.
-
-**A ledger holding a month shard and anything else is refused**, and that is not
-tidiness. `day_files` refuses a name it cannot place, so a month shard sitting beside a
-year directory stops every read of that ledger: a half-migrated ledger is already
-unreadable by the pipeline. A flat ledger sitting beside its own directory is
-refused for the same reason. The repair is a restore from the trunk rather than a second
-pass, because a second pass cannot know which rows the first one had already moved.
-
-**Which cell names the day.** The cell is exactly ten characters, `YYYY-MM-DD`.
-A wall-clock stamp is `<date>T<time>Z` and is refused: a stamp crosses midnight
-independently of the day its writer filed the row under, so a tree filed by one
-would disagree with the writer that built it. A run id, `<date>-<n>`, was read
-as its date while `state/seen/` was filed by `first_seen_run`; that ledger has
-moved under `state/raw/`, and a run id is refused now. One
-clause makes that choice mechanical instead of leaving it to a comment.
-
-Changing grain is a different operation from [a correction](#a-correction-to-a-closed-month),
-which rewrites one partition and leaves the layout alone. Both ship as a committed
-one-shot utility under `backend/utilities/` for the same reason: a fork or a stale
-branch can then reproduce the exact cutover this repository ran.
-
-Authority: Guardrail #5, 2026-09-13.
+Changing grain is different from [a correction](#a-correction-to-a-closed-month),
+which rewrites one partition and leaves the layout alone.
 
 ## The freeze rule
 
@@ -393,14 +348,9 @@ half-done. Until 2026-09-19 `.gitattributes` set a union merge driver on
 worse: the removal silently did not happen. And a shard's header is checked
 against the contract
 before any append, so a rewrite that changes the shape has to move every month at once.
-A correction therefore ships as a committed one-shot utility under `backend/utilities/`,
-not as an ad-hoc script; `migrate_to_day_shards.py` is the worked example. A
-utility whose input layout no longer exists is deleted with the layout:
-`migrate_feed_health.py` and `migrate_score_ledger.py` both went that way
-in September 2026, the item-health widener followed them once `widen_ledger_header.py`
-could re-file any ledger from a command line, and `migrate_published_ledger.py`
-and `split_published_ledger.py` went when the published ledger moved to the
-ledger door.
+A correction therefore ships as a committed one-shot utility under
+`backend/utilities/`, not as an ad-hoc script. It takes named input files.
+A utility whose input layout no longer exists is deleted with the layout.
 
 ### A deletion
 

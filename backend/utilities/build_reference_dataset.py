@@ -2,12 +2,12 @@
 
 Four verbs, and the order is the order:
 
-    python backend/utilities/build_reference_dataset.py plan
+    python backend/utilities/build_reference_dataset.py plan --day 2026-09-01
     python backend/utilities/build_reference_dataset.py fetch
     python backend/utilities/build_reference_dataset.py split
     python backend/utilities/build_reference_dataset.py verify
 
-`plan` reads the committed archive once and writes a candidate list. `fetch`
+`plan` reads named UTC days and writes a candidate list. `fetch`
 takes the article text a candidate at a time, honouring robots, and is resumable.
 `split` draws the split and refuses to write a set that fails any floor or any
 leakage check. `verify` re-runs every check over what is committed, and is the
@@ -37,14 +37,9 @@ The intersections are on `url_key` and never on article text. A near-duplicate t
 collections hold under two addresses is a different problem, and this tool does
 not claim to catch it.
 
-**`plan` is the one growing read, it runs by hand, and its cost is written down.**
-It walks every committed day under `frontend/public/digest/`. Measured
-2026-09-13 on an Intel Core i7-1265U: 23 days, 24,244,409 bytes, 9,278 items,
-1.3 seconds. That rises by about one day and 1 MB every day the pipeline runs,
-which is exactly what `CLAUDE.md` Guardrail #12 is about - so it is a verb a
-person types once rather than a step anything schedules, and no test repeats it
-(`CLAUDE.md` section 13). `verify` reads only the frozen set and the capped
-corpus window, both of which are fixed in size.
+**`plan` requires repeated `--day` arguments.** It opens those payloads directly
+and never discovers other published days. `verify` reads the named frozen set
+and corpus files. Checkpoint walks stay inside one explicitly named run.
 
 **Fetched text is data.** It crosses the trust boundary exactly once, through
 `extract.extract_text`, which is the same trafilatura-plus-sanitizer path the
@@ -185,10 +180,12 @@ def registrable_domain(url: str) -> str:
 # --- plan ------------------------------------------------------------------
 
 
-def archive_candidates(digest_dir: Path) -> list[Candidate]:
-    """Every published item, as a candidate. The one growing read - see the module docstring."""
+def archive_candidates(digest_dir: Path, days: Sequence[str]) -> list[Candidate]:
+    """Candidates from named UTC days only."""
+    from utilities.named_inputs import day_files
+
     found: dict[str, Candidate] = {}
-    for path in sorted(digest_dir.rglob("digest.json")):
+    for path in day_files(digest_dir, days):
         day = json.loads(path.read_text(encoding="utf-8"))
         for item in day.get("items", []):
             source_url = item.get("source_url")
@@ -242,10 +239,12 @@ def plan(
     digest_dir: Path,
     corpus_dir: Path,
     asked: ReferenceDatasetConfig,
+    *,
+    days: Sequence[str],
 ) -> int:
     """Choose the candidate pool, minus every collection this set must not overlap."""
     started = time.monotonic()
-    everything = archive_candidates(digest_dir)
+    everything = archive_candidates(digest_dir, days)
     trained_on = {row.url_key for row in corpus.read_rows(corpus_dir)}
     held_out = corpus.read_holdout(corpus_dir)
     already = {row.url_key for row in read_dataset(dataset_dir)}
@@ -1393,17 +1392,15 @@ def select_sample(
     ]
 
     target_path = dataset_dir / SELECTIONS_DIRNAME / selection_id / SELECTED_FILENAME
-    _write_atomically(
-        target_path, canonical_json([row.model_dump(mode="json") for row in rows])
-    )
+    _write_atomically(target_path, canonical_json([row.model_dump(mode="json") for row in rows]))
 
     written = [
         ReferenceSelectionRow.model_validate(payload)
         for payload in json.loads(target_path.read_text(encoding="utf-8"))
     ]
-    selected_by_group = _tally(
-        group_of(by_key[row.url_key], by) for row in written
-    ) | {name: 0 for name in universe if not chosen[name]}
+    selected_by_group = _tally(group_of(by_key[row.url_key], by) for row in written) | {
+        name: 0 for name in universe if not chosen[name]
+    }
     meta = ReferenceCollectionMetadata(
         version=ReferenceCollectionMetadata.schema_version(),
         phase=ReferencePhase.SELECTION,
@@ -1730,9 +1727,7 @@ def clean_extraction(
         )
 
     target = dataset_dir / CLEANED_DIRNAME / clean_id / ARTICLES_FILENAME
-    _write_atomically(
-        target, canonical_json([row.model_dump(mode="json") for row in cleaned])
-    )
+    _write_atomically(target, canonical_json([row.model_dump(mode="json") for row in cleaned]))
     written = [
         ReferenceExtractionRow.model_validate(payload)
         for payload in json.loads(target.read_text(encoding="utf-8"))
@@ -1816,7 +1811,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     verbs = parser.add_subparsers(dest="verb", required=True)
 
-    verbs.add_parser("plan", help="Choose the candidate pool. Reads the whole archive, once.")
+    planning = verbs.add_parser("plan", help="Choose the candidate pool from named UTC days.")
+    planning.add_argument(
+        "--day", action="append", required=True, help="UTC day, YYYY-MM-DD. Repeatable."
+    )
     fetching = verbs.add_parser("fetch", help="Take the article text. Resumable.")
     fetching.add_argument("--limit", type=int, default=None, help="Stop after this many attempts.")
     splitting = verbs.add_parser("split", help="Draw the split, or refuse and say why.")
@@ -1938,7 +1936,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     settings = config.load(args.config)
     asked = settings.app.reference_dataset
     if args.verb == "plan":
-        return plan(args.dataset_dir, args.work_dir, args.digest_dir, args.corpus_dir, asked)
+        return plan(
+            args.dataset_dir, args.work_dir, args.digest_dir, args.corpus_dir, asked, days=args.day
+        )
     if args.verb == "fetch":
         return fetch_articles(
             args.dataset_dir, args.work_dir, asked, settings.app.extract, limit=args.limit

@@ -77,7 +77,7 @@ From the root of a checkout, in this order. Only `plan` reads the archive, and
 only `fetch` touches the network.
 
 ```powershell
-python backend/utilities/build_reference_dataset.py plan
+python backend/utilities/build_reference_dataset.py plan --day 2026-09-01
 python backend/utilities/build_reference_dataset.py fetch
 python backend/utilities/build_reference_dataset.py split
 python backend/utilities/build_reference_dataset.py verify

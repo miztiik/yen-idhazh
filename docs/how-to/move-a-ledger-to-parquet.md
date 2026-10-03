@@ -1,6 +1,6 @@
 # Move a ledger to Parquet
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 How do I move one ledger from CSV to the ledger door without losing a row?
 
@@ -33,17 +33,19 @@ A test reads a bounded fixture under `tmp_path`, not the growing production stat
 
 The code pull request does not contain migrated production data. Merge the code first. The owner then makes the data commit last, after checking that no run of `digest.yml`, `idhazh-gardener.yml`, `idhazh-pipeline-tests.yaml`, `validate.yml` or `measure.yml` is queued or running. Check again just before the merge. If a run is active, wait for it and repeat the migration against the final code.
 
-Run the migrator from the checked-out code commit. Pass every root that can still hold this ledger's CSV. `--state-dir` and `--ledger` both repeat. The run id is the UTC date of the migration commit followed by `-1`; the SHA is the full commit id of the code being run.
+Run the migrator from the checked-out code commit. Name the roots and UTC months to migrate. `--state-dir`, `--ledger` and the required `--month YYYY-MM` all repeat. The run id is the UTC date of the migration commit followed by `-1`; the SHA is the full commit id of the code being run.
 
 ```text
-python backend/utilities/migrate_to_parquet.py --state-dir state --state-dir state/pipeline-tests --state-dir state/pipeline-tests-no-visual-plan --state-dir state/pipeline-tests-production-settings --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA> --ledger <LEDGER-NAME>
+python backend/utilities/migrate_to_parquet.py --state-dir state --state-dir state/pipeline-tests --state-dir state/pipeline-tests-no-visual-plan --state-dir state/pipeline-tests-production-settings --month <YYYY-MM> --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA> --ledger <LEDGER-NAME>
 ```
 
-List only trial roots that hold this ledger. A root other than the repository's `state/` is written raw and is never packed. The state root runs the declared compaction task with packing live and its monthly deletion window in report-only mode. The migrator repeats that task until a pass writes and deletes no period. This packs admitted days, months and years without pruning ledger rows. Include a ledger with no CSV in `state/` when it still needs its existing raw or compact files packed.
+List only trial roots that hold this ledger. A root other than the repository's `state/` is written raw and is never packed. The state root runs the declared compaction task over only the named months, with packing live and its monthly deletion window in report-only mode. The migrator repeats that task until a pass writes and deletes no selected period. Year packing requires all twelve months of that year to be named. Include a ledger with no CSV in the selected months when it still needs those months' existing raw or compact files packed.
+
+The listing weighs named period files and fixed index and watermark files. It never discovers other years or months. A gap after the daily watermark is refused: include the intervening months instead of advancing the watermark past unprocessed days. Monthly and yearly watermarks cannot skip older periods that still need packing. Name those months too; a completed indexed period outside the selection remains untouched.
 
 The migrator reads each layout it declares: a day tree, `YYYY/MM/DD/*.csv`, or a shared day file, `YYYY/MM/DD.csv`. A row with a date must name the day in its path. A row without a date uses the day in its path. Any other layout or invalid row stops the run. The migrator reads back every named day through the ledger door and compares every cell with the planned rows. It deletes no CSV in any root until every day in every root passes.
 
-Run the same roots and ledger list with `--check` after migration. It must print `0 CSV file(s) left` and exit 0. Run a dry compaction pass for each ledger moved in `state/`; it must have no period left to pack. Stage only the intended CSV deletions and new `state/raw/` and `state/compact/` files. Do not add trial-root compact files. Push the data commit and wait for its selected CI checks to pass.
+Run the same roots, months and ledger list with `--check` after migration. It must print `0 CSV file(s) left` and exit 0. Run a dry compaction pass for each ledger moved in `state/`; it must have no period left to pack. Stage only the intended CSV deletions and new `state/raw/` and `state/compact/` files. Do not add trial-root compact files. Push the data commit and wait for its selected CI checks to pass.
 
 After the merge, run `--check` again over `state/` and every trial root in the next quiet window. A CSV file found then belongs in a follow-up migration commit under the same row and run id.
 

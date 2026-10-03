@@ -122,20 +122,26 @@ def a_config(root: Path, *declarations: Path) -> Path:
     (config_dir / "gardener").mkdir(parents=True, exist_ok=True)
     for name in COMMITTED_FILES:
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
+    names: set[str] = set()
     for given in declarations:
-        if given.parent == GARDENER_FIXTURES:
-            for name in FIXTURE_DECLARATIONS[given.name]:
-                shutil.copyfile(given / name, config_dir / "gardener" / name)
-            continue
-        sources = (
-            [given / name for name in COMMITTED_DECLARATIONS]
-            if given == CONFIG_DIR / "gardener"
-            else sorted(given.glob("*.json"))
-            if given.is_dir()
-            else [given]
-        )
+        if given == CONFIG_DIR / "gardener":
+            declared = json.loads(
+                (config_dir / "idhazh_gardener.json").read_text(encoding="utf-8")
+            )["task_names"]
+            sources = [given / f"{name}.json" for name in declared]
+        elif given.parent == GARDENER_FIXTURES:
+            sources = [given / name for name in FIXTURE_DECLARATIONS[given.name]]
+        elif given.is_dir():
+            sources = sorted(given.glob("*.json"))
+        else:
+            sources = [given]
         for source in sources:
             shutil.copyfile(source, config_dir / "gardener" / source.name)
+            names.add(source.stem)
+    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
+    knobs["task_names"] = sorted(names)
+    knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
     return config_dir
 
 

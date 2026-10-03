@@ -6,14 +6,16 @@ ledger is left on CSV.
 `CSV_LEDGERS` records how each ledger was filed before it moved to the door, and
 how long it was kept there. It reads the day tree,
 `<prefix>/<YYYY>/<MM>/<DD>/*.csv`, and the shared day file,
-`<prefix>/<YYYY>/<MM>/<DD>.csv`. For each day it reads and validates the CSV
+`<prefix>/<YYYY>/<MM>/<DD>.csv`, only under repeated named `--month YYYY-MM`
+inputs. For each selected day it reads and validates the CSV
 rows, folds them onto any rows the door already holds for that day, and files
 the answer through the door. In the state tree beside `config/`, it runs the
-ledger's own compaction task until no pass writes or deletes a period. Packing
+ledger's own compaction task over those months until no pass writes or deletes a period. Packing
 is live; the monthly window only reports what it would delete. Any other root
 is filed raw and never packed because no reader opens a packed trial root.
 
     python backend/utilities/migrate_to_parquet.py --state-dir state [--state-dir DIR ...]
+        --month <YYYY-MM> [--month <YYYY-MM> ...]
         --run-id <YYYY-MM-DD-NNNN> --git-sha <sha> [--ledger <name> ...] [--check]
 
 With no `--ledger`, a run or a check takes every ledger in the table that
@@ -57,6 +59,8 @@ table's, in `ledger/keys.py`, so the table holds neither.
 from __future__ import annotations
 
 import argparse
+import calendar
+import errno
 import re
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -66,11 +70,10 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, NamedTuple, cast
 
-from idhazh import config, day_partition, day_shards, ledger
+from idhazh import config, day_shards, ledger
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN, Contract, ServerJob
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.file_envelope import WriterIdentity
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import (
     CompactionPolicy,
     DaysWindow,
@@ -86,6 +89,7 @@ from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
+from utilities.named_inputs import month_directories
 
 #: The name every file this writes carries as its producer.
 PRODUCER: Final = "utilities.migrate_to_parquet"
@@ -185,82 +189,73 @@ def _row_contract(which: LedgerName) -> type[Any]:
     return cast("type[Any]", ledger.door_contract(which))
 
 
-def csv_days(state_dir: Path, which: LedgerName) -> dict[str, list[Path]]:
-    """Every day this ledger's CSV still holds, to the files in it, oldest day first.
+def csv_days(state_dir: Path, which: LedgerName, *, months: Sequence[str]) -> dict[str, list[Path]]:
+    """CSV days in the named months, to the files in each, oldest day first.
 
     The day tree and shared day-file layouts are read. Any other layout, or a
     path either layout cannot place, is refused rather than read as empty.
     """
     sat = CSV_LEDGERS[which].old_entry.grain
     if sat is Grain.DAY_FILE:
-        return _shared_day_files(csv_root(state_dir, which), which)
+        return _shared_day_files(csv_root(state_dir, which), which, months=months)
     if sat is not Grain.DAY_TREE:
         raise NotProvenError(
             f"{which.value} sat in the {sat.value} layout, and this reads only the "
             f"{Grain.DAY_TREE.value} and {Grain.DAY_FILE.value} layouts"
         )
     root = csv_root(state_dir, which)
-    if not root.is_dir():
-        return {}
+    days: dict[str, list[Path]] = {}
     try:
-        days = sorted(
-            day for dates in day_shards.dates_by_month(root, days=UNBOUNDED_WINDOW).values()
-            for day in dates
-        )
-        return {day: day_shards.one_day(root, day) for day in days}
+        for folder in _csv_months(root, which, months):
+            for path in sorted(folder.iterdir()):
+                parsed = date.fromisoformat(f"{folder.parent.name}-{folder.name}-{path.name}")
+                if path.is_symlink() or not path.is_dir() or parsed.strftime("%d") != path.name:
+                    raise ValueError(f"{path.name} is not a DD directory in the day-tree layout")
+                day = parsed.isoformat()
+                days[day] = day_shards.one_day(root, day)
+        return days
     except ValueError as refusal:
         raise NotProvenError(f"{which.value}: {refusal}") from refusal
 
 
-def _shared_day_files(root: Path, which: LedgerName) -> dict[str, list[Path]]:
-    """Every `<YYYY>/<MM>/<DD>.csv` file, refusing any path outside that layout."""
-    if root.is_symlink():
-        raise NotProvenError(
-            f"{which.value}: the shared day-file root is a symlink, not a CSV layout"
-        )
-    if not root.is_dir():
-        return {}
+def _csv_months(root: Path, which: LedgerName, months: Sequence[str]) -> list[Path]:
+    """Only declared month directories, refusing symlinks or a malformed named path."""
+    folders = month_directories(root, months)
+    found: list[Path] = []
+    for folder in folders:
+        for named in (root, folder.parent, folder):
+            if named.is_symlink() or (named.exists() and not named.is_dir()):
+                raise NotProvenError(f"{which.value}: {named.name} is not a CSV directory")
+        if folder.is_dir():
+            found.append(folder)
+    return found
+
+
+def _shared_day_files(
+    root: Path, which: LedgerName, *, months: Sequence[str]
+) -> dict[str, list[Path]]:
+    """Shared day files in named months, refusing malformed paths inside those months."""
     days: dict[str, list[Path]] = {}
-    for year in sorted(root.iterdir()):
-        if (
-            year.is_symlink()
-            or not year.is_dir()
-            or re.fullmatch(r"[0-9]{4}", year.name) is None
-        ):
-            raise NotProvenError(
-                f"{which.value}: {year.relative_to(root).as_posix()} is not a YYYY directory "
-                "in the shared day-file layout"
-            )
-        for month in sorted(year.iterdir()):
+    for month in _csv_months(root, which, months):
+        for path in sorted(month.iterdir()):
+            try:
+                parsed = date.fromisoformat(f"{month.parent.name}-{month.name}-{path.stem}")
+            except ValueError as refusal:
+                raise NotProvenError(
+                    f"{which.value}: {path.relative_to(root).as_posix()} is not a "
+                    "YYYY/MM/DD.csv file in the shared day-file layout"
+                ) from refusal
             if (
-                month.is_symlink()
-                or not month.is_dir()
-                or re.fullmatch(r"[0-9]{2}", month.name) is None
-                or not 1 <= int(month.name) <= 12
+                not path.is_file()
+                or path.is_symlink()
+                or path.suffix != ".csv"
+                or parsed.strftime("%d") != path.stem
             ):
                 raise NotProvenError(
-                    f"{which.value}: {month.relative_to(root).as_posix()} is not a MM directory "
-                    "in the shared day-file layout"
+                    f"{which.value}: {path.relative_to(root).as_posix()} is not a "
+                    "YYYY/MM/DD.csv file in the shared day-file layout"
                 )
-            for path in sorted(month.iterdir()):
-                try:
-                    parsed = date.fromisoformat(f"{year.name}-{month.name}-{path.stem}")
-                except ValueError as refusal:
-                    raise NotProvenError(
-                        f"{which.value}: {path.relative_to(root).as_posix()} is not a "
-                        "YYYY/MM/DD.csv file in the shared day-file layout"
-                    ) from refusal
-                if (
-                    not path.is_file()
-                    or path.is_symlink()
-                    or path.suffix != ".csv"
-                    or parsed.strftime("%d") != path.stem
-                ):
-                    raise NotProvenError(
-                        f"{which.value}: {path.relative_to(root).as_posix()} is not a "
-                        "YYYY/MM/DD.csv file in the shared day-file layout"
-                    )
-                days[parsed.isoformat()] = [path]
+            days[parsed.isoformat()] = [path]
     return days
 
 
@@ -357,7 +352,7 @@ def _door_rows(state_dir: Path, which: LedgerName, day: str) -> list[dict[str, s
     return [cast("ledger.CsvRecord", row).csv_row() for row in rows]
 
 
-def _plan(state_dir: Path, which: LedgerName) -> dict[str, _Day]:
+def _plan(state_dir: Path, which: LedgerName, months: Sequence[str]) -> dict[str, _Day]:
     """Every CSV day of this ledger, folded onto what the door holds for it. Nothing written.
 
     Everything that can refuse a day's rows refuses here, before the first
@@ -367,7 +362,7 @@ def _plan(state_dir: Path, which: LedgerName) -> dict[str, _Day]:
     """
     model, key = _row_contract(which), ledger.door_key(which)
     planned: dict[str, _Day] = {}
-    for day, files in csv_days(state_dir, which).items():
+    for day, files in csv_days(state_dir, which, months=months).items():
         try:
             arriving = _csv_rows(state_dir, which, day, files, key, model)
         except ValueError as refusal:
@@ -406,9 +401,7 @@ def _spelled(window: Window) -> str:
     return "forever" if isinstance(window, ForeverWindow) else f"{window.value} {window.unit}"
 
 
-def _declared(
-    which: Sequence[LedgerName], config_dir: Path
-) -> dict[LedgerName, CompactionPolicy]:
+def _declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, CompactionPolicy]:
     """Each ledger's compaction, taken live and unbounded for this one pass, or a refusal.
 
     Asked before anything is read or written. A ledger `config/ledgers.json` still
@@ -466,29 +459,36 @@ def _pack(
     *,
     policy: CompactionPolicy,
     today: date,
+    months: Sequence[str],
 ) -> tuple[list[str], list[str], list[str]]:
-    """Run the declared compaction until it writes and deletes no period."""
+    """Pack only the named months until a pass writes and deletes no selected period."""
     repo_root = state_dir.parent
     folders = tuple(policy.owns or ())
     written: list[str] = []
     deleted: list[str] = []
     packed: set[str] = set()
     while True:
-        outcome = compaction.run(
-            TaskContext(
-                state_dir=state_dir,
-                repo_root=repo_root,
-                today=today,
-                policy=policy,
-                run_id=identity.run_id,
-                attempt=identity.attempt,
-                job=ServerJob.RUN_TASKS,
-                shard=identity.shard,
-                git_sha=identity.git_sha,
-                owned_folders=folders,
-                listing=FileListing.from_disk(repo_root, folders),
+        try:
+            outcome = compaction.run(
+                TaskContext(
+                    state_dir=state_dir,
+                    repo_root=repo_root,
+                    today=today,
+                    policy=policy,
+                    run_id=identity.run_id,
+                    attempt=identity.attempt,
+                    job=ServerJob.RUN_TASKS,
+                    shard=identity.shard,
+                    git_sha=identity.git_sha,
+                    owned_folders=folders,
+                    listing=FileListing.from_paths(
+                        repo_root, _packing_paths(state_dir, which, months), folders=folders
+                    ),
+                ),
+                months=frozenset(months),
             )
-        )
+        except ValueError as refusal:
+            raise NotProvenError(f"{which.value}: packing refused: {refusal}") from refusal
         written.extend(outcome.written)
         deleted.extend(outcome.taken)
         for path in outcome.written:
@@ -514,6 +514,54 @@ def _pack(
                 "writing or deleting a period; CSV files are kept"
             )
         return sorted(packed), list(dict.fromkeys(written)), list(dict.fromkeys(deleted))
+
+
+def _packing_paths(state_dir: Path, which: LedgerName, months: Sequence[str]) -> list[Path]:
+    """Files in named raw and daily months, plus named periods' files and index metadata."""
+    paths: set[Path] = set()
+    for folder in month_directories(ledger.raw_root(state_dir, which), months):
+        if folder.is_dir():
+            paths.update(path for path in folder.rglob("*") if path.is_file())
+    for folder in month_directories(
+        ledger.compact_path(state_dir, which, Period.DAILY, f"{months[0]}-01").parents[2],
+        months,
+    ):
+        if folder.is_dir():
+            paths.update(path for path in folder.iterdir() if path.is_file())
+    for month in sorted(set(months)):
+        year, number = map(int, month.split("-"))
+        for day in range(1, calendar.monthrange(year, number)[1] + 1):
+            index = ledger.raw_index_path(state_dir, which, f"{month}-{day:02d}")
+            if index.is_file():
+                paths.add(index)
+        for period, covers in ((Period.MONTHLY, month), (Period.YEARLY, month[:4])):
+            for fmt in Format:
+                path = ledger.compact_path(state_dir, which, period, covers, fmt=fmt)
+                if path.is_file():
+                    paths.add(path)
+    for period in Period:
+        for path in (
+            ledger.compact_index_path(state_dir, which, period),
+            ledger.watermark_path(state_dir, which, period),
+        ):
+            if path.is_file():
+                paths.add(path)
+    return sorted(paths)
+
+
+def _drop_empty_parents(path: Path, root: Path) -> None:
+    """Remove named empty parents without listing their siblings."""
+    folder = path.parent
+    while folder == root or root in folder.parents:
+        try:
+            folder.rmdir()
+        except OSError as refusal:
+            if refusal.errno in (errno.ENOTEMPTY, errno.EEXIST):
+                return
+            raise
+        if folder == root:
+            return
+        folder = folder.parent
 
 
 def prove(state_dir: Path, which: LedgerName, day: str, rows: Sequence[dict[str, str]]) -> None:
@@ -555,6 +603,7 @@ def migrate(
     git_sha: str,
     today: date,
     config_dir: Path = config.DEFAULT_CONFIG_DIR,
+    months: Sequence[str],
 ) -> list[Moved]:
     """Move these ledgers' CSV days onto the door, pack what the rule admits, prove, then delete.
 
@@ -572,6 +621,7 @@ def migrate(
             git_sha=git_sha,
             today=today,
             config_dir=config_dir,
+            months=months,
         )
     ]
 
@@ -584,12 +634,14 @@ def migrate_roots(
     git_sha: str,
     today: date,
     config_dir: Path = config.DEFAULT_CONFIG_DIR,
+    months: Sequence[str],
 ) -> list[tuple[Path, Moved]]:
     """Migrate every root, proving all of them before deleting any CSV file."""
     identity = _identity(run_id, git_sha)
+    month_directories(Path(), months)
     policies = _declared(which, config_dir)
     roots = list(dict.fromkeys(path.resolve() for path in state_dirs))
-    planned = {root: {name: _plan(root, name) for name in which} for root in roots}
+    planned = {root: {name: _plan(root, name, months) for name in which} for root in roots}
     reports = {
         (root, name): Moved(which=name, days=len(days))
         for root, days_by_ledger in planned.items()
@@ -615,6 +667,7 @@ def migrate_roots(
                 identity,
                 policy=policies[name],
                 today=today,
+                months=months,
             )
             report = reports[root, name]
             report.packed = packed
@@ -629,17 +682,17 @@ def migrate_roots(
             for held in days.values():
                 for path in held.files:
                     path.unlink()
-                    day_partition.drop_empty_day_dirs(path)
-            csv_path = csv_root(root, name)
-            if csv_path.is_dir() and not any(csv_path.iterdir()):
-                csv_path.rmdir()
+                    _drop_empty_parents(path, csv_root(root, name))
     return [(root, reports[root, name]) for root in roots for name in which]
 
 
-def left(state_dir: Path, which: Sequence[LedgerName]) -> list[Path]:
-    """Every CSV file of these ledgers still on disk."""
+def left(state_dir: Path, which: Sequence[LedgerName], *, months: Sequence[str]) -> list[Path]:
+    """CSV files remaining in the named months of these ledgers."""
     return [
-        path for name in which for files in csv_days(state_dir, name).values() for path in files
+        path
+        for name in which
+        for files in csv_days(state_dir, name, months=months).values()
+        for path in files
     ]
 
 
@@ -654,6 +707,14 @@ def _pattern(pattern: str, what: str) -> Callable[[str], str]:
     return take
 
 
+def _month_argument(value: str) -> str:
+    try:
+        month_directories(Path(), [value])
+    except ValueError as refusal:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a UTC month YYYY-MM") from refusal
+    return value
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n", 1)[0])
     parser.add_argument(
@@ -662,6 +723,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="append",
         type=Path,
         help="A tree to migrate; repeat for more.",
+    )
+    parser.add_argument(
+        "--month",
+        action="append",
+        required=True,
+        type=_month_argument,
+        help="UTC month YYYY-MM; repeatable.",
     )
     parser.add_argument(
         "--run-id",
@@ -699,7 +767,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.check:
         try:
             remaining = [
-                (root, path) for root in state_dirs for path in left(root, which)
+                (root, path) for root in state_dirs for path in left(root, which, months=args.month)
             ]
         except NotProvenError as refusal:
             print(f"a CSV tree cannot be read: {refusal}", file=sys.stderr)
@@ -718,6 +786,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_id=args.run_id,
             git_sha=args.git_sha,
             today=datetime.now(UTC).date(),
+            months=args.month,
         )
     except RefusedError as refusal:
         print(f"refused, nothing written: {refusal}", file=sys.stderr)

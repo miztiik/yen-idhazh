@@ -52,6 +52,7 @@ whether the window reports or not, because its day's rows are in a daily file.
 
 from __future__ import annotations
 
+import calendar
 import logging
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -151,6 +152,23 @@ def _new_days(tree: CompactTree, *, newest: date, first_kept: str | None) -> lis
         if first_kept is not None and start.isoformat()[:7] < first_kept:
             start = date.fromisoformat(f"{first_kept}-01")
     days: list[str] = []
+    if tree.months is not None:
+        for month in sorted(tree.months):
+            year, number = map(int, month.split("-"))
+            first = date(year, number, 1)
+            last = date(year, number, calendar.monthrange(year, number)[1])
+            if last < start:
+                continue
+            if first > start and start <= newest:
+                raise ValueError(
+                    f"named months omit {start.isoformat()[:7]} after the daily watermark"
+                )
+            cursor = max(start, first)
+            while cursor <= min(last, newest):
+                days.append(cursor.isoformat())
+                cursor += timedelta(days=1)
+            start = cursor
+        return days
     while start <= newest:
         days.append(start.isoformat())
         start += timedelta(days=1)

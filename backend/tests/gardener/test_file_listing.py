@@ -54,6 +54,17 @@ def test_a_listing_read_off_the_disk_names_every_file_with_its_size(tmp_path: Pa
     assert listing.downloaded() is None, "nothing was downloaded to read the disk"
 
 
+def test_named_paths_ignore_unlisted_neighbours(tmp_path: Path) -> None:
+    root = a_checkout(tmp_path)
+    named = root / "state/days/2026/09/01.csv"
+    listing = FileListing.from_paths(root, [named], folders=["state/days"])
+    assert dict(listing.sizes) == {"state/days/2026/09/01.csv": 1}
+    assert listing.paths_under(root / "state/days") == [named]
+    assert not listing.holds(root / "state/days/2026/09/02.csv")
+    with pytest.raises(ValueError, match="outside"):
+        FileListing.from_paths(root, [root / "state/other/x.csv"], folders=["state/days"])
+
+
 def test_a_folder_the_task_did_not_declare_is_refused_and_never_read_as_empty(
     tmp_path: Path,
 ) -> None:

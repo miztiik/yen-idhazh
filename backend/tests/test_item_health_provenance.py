@@ -18,6 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 from conftest import seed_item_health
 
 from idhazh import ledger
@@ -37,6 +38,18 @@ COLUMNS = frozenset(
         "cpu_busy_pct",
     }
 )
+
+
+def scan_built(root: Path) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    names = [
+        path.relative_to(root).as_posix() for path in (root / provenance.SOURCE_ROOT).rglob("*.py")
+    ]
+    return provenance.scan(root, COLUMNS, names)
+
+
+def ledger_files_built(root: Path) -> list[str]:
+    state = root / ledger.STATE_DIRNAME
+    return [path.relative_to(state).as_posix() for path in state.rglob("*.parquet")]
 
 
 def module(root: Path, name: str, source: str) -> None:
@@ -135,7 +148,7 @@ def test_a_module_that_only_uses_the_word_is_not_a_producer(tmp_path: Path) -> N
         "def build(planned):\n    return ItemHealthRow(date=planned.date, fetch_ms=12)\n",
     )
 
-    computed, lands = provenance.scan(tmp_path, COLUMNS)
+    computed, lands = scan_built(tmp_path)
 
     assert computed["date"] == {"backend/idhazh/producer.py"}
     assert lands["fetch_ms"] == {"backend/idhazh/producer.py"}
@@ -149,7 +162,7 @@ def test_a_record_the_row_never_sees_is_computed_and_not_landed(tmp_path: Path) 
         "def run(recorder):\n    recorder.note(cpu_busy_pct=11.5)\n",
     )
 
-    computed, lands = provenance.scan(tmp_path, COLUMNS)
+    computed, lands = scan_built(tmp_path)
 
     assert computed["cpu_busy_pct"] == {"backend/idhazh/worker.py"}
     assert lands["cpu_busy_pct"] == set()
@@ -167,7 +180,7 @@ def test_a_dict_of_cells_counts_and_a_dict_that_holds_one_does_not(tmp_path: Pat
         "    return {'fetch_ms': 1, 'items': 4, 'failures': {}}\n",
     )
 
-    computed, _ = provenance.scan(tmp_path, COLUMNS)
+    computed, _ = scan_built(tmp_path)
 
     assert computed["cpu_busy_pct"] == {"backend/idhazh/cells.py"}
     assert computed["fetch_ms"] == {"backend/idhazh/cells.py"}, "the first dict is enough"
@@ -195,7 +208,7 @@ def test_a_composed_key_resolves_from_the_constants_its_function_names(tmp_path:
         "    return cells\n",
     )
 
-    computed, _ = provenance.scan(tmp_path, COLUMNS)
+    computed, _ = scan_built(tmp_path)
 
     assert computed["label_prefill_ms"] == {"backend/idhazh/flatten.py"}
     assert computed["summary_prefill_ms"] == {"backend/idhazh/flatten.py"}
@@ -222,7 +235,7 @@ def test_a_helper_unpacked_into_the_row_lands_its_keys(tmp_path: Path) -> None:
         "    return ItemHealthRow(date='2026-09-15', **_flatten(calls))\n",
     )
 
-    _, lands = provenance.scan(tmp_path, COLUMNS)
+    _, lands = scan_built(tmp_path)
 
     assert lands["label_prefill_ms"] == {"backend/idhazh/writer.py"}
     assert lands["summary_prefill_ms"] == set(), "the fixture records one slot"
@@ -249,7 +262,7 @@ def test_a_class_of_cells_counts_and_the_contract_that_declares_the_row_does_not
         "    elapsed: int = 0\n",
     )
 
-    computed, _ = provenance.scan(tmp_path, COLUMNS)
+    computed, _ = scan_built(tmp_path)
 
     assert computed["cpu_busy_pct"] == {"backend/idhazh/timings.py"}
     assert computed["fetch_ms"] == {"backend/idhazh/timings.py"}, "the first class is enough"
@@ -263,7 +276,7 @@ def test_the_module_that_declares_the_row_produces_nothing(tmp_path: Path) -> No
         "class ItemHealthRow:\n    date: str\n    fetch_ms: int | None = None\n",
     )
 
-    computed, _ = provenance.scan(tmp_path, COLUMNS)
+    computed, _ = scan_built(tmp_path)
 
     assert computed["date"] == set()
     assert computed["fetch_ms"] == set()
@@ -273,7 +286,7 @@ def test_an_empty_cell_is_not_a_value(tmp_path: Path) -> None:
     """Empty means the run measured nothing, which is the answer the report gives."""
     census(tmp_path, "2026-09-01", {"fetch_ms": 12, "cpu_busy_pct": None})
 
-    filled, rows, days = provenance.archive_columns(tmp_path, COLUMNS)
+    filled, rows, days = provenance.archive_columns(tmp_path, COLUMNS, ledger_files_built(tmp_path))
 
     assert filled == {"date", "fetch_ms"}
     assert (rows, days) == (1, 1)
@@ -284,16 +297,15 @@ def test_every_recorded_day_is_read(tmp_path: Path) -> None:
     census(tmp_path, "2026-09-03", {"fetch_ms": 1})
     census(tmp_path, "2026-09-04", {"fetch_ms": 2}, {"fetch_ms": 3})
 
-    _, rows, days = provenance.archive_columns(tmp_path, COLUMNS)
+    _, rows, days = provenance.archive_columns(tmp_path, COLUMNS, ledger_files_built(tmp_path))
 
     assert (rows, days) == (3, 2)
 
 
 def test_a_missing_ledger_reads_as_nothing(tmp_path: Path) -> None:
     """A fresh clone holds no census row, and the report still runs."""
-    filled, rows, days = provenance.archive_columns(tmp_path, COLUMNS)
-
-    assert (filled, rows, days) == (frozenset(), 0, 0)
+    with pytest.raises(FileNotFoundError):
+        provenance.archive_columns(tmp_path, COLUMNS, ["raw/item-health/missing.parquet"])
 
 
 def test_a_type_is_printed_without_its_optional() -> None:

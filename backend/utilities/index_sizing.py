@@ -6,7 +6,7 @@ whole corpus, and that page is now 1.68 MB gzipped
 numbers that were estimates: how well the committed int8 vectors compress, how
 many items a month actually carries, what a browse entry costs, and what the
 ranking loop costs at a scope a reader would wait for. This tool measures all
-four over the committed archive, so the shape decision is made on Guardrail #10
+four over explicitly named UTC days, so the shape decision is made on Guardrail #10
 numbers rather than on arithmetic somebody did in their head.
 
 Three traps, all found by running it:
@@ -173,8 +173,10 @@ writeFileSync(outPath, JSON.stringify(result));
 """
 
 
-def digest_paths(root: Path) -> list[Path]:
-    return sorted((root / DIGEST_RELDIR).glob("*/*/*/digest.json"))
+def digest_paths(root: Path, days: list[str]) -> list[Path]:
+    from utilities.named_inputs import day_files
+
+    return day_files(root / DIGEST_RELDIR, days)
 
 
 def scheduled_runs_per_day(root: Path) -> tuple[int, list[str]]:
@@ -335,6 +337,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=REPO_ROOT, help="Repository root to read.")
     parser.add_argument(
+        "--day", action="append", required=True, help="UTC day, YYYY-MM-DD. Repeatable."
+    )
+    parser.add_argument(
         "--node",
         default=shutil.which("node"),
         help="Node executable. Brotli and the ranking clock are skipped without it.",
@@ -350,7 +355,7 @@ def main() -> int:
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
-    paths = digest_paths(root)
+    paths = digest_paths(root, args.day)
     if not paths:
         parser.error(f"no committed days under {DIGEST_RELDIR}")
     days = [DigestDay.from_json(path.read_text(encoding="utf-8")) for path in paths]
@@ -396,10 +401,7 @@ def main() -> int:
             for months in REPORTED_SCOPES_MONTHS
         ]
         encoded = [
-            value
-            for day in days
-            if day.embeddings
-            for value in day.embeddings.vectors.values()
+            value for day in days if day.embeddings for value in day.embeddings.vectors.values()
         ]
         node_result = run_node(
             args.node,
@@ -475,12 +477,18 @@ def main() -> int:
         print(json.dumps(report, indent=2))
         return 0
 
-    print(f"{counts['n_days']} committed days, {n_items} items, {n_vectors} carry a vector "
-          f"({counts['vector_coverage'] * 100:.1f}%)")
-    print(f"items a day: mean {counts['items_per_day_mean']} +/- {counts['items_per_day_stddev']}, "
-          f"median {counts['items_per_day_median']}, max {counts['items_per_day_max']}")
-    print(f"schedule: {slots} runs a day x safety ceiling {ceiling_per_run} = "
-          f"{ceiling_rate:.0f} items a day at the structural ceiling")
+    print(
+        f"{counts['n_days']} committed days, {n_items} items, {n_vectors} carry a vector "
+        f"({counts['vector_coverage'] * 100:.1f}%)"
+    )
+    print(
+        f"items a day: mean {counts['items_per_day_mean']} +/- {counts['items_per_day_stddev']}, "
+        f"median {counts['items_per_day_median']}, max {counts['items_per_day_max']}"
+    )
+    print(
+        f"schedule: {slots} runs a day x safety ceiling {ceiling_per_run} = "
+        f"{ceiling_rate:.0f} items a day at the structural ceiling"
+    )
 
     header = (
         "shape                  n      raw B  raw/item    gzip5 B  gz5/item  gz9/item   brotli B"
@@ -488,26 +496,32 @@ def main() -> int:
     print(f"\n{header}")
     for label, row in sizes.items():
         brotli = row.get("brotli_bytes")
-        print(f"  {label:<18} {row['n']:>6} {row['raw_bytes']:>10} {row['raw_bytes_per_item']:>9} "
-              f"{row['gzip_bytes']:>10} {row['gzip_bytes_per_item']:>9} "
-              f"{row['gzip9_bytes_per_item']:>9} "
-              f"{(brotli if brotli is not None else '-'):>10}")
+        print(
+            f"  {label:<18} {row['n']:>6} {row['raw_bytes']:>10} {row['raw_bytes_per_item']:>9} "
+            f"{row['gzip_bytes']:>10} {row['gzip_bytes_per_item']:>9} "
+            f"{row['gzip9_bytes_per_item']:>9} "
+            f"{(brotli if brotli is not None else '-'):>10}"
+        )
 
     print("\na 30-day month, sized on the level-5 gzipped per-item rates above")
     for row in months:
-        print(f"  {row['rate']:<9} {row['items_per_month']:>7} items  "
-              f"browse {row['browse_gzip_bytes']:>9} B "
-              f"({'OVER' if row['browse_over_trigger'] else 'under'} 1.5 MB, "
-              f"{row['browse_seconds']}s)  "
-              f"vectors {row['vector_gzip_bytes']:>9} B "
-              f"({'OVER' if row['vector_over_trigger'] else 'under'} 8 MB, "
-              f"{row['vector_seconds']}s)")
+        print(
+            f"  {row['rate']:<9} {row['items_per_month']:>7} items  "
+            f"browse {row['browse_gzip_bytes']:>9} B "
+            f"({'OVER' if row['browse_over_trigger'] else 'under'} 1.5 MB, "
+            f"{row['browse_seconds']}s)  "
+            f"vectors {row['vector_gzip_bytes']:>9} B "
+            f"({'OVER' if row['vector_over_trigger'] else 'under'} 8 MB, "
+            f"{row['vector_seconds']}s)"
+        )
 
     if report["rank"]:
         print(f"\nranking clock on {report['node']}, {args.repeats} repeats, median of samples")
         for row in report["rank"]:
-            print(f"  {row['label']:<16} {row['n']:>7} vectors  "
-                  f"{row['median_ms']:.1f} ms  (min {row['min_ms']:.1f}, max {row['max_ms']:.1f})")
+            print(
+                f"  {row['label']:<16} {row['n']:>7} vectors  "
+                f"{row['median_ms']:.1f} ms  (min {row['min_ms']:.1f}, max {row['max_ms']:.1f})"
+            )
     elif node_reason:
         print(f"\n{node_reason}")
 

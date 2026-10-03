@@ -105,13 +105,11 @@ def find_llama_bench(explicit: Path | None) -> Path:
         return explicit
 
     names = ("llama-bench.exe", "llama-bench") if os.name == "nt" else ("llama-bench",)
-    candidates = [
-        path for name in names for path in Path("backend/bin").rglob(name) if path.is_file()
-    ]
+    candidates = [path for name in names if (path := Path("backend/bin") / name).is_file()]
     if len(candidates) != 1:
         found = ", ".join(path.as_posix() for path in candidates) or "none"
         raise FileNotFoundError(
-            f"expected one llama-bench under backend/bin, found: {found}; use --binary"
+            f"expected one llama-bench in backend/bin, found: {found}; use --binary"
         )
     return candidates[0]
 
@@ -159,8 +157,7 @@ def download(ref: ModelRef, remote: RemoteFile, models_dir: Path) -> tuple[Path,
         local_sha = sha256(destination)
         if destination.stat().st_size != remote.bytes or local_sha != remote.sha256:
             raise ValueError(
-                f"existing file does not match {ref}; "
-                f"delete {display_path(destination)} and retry"
+                f"existing file does not match {ref}; delete {display_path(destination)} and retry"
             )
         return destination, 0.0
 
