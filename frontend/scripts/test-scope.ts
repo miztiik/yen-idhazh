@@ -191,20 +191,20 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^frontend\//.test(path)) {
 			selected = [...FRONTEND_GROUPS];
 			reason = 'shared or unmapped frontend input';
-		} else if (/^backend\/idhazh\/[^/]+\.py$/.test(path)) {
+		} else if (Object.hasOwn(MODULE_TESTS, path.match(/^backend\/idhazh\/([^/]+)\.py$/)?.[1] ?? '')) {
 			const module = path.split('/').at(-1)!.replace(/\.py$/, '');
-			const tests = MODULE_TESTS[module];
-			if (tests) {
-				for (const name of tests) backendFiles.add(name);
-				selected = ['backend'];
-				if (['extract', 'sanitize'].includes(module)) selected.push('logic', 'publishing');
-				if (['ledger', 'telemetry'].includes(module)) selected.push(...FRONTEND_GROUPS);
-				reason = 'module tests and declared consumers';
-			} else {
-				selected = ALL;
-				fullBackend = true;
-				reason = 'unmapped backend dependency; full coverage';
-			}
+			for (const name of MODULE_TESTS[module]) backendFiles.add(name);
+			selected = ['backend'];
+			if (['extract', 'sanitize'].includes(module)) selected.push('logic', 'publishing');
+			if (['ledger', 'telemetry'].includes(module)) selected.push(...FRONTEND_GROUPS);
+			reason = 'module tests and declared consumers';
+		} else if (/^backend\/idhazh\/(?!contracts\/).+\.py$/.test(path)) {
+			// The browser reaches backend code only through the canary build, so a
+			// pull request answers with the whole backend suite, and the merge push
+			// to `main`, which runs every group, settles the browser.
+			selected = ['backend'];
+			fullBackend = true;
+			reason = 'backend module; full backend suite';
 		} else {
 			selected = ALL;
 			fullBackend = true;
