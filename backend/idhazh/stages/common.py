@@ -13,6 +13,7 @@ import logging
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable
+from datetime import date
 from pathlib import Path
 from typing import Any, Final, NamedTuple
 from urllib.error import HTTPError
@@ -568,7 +569,11 @@ def _run_canaries(
     attacks run again on real calls before the model is adopted.
     """
     observations: list[CanaryObservation] = []
-    for path in sorted(CANARY_DIR.glob("*.json")):
+    names = settings.app.evaluation.canary_files
+    if not names:
+        raise ValueError("config/idhazh.json evaluation.canary_files must name at least one canary")
+    for name in names:
+        path = CANARY_DIR / f"{name}.json"
         payload = json.loads(path.read_text(encoding="utf-8"))
         article = _canary_article(
             payload, extract_config=settings.app.extract, fetched_at=assemble.utc_now()
@@ -706,6 +711,29 @@ def _manifest_with_run_vertical_counts(payload: object, day: DigestDay) -> RunMa
         migrated_runs.append({**run, "verticals": verticals})
     migrated = {**payload, "version": RunManifest.schema_version(), "runs": migrated_runs}
     return RunManifest.model_validate(migrated)
+
+
+def canonical_dates(dates: Iterable[str]) -> tuple[str, ...]:
+    """Validate and sort the exact caller-named UTC dates."""
+    selected: set[str] = set()
+    for value in dates:
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as error:
+            raise ValueError(f"day must be a YYYY-MM-DD UTC date: {value!r}") from error
+        if parsed.isoformat() != value:
+            raise ValueError(f"day must be a YYYY-MM-DD UTC date: {value!r}")
+        selected.add(value)
+    return tuple(sorted(selected))
+
+
+def published_days_on_dates(root: Path, dates: Iterable[str]) -> list[Path]:
+    """Existing committed day payloads for the exact caller-named UTC dates."""
+    return [
+        path
+        for value in canonical_dates(dates)
+        if (path := assemble.day_dir(root, value) / "digest.json").is_file()
+    ]
 
 
 def published_days(root: Path) -> list[Path]:

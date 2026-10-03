@@ -3,20 +3,18 @@
 from __future__ import annotations
 
 import ast
+import inspect
 
 import pytest
-from _source_files import source_files
-from conftest import REPO_ROOT
 
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.ledger import keys
+from idhazh.ledger import keys, paths, rows, staging
 
 pytestmark = pytest.mark.contract
 
-#: The package that builds every path under `state/`. Read here rather than
-#: imported, because the question is which functions it declares. Every file in
-#: it, so a second builder module is read the day it is written.
-LEDGER_PACKAGE = REPO_ROOT / "backend" / "idhazh" / "ledger"
+#: The modules that build paths under `state/`. Named rather than discovered, so
+#: the read stays fixed as the repository grows; a new builder module is added here.
+PATH_BUILDER_MODULES = (paths, rows, staging)
 
 
 def _path_builders(tree: ast.Module) -> tuple[set[str], set[str]]:
@@ -54,7 +52,7 @@ def test_the_day_trees_are_exactly_the_ledgers_with_a_settlement_shape() -> None
 
 
 def test_every_path_under_state_is_built_from_a_name_this_vocabulary_declares() -> None:
-    """Derived from the package rather than listed, so a new builder cannot slip past.
+    """Every builder in the named path-builder modules takes its ledger as a name.
 
     Every builder takes the ledger as a typed argument, so no address under
     `state/` can be reached by a name this vocabulary does not declare. A builder
@@ -65,10 +63,10 @@ def test_every_path_under_state_is_built_from_a_name_this_vocabulary_declares() 
     """
     generic: set[str] = set()
     naming: dict[str, str] = {}
-    for source in source_files(roots=(LEDGER_PACKAGE,), suffixes=(".py",)):
-        takes, names = _path_builders(ast.parse(source.read_text(encoding="utf-8")))
+    for module in PATH_BUILDER_MODULES:
+        takes, names = _path_builders(ast.parse(inspect.getsource(module)))
         generic |= takes
-        naming.update(dict.fromkeys(names, source.name))
+        naming.update(dict.fromkeys(names, module.__name__))
 
     assert generic, "no path builder was found, so this test is asserting nothing"
     offenders = ", ".join(f"{name} in {where}" for name, where in sorted(naming.items()))
