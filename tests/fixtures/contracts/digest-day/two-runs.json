@@ -3,171 +3,24 @@
   "embeddings": null,
   "generated_at": "2026-08-21T18:22:05Z",
   "items": [
-    {
-      "also_covered_by": null,
-      "also_ran_earlier": [],
-      "band": "high",
-      "band_reason": null,
-      "carried_by": null,
-      "desk": null,
-      "entities": [
-        "example-lab"
-      ],
-      "events": [
-        "release"
-      ],
-      "introduced_by_run": 1,
-      "item_id": "ai-01",
-      "lenses": [
-        "ai-roi"
-      ],
-      "on_front_page": null,
-      "published_at": "2026-08-21T05:30:00Z",
-      "rank_score": null,
-      "reader_note": null,
-      "same_story_as": null,
-      "secondary_desk": null,
-      "source_form": "article",
-      "source_id": "example-lab-blog",
-      "source_kind": "reporting",
-      "source_name": "Example Lab blog",
-      "source_url": "https://blog.example-lab.org/2026/08/model-release",
-      "summary": "Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.",
-      "time_source": null,
-      "title": "Example Lab releases a smaller model",
-      "truncated": false,
-      "updated_at": null,
-      "updated_by_run": null,
-      "vertical": "ai",
-      "visual": {
-        "alt": "Cost per million tokens, previous release against the new one.",
-        "data_path": "digest/2026/08/21/ai-01.json",
-        "kind": "chart",
-        "state": "rendered"
-      },
-      "watchlist_hit": null
-    },
-    {
-      "also_covered_by": null,
-      "also_ran_earlier": [],
-      "band": "medium",
-      "band_reason": null,
-      "carried_by": null,
-      "desk": null,
-      "entities": [],
-      "events": [
-        "capex",
-        "deal"
-      ],
-      "introduced_by_run": 1,
-      "item_id": "energy-01",
-      "lenses": [
-        "markets"
-      ],
-      "on_front_page": null,
-      "published_at": "2026-08-20T22:10:00Z",
-      "rank_score": null,
-      "reader_note": null,
-      "same_story_as": null,
-      "secondary_desk": null,
-      "source_form": "article",
-      "source_id": "example-grid-newsroom",
-      "source_kind": "reporting",
-      "source_name": "Example Grid newsroom",
-      "source_url": "https://newsroom.example-grid.com/2026/08/reactor-order",
-      "summary": "Example Grid has ordered four small modular reactors totalling 1.2 gigawatts for a datacentre campus. The order is worth 3.2 billion dollars and the first unit is due in 2031.",
-      "time_source": null,
-      "title": "Example Grid orders four small modular reactors",
-      "truncated": true,
-      "updated_at": null,
-      "updated_by_run": null,
-      "vertical": "energy",
-      "visual": null,
-      "watchlist_hit": null
-    },
-    {
-      "also_covered_by": null,
-      "also_ran_earlier": [],
-      "band": "high",
-      "band_reason": null,
-      "carried_by": null,
-      "desk": null,
-      "entities": [
-        "example-lab"
-      ],
-      "events": [
-        "research"
-      ],
-      "introduced_by_run": 2,
-      "item_id": "ai-02",
-      "lenses": [],
-      "on_front_page": null,
-      "published_at": "2026-08-21T16:40:00Z",
-      "rank_score": null,
-      "reader_note": null,
-      "same_story_as": null,
-      "secondary_desk": null,
-      "source_form": "article",
-      "source_id": "example-lab-research",
-      "source_kind": "reporting",
-      "source_name": "Example Lab research",
-      "source_url": "https://research.example-lab.org/2026/08/paper",
-      "summary": "A paper from Example Lab reports a 12 point gain on a summarization benchmark, trained in 4,000 GPU hours.",
-      "time_source": null,
-      "title": "Example Lab publishes a summarization paper",
-      "truncated": false,
-      "updated_at": null,
-      "updated_by_run": null,
-      "vertical": "ai",
-      "visual": null,
-      "watchlist_hit": null
-    }
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": null,"desk": null,"entities": ["example-lab"],"events": ["release"],"introduced_by_run": 1,"item_id": "ai-01","lenses": ["ai-roi"],"on_front_page": null,"published_at": "2026-08-21T05:30:00Z","rank_score": null,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "example-lab-blog","source_kind": "reporting","source_name": "Example Lab blog","source_url": "https://blog.example-lab.org/2026/08/model-release","summary": "Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.","time_source": null,"title": "Example Lab releases a smaller model","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "ai","visual": {"alt": "Cost per million tokens, previous release against the new one.","data_path": "digest/2026/08/21/ai-01.json","kind": "chart","state": "rendered"},"watchlist_hit": null},
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "medium","band_reason": null,"carried_by": null,"desk": null,"entities": [],"events": ["capex","deal"],"introduced_by_run": 1,"item_id": "energy-01","lenses": ["markets"],"on_front_page": null,"published_at": "2026-08-20T22:10:00Z","rank_score": null,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "example-grid-newsroom","source_kind": "reporting","source_name": "Example Grid newsroom","source_url": "https://newsroom.example-grid.com/2026/08/reactor-order","summary": "Example Grid has ordered four small modular reactors totalling 1.2 gigawatts for a datacentre campus. The order is worth 3.2 billion dollars and the first unit is due in 2031.","time_source": null,"title": "Example Grid orders four small modular reactors","truncated": true,"updated_at": null,"updated_by_run": null,"vertical": "energy","visual": null,"watchlist_hit": null},
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": null,"desk": null,"entities": ["example-lab"],"events": ["research"],"introduced_by_run": 2,"item_id": "ai-02","lenses": [],"on_front_page": null,"published_at": "2026-08-21T16:40:00Z","rank_score": null,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "example-lab-research","source_kind": "reporting","source_name": "Example Lab research","source_url": "https://research.example-lab.org/2026/08/paper","summary": "A paper from Example Lab reports a 12 point gain on a summarization benchmark, trained in 4,000 GPU hours.","time_source": null,"title": "Example Lab publishes a summarization paper","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "ai","visual": null,"watchlist_hit": null}
   ],
   "items_failed": 1,
   "items_planned": 4,
   "leads": [
-    {
-      "item_id": "energy-01",
-      "reason": "The lead story on our Energy desk."
-    }
+    {"item_id": "energy-01","reason": "The lead story on our Energy desk."}
   ],
   "partial": true,
   "retention_window_months": -1,
   "runs": [
-    {
-      "at": "2026-08-21T06:44:12Z",
-      "completed_at": null,
-      "items_added": 2,
-      "n": 1,
-      "run_id": null
-    },
-    {
-      "at": "2026-08-21T18:22:05Z",
-      "completed_at": null,
-      "items_added": 1,
-      "n": 2,
-      "run_id": null
-    }
+    {"at": "2026-08-21T06:44:12Z","completed_at": null,"items_added": 2,"n": 1,"run_id": null},
+    {"at": "2026-08-21T18:22:05Z","completed_at": null,"items_added": 1,"n": 2,"run_id": null}
   ],
   "version": "2026-08-21T06:00",
   "verticals": [
-    {
-      "below_feed_floor": false,
-      "considered": 9,
-      "count": 2,
-      "desk_count": null,
-      "display_name": "AI",
-      "id": "ai",
-      "too_old": 6
-    },
-    {
-      "below_feed_floor": null,
-      "considered": null,
-      "count": 1,
-      "desk_count": null,
-      "display_name": "Energy",
-      "id": "energy",
-      "too_old": null
-    }
+    {"below_feed_floor": false,"considered": 9,"count": 2,"desk_count": null,"display_name": "AI","id": "ai","too_old": 6},
+    {"below_feed_floor": null,"considered": null,"count": 1,"desk_count": null,"display_name": "Energy","id": "energy","too_old": null}
   ]
 }

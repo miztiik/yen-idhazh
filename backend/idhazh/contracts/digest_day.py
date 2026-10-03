@@ -72,6 +72,7 @@ from idhazh.contracts.base import (
     Slug,
     Timestamp,
     Url,
+    records_json,
     without_retired_keys,
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
@@ -600,6 +601,13 @@ class DigestDay(Contract):
         ),
     )
     embeddings: DigestEmbeddings | None = None
+
+    def to_json(self) -> str:
+        """Keep each story and short day reference on one line."""
+        return records_json(
+            self.model_dump(mode="json"),
+            record_lists=frozenset({"items", "leads", "runs", "verticals"}),
+        )
 
     @model_validator(mode="after")
     def _order_is_global_and_append_only(self) -> Self:
