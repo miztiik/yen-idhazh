@@ -1,7 +1,7 @@
 """Does the gardener's workflow run every task once, in a checkout its readers fit inside?
 
-Everything here is read off the committed workflow and the committed
-declarations, and nothing runs a workflow. What is decidable from those files
+Everything here reads the named workflow and three named declarations copied
+into a temporary config, and nothing runs a workflow. What is decidable from those files
 is decided here: that the matrix can only ever produce a partition of the
 tasks, that every job the workflow spells is a job a record can name, that the
 plan job's sparse checkout holds every folder its reader opens, that only the
@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -65,6 +64,9 @@ BARE_ROOTS: Final = frozenset(
     }
 )
 
+# Two active tasks exercise partitioning; history exercises exclusion from it.
+TASK_FILES: Final = ("feed-health.json", "traces.json", "corpus-squash.json")
+
 
 def gardener() -> dict[str, object]:
     return _load_workflows()[WORKFLOW]
@@ -85,23 +87,33 @@ def _sparse(checkout: dict[str, object]) -> list[str]:
 
 
 def a_config_with_shards(root: Path, shards: int) -> Path:
-    """The committed declarations, with the gardener's `shards` set to this."""
+    """Three named declarations, with the gardener's `shards` set to this."""
     config_dir = root / "config"
-    shutil.copytree(CONFIG_DIR / "gardener", config_dir / "gardener")
+    (config_dir / "gardener").mkdir(parents=True, exist_ok=True)
+    for filename in TASK_FILES:
+        (config_dir / "gardener" / filename).write_text(
+            read_text(CONFIG_DIR / "gardener" / filename), encoding="ascii", newline="\n"
+        )
+    for filename in ("idhazh.json", "appearance.json"):
+        (config_dir / filename).write_text(
+            read_text(CONFIG_DIR / filename), encoding="ascii", newline="\n"
+        )
     knobs = json.loads(read_text(CONFIG_DIR / "idhazh_gardener.json"))
     knobs["shards"] = shards
-    (config_dir / "idhazh_gardener.json").write_text(json.dumps(knobs), encoding="ascii")
+    (config_dir / "idhazh_gardener.json").write_text(
+        json.dumps(knobs), encoding="ascii", newline="\n"
+    )
     return config_dir
 
 
 def test_every_shard_count_the_matrix_can_run_is_a_partition_of_the_tasks(tmp_path: Path) -> None:
-    """The oracle: every active task the matrix runs is in exactly one shard, and none is empty.
+    """Each active fixture task is in exactly one shard, and none is empty.
 
     Swept over every shard count from one to one past the number of tasks, so a
-    change to the split is held at the value config ships and at every value a
-    person could set it to.
+    change to the split is held at the boundaries, not at a growing production
+    task count.
     """
-    declared = gardener_shards.declarations(CONFIG_DIR)
+    declared = gardener_shards.declarations(a_config_with_shards(tmp_path / "declared", 1))
     tasks = {
         name
         for name, held in declared.items()
@@ -119,14 +131,15 @@ def test_every_shard_count_the_matrix_can_run_is_a_partition_of_the_tasks(tmp_pa
         assert [leg["shard"] for leg in legs] == [shard["index"] for shard in planned["shards"]]
 
 
-def test_a_shard_lists_what_its_tasks_own_or_read_and_never_a_whole_root() -> None:
+def test_a_shard_lists_what_its_tasks_own_or_read_and_never_a_whole_root(tmp_path: Path) -> None:
     """Every owned folder is listed by the one shard that runs its owner, and none is a root.
 
     A shard checks out none of these folders: it lists their files from the
     commit. A whole root here would list every ledger's files for one task.
     """
-    settings = config.load_gardener()
-    planned = gardener_shards.plan(CONFIG_DIR)
+    config_root = a_config_with_shards(tmp_path, 2)
+    settings = config.load_gardener(config_root)
+    planned = gardener_shards.plan(config_root)
     owner: dict[str, int] = {}
     for shard in planned["shards"]:
         owned, read = gardener_publish.declared_folders(shard["task_names"], settings)
@@ -160,11 +173,12 @@ def test_every_job_the_workflow_spells_is_a_job_a_record_can_name() -> None:
 def _what_the_planner_opens(tmp_path: Path) -> list[str]:
     """Every file the committed planner opens and every folder it lists, run as the plan job runs it.
 
-    A fresh interpreter with no site packages, in the repository, against the
-    committed config, with an audit hook recording each `open` and each folder
+    A fresh interpreter with no site packages, in a test-built tree, against the
+    named config inputs, with an audit hook recording each `open` and each folder
     listing. Paths inside the interpreter's own installation are left out.
     """
     trace = tmp_path / "opened.json"
+    a_config_with_shards(tmp_path, 2)
     driver = (
         "import json, os, runpy, sys\n"
         "seen = []\n"
@@ -185,7 +199,7 @@ def _what_the_planner_opens(tmp_path: Path) -> list[str]:
     )
     done = subprocess.run(
         [sys.executable, "-I", "-S", "-c", driver],
-        cwd=REPO_ROOT,
+        cwd=tmp_path,
         capture_output=True,
         text=True,
         check=False,
@@ -195,12 +209,14 @@ def _what_the_planner_opens(tmp_path: Path) -> list[str]:
     installed = [Path(prefix).resolve() for prefix in {sys.prefix, sys.base_prefix}]
     opened: list[str] = []
     for raw in json.loads(trace.read_text(encoding="utf-8")):
-        path = Path(raw) if Path(raw).is_absolute() else REPO_ROOT / raw
+        path = Path(raw) if Path(raw).is_absolute() else tmp_path / raw
         resolved = path.resolve()
         if any(resolved.is_relative_to(prefix) for prefix in installed):
             continue
         if resolved.is_relative_to(REPO_ROOT.resolve()):
             opened.append(resolved.relative_to(REPO_ROOT.resolve()).as_posix())
+        elif resolved.is_relative_to(tmp_path.resolve()):
+            opened.append(resolved.relative_to(tmp_path.resolve()).as_posix())
     return opened
 
 
@@ -373,13 +389,13 @@ def test_the_history_job_runs_last_and_unless_the_run_was_cancelled() -> None:
     assert str(job["timeout-minutes"]) == "30"
 
 
-def test_the_workflow_names_no_task_the_matrix_runs() -> None:
+def test_the_workflow_names_no_task_the_matrix_runs(tmp_path: Path) -> None:
     """Adding a task is a declaration and never a workflow edit (decision 5).
 
     The one task outside the matrix is the history task, and its job is about
     it by design: it reads that declaration to decide whether the squash is due.
     """
-    declared = gardener_shards.declarations(CONFIG_DIR)
+    declared = gardener_shards.declarations(a_config_with_shards(tmp_path, 2))
     names = {name for name, held in declared.items() if held["kind"] != "history"}
     assert names, "nothing is declared, so this checks nothing"
 

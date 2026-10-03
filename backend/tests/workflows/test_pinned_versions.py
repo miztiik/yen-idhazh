@@ -23,7 +23,7 @@ from ._harness import (
     PINNED_LLAMA_SHA256,
     RELEASE_LOOKUP_FORM,
     WEIGHTS_FETCH_FORM,
-    WORKFLOWS_DIR,
+    WORKFLOW_PATHS,
     _action_references,
     _every_env,
     _llama_fetch_scripts,
@@ -93,8 +93,7 @@ def test_the_pin_file_is_the_one_home_of_the_build_for_every_caller_on_it() -> N
     # extracted is still a fetch.
     installer = read_text(REPO_ROOT / MODEL_RUNTIME_MODULE)
     named = (
-        *WORKFLOWS_DIR.glob("*.yml"),
-        *WORKFLOWS_DIR.glob("*.yaml"),
+        *WORKFLOW_PATHS,
         REPO_ROOT / MODEL_RUNTIME_MODULE,
     )
     assert named, "nothing ships here, so this is checking nothing"

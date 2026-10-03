@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -23,6 +22,7 @@ from ._harness import (
     BENCH_TRIAL_STATE,
     CANDIDATE_CONFIG_ACTION,
     MODELS_POINTER_KEY,
+    _copy_config,
     _load_workflows,
     _mapping,
     _stage_invocations,
@@ -175,7 +175,7 @@ def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
     somewhere else entirely would pass the second kind of check.
     """
     scratch = tmp_path / "candidate-config"
-    shutil.copytree(REPO_ROOT / "config", scratch)
+    _copy_config(scratch)
     committed = json.loads((scratch / "idhazh.json").read_text(encoding="utf-8"))
     candidate_pointer.point_at(
         committed[MODELS_POINTER_KEY], scratch=scratch, trial_state=BENCH_TRIAL_STATE
