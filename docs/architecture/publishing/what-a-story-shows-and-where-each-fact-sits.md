@@ -85,7 +85,7 @@ They now split by what they are a claim about.
 | who is speaking, and its kind where the kind is worth saying | `Read the original`, at the trailing edge |
 | when - the story's own published time on a dated page, and the day it was found on in a search result | |
 
-**The cap is four child elements above the title, at every width.** A line that holds four on a desktop and five on a phone because a chip wrapped in from somewhere else is the failure worth catching, so `frontend/tests/item-meta.spec.ts` drives 360, 801 and 1536 rather than the default viewport. The count is of elements, not of facts: an item that earned three lens chips still spends one slot, because they arrive inside one wrapper, and the kind sits inside the source element it qualifies.
+**The cap is four child elements above the title.** The count is of elements, not of facts: an item that earned three lens chips still spends one slot, because they arrive inside one wrapper, and the kind sits inside the source element it qualifies. An element count does not change with width - CSS wraps a line but never adds an element to it, and no item component renders differently by width - so `frontend/tests/item-meta.spec.ts` checks it once, at 360.
 
 **The monogram is the fourth thing above the title and it is not a child of that line.** Row #12 had already moved it into the item's own leading grid column, where it is level with the eyebrow and beside the title whose read state it carries. Putting it back into the line would undo that and cost a slot, so the ruling's four are read as four things the reader sees above the title, and the mechanical cap is on the line's own children.
 

@@ -6,12 +6,9 @@
  * Below the summary go the claims about the summary and the two things you can
  * do next. Three promises follow, and all three fail silently.
  *
- * 1. **The eyebrow holds at most four child elements, at every width.** A line
- *    that holds four on a desktop and five on a phone because a chip wrapped in
- *    from somewhere else is the failure this exists to catch, so every width the
- *    project commits to is driven rather than the default one. The count is of
- *    ELEMENTS: an item that earned three lens chips still spends one slot,
- *    because they arrive inside one wrapper.
+ * 1. **The eyebrow holds at most four child elements.** The count is of
+ *    ELEMENTS, so it is the same at every width: an item that earned three lens
+ *    chips still spends one slot, because they arrive inside one wrapper.
  * 2. **The confidence sentence, `Listen` and `Read the original` follow the
  *    summary in document order, on every item.** Printing "our summary leaves
  *    out figures from the opening" above a headline the reader has not read is a
@@ -57,10 +54,11 @@ const BUILD = join(HERE, '..', 'build');
  * `build/`, which since 2026-09-09 holds no dated directory at all. */
 const DAY = newestDate();
 
-/** A phone, the gap between two breakpoints, and a wide desktop. The same three
- * `layout-overflow.spec.ts` drives; `frame.breakpoints_px` is [640, 1024, 1400],
- * and 801 is where a layout only ever tested at a breakpoint breaks. */
-const WIDTHS = [360, 801, 1536];
+/** One width, the phone. Every check below reads document order and element
+ * counts, and no item component renders differently by width - CSS wraps a
+ * line, it never adds an element to it. Three widths loaded the same DOM three
+ * times. Geometry at the breakpoints is `layout-overflow.spec.ts`'s question. */
+const WIDTHS = [360];
 
 /** The whole day is on the page, however many `Show N more` it took.
  *

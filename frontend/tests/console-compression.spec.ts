@@ -378,9 +378,12 @@ test('the section declares its own window and follows the control', async ({ pag
 });
 
 test('the chart draws in CSS pixels at every width, and labels its own axis', async ({ page }) => {
+	// Loaded once: the first width drives the mount-time measure, the other two
+	// the resize path.
+	await page.setViewportSize({ width: 380, height: 900 });
+	await open(page);
 	for (const width of [380, 768, 1400]) {
 		await page.setViewportSize({ width, height: 900 });
-		await open(page);
 
 		// A viewBox is a scale factor, not a unit. One that disagrees with the
 		// rendered width puts `font-size="10"` on screen at some other size.
