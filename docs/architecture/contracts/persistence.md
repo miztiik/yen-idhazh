@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -132,6 +132,11 @@ The paths come back ascending by the day each file covers, never by path string.
 | Envelope | the footer's key-value metadata | line one, an object of strings |
 | Compression | `ledger.compression_raw` (snappy) or `ledger.compression_compact` (zstd) | `none` - it is plain text |
 | For | every ledger by default | a payload a person reads in a pull request |
+
+`parquet.read` closes its file reader and in-memory byte source before returning
+the materialized rows. A short-lived process must not leave native reader
+resources for interpreter shutdown to collect; the process-exit regression reads
+a committed fixture in a fresh interpreter.
 
 The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller than snappy at a thousand rows, in [what a parquet file costs](../../reference/benchmarks/what-a-parquet-file-costs.md)), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` names the three console ledgers**, `host-fingerprint`, `item-health` and `summary-quality-evals`: the site build copies each one's indexes and compact files into the site for the browser's query door ([../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)). The four console routes still read the same packed files while the site is built, from `state/` on disk, until a panel moves onto the door.
 

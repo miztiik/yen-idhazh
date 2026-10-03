@@ -14,12 +14,15 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import ClassVar, Final
 
 import pyarrow.parquet
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import Field
 
 from idhazh import ledger
@@ -145,6 +148,29 @@ def _stored(path: Path) -> list[dict[str, object]]:
 
 
 # --- the round trip ------------------------------------------------------------
+
+
+def test_a_short_lived_parquet_reader_exits_cleanly() -> None:
+    fixture = FIXTURES_DIR / "parquet" / "visual-prunes-raw-2026-09-06.parquet"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys\n"
+            "from pathlib import Path\n"
+            "from idhazh.ledger import parquet\n"
+            "metadata, rows = parquet.read(Path(sys.argv[1]).read_bytes())\n"
+            "print(len(rows))\n",
+            str(fixture),
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == str(len(_fixture_rows(VisualPruneRow)))
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
