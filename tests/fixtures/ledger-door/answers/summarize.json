@@ -1,0 +1,44 @@
+[
+  {
+    "column_name": "version",
+    "column_type": "VARCHAR",
+    "min": "2026-09-20",
+    "max": "2026-09-20",
+    "approx_unique": "1",
+    "avg": null,
+    "std": null,
+    "q25": null,
+    "q50": null,
+    "q75": null,
+    "count": "3",
+    "null_percentage": "0.00"
+  },
+  {
+    "column_name": "date",
+    "column_type": "VARCHAR",
+    "min": "2026-09-01",
+    "max": "2026-09-01",
+    "approx_unique": "1",
+    "avg": null,
+    "std": null,
+    "q25": null,
+    "q50": null,
+    "q75": null,
+    "count": "3",
+    "null_percentage": "0.00"
+  },
+  {
+    "column_name": "run_id",
+    "column_type": "VARCHAR",
+    "min": "2026-09-01-17820000001",
+    "max": "2026-09-01-17820000001",
+    "approx_unique": "1",
+    "avg": null,
+    "std": null,
+    "q25": null,
+    "q50": null,
+    "q75": null,
+    "count": "3",
+    "null_percentage": "0.00"
+  }
+]

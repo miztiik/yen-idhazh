@@ -17,7 +17,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'platform-mix', 'preview-port',
 		'processor-lost', 'prompt-reuse',
 		'run-axis', 'run-yield',
-		'settings-moved',
+		'settings-moved', 'statement', 'raw-listed-through',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',
 		'verdict-split', 'vocabulary',
 		'weights'
@@ -39,7 +39,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	'model-search': ['search'],
 	publishing: [
 		'canaries', 'charts', 'day-seam', 'empty-day', 'icons',
-		'ledger-ranges', 'malformed-day', 'payload-weight', 'published-ledgers', 'served-day', 'staged-day'
+		'explorer-boundary', 'ledger-ranges', 'malformed-day', 'payload-weight', 'published-ledgers', 'served-day', 'staged-day'
 	]
 };
 
