@@ -18,7 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import SEED_COMMIT
+from conftest import SEED_COMMIT, record_fixture_day
 
 from idhazh import ledger
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
@@ -58,6 +58,7 @@ def a_committed_day(tmp_path: Path) -> Path:
     """One quiet day under a published tree, written by the canary builder."""
     digest_root = tmp_path / "public" / "digest"
     build_canary_day.quiet_day(digest_root, DAY)
+    record_fixture_day(digest_root.parent, DAY)
     return digest_root
 
 

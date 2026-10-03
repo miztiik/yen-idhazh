@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-03
 
-How does a static build find published days and files without walking the archive?
+How does a static build find source days and files without walking the archive?
 
 ## Named inventory
 
@@ -133,6 +133,14 @@ and public totals, preserving every other writer's entries. The existing retry
 attempt limit still applies. The OS-held lock protects one checkout; the Git
 retry protects independent checkouts.
 
+Assembly reads source digest bytes and file counts from public entries with
+the `digest/` prefix. It registers the current day before reading those totals,
+then registers the new run manifest after writing it. Published-day readers
+derive their paths from `dates`, oldest first. A missing named day stays in that
+list so the publication gate reports it. Unlisted files are not discovered.
+These are source measurements, not deployed bytes. The Pages cap uses the
+[fresh build inventory](build-inventory.md).
+
 The day writer already knows the day and item identities. Recording those
 names avoids making each build rediscover every historical directory.
 An explicit seed keeps old published days visible without allowing an implicit
@@ -142,5 +150,6 @@ answer the same question: how a build obtains the named inventory.
 ## See also
 
 - [layout.md](layout.md) - the public paths and reader addresses.
+- [build-inventory.md](build-inventory.md) - deployed bytes and published item counts.
 - [../contracts/schemas.md](../contracts/schemas.md) - persisted contracts and stamps.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - local checks.

@@ -149,10 +149,16 @@ export function recordBuild(root: string, mode: BuildRecord['mode'], env: NodeJS
 
 export function beginBuild(root: string, mode: BuildRecord['mode'], env: NodeJS.ProcessEnv = process.env): void {
 	rmSync(join(root, 'backend/var/checks/build.json'), { force: true });
+	rmSync(join(root, 'frontend/build.publication.json'), { force: true });
+	// This is generated adapter output, never a source or committed data root.
+	rmSync(join(root, 'frontend/build'), { recursive: true, force: true });
 	writeRecord(join(root, 'backend/var/checks/build-start.json'), { mode, inputs: buildInputs(root, mode, env) });
 }
 
-export function completeBuild(root: string, mode: BuildRecord['mode'], env: NodeJS.ProcessEnv = process.env): BuildRecord {
+export function completeBuild(
+	root: string, mode: BuildRecord['mode'], env: NodeJS.ProcessEnv = process.env,
+	finalize?: () => void
+): BuildRecord {
 	const started = join(root, 'backend/var/checks/build-start.json');
 	if (!existsSync(started)) throw new Error('The build has no start record. Run npm run build.');
 	const previous = JSON.parse(readFileSync(started, 'utf8')) as Pick<BuildRecord, 'mode' | 'inputs'>;
@@ -161,6 +167,7 @@ export function completeBuild(root: string, mode: BuildRecord['mode'], env: Node
 	if (previous.mode !== mode || previous.inputs !== inputs) {
 		throw new Error('Build inputs changed during compilation; the output was not certified. Build again.');
 	}
+	finalize?.();
 	const record = { mode, inputs, output };
 	writeRecord(join(root, 'backend/var/checks/build.json'), record);
 	rmSync(started);
@@ -186,7 +193,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 		beginBuild(REPO, mode);
 		console.log(`Captured ${mode} build inputs before compilation.`);
 	} else if (process.argv[2] === '--complete') {
-		completeBuild(REPO, mode);
+		completeBuild(REPO, mode, process.env, () => {
+			execFileSync(process.env.IDHAZH_PYTHON || 'python', [
+				'-m', 'idhazh.build_publication', '--tree', join(REPO, 'frontend/build')
+			], { cwd: join(REPO, 'backend'), stdio: 'inherit' });
+		});
 		console.log(`Verified ${mode} build inputs and output after compilation.`);
 	} else {
 		throw new Error('Choose --begin or --complete; use npm run build for both.');

@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import record_fixture_day
 
 from idhazh.cli import main
 from idhazh.contracts.ledger_name import LedgerName
@@ -145,6 +146,7 @@ def test_a_mis_wired_gate_exits_two_rather_than_failing_the_day(
     day = tmp_path / "digest" / "2026" / "08" / "21"
     day.mkdir(parents=True)
     (day / "digest.json").write_text("{}", encoding="utf-8")
+    record_fixture_day(tmp_path, "2026-08-21")
 
     def refuse() -> tuple[Check, ...]:
         raise PublicationCheckError("two modules declare check 'pictures'")

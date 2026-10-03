@@ -33,19 +33,15 @@ which are the answer the question was always asking for.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
+from idhazh.build_publication import read_build_inventory
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 
 BYTES_PER_MB: Final = 1024 * 1024
-
-#: Where the built tree keeps the day payloads, relative to the tree root.
-_STAGED_DIGEST_DIRNAME: Final = "digest"
-
 
 @dataclass(frozen=True, slots=True)
 class SiteSize:
@@ -94,8 +90,7 @@ class SiteSize:
         asked, and passes only the files that really went - a total that subtracts
         a deletion which did not happen has nothing to disagree with it.
 
-        `measure` stays the audit: run it and the two have to agree, which is what
-        `test_a_retracted_deletion_equals_an_independent_walk` holds.
+        A new inventory over a generated fixture checks the retracted total.
         """
         by_directory = dict(self.by_directory)
         files = self.files
@@ -113,68 +108,21 @@ class SiteSize:
         return SiteSize(sum(by_directory.values()), files, by_directory, self.published_items)
 
 
-def measure(root: Path, *, published_items: int = 0) -> SiteSize:
-    """Walk the whole tree and read every file's size. The audit, not the ordinary path.
-
-    **This read grows with the tree, deliberately, and that is what it is for.**
-    It is the independent reading a maintained total is checked against, and the
-    only honest way to certify a tree this process did not write - the built
-    bundle comes out of `npm run build`, so nothing here saw those bytes land and
-    nothing here can carry a total forward across them. A pass that both writes
-    and deletes inside one process carries its total with `SiteSize.minus`
-    instead and calls this once.
-
-    Measured 2026-09-07 on an Intel Core i7-1265U over `frontend/public/digest/`:
-    443 files, 25,070,521 bytes, 276.8 ms best and 352.3 ms worst over five runs.
-
-    It streams rather than listing every path first, so the walk costs one file's
-    memory instead of the whole tree's.
-    """
-    if not root.exists():
-        return SiteSize(0, 0)
+def measure(root: Path) -> SiteSize:
+    """Read deployed bytes and item counts from the build's one named inventory."""
+    inventory = read_build_inventory(root)
     by_directory: dict[str, int] = {}
-    files = 0
-    for child in sorted(root.iterdir()):
-        if child.is_file():
-            by_directory[child.name] = child.stat().st_size
-            files += 1
-        elif child.is_dir():
-            inside = 0
-            counted = 0
-            for path in child.rglob("*"):
-                if path.is_file():
-                    inside += path.stat().st_size
-                    counted += 1
-            by_directory[child.name] = inside
-            files += counted
-    return SiteSize(sum(by_directory.values()), files, by_directory, published_items)
+    for entry in inventory.entries:
+        name = entry.path.split("/", 1)[0]
+        by_directory[name] = by_directory.get(name, 0) + entry.bytes
+    return SiteSize(
+        inventory.total_bytes, len(inventory.entries), by_directory, inventory.total_items
+    )
 
 
 def count_published_items(root: Path) -> int:
-    """Items across every day payload staged into the measured tree.
-
-    Read from the built tree rather than from `frontend/public/digest/` or from a
-    run manifest, because bytes and items have to come from one corpus. The two
-    trees are eighteen times apart and a prune would move one before the other,
-    so a rate taken across them divides a numerator by somebody else's
-    denominator.
-
-    **This read grows with the archive**: one more published day is one more
-    payload to open and parse. It stays that way for the same reason `measure`
-    does - the tree is written by the site build rather than by this process, so
-    there is no total to carry - and it runs once a build, in the step that has
-    just spent minutes producing the tree it reads.
-    """
-    staged = root / _STAGED_DIGEST_DIRNAME
-    if not staged.is_dir():
-        return 0
-    total = 0
-    for payload in staged.rglob("digest.json"):
-        day = json.loads(payload.read_text(encoding="utf-8"))
-        items = day.get("items")
-        if isinstance(items, list):
-            total += len(items)
-    return total
+    """Read the item total for the same deployed tree as its byte measurement."""
+    return read_build_inventory(root).total_items
 
 
 def heaviest_directories(size: SiteSize, limit: int = 0) -> list[tuple[str, int]]:

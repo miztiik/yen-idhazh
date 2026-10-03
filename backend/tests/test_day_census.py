@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text, record_fixture_day
 
 from idhazh.publication_checks import run_publication_checks
 
@@ -68,6 +68,7 @@ def written(public_root: Path, payload: dict[str, Any]) -> Path:
     where.mkdir(parents=True, exist_ok=True)
     file = where / "digest.json"
     file.write_text(json.dumps(payload), encoding="utf-8")
+    record_fixture_day(public_root, DATE, items=len(payload["items"]))
     return file
 
 

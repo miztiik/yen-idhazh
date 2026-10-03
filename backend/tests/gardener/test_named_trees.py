@@ -18,6 +18,7 @@ from typing import Final
 import pytest
 
 from idhazh import day_shards, ledger, month_partition, retention
+from idhazh.build_publication import record_build_inventory
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
@@ -173,7 +174,7 @@ def test_the_oldest_picture_leaves_out_what_a_pass_just_deleted(tmp_path: Path) 
 def test_a_trees_weight_is_the_disk_walks(tmp_path: Path) -> None:
     root = plant(tmp_path / "frontend" / "public" / "digest", PUBLISHED)
     listing = listing_of(tmp_path, "frontend/public/digest")
-
+    record_build_inventory(root)
     assert named_trees.measure(listing, root) == measure(root)
 
 

@@ -360,6 +360,7 @@ def stage_assemble(
     # published site and the Pages cap is not measured here - the site is built
     # by a later step in this same job, and `idhazh site-weight` measures it
     # there. See docs/architecture/publishing/layout.md.
+    publication.record_day(common.PUBLIC_ROOT.parent, day)
     site_bytes, site_files = assemble.site_size(common.PUBLIC_ROOT)
     observability = settings.app.observability
     # The instrument that actually wrote this run's rows. No rows means no
@@ -395,7 +396,10 @@ def stage_assemble(
     )
     _report_prose_change(recorded_inputs, previous_manifest)
     atomic_write.write_atomic(target / "run.json", manifest.to_json())
-    publication.record_day(common.PUBLIC_ROOT.parent, day)
+    publication.record_files(
+        common.PUBLIC_ROOT.parent,
+        paths=[f"digest/{plan.date.replace('-', '/')}/run.json"],
+    )
     publication.record_month(common.PUBLIC_ROOT.parent, assemble.month_of(plan.date))
     # This job's own raw files, never another writer's. A work shard recorded the
     # same items hours ago on another runner, and each files its own file through

@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text, record_fixture_day
 
 from idhazh.publication_checks import run_publication_checks
 
@@ -77,6 +77,7 @@ def a_day_naming(public_root: Path, paths: list[str | None]) -> None:
 
     day_dir(public_root).mkdir(parents=True, exist_ok=True)
     (day_dir(public_root) / "digest.json").write_text(json.dumps(payload), encoding="utf-8")
+    record_fixture_day(public_root, DATE, items=len(payload["items"]))
 
 
 def draw(public_root: Path, path: str) -> None:
@@ -160,6 +161,7 @@ def test_naming_a_day_opens_that_day_and_leaves_the_rest_shut(tmp_path: Path) ->
     (other / "digest.json").write_text(
         json.dumps({**json.loads(read_text(FIXTURE)), "date": "2026-08-22"}), encoding="utf-8"
     )
+    record_fixture_day(tmp_path, "2026-08-22", items=len(DAY["items"]))
 
     root = tmp_path / "digest"
     assert run_publication_checks(root, ["2026-08-22"], run_id="2026-08-22-1") == 0

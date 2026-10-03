@@ -30,7 +30,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, Literal
 
-from idhazh import atomic_write, ledger
+from idhazh import atomic_write, ledger, publication
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import (
@@ -2429,34 +2429,10 @@ def low_confidence(day: DigestDay) -> int:
 
 
 def site_size(root: Path) -> tuple[int, int]:
-    """Bytes and files under the committed payload tree. Measured every assembly.
-
-    **This read grows with the archive and is not bounded (Guardrail #12).** It opens
-    every file the tree holds, so one more published day is one more day of files
-    to open, for ever. Measured 2026-09-07 on an Intel Core i7-1265U over
-    `frontend/public/digest/`: 443 files, 25,070,521 bytes, 300.4 ms best and
-    563.4 ms worst over five runs, in a job that runs for hours.
-
-    A total carried forward cannot replace it from inside this process, and that
-    is the reason rather than the excuse. **Three jobs write this tree** - the
-    visuals job renders the pictures, this job writes the day payload, and the
-    cleanup pass deletes - so a total this process accumulated would miss what the
-    other two did, and it would miss it silently, in the number that feeds the
-    site-size card. Carrying one between the three means writing it down
-    somewhere, which is a persisted shape and a decision for a person to take
-    rather than for this function to assume. `site_weight.SiteSize.minus` is the
-    carried total where one process both writes and deletes; there is no such
-    process here.
-
-    It streams rather than listing every path first, so the walk costs one file's
-    memory instead of the whole tree's.
-    """
-    if not root.exists():
-        return (0, 0)
-    total = 0
-    files = 0
-    for path in root.rglob("*"):
-        if path.is_file():
-            total += path.stat().st_size
-            files += 1
-    return (total, files)
+    """Source digest bytes and files from the producer's named inventory."""
+    inventory = publication.read_inventory(root.parent)
+    entries = [
+        entry for entry in inventory.entries
+        if entry.root == "public" and entry.path.startswith(f"{root.name}/")
+    ]
+    return (sum(entry.bytes for entry in entries), len(entries))

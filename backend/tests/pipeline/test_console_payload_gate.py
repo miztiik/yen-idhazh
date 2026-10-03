@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text, record_fixture_day
 
 from idhazh.publication_checks import run_publication_checks
 
@@ -26,7 +26,7 @@ A_COMMITTED_DAY = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
 
 
 def a_published_day(public_root: Path) -> Path:
-    """One published day on disk, in the layout `published_days` globs for.
+    """One published day on disk and in the named inventory.
 
     The marks the payload names are written as well, because the `pictures`
     check compares the two and a day naming a file that is not there is a fault
@@ -43,6 +43,7 @@ def a_published_day(public_root: Path) -> Path:
             marks.parent.mkdir(parents=True, exist_ok=True)
             marks.write_text('{"item_id": "ai-01"}', encoding="utf-8")
     (where / "digest.json").write_text(json.dumps(payload), encoding="utf-8")
+    record_fixture_day(public_root, str(payload["date"]), items=len(payload["items"]))
     return where / "digest.json"
 
 

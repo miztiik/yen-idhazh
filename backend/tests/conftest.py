@@ -82,6 +82,16 @@ def seed_publication_inventory(public_root: Path) -> None:
     )
 
 
+def record_fixture_day(public_root: Path, day: str, *, items: int = 0) -> None:
+    """Register one test-written day, including deliberately malformed payloads."""
+    from idhazh.publication import record_files
+
+    if not (public_root / "publication.json").exists():
+        seed_publication_inventory(public_root)
+    name = f"digest/{day.replace('-', '/')}/digest.json"
+    record_files(public_root, dates=[day], paths=[name], item_counts={name: items})
+
+
 #: Numbers each `seed_item_health` call, so every call is a writer of its own.
 _SEED_CALLS: Final = itertools.count(1)
 
