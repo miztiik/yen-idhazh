@@ -72,6 +72,7 @@ function panelsAreTheSubject(paths: readonly string[]): boolean {
 export type CiAnswer = {
 	browser: boolean;
 	code: boolean;
+	modelAbsent: boolean;
 	console: boolean;
 	panels: boolean;
 	robots: boolean;
@@ -85,7 +86,7 @@ const ROBOTS_TESTS = 'backend/tests/test_extract.py';
 /** Anything under here IS the archive, so a change to it has to be re-read. */
 const ARCHIVE_TOUCHED = /^frontend\/public\/(digest|telemetry|assist)\//;
 
-/** The six lines the `scope` job writes to `$GITHUB_OUTPUT`.
+/** The check decisions the `scope` job writes to `$GITHUB_OUTPUT`.
  *
  * A pure function of the changed paths, so the truth table is checked here at
  * microseconds a case rather than through a temporary git repository and a
@@ -104,9 +105,16 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 	return {
 		browser: selection.groups.some((group) => group !== 'backend' && group !== 'logic'),
 		code,
+		modelAbsent: code && (!isPr || selection.tooling || selection.contracts || selection.reasons.some(({ path, groups }) => {
+			const clean = path.replaceAll('\\', '/');
+			if (/^(docs\/|TODO\/|(?:README|AGENTS|CLAUDE)\.md$|frontend\/tests\/)/.test(clean)) return false;
+			if (/^frontend\/src\/(routes\/console\/|lib\/(console|charts|data)\/|styles\/)/.test(clean)) return false;
+			// A backend-only selection cannot change model asset staging. Unknown
+			// inputs still select frontend groups and therefore buy the second build.
+			return groups.some((group) => group !== 'backend');
+		})),
 		console: selection.groups.includes('console') && !deferred,
-		// Whatever buys the console buys its pictures, and so does anything every
-		// panel is drawn from.
+		// Whatever buys the console buys panel assertions, as do shared drawing inputs.
 		panels: selection.groups.includes('panels') && (!deferred || panelsAreTheSubject(paths)),
 		// A full backend selection (null) is an unknown change, so it buys the job.
 		robots: selection.backendFiles?.includes(ROBOTS_TESTS) ?? true,
@@ -276,6 +284,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 		const answer = ciAnswer(paths, isPr);
 		console.log(`browser=${answer.browser}`);
 		console.log(`code=${answer.code}`);
+		console.log(`model_absent=${answer.modelAbsent}`);
 		console.log(`console=${answer.console}`);
 		console.log(`panels=${answer.panels}`);
 		console.log(`robots=${answer.robots}`);
