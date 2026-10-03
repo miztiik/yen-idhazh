@@ -295,7 +295,7 @@ def load_gardener(config_dir: Path = DEFAULT_CONFIG_DIR) -> GardenerSettings:
     declaration, or with a knob in `config/idhazh.json` it has to outlive.
     """
     gardener = _gardener_config(config_dir)
-    tasks = _declarations(config_dir)
+    tasks = _declarations(config_dir, gardener.task_names)
     app = AppConfig.from_json((config_dir / _FILES[0]).read_text(encoding="utf-8"))
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
@@ -314,21 +314,24 @@ def _gardener_config(config_dir: Path) -> GardenerConfig:
         raise ValueError(f"config/{GARDENER_FILE} is refused: {error}") from error
 
 
-def _declarations(config_dir: Path) -> dict[str, TaskPolicy]:
-    """Every declaration, by name, in sorted order. No folder is no tasks, not a fault."""
+def _declarations(config_dir: Path, names: tuple[str, ...]) -> dict[str, TaskPolicy]:
+    """The configured declarations, by name, opened without listing their directory."""
     folder = config_dir / GARDENER_TASKS_DIR
-    if not folder.is_dir():
-        return {}
     found: dict[str, TaskPolicy] = {}
-    for path in sorted(folder.glob(f"*{DECLARATION_SUFFIX}")):
+    for name in sorted(names):
+        path = folder / f"{name}{DECLARATION_SUFFIX}"
         where = f"config/{GARDENER_TASKS_DIR}/{path.name}"
-        if not _A_TASK_NAME.fullmatch(path.stem):
+        if not _A_TASK_NAME.fullmatch(name):
             raise ValueError(
-                f"{where} is refused: a task is named by its file, and {path.stem!r} is "
+                f"{where} is refused: a task is named by its file, and {name!r} is "
                 "not a lower-case word or words joined by hyphens"
             )
         try:
             found[path.stem] = _TASK_POLICY.validate_json(path.read_text(encoding="utf-8"))
+        except FileNotFoundError as error:
+            raise ValueError(
+                f"{where} is refused: this configured task declaration is missing"
+            ) from error
         except ValidationError as error:
             raise ValueError(f"{where} is refused: {error}") from error
     return found

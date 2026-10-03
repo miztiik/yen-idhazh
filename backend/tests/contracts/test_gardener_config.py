@@ -43,12 +43,20 @@ GARDEN = GARDENER_FIXTURES / "garden"
 def a_garden(tmp_path: Path, **declarations: dict[str, Any] | None) -> Path:
     """The fixture garden, with each named declaration replaced, added, or removed (None)."""
     config_dir = a_config(tmp_path, GARDEN)
+    gardener_config = config_dir / "idhazh_gardener.json"
+    settings = json.loads(gardener_config.read_text(encoding="utf-8"))
+    names = set(settings["task_names"])
     for name, declared in declarations.items():
-        path = config_dir / "gardener" / f"{name.replace('_', '-')}.json"
+        task_name = name.replace("_", "-")
+        path = config_dir / "gardener" / f"{task_name}.json"
         if declared is None:
             path.unlink()
+            names.discard(task_name)
         else:
             path.write_text(json.dumps(declared), encoding="ascii")
+            names.add(task_name)
+    settings["task_names"] = sorted(names)
+    gardener_config.write_text(json.dumps(settings, indent=2) + "\n", encoding="ascii")
     return config_dir
 
 
@@ -345,9 +353,16 @@ def test_a_month_settles_only_beside_a_window_that_keeps_whole_months(
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
-    GardenerConfig(version="2026-09-27", attempts=6, shards=5)
+    GardenerConfig(version="2026-09-27", task_names=(), attempts=6, shards=5)
     with pytest.raises(ValidationError, match="attempts is 5 and shards is 5"):
-        GardenerConfig(version="2026-09-27", attempts=5, shards=5)
+        GardenerConfig(version="2026-09-27", task_names=(), attempts=5, shards=5)
+
+
+def test_task_names_must_be_unique() -> None:
+    with pytest.raises(ValidationError, match="task_names must not contain duplicates"):
+        GardenerConfig(
+            version="2026-09-27", task_names=("seen", "seen"), attempts=6, shards=5
+        )
 
 
 def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -> None:

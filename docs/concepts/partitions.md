@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -223,6 +223,10 @@ cannot read back.** `backend/utilities/migrate_to_day_shards.py` takes
 `--directory`, the ledger, `--shape`, the move, and `--date-column`, the cell
 that says which day a row belongs to. Each ledger's own change runs it once on
 its own directory; committing the utility migrates nothing.
+
+For `month-to-day`, the operator also supplies inclusive `--from` and `--to`
+month names. The utility reads those named month files only; it does not
+discover other months from the directory.
 
 **Four shapes, because a ledger arrives at the day directory from four places.**
 `month-to-day` splits `<YYYY-MM>.csv` into `<YYYY>/<MM>/<DD>.csv`.

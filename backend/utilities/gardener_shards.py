@@ -50,21 +50,19 @@ def _key(declaration: dict[str, Any], key: str, name: str) -> Any:
     return declaration[key]
 
 
-def declarations(config_root: Path) -> dict[str, dict[str, Any]]:
-    """Every declaration by task name, in sorted order. No folder is no tasks."""
+def declarations(config_root: Path, names: list[str]) -> dict[str, dict[str, Any]]:
+    """The configured declarations, opened by name rather than discovered from a directory."""
     folder = config_root / TASKS_DIR
-    if not folder.is_dir():
-        return {}
     return {
-        path.stem: json.loads(path.read_text(encoding="utf-8"))
-        for path in sorted(folder.glob(f"*{DECLARATION_SUFFIX}"))
+        name: json.loads((folder / f"{name}{DECLARATION_SUFFIX}").read_text(encoding="utf-8"))
+        for name in sorted(names)
     }
 
 
 def plan(config_root: Path) -> dict[str, Any]:
     """The plan payload: every shard and its tasks, and the matrix that runs them."""
     knobs = json.loads((config_root / GARDENER_FILE).read_text(encoding="utf-8"))
-    tasks = declarations(config_root)
+    tasks = declarations(config_root, knobs["task_names"])
     names = sorted(
         name
         for name, declared in tasks.items()

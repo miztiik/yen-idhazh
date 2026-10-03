@@ -509,6 +509,7 @@ def run(
     committed_folders: frozenset[str] | None,
     cone_bytes: Mapping[str, int] | None,
     listing: FileListing | None,
+    period_range: tuple[str, str] | None = None,
     package: ModuleType = shipped_tasks,
     clock: Callable[[], datetime] = utc_now,
     say: Callable[[str], None] = print,
@@ -531,6 +532,9 @@ def run(
             f"shard {shard}: {', '.join(refused)} rewrites history, and a history task runs "
             f"only in its own job: {HISTORY_PROGRAM} binds and runs it. Nothing ran"
         )
+        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+    if period_range is not None and len(names) != 1:
+        say("a named period range runs one task, not a shard")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
     state_dir = repo_root / ledger.STATE_DIRNAME
     try:
@@ -579,6 +583,7 @@ def run(
                 git_sha=git_sha,
                 owned_folders=resolved[name].walk,
                 listing=listing.within(covered[name]),
+                period_range=period_range,
             )
             done = _run_one(name, bound[name], context, resolved[name])
             _refuse_a_path_outside(done, settings.tasks)

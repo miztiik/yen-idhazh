@@ -175,33 +175,15 @@ class Shards:
         return sum(len(lines) for lines in self.lines.values())
 
 
-def _refuse_mixed(directory: Path, shards: list[Path]) -> None:
-    """A ledger holding a month shard may hold nothing else.
-
-    `day_files` refuses a month shard at the root of a day tree, so a directory
-    holding both grains is already unreadable. Refusing here rather than on the
-    read-back is what keeps the failure free of a half-written tree.
-    """
-    known = set(shards)
-    strays = [path.name for path in sorted(directory.iterdir()) if path not in known]
-    if strays:
-        raise ValueError(
-            f"holds {len(shards)} month shards and {', '.join(strays)} beside them, "
-            "which is a layout no reader can walk. Restore the directory from the "
-            "trunk and run this once on the month shards alone"
-        )
-
-
-def read_shards(directory: Path, date_column: str) -> Shards:
-    """Every month shard, grouped by the day each row's own cell names.
+def read_shards(directory: Path, date_column: str, months: list[str]) -> Shards:
+    """The named month shards, grouped by the day each row's own cell names.
 
     A row nobody can place stops the whole read rather than being skipped, and
     nothing is written until this returns.
     """
-    paths = month_partition.month_files(directory, SUFFIX)
+    paths = month_partition.month_files(directory, SUFFIX, months)
     if not paths:
         return Shards(header="", texts={}, lines={})
-    _refuse_mixed(directory, paths)
 
     header = ""
     index = -1
@@ -318,13 +300,13 @@ class Report:
         return len(self.paths)
 
 
-def run(directory: Path, date_column: str) -> Report:
+def run(directory: Path, date_column: str, months: list[str]) -> Report:
     """Move the rows, read the tree back, and only then unlink a month shard.
 
     A ledger with no month shard has nothing to move and is told so, which is
     what makes a second run over a migrated tree change no byte.
     """
-    shards = read_shards(directory, date_column)
+    shards = read_shards(directory, date_column, months)
     if not shards.texts:
         return Report(rows_in=0, rows_out=0, shards=[], paths=[])
 
@@ -749,10 +731,10 @@ SHAPES: Final = ("month-to-day", "day-to-directory", "flat-to-day-directory", "t
 NEEDS_A_DATE_COLUMN: Final = ("month-to-day", "flat-to-day-directory")
 
 
-def migrate(shape: str, directory: Path, date_column: str) -> Report:
+def migrate(shape: str, directory: Path, date_column: str, months: list[str]) -> Report:
     """Run one shape over one ledger."""
     if shape == "month-to-day":
-        return run(directory, date_column)
+        return run(directory, date_column, months)
     if shape == "day-to-directory":
         return partition(directory)
     if shape == "flat-to-day-directory":
@@ -780,6 +762,16 @@ def main() -> None:
         default="",
         help="the column whose cell names the day a row belongs to",
     )
+    parser.add_argument(
+        "--from",
+        dest="from_month",
+        help="first YYYY-MM month to read (inclusive); required for month-to-day",
+    )
+    parser.add_argument(
+        "--to",
+        dest="to_month",
+        help="last YYYY-MM month to read (inclusive); required for month-to-day",
+    )
     args = parser.parse_args()
 
     directory = Path(args.directory)
@@ -790,9 +782,16 @@ def main() -> None:
         )
     if args.shape in NEEDS_A_DATE_COLUMN and not args.date_column:
         raise SystemExit(f"--shape {args.shape} needs --date-column")
+    if args.shape == "month-to-day" and (args.from_month is None or args.to_month is None):
+        raise SystemExit("--shape month-to-day needs --from and --to")
+    months = (
+        month_partition.months_between(args.from_month, args.to_month)
+        if args.shape == "month-to-day"
+        else []
+    )
     where = directory.as_posix()
     try:
-        report = migrate(args.shape, directory, args.date_column)
+        report = migrate(args.shape, directory, args.date_column, months)
     except ValueError as error:
         raise SystemExit(f"{where}: {error}") from error
 

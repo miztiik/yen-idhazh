@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -354,6 +354,20 @@ developer's machine cannot reset their branch or push to main. It takes the
 commit as `--git-sha`, because the package does not start git to read it. The
 utility takes the same line without that flag, and both are built from one
 parser in `idhazh.gardener.cli`.
+
+Scheduled retention tasks inspect the period that just expired plus the
+configured earlier periods, using UTC dates. Their counts describe only those
+named periods. To drain an older backlog, run one task with an inclusive range:
+
+```text
+idhazh gardener run-task NAME --from YYYY-MM-DD --to YYYY-MM-DD ...
+idhazh gardener run-task NAME --from YYYY-MM --to YYYY-MM ...
+```
+
+The task's window decides whether the endpoints must be dates or months. The
+range is accepted only for one named task, never a scheduled shard. Run the
+operator pass once for each backlog range; the next scheduled wake returns to
+its fixed window.
 
 ## The collection tasks
 

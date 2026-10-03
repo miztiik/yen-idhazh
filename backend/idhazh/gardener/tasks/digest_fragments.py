@@ -41,7 +41,11 @@ def run(context: TaskContext) -> Pass:
     aged = [
         retention_files.Aged(path=path, day=day.published.isoformat())
         for day in (
-            named_trees.dated_days(context.listing, tree, before=first_kept)
+            named_trees.dated_days(
+                context.listing,
+                tree,
+                day_partition.days_before(first_kept, context.policy.lookback_periods + 1),
+            )
             if tree is not None and first_kept is not None
             else ()
         )

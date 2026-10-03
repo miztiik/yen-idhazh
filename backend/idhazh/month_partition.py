@@ -38,6 +38,7 @@ to hold things that are not the partitioned tree at all.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
@@ -83,18 +84,49 @@ def months_between(first: str, last: str) -> list[str]:
     return months
 
 
-def month_files(directory: Path, suffix: str) -> list[Path]:
-    """Every `<YYYY-MM><suffix>` in one directory, oldest first, and nothing else.
+def month_files(directory: Path, suffix: str, months: Iterable[str]) -> list[Path]:
+    """Existing files for these named months, oldest first.
 
-    One listing of the directory, then a sort of the names it returned - so the
-    cost is the ledger's own contents and never what sits beside it. An absent
-    directory is not an error: a fresh clone has no history, and no history is
-    not a fault.
+    A missing month is not an error: a fresh clone has no history, and no
+    history is not a fault. A caller that must drain an older backlog names its
+    inclusive range rather than asking this reader to discover it.
     """
-    if not directory.is_dir():
-        return []
-    found = [path for path in directory.glob(f"*{suffix}") if is_month_stem(path.stem)]
-    return sorted(found, key=lambda path: path.stem)
+    chosen = sorted(set(months))
+    for month in chosen:
+        if not is_month_stem(month):
+            raise ValueError(f"{month!r} is not a real YYYY-MM month")
+    return [
+        path
+        for month in chosen
+        if (path := directory / f"{month}{suffix}").is_file()
+    ]
+
+
+def expired_months(today: date, keep_months: int, lookback: int = 2) -> list[str]:
+    """The last expired month and `lookback` earlier months, oldest first."""
+    if lookback < 1:
+        raise ValueError("month lookback must be at least one")
+    first_kept = oldest_month_kept(today, keep_months)
+    year, month = map(int, first_kept.split("-"))
+    last_expired = date(year, month, 1) - timedelta(days=1)
+    first = last_expired.replace(day=1)
+    first_total = first.year * 12 + first.month - 1 - (lookback - 1)
+    first_month = f"{first_total // 12:04d}-{first_total % 12 + 1:02d}"
+    return months_between(first_month, first.isoformat()[:7])
+
+
+def months_before(first_kept: str, lookback: int) -> list[str]:
+    """The `lookback` months immediately before an exclusive month boundary."""
+    if not is_month_stem(first_kept):
+        raise ValueError(f"{first_kept!r} is not a real YYYY-MM month")
+    if lookback < 1:
+        raise ValueError("month lookback must be at least one")
+    year, month = map(int, first_kept.split("-"))
+    first_total = year * 12 + month - 1 - lookback
+    first = f"{first_total // 12:04d}-{first_total % 12 + 1:02d}"
+    last_total = year * 12 + month - 2
+    last = f"{last_total // 12:04d}-{last_total % 12 + 1:02d}"
+    return months_between(first, last)
 
 
 def oldest_month_kept(today: date, months: int) -> str:

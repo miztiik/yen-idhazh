@@ -18,7 +18,7 @@ counted, capped and recorded in the gardener's own record.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
@@ -31,22 +31,10 @@ from idhazh.contracts.visual_decision import VisualState
 from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow, band_of
 
 
-def visuals_older_than(root: Path, limit: date) -> list[Path]:
-    """Rendered visuals under dated directories older than the cutoff.
-
-    Ordered by path, the same order a sort over the whole tree would give,
-    because the visual-prune task hands its fuse this list in order. The order
-    decides which files a capped run takes and which it leaves for the next one,
-    so a reordering here would quietly change what a backlog run does.
-
-    Only the expired days are opened. Measured on a built 400-day tree with
-    3,600 files, 2026-09-07, Intel Core i7-1265U: 261 directory listings against
-    417 for the sort-then-filter shape this replaced - and the 261 does not move
-    when 140 more days and 3,080 more files are published inside the window,
-    which is what the archive does every day nobody writes any code (Guardrail #12).
-    """
+def visuals_older_than(root: Path, days: Iterable[date]) -> list[Path]:
+    """Rendered visuals inside these named days, ordered for the delete ceiling."""
     found: list[Path] = []
-    for _, folder in dated_days(root, before=limit):
+    for _, folder in dated_days(root, days):
         found.extend(_visuals_in(folder))
     return found
 
@@ -70,65 +58,16 @@ def _refuse(entry: Path, root: Path, expected: str) -> NoReturn:
     )
 
 
-def dated_days(root: Path, *, before: date | None = None) -> Iterator[tuple[date, Path]]:
-    """Published day directories, oldest first, read out of their names.
+def dated_days(root: Path, days: Iterable[date]) -> Iterator[tuple[date, Path]]:
+    """Existing published directories for these named days, oldest first.
 
-    The tree is `<YYYY>/<MM>/<DD>` (`assemble.day_dir`), so a day's date is in
-    its path and a caller who wants a span of days can have it without opening a
-    single one. That is the whole reason this exists. The scan above used to sort
-    every path under the root and then filter, so selecting the handful of
-    expired days cost a listing of all of them - a bill that arrived every run,
-    larger each time, for an answer no code change had touched (Guardrail #12).
-    `before` prunes by name at each level: a year whose January already sits at
-    or past the cutoff, and a month whose first does, cannot hold an expired day
-    and are never opened.
-
-    **What this still reads, and how that grows.** The root once, then one
-    listing per year and one per month that could hold a day older than `before`,
-    then one per day it yields. So it grows with the BACKLOG - the days the
-    policy has not caught up with - at one listing a month, and it shrinks as the
-    prune works. A bounded input cannot answer the question: "every day older
-    than the cutoff" has no lower bound but the archive's own first day, and the
-    per-run fuse deliberately caps what a pass DELETES rather than what it
-    counts, because the backlog left behind is what the committed row exists to
-    report.
-
-    **A name inside the dated tree that is not a date is a fault, not a skip.**
-    Below a year directory the layout is ours, so a name this cannot read means
-    something else is writing there, and a cleanup that passed over it quietly
-    would leave files it can never account for. At the root the rule stops and
-    nothing is refused: a root is allowed to hold things that are not the day
-    tree at all, and one that does is left alone rather than pruned or rejected.
+    The caller supplies a fixed day window. This opens each named path directly,
+    so neither an old backlog nor newer published days adds directory reads.
     """
-    if not root.is_dir():
-        return
-    for year_dir in sorted(root.iterdir()):
-        if not _stamped(year_dir.name, 4) or not year_dir.is_dir():
-            continue
-        year = int(year_dir.name)
-        try:
-            opens = date(year, 1, 1)
-        except ValueError:
-            continue
-        if before is not None and opens >= before:
-            continue
-        for month_dir in sorted(year_dir.iterdir()):
-            if not _stamped(month_dir.name, 2) or not month_dir.is_dir():
-                _refuse(month_dir, root, "month")
-            month = int(month_dir.name)
-            if not 1 <= month <= 12:
-                _refuse(month_dir, root, "month")
-            if before is not None and date(year, month, 1) >= before:
-                continue
-            for day_dir in sorted(month_dir.iterdir()):
-                if not _stamped(day_dir.name, 2) or not day_dir.is_dir():
-                    _refuse(day_dir, root, "day")
-                try:
-                    published = date(year, month, int(day_dir.name))
-                except ValueError:
-                    _refuse(day_dir, root, "day")
-                if before is None or published < before:
-                    yield published, day_dir
+    for published in sorted(set(days)):
+        day_dir = root / f"{published:%Y}" / f"{published:%m}" / f"{published:%d}"
+        if day_dir.is_dir():
+            yield published, day_dir
 
 
 def _visuals_in(folder: Path) -> list[Path]:
@@ -154,7 +93,7 @@ def _visuals_in(folder: Path) -> list[Path]:
     ]
 
 
-def oldest_visual(root: Path) -> date | None:
+def oldest_visual(root: Path, day: date) -> date | None:
     """The published day of the oldest rendered visual still on disk, or None.
 
     Read against the cutoff, this is what says whether the policy has caught up:
@@ -168,10 +107,8 @@ def oldest_visual(root: Path) -> date | None:
     built 400-day tree against 417 for the shape it replaced, 2026-09-07, Intel
     Core i7-1265U.
     """
-    for published, folder in dated_days(root):
-        if _visuals_in(folder):
-            return published
-    return None
+    folder = root / f"{day:%Y}" / f"{day:%m}" / f"{day:%d}"
+    return day if folder.is_dir() and _visuals_in(folder) else None
 
 
 def oldest_month_kept(today: date, months: int) -> str:
@@ -185,7 +122,7 @@ def oldest_month_kept(today: date, months: int) -> str:
     return month_partition.oldest_month_kept(today, months)
 
 
-def month_shards(directory: Path) -> list[Path]:
+def month_shards(directory: Path, months: Iterable[str]) -> list[Path]:
     """Every `<YYYY-MM>.csv` in a ledger directory, oldest first.
 
     Anything else in there is left alone. A directory this walks is one a task
@@ -194,7 +131,7 @@ def month_shards(directory: Path) -> list[Path]:
     readers used to hold three different answers, and `2025-13.csv` was left
     alone here and deleted there.
     """
-    return month_partition.month_files(directory, ".csv")
+    return month_partition.month_files(directory, ".csv", months)
 
 
 # --- The telemetry fold ------------------------------------------------------

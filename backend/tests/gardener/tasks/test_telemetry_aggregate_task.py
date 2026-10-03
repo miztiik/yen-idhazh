@@ -32,7 +32,7 @@ from retention._trees import (
     totals_from_shard,
 )
 
-from idhazh import config, ledger
+from idhazh import config, ledger, month_partition
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.item_health_summary import percentile
 from idhazh.contracts.knobs.gardener import MonthsWindow
@@ -63,7 +63,13 @@ class Folded:
 
 
 def pruned(
-    state: Path, *, today: date = TODAY, dry_run: bool = False, aggregate_months: int | None = None
+    state: Path,
+    *,
+    today: date = TODAY,
+    dry_run: bool = False,
+    aggregate_months: int | None = None,
+    lookback: int | None = None,
+    period_range: tuple[str, str] | None = None,
 ) -> Folded:
     """One pass of the shipped task over the checkout `state` sits in."""
     full = {"unit": "months", "value": full_grain_months()}
@@ -79,6 +85,8 @@ def pruned(
         dry_run=dry_run,
         window=full,
         series={"full-grain": full, "public-copy": full, "aggregate": aggregate},
+        period_range=period_range,
+        **({"lookback": lookback} if lookback is not None else {}),
     )
     copies = f"{public_telemetry.DEFAULT_PUBLIC_ROOT.relative_to(config.REPO_ROOT).as_posix()}/"
     summaries = f"{ledger.tree_relpath(LedgerName.ITEM_HEALTH_SUMMARY)}/"
@@ -93,7 +101,11 @@ def pruned(
 
 def summary_stems(state: Path) -> list[str]:
     return sorted(
-        path.stem for path in month_shards(ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY))
+        path.stem
+        for path in month_shards(
+            ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY),
+            months_back(TODAY, HISTORY_MONTHS),
+        )
     )
 
 
@@ -137,9 +149,11 @@ def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> N
     assert full_grain_months() == 14, "a 366-day console read can open fourteen month shards"
     assert kept == "2025-07", "fourteen months ending in August 2026 starts in July 2025"
     assert list(result.folded) == [
-        month for month in months_back(TODAY, HISTORY_MONTHS) if month < kept
+        month
+        for month in month_partition.months_before(kept, 3)
+        if month in months_back(TODAY, HISTORY_MONTHS)
     ]
-    assert len(result.folded) == HISTORY_MONTHS - full_grain_months()
+    assert len(result.folded) == 3
     assert summary_stems(state) == list(result.folded), "a month inside the window was summarised"
     assert census_files(state) == before, "the pass deleted or rewrote a census file"
     assert item_health_months(state) == months_back(TODAY, HISTORY_MONTHS)
@@ -154,13 +168,22 @@ def test_the_fold_loses_no_total(tmp_path: Path) -> None:
     }
     assert doomed, "the fixture has to reach past the window or this proves nothing"
 
-    pruned(state)
+    result = pruned(state, lookback=HISTORY_MONTHS)
 
+    assert set(result.folded) == set(doomed)
     for month, text in doomed.items():
         target = ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, month)
         assert totals_from_aggregate(ledger.load_item_health_summary(target)) == (
             totals_from_shard([text])
         ), f"{month} lost a total in the fold"
+
+
+def test_an_operator_range_folds_only_the_named_months(tmp_path: Path) -> None:
+    state = a_state_tree(tmp_path)
+
+    result = pruned(state, period_range=("2025-01", "2025-02"))
+
+    assert result.folded == ("2025-01", "2025-02")
 
 
 def test_the_fold_keeps_a_repeated_row_rather_than_deciding_for_a_reader(tmp_path: Path) -> None:
@@ -251,10 +274,10 @@ def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
 def test_a_hard_delete_takes_the_aggregate_only_after_the_fold_has_had_it(tmp_path: Path) -> None:
     """The escape hatch, for the day the owner wants the bytes back."""
     state = a_state_tree(tmp_path)
-    pruned(state)
+    pruned(state, lookback=HISTORY_MONTHS)
     before = summary_stems(state)
 
-    result = pruned(state, aggregate_months=16)
+    result = pruned(state, aggregate_months=16, lookback=HISTORY_MONTHS)
 
     boundary = oldest_month_kept(TODAY, 16)
     assert sorted(result.hard_deleted) == [stem for stem in before if stem < boundary]
@@ -315,7 +338,7 @@ def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -
     for stem in ("2025-01", *NOT_MONTHS, *OTHER_STRAYS):
         (directory / f"{stem}.csv").write_text("header\n", encoding="utf-8")
 
-    assert [path.name for path in month_shards(directory)] == ["2025-01.csv"]
+    assert [path.name for path in month_shards(directory, ["2025-01"])] == ["2025-01.csv"]
 
 
 def test_an_empty_state_tree_folds_nothing_and_says_so(tmp_path: Path) -> None:
@@ -338,14 +361,14 @@ def a_published_tree(tmp_path: Path) -> tuple[Path, Path]:
 def test_the_browser_copy_goes_with_the_month_it_copies(tmp_path: Path) -> None:
     """One boundary, two trees. A copy nobody can check is worse than no copy."""
     state, public = a_published_tree(tmp_path)
-    kept = oldest_month_kept(TODAY, full_grain_months())
-    assert len(month_shards(public)) == HISTORY_MONTHS
+    all_months = months_back(TODAY, HISTORY_MONTHS)
+    assert len(month_shards(public, all_months)) == HISTORY_MONTHS
 
     result = pruned(state)
 
     assert sorted(result.public_deleted) == sorted(result.folded)
-    assert [path.stem for path in month_shards(public)] == [
-        stem for stem in months_back(TODAY, HISTORY_MONTHS) if stem >= kept
+    assert [path.stem for path in month_shards(public, all_months)] == [
+        stem for stem in all_months if stem not in result.public_deleted
     ]
     for stem in result.public_deleted:
         assert not public_telemetry.shard_path(public, stem).exists()
@@ -364,23 +387,24 @@ def test_a_copy_whose_source_is_already_gone_is_still_taken(tmp_path: Path) -> N
     result = pruned(state)
 
     assert result.folded == (), "there was no shard to fold"
-    assert result.public_deleted == ("2024-01",)
-    assert result.changed is True, "a deletion is a change even with nothing folded"
-    assert not orphan.exists()
+    assert result.public_deleted == (), "the scheduled task does not discover older backlog"
+    assert result.changed is False
+    assert orphan.exists()
     assert live.exists()
 
 
 def test_a_dry_run_names_the_copy_it_would_take_and_leaves_it(tmp_path: Path) -> None:
     """The list a dry run prints is the list a live run removes, file for file."""
     state, public = a_published_tree(tmp_path)
-    before = {path.name: path.read_bytes() for path in month_shards(public)}
+    all_months = months_back(TODAY, HISTORY_MONTHS)
+    before = {path.name: path.read_bytes() for path in month_shards(public, all_months)}
 
     planned = pruned(state, dry_run=True)
     done = pruned(state)
 
     assert planned.public_deleted == done.public_deleted
     assert planned.folded == done.folded
-    assert {path.name for path in month_shards(public)} == set(before) - {
+    assert {path.name for path in month_shards(public, all_months)} == set(before) - {
         f"{stem}.csv" for stem in done.public_deleted
     }
     for name, content in before.items():
@@ -438,7 +462,7 @@ def test_a_fold_that_cannot_be_read_back_leaves_the_browser_copy(
         pruned(state)
 
     assert public_telemetry.shard_path(public, doomed[0]).exists()
-    assert len(month_shards(public)) == HISTORY_MONTHS
+    assert len(month_shards(public, months_back(TODAY, HISTORY_MONTHS))) == HISTORY_MONTHS
 
 
 def test_a_census_the_declaration_does_not_read_is_refused_and_never_read_as_empty(

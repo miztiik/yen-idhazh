@@ -89,13 +89,15 @@
       "dry_run": true,
       "fuse_tripped": false,
       "max_deletes_per_run": 200,
-      "oldest_kept": "2026-10-19",
-      "payload_bytes_after": 5104,
-      "payload_bytes_before": 5104,
+      "oldest_kept": "2026-10-21",
+      "payload_bytes_after": 3052,
+      "payload_bytes_before": 3052,
       "policy_months": 13,
       "run_id": "2027-11-15-19000000001",
       "skipped_by_fuse": 0,
-      "version": "2026-09-06T13:00"
+      "version": "2026-10-03T16:19",
+      "window_end": "2026-10-20",
+      "window_start": "2026-10-13"
     },
     "live": {
       "bytes_reclaimed": 3000,
@@ -107,12 +109,14 @@
       "fuse_tripped": false,
       "max_deletes_per_run": 200,
       "oldest_kept": "2026-10-21",
-      "payload_bytes_after": 2104,
-      "payload_bytes_before": 5104,
+      "payload_bytes_after": 52,
+      "payload_bytes_before": 3052,
       "policy_months": 13,
       "run_id": "2027-11-15-19000000001",
       "skipped_by_fuse": 0,
-      "version": "2026-09-06T13:00"
+      "version": "2026-10-03T16:19",
+      "window_end": "2026-10-20",
+      "window_start": "2026-10-13"
     }
   }
 }

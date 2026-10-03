@@ -76,6 +76,12 @@ class GardenerConfig(Model):
     version: DateStamp = Field(
         description="The UTC day this file's shape was last changed, as YYYY-MM-DD."
     )
+    task_names: tuple[Slug, ...] = Field(
+        description=(
+            "The complete configured task-name list. Declaration readers open only these "
+            "named files and never discover tasks by listing the config directory."
+        )
+    )
     attempts: int = Field(
         ge=1,
         description=(
@@ -119,6 +125,8 @@ class GardenerConfig(Model):
                 "other shard first, so at attempts == shards it has no try left for a "
                 "push from outside the wake"
             )
+        if len(self.task_names) != len(set(self.task_names)):
+            raise ValueError("task_names must not contain duplicates")
         return self
 
 
@@ -273,6 +281,11 @@ class _Declared(Model):
         """The folders this declaration names, in either form."""
         return tuple(self.owns if self.owns is not None else self.owns_everything_else_under or ())
 
+    @property
+    def lookback_periods(self) -> int:
+        """A non-retention declaration has no period lookback."""
+        return 0
+
 
 #: How many whole days after a UTC day ends before a fold acts on it, where the
 #: fold names no number of its own. A compaction writes its own number, as
@@ -323,6 +336,14 @@ class RetentionPolicy(_Declared):
     """A task that deletes what its window has aged out of the trees it owns."""
 
     kind: Literal[TaskKind.RETENTION]
+    lookback: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "How many earlier periods a scheduled pass checks beyond the period that "
+            "just expired. Defaults to 7 days or 2 months."
+        ),
+    )
     series: dict[Slug, SeriesWindow] | None = Field(
         default=None,
         description=(
@@ -338,6 +359,17 @@ class RetentionPolicy(_Declared):
             "window has run. Absent on a task that owns no such tree."
         ),
     )
+
+    @property
+    def lookback_periods(self) -> int:
+        """The configured lookback, or the default for this window's grain."""
+        if self.lookback is not None:
+            return self.lookback
+        if isinstance(self.window, MonthsWindow):
+            return 2
+        if isinstance(self.window, DaysWindow):
+            return 7
+        return 0
 
     @model_validator(mode="after")
     def _a_month_settles_only_where_the_window_keeps_whole_months(self) -> Self:

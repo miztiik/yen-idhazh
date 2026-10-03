@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -13,7 +13,8 @@ what a knob is at all is [../config.md](../config.md).
 
 | Knob | Committed | What it decides |
 | --- | --- | --- |
-| `version` | `2026-09-30` | The UTC day this file's shape last changed |
+| `version` | `2026-10-03` | The UTC day this file's shape last changed |
+| `task_names` | 20 names | The complete task list. The loader opens each named declaration and does not list `config/gardener/` |
 | `attempts` | `6` | How many times one shard may try to push before it gives up with exit 3 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
 | `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate. Its first reset is to about twice the largest `downloaded_bytes` the first thirty scheduled wakes record ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
@@ -26,12 +27,14 @@ naming both values.
 
 ## One declaration a task
 
-A task is named by its file: `config/gardener/traces.json` declares the task
-`traces`. A missing `config/gardener/` means no tasks. Twenty ship today:
+A task name in `task_names` selects one declaration file:
+`config/gardener/traces.json` declares the task `traces`. An empty list means no
+tasks. Twenty ship today:
 seven `retention` tasks, two `collection` tasks, ten `compaction` tasks (below)
 and `corpus-squash`, the one `history` task (below).
-**There is no index file and no `name` key**, so a task can never be listed under
-one name and filed under another.
+The list is the sole source of configured task names; unlisted files are not
+loaded. There is no `name` key inside a declaration, so a task cannot be listed
+under one name and filed under another.
 
 Every declaration carries these keys, whatever its kind:
 
@@ -40,6 +43,7 @@ Every declaration carries these keys, whatever its kind:
 | `lifecycle_status` | `active`, `paused` or `retired`, no default | `active` runs at every wake. `paused` does not run and keeps its claim. `retired` never runs again, and its declaration stays as the record of how far back its tree reached |
 | `kind` | `retention`, `collection`, `compaction` or `history` | Which member reads the rest of the file, and which module may serve it |
 | `window` | `{unit: days, value}`, `{unit: months, value}` or `{unit: forever}` | How far back the task keeps what it owns. `value` is at least 1, so no window includes today, and `forever` carries no value |
+| `lookback` | a count, optional | Extra earlier periods a scheduled pass checks beyond the period that just expired. Defaults to 7 days or 2 months; the pass reports only the periods it names |
 | `dry_run` | `bool`, no default | True reports what a live pass would take and takes nothing |
 | `max_deletes_per_run` | a count, or `null` | The most one pass deletes. `null` is no ceiling and `0` is a survey. A collection pruned through GitHub's API spends a request a delete, so `null` there can use up the token's hourly allowance on one backlog |
 | `owns` or `owns_everything_else_under` | a list of folders | Exactly one of the two. `owns` names repository-relative folders; the second is the complement: every folder under its roots that no other task owns and no ledger family claims |

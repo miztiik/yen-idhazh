@@ -47,3 +47,5 @@ class TaskContext:
     #: weighs. A task lists its members from here and never from the disk, and
     #: fetches a folder through it before it opens a file inside.
     listing: FileListing
+    #: An operator's inclusive period range for a one-task backlog pass.
+    period_range: tuple[str, str] | None = None

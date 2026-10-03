@@ -30,10 +30,10 @@ def run(context: TaskContext) -> Pass:
     """Take the oldest pictures past the window up to the fuse, and file what was found."""
     import dataclasses
     import logging
-    from datetime import timedelta
+    from datetime import date, timedelta
     from pathlib import Path
 
-    from idhazh import ledger
+    from idhazh import day_partition, ledger
     from idhazh.contracts.file_envelope import WriterIdentity
     from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow
     from idhazh.contracts.ledger_name import LedgerName
@@ -60,8 +60,25 @@ def run(context: TaskContext) -> Pass:
             context, (), collection=collection, first_kept=first_kept
         )
     listing = context.listing
-    before = named_trees.measure(listing, root)
-    candidates = named_trees.visuals_older_than(listing, root, first_kept) if first_kept else []
+    if context.period_range is not None:
+        start_text, end_text = context.period_range
+        start = date.fromisoformat(start_text)
+        end = date.fromisoformat(end_text)
+        if start > end:
+            raise ValueError("a visual-prune backlog range starts after it ends")
+        if first_kept is None or end >= first_kept:
+            raise ValueError("a visual-prune backlog range must end before the kept-day boundary")
+        candidate_days = [
+            start + timedelta(days=offset) for offset in range((end - start).days + 1)
+        ]
+    else:
+        candidate_days = (
+            day_partition.days_before(first_kept, policy.lookback_periods + 1)
+            if first_kept is not None
+            else []
+        )
+    before = named_trees.measure_days(listing, root, candidate_days)
+    candidates = named_trees.visuals_older_than(listing, root, candidate_days)
     sizes: dict[Path, int] = {}
     gone: dict[Path, int] = {}
 
@@ -83,7 +100,9 @@ def run(context: TaskContext) -> Pass:
         after_delete=count_gone,
         before_delete=weigh,
     )
-    after = before.minus(root, gone)
+    after = before - sum(gone.values())
+    if after < 0:
+        raise ValueError("visual cleanup removed more bytes than its named period window held")
     skipped = len(candidates) - len(outcome.taken)
     window = policy.window
     row = VisualPruneRow(
@@ -100,18 +119,25 @@ def run(context: TaskContext) -> Pass:
         max_deletes_per_run=policy.max_deletes_per_run,
         dry_run=policy.dry_run,
         cutoff_date=first_kept.isoformat() if first_kept else None,
+        window_start=candidate_days[0].isoformat() if candidate_days else None,
+        window_end=candidate_days[-1].isoformat() if candidate_days else None,
         candidates_found=len(candidates),
         deleted=0 if policy.dry_run else len(outcome.taken),
         skipped_by_fuse=skipped,
         fuse_tripped=skipped > 0,
-        bytes_reclaimed=before.bytes_used - after.bytes_used,
+        bytes_reclaimed=before - after,
         oldest_kept=(
             oldest.isoformat()
-            if (oldest := named_trees.oldest_visual(listing, root, without=gone))
+            if first_kept is not None
+            and (
+                oldest := named_trees.oldest_visual(
+                    listing, root, first_kept, without=gone
+                )
+            )
             else None
         ),
-        payload_bytes_before=before.bytes_used,
-        payload_bytes_after=after.bytes_used,
+        payload_bytes_before=before,
+        payload_bytes_after=after,
     )
     reports = ledger.persist(
         context.state_dir,
@@ -129,11 +155,12 @@ def run(context: TaskContext) -> Pass:
     )
     appended = tuple(path.relative_to(context.repo_root).as_posix() for path in reports)
     logging.getLogger(__name__).info(
-        "visual cleanup%s: %s candidates older than %s, %s deleted, %s held back by the "
+        "visual cleanup%s: %s candidates from %s through %s, %s deleted, %s held back by the "
         "%s-file fuse, %s bytes reclaimed, oldest picture still kept %s (%s file)",
         " (dry run)" if row.dry_run else "",
         row.candidates_found,
-        row.cutoff_date or "no cutoff - the window is forever",
+        row.window_start or "no expired window",
+        row.window_end or "no expired window",
         row.deleted,
         row.skipped_by_fuse,
         row.max_deletes_per_run,

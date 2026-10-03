@@ -122,10 +122,12 @@ def a_config(root: Path, *declarations: Path) -> Path:
     (config_dir / "gardener").mkdir(parents=True, exist_ok=True)
     for name in COMMITTED_FILES:
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
+    task_names: set[str] = set()
     for given in declarations:
         if given.parent == GARDENER_FIXTURES:
             for name in FIXTURE_DECLARATIONS[given.name]:
                 shutil.copyfile(given / name, config_dir / "gardener" / name)
+                task_names.add(Path(name).stem)
             continue
         sources = (
             [given / name for name in COMMITTED_DECLARATIONS]
@@ -136,6 +138,13 @@ def a_config(root: Path, *declarations: Path) -> Path:
         )
         for source in sources:
             shutil.copyfile(source, config_dir / "gardener" / source.name)
+            task_names.add(source.stem)
+    gardener_config = config_dir / "idhazh_gardener.json"
+    gardener_settings = json.loads(gardener_config.read_text(encoding="utf-8"))
+    gardener_settings["task_names"] = sorted(task_names)
+    gardener_config.write_text(
+        json.dumps(gardener_settings, indent=2) + "\n", encoding="utf-8"
+    )
     return config_dir
 
 
