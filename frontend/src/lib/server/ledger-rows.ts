@@ -1,11 +1,11 @@
-/** Which rows of the article and score records does a console route read?
+/** Which rows of the article, score and feed records does a console route read?
  *
- * Both come from their packed files under `state/compact/`, through the query
- * door's build-time entry, `sliceFromDisk()` in `ledger-disk.ts`, so a build and
- * a browser panel asking for one span get one answer from one set of files. The
- * raw files a run appends are never read here: a day reaches these routes once
- * it is packed, so they stop at the newest packed day rather than at today, and
- * each table says which day that is.
+ * All three come from their packed files under `state/compact/`, through the
+ * query door's build-time entry, `sliceFromDisk()` in `ledger-disk.ts`, so a
+ * build and a browser panel asking for one span get one answer from one set of
+ * files. The raw files a run appends are never read here: a day reaches these
+ * routes once it is packed, so they stop at the newest packed day rather than
+ * at today, and each table says which day that is.
  *
  * **The rows come back as text cells**, the way the day files used to hand them
  * over: a reading nobody took is '', a flag is 'True' or 'False' as Python
@@ -14,8 +14,9 @@
  *
  * **One row per key is the packing's job, not this reader's.** A day is packed
  * by settling its rows under the ledger's own key and preference, so a packed
- * day already holds one row per item per run, or one per scored measurement. A
- * second settle here would be a second rule for one question.
+ * day already holds one row per item per run, one per scored measurement, or
+ * one per feed per run. A second settle here would be a second rule for one
+ * question.
  *
  * They sit apart from `payload.ts`, the one payload loader, because reading a
  * committed ledger is a different question from loading a published day.
@@ -201,6 +202,35 @@ export async function itemHealthRows(
 	return newestRows(root, 'item-health', days, ITEM_HEALTH_COLUMNS, (start, end) =>
 		sliceFromDisk(root, 'item-health', {
 			columns: [...datedFirst(ITEM_HEALTH_COLUMNS)],
+			from: start,
+			to: end
+		})
+	);
+}
+
+/** The columns of `FeedHealthRow` a console route reads, in the contract's own order.
+ *
+ * Only these: the feed record carries the address it asked and what its robots
+ * file said as well, and no console panel draws either. A backend contract test
+ * fails when the contract renames or drops one of these, or when this order is
+ * not the contract's.
+ */
+export const FEED_HEALTH_COLUMNS = [
+	'run_id', 'date', 'feed_id', 'checked_at', 'outcome', 'status', 'items', 'detail'
+] as const;
+
+/** One row per feed per run, over the newest `days` days the feed record holds.
+ *
+ * Read from `state/compact/feed-health/`, packed, so it stops at the newest
+ * packed day as the article and score records do.
+ */
+export async function feedHealthRows(
+	days: number = LEDGER_WINDOW_DAYS,
+	root: string = STATE_ROOT
+): Promise<LedgerTable> {
+	return newestRows(root, 'feed-health', days, FEED_HEALTH_COLUMNS, (start, end) =>
+		sliceFromDisk(root, 'feed-health', {
+			columns: [...datedFirst(FEED_HEALTH_COLUMNS)],
 			from: start,
 			to: end
 		})

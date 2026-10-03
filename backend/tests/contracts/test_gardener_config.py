@@ -34,6 +34,7 @@ from idhazh.contracts.knobs.gardener import (
     Window,
 )
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 
 pytestmark = pytest.mark.contract
 
@@ -43,23 +44,20 @@ GARDEN = GARDENER_FIXTURES / "garden"
 def a_garden(tmp_path: Path, **declarations: dict[str, Any] | None) -> Path:
     """The fixture garden, with each named declaration replaced, added, or removed (None)."""
     config_dir = a_config(tmp_path, GARDEN)
+    gardener_config = config_dir / "idhazh_gardener.json"
+    settings = json.loads(gardener_config.read_text(encoding="utf-8"))
+    names = set(settings["task_names"])
     for name, declared in declarations.items():
-        path = config_dir / "gardener" / f"{name.replace('_', '-')}.json"
+        task_name = name.replace("_", "-")
+        path = config_dir / "gardener" / f"{task_name}.json"
         if declared is None:
             path.unlink()
+            names.discard(task_name)
         else:
             path.write_text(json.dumps(declared), encoding="ascii")
-    knobs_path = config_dir / "idhazh_gardener.json"
-    knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
-    names = set(knobs["task_names"])
-    for name, declared in declarations.items():
-        slug = name.replace("_", "-")
-        if declared is None:
-            names.discard(slug)
-        else:
-            names.add(slug)
-    knobs["task_names"] = sorted(names)
-    knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
+            names.add(task_name)
+    settings["task_names"] = sorted(names)
+    gardener_config.write_text(json.dumps(settings, indent=2) + "\n", encoding="ascii")
     return config_dir
 
 
@@ -92,12 +90,6 @@ def a_compaction(ledger: str, **changes: Any) -> dict[str, Any]:
 
 MONTHS = {"unit": "months", "value": 14}
 
-#: Why every closed-day fold ships live while the window beside it only reports.
-FOLD_ALREADY_RAN_LIVE: Final = (
-    "the fold copies the closed-day fold digest.yml ran live on every run until "
-    "the gardener took it over, and a fold changes no answer a reader gets"
-)
-
 #: Why two of the ledgers the console reads are packed at every wake.
 PACKED_FOR_THE_CONSOLE: Final = (
     "packed live by owner decision: the console reads this ledger from its packed "
@@ -128,6 +120,7 @@ PACKED_ON_THE_MOVE: Final = (
 LIVE_BY_DECISION: Final = {
     ("compact-candidate-models", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-counterfactual-scores", "dry_run"): PACKED_ON_THE_MOVE,
+    ("compact-feed-health", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-host-fingerprint", "dry_run"): PACKED_FOR_THE_CONSOLE,
     ("compact-host-fingerprint", "monthly_window_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
     ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
@@ -138,7 +131,6 @@ LIVE_BY_DECISION: Final = {
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
     ),
-    ("feed-health", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
 }
 
 #: The CSV day trees no task folds, each with why. A tree that joins `DAY_TREES`
@@ -292,11 +284,10 @@ def test_a_fold_that_names_no_wait_closes_a_day_after_the_shared_one() -> None:
     assert FoldPolicy(dry_run=True).after_days == DEFAULT_CLOSED_AFTER_DAYS
 
 
-#: The keys every kind shares that a declaration may leave out: the two ways of
-#: owning, and the folders read and ledgers appended to, empty unless named.
-SHARED_OPTIONAL_KEYS: Final = frozenset(
-    {"owns", "owns_everything_else_under", "reads", "appends_to"}
-)
+#: The keys every kind shares that a declaration may leave out, plus compaction's
+#: optional lookback, whose default is two months.
+SHARED_OPTIONAL_KEYS: Final = frozenset({"reads", "appends_to"})
+COMPACTION_OPTIONAL_KEYS: Final = SHARED_OPTIONAL_KEYS | {"lookback"}
 
 #: Every key a compaction declaration has to write.
 COMPACTION_KEYS: Final = tuple(
@@ -313,7 +304,7 @@ def test_no_setting_a_compaction_runs_with_has_a_default() -> None:
     optional = {
         name for name, field in CompactionPolicy.model_fields.items() if not field.is_required()
     }
-    assert optional == SHARED_OPTIONAL_KEYS
+    assert optional == COMPACTION_OPTIONAL_KEYS
 
 
 @pytest.mark.parametrize("key", COMPACTION_KEYS)
@@ -354,9 +345,16 @@ def test_a_month_settles_only_beside_a_window_that_keeps_whole_months(
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
-    GardenerConfig(version="2026-09-27", attempts=6, shards=5, task_names=())
+    GardenerConfig(version="2026-09-27", task_names=(), attempts=6, shards=5)
     with pytest.raises(ValidationError, match="attempts is 5 and shards is 5"):
-        GardenerConfig(version="2026-09-27", attempts=5, shards=5, task_names=())
+        GardenerConfig(version="2026-09-27", task_names=(), attempts=5, shards=5)
+
+
+def test_task_names_must_be_unique() -> None:
+    with pytest.raises(ValidationError, match="task_names repeats a task"):
+        GardenerConfig(
+            version="2026-09-27", task_names=("seen", "seen"), attempts=6, shards=5
+        )
 
 
 def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -> None:
@@ -396,11 +394,14 @@ def test_a_window_that_includes_today_or_numbers_forever_is_refused(
     )
 
 
-def test_a_declaration_owns_one_way_and_only_one(tmp_path: Path) -> None:
-    both = fixture("traces", owns_everything_else_under=["frontend"])
-    assert "exactly one of owns" in refused(a_garden(tmp_path / "both", traces=both))
-    neither = {key: value for key, value in fixture("traces").items() if key != "owns"}
-    assert "exactly one of owns" in refused(a_garden(tmp_path / "neither", traces=neither))
+def test_a_declaration_must_name_its_owned_folders(tmp_path: Path) -> None:
+    declaration = fixture("traces")
+    del declaration["owns"]
+    assert "owns" in refused(a_garden(tmp_path / "missing", traces=declaration))
+    legacy = fixture("trials", owns_everything_else_under=["state"])
+    assert "owns_everything_else_under" in refused(
+        a_garden(tmp_path / "legacy", trials=legacy)
+    )
 
 
 @pytest.mark.parametrize(
@@ -425,9 +426,16 @@ def test_a_folder_that_only_shares_a_prefix_of_letters_is_not_nested(tmp_path: P
     assert "traces-archive" in config.load_gardener(a_garden(tmp_path, traces_archive=extra)).tasks
 
 
-def test_one_task_at_most_takes_the_complement(tmp_path: Path) -> None:
-    second = fixture("trials", owns_everything_else_under=["frontend/public"])
-    assert "One task may take the complement" in refused(a_garden(tmp_path, strays=second))
+def test_trials_owns_only_configured_pipeline_test_roots() -> None:
+    policy = config.load_gardener().tasks["trials"]
+    tests = PipelineTestsConfig.from_json(
+        (CONFIG_DIR / "pipeline-tests.json").read_text(encoding="utf-8")
+    )
+
+    assert policy.owns == [
+        f"state/{test_case.trial_state_dirname}" for test_case in tests.test_cases
+    ]
+    assert "state" not in policy.owns
 
 
 @pytest.mark.parametrize("reads", [["state/traces"], ["state/traces/2026"], ["state"]])
@@ -439,10 +447,10 @@ def test_a_task_does_not_read_a_folder_it_owns_or_one_that_holds_it(
     assert "config/gardener/traces.json is refused" in message and "is in reads" in message
 
 
-def test_the_task_that_takes_the_complement_reads_nothing_more(tmp_path: Path) -> None:
-    """Everything under its root is listed for it already."""
-    trials = fixture("trials", reads=["frontend/public/digest"])
-    assert "declares no reads" in refused(a_garden(tmp_path, trials=trials))
+def test_trials_declares_no_additional_reads() -> None:
+    """Every trial path it may read is in its explicit root list."""
+    trials = config.load_gardener().tasks["trials"]
+    assert not trials.reads
 
 
 def test_a_task_may_read_a_folder_another_task_owns(tmp_path: Path) -> None:
@@ -634,9 +642,7 @@ def _thirteen_months(name: str) -> dict[str, Any]:
     return declared
 
 
-@pytest.mark.parametrize(
-    "name", ["feed-health", "telemetry-aggregate"]
-)
+@pytest.mark.parametrize("name", ["telemetry-aggregate"])
 def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: str) -> None:
     """A 366-day read reaches fourteen month shards, and thirteen is one short of it.
 
@@ -653,7 +659,7 @@ def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: st
 def test_a_compaction_keeps_every_month_file_a_console_read_still_selects(
     tmp_path: Path, months: int, loads: bool
 ) -> None:
-    """Once feed-health moves, its compaction governs it, and the widest read still floors it.
+    """Feed health's compaction governs it, and the widest read still floors it.
 
     Fourteen month shards can hold 428 days. Forty-five days and twelve months
     reach back 410; with thirteen months, 438.

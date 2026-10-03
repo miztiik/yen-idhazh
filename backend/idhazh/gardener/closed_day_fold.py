@@ -38,11 +38,10 @@ a dry run, is left to the window, and so is a month holding one: a shard refuses
 a path it both writes and deletes, and a day the window is removing needs no
 fold.
 
-**Listing a tree reads every day folder's name it holds.** The question is
-which days still hold a writer file, and no bounded input answers it, so the
-cost of the listing grows with the tree (Guardrail #12,
-`docs/concepts/growing-reads.md`). The names come from the task's listing, and
-only the days and months that still hold a file to settle are fetched and
+**A fold lists only its fixed day and month windows.** The task names those
+period paths before the fold starts, so the listing cost follows its configured
+lookbacks, not every day the tree holds. The names come from the task's listing,
+and only the days and months that still hold a file to settle are fetched and
 opened, a tree's folders in one fetch.
 """
 
@@ -175,6 +174,7 @@ def fold(
     settles_months: bool = False,
     skip: Collection[Path] = (),
     listing: FileListing | None = None,
+    period_paths: Iterable[Path] | None = None,
 ) -> Folded:
     """Settle every closed day of these trees that still holds a file other than its settled one.
 
@@ -184,15 +184,18 @@ def fold(
     stands, and so is a month whose own folder, or one of whose day folders, is
     in it. A dry run reads and settles everything it would fold, so a row that
     will not parse stops it the way it would stop a live fold, and it writes and
-    deletes nothing. `listing` is where the names come from; a caller that
-    folds a tree on disk passes none, and the trees are listed as the disk holds
-    them.
+    deletes nothing.     `listing` is where the names come from. A direct disk caller must name its
+    period paths.
     """
     chosen = sorted(trees, key=lambda which: which.value)
     if listing is None:
+        if period_paths is None:
+            raise ValueError("a fold without a listing requires named period paths")
         roots = [ledger.tree_root(state_dir, tree) for tree in chosen]
         listing = FileListing.from_disk(
-            state_dir.parent, [root.relative_to(state_dir.parent).as_posix() for root in roots]
+            state_dir.parent,
+            [root.relative_to(state_dir.parent).as_posix() for root in roots],
+            paths=period_paths,
         )
     days_done: list[SettledDay] = []
     months_done: list[SettledMonth] = []

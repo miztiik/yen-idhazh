@@ -22,6 +22,7 @@ import pytest
 from idhazh import day_shards, ledger, path_classes
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.telemetry.traces import TRACE_SUFFIX, committed_trace_path
 
 pytestmark = pytest.mark.contract
 
@@ -75,22 +76,27 @@ def _a_writer_file(tree: LedgerName) -> str:
     )
 
 
-def test_every_day_tree_writer_names_a_file_only_it_can_have_written() -> None:
-    """Rule 1 over the closed set of day trees, one file each.
+def _a_trace() -> str:
+    """One job's committed trace, spelled by the producer that writes it."""
+    return committed_trace_path(
+        Path("state"), run_id=A_RUN_ID, attempt=AN_ATTEMPT, job=ServerJob.WORK, shard=A_SHARD
+    ).as_posix()
 
-    A tree here is one a writer fills with a file carrying its own identity, so
-    two runs never arrive at one path and there is nothing for git to settle. A
-    tree that also appeared in the derived or the union-safe list would be two
-    answers to that question.
+
+def test_a_writer_named_file_is_written_once_and_in_no_other_class() -> None:
+    """Rule 1 over the file a writer still names for itself: one job's trace.
+
+    A file carrying its writer's identity is one two runs never arrive at
+    together, so there is nothing for git to settle. A path that also appeared
+    in the derived or the union-safe list would be two answers to that question.
+    The day trees that filed rows this way have moved to the raw ledger tree, so
+    `DAY_TREES` is empty and the trace is the writer left to check.
     """
-    assert DAY_TREES, "a closed set with no members declares no writer"
-
-    for tree in DAY_TREES:
-        relpath = _a_writer_file(tree)
-        assert _classes(relpath) == {"written once"}, (
-            f"{relpath} is classed {sorted(_classes(relpath))}, and a committed path "
-            "needs exactly one answer about what git may do with it"
-        )
+    relpath = _a_trace()
+    assert _classes(relpath) == {"written once"}, (
+        f"{relpath} is classed {sorted(_classes(relpath))}, and a committed path "
+        "needs exactly one answer about what git may do with it"
+    )
 
 
 def test_a_writers_file_carries_the_run_the_attempt_the_job_and_the_shard() -> None:
@@ -99,13 +105,11 @@ def test_a_writers_file_carries_the_run_the_attempt_the_job_and_the_shard() -> N
     Read back through the producer's own parser rather than by eye, because a
     name this test spelled itself would prove only that this test can spell.
     """
-    for tree in DAY_TREES:
-        relpath = _a_writer_file(tree)
-        read = ledger.parse_segment_name(Path(relpath))
-        assert read.run_id == A_RUN_ID
-        assert read.attempt == AN_ATTEMPT
-        assert read.job is ServerJob.WORK
-        assert read.shard == A_SHARD
+    read = ledger.parse_segment_name(Path(_a_trace()), suffix=TRACE_SUFFIX)
+    assert read.run_id == A_RUN_ID
+    assert read.attempt == AN_ATTEMPT
+    assert read.job is ServerJob.WORK
+    assert read.shard == A_SHARD
 
 
 def test_a_derived_path_is_rebuilt_and_is_neither_written_once_nor_unioned() -> None:

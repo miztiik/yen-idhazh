@@ -260,15 +260,14 @@ def test_a_folder_that_is_not_a_checkout_has_no_commit_to_name(
     assert gardener_publish.Checkout(loose).head() is None
 
 
-def test_the_commit_listing_names_the_owned_folders_it_holds_and_every_child_of_state(
+def test_the_commit_listing_names_only_the_requested_folders(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Read from the commit, so a folder the checkout lacks is still named, and never recursed.
+    """Read from the commit, so a folder the checkout lacks is still named.
 
     An owned folder with a trailing slash would list its children rather than
     itself, and the folder would read as absent - the slash is stripped. A child
-    of `state/` that holds a named folder is listed as that folder: git walks into
-    it to reach the name, so it never reads as the complement's to take whole.
+    under `state/` that is not requested is not discovered.
     """
     quiet_git(tmp_path, monkeypatch)
     _, checkout = an_origin(
@@ -289,7 +288,6 @@ def test_the_commit_listing_names_the_owned_folders_it_holds_and_every_child_of_
     assert listed == {
         "state/traces",
         "state/raw/visual-prunes",
-        "state/a-trial-run",
         "frontend/public/digest",
     }
 

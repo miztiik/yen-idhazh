@@ -743,8 +743,9 @@ feed-health rows and the score rows are all written by `build_canary_day.py`.
 The item-health and machine rows are made by `build:canary` as CSV beside the
 state tree, and `build_canary_day.py --file-fixture-rows` files them through the
 ledger door, which validates every row against its contract. The fixture then
-packs the item-health, summary-quality-evals and host-fingerprint ledgers with their own
-compaction tasks turned live, because the console reads only packed days. The
+packs the item-health, summary-quality-evals, host-fingerprint and feed-health
+ledgers with their own compaction tasks turned live, because the console reads
+only packed days. The
 score rows are shaped for the compression plot rather than picked at random -
 eight items from 38 to 6100 source words, so the log x axis spans four decades,
 and each of the five configured target zones has at least one mark under it.

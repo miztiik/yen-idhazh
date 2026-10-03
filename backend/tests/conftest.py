@@ -45,6 +45,7 @@ from idhazh.fetch import FetchResult
 from idhazh.gardener import closed_day_fold
 from idhazh.llm.server import TurnMarkers, server_argv
 from idhazh.stages import common
+from idhazh.stages import plan as plan_stage
 from idhazh.telemetry import silicon
 from utilities.capture_request_bodies import RENDERINGS, markers_for
 
@@ -204,24 +205,32 @@ def seed_feed_health(
     job: ServerJob = ServerJob.PLAN,
     shard: int = 0,
 ) -> int:
-    """Put feed verdicts on disk the way the plan job leaves them.
+    """Put feed verdicts on disk the way the plan job leaves them: one raw file, through the door.
 
-    The real producer, not a copy of it: the plan job is the only writer of this
-    tree and it writes one file of its own inside the day directory. A caller
-    that needs two writers on one day calls this twice with two identities.
+    Filed under the writer the plan job itself uses - the run, the attempt, the
+    job, the shard and the plan stage's producer - so a second call for one run
+    is a later write of that job's work unit and replaces the first, and a higher
+    `attempt` replaces a lower one, which is what a re-run does. A caller that
+    needs two writers side by side on one run names another job or shard.
 
     `run_id` defaults to the first run of the date, which is what a caller that
-    does not care about identity wants.
+    does not care about identity wants. Returns how many rows were filed.
     """
-    return ledger.write_segment(
+    recorded = list(rows)
+    filed = ledger.persist(
         state_dir,
-        LedgerName.FEED_HEALTH,
-        list(rows),
-        run_id=run_id if run_id is not None else f"{date}-1",
-        attempt=attempt,
-        job=job,
-        shard=shard,
+        recorded,
+        ledger=LedgerName.FEED_HEALTH,
+        covers=date,
+        identity=writer_identity(
+            run_id if run_id is not None else f"{date}-1",
+            attempt=attempt,
+            job=job,
+            shard=shard,
+            producer=plan_stage.PRODUCER,
+        ),
     )
+    return len(recorded) if filed else 0
 
 
 def seed_scores(
@@ -262,6 +271,7 @@ def fold(state_dir: Path, date: str) -> closed_day_fold.Folded:
         now=datetime.combine(closed, time_type.min, tzinfo=UTC),
         after_days=after_days,
         dry_run=False,
+        period_paths=[ledger.tree_root(state_dir, tree) for tree in DAY_TREES],
     )
 
 

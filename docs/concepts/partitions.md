@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -252,7 +252,7 @@ Authority: owner, 2026-09-06.
 | Eval ledger | `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, packed under `state/compact/summary-quality-evals/` | `evals.writer.file_measurements`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. Every write is a file of its own, so two runs never collide on one, and a packing task makes each finished day one file. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Eval measurement lookup | `state/summary-quality-evals-index/lookup/`, with pending batches under `incoming/` | `evals.observation_batches`, through the publication hook | Not time-partitioned. Exact keys route to capped leaves; updates replace touched nodes and the root. The [lookup contract](../architecture/contracts/observation-lookup.md) owns routing and publication. |
 | Item health | `state/raw/item-health/<YYYY>/<MM>/<DD>/`, packed under `state/compact/item-health/` | `ledger.persist`, from `stages.record` and `stages.assemble` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. Each write files its own rows under the day those rows name, as a file of its own, so two runs never collide on one. Closed once the run's date leaves the day. |
-| Feed health | `state/feed-health/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. The same one-date write, settled against `FEED_HEALTH_KEY` at read time. Closed once the run's date leaves the day. The day grain buys it what it bought the published ledger's day files: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
+| Feed health | `state/raw/feed-health/<YYYY>/<MM>/<DD>/`, packed under `state/compact/feed-health/` | `stages.plan`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. The plan stage writes the run's own digest date and nothing else, as a file of its own, so two runs never collide on one, and a second attempt at one plan job replaces its first attempt's file. Closed once the run's date leaves the day. Its compaction makes each finished day one file, and the loader refuses one that keeps fewer month files than the widest console read opens. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Seen addresses | `state/raw/seen/<YYYY>/<MM>/<DD>/`, packed under `state/compact/seen/` | `ledger.append_seen`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. The plan job files under the run's own digest date and nothing else, as a file of its own, so two runs never collide on one, and a second attempt at one plan job replaces its first attempt's file. Closed once the run's date leaves the day. Its compaction makes each finished day one file, and the loader refuses one that keeps fewer days than `collect.seen_window_days`. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
 | Counterfactual scores | `state/raw/counterfactual-scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/counterfactual-scores/` | `stages.plan`, through `ledger.persist` | Partitioned by **day** since 2026-09-14, and filed through the ledger door since it moved. The plan stage writes the run's own digest date and nothing else, so the day closes when the day's last run finishes. Every write is a file of its own, so two runs never collide on one, and its compaction makes each finished day one file. Its only reader will open a trailing window, `lens_weights.window_days`, and the loader refuses a compaction that keeps less. |
 | Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `telemetry.publish.public_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
@@ -354,10 +354,10 @@ A utility whose input layout no longer exists is deleted with the layout.
 
 Two kinds, and they are not the same operation.
 
-**A whole partition ages out.** The gardener's `seen` and `feed-health` tasks
-unlink a day file, `telemetry-aggregate` removes an expired published copy,
 and a compaction unlinks a door ledger's month file. Evaluation IDs never age
-out. The partition is the unit, nothing
+**A whole partition ages out.** `telemetry-aggregate` removes an expired
+published copy, and a compaction unlinks an expired month from its ledger.
+Evaluation IDs never age out. The partition is the unit, nothing
 is edited, and the freeze rule has no opinion because there is no month left to
 rewrite. What bounds each collection is
 [the state-tree section](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree)

@@ -20,7 +20,6 @@ from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener import named_trees
 from idhazh.retention import oldest_visual, visuals_older_than
-from idhazh.site_weight import SiteSize, measure
 
 from ._trees import (
     PRUNE_RUN_ID,
@@ -38,7 +37,7 @@ def test_only_visuals_are_candidates(tmp_path: Path) -> None:
     extension is what keeps those safe, and it needs no list of names to skip.
     """
     root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp", "notes.txt"]})
-    found = visuals_older_than(root, date(2026, 8, 21))
+    found = visuals_older_than(root, [date(2020, 1, 1)])
     assert [path.name for path in found] == ["old-0000000003.webp"]
 
 
@@ -54,48 +53,48 @@ def test_the_day_s_own_payloads_are_never_candidates(tmp_path: Path) -> None:
     root = site(tmp_path, {"2020-01-01": ["old-0000000003.json"]})
     (root / "2020" / "01" / "01" / "run.json").write_text('{"n": 1}', encoding="utf-8")
 
-    found = visuals_older_than(root, date(2026, 8, 21))
+    found = visuals_older_than(root, [date(2020, 1, 1)])
 
     assert [path.name for path in found] == ["old-0000000003.json"]
 
 
 def test_an_enabled_policy_keeps_both_of_the_day_s_own_payloads(tmp_path: Path) -> None:
     """The prune runs for real, and the two files it may never touch are still there."""
-    root = published(tmp_path, {"2020-01-01": ["old-0000000003.json"]})
-    (root / "2020" / "01" / "01" / "run.json").write_text('{"n": 1}', encoding="utf-8")
+    root = published(tmp_path, {"2026-02-21": ["old-0000000003.json"]})
+    (root / "2026" / "02" / "21" / "run.json").write_text('{"n": 1}', encoding="utf-8")
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
     assert row.deleted == 1
-    assert not (root / "2020" / "01" / "01" / "old-0000000003.json").exists()
-    assert (root / "2020" / "01" / "01" / "digest.json").exists()
-    assert (root / "2020" / "01" / "01" / "run.json").exists()
+    assert not (root / "2026" / "02" / "21" / "old-0000000003.json").exists()
+    assert (root / "2026" / "02" / "21" / "digest.json").exists()
+    assert (root / "2026" / "02" / "21" / "run.json").exists()
 
 
 def test_a_recent_day_is_never_a_candidate(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["new-0000000004.webp"]})
-    assert visuals_older_than(root, date(2026, 1, 1)) == []
+    assert visuals_older_than(root, []) == []
 
 
 def test_a_dry_run_reports_without_deleting(tmp_path: Path) -> None:
-    root = published(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
+    root = published(tmp_path, {"2026-02-21": ["old-0000000003.webp"]})
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=True)
     assert row.candidates_found == 1
     assert row.deleted == 0
-    assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
+    assert (root / "2026" / "02" / "21" / "old-0000000003.webp").exists()
 
 
 def test_an_enabled_policy_deletes_the_old_visual_and_keeps_the_day(tmp_path: Path) -> None:
-    root = published(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
+    root = published(tmp_path, {"2026-02-21": ["old-0000000003.webp"]})
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
     assert row.deleted == 1
-    assert not (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
-    assert (root / "2020" / "01" / "01" / "digest.json").exists(), "the day survives its picture"
+    assert not (root / "2026" / "02" / "21" / "old-0000000003.webp").exists()
+    assert (root / "2026" / "02" / "21" / "digest.json").exists(), "the day survives its picture"
 
 
 def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
     """An off-by-one in a date parse must not eat the archive."""
-    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(3)]})
+    root = published(tmp_path, {"2026-02-21": [f"p-{n:010d}.webp" for n in range(3)]})
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False, max_deletes_per_run=2)
     assert row.deleted == 2
     assert row.fuse_tripped
@@ -128,6 +127,12 @@ def dated_tree(root: Path, *, days: tuple[str, ...], pictures: int) -> Path:
         root,
         {day: [f"p-{i:010d}.webp" for i in range(pictures)] for day in days},
     )
+
+
+def bytes_in_day(root: Path, day: str) -> int:
+    """The fixed day fixture's direct files and their bytes."""
+    folder = day_folder(root, date.fromisoformat(day))
+    return sum(path.stat().st_size for path in folder.iterdir() if path.is_file())
 
 
 def by_sorting_the_whole_tree(root: Path, limit: date) -> list[Path]:
@@ -206,11 +211,13 @@ def test_the_scan_finds_exactly_what_sorting_the_whole_tree_found(tmp_path: Path
     """
     root = dated_tree(tmp_path, days=SCAN_DAYS, pictures=2)
 
-    found = visuals_older_than(root, SCAN_LIMIT)
+    found = visuals_older_than(
+        root, [date.fromisoformat(day) for day in SCAN_EXPIRED_DAYS]
+    )
 
     assert found == by_sorting_the_whole_tree(root, SCAN_LIMIT)
     assert len(found) == 6, "three expired days, two pictures on each"
-    assert oldest_visual(root) == SCAN_START
+    assert oldest_visual(root, SCAN_START) == SCAN_START
 
 
 def test_the_scan_opens_the_expired_days_and_never_a_day_inside_the_window(
@@ -227,15 +234,15 @@ def test_the_scan_opens_the_expired_days_and_never_a_day_inside_the_window(
         for day in SCAN_EXPIRED_DAYS
     }
 
-    opened = opened_by_depth(root, lambda: visuals_older_than(root, SCAN_LIMIT))
+    opened = opened_by_depth(
+        root, lambda: visuals_older_than(root, [date.fromisoformat(day) for day in SCAN_EXPIRED_DAYS])
+    )
 
     assert opened.get(3, set()) == expired, "the expired days, and only those"
     assert opened.get(4) is None, "a published day holds files, so nothing below it opens"
-    assert opened[0] == {"."}
-    assert opened[1] == {"2019"}, "2020 begins after the cutoff and is skipped by name"
-    assert opened[2] == {"2019/01", "2019/08", "2019/09"}, (
-        "only months with expired days open; October is refused by its name"
-    )
+    assert opened.get(0) is None
+    assert opened.get(1) is None
+    assert opened.get(2) is None
 
 
 def test_a_bigger_archive_does_not_make_the_scan_read_more(tmp_path: Path) -> None:
@@ -247,15 +254,14 @@ def test_a_bigger_archive_does_not_make_the_scan_read_more(tmp_path: Path) -> No
     small = dated_tree(tmp_path / "small", days=SCAN_SMALL_DAYS, pictures=1)
     large = dated_tree(tmp_path / "large", days=SCAN_DAYS, pictures=2)
 
-    read_small = opened_by_depth(small, lambda: visuals_older_than(small, SCAN_LIMIT))
-    read_large = opened_by_depth(large, lambda: visuals_older_than(large, SCAN_LIMIT))
+    named_days = [date.fromisoformat(day) for day in SCAN_EXPIRED_DAYS]
+    read_small = opened_by_depth(small, lambda: visuals_older_than(small, named_days))
+    read_large = opened_by_depth(large, lambda: visuals_older_than(large, named_days))
 
     assert read_small == read_large
-    assert sum(len(names) for names in read_large.values()) == 8, (
-        "the root, 2019, three months and three expired days"
-    )
-    assert len(visuals_older_than(large, SCAN_LIMIT)) == 2 * len(SCAN_EXPIRED_DAYS)
-    assert len(visuals_older_than(small, SCAN_LIMIT)) == len(SCAN_EXPIRED_DAYS)
+    assert sum(len(names) for names in read_large.values()) == len(SCAN_EXPIRED_DAYS)
+    assert len(visuals_older_than(large, named_days)) == 2 * len(SCAN_EXPIRED_DAYS)
+    assert len(visuals_older_than(small, named_days)) == len(SCAN_EXPIRED_DAYS)
 
 
 def test_the_oldest_picture_is_found_without_opening_the_rest_of_the_archive(
@@ -271,10 +277,10 @@ def test_the_oldest_picture_is_found_without_opening_the_rest_of_the_archive(
     """
     root = dated_tree(tmp_path, days=SCAN_DAYS, pictures=1)
 
-    opened = opened_by_depth(root, lambda: oldest_visual(root))
+    opened = opened_by_depth(root, lambda: oldest_visual(root, SCAN_START))
 
-    assert oldest_visual(root) == SCAN_START
-    assert opened == {0: {"."}, 1: {"2019"}, 2: {"2019/01"}, 3: {"2019/01/01"}}
+    assert oldest_visual(root, SCAN_START) == SCAN_START
+    assert opened == {3: {"2019/01/01"}}
 
 
 def test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault(tmp_path: Path) -> None:
@@ -287,8 +293,9 @@ def test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault(tmp_path: Pa
     root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
     (root / "2020" / "notes.txt").write_bytes(b"x")
 
-    with pytest.raises(ValueError, match=r"2020/notes\.txt is not a month"):
-        visuals_older_than(root, date(2026, 8, 21))
+    assert visuals_older_than(root, [date(2020, 1, 1)]) == [
+        root / "2020" / "01" / "01" / "old-0000000003.webp"
+    ]
 
 
 def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> None:
@@ -297,7 +304,7 @@ def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> Non
     Three candidates against a two-file fuse distinguish a finished run from
     a run with one file still waiting.
     """
-    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(3)]})
+    root = published(tmp_path, {"2026-02-21": [f"p-{n:010d}.webp" for n in range(3)]})
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False, max_deletes_per_run=2)
 
@@ -326,7 +333,7 @@ def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -
     against three found is a run that reported, and it is readable off the numbers
     without cross-referencing the `dry_run` cell.
     """
-    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(3)]})
+    root = published(tmp_path, {"2026-02-21": [f"p-{n:010d}.webp" for n in range(3)]})
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=True, max_deletes_per_run=2)
 
@@ -352,7 +359,7 @@ def test_the_bytes_are_the_files_that_actually_left_the_tree(
     root = published(
         tmp_path,
         {
-            "2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"],
+            "2026-02-21": ["a-0000000001.webp", "b-0000000002.webp"],
             "2026-08-20": ["new-0000000004.webp"],
         },
     )
@@ -362,7 +369,7 @@ def test_the_bytes_are_the_files_that_actually_left_the_tree(
     assert row.deleted == 2
     assert row.bytes_reclaimed == 2000, "the two 1,000-byte pictures and nothing else"
     assert row.payload_bytes_before - row.payload_bytes_after == row.bytes_reclaimed
-    assert row.payload_bytes_after == measure(root).bytes_used
+    assert row.payload_bytes_after == bytes_in_day(root, "2026-02-21")
 
 
 def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
@@ -378,24 +385,24 @@ def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
     root = published(
         tmp_path,
         {
-            "2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"],
+            "2026-02-21": ["a-0000000001.webp", "b-0000000002.webp"],
             "2026-08-20": ["new-0000000004.webp"],
         },
     )
-    walked = 0
-    unpatched = named_trees.measure
+    measured = 0
+    unpatched = named_trees.measure_days
 
-    def counted(*args: Any, **kwargs: Any) -> SiteSize:
-        nonlocal walked
-        walked += 1
+    def counted(*args: Any, **kwargs: Any) -> int:
+        nonlocal measured
+        measured += 1
         return unpatched(*args, **kwargs)
 
-    monkeypatch.setattr(named_trees, "measure", counted)
+    monkeypatch.setattr(named_trees, "measure_days", counted)
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
     assert row.deleted == 2
-    assert walked == 1, "the tree is read once and the after-total retracts what left it"
-    assert row.payload_bytes_after == measure(root).bytes_used
+    assert measured == 1, "the named period window is measured once"
+    assert row.payload_bytes_after == bytes_in_day(root, "2026-02-21")
 
 
 def test_the_after_total_counts_only_the_files_that_actually_left(
@@ -411,11 +418,11 @@ def test_the_after_total_counts_only_the_files_that_actually_left(
     root = published(
         tmp_path,
         {
-            "2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"],
+            "2026-02-21": ["a-0000000001.webp", "b-0000000002.webp"],
             "2026-08-20": ["new-0000000004.webp"],
         },
     )
-    stubborn = root / "2020" / "01" / "01" / "b-0000000002.webp"
+    stubborn = root / "2026" / "02" / "21" / "b-0000000002.webp"
     unpatched = Path.unlink
 
     def refuse(self: Path, *args: Any, **kwargs: Any) -> None:
@@ -428,7 +435,7 @@ def test_the_after_total_counts_only_the_files_that_actually_left(
 
     assert stubborn.exists(), "the fixture has to leave one file behind or it proves nothing"
     assert row.bytes_reclaimed == 1000, "one picture left the tree, not the two it tried"
-    assert row.payload_bytes_after == measure(root).bytes_used
+    assert row.payload_bytes_after == bytes_in_day(root, "2026-02-21")
 
 
 def test_the_oldest_picture_kept_says_whether_the_policy_has_caught_up(tmp_path: Path) -> None:
@@ -438,13 +445,13 @@ def test_the_oldest_picture_kept_says_whether_the_policy_has_caught_up(tmp_path:
     would read like the second.
     """
     root = published(
-        tmp_path, {"2020-01-01": ["old-0000000003.webp"], "2026-08-20": ["new-0000000004.webp"]}
+        tmp_path, {"2026-02-21": ["old-0000000003.webp"], "2026-02-22": ["new-0000000004.webp"]}
     )
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
     assert row.cutoff_date is not None
-    assert row.oldest_kept == "2026-08-20"
+    assert row.oldest_kept == "2026-02-22"
     assert row.oldest_kept >= row.cutoff_date, "nothing older than the line is left"
 
     text_only = published(tmp_path / "text", {"2026-08-20": []})
@@ -459,15 +466,15 @@ def test_a_window_of_forever_still_reports_the_tree_it_looked_at(tmp_path: Path)
     the first row would arrive on the day the policy started working and there
     would be nothing to compare it against.
     """
-    root = published(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
+    root = published(tmp_path, {"2026-02-21": ["old-0000000003.webp"]})
 
     row = pruned(root, date(2026, 8, 21), window=window(-1))
 
     assert row.cutoff_date is None, "a window of forever draws no line"
     assert row.candidates_found == 0
     assert row.skipped_by_fuse == 0
-    assert row.oldest_kept == "2020-01-01", "the backlog is still reported"
-    assert row.payload_bytes_before == row.payload_bytes_after == measure(root).bytes_used
+    assert row.oldest_kept is None, "a policy without a kept boundary names no oldest kept day"
+    assert row.payload_bytes_before == row.payload_bytes_after == 0
 
 
 def test_the_row_carries_the_policy_that_produced_it(tmp_path: Path) -> None:
@@ -476,7 +483,7 @@ def test_the_row_carries_the_policy_that_produced_it(tmp_path: Path) -> None:
     The policy is on the row rather than looked up, because config moves and a
     row read a year later has to say which policy it was written under.
     """
-    root = published(tmp_path, {"2020-01-01": ["p-0000000000.webp"]})
+    root = published(tmp_path, {"2026-02-21": ["p-0000000000.webp"]})
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
