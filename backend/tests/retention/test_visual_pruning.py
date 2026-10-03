@@ -96,9 +96,7 @@ def test_an_enabled_policy_deletes_the_old_visual_and_keeps_the_day(tmp_path: Pa
 def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
     """An off-by-one in a date parse must not eat the archive."""
     root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(10)]})
-    row = pruned(
-        root, date(2026, 8, 21), window=window(6), dry_run=False, max_deletes_per_run=3
-    )
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False, max_deletes_per_run=3)
     assert row.deleted == 3
     assert row.fuse_tripped
     assert row.candidates_found == 10
@@ -141,7 +139,9 @@ def dated_tree(root: Path, *, days: int, pictures: int) -> Path:
     return site(
         root,
         {
-            (SCAN_START + timedelta(days=n)).isoformat(): [f"p-{i:010d}.webp" for i in range(pictures)]
+            (SCAN_START + timedelta(days=n)).isoformat(): [
+                f"p-{i:010d}.webp" for i in range(pictures)
+            ]
             for n in range(days)
         },
     )
@@ -315,25 +315,25 @@ def test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault(tmp_path: Pa
 def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> None:
     """The row's whole point. `deleted` is capped, so `deleted` cannot answer this.
 
-    300 candidates against the shipped 200-file fuse, and the shipped fuse rather
+    201 candidates against the shipped 200-file fuse, and the shipped fuse rather
     than a scaled-down one - the question is whether the number an operator
     actually reads can distinguish a finished run from a stuck one.
 
     A run that deleted 200 and skipped 0 has cleared its backlog. A run that
-    deleted 200 and skipped 100 has not. `deleted` is 200 in both.
+    deleted 200 and skipped 1 has not. `deleted` is 200 in both.
     """
-    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
+    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(201)]})
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
     assert row.max_deletes_per_run == 200, "the shipped fuse, not a scaled-down one"
     assert row.deleted == row.max_deletes_per_run
-    assert row.skipped_by_fuse == 100, "the 100 the fuse would not let this run reach"
+    assert row.skipped_by_fuse == 1, "the one file the fuse would not let this run reach"
     assert row.fuse_tripped
-    assert row.deleted + row.skipped_by_fuse == row.candidates_found == 300
+    assert row.deleted + row.skipped_by_fuse == row.candidates_found == 201
 
     finished = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
-    assert finished.deleted == 100
+    assert finished.deleted == 1
     assert finished.skipped_by_fuse == 0, "a second pass clears what the first could not"
     assert not finished.fuse_tripped
 
@@ -345,20 +345,20 @@ def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -
     the deletions a dry run declined to make would equal `candidates_found` on
     every row this project will ever write, and the field would say nothing.
 
-    The dry run's own tell is the sum falling short: 0 deleted plus 100 skipped
-    against 300 found is a run that reported, and it is readable off the numbers
+    The dry run's own tell is the sum falling short: 0 deleted plus 1 skipped
+    against 201 found is a run that reported, and it is readable off the numbers
     without cross-referencing the `dry_run` cell.
     """
-    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
+    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(201)]})
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=True)
 
     assert row.dry_run
     assert row.deleted == 0
-    assert row.candidates_found == 300
-    assert row.skipped_by_fuse == 100, "the fuse's own count, unchanged by the pretending"
+    assert row.candidates_found == 201
+    assert row.skipped_by_fuse == 1, "the fuse's own count, unchanged by the pretending"
     assert row.deleted + row.skipped_by_fuse < row.candidates_found
-    assert len(list(root.rglob("*.webp"))) == 300
+    assert len(list(root.rglob("*.webp"))) == 201
 
 
 def test_the_bytes_are_the_files_that_actually_left_the_tree(
@@ -372,7 +372,13 @@ def test_the_bytes_are_the_files_that_actually_left_the_tree(
     really holds - is kept by the last line here, and by
     `test_the_after_total_counts_only_the_files_that_actually_left` below.
     """
-    root = published(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
+    root = published(
+        tmp_path,
+        {
+            "2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"],
+            "2026-08-20": ["new-0000000004.webp"],
+        },
+    )
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
@@ -392,7 +398,13 @@ def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
     because the cost this row is about is what gets read. The pass reads the
     tree's names and sizes from its listing, so that is the reading counted.
     """
-    root = published(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
+    root = published(
+        tmp_path,
+        {
+            "2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"],
+            "2026-08-20": ["new-0000000004.webp"],
+        },
+    )
     walked = 0
     unpatched = named_trees.measure
 
@@ -419,7 +431,13 @@ def test_the_after_total_counts_only_the_files_that_actually_left(
     the pass retracts a file only once the file is gone, and one that stayed is
     charged to neither number.
     """
-    root = published(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
+    root = published(
+        tmp_path,
+        {
+            "2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"],
+            "2026-08-20": ["new-0000000004.webp"],
+        },
+    )
     stubborn = root / "2020" / "01" / "01" / "b-0000000002.webp"
     unpatched = Path.unlink
 
@@ -442,7 +460,9 @@ def test_the_oldest_picture_kept_says_whether_the_policy_has_caught_up(tmp_path:
     None is a different fact from "the oldest one is recent", and a stand-in date
     would read like the second.
     """
-    root = published(tmp_path, {"2020-01-01": ["old-0000000003.webp"], "2026-08-20": ["new-0000000004.webp"]})
+    root = published(
+        tmp_path, {"2020-01-01": ["old-0000000003.webp"], "2026-08-20": ["new-0000000004.webp"]}
+    )
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
@@ -479,18 +499,18 @@ def test_the_row_carries_the_policy_that_produced_it(tmp_path: Path) -> None:
     The policy is on the row rather than looked up, because config moves and a
     row read a year later has to say which policy it was written under.
     """
-    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
+    root = published(tmp_path, {"2020-01-01": ["p-0000000000.webp"]})
 
     row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
     assert row.policy_months == 6
     assert row.max_deletes_per_run == 200
     assert row.cutoff_date == "2026-02-22", "180 days back from 2026-08-21"
-    assert row.candidates_found == 300
-    assert row.deleted == 200
-    assert row.skipped_by_fuse == 100
-    assert row.fuse_tripped
-    assert row.bytes_reclaimed == 200_000
+    assert row.candidates_found == 1
+    assert row.deleted == 1
+    assert row.skipped_by_fuse == 0
+    assert not row.fuse_tripped
+    assert row.bytes_reclaimed == 1_000
     assert row.payload_bytes_before - row.payload_bytes_after == row.bytes_reclaimed
     assert VisualPruneRow.from_csv_row(row.csv_row()) == row
 
@@ -509,16 +529,16 @@ def test_the_row_refuses_arithmetic_that_does_not_add_up() -> None:
         "max_deletes_per_run": 200,
         "dry_run": False,
         "cutoff_date": "2025-02-22",
-        "candidates_found": 300,
+        "candidates_found": 201,
         "deleted": 200,
-        "skipped_by_fuse": 100,
+        "skipped_by_fuse": 1,
         "fuse_tripped": True,
         "bytes_reclaimed": 200_000,
         "oldest_kept": "2025-03-01",
-        "payload_bytes_before": 500_000,
-        "payload_bytes_after": 300_000,
+        "payload_bytes_before": 201_000,
+        "payload_bytes_after": 1_000,
     }
-    assert VisualPruneRow(**honest).candidates_found == 300
+    assert VisualPruneRow(**honest).candidates_found == 201
 
     with pytest.raises(ValueError, match="add up"):
         VisualPruneRow(**{**honest, "skipped_by_fuse": 0, "fuse_tripped": False})

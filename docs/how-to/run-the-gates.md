@@ -64,12 +64,12 @@ still needs the Python producer. The launcher honors `IDHAZH_PYTHON` or
 `--python <path>`.
 It clears inherited data-root overrides and `PYTEST_ADDOPTS`. A missing or stale
 canary build is prepared automatically: canary day, canary site, then selected
-browser tests. Build and test share one lock. The logic-only path uses a
-checkout-local lock and does not queue behind another checkout's site build.
-Both paths require the lock. If it cannot be acquired, the launcher exits 75
-without starting the checks. It does not reclaim a live holder's lock based
-only on age. The lock helper's legacy unlocked fallback remains available to
-direct callers that do not pass `--require-lock`.
+browser tests. Each checkout runs one check at a time, because its build and
+reports are shared: logic-only runs queue on `backend/var/checks/logic.lock`,
+everything else on `backend/var/checks/build.lock`. A run that is not
+logic-only then also takes one of the machine-wide seats (see "Running the
+gates when the machine is shared"). Neither lock fails a run: a caller that
+waits out the lock's timeout runs anyway.
 
 Every normal `npm run build` captures its mode, source inputs and build
 environment after staging and before compilation. Starting a build invalidates
@@ -116,10 +116,13 @@ second thing to keep correct. `ciAnswer` in `test-scope.ts` is the one place
 that decides, and the truth table is in
 `frontend/scripts/tests/test-scope.test.mjs`.
 
-`ciAnswer` returns five answers. **`code` says whether the change carries
-anything but documentation, and `gates`, `robots` and `site` skip when it does
+`ciAnswer` returns six answers. **`code` says whether the change carries
+anything but documentation, and `gates` and `site` skip when it does
 not** - a changed sentence cannot break an application check, on a branch or on
-a merge. That branch is a closed list of prefixes rather than a guess, so a path
+a merge. **`robots` says whether the change selects
+`backend/tests/test_extract.py`**, the one module the `robots` job runs on the
+newest supported interpreter; an unknown change and every `main` push carrying
+code select it. That branch is a closed list of prefixes rather than a guess, so a path
 nobody classified falls to full coverage instead; and a document that a test
 reads is that test's input rather than documentation, which is why an edit to
 the page ruling the console's model labels buys the console specs. Such a page
@@ -190,7 +193,7 @@ selector: `-m contract`, `-m visual`, `-m workflow` or `-m "not slow"`, priced
 [below](#run-only-the-tests-a-change-can-break).
 
 **Read the jobs, not the run's conclusion.** The `scope` job selects which of
-`gates`, `site`, `browser`, `robots` and `whole-day` run, so a commit that
+`gates`, `site`, `browser` and `robots` run, so a commit that
 touched no matching path produces a run marked success with most of them
 skipped. That is correct for the commit and worthless as a statement about the
 branch: a suite can be fatally broken while every run on `main` reads green,
@@ -262,8 +265,8 @@ locally - nothing in the gate set imports it.
 Several agents work in their own worktrees on one box, and each starts its own
 gate the moment it is ready. Nothing coordinates them, so the gates fight over
 the same cores - and the loser looks like a broken branch rather than a busy
-machine. Wrap the three gates measured as CPU-bound so one of them runs at a
-time across every worktree:
+machine. Wrap the three gates measured as CPU-bound so at most five of them run
+at once across every worktree:
 
 ```powershell
 python backend/utilities/gate_lock.py -- python -m pytest
@@ -271,12 +274,18 @@ python backend/utilities/gate_lock.py -- npm run build
 python backend/utilities/gate_lock.py -- npm run test:browser
 ```
 
+`--seats N` sets how many may run at once; the default is 5 (owner decision
+2026-10-02). One seat made every agent on the box queue behind every other, and
+that wait cost more than the contention it prevented. Each seat is its own lock
+file; seat 1 keeps the name `yen-idhazh-gate.lock`, so a branch that predates
+seats still contends on it.
+
 `ruff`, `mypy`, `svelte-check` and `bundle-gate` stay unwrapped:
 serialising a gate that finishes in seconds only adds waiting. The tool reads no
 configuration and imports nothing from `idhazh`, so any supported Python runs it
 from a fresh clone. **CI never takes it** - a runner is one job alone on its own
 machine (Guardrail #2), so nothing about a CI run moves. A caller that has to wait
-prints who holds the lock, from which worktree, running what, and for how long,
+prints who holds each seat, from which worktree, running what, and for how long,
 every 30 seconds. And it cannot fail your gate: a lock whose holder died is
 reclaimed, and a caller that waits out `--timeout` runs the gate unlocked rather
 than returning an error. What the lock does not save you from is in
@@ -320,7 +329,7 @@ anywhere has to be repointed.
 
 **`-n 0` is faster for a small subset**, because the worker pool costs
 several seconds to start and that is most of what a small run pays. Time every
-run through `gate_lock.py`, so no sibling gate can land inside a timing.
+run through `gate_lock.py --seats 1`, so no sibling gate can land inside a timing.
 
 **Read the ratio rather than the seconds.** The whole-suite spread is 45.9 s on
 a 155.4 s mean - 30 percent of itself, and that is the shared box rather than
@@ -663,42 +672,16 @@ npm run test:whole-day
 
 **A few minutes end to end**, dominated by the build rather than the spec. The
 spec is 7 tests: three read the day off disk in milliseconds, and four are
-browser cases. The spread between two runs of one tree is the shared box rather
-than the widths, which is why the build figure can nearly double. Which day it
-looks at is derived and never written down: the committed day staging the most
-drawings. Run it before `build:canary`, which overwrites the same
-`build/` directory.
+browser cases. Which day it looks at is derived and never written down: the
+committed day staging the most drawings. Run it before `build:canary`, which
+overwrites the same `build/` directory.
 
-**It runs in CI, in a job of its own, and the numbers say why it is not part of
-the `browser` job.** Developer-box figures run three to five times the runner's,
-which is the usual shape and is why a local number may not stand in for a runner
-one (Guardrail #10).
-
-Appending the build and the spec to the `browser` job would not threaten its
-timeout - that job uses well under half of what it is allowed, even on its worst
-run. **The wall clock is the problem, not the timeout**: those seconds land on
-the critical path of every pull request that buys the browser half, because
-nothing else in the run is waiting.
-
-A separate job costs nothing there. It is far shorter than the `browser` job,
-it runs at the same time, and the workflow
-finishes at the moment it finished before. Actions minutes are free and
-unmetered on a public repository (Guardrail #2), so the 183 seconds are spent rather
-than paid, and 20 concurrent jobs are available against the six this workflow
-already starts.
-
-It is also the safer shape, and that would have decided it on its own. The
-`browser` job does build the real site once - the model-absent gate needs one -
-but it builds it with `static/assist` moved out of the way, and then overwrites
-the whole tree with the canary. Running this spec beside either of those is
-running it against exactly the tree it was written to refuse. Its own job has
-its own `frontend/build` and races nothing. `backend/tests/workflows/`
-holds the job to that: the canary build may not appear in it, and the real build
-has to come before the spec.
-
-The job is bought by the same allow-list as the browser half, because it is the
-same question about the same page. Run it by hand as well when a reading-page
-change is still local - the CI answer arrives after the push.
+**It does not run in CI.** It reads committed days rather than a fixture, so a
+pipeline run alone can change its answer, which makes it a data check rather
+than a code check (`CLAUDE.md` section 13). It also skipped all 7 of its tests
+on every run while no committed day publishes a chart, so its CI job spent a
+build to report nothing. Run it by hand when a reading-page change needs the
+day-scale picture.
 
 **A component with no call site proves itself here too.** A shared component
 lands before the sections that render it, so the build tree-shakes it away and

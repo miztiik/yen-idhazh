@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
@@ -39,9 +38,6 @@ requires_node: Final = pytest.mark.skipif(
 #: would keep agreeing with itself after the workflow moved.
 SELECTOR: Final = REPO_ROOT / "frontend" / "scripts" / "test-scope.ts"
 
-#: What the `docs` job runs.
-CHANGED_DOCS: Final = REPO_ROOT / "backend" / "utilities" / "changed_docs.py"
-
 #: The directory the gate set no longer has a check for.
 RETIRED_SCRIPTS_DIR: Final = GITHUB_DIR / "scripts"
 
@@ -64,22 +60,27 @@ def test_the_platform_runs_no_shell_script_directory() -> None:
     )
 
 
-def test_the_two_selection_steps_run_what_this_module_drives() -> None:
-    """The step and the harness below have to name the same program.
-
-    Both steps used to name a shell script, which is what kept them in step with
-    the tests. The script is gone, so the agreement is checked here instead: a
-    workflow that moved either program leaves the tests driving something the
-    run does not.
+def test_the_selection_step_runs_what_this_module_drives() -> None:
+    """The step and the harness below have to name the same program, or the
+    tests drive something the run does not.
     """
     workflow = _load_workflows()["ci.yml"]
     decide = _script(_step(workflow, "scope", "id", "decide"), "ci.yml/scope/decide")
-    changed = _script(_step(workflow, "docs", "id", "changed"), "ci.yml/docs/changed")
     assert SELECTOR.relative_to(REPO_ROOT).as_posix() in decide
     assert decide.split()[0] == "node", "the step calls node itself, with no script between"
-    assert CHANGED_DOCS.relative_to(REPO_ROOT).as_posix() in changed
-    for body in (decide, changed):
-        assert '>> "$GITHUB_OUTPUT"' in body, "a job reads these lines back as step outputs"
+    assert '>> "$GITHUB_OUTPUT"' in decide, "a job reads these lines back as step outputs"
+
+
+def test_the_robots_job_runs_the_module_the_selector_keys_on() -> None:
+    """The selector buys `robots` only when it selects the module this job runs,
+    so the two must name the same file."""
+    workflow = _load_workflows()["ci.yml"]
+    assert _job(workflow, "robots")["if"] == "needs.scope.outputs.robots == 'true'"
+    outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
+    assert outputs["robots"] == "${{ steps.decide.outputs.robots }}"
+    run = _step(workflow, "robots", "name", "The robots fixtures, on the newest supported interpreter")
+    module = str(run["run"]).split()[-1]
+    assert f"const ROBOTS_TESTS = '{module}';" in SELECTOR.read_text(encoding="utf-8")
 
 
 #: What the shipped script has to answer through a real git history.
@@ -93,10 +94,10 @@ def test_the_two_selection_steps_run_what_this_module_drives() -> None:
 #: panel pictures, one that re-reads the archive because it moved the shape a
 #: day is read through, and one that buys nothing.
 BROWSER_SCOPE_CASES: Final = (
-    ("frontend/src/routes/console/+page.svelte", True, True, True, True, False),
-    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, False),
-    ("config/idhazh.json", True, True, False, False, True),
-    ("docs/reference/pipeline-cost.md", False, False, False, False, False),
+    ("frontend/src/routes/console/+page.svelte", True, True, True, True, False, False),
+    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, False, False),
+    ("config/idhazh.json", True, True, False, False, True, True),
+    ("docs/reference/pipeline-cost.md", False, False, False, False, False, False),
 )
 
 def test_the_selector_tests_use_the_same_node_as_the_ci_selector() -> None:
@@ -165,7 +166,8 @@ def _browser_scope(
 
 @requires_node
 @pytest.mark.parametrize(
-    ("changed", "browser", "code", "console", "panels", "validate_all"), BROWSER_SCOPE_CASES
+    ("changed", "browser", "code", "console", "panels", "robots", "validate_all"),
+    BROWSER_SCOPE_CASES,
 )
 def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
     changed: str,
@@ -173,6 +175,7 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
     code: bool,
     console: bool,
     panels: bool,
+    robots: bool,
     validate_all: bool,
     tmp_path: Path,
 ) -> None:
@@ -193,6 +196,7 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
         "code": str(code).lower(),
         "console": str(console).lower(),
         "panels": str(panels).lower(),
+        "robots": str(robots).lower(),
         "validate_all": str(validate_all).lower(),
     }
 
@@ -222,6 +226,7 @@ def test_a_push_carrying_code_still_never_consults_the_list(tmp_path: Path) -> N
         "code": "true",
         "console": "true",
         "panels": "true",
+        "robots": "true",
         "validate_all": "true",
     }
 
@@ -240,6 +245,7 @@ def test_a_push_carrying_no_code_starts_no_code_job(tmp_path: Path) -> None:
         "code": "false",
         "console": "false",
         "panels": "false",
+        "robots": "false",
         "validate_all": "false",
     }
 
@@ -302,74 +308,3 @@ def test_the_panel_pictures_are_taken_and_kept_on_every_run_that_buys_them() -> 
     assert "!frontend/test-results/panels/" in str(traces["path"]).split(), (
         "a red run must not upload every panel picture a second time inside the traces"
     )
-
-
-def _changed_docs(root: Path, env: dict[str, str], base: str, head: str) -> dict[str, str]:
-    """Run the docs job's step in a real repository and read the lines it writes."""
-    return _outputs(
-        subprocess.run(
-            [sys.executable, CHANGED_DOCS.as_posix()],
-            cwd=root,
-            env={**env, "BASE": base, "HEAD": head},
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    )
-
-
-#: Every base the docs job can be handed that does not start a range. A dispatch
-#: names none at all, a branch's first push names the all-zero id, and a
-#: force-push leaves a base this clone no longer holds.
-UNRESOLVABLE_BASES: Final = (
-    ("no-base-at-all", ""),
-    ("no-earlier-tip", "0" * 40),
-    ("not-in-this-clone", "b" * 40),
-)
-
-
-@pytest.mark.parametrize(
-    "base", [base for _, base in UNRESOLVABLE_BASES], ids=[name for name, _ in UNRESOLVABLE_BASES]
-)
-def test_a_range_the_clone_cannot_resolve_answers_no_pages(base: str, tmp_path: Path) -> None:
-    """The docs job gates nothing and can fail nothing, so neither can this.
-
-    Asking git for a range it does not hold is a failure rather than an answer,
-    and a failure here would redden a check over a number nobody set a threshold
-    on. Each case is driven rather than read: the step is run, and its exit code
-    is what `_outputs` asserts before the answer is compared.
-    """
-    root, env, _, head = _two_commits(tmp_path, ["docs/x.md"])
-    assert _changed_docs(root, env, base, head) == {"any": "false"}
-
-
-def test_a_head_the_event_never_named_answers_no_pages(tmp_path: Path) -> None:
-    """The other half of a range. A dispatch names neither end."""
-    root, env, base, _ = _two_commits(tmp_path, ["docs/x.md"])
-    assert _changed_docs(root, env, base, "") == {"any": "false"}
-
-
-def test_a_change_that_touched_a_page_names_every_page_it_touched(tmp_path: Path) -> None:
-    """One line per answer, and the paths reach `doc_load.py --changed` as words."""
-    root, env, base, head = _two_commits(
-        tmp_path, ["docs/a.md", "docs/deep/b.md", "backend/idhazh/discover.py"]
-    )
-    assert _changed_docs(root, env, base, head) == {
-        "any": "true",
-        "paths": "docs/a.md docs/deep/b.md",
-    }
-
-
-def test_a_change_that_touched_no_page_answers_no_pages(tmp_path: Path) -> None:
-    """A resolvable range is still no reason to start the reader below it."""
-    root, env, base, head = _two_commits(tmp_path, ["backend/idhazh/discover.py"])
-    assert _changed_docs(root, env, base, head) == {"any": "false"}
-
-
-def test_a_page_the_change_deleted_is_left_out(tmp_path: Path) -> None:
-    """`doc_load.py` reads each page it is given, so a deleted one is not one."""
-    root, env, base, _ = _two_commits(tmp_path, ["docs/gone.md", "docs/kept.md"])
-    _git(root, env, "rm", "--quiet", "docs/gone.md")
-    _git(root, env, "commit", "--quiet", "-m", "delete")
-    head = _git(root, env, "rev-parse", "HEAD").strip()
-    assert _changed_docs(root, env, base, head) == {"any": "true", "paths": "docs/kept.md"}

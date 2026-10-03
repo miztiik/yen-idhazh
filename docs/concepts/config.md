@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-10-02
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -53,6 +53,7 @@ Knobs, by the surface they tune:
 - **Summarize** - the length bands, plus the title range and quote cap ([config/summary-length.md](config/summary-length.md)).
 - **Evaluation** - the confidence band thresholds, the brief compression ceiling, the copy reject ceiling, the word gate, the faithfulness window and its overlap, and the spot-check sample size ([evaluation.md](evaluation.md)).
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)). Every knob here is the digest pipeline's; the judging night's own clock is in `council` ([config/run-limits.md](config/run-limits.md)).
+- **Push retries** - the deadlines and wait steps in `config/push-retry.json`. The commit utility reads them without a producer install ([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-loop-stops-on-a-clock-and-says-what-each-attempt-spent)).
 - **Council** - what one judging night costs a runner, whatever judges it hosts, and who it hosts. `council.shard_timeout_minutes` is how long one judging shard may run, `council.shard_preamble_minutes` is how much of that is already gone before the judging process starts, `council.shard_wrap_up_minutes` is how much the shard keeps back so it stops on its own clock rather than being killed on the platform's, and `council.shards` is how many ways a night's work may split. `council.tenants` is an ordered list of slugs and **it may be empty**: it is the one place a judge is registered, it names the content-similarity judge today, and an empty list is a night the venue runs end to end and judges nothing. The workflow reads the bound to set `timeout-minutes`; the width and the tenants size its matrix. [Why these are the venue's and not a judge's](config/run-limits.md#why-the-councils-runner-numbers-are-a-block-of-their-own).
 - **Same-story line** - `assemble.same_story.adaptive_dedup_threshold` holds how the merge line fits itself: the band worth judging, how the record slices it, the five steps that move the line, and the three gates it has to clear first. The line falls fast and rises slow, and both daily caps are counted in slots of `bin_width` rather than written as decimals. `enabled` is the switch and it ships **off**, so a fresh clone publishes exactly the groups `assemble.same_story.floor_min` produced before the block existed. With it on, `assemble` reads the newest fitted line inside `applied_lookback_days` and groups the day at that number instead; the run records which number it used, so a committed `run.json` says what shaped its groups ([../architecture/publishing/autotune-content-similarity.md](../architecture/publishing/autotune-content-similarity.md)). **The whole block is optional**, and an absent block is what a repository with no content-similarity judge in it looks like: the pass then groups at `floor_min`, which is the same day the switch being off produces.
 - **Bench** - how many articles one runtime-sweep repeat reads, how many times each case repeats, and whether a bench dispatch measures the model's raw speed first. `bench.corpus_items` is a fit against the job timeout rather than a taste ([../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md#why-the-bench-corpus-is-three-articles)), and `bench.repeats` is the other multiplier in that same fit - the two are here together so that raising one shows the other rather than leaving it to be found at 330 minutes. `bench.run_model_speed_case` is true by default; false skips the `llama-bench` job and leaves the rest of the dispatch running, which is what to set when the flow is being exercised rather than a model measured ([../reference/github-actions.md](../reference/github-actions.md#design-rationale)).
@@ -66,9 +67,9 @@ Knobs, by the surface they tune:
 - **Console** - the telemetry viewport's default window, today anchor, pan step,
  zoom factor, minimum denominator for rate bars, and chart height ([config/appearance.md](config/appearance.md)).
 
-These are the *surfaces*, not a field list. The field-level truth is the `AppConfig` model - read it there rather than restating it here, because a list copied into prose is a list that goes stale.
+These are the *surfaces*, not a field list. The pipeline's field-level truth is the `AppConfig` model. Standalone utilities read their own authored config by name and refuse missing keys. Read the owning reader rather than restating the fields here, because a list copied into prose is a list that goes stale.
 
-The knobs are spread across six files rather than one, along the line of who edits them and how often: `config/idhazh.json` for pipeline behaviour, `config/models/<name>.json` for everything that is a fact about one set of weights, `config/appearance.json` for everything the published surface is drawn from, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
+The knobs are spread across files rather than one, along the line of who edits them and how often: `config/idhazh.json` for pipeline behaviour, `config/models/<name>.json` for everything that is a fact about one set of weights, `config/appearance.json` for everything the published surface is drawn from, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
 
 **Three of those files are lists rather than settings, and they are written one record a line.** `config/sources.json` holds a feed per line, `config/taxonomy.json` a word per line and `config/watchlist.json` an entity per line, keys sorted, every field spelled out even at its default. Adding a feed is one line; changing a tier is a one-line diff; adding a keyword to a lens moves that lens and nothing else. A test holds the layout still, because nothing else can - every layout parses to the same payload, so a record hand-indented across ten lines is invisible to the schema and to every reader. See [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
 
@@ -119,6 +120,13 @@ The read-side migration is unusual and worth stating once: **for a config contra
 Most knobs are read only by the producer and never reach a reader: source lists, model references, batch sizes, timeouts, retry budgets. Shipping those into the published bundle would be dead bytes and a muddled surface.
 
 A knob is shipped **only** when a published surface genuinely needs it - for example, how the dashboard buckets the ledger it renders. When that happens the value is *imported into the bundle at build time*, never fetched at read time: it is tiny, it is needed before the first paint, and fetching it would put a round trip on the critical path for something that cannot change between builds.
+
+The exception is `config/ledgers.json`. It is a registry, not a knob: a list of
+ledger families and ledgers that the Records page refreshes and compares with
+the site's published list. The build copies it verbatim to the site at the same
+path, and the page fetches it when the operator opens that page. That makes the
+refresh a real read of the site's declaration rather than a rebuild-time
+constant. Owner ruling, 2026-09-28.
 
 ## Design rationale
 

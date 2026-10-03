@@ -52,7 +52,8 @@ from idhazh.assemble import (
 )
 from idhazh.atomic_write import write_atomic
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import ServerJob, derive_url_key, normalize_prose
+from idhazh.contracts.base import Contract, ServerJob, derive_url_key, normalize_prose
+from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
@@ -74,10 +75,16 @@ from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
+from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import SourceKind, SourceTier
+from idhazh.contracts.validation_row import (
+    LeaderboardProvenance,
+    ValidationRow,
+    ValidationVerdict,
+)
 from idhazh.contracts.visual import VisualPlan, VisualType
 from idhazh.contracts.visual_data import (
     RENDERER_VERSION,
@@ -128,11 +135,7 @@ FIXTURE_ROW_LEDGERS: Final[dict[LedgerName, tuple[type[FixtureRow], tuple[str, .
 }
 
 #: The ledgers the console reads from packed files, so the fixture packs them.
-PACKED_LEDGERS: Final = (
-    LedgerName.ITEM_HEALTH,
-    LedgerName.HOST_FINGERPRINT,
-    LedgerName.SUMMARY_QUALITY_EVALS,
-)
+PACKED_LEDGERS: Final = tuple(config.load().app.ledger.published)
 
 #: The UTC day the fixture's packing pass runs on: two days after the attack
 #: day, the first day the declared rule admits it. A fixed day rather than the
@@ -1594,6 +1597,83 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
     return filed
 
 
+def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
+    """Give each published fixture ledger one real row before packing.
+
+    The canary already writes item-health, host-fingerprint and
+    summary-quality-evals elsewhere. A newly published ledger still needs one
+    fixture day through the ledger door, because the browser suite reads packed
+    files and an empty packed ledger proves only that the build did not crash.
+    """
+    url = "https://canary.example.com/published-ledger"
+    url_key = derive_url_key(url)
+    rows: dict[LedgerName, list[Contract]] = {
+        LedgerName.CANDIDATE_MODELS: [
+            ValidationRow(
+                version=ValidationRow.schema_version(),
+                model_id="canary-model",
+                is_incumbent=True,
+                selected=True,
+                leaderboard_hhem=None,
+                leaderboard_provenance=LeaderboardProvenance.NOT_REPORTED,
+                measured_hhem=0.82,
+                articles=3,
+                date=DATE,
+                run_id=SCORE_RUN_ID,
+                commit_sha=FIXTURE_SHA,
+                runner="canary",
+                verdict=ValidationVerdict.CONFIRMED,
+                detail="fixture candidate model",
+            )
+        ],
+        LedgerName.COUNTERFACTUAL_SCORES: [
+            CounterfactualScoreRow(
+                version=CounterfactualScoreRow.schema_version(),
+                date=DATE,
+                run_id=SCORE_RUN_ID,
+                vertical="ai",
+                url_key=url_key,
+                taken=True,
+                lens_id="war",
+                lens_bonus=0.1,
+                lens_multiplier=1.25,
+                score_committed=0.5,
+                score_counterfactual=0.525,
+            )
+        ],
+        LedgerName.SEEN: [
+            SeenRow(
+                version=SeenRow.schema_version(),
+                url_key=url_key,
+                first_seen_at=f"{DATE}T05:00:00Z",
+                first_seen_run=SCORE_RUN_ID,
+            )
+        ],
+        LedgerName.PUBLISHED: [
+            PublishedRow(
+                version=PublishedRow.schema_version(),
+                url_key=url_key,
+                published_on=DATE,
+                item_id="ai-01",
+            )
+        ],
+    }
+    filed: dict[LedgerName, int] = {}
+    for which in PACKED_LEDGERS:
+        ledger_rows = rows.get(which)
+        if ledger_rows is None:
+            continue
+        ledger.persist(
+            state,
+            ledger_rows,
+            ledger=which,
+            covers=DATE,
+            identity=_fixture_writer(SCORE_RUN_ID),
+        )
+        filed[which] = len(ledger_rows)
+    return filed
+
+
 def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
     """Pack every fixture day of the console's ledgers, as a live compaction pass would.
 
@@ -1669,6 +1749,7 @@ def main() -> int:
         return 0
     if args.file_fixture_rows is not None:
         filed = file_fixture_rows(args.state, args.file_fixture_rows)
+        filed.update(file_published_fixture_rows(args.state))
         pack_fixture_ledgers(args.state.resolve(), Path.cwd().resolve())
         for which, count in filed.items():
             print(f"filed {count} {which.value} fixture rows through the ledger door")
