@@ -126,7 +126,7 @@ class GardenerConfig(Model):
                 "push from outside the wake"
             )
         if len(self.task_names) != len(set(self.task_names)):
-            raise ValueError("task_names must not contain duplicates")
+            raise ValueError("task_names repeats a task")
         return self
 
 

@@ -99,9 +99,7 @@ class CollectionPruneRow(Contract):
         ChangelogEntry(
             version="2026-10-03T18:00",
             change="candidates_seen describes the fixed named period window.",
-            why=(
-                "Scheduled cleanup reads a configured window; older backlog uses an explicit range."
-            ),
+            why="Scheduled cleanup reads a window; older backlog uses an explicit range.",
         ),
         ChangelogEntry(
             version="2026-10-01",

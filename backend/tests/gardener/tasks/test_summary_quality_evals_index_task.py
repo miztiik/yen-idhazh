@@ -94,6 +94,7 @@ def test_folding_leaves_every_historical_candidate_and_every_lookup_file_unchang
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=dry_run,
         settles_months=True,
+        period_paths=[],
     )
 
     assert (folded.days, folded.months) == ((), ())
