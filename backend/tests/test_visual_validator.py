@@ -435,20 +435,37 @@ def test_every_role_and_every_value_role_is_declared() -> None:
 
 
 @pytest.mark.parametrize(
-    "path",
-    sorted(VALIDATOR_FIXTURES.glob("*/*.json")),
-    ids=lambda path: f"{path.parent.name}/{path.stem}",
+    ("directory", "name"),
+    [
+        ("plans", "declines"),
+        ("plans", "duplicate-in-role"),
+        ("plans", "element-missing"),
+        ("plans", "kind-mismatched"),
+        ("plans", "numeral-unmatched"),
+        ("plans", "passes"),
+        ("plans", "role-not-for-type"),
+        ("plans", "stale-vocabulary"),
+        ("plans", "too-few-marks"),
+        ("plans", "units-convert"),
+        ("plans", "units-disagree"),
+        ("tables", "capacity-and-headcount"),
+        ("tables", "misread-quantity"),
+        ("tables", "tonnes-and-kilotonnes"),
+        ("tables", "wind"),
+    ],
 )
-def test_every_fixture_round_trips_byte_identically(path: Path) -> None:
+def test_a_named_fixture_round_trips_byte_identically(directory: str, name: str) -> None:
     """A hand-edited fixture drifts from the model that is supposed to describe it.
 
     `tests/fixtures/contracts/` gets this from the contract gate. These live
     outside it because a table whose cell is deliberately wrong would read as a
-    canonical example in that folder, so the gate comes with them.
+    canonical example in that folder. Each input is named here so adding an
+    unrelated file cannot add work to this test.
     """
+    path = VALIDATOR_FIXTURES / directory / f"{name}.json"
     text = read_text(path)
     payload: dict[str, Any] = json.loads(text)
-    contract = ElementTable if path.parent.name == "tables" else VisualPlan
+    contract = ElementTable if directory == "tables" else VisualPlan
     assert contract.from_json(text).to_json() == text
     assert "\r" not in text and payload
 

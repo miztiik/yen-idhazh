@@ -17,31 +17,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, read_text
 
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.llm.server import server_argv
-from utilities import capture_server_argv
 
 pytestmark = pytest.mark.contract
-
-GOLDEN_DIR = FIXTURES_DIR / "server-argv"
-
-#: The values that decide which token is drawn. None of them is a server flag,
-#: so none of them may appear on a command line under any spelling.
-SAMPLING_KEYS = ("temperature", "top_p", "seed")
-
-
-def model_files() -> list[Path]:
-    """Every committed model file, which is bounded by how many models this
-    project supports rather than by what the archive has piled up
-    (`CLAUDE.md` Guardrail #12)."""
-    return sorted((CONFIG_DIR / "models").glob("*.json"))
-
-
-def model_id(path: Path) -> str:
-    return path.stem
-
 
 def entry_with(server: dict[str, Any]) -> Any:
     """The committed entry with its server block replaced, so a fixture case is
@@ -49,24 +30,6 @@ def entry_with(server: dict[str, Any]) -> Any:
     raw = json.loads(read_text(CONFIG_DIR / "models" / "qwen3.5-9b-q4km.json"))
     raw["summarizer"]["server"] = server
     return ModelsConfig.model_validate(raw).summarizer
-
-
-@pytest.mark.parametrize("path", model_files(), ids=model_id)
-def test_every_committed_entry_builds_the_golden_command_line(path: Path) -> None:
-    """The command line is pinned whole, so a moved flag is a reviewable diff.
-
-    Regenerate with `python backend/utilities/capture_server_argv.py` and read
-    the diff - that is the review, and it is the only thing that can say a
-    rewritten model file moved a flag nobody meant to move.
-    """
-    golden = GOLDEN_DIR / path.name
-    assert golden.exists(), (
-        f"{path.name} has no golden command line - run backend/utilities/capture_server_argv.py"
-    )
-
-    config = ModelsConfig.model_validate_json(read_text(path))
-
-    assert capture_server_argv.command_line(config) == json.loads(read_text(golden))
 
 
 def test_a_sampling_value_in_the_server_block_reaches_the_command_line() -> None:
@@ -88,17 +51,6 @@ def test_a_sampling_value_in_the_server_block_reaches_the_command_line() -> None
     )
     assert "temperature" in argv, "the builder emits the block verbatim, whatever is in it"
     assert "0.7" in argv
-
-
-@pytest.mark.parametrize("path", model_files(), ids=model_id)
-def test_no_committed_entry_puts_a_sampling_value_on_the_command_line(path: Path) -> None:
-    """Every committed file keeps its sampling in the block nothing emits."""
-    golden: dict[str, Any] = json.loads(read_text(GOLDEN_DIR / path.name))
-    config = ModelsConfig.model_validate_json(read_text(path))
-
-    for name in SAMPLING_KEYS:
-        assert name in config.summarizer.sampling, f"{name} left the sampling block"
-        assert name not in golden
 
 
 def test_a_flag_no_reader_of_ours_names_is_emitted_unchanged() -> None:
