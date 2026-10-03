@@ -54,16 +54,12 @@ served. The cost, stated rather than implied: a shared component or a token edit
 that breaks the console is found on the merge push to `main`, not on the pull
 request that caused it.
 
-**The panel pictures and gates are bought by a wider set than the console.** The
-`panels` group - a picture of every console panel at three widths in both themes,
-and the sufficiency gates a selector can decide - is two spec files, so a pull
-request buys it whenever it buys the console and also for anything every panel is
-drawn from: the panel frame and readout strip, the chart modules, the stylesheets
-and tokens, `config/appearance.json`, and the pictures' own specs, fixture and
-helpers. Those are the edits that move every picture at once, and a reviewer
-approving one needs the pictures on the pull request, not after the merge. The
-cost is the group's own run time on those pull requests, recorded in
-[../how-to/run-the-gates.md](../how-to/run-the-gates.md).
+**Panel sufficiency checks use a wider selection than the console.** They run
+for panel frames, readout strips, chart modules, styles, appearance config and
+their own fixtures and helpers. Bulk review pictures are explicit instead:
+dispatch CI with `panel_captures=true` on the branch being reviewed.
+Routine runs no longer supply those pictures automatically. Browser assertions
+and sufficiency checks still run when selected.
 
 **A path filter is not a dependency map.** Shared styles, layouts and frontend
 dependencies reach the console without naming it, and the boundary is crossed in
@@ -93,12 +89,31 @@ breaks a published page is found on the merge push to `main`, which still runs
 every group. A contract keeps full coverage, because it is the shape both halves
 read.
 
+## Design rationale
+
+The owner approved removing routine bulk panel captures on 2026-10-03.
+Pictures are review material, not pixel-comparison checks. Keeping their explicit
+review path retains that material without charging every routine run for it.
+The second model-absent build remains on code pushes to `main` and on pull
+requests that can change asset loading. Skipping unrelated PR inputs defers no
+model-asset check that those inputs can change. Unknown inputs still buy it.
+Individual browser durations are retained in the `browser-results` artifact so
+the next reduction can use measured costs rather than test counts.
+Build-independent machine arithmetic and token checks are assigned to `logic`
+by the named inventory, not by a `console-` filename prefix. This retains every
+assertion while removing browser preparation from edits confined to those specs.
+Tests that inspect built documents or packed canary ledgers still need their build.
+Machine-ledger tests compare a populated fixture root with an empty root, then
+read the populated root again. This checks that a reader neither falls back to
+the archive nor reuses another root's rows. They do not require a function call
+to have one spelling. Day-split tests compare the seed and remainder directly
+with the original stories; no unused reconstruction helper is kept for tests.
+
 ## Rejected alternatives
 
 | Rejected | Why |
 | --- | --- |
 | A nightly job for the deferred console specs | A second copy of the browser job is a second thing to keep correct, and a `main` push carrying code already runs every group. |
-| The panel pictures following the console's own answer | One answer fewer to keep in step, but a token, chart, readout or appearance edit - the kind that moves every panel picture at once - would be pictured only on the merge push, after a reviewer had approved it without seeing it (Susan, 2026-09-28). |
 | A guard listing the paths a test may not read | Written and deleted the same day; the rule is now stated directly in [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 and section 13. What that costs: a regression can still merge if no check catches it. |
 | Treating the shared gate lock as a result cache | It only caps how many callers run at once across worktrees and knows nothing about what ran. Two workers can still do identical work. |
 | Trusting a cached green step without its executed-test count | Collected output is not executed-test evidence, and a run that collected nothing has the same shape as a suite that passed. |

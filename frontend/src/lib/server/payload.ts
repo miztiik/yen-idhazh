@@ -281,8 +281,7 @@ export interface DayShellSplit {
 	 *
 	 * A shell built with this is not one to put back together: a kept story moves
 	 * forward into the seed, so `[...seed, ...rest]` is the same set in a
-	 * different order. `wholeDay` is for the routes that still inline everything,
-	 * and none of them keeps anything.
+	 * different order. A reader must restore the reading order after joining them.
 	 */
 	keep?: Iterable<string>;
 	/** Where the committed days are read from. */
@@ -395,18 +394,6 @@ export function homeShell(
 	const day = loadDay(date, root);
 	if (!day) return null;
 	return dayShell(date, seedItems, { keep: (day.leads ?? []).map((lead) => lead.item_id), root });
-}
-
-/** The two halves back together.
- *
- * The home page still renders the whole day inline, so this is what its `load`
- * returns. The dated routes stopped calling it: they keep a seed and let the
- * browser fetch the remainder.
- *
- * Only for a shell split with nothing kept out of order (see `DayShellSplit`).
- */
-export function wholeDay(shell: DayShell): DigestDay {
-	return { ...shell.facts, items: [...shell.seed, ...shell.rest] };
 }
 
 /** The cells of a CSV, quoting and all.
