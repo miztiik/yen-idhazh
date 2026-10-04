@@ -38,6 +38,7 @@ there.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,11 +48,14 @@ from idhazh import atomic_write, day_partition, ledger
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Format, Period
+from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import ledger_marks, named_trees
 from idhazh.gardener.file_listing import FileListing
 from idhazh.ledger import StoredRow
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,21 +155,14 @@ class CompactTree:
 
         Each month's daily folder, raw folder and month file, whichever format
         wrote it, are listed from the commit now: the month step chose them as
-        it ran. Only the raw days of a month newly named are taken in, so a day
-        a drop took earlier in this pass does not come back.
+        it ran.
         """
-        fresh = [
-            month
-            for month in months
-            if not self.listing.answers_for(self.raw_month_folder(month))
-        ]
-        self.listing = self.listing.name(
+        self._name(
             [
                 path
                 for month in months
                 for path in (
                     self.daily_month_folder(month),
-                    self.raw_month_folder(month),
                     *(
                         ledger.compact_path(
                             self.state_dir, self.ledger, Period.MONTHLY, month, fmt=fmt
@@ -173,7 +170,24 @@ class CompactTree:
                         for fmt in Format
                     ),
                 )
-            ]
+            ],
+            months=months,
+        )
+
+    def _name(self, paths: Sequence[Path], *, months: Sequence[str]) -> None:
+        """Name these paths and these months' raw folders in one listing call, and take in raw days.
+
+        Only the raw days of a folder no step had named are taken in: a folder
+        named before was read then, so a day a drop took from it earlier in this
+        pass does not come back.
+        """
+        fresh = [
+            month
+            for month in months
+            if not self.listing.answers_for(self.raw_month_folder(month))
+        ]
+        self.listing = self.listing.name(
+            [*(self.raw_month_folder(month) for month in months), *paths]
         )
         found = named_trees.raw_days(self.listing, self.state_dir, self.ledger, months=fresh)
         self.raw_days = sorted({*self.raw_days, *found})
@@ -211,6 +225,12 @@ class CompactTree:
         """Keep one file a live monthly window would delete, and name it for the record."""
         self.looked.add(path)
         self.spares.append(path)
+
+    def note_recovery(self, note: RecoveryNote, covers: str) -> None:
+        """Say once what the pass recovered instead of stopping, and the period it is about."""
+        logger.warning(
+            "a period was recovered ledger=%s period=%s note=%s", self.ledger.value, covers, note
+        )
 
     def entries(self, period: Period) -> dict[str, CompactEntry]:
         """One period's index as the pass holds it now, by what each entry covers."""
