@@ -64,7 +64,7 @@ Table A - what is out
 | 24 | Months close 16 days after they end | 7, 17, 23 | F | PENDING | - | - | - |
 | 25 | The retired raw listings code goes | 15 | F | COLLAPSED #1267 | - | - | - |
 | 26 | doc_load.py reads a web address as a web address | - | A | DONE | stunning-garbanzo | - | Plan 60 row 26: doc_load web links |
-| 27 | A shard lands nothing stale, and says why when it cannot land | 3, 9 | C | PENDING | - | - | - |
+| 27 | A shard lands nothing stale, and says why when it cannot land | 3, 9 | C | DONE | urban-spoon | - | Plan 60 row 27: no stale landing |
 | 28 | The console can read the gardener ledger | 23 | F | PENDING | - | - | - |
 | 29 | doc_load.py measures every named Markdown page | 26 | A | PENDING | - | - | - |
 
