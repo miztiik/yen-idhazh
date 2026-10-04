@@ -527,9 +527,9 @@ jobs:
             --commit "${{ github.sha }}" \
             --runner ubuntu-latest
 
-          # Harvest while downloaded item text is available.
-          # The stage enforces finetune.harvest_every_days; failure must not block publication.
       - name: Harvest the training corpus
+        # Harvest while downloaded item text is available.
+        # The stage enforces finetune.harvest_every_days; failure must not block publication.
         continue-on-error: true
         run: python -m idhazh harvest --date "${{ needs.plan.outputs.date }}"
 
