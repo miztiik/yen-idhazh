@@ -447,6 +447,19 @@ class IconsConfig(Model):
         le=32,
         description="The default drawn size of an inline icon, in CSS pixels.",
     )
+    stroke_px: float = Field(
+        default=1.5,
+        ge=0.5,
+        le=3.0,
+        description=(
+            "The line width, in screen pixels, that every icon draws at every size. "
+            "At 1.25 px, six 13 px lines in the dark theme read no brighter than "
+            "secondary text and eight more sat just above it. At 1.5 px, no line "
+            "is that dim; only chart-scatter dots are. At density 3, a 1.5 px "
+            "icon line is 1.50 px beside a weight-600 label stroke of 1.68 px, "
+            "so the icon does not outweigh its label."
+        ),
+    )
     tint_mode: TintMode = Field(
         default=TintMode.SEMANTIC,
         description="Whether an icon takes the hue of what it means, or stays with the text.",
@@ -496,6 +509,16 @@ class AppearanceConfig(Contract):
             why="The Records page is live and draws its own controls.",
         ),
         ChangelogEntry(
+            version="2026-10-03T12:00",
+            change="icons.stroke_px added; icon strokes are fixed in screen pixels.",
+            why="One icon line weight keeps every glyph aligned with text at every size.",
+        ),
+        ChangelogEntry(
+            version="2026-10-02",
+            change="console.default_window_days 30 to 14; console.data_explorer_tab added.",
+            why="One opening span on every route, and the sixth tab waits for its page.",
+        ),
+        ChangelogEntry(
             version="2026-09-30",
             change="console.machine_colour_stops 7 to 5, and three machine-panel knobs added.",
             why="A machine's colour is a speed ramp of five steps, not a key-ordered palette.",
@@ -504,11 +527,6 @@ class AppearanceConfig(Contract):
             version="2026-09-28",
             change="console.judged_panel_ids and console.plot_min_fill_share, additive.",
             why="The sufficiency gates judge an opt-in list of panels against a fill floor.",
-        ),
-        ChangelogEntry(
-            version="2026-09-27",
-            change="console.completeness_grace_days, additive, default 1.",
-            why="The console says its record has stopped once a whole UTC day has none.",
         ),
         ChangelogEntry(
             version="2026-09-24",
