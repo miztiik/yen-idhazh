@@ -65,6 +65,7 @@ class LedgerName(StrEnum):
     DAY_METRICS = "day-metrics"
     DIGEST_FRAGMENTS = "digest-fragments"
     GARDENER = "gardener"
+    RUN_PLAN = "run-plan"
 
 
 #: Ledgers whose writers still file one CSV segment per run under a day directory.

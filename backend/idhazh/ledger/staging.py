@@ -147,6 +147,11 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol="idhazh.stages.plan.stage_plan",
         job_labels=frozenset({"plan"}),
     ),
+    LedgerName.RUN_PLAN: LedgerStaging(
+        writer="idhazh.stages.plan.stage_plan, through the ledger door",
+        symbol="idhazh.stages.plan.stage_plan",
+        job_labels=frozenset({"plan"}),
+    ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: LedgerStaging(
         writer=(
             "idhazh.ledger.rows.append_story_similarity_pairs, called from the "
