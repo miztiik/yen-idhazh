@@ -469,9 +469,9 @@ def _hand_back(tip: str, refresh: Sequence[str]) -> bool:
     restored; what only this attempt created is removed, or the producer below
     reads its own last attempt as the day's history and counts itself twice.
 
-    Every path is named. A directory that also holds this run's rendered assets
-    is never refreshed whole: those assets came from another job's artifact and
-    no producer here can make them again.
+    Every path is named. A directory that also holds this run's charts is never
+    refreshed whole: a chart the tip already publishes is dropped before the
+    rebase instead, by `_spare_the_published_assets`.
     """
     if not refresh:
         return True

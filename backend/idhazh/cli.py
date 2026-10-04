@@ -454,9 +454,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         help=(
             "The published day's directory, as the workflow already derived it: "
             "frontend/public/digest/<YYYY>/<MM>/<DD>. `derived-paths` names two files "
-            "inside it one at a time, because the day's directory itself must never be "
-            "handed back - this run's rendered charts are in it and no producer here "
-            "can make them again."
+            "inside it one at a time, because the day's directory itself is never "
+            "handed back - it also holds the day's charts, and a raced chart is "
+            "dropped before the rebase instead."
         ),
     )
     parser.add_argument(

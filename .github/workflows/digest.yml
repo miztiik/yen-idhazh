@@ -426,22 +426,13 @@ jobs:
 
       # Keep article text for training-corpus backfill.
       # Upload completed items even after failure or timeout.
+      # A rendered chart travels inside its decision; assemble writes the file.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: items-${{ matrix.shard }}
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
           retention-days: 7
-          if-no-files-found: ignore
-
-      # Upload only this run's day, including completed charts after failure.
-      # Chart decisions travel in items; their image bytes must travel here.
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: shard-visuals-${{ matrix.shard }}
-          path: ${{ needs.plan.outputs.day_dir }}/
-          retention-days: 1
           if-no-files-found: ignore
 
       # Retain article/summary evidence for manual faithfulness labelling.
@@ -503,14 +494,6 @@ jobs:
           pattern: items-*
           merge-multiple: true
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
-
-      # Missing visuals are valid when no shard produced a chart.
-      - uses: actions/download-artifact@v8
-        continue-on-error: true
-        with:
-          pattern: shard-visuals-*
-          merge-multiple: true
-          path: ${{ needs.plan.outputs.day_dir }}/
 
       - name: Assemble and publish
         run: |

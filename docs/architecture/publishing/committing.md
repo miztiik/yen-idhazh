@@ -146,10 +146,11 @@ closed-day fold. The list lives in
 `Say which committed paths a rebuild owns` step prints it into `$GITHUB_OUTPUT`;
 it was a space-split string in the workflow, under a header warning that no path
 in it may carry a space, and the workflow tests held a second copy of the same
-list. It never names the day's directory. The `shard-visuals-*`
-artifacts unpack this run's rendered charts into that same directory and no producer in
-the assemble job can make them again, so the two payload files are named one at a
-time. `frontend/public/telemetry/` is a full rewrite of a month of the
+list. It never names the day's directory. That directory also holds the day's charts,
+and a chart is never handed back: this run's copy of one the tip already publishes is
+dropped before the rebase instead
+([one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md)),
+so the two payload files are named one at a time. `frontend/public/telemetry/` is a full rewrite of a month of the
 item-health ledger, which is why it is regenerated and not unioned: a union of
 two rewrites is a file with every row twice.
 

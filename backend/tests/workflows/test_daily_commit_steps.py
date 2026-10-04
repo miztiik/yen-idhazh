@@ -446,8 +446,7 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     assert settings["REFRESH_PATHS"].split() == path_classes.refresh_paths(
         day_dir=SUBSTITUTED_DAY_DIR
     ).split()
-    # Never the day's directory itself. The visuals artifact unpacks this run's
-    # rendered charts into it and no producer here can make them again, so the
+    # Never the day's directory itself: it also holds the day's charts, so the
     # two payload files are named one at a time.
     assert SUBSTITUTED_DAY_DIR not in settings["REFRESH_PATHS"].split()
     # Which is why the charts get their own answer: this run's copy is dropped
