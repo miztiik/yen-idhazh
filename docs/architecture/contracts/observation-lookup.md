@@ -1,6 +1,6 @@
 # Observation Lookup
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 How evaluation membership stays exact without reading the full history of recorded IDs.
 
@@ -112,6 +112,18 @@ The [shared preparation hook](../publishing/committing.md#preparation-names-this
 restores the previous attempt's named derived paths, rebases, runs any producer
 regeneration, then prepares again. It never text-merges lookup generations.
 A concurrency group that drops jobs is not part of this protocol.
+
+**Known publication limitation:** a competing push can still stop the current
+commit helper at a lookup-node `rename/delete` or `modify/delete` conflict.
+Similar SQLite or routing-page bytes can make Git infer a rename between
+different digest-addressed files. Disabling directory-renaming inference does
+not disable file-renaming inference. The observed failures stop before batch
+replay, so passing membership tests alone does not certify this retry path.
+Keep the winning root and its nodes. Do not choose a conflict side, merge
+SQLite bytes, or delete the root to bypass the refusal. Verify whether the
+batch has an incoming file or a committed receipt before using the
+[named recovery procedure](../../how-to/migrate-observation-lookup.md#recover-a-named-pending-batch).
+This warning records a reachable failure, not an implemented correction.
 
 After an inbox push succeeds, a failed final publication leaves durable pending
 input or a committed receipt if another attempt already applied it. A matching
