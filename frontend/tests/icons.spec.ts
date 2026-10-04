@@ -143,6 +143,30 @@ test.describe('the icon set', () => {
 		}
 	});
 
+	test('the built pages draw every visible icon at the configured line width', async ({ page }) => {
+		// The test above checks the arithmetic; this one checks the built component and its
+		// build-time constant together, on the pages a reader opens.
+		const strokePx = iconsConfig().stroke_px;
+		const drawn: { path: string; size: string | null; screen: number }[] = [];
+		for (const path of ['/', '/console/']) {
+			await page.goto(path);
+			await expect(page.locator('svg.icon').first()).toBeAttached();
+			const strokes = await page.locator('svg.icon').evaluateAll((nodes) =>
+				nodes.flatMap((node) => {
+					const svg = node as SVGSVGElement;
+					const matrix = svg.getScreenCTM();
+					if (matrix === null || svg.getClientRects().length === 0) return [];
+					return [{ size: svg.getAttribute('width'), screen: Number(svg.getAttribute('stroke-width')) * matrix.a }];
+				})
+			);
+			drawn.push(...strokes.map((stroke) => ({ path, ...stroke })));
+		}
+		expect(drawn.length, 'the built pages drew no visible icon').toBeGreaterThan(0);
+		for (const stroke of drawn) {
+			expect(stroke.screen, `${stroke.path}, an icon at ${stroke.size} px`).toBeCloseTo(strokePx, 5);
+		}
+	});
+
 	test('an id outside the named set is a type error', () => {
 		const diagnostics = invalidIconIdDiagnostics();
 		const errors = diagnostics.map((diagnostic) => ({
