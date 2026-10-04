@@ -395,7 +395,7 @@ def test_the_commit_listing_names_only_the_requested_folders(
     shutil.rmtree(checkout / "state" / "traces")
 
     listed = gardener_publish.Checkout(checkout).committed_folders(
-        ["state/traces/", "state/summary-quality-evals-index", "state/raw/visual-prunes", "frontend/public/digest"]
+        ["state/traces/", "state/a-folder-nothing-committed", "state/raw/visual-prunes", "frontend/public/digest"]
     )
 
     assert listed == {

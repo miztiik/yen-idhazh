@@ -63,14 +63,11 @@ Each deletes what it owns past its window, and each ships `dry_run: true`. The
 windows were keys in `config/idhazh.json` until 2026-09-28 and moved here with
 no value changed, because each task is the only thing that reads its number.
 No current task carries a `fold` block. Feed-health is packed through the
-ledger door, and the evaluation ID lookup uses JSON and SQLite, so neither is a
-CSV day tree. The generic fold remains available to a future retention task
-that owns a registered CSV day tree.
+ledger door, so it is not a CSV day tree. The generic fold remains available to
+a future retention task that owns a registered CSV day tree.
 The digest workflow ran that same fold live on every run until the gardener
 took it over, and a fold changes no answer a reader gets. No current task sets
-`fold.settles_months`. The [evaluation ID lookup](../../architecture/contracts/observation-lookup.md)
-has no retention declaration and no day/month fold, and nothing in the pipeline
-writes or reads it.
+`fold.settles_months`.
 Why each tree gets the age it has is
 [retention-ages.md](retention-ages.md#every-tree-names-its-own-cleanup-age).
 

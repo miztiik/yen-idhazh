@@ -710,7 +710,6 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/gardener/period_inputs.py`
   - `backend/idhazh/gardener/named_trees.py`
   - `backend/idhazh/telemetry/door_prune.py`
-  - `backend/idhazh/evals/observation_migration.py`
   - `backend/utilities/ledger_migration/packing_files.py` (its docstring names a watermark; it names the marks through `ledger_marks.name_marks` since #1281)
   - `backend/utilities/benchmark_compaction.py` (it times `write_watermark`)
   - `frontend/scripts/published-ledgers.mjs` (its comment on keeping `daily/watermark.json` off the site)
@@ -729,7 +728,6 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/ledger_migration/test_packing_parity.py` (its watermark reads)
   - `backend/tests/ledger_migration/test_packing_scope.py` (its watermark writes and checks)
   - `backend/tests/retention/test_prune_range.py`
-  - `backend/tests/evals/test_observation_migration.py`
   - `backend/tests/test_canary_packing.py`
   - `frontend/tests/ledger-copy.spec.ts`
   - `frontend/tests/published-ledgers.spec.ts`
