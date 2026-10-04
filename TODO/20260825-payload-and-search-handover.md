@@ -83,7 +83,7 @@ Per-day detail, because one number hides the shape. **Re-measured 2026-08-26** o
 
 These are deletions. They can ship before any of the questions below are answered, and they should.
 
-1. **SHIPPED in PR #119.** Stop inlining `day` into routes that do not read it. The root layout hands the footer four scalars and the home page loads its own day; `/console/` went 406.3 KB gz to 93.0 KB and `/evals/` 315.6 KB to 2.4 KB.
+1. **SHIPPED in PR #119.** Stop inlining `day` into routes that do not read it. The root layout hands the footer four scalars and the home page loads its own day; `/console/` went 406.3 KB gz to 93.0 KB.
 2. **SHIPPED in PR #121.** Stop sending the console its telemetry rows twice. The server load seeds one `console.default_window_days` window instead of every committed month, and panning back fetches the older shards that were already on disk.
 3. **Still open.** Decide whether `retention.dry_run` stays true. Every projection above assumes nothing is ever pruned, which is the current behaviour.
 

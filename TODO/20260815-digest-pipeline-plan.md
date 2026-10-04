@@ -873,7 +873,6 @@ Routes, under the Pages project base:
 /<YYYY-MM-DD>/<vertical>/  that day, one vertical - a projection        canonical, immutable
 /<YYYY-MM-DD>/#<vertical>-<NN>   an item anchor, force-revealed by the shell
 /archive/                  every surviving day, newest first            (moving)
-/evals/                    the dashboard                                (moving)
 404.html                   the designed missing-day state
 ```
 

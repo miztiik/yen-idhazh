@@ -19,11 +19,10 @@ Table A - Configured bounds
 | A1 | `retention.pages_hard_cap_mb` | 1,024 MiB | Refuse an oversized built site; the configured limit cannot exceed the platform's 1 GiB limit. |
 | A2 | `retention.site_budget_mb` | 800 MiB | Warn while publishing can continue; delete nothing. |
 | A3 | `page_weight.ceilings_bytes`, `/404` | 4,400 compressed bytes | Bound this route's prerendered HTML. |
-| A4 | `page_weight.ceilings_bytes`, `/evals/` | 6,600 compressed bytes | Bound this route's prerendered HTML. |
-| A5 | `page_weight.payload_ceilings_bytes`, `console/band.json` | 2,000 compressed bytes | Bound this fetched payload. |
-| A6 | `page_weight.payload_ceilings_bytes`, `telemetry/` | 1,100,000 compressed bytes | Bound each file under this build-relative prefix, not their combined size. |
-| A7 | `page_weight.cold_console_load_bytes` | 2,300,000 compressed bytes | Bound the payload total for a cold console opening: two telemetry month shards at the 14-day default window, the band, and 98,000 bytes of room. |
-| A8 | `page_weight.payload_ceilings_bytes`, `state/compact/<ledger>/index/`, one key per published ledger | 2,200 compressed bytes | Bound each of a published ledger's two indexes, each on its own. |
+| A4 | `page_weight.payload_ceilings_bytes`, `console/band.json` | 2,000 compressed bytes | Bound this fetched payload. |
+| A5 | `page_weight.payload_ceilings_bytes`, `telemetry/` | 1,100,000 compressed bytes | Bound each file under this build-relative prefix, not their combined size. |
+| A6 | `page_weight.cold_console_load_bytes` | 2,300,000 compressed bytes | Bound the payload total for a cold console opening: two telemetry month shards at the 14-day default window, the band, and 98,000 bytes of room. |
+| A7 | `page_weight.payload_ceilings_bytes`, `state/compact/<ledger>/index/`, one key per published ledger | 2,200 compressed bytes | Bound each of a published ledger's two indexes, each on its own. |
 
 These are limits, not measurements of the current site. Measure the completed
 build before reporting its size or remaining capacity. Use the commands in
