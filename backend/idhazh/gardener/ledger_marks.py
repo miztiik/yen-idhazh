@@ -4,8 +4,9 @@ A ledger's marks are six small files under `state/compact/<ledger>/`. The three
 indexes, `index/daily.json`, `index/monthly.json` and `index/yearly.json`, list
 every packed day, month and year file. The three watermarks,
 `<period>/watermark.json`, each name the newest day, month or year its step has
-packed. `name_marks` says where the six sit, so the listing a task is given
-names the same files a compaction pass then reads with `read_marks`.
+packed. `name_marks` says where the six sit. Code that builds a pass's listing
+path by path names the marks through it, so the pass never asks for a mark its
+listing left out. `read_marks` reads them.
 
 **A mark is fetched once, before it is read.** The index folder is fetched
 whole, and each watermark by itself, without the day, month or year folders
