@@ -16,6 +16,16 @@ under `backend/idhazh/` starts a process. `from_disk` walks only the named day,
 month, or run-directory paths passed to it, for `idhazh gardener run-task` and
 tests that build fixtures.
 
+**A step that chooses its periods as it runs names them then.** `name` hands
+back a listing that also answers for the paths it was given, listed by the
+builder's own lister in one call: `git ls-tree` over the same commit for a
+shard, the same disk walk for `from_disk`. A path the listing already answers
+for is not listed again, so a naming never brings back a file an earlier task
+of the shard deleted. `from_paths` has no lister, and refuses to name more.
+Every file a later naming listed is recorded for the shard, so `listed` can
+hold a shard's deletions to what it listed, and the next `settled` listing
+answers for those paths too.
+
 **A folder outside the listing is refused, never read as empty.** A task that
 asks for the names under a folder its declaration neither owns nor reads has a
 declaration that forgot the folder, and an empty answer would be the silent
@@ -30,6 +40,13 @@ and `fetch` raise `PathNotNamedError`, naming the path and the nearest paths a
 step did name. "Not held" there would be a guess, and a step that looked in the
 wrong months would act on it as if those months were empty. A folder that holds
 a named path passes too, because fetching it brings what was named inside it.
+
+**`files_under` answers for all of a folder or for none of it.** It answers
+only for a path a step named, or one inside such a path, because only there has
+the listing seen every file. A folder that merely holds named periods, or sits
+beside them, is refused: its answer would be the named part of it read as the
+whole. `named_files` is the walk over the named periods inside a folder, and a
+caller asks for that partial walk by name.
 
 **Content arrives before it is read, a folder at a time.** `fetch` widens the
 checkout in one call, by whole folders or by the files directly inside a
@@ -56,6 +73,11 @@ from typing import Any, Final, Protocol
 #: A git object id as `git ls-tree` prints it: forty lowercase hex digits. A tree
 #: id is put into an API address, so it is checked as an identity first.
 _OBJECT_ID: Final = re.compile(r"^[0-9a-f]{40}$")
+
+#: Lists every file the commit holds at or under these repository paths, with its
+#: size in bytes. Each builder brings its own: `git ls-tree` for a shard, the disk
+#: walk for `from_disk`.
+type Lister = Callable[[Sequence[str]], Mapping[str, int]]
 
 
 class FileNotFetchedError(Exception):
@@ -117,6 +139,45 @@ def sizes_from_github(api: TreeReader, blobs: Iterable[str]) -> dict[str, int]:
     return sizes
 
 
+def sizes_of(entries: Iterable[TreeEntry], github_sizes: Mapping[str, int]) -> dict[str, int]:
+    """Each file's size: git's where it printed one, else GitHub's for the file's blob.
+
+    A file neither can size is refused by name: a weight that skipped it would
+    read low and say nothing.
+    """
+    sizes: dict[str, int] = {}
+    for entry in entries:
+        size = entry.size if entry.size is not None else github_sizes.get(entry.blob)
+        if size is None:
+            raise ValueError(
+                f"{entry.path} has no size: this clone never downloaded blob {entry.blob}, "
+                "and GitHub's blob API did not report it"
+            )
+        sizes[entry.path] = size
+    return sizes
+
+
+def _on_disk(repo_root: Path, names: Iterable[str]) -> dict[str, int]:
+    """Every file at or under these repository paths, weighed on disk. A symlink is refused."""
+    sizes: dict[str, int] = {}
+    for name in sorted(set(names)):
+        root = repo_root / name
+        if root.is_symlink():
+            raise ValueError(f"{root} is a symlink inside a named period path")
+        if root.is_file():
+            candidates: Iterable[Path] = (root,)
+        elif root.is_dir():
+            candidates = root.rglob("*")
+        else:
+            continue
+        for path in candidates:
+            if path.is_symlink():
+                raise ValueError(f"{path} is a symlink inside a named period path")
+            if path.is_file():
+                sizes[path.relative_to(repo_root).as_posix()] = path.stat().st_size
+    return dict(sorted(sizes.items()))
+
+
 def _folder(name: str) -> str:
     """A repository folder as the listing spells it: POSIX, no trailing slash."""
     return name.strip().rstrip("/")
@@ -157,7 +218,7 @@ def _nearest(path: str, named: Sequence[str]) -> str:
 
 @dataclass(slots=True)
 class _Checkout:
-    """What every task of one shard shares: the checkout, how to widen it, and what that added."""
+    """What every task of one shard shares: the checkout, how to widen and list it, what it got."""
 
     repo_root: Path
     #: Widens a sparse checkout by these entries in one call. None for a listing
@@ -165,8 +226,15 @@ class _Checkout:
     widen: Callable[[Sequence[str]], None] | None
     #: Every folder the shard listed, which is what a download is counted under.
     folders: tuple[str, ...]
+    #: Lists what the commit holds under a path a step names as it runs. None for
+    #: a listing built from named files alone, which can name nothing more.
+    lister: Lister | None = None
     #: Every file a widening put on disk, with its size.
     added: dict[str, int] = field(default_factory=dict)
+    #: Every path a step named after the listing was built.
+    named_later: set[str] = field(default_factory=set)
+    #: Every file listed under those paths, with its size.
+    listed_later: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,10 +276,13 @@ class FileListing:
     def from_disk(
         cls, repo_root: Path, folders: Iterable[str], *, paths: Iterable[Path]
     ) -> FileListing:
-        """Every file under these named period paths, weighed on disk."""
+        """Every file under these named period paths, weighed on disk.
+
+        A path named later is walked the same way, so a step that names its
+        periods as it runs reads the disk exactly as this listing did.
+        """
         chosen = tuple(sorted({_folder(folder) for folder in folders}))
         named: set[str] = set()
-        sizes: dict[str, int] = {}
         for root in sorted(set(paths)):
             try:
                 name = root.relative_to(repo_root).as_posix()
@@ -220,24 +291,15 @@ class FileListing:
             if not any(_inside(name, folder) for folder in chosen):
                 raise ValueError(f"{name} is outside the listing's declared folders")
             named.add(name)
-            if root.is_symlink():
-                raise ValueError(f"{root} is a symlink inside a named period path")
-            if root.is_file():
-                candidates: Iterable[Path] = (root,)
-            elif root.is_dir():
-                candidates = root.rglob("*")
-            else:
-                continue
-            for path in candidates:
-                if path.is_symlink():
-                    raise ValueError(f"{path} is a symlink inside a named period path")
-                if path.is_file():
-                    sizes[path.relative_to(repo_root).as_posix()] = path.stat().st_size
+
+        def walked(names: Sequence[str]) -> Mapping[str, int]:
+            return _on_disk(repo_root, names)
+
         return cls(
             folders=chosen,
             named=tuple(sorted(named)),
-            sizes=dict(sorted(sizes.items())),
-            checkout=_Checkout(repo_root=repo_root, widen=None, folders=chosen),
+            sizes=_on_disk(repo_root, named),
+            checkout=_Checkout(repo_root=repo_root, widen=None, folders=chosen, lister=walked),
         )
 
     @classmethod
@@ -250,6 +312,7 @@ class FileListing:
         *,
         paths: Iterable[str],
         widen: Callable[[Sequence[str]], None],
+        lister: Lister | None = None,
     ) -> FileListing:
         """The files the commit holds under these folders, each with a size or a refusal.
 
@@ -257,24 +320,19 @@ class FileListing:
         what the listing answers for. `github_sizes` answers, by blob id, for
         every file git printed no size for. A file neither can size is refused
         by name: a weight that skipped it would read low and say nothing.
+        `lister` lists the same commit for a path a step names later; without
+        one, `name` refuses.
         """
         chosen = tuple(sorted({_folder(folder) for folder in folders}))
-        sizes: dict[str, int] = {}
-        for entry in entries:
-            if not any(_inside(entry.path, folder) for folder in chosen):
-                continue
-            size = entry.size if entry.size is not None else github_sizes.get(entry.blob)
-            if size is None:
-                raise ValueError(
-                    f"{entry.path} has no size: this clone never downloaded blob {entry.blob}, "
-                    "and GitHub's blob API did not report it"
-                )
-            sizes[entry.path] = size
+        sizes = sizes_of(
+            (entry for entry in entries if any(_inside(entry.path, folder) for folder in chosen)),
+            github_sizes,
+        )
         return cls(
             folders=chosen,
             named=tuple(sorted({_folder(path) for path in paths})),
             sizes=dict(sorted(sizes.items())),
-            checkout=_Checkout(repo_root=repo_root, widen=widen, folders=chosen),
+            checkout=_Checkout(repo_root=repo_root, widen=widen, folders=chosen, lister=lister),
         )
 
     @property
@@ -322,11 +380,97 @@ class FileListing:
             f"{nearest}. A step reads only inside the periods its task named"
         )
 
+    def answers_for(self, path: str | Path) -> bool:
+        """Whether the listing saw all at or under a path: a step named it, or a folder above it."""
+        relative = self._relative(path)
+        return any(_inside(relative, named) for named in self.named)
+
+    def _listed_under(self, relative: str) -> list[str]:
+        """Every listed file under a folder, in path order, asked of nothing but the listing."""
+        return [path for path in self.sizes if path.startswith(f"{relative}/")]
+
     def files_under(self, folder: str | Path) -> list[str]:
-        """Every listed file under this folder, as repository paths, in path order."""
+        """Every file the commit holds under this folder, as repository paths, in path order.
+
+        Only a folder a step named, or one inside such a folder, is answered:
+        anywhere else the listing has seen part of the folder at most. A folder
+        that holds named periods without being one is refused as well as one
+        beside them, because its answer would be the named part read as all of
+        it. `named_files` walks the named periods instead, by name.
+        """
         relative = self._relative(folder)
         self._refuse_outside(relative)
-        return [path for path in self.sizes if path.startswith(f"{relative}/")]
+        if not self.answers_for(relative):
+            area = next(held for held in self.folders if _inside(relative, held))
+            nearest = _nearest(relative, [named for named in self.named if _inside(named, area)])
+            raise PathNotNamedError(
+                f"{relative} is not a path a step named, nor inside one, so the listing holds "
+                f"only the periods named inside {area} and cannot say what all of {relative} "
+                f"holds. {nearest}. Walk the named periods with named_files"
+            )
+        return self._listed_under(relative)
+
+    def named_files(self, folder: str | Path) -> list[str]:
+        """Every listed file inside the periods a step named at, above or under this folder.
+
+        The walk for a tree whose periods a task named one by one: it answers
+        for those periods, in path order, and says nothing of the rest of the
+        folder. A folder with no named period at, above or under it is refused,
+        as `holds` refuses a path there.
+        """
+        relative = self._relative(folder)
+        self._refuse_unnamed(relative)
+        return self._listed_under(relative)
+
+    def name(self, paths: Iterable[str | Path]) -> FileListing:
+        """This listing, answering also for these paths: what the commit holds at or under each.
+
+        For a step that chooses its periods as it runs, after the listing was
+        built. The builder's lister lists every path this listing does not
+        answer for yet, in one call. A path at or inside a named one is not
+        listed again, and a file listed inside one is passed over, so a naming
+        never brings back a file an earlier task of the shard deleted. What the
+        lister found is recorded for the shard, for `listed` and `settled`.
+        """
+        wanted = sorted({self._relative(path) for path in paths})
+        for path in wanted:
+            self._refuse_outside(path)
+        fresh = [path for path in wanted if not self.answers_for(path)]
+        fresh = [
+            path
+            for path in fresh
+            if not any(path != other and _inside(path, other) for other in fresh)
+        ]
+        if not fresh:
+            return self
+        lister = self.checkout.lister
+        if lister is None:
+            raise ValueError(
+                f"{fresh[0]} cannot be named now: this listing was built from named files "
+                "and has no lister to list more"
+            )
+        found = {
+            path: size
+            for path, size in lister(fresh).items()
+            if any(_inside(path, named) for named in fresh) and not self.answers_for(path)
+        }
+        self.checkout.named_later.update(fresh)
+        self.checkout.listed_later.update(found)
+        return FileListing(
+            folders=self.folders,
+            named=tuple(sorted({*self.named, *fresh})),
+            sizes=dict(sorted({**self.sizes, **found}.items())),
+            checkout=self.checkout,
+        )
+
+    def listed(self) -> frozenset[str]:
+        """Every file this listing was built with, and every file a later naming listed.
+
+        What a shard's deletions are held to: a file a task deleted is one the
+        shard listed from the commit, when the listing was built or when a step
+        named its period later.
+        """
+        return frozenset(self.sizes) | frozenset(self.checkout.listed_later)
 
     def holds(self, path: str | Path) -> bool:
         """Whether the commit holds this file. A path no step named is refused."""
@@ -376,7 +520,7 @@ class FileListing:
         for folder in folders:
             relative = self._relative(folder)
             self._refuse_unnamed(relative)
-            if self.files_under(relative):
+            if self._listed_under(relative):
                 entries.append(relative)
         for file in beside:
             relative = self._relative(file)
@@ -405,12 +549,21 @@ class FileListing:
     def settled(self, *, written: Iterable[str], deleted: Iterable[str]) -> FileListing:
         """This listing after one task's changes, for the tasks of the shard that run later.
 
-        A deleted file is no longer listed. A written file is listed with what it
-        weighs on disk, where the task left it, when it sits under a listed folder,
-        and it counts as named: the listing knows exactly what that path holds.
+        It first takes in every path a step named as it ran and the files listed
+        under each, so a later task that names the same path is not handed the
+        commit's files again. Then a deleted file is no longer listed, and a
+        written file is listed with what it weighs on disk, where the task left
+        it, when it sits under a listed folder, and it counts as named: the
+        listing knows exactly what that path holds.
         """
-        named = set(self.named)
+        later = [path for path in self.checkout.named_later if not self.answers_for(path)]
+        named = {*self.named, *later}
         sizes = dict(self.sizes)
+        sizes.update(
+            (path, size)
+            for path, size in self.checkout.listed_later.items()
+            if any(_inside(path, folder) for folder in later)
+        )
         for path in deleted:
             sizes.pop(path, None)
         for path in written:

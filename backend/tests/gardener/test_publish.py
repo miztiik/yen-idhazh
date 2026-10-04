@@ -32,7 +32,17 @@ from idhazh.gardener.outcome import (
 )
 from utilities import commit_and_push, gardener_publish
 
-from ._garden import a_hook, an_origin, commits_on, git, on_origin, quiet_git, write
+from ._garden import (
+    OriginBlobs,
+    a_hook,
+    a_partial_clone,
+    an_origin,
+    commits_on,
+    git,
+    on_origin,
+    quiet_git,
+    write,
+)
 
 RECORD = "state/raw/gardener/2026/09/27/record.json"
 AGED = "state/old/2026-01-01.txt"
@@ -403,6 +413,33 @@ def test_the_commit_listing_names_only_the_requested_folders(
         "state/raw/visual-prunes",
         "frontend/public/digest",
     }
+
+
+def test_a_period_a_step_names_as_the_shard_runs_is_listed_from_the_same_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """October was not in the listing the shard read; a step names it, and it is listed then.
+
+    The clone never downloaded October's file, so its size is GitHub's, and the
+    checkout widens for the folder only once the step has named it.
+    """
+    quiet_git(tmp_path, monkeypatch)
+    september, october = "state/raw/x/2026/09/01/a.csv", "state/raw/x/2026/10/01/b.csv"
+    origin, _ = an_origin(tmp_path, {september: "a\n", october: "bb\n"})
+    shard = a_partial_clone(tmp_path, origin, "config")
+    blobs = OriginBlobs(origin)
+    listing = gardener_publish.read_the_listing(
+        gardener_publish.Checkout(shard), shard, ["state/raw/x"], ["state/raw/x/2026/09"], blobs
+    )
+    assert dict(listing.sizes) == {september: 2}
+
+    named = listing.name(["state/raw/x/2026/10"])
+    named.fetch(["state/raw/x/2026/10"])
+
+    assert named.size_of(october) == 3
+    assert len(blobs.asked) == 2, "each file the clone lacked was sized by its blob, once"
+    assert (shard / october).read_text(encoding="ascii") == "bb\n"
+    assert listing.listed() == {september, october}
 
 
 def test_a_shard_names_its_record_among_its_writes_and_never_both_writes_and_deletes() -> None:
