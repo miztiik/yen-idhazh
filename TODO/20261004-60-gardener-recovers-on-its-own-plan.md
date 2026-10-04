@@ -59,7 +59,7 @@ Table A - what is out
 | 22 | A person reads a shard at a glance | 21 | E | PENDING | - | - | - |
 | 23 | The gardener ledger is packed live | 16, 22 | F | PENDING | - | - | - |
 | 24 | Months close 16 days after they end | 7, 17, 23 | F | PENDING | - | - | - |
-| 25 | The retired raw listings code goes | - | F | DONE #1267 | - | #1267 | - |
+| 25 | The retired raw listings code goes | 15 | F | PENDING | - | - | - |
 | 26 | doc_load.py reads a web address as a web address | - | A | PENDING | - | - | - |
 
 ## 2. Shared declarations
@@ -76,12 +76,13 @@ Table B - each step
 | --- | --- | --- | --- | --- |
 | B1 | Drop month files | The oldest monthly entry | Entries older than the keep line, oldest first, up to the cap. Live: delete the month file when the entry has one, delete its raw month folder, then remove the entry. Report-only: keep both and report them | Each month file and its `state/raw/<ledger>/YYYY/MM` folder |
 | B2 | Drop raw days | - | Raw day folders older than the keep line, inside the months B1 names. They are deleted by listed path and never parsed | Nothing more |
+| B3 | Drop retired listings | - | Every file in `state/raw/<ledger>/index/`. Nothing writes there now, so it only shrinks | That folder |
 | B4 | Pack years, only with `monthly_keep_days` | The year after the yearly mark; with none, the year of the oldest monthly entry | Consecutive years whose age line has passed and whose December the monthly mark is strictly past, up to the cap. A ledger that began after January packs its first year from its first month. A year with no row is an entry `empty` with no file. Its months' `lost_days` carry into the year entry | That year's month files, named from the monthly index |
 | B5 | Absorb months | The month after the monthly mark; with none, the oldest month the daily index names; with an empty daily index, nothing | Consecutive months at least `daily_keep_days` past their end that the daily mark has passed, up to the cap. A month with a raw day still waiting is held for B6. Completeness counts days from the month's 1st, or from the ledger's first day when the ledger began inside that month. A missing day inside that span is recovered (Table C, C2). A month with no row is an entry `empty` with no file | Each month's daily files and its raw month folder |
 | B6 | Pack days | The day after the daily mark | New days up to the earlier of the mark plus the cap and the newest eligible day. Also packed days inside the 30-day re-run span that hold new raw files; they count against the cap. A raw file in a closed month re-opens it (Table C, C3). A day with no row is an entry `empty` with no file | The raw folders of the new days and of the re-run span |
 | B7 | First run: no daily mark | The oldest raw day in the raw month folders from the newest eligible month minus `lookback` months to the newest eligible month, or in the operator range. Never before the keep line when month deletes are live | As B6. With no raw day, nothing; the outcome is `empty` | Those raw month folders |
 
-Every read has a fixed size (Guardrail #12). A pass names at most: the three indexes, plus the three watermarks until row 19; and for each step, the cap times that step's periods. Each count comes from config or the calendar.
+Every read has a fixed size (Guardrail #12). A pass names at most: the three indexes, plus the three watermarks until row 19; one retired-listings folder until row 25; and for each step, the cap times that step's periods. Each count comes from config or the calendar.
 
 ### 2.2 The marks
 
@@ -140,7 +141,7 @@ Table E - events
 | E1 | TaskPlanned | The runner, before the task | task, kind, shard, run_id, attempt, today, operator_range, declared: every knob of the declaration as text (thresholds, windows, ceilings, switches), leaving out `owns`, `reads` and prose |
 | E2 | WindowChosen | `one_at_a_time.take`, before the first member | collection, since, until, ceiling, dry_run, mark (the `handled_through` it starts from), pages read |
 | E3 | PeriodsChosen | Compaction, after it chooses | ledger; marks before; age lines (newest eligible day, newest closable month, keep line, year line); for each step, the span or none, the resume point and the start reason (mark, oldest-indexed, oldest-raw-day, operator-range, keep-line, none); cap; operator range; month deletes live or report-only |
-| E4 | PeriodsTaken | Compaction, nested inside E5 | Packed and re-taken days; closed months; packed years; dropped months and raw days; entries written `empty` or `lost`; files set aside; marks after |
+| E4 | PeriodsTaken | Compaction, nested inside E5 | Packed and re-taken days; closed months; packed years; dropped months and raw days; dropped listings; entries written `empty` or `lost`; files set aside; marks after |
 | E5 | TaskFinished | The runner, after the task | task, outcome (Table F), dry_run, seen, selected, taken, written, bytes_freed, stopped_because, resume_from, fault, recovered, next (the advice sentence), duration_ms, periods (E4) |
 | E6 | ShardPublished | The publisher, after its push loop | shard, run_id, attempt, tasks, failed tasks, landing (landed, already-on-main, lost, refused), push try ("n of 6"), exit code and its meaning |
 
@@ -535,7 +536,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 ### Row #15 - Each old month is dropped once
 
-- **Scope:** The drop steps follow Table B, B1 and B2. The monthly index is the record of what is left to drop, and a raw day past the line is deleted by its listed path without being parsed. Level 3.
+- **Scope:** The drop steps follow Table B, B1 to B3. The monthly index is the record of what is left to drop, a raw day past the line is deleted by its listed path without being parsed, and every retired raw listing goes. Level 3.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_compaction_periods.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
@@ -544,7 +545,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/contracts/knobs/gardener.py` (the `max_periods_per_run` description now covers drops)
   - `backend/tests/gardener/tasks/test_compaction_periods.py`
   - `backend/tests/gardener/tasks/test_compaction.py`
-  - `backend/tests/gardener/test_period_inputs.py`
+  - `backend/tests/gardener/test_period_inputs.py` (turn `test_compaction_inputs_do_not_name_retired_raw_indexes` around so it requires the listings folder)
   - `docs/architecture/publishing/ledger-compaction.md`
 - **Acceptance gates:** local: pytest on the three test files; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** a monthly index from 2025-01 to 2026-09, a keep line of 2025-10 and cap 8: B1 takes 2025-01 to 2025-08 and resumes at 2025-09. A live pass deletes those files and entries, and the next pass names no month older than the line. A report-only pass keeps them and reports them again. A raw day past the line whose file cannot be parsed is still deleted. It cannot settle the first live drop on a real ledger; `compact-gardener`'s first drop is due around November 2027.
@@ -561,7 +562,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 ### Row #16 - The shared window is gone
 
-- **Scope:** `scheduled_range` returns nothing for compaction, `paths_for_task` names only the marks, and the code that served the shared window is deleted. Level 2.
+- **Scope:** `scheduled_range` returns nothing for compaction, `paths_for_task` names only the marks and the retired-listings folder, and the code that served the shared window is deleted. Level 2.
 - **Files touched:**
   - `backend/idhazh/gardener/period_inputs.py`
   - `backend/idhazh/gardener/tasks/compaction.py`
@@ -574,7 +575,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/test_publish.py`
   - `backend/tests/ledger/test_migrate_to_parquet.py`
 - **Acceptance gates:** local: pytest on the four test files and the gardener tests the selector lists; ruff; mypy. CI: the full suite.
-- **Oracle:** this row removes code, and the property that could break is what each task names: `test_period_inputs.py` requires exactly the marks for every compaction task. It cannot settle anything the earlier rows did not already test.
+- **Oracle:** this row removes code, and the property that could break is what each task names: `test_period_inputs.py` requires exactly the marks and the listings folder for every compaction task. It cannot settle anything the earlier rows did not already test.
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -835,7 +836,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #25 - The retired raw listings code goes
 
 - **Scope:** `drop_listings`, row B3 and the listings folder in `paths_for_task` are deleted once no ledger holds a retired listing. Level 1.
-- **Precondition:** at dispatch, `git ls-tree --name-only origin/main state/raw/<ledger>/index/` lists nothing for each ledger a compaction declaration names. It was met on 2026-10-04, when the listings were deleted by hand (decision 2).
+- **Precondition:** at dispatch, `git ls-tree --name-only origin/main state/raw/<ledger>/index/` lists nothing for each ledger a compaction declaration names. Until then the row waits; B3 empties the folders on live passes.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_daily_period.py`
   - `backend/idhazh/gardener/tasks/compaction.py`
@@ -849,7 +850,6 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Delete the code when its last input is gone, not before | Fowler, 2026-10-04 |
-| 2 | The owner chose rejected option 1: the 325 listings were deleted by hand, in the pull request that deleted the code, with no guard against a new one | The owner, 2026-10-04 |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
