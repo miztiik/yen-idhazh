@@ -89,6 +89,7 @@ from idhazh.ledger.paths import (
     watermark_path,
 )
 from idhazh.ledger.persist import (
+    FileFooter,
     PeriodFile,
     StoredRow,
     load,
@@ -96,6 +97,7 @@ from idhazh.ledger.persist import (
     persist,
     persist_period,
     read_envelope,
+    read_footer,
     render_grouped_period,
     render_period,
     render_renamed,
@@ -157,6 +159,7 @@ __all__ = [  # noqa: RUF022
     "tree_root",
     "watermark_path",
     # persist.py: the one door a contract payload takes to disk, and back.
+    "FileFooter",
     "PeriodFile",
     "StoredRow",
     "load",
@@ -164,6 +167,7 @@ __all__ = [  # noqa: RUF022
     "persist",
     "persist_period",
     "read_envelope",
+    "read_footer",
     "render_grouped_period",
     "render_period",
     "render_renamed",

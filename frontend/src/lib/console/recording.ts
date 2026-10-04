@@ -13,18 +13,18 @@
  * line that goes where the figure would have been, so an operator learns the
  * measurement exists and learns why it has no answer today.
  *
- * The strings are fixed - the owner wrote them, on 2026-08-30 - and only the
- * dates and counts inside them are computed. **A date that is not true is worse
- * than no date**, so every one of them is derived from the ledger that is
- * missing rather than typed here.
+ * The strings are fixed - the owner wrote the first of them on 2026-08-30 - and
+ * only the dates, counts and names inside them are computed. **A date that is
+ * not true is worse than no date**, so every one of them is derived from the
+ * ledger that is missing rather than typed here.
  *
  * Pure and dependency-free apart from the date formatter, so the browser suite
  * drives every state without a page. The names of a ledger's missing-file faults
  * are types from the query door, and nothing of the door runs here.
  */
 
-import type { LedgerFault } from '../data/ledger';
-import { shortDate } from '../format';
+import type { LedgerFault, LedgerName, SetAsideFiles } from '../data/ledger';
+import { dayMonth, shortDate } from '../format';
 
 /** A measurement that was switched off, and when it last recorded anything.
  *
@@ -155,22 +155,26 @@ export interface RecordingFacts {
 	coveredElsewhere?: readonly string[];
 	/** Days that published articles and that this instrument kept no row of. */
 	lost?: readonly LostDay[];
+	/** Days the instrument's own record has no record for, because its packing
+	 * recorded them lost. Unlike `lost`, nothing else is joined to know it: the
+	 * record's index says so. The route's record notes name them. */
+	daysWithNoRecord?: readonly string[];
 	/** What the days before the first recorded one have none of. */
 	figures?: string;
 }
 
 export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	const recorded = [...facts.recorded].sort();
-	const first = recorded[0] ?? null;
 	const last = recorded.at(-1) ?? null;
 	const lost = (facts.lost ?? []).filter((day) => !recorded.includes(day.date));
-	const destroyed = new Set(lost.map((day) => day.date));
-	// A day whose rows were destroyed is not a day before the recording started.
-	// Counted in the gap it would date the instrument's own start to the day after
-	// the loss and hand that back as the reason for it, which is the lie this
-	// third state exists to stop.
-	const before =
-		first === null ? 0 : facts.window.filter((date) => date < first && !destroyed.has(date)).length;
+	// The instrument started on the first day it is known to have run: a day it
+	// recorded, or a day whose record did not survive, destroyed or recorded lost.
+	// Dated from the recorded days alone, a loss before them would date the
+	// instrument's start to the day after the loss and count the loss as a day
+	// before it, which is the lie these states exist to stop.
+	const ran = [...recorded, ...lost.map((day) => day.date), ...(facts.daysWithNoRecord ?? [])].sort();
+	const first = ran[0] ?? null;
+	const before = first === null ? 0 : facts.window.filter((date) => date < first).length;
 	const elsewhere = (facts.coveredElsewhere ?? []).filter((date) => !recorded.includes(date));
 	return {
 		off: facts.enabled ? null : measurementOff(last),
@@ -190,31 +194,109 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
  * that did not load; `at` is the first day that failed, or null when the list
  * itself did not load, and `fault` names the missing file behind it as the door
  * does, or is null for another cause. `read` carries the newest packed day,
- * which is where every panel built on the record stops.
+ * which is where every panel built on the record stops; `lostDays`, the days in
+ * the read the record's index records lost, ascending; and `setAside`, the files
+ * the packing of the read's periods set aside unread.
  */
 export type RecordRead =
-	| { state: 'read'; through: string }
+	| { state: 'read'; through: string; lostDays: string[]; setAside: SetAsideFiles }
 	| { state: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreadable'; at: string | null; fault: Exclude<LedgerFault, 'not-packed'> | null };
 
 /** The three records the console reads at build time, as its notes name them. */
 export type RecordName = 'article' | 'score' | 'machine';
 
+/** The ledger each record is read from, so a note can send a person to its files. */
+const RECORD_LEDGERS: Readonly<Record<RecordName, LedgerName>> = {
+	article: 'item-health',
+	score: 'summary-quality-evals',
+	machine: 'host-fingerprint'
+};
+
 /** One sentence about one or more records. `unreadable` is a fault; the others are not. */
 export interface RecordNote {
-	kind: 'not-packed' | 'unreadable' | 'behind';
+	kind: 'not-packed' | 'unreadable' | 'behind' | 'lost' | 'set-aside';
 	records: RecordName[];
 	text: string;
 }
 
-/** `article`, `article and score`, `article, score and machine`. */
-function recordsNamed(records: readonly RecordName[]): string {
-	if (records.length < 2) return records.join('');
-	return `${records.slice(0, -1).join(', ')} and ${records.at(-1)}`;
+/** `a`, `a and b`, `a, b and c`. */
+function englishList(items: readonly string[]): string {
+	if (items.length < 2) return items.join('');
+	return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
 
 function recordNoun(records: readonly RecordName[]): string {
-	return `${recordsNamed(records)} ${records.length === 1 ? 'record' : 'records'}`;
+	return `${englishList(records)} ${records.length === 1 ? 'record' : 'records'}`;
+}
+
+/** UTC days as English, consecutive days joined into one run the way a span is
+ * written: `19 Aug 2026`, `14 Aug to 16 Aug 2026`, `14 Aug to 16 Aug and 19 Aug
+ * 2026`. The year is printed once when every day shares it. */
+function namedDays(days: readonly string[]): string {
+	const runs: [string, string][] = [];
+	for (const day of [...new Set(days)].sort()) {
+		const run = runs.at(-1);
+		if (run !== undefined && daysAfter(run[1], day) === 1) run[1] = day;
+		else runs.push([day, day]);
+	}
+	const oneYear = new Set(days.map((day) => day.slice(0, 4))).size === 1;
+	const newest = runs.at(-1)?.[1];
+	const named = (day: string): string => (oneYear && day !== newest ? dayMonth(day) : shortDate(day));
+	return englishList(runs.map(([first, end]) => (first === end ? named(first) : `${named(first)} to ${named(end)}`)));
+}
+
+/** Days a record has no record for, because its packing recorded them lost.
+ *
+ * Not a quiet day and not a fault to fix: what was written that day could not
+ * be recovered, so the packing wrote the day down as lost and carried on. The
+ * sentence says it could not be recovered, so an operator does not read it as
+ * one more fault to fix. `subject` names the record the way the surface does -
+ * `machine record` on a route, `host-fingerprint record` in the explorer - and
+ * `missingFrom` says what the reader of that surface does not get, for
+ * `that day` or `those days`.
+ */
+export function noRecordSentence(
+	subject: string,
+	days: readonly string[],
+	missingFrom: (them: 'that day' | 'those days') => string
+): string {
+	const them = new Set(days).size === 1 ? 'that day' : 'those days';
+	return (
+		`There is no ${subject} for ${namedDays(days)}, so ${missingFrom(them)}. ` +
+		`The record for ${them} was lost and could not be recovered; ` +
+		`${them === 'that day' ? 'it was not a quiet day' : 'they were not quiet days'}.`
+	);
+}
+
+/** Where a person reads the files a ledger's packing set aside: the packing
+ * moves a file it cannot read there and never deletes it, and no step reads it. */
+function setAsideFolder(ledger: LedgerName): string {
+	return `state/raw/${ledger}/set-aside/`;
+}
+
+/** Files a ledger's packing set aside unread, and where a person reads them; null when none were.
+ *
+ * The count belongs to the packed periods, never to days: a month counts every
+ * file it set aside, so the sentence says "this data" rather than naming days.
+ * The folder is the reader's next step, so it is printed whole, and never last
+ * in a sentence, where the full stop would read as part of it. `subject` and
+ * `missingFrom` name the record and what may be short, as in `noRecordSentence`.
+ */
+export function setAsideSentence(
+	subject: string,
+	ledger: LedgerName,
+	setAside: SetAsideFiles,
+	missingFrom: string
+): string | null {
+	const files = Object.values(setAside).reduce((total, count) => total + count, 0);
+	if (files === 0) return null;
+	const one = files === 1;
+	return (
+		`${files} ${subject} ${one ? 'file was' : 'files were'} set aside unread when this data was packed, ` +
+		`so ${missingFrom} may be missing ${one ? 'its' : 'their'} rows. ` +
+		`${one ? 'It waits' : 'They wait'} in ${setAsideFolder(ledger)} for a person to read.`
+	);
 }
 
 /** The sentence for a record that did not load. A missing file and a missing
@@ -238,12 +320,15 @@ function unreadableText(record: RecordName, read: Extract<RecordRead, { state: '
 /** What a route says about the records it read, before any panel draws from them.
  *
  * One sentence a record and a state, never one a panel and never a banner: the
- * record is what is late or broken, and every panel built on it is empty for the
- * same reason. `newestDay` is the newest day the site published. A record packed
- * as far as the day before it is as current as packing can be - a day is packed
- * only once it has ended - so it earns no sentence. Further behind than that,
- * the panels stop early for a reason a reader cannot see, so the sentence says
- * where they stop and how many days are not shown yet.
+ * record is what is late, broken or short, and every panel built on it is empty,
+ * stops early or misses the same rows for the same reason. `newestDay` is the
+ * newest day the site published. A record packed as far as the day before it is
+ * as current as packing can be - a day is packed only once it has ended - so it
+ * earns no sentence. Further behind than that, the panels stop early for a
+ * reason a reader cannot see, so the sentence says where they stop and how many
+ * days are not shown yet. A record read in full can still be short: a day its
+ * packing recorded lost has no record, and a file it set aside unread holds rows
+ * no panel draws, so each says so, one record at a time and lost days first.
  *
  * The words are fixed, like the other notes in this file; only the names, the
  * dates and the counts inside them are computed.
@@ -268,7 +353,25 @@ export function recordNotes(
 		if (read.state !== 'unreadable') continue;
 		notes.push({ kind: 'unreadable', records: [record], text: unreadableText(record, read) });
 	}
-	if (newestDay === null) return notes;
+	if (newestDay !== null) notes.push(...behindNotes(reads, newestDay));
+	for (const { record, read } of reads) {
+		if (read.state !== 'read') continue;
+		const subject = `${record} record`;
+		if (read.lostDays.length > 0) {
+			notes.push({
+				kind: 'lost',
+				records: [record],
+				text: noRecordSentence(subject, read.lostDays, (them) => `nothing below that uses this record shows ${them}`)
+			});
+		}
+		const setAside = setAsideSentence(subject, RECORD_LEDGERS[record], read.setAside, 'anything below that uses this record');
+		if (setAside !== null) notes.push({ kind: 'set-aside', records: [record], text: setAside });
+	}
+	return notes;
+}
+
+/** The records packed short of the day before `newestDay`, one sentence for each day they stop on. */
+function behindNotes(reads: readonly { record: RecordName; read: RecordRead }[], newestDay: string): RecordNote[] {
 	const behind = new Map<string, RecordName[]>();
 	for (const { record, read } of reads) {
 		if (read.state !== 'read') continue;
@@ -277,18 +380,19 @@ export function recordNotes(
 		if (daysAfter(read.through, newestDay) < 2) continue;
 		behind.set(read.through, [...(behind.get(read.through) ?? []), record]);
 	}
-	for (const [through, records] of [...behind].sort(([left], [right]) => left.localeCompare(right))) {
-		const after = daysAfter(through, newestDay);
-		notes.push({
-			kind: 'behind',
-			records,
-			text:
-				`The ${recordNoun(records)} ${records.length === 1 ? 'is' : 'are'} packed as far as ` +
-				`${shortDate(through)}, so the ${after} ${after === 1 ? 'day' : 'days'} after it ` +
-				`${after === 1 ? 'is' : 'are'} not shown yet.`
+	return [...behind]
+		.sort(([left], [right]) => left.localeCompare(right))
+		.map(([through, records]): RecordNote => {
+			const after = daysAfter(through, newestDay);
+			return {
+				kind: 'behind',
+				records,
+				text:
+					`The ${recordNoun(records)} ${records.length === 1 ? 'is' : 'are'} packed as far as ` +
+					`${shortDate(through)}, so the ${after} ${after === 1 ? 'day' : 'days'} after it ` +
+					`${after === 1 ? 'is' : 'are'} not shown yet.`
+			};
 		});
-	}
-	return notes;
 }
 
 /** Whole UTC days from `from` to `to`, negative when `to` is earlier. */

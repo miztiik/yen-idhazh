@@ -67,13 +67,19 @@ When `ledger.archive_base_url` is empty, Data explorer reads the site only. A sp
 
 When no selected ledger holds a file in the span, `ask()` answers `quiet` and starts no engine. When files are in the span and the statement matches no rows, it also answers `quiet`, with the columns from `DESCRIBE`.
 
+## What an answer is missing
+
+`ok` and `quiet` carry `gaps`: each selected ledger that is missing something inside the span, in the order the ledgers were chosen, with the days its indexes record lost and the files its periods set aside unread (`lostDays` and `setAside`, as a [slice answers them](how-the-query-door-answers-a-panel.md#what-a-panel-asks-for-and-the-four-answers)). A ledger missing nothing is not named. A span of nothing but lost days is `quiet` and still names them.
+
+The Data explorer page prints one line a ledger and a state under the span line, in the plain note type, lost days first: a lost day has no record, so nothing from it is in the answer, and a set-aside file may hold rows the answer lacks. The set-aside line counts files, never days, because a month counts every file it set aside, and it names the folder a person reads them in, `state/raw/<ledger>/set-aside/`. The quiet answer carries the same lines. The chart panel repeats none of them.
+
 ## Date range and address
 
 The Data explorer page uses two native date inputs, `From (UTC)` and `To (UTC)`. By default they accept the reader's UTC day and the 364 UTC days before it. The bound is `console.explorer_reach_days`, so an operator can widen or narrow it with a config edit rather than a source edit.
 
 Preset tiles remain shortcuts. Pressing one sets `To (UTC)` to the reader's UTC day and `From (UTC)` to the preset's span ending on that day.
 
-A shared link carries a preset as `days=<n>`. A custom span replaces `days` with `from=YYYY-MM-DD` and `end=YYYY-MM-DD`. Invalid dates, a date outside the reach, or `from` after `end` are dropped with a sentence, and the page ends today. A link never runs a question.
+A shared link carries a preset as `days=<n>`. A custom span replaces `days` with `from=YYYY-MM-DD` and `end=YYYY-MM-DD`. A date that is not a real UTC day, such as `2026-08-32`, a date outside the reach, or `from` after `end` is dropped with a sentence, and the page ends today. The day check is the door's own `isDay()`, which answers rather than throws. A link never runs a question.
 
 ## Boundary
 

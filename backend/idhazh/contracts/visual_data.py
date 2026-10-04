@@ -37,7 +37,14 @@ from typing import Annotated, ClassVar, Final, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.article import UntrustedLine
-from idhazh.contracts.base import ChangelogEntry, Contract, ItemId, Model, SchemaVersion
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    Contract,
+    ItemId,
+    Model,
+    SchemaVersion,
+    records_json,
+)
 from idhazh.contracts.derived import DerivedNumber, DerivedUnit, DerivedValue
 from idhazh.contracts.element import ElementId
 from idhazh.contracts.visual import MAX_IDS_PER_ROLE, EncodingRole, VisualType
@@ -195,6 +202,11 @@ class VisualData(Contract):
     """
 
     __schema_stem__: ClassVar[str] = "visual-data"
+
+    def to_json(self) -> str:
+        """Keep chart marks on one line and the encoding expanded."""
+        return records_json(self.model_dump(mode="json"), record_lists=frozenset({"marks"}))
+
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T20:00",

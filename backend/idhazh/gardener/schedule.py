@@ -59,6 +59,18 @@ def is_month_eligible(month: str, *, now: datetime, after_days: int) -> bool:
     return now - month_ended_at(month) >= timedelta(days=after_days)
 
 
+def newest_eligible_month(*, now: datetime, after_days: int) -> str:
+    """The newest `YYYY-MM` month `is_month_eligible` says yes to at `now`.
+
+    A month ends at 00:00 UTC on the first of the next, so it is eligible once
+    that first is at least `after_days` days before `now`: the month before the
+    one holding the day `after_days` back.
+    """
+    back = now.astimezone(UTC).date() - timedelta(days=after_days)
+    total = back.year * 12 + back.month - 2
+    return f"{total // 12:04d}-{total % 12 + 1:02d}"
+
+
 def year_ended_at(year: str) -> datetime:
     """The instant a UTC year closed: 00:00 UTC on 1 January of the year after it.
 

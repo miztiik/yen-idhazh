@@ -138,12 +138,13 @@ is the conflict resolver; it was being run once against a stale base and then
 thrown at `git merge-file`. A text merge of two digests produces a payload no
 producer would ever write.
 
-**Recovery is bound to a saved run, not only to its UTC day.** The date-only
-`assemble` command reads the newest plan recorded in the run-plan ledger.
-Restoring an older `backend/var/run/<date>/plan.json` does not change that
-selection. The assembly stage accepts a validated `RunPlan` directly, so an
-operator can recover the saved run without replacing the newer plan in the
-ledger. Its item inputs and recorded run ID must belong to that saved plan.
+**Recovery is bound to a saved run, not only to its UTC day.** `assemble` reads
+the plan of the run `--execution` names, so recovering a saved run names that
+run and leaves any newer plan in the run-plan ledger alone. Without
+`--execution` it reads the newest plan of the day, which may be another run's.
+A run planned before the plan moved into the ledger on 2026-10-04 has no ledger
+row; for it the assembly stage accepts the saved, validated `RunPlan` directly.
+Its item inputs and recorded run ID must belong to that saved plan.
 
 A saved `shard-visuals-*` bundle can also contain `digest.json` and `run.json`
 from the worker's checkout. Those are whole-day output, not chart input. Do not
@@ -159,10 +160,11 @@ closed-day fold. The list lives in
 `Say which committed paths a rebuild owns` step prints it into `$GITHUB_OUTPUT`;
 it was a space-split string in the workflow, under a header warning that no path
 in it may carry a space, and the workflow tests held a second copy of the same
-list. It never names the day's directory. The `shard-visuals-*`
-artifacts unpack this run's rendered charts into that same directory and no producer in
-the assemble job can make them again, so the two payload files are named one at a
-time. `frontend/public/telemetry/` is a full rewrite of a month of the
+list. It never names the day's directory. That directory also holds the day's charts,
+and a chart is never handed back: this run's copy of one the tip already publishes is
+dropped before the rebase instead
+([one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md)),
+so the two payload files are named one at a time. `frontend/public/telemetry/` is a full rewrite of a month of the
 item-health ledger, which is why it is regenerated and not unioned: a union of
 two rewrites is a file with every row twice.
 

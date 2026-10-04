@@ -82,3 +82,11 @@ test('custom dates replace days, and invalid custom dates are dropped with a sen
 	expect(invalid.days).toBe(14);
 	expect(invalid.notices).toEqual(['The link asked for 2025-01-01 to 2026-10-05, which is not a span this page can read, so it ends today.']);
 });
+
+test('a date shaped like a day that is not one is dropped with the same sentence, never thrown', async () => {
+	// 2026-08-32 has the shape of a day and no time at all, so a check that prints it
+	// before it asks whether it is a day throws instead of answering.
+	const parsed = await parseExplorerAddress('ledgers=seen&from=2026-08-32&end=2026-09-02', PARSE_OPTIONS);
+	expect(parsed).toMatchObject({ ledgers: ['seen'], days: 14, from: null, end: null });
+	expect(parsed.notices).toEqual(['The link asked for 2026-08-32 to 2026-09-02, which is not a span this page can read, so it ends today.']);
+});

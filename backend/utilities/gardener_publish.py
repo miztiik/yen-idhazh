@@ -2,7 +2,8 @@
 
 This is the entry point a wake's shard runs. Its checkout holds only the code
 and config it runs. It reads the commit this checkout is at, the exact folders
-its tasks own or read, and the files under each task's named periods. It runs the shard through
+its tasks own or read, and the files under each task's named periods. A task
+that names a period as it runs has it listed from the same commit then. It runs the shard through
 `idhazh.gardener.runner`, whose tasks fetch only the folders they read, and
 lands what the runner hands back. It sits here rather than in the package
 because landing and reading the commit run git, and nothing under
@@ -92,6 +93,7 @@ from idhazh.gardener.file_listing import (
     TreeReader,
     parse_tree,
     sizes_from_github,
+    sizes_of,
 )
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
@@ -518,28 +520,44 @@ def read_the_listing(
     folders that none of them names. Git's size where the clone holds the
     file. For one it never downloaded, GitHub's blob API is asked for that
     named file and its size is matched by blob id. `trees` stands in for that
-    API, and None reaches it for this repo.
+    API, and None reaches it for this repo. A step that names a period as it
+    runs has it listed the same way, from the same commit.
 
     The checkout is widened only by a file the commit lists, a folder above one,
     or a name directly inside such a folder - a file an earlier task of the
     shard wrote beside the commit's own - so a name a task hands back never
-    widens it where the commit holds nothing.
+    widens it where the commit holds nothing. A period named later counts once
+    it is listed.
     """
     chosen = sorted(set(folders))
     named = sorted(set(period_paths))
-    entries = checkout.list_files(named)
-    unsized = [entry.blob for entry in entries if entry.size is None]
-    sizes: dict[str, int] = {}
-    if unsized:
+    listed: set[str] = set()
+    above: set[str] = set()
+
+    def asked_of_github(entries: Sequence[TreeEntry]) -> dict[str, int]:
+        """The size GitHub gives each blob git printed no size for, by blob id."""
+        unsized = [entry.blob for entry in entries if entry.size is None]
+        if not unsized:
+            return {}
         api = trees if trees is not None else github_collections.api_of_this_repository()
-        sizes = sizes_from_github(api, unsized)
-    listed = {entry.path for entry in entries}
-    above = {
-        parent.as_posix()
-        for path in listed
-        for parent in PurePosixPath(path).parents
-        if parent.parts
-    }
+        return sizes_from_github(api, unsized)
+
+    def remember(entries: Sequence[TreeEntry]) -> None:
+        listed.update(entry.path for entry in entries)
+        above.update(
+            parent.as_posix()
+            for entry in entries
+            for parent in PurePosixPath(entry.path).parents
+            if parent.parts
+        )
+
+    entries = checkout.list_files(named)
+    remember(entries)
+
+    def lister(wanted: Sequence[str]) -> dict[str, int]:
+        found = checkout.list_files(wanted)
+        remember(found)
+        return sizes_of(found, asked_of_github(found))
 
     def widen(wanted: Sequence[str]) -> None:
         stray = [
@@ -556,7 +574,15 @@ def read_the_listing(
             )
         checkout.widen(wanted)
 
-    return FileListing.from_commit(repo_root, chosen, entries, sizes, paths=named, widen=widen)
+    return FileListing.from_commit(
+        repo_root,
+        chosen,
+        entries,
+        asked_of_github(entries),
+        paths=named,
+        widen=widen,
+        lister=lister,
+    )
 
 
 def declared_folders(
@@ -566,14 +592,6 @@ def declared_folders(
     owned = sorted({folder for name in names for folder in settings.tasks[name].owns})
     read = sorted({folder for name in names for folder in settings.tasks[name].reads})
     return owned, read
-
-
-def folder_weights(listing: FileListing, folders: Sequence[str]) -> dict[str, int]:
-    """What each folder weighs at the commit, in bytes. A folder the commit lacks weighs 0."""
-    return {
-        folder: sum(listing.size_of(path) for path in listing.files_under(folder))
-        for folder in folders
-    }
 
 
 def run_and_land(
@@ -592,10 +610,11 @@ def run_and_land(
 ) -> Outcome:
     """Read the commit's names, run the shard, and land what it hands back; the worst code wins.
 
-    The listing covers only the named periods each task may read. A listing that
-    cannot be read runs no task and lands nothing, and the shard exits 1, so the
-    next wake tries again. A deletion of a file the commit did not list lands
-    nothing either: a task decided it from something other than the commit.
+    The listing covers only the named periods each task may read, and a period
+    a step names as it runs. A listing that cannot be read runs no task and
+    lands nothing, and the shard exits 1, so the next wake tries again. A
+    deletion of a file the shard never listed from the commit lands nothing
+    either: a task decided it from something other than the commit.
     """
     checkout = Checkout(repo_root)
     sha = checkout.head()
@@ -650,7 +669,7 @@ def run_and_land(
     )
     if ran.landing is None:
         return ran
-    unlisted = sorted(ran.landing.deleted_paths - set(listing.sizes))
+    unlisted = sorted(ran.landing.deleted_paths - listing.listed())
     if unlisted:
         say(
             f"shard {shard}: {unlisted[0]} was deleted, and the commit this shard read lists "

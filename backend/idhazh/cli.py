@@ -469,9 +469,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         help=(
             "The published day's directory, as the workflow already derived it: "
             "frontend/public/digest/<YYYY>/<MM>/<DD>. `derived-paths` names two files "
-            "inside it one at a time, because the day's directory itself must never be "
-            "handed back - this run's rendered charts are in it and no producer here "
-            "can make them again."
+            "inside it one at a time, because the day's directory itself is never "
+            "handed back - it also holds the day's charts, and a raced chart is "
+            "dropped before the rebase instead."
         ),
     )
     parser.add_argument(
@@ -526,7 +526,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # the only way to guarantee that for every ledger at once is to move the
     # root they all hang off (Guardrail #6).
     if settings.app.run.trial_state_dirname:
-        common.STATE_ROOT = common.STATE_ROOT / settings.app.run.trial_state_dirname
+        common.STATE_ROOT = common.state_root_of(settings, base=common.STATE_ROOT)
         logging.getLogger(__name__).warning(
             "trial run: every ledger goes to %s and no published series reads it",
             common.STATE_ROOT.relative_to(config.REPO_ROOT).as_posix(),
@@ -659,7 +659,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "validate":
         validate.stage_validate(
             settings=settings,
-            date=date,
+            plan=_planned(date, args.execution),
             leaderboard=args.leaderboard,
             scorer=_scorer(not args.no_faithfulness),
             fetcher=read_url,
@@ -678,6 +678,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "qualify":
         qualify.stage_qualify(
             settings=settings,
+            plan=_planned(date, args.execution),
             date=date,
             shard=args.shard,
             shards=args.shards,

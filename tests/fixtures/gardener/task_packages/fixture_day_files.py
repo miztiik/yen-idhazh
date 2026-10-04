@@ -8,8 +8,8 @@ core every gardener task uses.
 A day file is `<YYYY-MM-DD>.txt` directly inside a folder, and its member id is
 its path relative to the checkout, which is what the runner holds to what the
 task owns. Its names and sizes come from the task's listing, the way every
-shipped task learns them, so a checkout that never downloaded the file still
-takes it by name.
+shipped task learns them: the walk covers the periods the listing names under
+each folder, so a checkout that never downloaded the file still takes it by name.
 """
 
 from __future__ import annotations
@@ -24,6 +24,8 @@ from idhazh.gardener.one_at_a_time import Collection, Member, Pass, Window, take
 
 def day_files(context: TaskContext, folders: Sequence[str]) -> Pass:
     """Take every day file older than the declaration's window, oldest first."""
+    from idhazh.gardener import named_trees
+
     window = context.policy.window
     assert isinstance(window, DaysWindow), "a fixture task keeps a window in days"
     root = context.repo_root
@@ -31,11 +33,7 @@ def day_files(context: TaskContext, folders: Sequence[str]) -> Pass:
 
     def members() -> Iterator[Path]:
         for folder in folders:
-            yield from (
-                path
-                for path in listing.paths_under(folder)
-                if path.suffix == ".txt"
-            )
+            yield from named_trees.files_named(listing, root / folder, ".txt")
 
     def describe(path: Path) -> Member:
         return Member(

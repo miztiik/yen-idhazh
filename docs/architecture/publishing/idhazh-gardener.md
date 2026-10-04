@@ -87,7 +87,11 @@ from the commit alone, so a folder somebody left in the checkout and never
 committed is not the sweep's to take, and `idhazh gardener run-task`, which
 starts no process and so reads no commit, refuses one by name. A folder a task
 reads and does not own is declared under `reads`; asking about a folder it
-neither owns nor reads is refused rather than answered empty.
+neither owns nor reads is refused rather than answered empty, and so is asking
+for every file under a folder no step named, nor a folder above it, rather than
+answered with the named periods inside it. A step that chooses its periods as
+it runs - the compaction's month step - names them first, and the shard lists
+them from the same commit then.
 
 **The plan is written twice.** The plan job runs before anything of ours is
 installed, so `gardener_shards.py` cannot import the typed planner in
