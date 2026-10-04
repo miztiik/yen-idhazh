@@ -363,8 +363,6 @@ jobs:
             --server-log llama-server.log \
             --counters-file llama-metrics.prom
 
-          # Publish evaluation inputs before their rows, index and receipts.
-          # Replay saved inputs after rejected pushes; keep prepared paths separate.
           # The shard's deadline in config/push-retry.json leaves time to upload items.
       - name: Commit what this shard measured
         if: always()
@@ -374,12 +372,6 @@ jobs:
           NOTHING_STAGED_MESSAGE: "nothing measured to record"
           PUSH_FAILED_MESSAGE: "could not push what this shard measured"
           SHARD: ${{ matrix.shard }}
-          PREPARE_COMMAND: >-
-            python backend/utilities/prepare_evaluation_publication.py --state-dir state
-            --inputs backend/var/evaluation-inputs/${{ needs.plan.outputs.date }}-${{ github.run_id }}/work-${{ matrix.shard }}.json
-            --attempt ${{ github.run_attempt }}
-            --paths-file backend/var/evaluation-inputs/prepared-work-${{ matrix.shard }}.json
-          PREPARED_PATHS_FILE: backend/var/evaluation-inputs/prepared-work-${{ matrix.shard }}.json
         run: >-
           python backend/utilities/commit_and_push.py
           state
@@ -585,12 +577,6 @@ jobs:
           DROP_RACED_ASSETS_COMMAND: >-
             python backend/utilities/drop_raced_assets.py
             --date ${{ needs.plan.outputs.date }}
-          PREPARE_COMMAND: >-
-            python backend/utilities/prepare_evaluation_publication.py --state-dir state
-            --inputs backend/var/evaluation-inputs/${{ needs.plan.outputs.date }}-${{ github.run_id }}/assemble-0.json
-            --attempt ${{ github.run_attempt }}
-            --paths-file backend/var/evaluation-inputs/prepared-assemble-0.json
-          PREPARED_PATHS_FILE: backend/var/evaluation-inputs/prepared-assemble-0.json
         run: >-
           python backend/utilities/commit_and_push.py
           frontend/public/digest frontend/public/telemetry frontend/public/assist/index
