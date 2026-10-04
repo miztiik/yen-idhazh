@@ -14,7 +14,7 @@ what a knob is at all is [../config.md](../config.md).
 | Knob | Committed | What it decides |
 | --- | --- | --- |
 | `version` | `2026-10-03` | The UTC day this file's shape last changed |
-| `attempts` | `6` | How many times one shard may try to push before it gives up with exit 3 |
+| `attempts` | `6` | How many times one shard may try to push. If every try fails and main did not move, main refused the push, and the shard exits 3. If main moved, other writers are landing, and the shard warns and exits 0 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
 | `task_names` | Named list in the file | The declarations to read under `config/gardener/`. Empty means no tasks. Missing named files and repeated names are refused. |
 | `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate. Its first reset is to about twice the largest `downloaded_bytes` the first thirty scheduled wakes record ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |

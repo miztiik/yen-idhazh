@@ -85,9 +85,11 @@ class GardenerConfig(Model):
     attempts: int = Field(
         ge=1,
         description=(
-            "How many times one shard may try to push its commit before it gives up "
-            "with exit 3. Each try fetches main again, so a push that lost to another "
-            "shard is retried against the new tip. No sleep follows the last try."
+            "How many times one shard may try to push its commit. Each try fetches main "
+            "again, so a push that lost to another shard is retried against the new tip. "
+            "No sleep follows the last try. If every try fails and main did not move, main "
+            "refused the push, and the shard exits 3. If main moved, other writers are "
+            "landing, and the shard warns and exits 0."
         ),
     )
     shards: int = Field(

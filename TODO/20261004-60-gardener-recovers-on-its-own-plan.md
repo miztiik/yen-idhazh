@@ -323,6 +323,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `docs/architecture/publishing/ledger-compaction.md`
   - `TODO/20260928-55-one-page-queries-every-ledger-plan.md`
   - `TODO/20261004-pipeline-tests-migration-plan.md`
+  - attempts description: carried from row 27 (#1291), owner 2026-10-04
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/contracts/test_gardener_config.py backend/tests/gardener/tasks/test_compaction.py backend/tests/gardener/tasks/test_compaction_years.py backend/tests/ledger_migration/` (the migration tests' path corrected during execution (Fowler review 2026-10-04)); ruff; mypy; `doc_load.py` on the changed docs. CI: the full suite.
 - **Oracle:** a declaration that carries the old key fails to load, and the error names the key (`extra="forbid"`). A search for the old name finds only git history. It cannot settle a copy of the name outside the repository.
 
