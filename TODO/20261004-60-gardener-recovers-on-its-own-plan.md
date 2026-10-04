@@ -42,7 +42,7 @@ Table A - what is out
 | 5 | A ledger's marks are read in one place | - | A | PENDING | - | - | - |
 | 6 | One run id per workflow run | 1 | B | PENDING | - | - | - |
 | 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
-| 8 | The site reads empty, lost and set-aside periods | 4 | B | PENDING | - | - | - |
+| 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | - | Plan 60 row 8: site reads lost periods |
 | 9 | Each job's name says what its shard runs | 6 | C | PENDING | - | - | - |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
@@ -323,17 +323,23 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/contracts/ledger_index.py`
   - `backend/tests/contracts/test_ledger_index.py`
   - `backend/tests/contracts/test_frontend_index_shapes.py`
+  - `backend/tests/contracts/_fixtures.py` (found during execution: the round-trip list names each fixture)
   - `tests/fixtures/contracts/compact-index/` (new: an `empty` day, a `lost` day, a month with `lost_days`, an index written before this row)
   - `frontend/src/lib/data/compact-index.ts`
   - `frontend/src/lib/data/slice-reader.ts`
   - `frontend/src/lib/data/slice.ts`
   - `frontend/src/lib/data/slice-shapes.ts`
-  - `frontend/src/lib/data/ledger-reach.ts`
+  - `frontend/src/lib/data/ledger-reach.ts` (read, no change: it counts an entry by its `covers` alone)
   - `frontend/src/lib/data/ask-reader.ts`
-  - `frontend/src/lib/console/recording.ts`
+  - `frontend/src/lib/console/recording.ts` (read, no change: it never reads an entry)
+  - `frontend/scripts/published-ledgers.mjs` (found during execution: the site build named a file for every entry)
   - `frontend/tests/ledger-door.spec.ts`
   - `frontend/tests/ledger-ranges.spec.ts`
+  - `frontend/tests/ledger-copy.spec.ts` (found during execution)
+  - `frontend/tests/published-ledgers.spec.ts` (found during execution)
   - `docs/architecture/contracts/persistence.md`
+  - `docs/architecture/contracts/schemas.md` (the `ENTRY_STATES` binding this row adds)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (found during execution)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 -m contract backend/tests/contracts/test_ledger_index.py backend/tests/contracts/test_frontend_index_shapes.py`; the specs the selector lists; the browser smoke in run-the-gates.md on a ledger page served from a fixture with an `empty` and a `lost` day (CLAUDE.md section 12, including a missing index); `doc_load.py`. CI: the full suite.
 - **Oracle:** contract: an index written before this row reads as all `packed`; an `empty` entry with `bytes` above 0 is refused; a `lost_days` day outside its entry's period is refused; the field-set and vocabulary tests hold the frontend copy in step. Site: a slice across a `lost` day returns the other days' rows and names the lost day, and fetches no file for an `empty` or `lost` period. It cannot settle how a panel words the gap; Jony and Susan rule on that only if two layouts lead to different code.
 

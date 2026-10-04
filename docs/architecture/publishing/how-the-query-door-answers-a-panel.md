@@ -52,8 +52,12 @@ of four nothings without inspecting an error:
 `ok` and `quiet` carry `through`, the newest day `daily.json` names - `null`
 before the first compaction - so a panel can say how far its data reaches. A day
 after `through` has not been compacted yet, so it is clamped away rather than
-drawn as a zero. `missing` and `unreachable` carry `fault`, the name of the
-missing file behind them, or `null` for an `unreachable` with another cause.
+drawn as a zero. `ok` and `quiet` also carry `lostDays`, the days in the span an
+index records lost, ascending: each has no record, so a panel says so rather than
+drawing it as a day with no rows, and the other days are drawn as usual. A span
+of nothing but lost days is `quiet` with every day in `lostDays`. `missing` and
+`unreachable` carry `fault`, the name of the missing file behind them, or `null`
+for an `unreachable` with another cause.
 
 ## Which files a span reads
 
@@ -77,14 +81,20 @@ index for a period never packed names nothing - and declared as `CompactIndex` i
    could see. A span that starts before the oldest named day is `unreachable` at
    its first day with no fault: those days were never packed, and a route clamps
    its span to the reach's `first` (below).
-4. **An entry with `rows: 0` is never fetched.** A span of quiet days loads no
-   engine at all.
-5. **A file whose decoded length differs from its entry's `bytes` is refused**, and
+4. **An entry with `rows: 0` is never fetched, and neither is one that names no
+   file.** An entry `empty` held no row and an entry `lost` lost its rows, so
+   neither has a file ([../contracts/persistence.md](../contracts/persistence.md#what-an-index-entry-says)).
+   A span of quiet days loads no engine at all.
+5. **A day an index records lost is named, never drawn.** It is a day of an
+   entry `lost`, or a day a month or a year lists in its `lost_days`. It is not a
+   hole, because an entry names it; the answer lists it in `lostDays`, and the
+   door reads the rest of the span as usual.
+6. **A file whose decoded length differs from its entry's `bytes` is refused**, and
    so is one that does not arrive; one the site answers is not there is
    `file-missing`. The decoded length, never `Content-Length`,
    because Pages compresses what it serves. A year file read by byte range is
    held to the same rule by the length the engine opened it at.
-6. **A day in a packed year is read from its year file by byte range.** In a
+7. **A day in a packed year is read from its year file by byte range.** In a
    browser the engine asks the host for the year file's footer and then for the
    parts of the months the query touches, because the gardener writes a year file
    one row group a month. One month of 10 columns out of a 29.8 MB year cost
@@ -173,7 +183,8 @@ It reads all three indexes at the same time through the page's keeper, so a slic
 asked after it reads none again, and it starts no engine. A `monthly.json` or
 `yearly.json` this build will not act on leaves the days the other indexes name,
 and the console says why. A packed year counts from its 1 January even when the
-ledger's first rows came later in it. The logic is
+ledger's first rows came later in it. An entry with no file counts like any
+other, so an `empty` or a `lost` newest day is still `through`. The logic is
 `frontend/src/lib/data/ledger-reach.ts`, which reads each index with the slice's
 own reader, so the two never disagree about what an index says.
 
@@ -208,10 +219,10 @@ same names: a record whose packed file or packed day is missing says which,
 because each has its own fix (`recordNotes` in
 `frontend/src/lib/console/recording.ts`).
 
-**Three gaps are expected, and none of them is a fault or a request**: a day
-after the newest packed day is clamped away, an entry with `rows: 0` is never
-fetched, and an empty `monthly.json` or `yearly.json` names nothing. None of
-them makes the door
+**Some gaps are expected, and none of them is a fault or a request**: a day
+after the newest packed day is clamped away, an entry with `rows: 0` or one that
+names no file is never fetched, a lost day is named in `lostDays`, and an empty
+`monthly.json` or `yearly.json` names nothing. None of them makes the door
 ask the site for a file that is not there, and `frontend/tests/ledger-door.spec.ts`
 counts what a byte source is asked to prove it.
 
@@ -254,7 +265,9 @@ staged tree.
 - **The trimmed indexes are the list.** No directory is walked, so the gardener's
   watermark, a raw day and any file no trimmed index names stay off the site with
   no list of things to leave out. A file whose entry has `rows: 0` is copied too,
-  so every entry resolves, although the door never asks for one.
+  so every entry resolves, although the door never asks for one. An entry
+  `empty` or `lost` names no file, so nothing is copied for it and nothing is
+  reported missing; it stays in its trimmed index.
 - **A published ledger without all three indexes stops the build**, which names the
   ledger and the missing file. A browser asks for a ledger's indexes before
   anything else, so a 404 there would be the only sign that the ledger was
@@ -424,8 +437,9 @@ in the console, and no data file is fetched. The gardener rewrites an index at i
 own wake rather than in the commit that moves the shape, so a build that demanded
 its own stamp exactly would blank every panel from a shape change until the next
 wake. The guard checks the fields the door acts on - the ledger, the period, and
-each entry's `covers`, `rows` and `bytes`, ascending and none twice - and ignores
-any other field an older index carries.
+each entry's `covers`, `rows`, `bytes`, `state` and `lost_days`, ascending and
+none twice - and ignores any other field, `set_aside` included. An entry from
+before entries had a `state` is read as `packed`, as the contract reads it.
 
 ## The engine
 
