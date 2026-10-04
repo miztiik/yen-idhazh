@@ -407,8 +407,7 @@
     "ceilings_bytes": {
       "/404": 2048,
       "/archive/": 1500000,
-      "/console/": 150000,
-      "/evals/": 4096
+      "/console/": 150000
     },
     "cold_console_load_bytes": 900000,
     "payload_ceilings_bytes": {
