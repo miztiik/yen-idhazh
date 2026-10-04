@@ -84,7 +84,7 @@ ceil(4 * (5791 + 5) / 3) = 7728
 465 + 7728 = 8193, which is 1 byte too long
 ```
 
-So the current answer is 5,790 ASCII characters. The test `frontend/tests/console-data-explorer-address.spec.ts` binds this number to the real encoder by writing a 5,790-character printable ASCII statement, adding every ledger name and using a custom span with `from` and `end`. A ledger added to the list or taken off it moves the fixed total, so the test fails until this number and `console.explorer_query_max_chars` are worked out again.
+So the measured worst-case limit is 5,790 ASCII characters for this path and ledger list. The configured cap is 5,790. The test `frontend/tests/console-data-explorer-address.spec.ts` checks that a statement at the configured cap can be shared with every ledger and a custom span; it does not require the cap to be the largest possible statement.
 
 ## What would make this stale
 

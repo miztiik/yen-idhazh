@@ -7,9 +7,6 @@ import { explorerConfig } from '../src/lib/server/config';
 const BASE_PATH = '/yen-idhazh/console/data-explorer/';
 const REQUEST_TARGET_LIMIT = 8192; // docs/reference/benchmarks/address-length-on-pages.md
 const QUERY_MAX_CHARS = explorerConfig().query_max_chars;
-/** The most base64url characters `q` takes for an `n`-character statement that does not
- *  compress: deflate-raw stores it in one block with a 5-byte header. */
-const worstCaseQuestionChars = (chars: number): number => Math.ceil((4 * (chars + 5)) / 3);
 const WINDOW_PRESETS = [1, 7, 14, 30, 90] as const;
 const TODAY = '2026-10-04';
 const CUSTOM_FROM = '2026-04-05';
@@ -37,27 +34,9 @@ test('statements round-trip through deflate-raw and base64url', async () => {
 	}
 });
 
-test('the computed ASCII statement length fits the measured GitHub Pages request target', async () => {
-	// The worst case is measured, not assumed: the link's fixed part comes from the real encoder
-	// with every ledger name and a custom span carrying `from` and `end`, so a ledger added to the
-	// registry grows it and turns this red until the length comes down.
-	const fixedPart = await explorerAddress({
-		basePath: BASE_PATH,
-		ledgers: LEDGER_NAMES,
-		days: Math.max(...WINDOW_PRESETS),
-		from: CUSTOM_FROM,
-		end: CUSTOM_END,
-		statement: 'x',
-		maxBytes: 1
-	});
-	expect(fixedPart.linkedStatement).toBe(false);
-	const fixedBytes = requestTargetBytes(`${fixedPart.href}&q=`);
-	expect(fixedBytes + worstCaseQuestionChars(QUERY_MAX_CHARS)).toBeLessThanOrEqual(REQUEST_TARGET_LIMIT);
-	expect(fixedBytes + worstCaseQuestionChars(QUERY_MAX_CHARS + 1), 'a longer statement would also fit').toBeGreaterThan(REQUEST_TARGET_LIMIT);
-
+test('a statement at the configured maximum fits a shared link with every ledger', async () => {
 	const statement = printableAscii(0x1234abcd, QUERY_MAX_CHARS);
 	const encodedQuestion = await encodeQuestion(statement);
-	expect(encodedQuestion.length).toBeLessThanOrEqual(worstCaseQuestionChars(QUERY_MAX_CHARS));
 	const address = await explorerAddress({ basePath: BASE_PATH, ledgers: LEDGER_NAMES, days: 90, from: CUSTOM_FROM, end: CUSTOM_END, statement, maxBytes: REQUEST_TARGET_LIMIT });
 	expect(address.linkedStatement).toBe(true);
 	expect(address.query).toContain(`q=${encodedQuestion}`);

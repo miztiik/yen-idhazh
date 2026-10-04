@@ -138,6 +138,19 @@ is the conflict resolver; it was being run once against a stale base and then
 thrown at `git merge-file`. A text merge of two digests produces a payload no
 producer would ever write.
 
+**Recovery is bound to a saved run, not only to its UTC day.** The date-only
+`assemble` command reads the newest plan recorded in the run-plan ledger.
+Restoring an older `backend/var/run/<date>/plan.json` does not change that
+selection. The assembly stage accepts a validated `RunPlan` directly, so an
+operator can recover the saved run without replacing the newer plan in the
+ledger. Its item inputs and recorded run ID must belong to that saved plan.
+
+A saved `shard-visuals-*` bundle can also contain `digest.json` and `run.json`
+from the worker's checkout. Those are whole-day output, not chart input. Do not
+restore them over the current day. Restore only the visual data files named by
+validated item decisions; regenerate the day and its run record from the saved
+items and current committed state.
+
 **`DERIVED` names what the rebuild owns, and after 2026-09-22 that is almost
 nothing under `state/`.** It carries the day's `digest.json` and `run.json`, the
 published projections under `frontend/public/`, `state/day-metrics` and the
