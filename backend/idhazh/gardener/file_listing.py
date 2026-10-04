@@ -6,20 +6,30 @@ shard builds once, and each task is handed the part of it that covers the
 folders its declaration owns or reads. A task never walks the disk to learn
 what is there.
 
-**Three builders make the same listing.** `from_paths` weighs only supplied
-files and never discovers siblings. `from_commit` takes what `git ls-tree -r
--l` printed for named period paths in the commit the shard checked out. A
-file's size is git's own where the clone holds the file, and GitHub's blob API's
-where the clone never downloaded it. `backend/utilities/gardener_publish.py`
-runs git and calls it, because nothing under `backend/idhazh/` starts a
-process. `from_disk` walks only the named day, month, or run-directory paths
-passed to it, for `idhazh gardener run-task` and tests that build fixtures.
+**Three builders make the same listing, and each records the paths it was
+given.** `from_paths` weighs only supplied files and never discovers siblings.
+`from_commit` takes what `git ls-tree -r -l` printed for named period paths in
+the commit the shard checked out. A file's size is git's own where the clone
+holds the file, and GitHub's blob API's where the clone never downloaded it.
+`backend/utilities/gardener_publish.py` runs git and calls it, because nothing
+under `backend/idhazh/` starts a process. `from_disk` walks only the named day,
+month, or run-directory paths passed to it, for `idhazh gardener run-task` and
+tests that build fixtures.
 
 **A folder outside the listing is refused, never read as empty.** A task that
 asks for the names under a folder its declaration neither owns nor reads has a
 declaration that forgot the folder, and an empty answer would be the silent
 zero that lets a task report success over rows it could not see. A declared
 folder the commit does not hold answers empty: nothing has written one yet.
+
+**A path no step named is refused, never answered "not held".** The listing
+looked only at the paths it was given. A file at or below one of them is
+answered for, and one the commit lacks is not held: a step named its period,
+and nothing is there. Anywhere else under a listed folder, `holds`, `size_of`
+and `fetch` raise `PathNotNamedError`, naming the path and the nearest paths a
+step did name. "Not held" there would be a guess, and a step that looked in the
+wrong months would act on it as if those months were empty. A folder that holds
+a named path passes too, because fetching it brings what was named inside it.
 
 **Content arrives before it is read, a folder at a time.** `fetch` widens the
 checkout in one call, by whole folders or by the files directly inside a
@@ -30,8 +40,9 @@ added is what the shard downloaded for its tasks, and the record says so.
 
 **A task sees what the shard's earlier tasks changed.** One task may read a
 folder another task of its shard owns, so after each task the listing drops
-what it deleted and adds what it wrote. A later task then decides from the
-tree the shard will commit, and never fetches a file an earlier task deleted.
+what it deleted and adds what it wrote, and a file it adds counts as named. A
+later task then decides from the tree the shard will commit, and never fetches
+a file an earlier task deleted.
 """
 
 from __future__ import annotations
@@ -49,6 +60,13 @@ _OBJECT_ID: Final = re.compile(r"^[0-9a-f]{40}$")
 
 class FileNotFetchedError(Exception):
     """A file the commit holds is still not on disk after the checkout was widened for it."""
+
+
+class PathNotNamedError(Exception):
+    """A path under a listed folder that no step named, so the listing cannot answer for it.
+
+    Not a `ValueError`, so a handler that skips bad data cannot skip this defect too.
+    """
 
 
 class TreeReader(Protocol):
@@ -113,6 +131,30 @@ def _parent(path: str) -> str:
     return path.rpartition("/")[0]
 
 
+def _shared(left: str, right: str) -> int:
+    """How many leading segments two repository paths have in common."""
+    count = 0
+    for mine, theirs in zip(left.split("/"), right.split("/"), strict=False):
+        if mine != theirs:
+            break
+        count += 1
+    return count
+
+
+def _nearest(path: str, named: Sequence[str]) -> str:
+    """The named paths sharing the most leading segments with `path`, as a refusal says them."""
+    if not named:
+        return "No step named any path under it"
+    closest = max(_shared(path, other) for other in named)
+    nearest = [other for other in named if _shared(path, other) == closest]
+    if len(nearest) == 1:
+        return f"The nearest path a step named is {nearest[0]}"
+    return (
+        f"The nearest paths a step named run from {nearest[0]} to {nearest[-1]} "
+        f"({len(nearest)} paths)"
+    )
+
+
 @dataclass(slots=True)
 class _Checkout:
     """What every task of one shard shares: the checkout, how to widen it, and what that added."""
@@ -134,6 +176,10 @@ class FileListing:
     #: The folders this listing answers for, sorted. Asking about anything else
     #: is refused.
     folders: tuple[str, ...]
+    #: Every path a step named for this listing - a file or a period folder - by
+    #: repository path, sorted. A path under a listed folder that is not one of
+    #: these, under one, or above one is refused.
+    named: tuple[str, ...]
     #: Every file the shard listed, by repository path, in path order. A task's
     #: view shares it and answers only for its own folders.
     sizes: Mapping[str, int]
@@ -153,6 +199,7 @@ class FileListing:
             sizes[name] = path.stat().st_size
         return cls(
             folders=chosen,
+            named=tuple(sorted(sizes)),
             sizes=sizes,
             checkout=_Checkout(repo_root=repo_root, widen=None, folders=chosen),
         )
@@ -163,6 +210,7 @@ class FileListing:
     ) -> FileListing:
         """Every file under these named period paths, weighed on disk."""
         chosen = tuple(sorted({_folder(folder) for folder in folders}))
+        named: set[str] = set()
         sizes: dict[str, int] = {}
         for root in sorted(set(paths)):
             try:
@@ -171,6 +219,7 @@ class FileListing:
                 raise ValueError(f"{root} is outside the checkout") from refusal
             if not any(_inside(name, folder) for folder in chosen):
                 raise ValueError(f"{name} is outside the listing's declared folders")
+            named.add(name)
             if root.is_symlink():
                 raise ValueError(f"{root} is a symlink inside a named period path")
             if root.is_file():
@@ -186,6 +235,7 @@ class FileListing:
                     sizes[path.relative_to(repo_root).as_posix()] = path.stat().st_size
         return cls(
             folders=chosen,
+            named=tuple(sorted(named)),
             sizes=dict(sorted(sizes.items())),
             checkout=_Checkout(repo_root=repo_root, widen=None, folders=chosen),
         )
@@ -198,13 +248,15 @@ class FileListing:
         entries: Iterable[TreeEntry],
         github_sizes: Mapping[str, int],
         *,
+        paths: Iterable[str],
         widen: Callable[[Sequence[str]], None],
     ) -> FileListing:
         """The files the commit holds under these folders, each with a size or a refusal.
 
-        `github_sizes` answers, by blob id, for every file git printed no size
-        for. A file neither can size is refused by name: a weight that skipped it
-        would read low and say nothing.
+        `paths` are the period paths `git ls-tree` was asked about, so they are
+        what the listing answers for. `github_sizes` answers, by blob id, for
+        every file git printed no size for. A file neither can size is refused
+        by name: a weight that skipped it would read low and say nothing.
         """
         chosen = tuple(sorted({_folder(folder) for folder in folders}))
         sizes: dict[str, int] = {}
@@ -220,6 +272,7 @@ class FileListing:
             sizes[entry.path] = size
         return cls(
             folders=chosen,
+            named=tuple(sorted({_folder(path) for path in paths})),
             sizes=dict(sorted(sizes.items())),
             checkout=_Checkout(repo_root=repo_root, widen=widen, folders=chosen),
         )
@@ -233,7 +286,9 @@ class FileListing:
         chosen = tuple(sorted({_folder(folder) for folder in folders}))
         for folder in chosen:
             self._refuse_outside(folder)
-        return FileListing(folders=chosen, sizes=self.sizes, checkout=self.checkout)
+        return FileListing(
+            folders=chosen, named=self.named, sizes=self.sizes, checkout=self.checkout
+        )
 
     def _relative(self, path: str | Path) -> str:
         """A repository path as the listing spells it; a `Path` sits under the checkout."""
@@ -249,6 +304,24 @@ class FileListing:
                 "listed. Declare the folder under owns or reads"
             )
 
+    def _refuse_unnamed(self, path: str) -> None:
+        """Refuse a path no step named, because the listing never looked there.
+
+        A path passes when a step named it, a folder above it, or a path inside
+        it: a file can hold no path, and fetching a folder brings what was named
+        inside it.
+        """
+        self._refuse_outside(path)
+        if any(_inside(path, named) or _inside(named, path) for named in self.named):
+            return
+        folder = next(folder for folder in self.folders if _inside(path, folder))
+        nearest = _nearest(path, [named for named in self.named if _inside(named, folder)])
+        raise PathNotNamedError(
+            f"{path} is under {folder}, which this task owns or reads, but no step named it: "
+            "the listing never looked there, so it cannot say whether the commit holds it. "
+            f"{nearest}. A step reads only inside the periods its task named"
+        )
+
     def files_under(self, folder: str | Path) -> list[str]:
         """Every listed file under this folder, as repository paths, in path order."""
         relative = self._relative(folder)
@@ -260,15 +333,15 @@ class FileListing:
         return [self.repo_root / path for path in self.files_under(folder)]
 
     def holds(self, path: str | Path) -> bool:
-        """Whether the commit holds this file."""
+        """Whether the commit holds this file. A path no step named is refused."""
         relative = self._relative(path)
-        self._refuse_outside(relative)
+        self._refuse_unnamed(relative)
         return relative in self.sizes
 
     def size_of(self, path: str | Path) -> int:
         """What one listed file weighs, in bytes."""
         relative = self._relative(path)
-        self._refuse_outside(relative)
+        self._refuse_unnamed(relative)
         size = self.sizes.get(relative)
         if size is None:
             raise ValueError(f"{relative} is not a file the listing holds, so it has no size")
@@ -299,18 +372,19 @@ class FileListing:
         serves with one download, by exactly the entries that bring a file the
         checkout lacks: a folder whose files an earlier task of this shard wrote
         is on disk already. A folder the commit does not hold is passed over,
-        because there is nothing in it to read. Every listed file brought is on
-        disk afterwards, or this raises naming the first one missing.
+        because there is nothing in it to read; a folder or file no step named
+        is refused, as `holds` refuses it. Every listed file brought is on disk
+        afterwards, or this raises naming the first one missing.
         """
         entries: list[str] = []
         for folder in folders:
             relative = self._relative(folder)
-            self._refuse_outside(relative)
+            self._refuse_unnamed(relative)
             if self.files_under(relative):
                 entries.append(relative)
         for file in beside:
             relative = self._relative(file)
-            self._refuse_outside(relative)
+            self._refuse_unnamed(relative)
             if relative not in self.sizes:
                 raise ValueError(f"{relative} is not a file the listing holds")
             entries.append(relative)
@@ -336,8 +410,10 @@ class FileListing:
         """This listing after one task's changes, for the tasks of the shard that run later.
 
         A deleted file is no longer listed. A written file is listed with what it
-        weighs on disk, where the task left it, when it sits under a listed folder.
+        weighs on disk, where the task left it, when it sits under a listed folder,
+        and it counts as named: the listing knows exactly what that path holds.
         """
+        named = set(self.named)
         sizes = dict(self.sizes)
         for path in deleted:
             sizes.pop(path, None)
@@ -345,8 +421,12 @@ class FileListing:
             on_disk = self.repo_root / path
             if on_disk.is_file() and any(_inside(path, folder) for folder in self.folders):
                 sizes[path] = on_disk.stat().st_size
+                named.add(path)
         return FileListing(
-            folders=self.folders, sizes=dict(sorted(sizes.items())), checkout=self.checkout
+            folders=self.folders,
+            named=tuple(sorted(named)),
+            sizes=dict(sorted(sizes.items())),
+            checkout=self.checkout,
         )
 
     def downloaded(self) -> dict[str, int] | None:

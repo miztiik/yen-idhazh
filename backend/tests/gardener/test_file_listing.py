@@ -1,10 +1,12 @@
-"""Does a listing answer only for its folders, weigh each file, and refuse to read an absent one?
+"""Does a listing answer only for what it was given, weigh each file, and refuse to read an absent one?
 
 A task learns what its folders hold from a `FileListing`, never from the disk.
-These tests pin the three promises that makes: a folder the task did not declare
-is refused rather than read as empty; a declared folder the commit does not
-hold answers empty; and a file the commit holds is never taken for a missing
-member - after the checkout is widened for it, it is on disk or the read fails.
+These tests pin the four promises that makes: a folder the task did not declare
+is refused rather than read as empty; a path under a declared folder that no
+step named is refused rather than answered "not held"; a declared folder the
+commit does not hold answers empty; and a file the commit holds is never taken
+for a missing member - after the checkout is widened for it, it is on disk or
+the read fails.
 """
 
 from __future__ import annotations
@@ -15,7 +17,12 @@ from typing import Final
 
 import pytest
 
-from idhazh.gardener.file_listing import FileListing, FileNotFetchedError, TreeEntry
+from idhazh.gardener.file_listing import (
+    FileListing,
+    FileNotFetchedError,
+    PathNotNamedError,
+    TreeEntry,
+)
 
 pytestmark = pytest.mark.contract
 
@@ -68,9 +75,86 @@ def test_named_paths_ignore_unlisted_neighbours(tmp_path: Path) -> None:
     listing = FileListing.from_paths(root, [named], folders=["state/days"])
     assert dict(listing.sizes) == {"state/days/2026/09/01.csv": 1}
     assert listing.paths_under(root / "state/days") == [named]
-    assert not listing.holds(root / "state/days/2026/09/02.csv")
     with pytest.raises(ValueError, match="outside"):
         FileListing.from_paths(root, [root / "state/other/x.csv"], folders=["state/days"])
+
+
+def test_a_sibling_nobody_named_is_refused_by_name_and_never_answered_not_held(
+    tmp_path: Path,
+) -> None:
+    """The commit holds the sibling, so "not held" would be a wrong answer a step acts on."""
+    root = a_checkout(tmp_path)
+    listing = FileListing.from_paths(
+        root, [root / "state/days/2026/09/01.csv"], folders=["state/days"]
+    ).within(["state/days"])
+
+    for ask in (
+        lambda: listing.holds(root / "state/days/2026/09/02.csv"),
+        lambda: listing.size_of("state/days/2026/09/02.csv"),
+        lambda: listing.fetch(beside=["state/days/2026/09/02.csv"]),
+    ):
+        with pytest.raises(PathNotNamedError) as refused:
+            ask()
+        said = str(refused.value)
+        assert said.startswith("state/days/2026/09/02.csv is under state/days"), said
+        assert "The nearest path a step named is state/days/2026/09/01.csv" in said, said
+        assert not isinstance(refused.value, ValueError), "a handler of bad data would skip it"
+
+
+def test_a_named_period_answers_for_every_file_in_it_and_a_period_beside_it_is_refused(
+    tmp_path: Path,
+) -> None:
+    root = a_checkout(tmp_path)
+    listing = FileListing.from_disk(
+        root, ["state/traces"], paths=[root / "state/traces/2026/09/01"]
+    )
+
+    assert listing.holds("state/traces/2026/09/01/0001-0.jsonl")
+    assert not listing.holds("state/traces/2026/09/01/0002-0.jsonl"), (
+        "a file the named day lacks is not held: a step looked there"
+    )
+    listing.fetch(["state/traces/2026/09"])
+    with pytest.raises(
+        PathNotNamedError,
+        match=r"^state/traces/2026/09/02 is under state/traces, .* "
+        r"The nearest path a step named is state/traces/2026/09/01\. ",
+    ):
+        listing.fetch(["state/traces/2026/09/02"])
+
+
+def test_a_commit_listing_answers_for_the_paths_git_was_asked_about(tmp_path: Path) -> None:
+    listing = FileListing.from_commit(
+        tmp_path,
+        ["state/days"],
+        [TreeEntry(path="state/days/2026/09/01.csv", blob="1" * 40, size=12)],
+        {},
+        paths=["state/days/2026/09/01.csv", "state/days/2026/09/02.csv"],
+        widen=lambda _: None,
+    )
+
+    assert listing.holds("state/days/2026/09/01.csv")
+    assert not listing.holds("state/days/2026/09/02.csv"), "a named file the commit lacks"
+    with pytest.raises(PathNotNamedError) as refused:
+        listing.size_of("state/days/2026/10/01.csv")
+    assert (
+        "The nearest paths a step named run from state/days/2026/09/01.csv to "
+        "state/days/2026/09/02.csv (2 paths)"
+    ) in str(refused.value)
+
+
+def test_a_file_an_earlier_task_wrote_counts_as_named(tmp_path: Path) -> None:
+    """A later task may weigh what an earlier one wrote, and still not what nobody named."""
+    root = a_checkout(tmp_path)
+    listing = FileListing.from_paths(
+        root, [root / "state/days/2026/09/01.csv"], folders=["state/days"]
+    )
+    (root / "state/days/2026/09/03.csv").write_text("eeeee", encoding="ascii", newline="\n")
+
+    later = listing.settled(written=["state/days/2026/09/03.csv"], deleted=[])
+
+    assert later.size_of("state/days/2026/09/03.csv") == 5
+    with pytest.raises(PathNotNamedError, match=r"^state/days/2026/09/02\.csv "):
+        later.holds("state/days/2026/09/02.csv")
 
 
 def test_a_folder_the_task_did_not_declare_is_refused_and_never_read_as_empty(
@@ -109,6 +193,7 @@ def test_a_file_the_commit_holds_and_the_checkout_lacks_is_never_read_as_absent(
         ["state/days"],
         [TreeEntry(path="state/days/2026/09/01.csv", blob="1" * 40, size=12)],
         {},
+        paths=["state/days/2026/09"],
         widen=asked.append,
     )
 
@@ -128,12 +213,24 @@ def test_a_file_git_never_sized_takes_the_size_github_gave_its_blob_or_is_refuse
     ]
 
     listing = FileListing.from_commit(
-        tmp_path, ["state/days"], entries, {"2" * 40: 34}, widen=lambda _: None
+        tmp_path,
+        ["state/days"],
+        entries,
+        {"2" * 40: 34},
+        paths=["state/days/2026/09"],
+        widen=lambda _: None,
     )
 
     assert dict(listing.sizes) == {"state/days/2026/09/01.csv": 12, "state/days/2026/09/02.csv": 34}
     with pytest.raises(ValueError, match=r"state/days/2026/09/02\.csv has no size"):
-        FileListing.from_commit(tmp_path, ["state/days"], entries, {}, widen=lambda _: None)
+        FileListing.from_commit(
+            tmp_path,
+            ["state/days"],
+            entries,
+            {},
+            paths=["state/days/2026/09"],
+            widen=lambda _: None,
+        )
 
 
 def test_a_file_entry_brings_only_the_files_beside_it(tmp_path: Path) -> None:
@@ -147,6 +244,11 @@ def test_a_file_entry_brings_only_the_files_beside_it(tmp_path: Path) -> None:
             TreeEntry(path="state/compact/x/index/daily.json", blob="3" * 40, size=9),
         ],
         {},
+        paths=[
+            "state/compact/x/daily/watermark.json",
+            "state/compact/x/daily/2026/09",
+            "state/compact/x/index/daily.json",
+        ],
         widen=lambda _: None,
     )
 
@@ -157,7 +259,11 @@ def test_a_file_entry_brings_only_the_files_beside_it(tmp_path: Path) -> None:
 
 
 def test_a_folder_whose_files_are_on_disk_is_not_widened_for(tmp_path: Path) -> None:
-    """Only the entries that bring an absent file reach the checkout, in one call."""
+    """Only the entries that bring an absent file reach the checkout, in one call.
+
+    Each folder fetched holds a named path rather than being one, as a ledger's
+    index folder holds the index files a task names.
+    """
     a_checkout(tmp_path)
     asked: list[Sequence[str]] = []
     listing = FileListing.from_commit(
@@ -168,6 +274,7 @@ def test_a_folder_whose_files_are_on_disk_is_not_widened_for(tmp_path: Path) -> 
             TreeEntry(path="state/lacking/2026-09.csv", blob="2" * 40, size=5),
         ],
         {},
+        paths=["state/days/2026/09", "state/lacking/2026-09.csv"],
         widen=asked.append,
     )
 

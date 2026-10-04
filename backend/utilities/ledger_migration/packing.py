@@ -110,8 +110,8 @@ def pack(
                     shard=identity.shard,
                     git_sha=identity.git_sha,
                     owned_folders=folders,
-                    listing=FileListing.from_paths(
-                        repo_root, packing_paths(state_dir, which, months), folders=folders
+                    listing=FileListing.from_disk(
+                        repo_root, folders, paths=packing_paths(state_dir, which, months)
                     ),
                 ),
                 months=frozenset(months),

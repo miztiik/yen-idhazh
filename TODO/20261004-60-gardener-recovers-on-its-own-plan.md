@@ -37,7 +37,7 @@ Table A - what is out
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Compaction gets its own page | - | A | DONE | fantastic-umbrella | - | Plan 60 row 1: compaction page |
 | 2 | A dry run says nothing was deleted | - | A | DONE | literate-parakeet | - | Plan 60 row 2: dry-run wording |
-| 3 | A read nobody named fails loudly | - | A | PENDING | - | - | - |
+| 3 | A read nobody named fails loudly | - | A | DONE | curly-parakeet | - | Plan 60 row 3: unnamed reads fail |
 | 4 | The ledger fault words live in contracts | 1 | A | DONE | special-sniffle | - | Plan 60 row 4: fault words in contracts |
 | 5 | A ledger's marks are read in one place | - | A | PENDING | - | - | - |
 | 6 | One run id per workflow run | 1 | B | PENDING | - | - | - |

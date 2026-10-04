@@ -436,9 +436,11 @@ def read_the_listing(
 ) -> FileListing:
     """Every file the commit holds under these named period paths, with its size.
 
-    Git's size where the clone holds the file. For one it never downloaded,
-    GitHub's blob API is asked for that named file and its size is matched by
-    blob id. `trees` stands in for that API, and None reaches it for this repo.
+    The listing answers only for these paths, and refuses a path under its
+    folders that none of them names. Git's size where the clone holds the
+    file. For one it never downloaded, GitHub's blob API is asked for that
+    named file and its size is matched by blob id. `trees` stands in for that
+    API, and None reaches it for this repo.
 
     The checkout is widened only by a file the commit lists, a folder above one,
     or a name directly inside such a folder - a file an earlier task of the
@@ -476,7 +478,7 @@ def read_the_listing(
             )
         checkout.widen(wanted)
 
-    return FileListing.from_commit(repo_root, chosen, entries, sizes, widen=widen)
+    return FileListing.from_commit(repo_root, chosen, entries, sizes, paths=named, widen=widen)
 
 
 def declared_folders(
