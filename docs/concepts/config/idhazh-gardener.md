@@ -283,7 +283,7 @@ against a pair kept forever passes; a floor kept forever against a bounded pair 
 refused, because a person chose never to delete that ledger; forever against
 forever passes; and a ledger no task ever limited has no floor. How long a moved
 ledger's CSV was kept is not a declaration: `CSV_LEDGERS` in
-`backend/utilities/migrate_to_parquet.py` records it, and its test holds every
+`backend/utilities/ledger_migration/csv_layouts.py` records it, and its test holds every
 moved ledger's committed compaction to it, so no retired retention task stays
 behind owning a folder nothing writes.
 

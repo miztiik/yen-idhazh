@@ -1,0 +1,135 @@
+"""Do stored-output checks refuse broken named files without relying on obsolete raw listings?"""
+
+from __future__ import annotations
+
+import hashlib
+from pathlib import Path
+from typing import Final
+
+import pytest
+from conftest import CONTRACT_FIXTURES_DIR, SEED_COMMIT
+
+from idhazh import ledger
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.ledger.stored_output import check_compact_period, check_raw_day
+
+pytestmark = pytest.mark.contract
+DAY: Final = "2026-09-02"
+WHICH: Final = LedgerName.ITEM_HEALTH
+
+
+def _raw(root: Path) -> Path:
+    row = ItemHealthRow.model_validate_json(
+        (CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json").read_text(encoding="ascii")
+    ).model_copy(update={"date": DAY})
+    (path,) = ledger.persist(
+        root,
+        [row],
+        ledger=WHICH,
+        covers=DAY,
+        identity=WriterIdentity(
+            run_id=f"{DAY}-1",
+            attempt=1,
+            job=ServerJob.MIGRATE,
+            shard=0,
+            producer="utilities.migrate_to_parquet",
+            git_sha=SEED_COMMIT,
+        ),
+    )
+    return path
+
+
+def _compact(root: Path) -> tuple[Path, Path]:
+    raw = _raw(root)
+    path = ledger.persist_period(
+        root,
+        ledger.load_stored([raw], model=ItemHealthRow),
+        model=ItemHealthRow,
+        ledger=WHICH,
+        period=Period.DAILY,
+        covers=DAY,
+        identity=ledger.read_envelope(raw).identity,
+        built_from=1,
+    )
+    index_path = ledger.compact_index_path(root, WHICH, Period.DAILY)
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(
+        CompactIndex(
+            version=CompactIndex.schema_version(),
+            ledger=WHICH,
+            period=Period.DAILY,
+            entries=[CompactEntry(covers=DAY, rows=1, bytes=path.stat().st_size)],
+        ).to_json(),
+        encoding="ascii",
+        newline="\n",
+    )
+    return path, index_path
+
+
+def test_raw_check_reads_real_files_and_ignores_an_obsolete_listing(tmp_path: Path) -> None:
+    path = _raw(tmp_path)
+    missing = "019f75f0-4bb0-835b-8c7e-824db9007c61.parquet"
+    listing = ledger.raw_index_path(tmp_path, WHICH, DAY)
+    listing.parent.mkdir(parents=True, exist_ok=True)
+    listing.write_text(
+        RawDayIndex(
+            version=RawDayIndex.schema_version(),
+            ledger=WHICH,
+            date=DAY,
+            files=[missing],
+            content_sha256=hashlib.sha256(missing.encode()).hexdigest(),
+            listed_at=f"{DAY}T12:00:00Z",
+        ).to_json(),
+        encoding="ascii",
+        newline="\n",
+    )
+    assert check_raw_day(tmp_path, WHICH, DAY)
+    path.unlink()
+    assert not check_raw_day(tmp_path, WHICH, DAY)
+    listing.write_bytes(b"an unreadable obsolete listing")
+    assert not check_raw_day(tmp_path, WHICH, DAY)
+
+
+def test_raw_check_refuses_an_unreadable_actual_file(tmp_path: Path) -> None:
+    path = _raw(tmp_path)
+    path.write_bytes(b"not a ledger")
+    with pytest.raises(ValueError, match="neither a parquet nor"):
+        check_raw_day(tmp_path, WHICH, DAY)
+
+
+@pytest.mark.parametrize("damage", ["none", "missing", "size", "unindexed"])
+def test_compact_check_checks_the_named_period_and_entry(tmp_path: Path, damage: str) -> None:
+    path, index = _compact(tmp_path)
+    if damage == "none":
+        assert check_compact_period(tmp_path, WHICH, Period.DAILY, DAY)
+        return
+    if damage == "missing":
+        path.unlink()
+    elif damage == "size":
+        value = CompactIndex.read(index)
+        index.write_text(
+            value.model_copy(
+                update={"entries": [value.entries[0].model_copy(update={"bytes": 0})]}
+            ).to_json(),
+            encoding="ascii",
+            newline="\n",
+        )
+    else:
+        index.unlink()
+    with pytest.raises(ValueError):
+        check_compact_period(tmp_path, WHICH, Period.DAILY, DAY)
+
+
+def test_an_unreadable_old_index_is_a_named_value_error(tmp_path: Path) -> None:
+    _, index = _compact(tmp_path)
+    index.write_text(
+        '{"version":"2026-09-01","ledger":"item-health","period":"daily","entries":"broken"}',
+        encoding="ascii",
+        newline="\n",
+    )
+    with pytest.raises(ValueError, match=r"daily.json:"):
+        check_compact_period(tmp_path, WHICH, Period.DAILY, DAY)
