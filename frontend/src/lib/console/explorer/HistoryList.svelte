@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** Lists Records runs kept by this browser and reopens one without running it. */
+	/** Lists Data explorer runs kept by this browser and reopens one without running it. */
 	import Icon from '$lib/icons/Icon.svelte';
 	import { dayMonth } from '$lib/format';
 	import type { RecentRun } from './keep';

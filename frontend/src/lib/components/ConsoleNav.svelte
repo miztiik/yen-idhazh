@@ -29,7 +29,7 @@
 	 * away. Where they do not both fit, the band under the strip still names the
 	 * worst route.
 	 *
-	 * **The sixth route, Records, is live.** The layout hands this strip
+	 * **The sixth route, Data explorer, is live.** The layout hands this strip
 	 * `stripRoutes()` of the band's routes; the old flag was removed with the page.
 	 */
 	import { onMount } from 'svelte';
@@ -280,6 +280,45 @@
 	/* While the strip is stuck the description goes. It is the anchor's `title`,
 	   and it is back the moment the strip returns to the top. */
 	:global([data-console-strip-stuck='yes']) .tab-line {
+		display: none;
+	}
+
+	:global([data-console-chrome='workbench']) .console-nav {
+		border-block-end: 0;
+	}
+
+	:global([data-console-chrome='workbench']) .tabs {
+		flex-wrap: nowrap;
+		gap: var(--space-1);
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scrollbar-width: thin;
+	}
+
+	:global([data-console-chrome='workbench']) .tab-slot {
+		flex: 0 0 auto;
+		min-inline-size: max-content;
+	}
+
+	:global([data-console-chrome='workbench']) .tab {
+		min-block-size: var(--workbench-control);
+		padding: var(--space-1) var(--space-3);
+		border-radius: 0;
+	}
+
+	:global([data-console-chrome='workbench']) .tab-head {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	:global([data-console-chrome='workbench']) .tab-label {
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		white-space: nowrap;
+	}
+
+	:global([data-console-chrome='workbench']) .tab-state,
+	:global([data-console-chrome='workbench']) .tab-line {
 		display: none;
 	}
 </style>

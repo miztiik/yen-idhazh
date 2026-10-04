@@ -1,11 +1,10 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { base } from '$app/paths';
 	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
-	import { fillWindowSlot } from '$lib/console/window-slot';
+	import WindowControl from '$lib/components/WindowControl.svelte';
 	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
 	import { shortDate, dayMonth } from '$lib/format';
 	import QuestionStrip from '$lib/console/explorer/QuestionStrip.svelte';
@@ -67,9 +66,6 @@
 	const columnLabel = $derived(showAnswerColumns ? 'Answer columns' : 'Columns in the selected ledgers');
 	const answerRows = $derived(result !== null && result.state === 'ok' ? (result.rows as Row[]) : []);
 	const answerColumns = $derived(result !== null && result.state === 'ok' ? result.columns : []);
-	const statusLine = $derived(
-		`The next question will read ${spanDays()} UTC ${spanDays() === 1 ? 'day' : 'days'}, ${dayMonth(fromDay)} to ${shortDate(toDay)}.`
-	);
 	const actionNotice = $derived([...linkNotices, keepNotice, copiedLink].filter(Boolean).join(' '));
 	const shapeBounds = $derived({
 		chartMinRows: config.chart_min_rows,
@@ -156,25 +152,6 @@
 		fromDay = addDays(toDay, 1 - days);
 		void updateCostAndColumns();
 	}
-	function monthsFor(): number {
-		// Records prices ledger-day files in the action line, so the span control prices no month files.
-		return 0;
-	}
-
-	function carrySentence(): string {
-		return data.carries?.['data-explorer'] ?? 'Every published ledger the other routes draw from, open to a question of your own.';
-	}
-
-	fillWindowSlot({
-		get days() { return windowDays; },
-		get presets() { return presets; },
-		get busy() { return costing || running; },
-		get ready() { return ready; },
-		get statusLine() { return statusLine; },
-		monthsFor,
-		onChange: setWindow
-	});
-
 	async function refreshRegistry() {
 		refreshing = true;
 		registryError = null;
@@ -261,13 +238,13 @@
 			if (raw === null) return [];
 			const parsed = JSON.parse(raw);
 			if (!Array.isArray(parsed)) {
-				console.info(`Records storage ${key} was not a list and was dropped.`);
+				console.info(`Data explorer storage ${key} was not a list and was dropped.`);
 				return [];
 			}
 			const kept: T[] = [];
 			for (const entry of parsed) {
 				const item = keep(entry);
-				if (item === null) console.info(`Records storage ${key} entry was invalid and was dropped.`);
+				if (item === null) console.info(`Data explorer storage ${key} entry was invalid and was dropped.`);
 				else kept.push(item);
 			}
 			return kept;
@@ -359,8 +336,11 @@
 			for (const ledger of picked) {
 				const day = cost.through[ledger] ?? nextSpan.to;
 				const answer = await ask({ ledgers: [ledger], from: day, to: day, sql: `DESCRIBE ${quoteLedger(ledger)}`, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
-				if ((answer.state === 'ok' || answer.state === 'quiet') && 'columns' in answer) {
-					for (const column of answer.columns) described.push({ name: `${ledger}.${column.name}`, type: column.type });
+				// DESCRIBE answers one row per column of the ledger: its name and its type.
+				if (answer.state === 'ok') {
+					for (const row of answer.rows) {
+						if (typeof row.column_name === 'string') described.push({ name: `${ledger}.${row.column_name}`, type: String(row.column_type ?? '') });
+					}
 				}
 			}
 			ledgerColumns = described;
@@ -436,27 +416,42 @@
 	});
 </script>
 
-<p class="cross-link" data-console-carry>{carrySentence()} <a href={`${base}/console/`}>Open Pipelines.</a></p>
-
 {#snippet questionActions()}
 	<button type="button" class="panel-button" onclick={copyLink}><Icon id="share-link" /> Copy link</button>
 {/snippet}
 
 <Panel id="data-explorer-ask" title="Your question" note={`One read-only DuckDB statement at a time, up to ${config.query_max_chars} characters.`} actions={questionActions}>
 	<div class="question-panel" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px`}>
-		<p class="state">Need help with the syntax? <a href={`${data.docsBase}/blob/main/docs/how-to/query-a-ledger-from-the-console.md`}><Icon id="docs" /> Read the Records how-to.</a></p>
-		<QuestionStrip examples={config.examples} {published} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
+		<div class="workbench-toolbar" data-workbench-region="toolbar">
+			<WindowControl
+				days={windowDays}
+				presets={presets}
+				busy={costing || running}
+				ready={ready}
+				onChange={setWindow}
+			/>
+			<ActionLine files={cost.files} bytes={cost.bytes} {heldBytes} read={lastRead} busy={running || costing} disabled={selected.length === 0 || sql.trim() === ''} notice={actionNotice} from={fromDay} to={toDay} minDay={minReachDay()} maxDay={todayUtc()} saveName={suggestedSaveName(sql, config.save_name_max_chars)} saveNameMaxChars={config.save_name_max_chars} canSave={storageWorks && sql.trim() !== ''} canCopyQuestion={linkNotices.includes(LINK_TOO_LONG_NOTICE)} onRun={run} onSave={saveQuestion} onCopyQuestion={copyQuestion} onDates={setSpan} />
+		</div>
+		<p class="state">Need help with the syntax? <a href={`${data.docsBase}/blob/main/docs/how-to/query-a-ledger-from-the-console.md`}><Icon id="docs" /> Read the Data explorer how-to.</a></p>
+		<div data-workbench-region="questions">
+			<QuestionStrip examples={config.examples} {published} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
+		</div>
 		{#if keepNotice}<p class="state">{keepNotice}</p>{/if}
 		{#if !storageWorks}<p class="state warn">This browser is not letting the page keep anything, so Save and the history are off.</p>{/if}
 		<div class="question-grid" class:wide>
-			<LedgerList ledgers={ledgers} selected={selected} {published} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
+			<div data-workbench-region="ledgers">
+				<LedgerList ledgers={ledgers} selected={selected} {published} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
+			</div>
 			<div class="editor-stack">
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}
-				<QueryEditor value={sql} maxChars={config.query_max_chars} minLines={config.editor_lines[0]} maxLines={config.editor_lines[1]} counterFromShare={config.counter_from_share} onInput={(value) => (sql = value)} onRun={run} />
-				<ActionLine files={cost.files} bytes={cost.bytes} {heldBytes} read={lastRead} busy={running || costing} disabled={selected.length === 0 || sql.trim() === ''} notice={actionNotice} from={fromDay} to={toDay} minDay={minReachDay()} maxDay={todayUtc()} saveName={suggestedSaveName(sql, config.save_name_max_chars)} saveNameMaxChars={config.save_name_max_chars} canSave={storageWorks && sql.trim() !== ''} canCopyQuestion={linkNotices.includes(LINK_TOO_LONG_NOTICE)} onRun={run} onSave={saveQuestion} onCopyQuestion={copyQuestion} onDates={setSpan} />
+				<div data-workbench-region="editor">
+					<QueryEditor value={sql} maxChars={config.query_max_chars} minLines={config.editor_lines[0]} maxLines={config.editor_lines[1]} counterFromShare={config.counter_from_share} onInput={(value) => (sql = value)} onRun={run} />
+				</div>
 				<HistoryList runs={recentRuns} onPick={pickRun} />
 			</div>
-			<ColumnList columns={columns} label={columnLabel} />
+			<div data-workbench-region="columns">
+				<ColumnList columns={columns} label={columnLabel} />
+			</div>
 		</div>
 	</div>
 </Panel>
@@ -521,9 +516,17 @@
 </Panel>
 
 <style>
-	.cross-link { margin: var(--space-4) 0; color: var(--color-text-secondary); }
-	.cross-link a { color: var(--color-accent-strong); }
 	.question-panel { display: grid; gap: var(--space-4); }
+	.workbench-toolbar {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: stretch;
+		gap: var(--space-3);
+		padding: var(--space-2);
+		border: 1px solid var(--item-edge);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+	}
 	.question-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 	.editor-stack { display: grid; gap: var(--space-4); align-content: start; }
 	.state, .answer-note { margin: 0; color: var(--color-text-secondary); }
@@ -535,4 +538,9 @@
 	.panel-button { min-block-size: 2.75rem; border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); padding-inline: var(--space-3); font-weight: 600; }
 	.shape-actions { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
 	.shape-actions legend { color: var(--color-text-tertiary); font-size: var(--text-xs); }
+	@media (max-width: 1023px) {
+		.workbench-toolbar {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
 </style>

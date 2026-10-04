@@ -1,12 +1,12 @@
-# Query a ledger from the Records console
+# Query a ledger from the Data explorer console
 
 **Last Updated**: 2026-10-04
 
-Use the Records page when the console has the data you need but no purpose-built panel answers your question.
+Use the Data explorer page when the console has the data you need but no purpose-built panel answers your question.
 
 ## What the page reads
 
-Records reads the ledgers that `config/ledgers.json` declares and `config/idhazh.json` publishes. It reads the site copy first. For older packed days, it reads the committed repository through `ledger.archive_base_url`. If that value is empty, Records reads the site only and says which older days are not on this site.
+Data explorer reads the ledgers that `config/ledgers.json` declares and `config/idhazh.json` publishes. It reads the site copy first. For older packed days, it reads the committed repository through `ledger.archive_base_url`. If that value is empty, Data explorer reads the site only and says which older days are not on this site.
 
 ## Ask a question
 

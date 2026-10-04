@@ -58,7 +58,7 @@
       "description": "What the ledgers hold, and whatever you ask of them.",
       "href": "/console/data-explorer/",
       "id": "data-explorer",
-      "label": "Records",
+      "label": "Data explorer",
       "severity": 0,
       "worst": null
     }

@@ -160,7 +160,7 @@ ROUTES: Final[tuple[tuple[RouteId, str, str, str], ...]] = (
     ),
     (
         RouteId.DATA_EXPLORER,
-        "Records",
+        "Data explorer",
         "/console/data-explorer/",
         "What the ledgers hold, and whatever you ask of them.",
     ),
@@ -1092,7 +1092,7 @@ def build(
         RouteId.MACHINE: worst_machine,
         RouteId.JUDGEMENT: worst_judgement,
         RouteId.VOICES: worst_voices,
-        # The Records route reads whatever an operator asks of it and judges
+        # The Data explorer route reads whatever an operator asks of it and judges
         # nothing, so it has no worst state to carry.
         RouteId.DATA_EXPLORER: None,
     }

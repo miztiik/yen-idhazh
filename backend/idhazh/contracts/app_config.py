@@ -111,8 +111,8 @@ class AppConfig(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-10-03T14:45",
-            change="console.data_explorer_tab removed; Records knobs and panel group added.",
-            why="The Records page is live and draws its own controls.",
+            change="console.data_explorer_tab removed; Data explorer knobs and panel group added.",
+            why="The Data explorer page is live and draws its own controls.",
         ),
         ChangelogEntry(
             version="2026-10-02",

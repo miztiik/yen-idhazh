@@ -27,7 +27,7 @@ const APP = readFileSync(join(FRONTEND, 'src', 'styles', 'app.css'), 'utf8');
  * They are declared in their own `:root` block outside both theme blocks, so a
  * dark override would be a second copy of the same number.
  */
-const THEME_INDEPENDENT = /^--(space|text|leading|frame|measure|gutter|radius|dur|ease|zone)/;
+const THEME_INDEPENDENT = /^--(space|text|leading|frame|measure|gutter|radius|dur|ease|zone|workbench|tracking)/;
 
 /** Tokens with no Tailwind utility, because nothing would ever write one.
  *
