@@ -39,7 +39,7 @@ Table A - what is out
 | 2 | A dry run says nothing was deleted | - | A | DONE | literate-parakeet | - | Plan 60 row 2: dry-run wording |
 | 3 | A read nobody named fails loudly | - | A | PENDING | - | - | - |
 | 4 | The ledger fault words live in contracts | - | A | PENDING | - | - | - |
-| 5 | A ledger's marks are read in one place | - | A | PENDING | - | - | - |
+| 5 | A ledger's marks are read in one place | - | A | DONE | silver-dollop | - | Plan 60 row 5: marks in one place |
 | 6 | One run id per workflow run | 1 | B | PENDING | - | - | - |
 | 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | PENDING | - | - | - |
