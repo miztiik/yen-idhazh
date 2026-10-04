@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from os.path import relpath
 from pathlib import Path
 
 from idhazh import config
 
 
 def label_path(path: Path) -> str:
-    """Render a checkout-relative POSIX path, or its folder name on another drive."""
-    try:
-        return Path(relpath(path.resolve(), config.DEFAULT_CONFIG_DIR.parent)).as_posix()
-    except ValueError:
-        return path.name
+    """Render a path inside the checkout relative to it, and any other path by its name alone."""
+    resolved = path.resolve()
+    checkout = config.DEFAULT_CONFIG_DIR.parent.resolve()
+    if resolved.is_relative_to(checkout):
+        return resolved.relative_to(checkout).as_posix()
+    return path.name
 
 
 def describe_error(error: ValueError | OSError) -> str:
