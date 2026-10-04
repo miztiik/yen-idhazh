@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ICON_IDS, ICONS, type IconId } from '../src/lib/icons/generated';
+import { iconsConfig } from '../src/lib/server/config';
 import ts from 'typescript';
 
 /**
@@ -57,6 +58,10 @@ export const ICON_IDS = Object.keys(ICONS) as IconId[];
 `;
 }
 
+function iconComponentSource(): string {
+	return readFileSync(join(ICON_DIRECTORY, 'Icon.svelte'), 'utf8');
+}
+
 function invalidIconIdDiagnostics(): readonly ts.Diagnostic[] {
 	const directory = mkdtempSync(join(tmpdir(), 'idhazh-icon-contract-'));
 	const fixture = readFileSync(join(FRONTEND, 'tests', 'fixtures', 'icons', 'invalid-id.ts.txt'), 'utf8');
@@ -105,6 +110,37 @@ test.describe('the icon set', () => {
 		expect(readFileSync(join(ICON_DIRECTORY, 'generated.ts'), 'utf8')).toBe(
 			generatedFromManifest()
 		);
+	});
+
+	test('every size keeps the configured line width in screen pixels', async ({ page }) => {
+		const source = iconComponentSource();
+		expect(source).toContain('const strokeWidth = $derived((__ICON_STROKE_PX__ * 24) / size);');
+		expect(source).toContain('stroke-width={strokeWidth}');
+		const strokePx = iconsConfig().stroke_px;
+		expect(strokePx).toBe(1.5);
+		const sizes = [13, 14, 16, 20];
+		const html = ICON_IDS.flatMap((id) =>
+			sizes.map((size) => {
+				const strokeUnits = (strokePx * 24) / size;
+				return `<svg data-icon="${id}" data-size="${size}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${strokeUnits}" stroke-linecap="round" stroke-linejoin="round">${ICONS[id]}</svg>`;
+			})
+		).join('');
+		await page.setContent(html);
+		const strokes = await page.locator('svg[data-icon]').evaluateAll((nodes) =>
+			nodes.map((node) => {
+				const svg = node as SVGSVGElement;
+				const scale = svg.getScreenCTM()?.a ?? Number.NaN;
+				return {
+					id: svg.dataset.icon,
+					size: Number(svg.dataset.size),
+					screenStroke: Number(svg.getAttribute('stroke-width')) * scale
+				};
+			})
+		);
+		expect(strokes).toHaveLength(ICON_IDS.length * sizes.length);
+		for (const stroke of strokes) {
+			expect(stroke.screenStroke, `${stroke.id} at ${stroke.size} px`).toBeCloseTo(strokePx, 5);
+		}
 	});
 
 	test('an id outside the named set is a type error', () => {
