@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 Where documentation belongs and what it must contain. Follow [CLAUDE.md](../../CLAUDE.md) section 5. These rules are domain-neutral.
 
@@ -98,7 +98,7 @@ The token count estimates one token per four characters; it is not a tokenizer m
 | `from` | Links between the named pages only; this does not count the whole repository |
 | `super` | Whether corrections have accumulated instead of replacing old answers |
 
-Name every page to measure. There is no whole-tree default or repository-wide rank. The tool also checks direct link targets for broken paths or anchors, without following their links. It reports rather than gates. Inspect the findings even when the command exits successfully. CI includes the changed-page report in its documentation summary.
+Name every page to measure. Any Markdown file inside the repository gets a row, a plan included. There is no whole-tree default or repository-wide rank. On pages under `docs/` the tool also reports missing required elements, and checks direct link targets for broken paths or anchors without following their links. It reports rather than gates. Inspect the findings even when the command exits successfully. No CI job runs it.
 
 ### `docs/` is the memory
 
