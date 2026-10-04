@@ -36,7 +36,7 @@ Table A - what is out
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Compaction gets its own page | - | A | DONE | fantastic-umbrella | - | Plan 60 row 1: compaction page |
-| 2 | A dry run says nothing was deleted | - | A | PENDING | - | - | - |
+| 2 | A dry run says nothing was deleted | - | A | DONE | literate-parakeet | - | Plan 60 row 2: dry-run wording |
 | 3 | A read nobody named fails loudly | - | A | PENDING | - | - | - |
 | 4 | The ledger fault words live in contracts | - | A | PENDING | - | - | - |
 | 5 | A ledger's marks are read in one place | - | A | PENDING | - | - | - |
