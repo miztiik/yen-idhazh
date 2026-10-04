@@ -42,6 +42,7 @@ from idhazh.contracts.base import (
     RunId,
     Sha256,
     Timestamp,
+    records_json,
 )
 from idhazh.contracts.file_envelope import Period, Tier, covers_fits
 from idhazh.contracts.ledger_name import LedgerName
@@ -70,13 +71,18 @@ def _first_descent(values: list[str]) -> tuple[str, str] | None:
 class RawDayIndex(Contract):
     """Which raw files exist for one day of one ledger.
 
-    Written when the compaction takes that day, and staged by the site build for
-    days not packed yet. A compaction listing may omit `bytes`; a staged listing
-    carries it so the browser can price the files before it fetches them.
+    Staged by the site build for days not packed yet, carrying `bytes` so the
+    browser can price the files before it fetches them. The compaction no longer
+    writes one; a listing an older compaction left omits `bytes`.
     """
 
     __schema_stem__: ClassVar[str] = "raw-day-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-03",
+            change="Only the site build writes a listing; the compaction no longer does.",
+            why="Nothing read a compaction listing once its day was packed.",
+        ),
         ChangelogEntry(
             version="2026-10-02",
             change="bytes is an optional size for each listed file, filled by the site build.",
@@ -122,14 +128,14 @@ class RawDayIndex(Contract):
     bytes: list[int] | None = Field(
         default=None,
         description=(
-            "The size in bytes of each file in `files`, in the same order. The "
-            "compaction listing may omit it; the site build fills it for days not "
+            "The size in bytes of each file in `files`, in the same order. A listing "
+            "an older compaction wrote omits it; the site build fills it for days not "
             "packed yet so the browser can price and check each file before it fetches it."
         ),
     )
     listed_at: Timestamp = Field(
         description=(
-            "When the compaction task or site build last listed the day's directory, UTC, "
+            "When the site build, or an older compaction, last listed the day's directory, UTC, "
             "to the whole second: the moment this index last agreed with the tree."
         )
     )
@@ -224,6 +230,15 @@ class CompactIndex(Contract):
             "Every entry covers one period of the kind `period` names."
         )
     )
+
+    def to_json(self) -> str:
+        """One entry a line - see `records_json`.
+
+        A reader checks which days exist by scanning the list, and an entry's
+        three fields mean nothing apart. The layout is not part of the shape, so
+        a file in the older layout is still read and is re-laid-out when written.
+        """
+        return records_json(self.model_dump(mode="json"))
 
     @model_validator(mode="after")
     def _the_entries_ascend_once_each_at_the_period_s_grain(self) -> Self:

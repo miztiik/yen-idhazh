@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { deskOf, orderByTime } from '../src/lib/day-shape';
-import { dayShell, homeShell, loadDay, publishedDates, wholeDay } from '../src/lib/server/payload';
+import { dayShell, homeShell, loadDay, publishedDates } from '../src/lib/server/payload';
 import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/types';
 
 /**
@@ -20,9 +20,7 @@ import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/typ
  * equality alone because it is what the bytes are - a prerendered document
  * serialises an object in its own key order, and the committed payload writes
  * its keys sorted, so a day rebuilt with the stories appended is a different
- * document holding the same day. `wholeDay` has no caller in `frontend/src` now
- * that `/` has stopped inlining, and the round trip is asserted here because it
- * is what says the split loses nothing.
+ * document holding the same day.
  *
  * And split, it must lose nothing. A topic's seed comes from the topic's own
  * list, and a story named in `keep` is in the seed whatever its position - the
@@ -77,15 +75,15 @@ test.describe('the reading routes load a day in two halves', () => {
 				expect(shell, `${date} at a seed of ${seed} did not load`).not.toBeNull();
 				inlined += inlinedDrawings(shell!.seed);
 				expect(
-					JSON.stringify(wholeDay(shell!)),
-					`${date} at a seed of ${seed} rebuilt a different day`
-				).toBe(JSON.stringify(reading(whole!)));
+					JSON.stringify([...shell!.seed, ...shell!.rest]),
+					`${date} at a seed of ${seed} changed the stories or their order`
+				).toBe(JSON.stringify(reading(whole!).items));
+				expect(shell!.facts).toEqual({ ...whole!, items: [] });
 				// And the set is the set, whatever the order: a sort that dropped a
 				// story would otherwise only fail the line above, which reads as a key
 				// order problem.
 				expect(
-					wholeDay(shell!)
-						.items.map((item) => item.item_id)
+					[...shell!.seed, ...shell!.rest].map((item) => item.item_id)
 						.sort(),
 					`${date} at a seed of ${seed} lost or doubled a story`
 				).toEqual(whole!.items.map((item) => item.item_id).sort());

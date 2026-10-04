@@ -1,10 +1,8 @@
 """How does one gardener shard land its one commit on main, however many shards race it?
 
 This is the entry point a wake's shard runs. Its checkout holds only the code
-and config it runs. It reads the commit this checkout is at, which of the
-folders its tasks own or read that commit holds, and the name and size of every
-file under them - the complement task's folders included, which only the commit
-can name - and downloads none of those files. It runs the shard through
+and config it runs. It reads the commit this checkout is at, the exact folders
+its tasks own or read, and the files under each task's named periods. It runs the shard through
 `idhazh.gardener.runner`, whose tasks fetch only the folders they read, and
 lands what the runner hands back. It sits here rather than in the package
 because landing and reading the commit run git, and nothing under
@@ -18,8 +16,8 @@ could use to act.
 off but the one that widens the checkout for a task, so a call that would have
 downloaded a file the clone lacks fails instead of paying for it quietly. A
 file's size is git's where the clone holds the file. For one it never
-downloaded, git prints no size, so GitHub's trees API is asked, one request a
-listed folder, and its answer is matched to git's names by blob id.
+downloaded, git prints no size, so GitHub's blob API is asked for that named
+file and its size is matched by blob id.
 
 The work happens once, before `publish` is called. What is left is to build a
 commit of exactly what the shard wrote and deleted, and push it - and to do that
@@ -85,7 +83,7 @@ from idhazh.gardener.outcome import (
     Shard,
     worst,
 )
-from idhazh.ledger import STATE_DIRNAME
+from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 
 #: The one identity every commit in this repository carries. The same two values
 #: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
@@ -119,6 +117,29 @@ _NO_OBJECT: Final = "0" * 40
 
 #: The mode of a plain file, which is every file a task writes.
 _PLAIN_FILE: Final = "100644"
+
+#: Leave headroom below Windows' 32K process command-line limit.
+_MAX_PATHSPEC_CHARACTERS: Final = 16_000
+
+
+def _pathspec_batches(paths: Sequence[str]) -> list[tuple[str, ...]]:
+    """Split named Git pathspecs before the process command line can overflow."""
+    batches: list[tuple[str, ...]] = []
+    current: list[str] = []
+    characters = 0
+    for path in sorted(set(paths)):
+        size = len(path) + 1
+        if size > _MAX_PATHSPEC_CHARACTERS:
+            raise ValueError(f"Git pathspec is too long to list safely: {path!r}")
+        if current and characters + size > _MAX_PATHSPEC_CHARACTERS:
+            batches.append(tuple(current))
+            current = []
+            characters = 0
+        current.append(path)
+        characters += size
+    if current:
+        batches.append(tuple(current))
+    return batches
 
 
 class Checkout:
@@ -211,18 +232,7 @@ class Checkout:
         return set(listed.split("\0")) - {""}
 
     def committed_folders(self, owned: Sequence[str]) -> frozenset[str]:
-        """Which of these folders the commit holds, and every folder directly under `state/`.
-
-        One `git ls-tree` over the object database, so a folder a sparse checkout
-        left out is still seen, and nothing recurses: the cost is one entry per
-        folder named and one per child of `state/`, whatever those folders hold.
-        `state/` carries its slash, which lists what is inside it; an owned folder
-        carries none, which names the folder itself - with a slash it would list
-        its children, and the folder would read as absent. A child of `state/`
-        that holds a named folder is listed as that folder and not as itself,
-        because git walks into it to reach the name - so the sweep never reads a
-        folder holding another task's folder as its own to take.
-        """
+        """Which exact configured folders the commit holds, without listing their children."""
         listed = self.git(
             "ls-tree",
             "-d",
@@ -230,34 +240,25 @@ class Checkout:
             "-z",
             "HEAD",
             "--",
-            f"{STATE_DIRNAME}/",
             *(folder.rstrip("/") for folder in owned),
         )
         return frozenset(listed.split("\0")) - {""}
 
-    def list_files(self, folders: Sequence[str]) -> list[TreeEntry]:
-        """Every file the commit holds under these folders, with git's size where it has one.
+    def list_files(self, paths: Sequence[str]) -> list[TreeEntry]:
+        """Every file under these named period paths, with git's size where it has one.
 
-        One `git ls-tree -r -l`, which reads trees and never a file: a file the
-        clone never downloaded is named with no size, because git prints `BAD`.
+        Bounded groups of pathspecs keep the command below Windows' process
+        limit. Each call reads trees and never file contents: a file the clone
+        never downloaded is named with no size, because git prints `BAD`.
         """
-        if not folders:
+        if not paths:
             return []
-        return parse_tree(self.git("ls-tree", "-r", "-l", "-z", "HEAD", "--", *folders))
-
-    def folder_trees(self, folders: Sequence[str]) -> dict[str, str]:
-        """The tree id the commit holds at each of these folders, by folder."""
-        if not folders:
-            return {}
-        listed = self.git(
-            "ls-tree", "-d", "-z", "HEAD", "--", *(folder.rstrip("/") for folder in folders)
-        )
-        trees: dict[str, str] = {}
-        for record in listed.split("\0"):
-            if record:
-                described, path = record.split("\t", 1)
-                trees[path] = described.split()[2]
-        return trees
+        found = {
+            entry.path: entry
+            for batch in _pathspec_batches(paths)
+            for entry in parse_tree(self.git("ls-tree", "-r", "-l", "-z", "HEAD", "--", *batch))
+        }
+        return [found[path] for path in sorted(found)]
 
     def widen(self, entries: Sequence[str]) -> None:
         """Add these folders, or the files beside these files, to the sparse checkout.
@@ -426,33 +427,18 @@ def publish(
     return EXIT_PUSH_KEPT_LOSING
 
 
-def find_the_swept_folders(
-    names: Sequence[str],
-    settings: GardenerSettings,
-    repo_root: Path,
-    committed: frozenset[str],
-) -> list[str]:
-    """Every folder the commit holds that this shard's complement task sweeps.
-
-    The plan job cannot name them: they are the folders under `state/` that no
-    declaration and no ledger claims, and only the commit says what is there.
-    """
-    swept: set[str] = set()
-    for name in names:
-        if settings.tasks[name].owns is None:
-            swept.update(runner.folders_of(name, settings.tasks, repo_root, committed).walk)
-    return sorted(swept)
-
-
 def read_the_listing(
-    checkout: Checkout, repo_root: Path, folders: Sequence[str], trees: TreeReader | None
+    checkout: Checkout,
+    repo_root: Path,
+    folders: Sequence[str],
+    period_paths: Sequence[str],
+    trees: TreeReader | None,
 ) -> FileListing:
-    """Every file the commit holds under these folders, each with its size, downloading none.
+    """Every file the commit holds under these named period paths, with its size.
 
     Git's size where the clone holds the file. For one it never downloaded,
-    GitHub's trees API is asked once for each listed folder that holds one, and
-    its sizes are matched to git's names by blob id; a full clone never asks.
-    `trees` stands in for that API, and None reaches it for this repository.
+    GitHub's blob API is asked for that named file and its size is matched by
+    blob id. `trees` stands in for that API, and None reaches it for this repo.
 
     The checkout is widened only by a file the commit lists, a folder above one,
     or a name directly inside such a folder - a file an earlier task of the
@@ -460,22 +446,17 @@ def read_the_listing(
     widens it where the commit holds nothing.
     """
     chosen = sorted(set(folders))
-    entries = checkout.list_files(chosen)
-    unsized = [entry.path for entry in entries if entry.size is None]
+    named = sorted(set(period_paths))
+    entries = checkout.list_files(named)
+    unsized = [entry.blob for entry in entries if entry.size is None]
     sizes: dict[str, int] = {}
     if unsized:
-        held = checkout.folder_trees(chosen)
-        asked = [
-            tree
-            for folder, tree in sorted(held.items())
-            if any(path.startswith(f"{folder}/") for path in unsized)
-        ]
         api = trees if trees is not None else github_collections.api_of_this_repository()
-        sizes = sizes_from_github(api, asked)
-    named = {entry.path for entry in entries}
+        sizes = sizes_from_github(api, unsized)
+    listed = {entry.path for entry in entries}
     above = {
         parent.as_posix()
-        for path in named
+        for path in listed
         for parent in PurePosixPath(path).parents
         if parent.parts
     }
@@ -484,7 +465,7 @@ def read_the_listing(
         stray = [
             entry
             for entry in wanted
-            if entry not in named
+            if entry not in listed
             and entry not in above
             and PurePosixPath(entry).parent.as_posix() not in above
         ]
@@ -502,7 +483,7 @@ def declared_folders(
     names: Sequence[str], settings: GardenerSettings
 ) -> tuple[list[str], list[str]]:
     """The folders these tasks own, and the ones they only read, each sorted."""
-    owned = sorted({folder for name in names for folder in settings.tasks[name].owns or ()})
+    owned = sorted({folder for name in names for folder in settings.tasks[name].owns})
     read = sorted({folder for name in names for folder in settings.tasks[name].reads})
     return owned, read
 
@@ -523,6 +504,7 @@ def run_and_land(
     run_id: str,
     attempt: int,
     shard: int,
+    period_range: tuple[str, str] | None = None,
     package: ModuleType = shipped_tasks,
     trees: TreeReader | None = None,
     clock: Callable[[], datetime] = runner.utc_now,
@@ -530,8 +512,7 @@ def run_and_land(
 ) -> Outcome:
     """Read the commit's names, run the shard, and land what it hands back; the worst code wins.
 
-    The listing covers every folder the shard's tasks own or read, and the ones
-    the complement task sweeps, which only the commit can name. A listing that
+    The listing covers only the named periods each task may read. A listing that
     cannot be read runs no task and lands nothing, and the shard exits 1, so the
     next wake tries again. A deletion of a file the commit did not list lands
     nothing either: a task decided it from something other than the commit.
@@ -541,11 +522,29 @@ def run_and_land(
     if sha is None:
         say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+    if period_range is not None and len(names) != 1:
+        say("a named period range runs one task, not a shard")
+        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+    started_at = clock()
     owned, read = declared_folders(names, settings)
     committed = checkout.committed_folders([*owned, *read])
-    swept = find_the_swept_folders(names, settings, repo_root, committed)
     try:
-        listing = read_the_listing(checkout, repo_root, [*owned, *read, *swept], trees)
+        paths = sorted(
+            {
+                path.relative_to(repo_root).as_posix()
+                for name in names
+                for path in paths_for_task(
+                    repo_root,
+                    name,
+                    settings.tasks[name],
+                    period_range
+                    if period_range is not None
+                    else scheduled_range(name, settings.tasks[name], started_at.date()),
+                    today=started_at.date(),
+                )
+            }
+        )
+        listing = read_the_listing(checkout, repo_root, [*owned, *read], paths, trees)
     except (OSError, RuntimeError, ValueError) as refusal:
         say(
             f"shard {shard}: the files under its folders could not be listed, so no task "
@@ -561,10 +560,12 @@ def run_and_land(
         shard=shard,
         git_sha=sha,
         committed_folders=committed,
-        cone_bytes=folder_weights(listing, [*owned, *swept]),
+        cone_bytes=None,
         listing=listing,
+        period_range=period_range,
         package=package,
         clock=clock,
+        started_at=started_at,
         say=say,
     )
     if ran.landing is None:
@@ -587,11 +588,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     gardener_cli.add_the_run(parser)
+    parser.add_argument("--from", dest="from_period")
+    parser.add_argument("--to", dest="to_period")
     args = parser.parse_args(argv)
     settings = gardener_cli.settings_or_none(args.config)
     if settings is None:
         return EXIT_INTEGRITY
     names, shard = gardener_cli.chosen(settings, args, parser)
+    selected_range = gardener_cli.period_range(settings, args, parser)
     outcome = run_and_land(
         names,
         settings=settings,
@@ -599,6 +603,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_id=args.run_id,
         attempt=args.attempt,
         shard=shard,
+        period_range=selected_range,
     )
     return outcome.exit_code
 

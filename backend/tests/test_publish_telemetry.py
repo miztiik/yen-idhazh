@@ -185,7 +185,7 @@ def test_the_writer_and_the_deleter_name_one_file(tmp_path: Path) -> None:
     written = publish(state_root=state, public_root=public, months={"2026-08"})
 
     assert written == [shard_path(public, "2026-08")]
-    assert retention.month_shards(public) == written
+    assert retention.month_shards(public, {"2026-08"}) == written
     assert shard_relpath("2026-08") == "frontend/public/telemetry/2026-08.csv"
     assert shard_path(DEFAULT_PUBLIC_ROOT, "2026-08").relative_to(
         REPO_ROOT

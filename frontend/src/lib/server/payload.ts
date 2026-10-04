@@ -24,6 +24,7 @@ import { settled } from '../feed-health';
 import { publishedVisual, refusedDrawing } from '../payload/drawing';
 import { dropVectors, coverageOf } from '../payload/project';
 import type { DigestDay, DigestItem, SeededVisual } from '$lib/payload/types';
+import { feedHealthRows } from './ledger-rows';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
 export const REPO_ROOT = resolve(process.cwd(), '..');
@@ -281,8 +282,7 @@ export interface DayShellSplit {
 	 *
 	 * A shell built with this is not one to put back together: a kept story moves
 	 * forward into the seed, so `[...seed, ...rest]` is the same set in a
-	 * different order. `wholeDay` is for the routes that still inline everything,
-	 * and none of them keeps anything.
+	 * different order. A reader must restore the reading order after joining them.
 	 */
 	keep?: Iterable<string>;
 	/** Where the committed days are read from. */
@@ -395,18 +395,6 @@ export function homeShell(
 	const day = loadDay(date, root);
 	if (!day) return null;
 	return dayShell(date, seedItems, { keep: (day.leads ?? []).map((lead) => lead.item_id), root });
-}
-
-/** The two halves back together.
- *
- * The home page still renders the whole day inline, so this is what its `load`
- * returns. The dated routes stopped calling it: they keep a seed and let the
- * browser fetch the remainder.
- *
- * Only for a shell split with nothing kept out of order (see `DayShellSplit`).
- */
-export function wholeDay(shell: DayShell): DigestDay {
-	return { ...shell.facts, items: [...shell.seed, ...shell.rest] };
 }
 
 /** The cells of a CSV, quoting and all.
@@ -831,32 +819,33 @@ export interface FeedResult {
 	detail: string;
 }
 
-/** Feed results from the newest `days` day files, one per feed per run, oldest first.
+/** Feed results from the newest `days` packed days, one per feed per run, oldest first.
  *
- * Filed by day under `state/feed-health/<YYYY>/<MM>/<DD>.csv`, so this reads a
- * tree rather than a file - through `readDayShards`, so the cover is the one
- * every day-filed ledger takes. Absent is the ordinary state of a fresh clone:
- * no run has written a record yet, and no record is exactly what an empty list
- * says.
+ * Read from the feed record's packed files through `feedHealthRows`, so it
+ * stops at the newest packed day as the console's other packed records do. A
+ * record not packed yet is the ordinary state of a fresh clone, and no record
+ * is exactly what an empty list says.
  *
  * Settled here, at the one read every console panel shares, rather than in each
- * panel. A repeat is a second attempt at one run writing a second account of
- * one event, and a panel that counted both would count that run twice. Doing it
- * once is also what stops two panels disagreeing about the same feed.
+ * panel. A packed day already holds one row per feed per run, settled under the
+ * ledger's own preference, so on a packed read this keeps every row; it is the
+ * same rule, and doing it here once is what stops two panels disagreeing about
+ * the same feed.
  */
-export function feedResults(days: number = LEDGER_WINDOW_DAYS): FeedResult[] {
-	const found: FeedResult[] = readDayShards(join(STATE_ROOT, 'feed-health'), days).rows.map(
-		(row) => ({
-			runId: row.run_id ?? '',
-			date: row.date ?? '',
-			feedId: row.feed_id ?? '',
-			checkedAt: row.checked_at ?? '',
-			outcome: row.outcome ?? '',
-			status: row.status ? Number(row.status) : null,
-			items: Number(row.items ?? 0) || 0,
-			detail: row.detail ?? ''
-		})
-	);
+export async function feedResults(
+	days: number = LEDGER_WINDOW_DAYS,
+	root: string = STATE_ROOT
+): Promise<FeedResult[]> {
+	const found: FeedResult[] = (await feedHealthRows(days, root)).rows.map((row) => ({
+		runId: row.run_id ?? '',
+		date: row.date ?? '',
+		feedId: row.feed_id ?? '',
+		checkedAt: row.checked_at ?? '',
+		outcome: row.outcome ?? '',
+		status: row.status ? Number(row.status) : null,
+		items: Number(row.items ?? 0) || 0,
+		detail: row.detail ?? ''
+	}));
 	return settled(found);
 }
 

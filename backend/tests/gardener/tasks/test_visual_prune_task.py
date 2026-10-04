@@ -60,10 +60,23 @@ def test_a_dry_run_files_its_report_through_the_ledger_door(tmp_path: Path) -> N
     assert identity.producer == "gardener.tasks.visual_prune"
 
 
+def test_an_operator_range_reports_only_its_named_days(tmp_path: Path) -> None:
+    root = build(tmp_path / "checkout")
+
+    run_task(NAME, root, dry_run=True, period_range=("2026-10-20", "2026-10-20"))
+
+    (row,) = ledger.load_visual_prunes(root / ledger.STATE_DIRNAME)
+    assert (row.window_start, row.window_end, row.candidates_found) == (
+        "2026-10-20",
+        "2026-10-20",
+        1,
+    )
+
+
 def test_a_second_pass_by_one_execution_is_one_report(tmp_path: Path) -> None:
     """One execution writing one work unit twice leaves one row: the reader keeps the later."""
     for n in range(3):
-        a_picture(tmp_path, date(2020, 1, 1), f"p-{n:010d}.json")
+        a_picture(tmp_path, date(2026, 10, 20), f"p-{n:010d}.json")
 
     first = run_task(NAME, tmp_path, dry_run=False, max_deletes_per_run=2)
     second = run_task(NAME, tmp_path, dry_run=False, max_deletes_per_run=2)
@@ -77,7 +90,7 @@ def test_the_log_names_what_the_fuse_held_back(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     for n in range(3):
-        a_picture(tmp_path, date(2020, 1, 1), f"p-{n:010d}.json")
+        a_picture(tmp_path, date(2026, 10, 20), f"p-{n:010d}.json")
 
     with caplog.at_level(logging.INFO):
         run_task(NAME, tmp_path, dry_run=False, max_deletes_per_run=2)
@@ -97,7 +110,7 @@ def test_a_tree_the_commit_does_not_hold_is_neither_walked_nor_reported(
 def test_a_window_of_forever_takes_nothing_and_still_reports_the_backlog(
     tmp_path: Path,
 ) -> None:
-    kept = a_picture(tmp_path, date(2020, 1, 1))
+    kept = a_picture(tmp_path, date(2026, 10, 20))
 
     outcome = run_task(NAME, tmp_path, dry_run=False, window={"unit": "forever"})
 
@@ -105,7 +118,7 @@ def test_a_window_of_forever_takes_nothing_and_still_reports_the_backlog(
     assert kept.exists()
     assert outcome.taken == ()
     assert (row.policy_months, row.cutoff_date, row.candidates_found) == (-1, None, 0)
-    assert row.oldest_kept == "2020-01-01"
+    assert row.oldest_kept is None
 
 
 @pytest.mark.parametrize(
@@ -118,7 +131,7 @@ def test_a_window_of_forever_takes_nothing_and_still_reports_the_backlog(
 def test_the_declaration_names_one_tree_and_a_fuse(
     changed: dict[str, Any], tmp_path: Path
 ) -> None:
-    a_picture(tmp_path, date(2020, 1, 1))
+    a_picture(tmp_path, date(2026, 10, 20))
 
     with pytest.raises(ValueError, match="owns exactly one folder and names a"):
         run_task(NAME, tmp_path, dry_run=False, **changed)

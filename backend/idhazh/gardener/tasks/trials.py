@@ -29,7 +29,7 @@ def run(context: TaskContext) -> Pass:
     from datetime import timedelta
 
     from idhazh import ledger, retention
-    from idhazh.gardener import named_trees, retention_files
+    from idhazh.gardener import named_trees, period_inputs, retention_files
 
     first_kept = retention_files.first_kept_day(
         context.policy.window,
@@ -37,6 +37,14 @@ def run(context: TaskContext) -> Pass:
         days_back=lambda days: context.today - timedelta(days=days - 1),
     )
     roots = [context.repo_root / folder for folder in context.owned_folders]
+    period_range = context.period_range or period_inputs.scheduled_range(
+        "trials", context.policy, context.today
+    )
+    named_days = (
+        set(period_inputs.periods_in_range(period_range)[0])
+        if period_range is not None
+        else set()
+    )
 
     def aged() -> list[retention_files.Aged]:
         if first_kept is None:
@@ -45,14 +53,18 @@ def run(context: TaskContext) -> Pass:
         for root in roots:
             for path in named_trees.files_named(context.listing, root):
                 written = retention.trial_day(path.relative_to(root).as_posix())
-                if written is not None and written < first_kept:
+                if written is not None and written in named_days and written < first_kept:
                     found.append(retention_files.Aged(path=path, day=written.isoformat()))
         return found
 
+    candidates = aged()
     outcome = retention_files.take_files(
-        context, aged(), collection=ledger.STATE_DIRNAME, first_kept=first_kept
+        context, candidates, collection=ledger.STATE_DIRNAME, first_kept=first_kept
     )
     if not context.policy.dry_run:
+        deleted = [context.repo_root / path for path in outcome.taken]
         for root in roots:
-            retention.drop_empty_directories(root)
+            retention.drop_empty_directories(
+                root, (path for path in deleted if path.is_relative_to(root))
+            )
     return outcome

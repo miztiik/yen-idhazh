@@ -107,6 +107,12 @@ lives in `frontend/scripts/test-scope.ts`; the group inventory lives beside it
 in `test-groups.ts`. CI uses that same selector for its browser/console choice,
 keeps the full backend suite, and runs all frontend groups on a `main` push that
 carries code.
+
+Build-independent machine arithmetic (`console-host-spans`, `console-machine-cards`,
+`console-machine-split`, `console-machine`) and token-file checks belong to
+`logic`, despite their filenames. A change confined to one of those specs needs
+no canary build or preview server. Checks that read built HTML or canary ledgers
+remain in their build-dependent groups.
 The selector job and the backend test job declare the same Node version,
 because the workflow tests execute that TypeScript selector. The backend job
 does not install frontend packages for it; the selector uses Node's built-ins.
@@ -123,7 +129,7 @@ second thing to keep correct. `ciAnswer` in `test-scope.ts` is the one place
 that decides, and the truth table is in
 `frontend/scripts/tests/test-scope.test.mjs`.
 
-`ciAnswer` returns six answers. **`code` says whether the change carries
+`ciAnswer` returns seven answers. **`code` says whether the change carries
 anything but documentation, and `gates` and `site` skip when it does
 not** - a changed sentence cannot break an application check, on a branch or on
 a merge. **`robots` says whether the change selects
@@ -141,13 +147,23 @@ carrying code, and any change to the contracts, the tooling or a committed
 payload under `frontend/public/`, open all of them; every other change opens
 none.
 
-**`panels` buys the panel pictures and the sufficiency gates** whenever `console`
+**`model_absent` buys the second site build with model assets removed.**
+Every code push to `main` runs it. On a pull request, backend-only changes,
+test-only changes, and changes confined to console routes, charts, data helpers
+or styles skip it. Asset loading, build tooling, contracts, config and unknown
+inputs still run it.
+
+**`panels` buys the sufficiency gates** whenever `console`
 is bought, and also for anything every panel is drawn from: the panel frame and
 readout strip, the chart modules, the stylesheets, `config/appearance.json`, and
 the pictures' own specs, fixture and helpers. The browser job sets
-`SKIP_PANELS_SUITE` from it, and uploads what the group drew as the
-`panel-captures` artefact on a pass or a fail - a picture that exists only on a
-red run is one nobody can read on the run a reviewer is asked to approve. The
+`SKIP_PANELS_SUITE` from it. Routine CI also sets `SKIP_PANEL_CAPTURES=true`,
+so it retains the sufficiency checks without generating review pictures.
+For a design review, dispatch CI on the review branch with `panel_captures=true`.
+That run uploads the `panel-captures` artifact on a pass or a fail. Locally,
+prepare the canary build, then run
+`npx playwright test --project panels tests/panel-captures.spec.ts`.
+Leave `SKIP_PANEL_CAPTURES` unset for that command. The
 pictures land in `frontend/test-results/panels/` as
 `<panel-id>--<width>--<theme>--<state>.png` - every width in light and the
 narrowest in dark, since width moves layout and theme moves colour - and each capture test writes one
@@ -155,6 +171,11 @@ narrowest in dark, since width moves layout and theme moves colour - and each ca
 the share of the panel's width its plots cover, and the test's own run time. The
 argument for the wider set is in
 [../reference/test-selection.md](../reference/test-selection.md).
+
+The browser job also uploads `browser-results`, a Playwright JSON report with
+each test's group, file, result and duration. Compare equivalent runs using this
+report before removing more checks. Test durations sum worker time, not elapsed
+job time.
 
 **A push to `main` keeps the run it started.** A pull request cancels its own
 older run, because a newer commit supersedes it. A push does not, and the two
@@ -743,8 +764,9 @@ feed-health rows and the score rows are all written by `build_canary_day.py`.
 The item-health and machine rows are made by `build:canary` as CSV beside the
 state tree, and `build_canary_day.py --file-fixture-rows` files them through the
 ledger door, which validates every row against its contract. The fixture then
-packs the item-health, summary-quality-evals and host-fingerprint ledgers with their own
-compaction tasks turned live, because the console reads only packed days. The
+packs the item-health, summary-quality-evals, host-fingerprint and feed-health
+ledgers with their own compaction tasks turned live, because the console reads
+only packed days. The
 score rows are shaped for the compression plot rather than picked at random -
 eight items from 38 to 6100 source words, so the log x axis spans four decades,
 and each of the five configured target zones has at least one mark under it.

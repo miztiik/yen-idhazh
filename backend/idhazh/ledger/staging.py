@@ -74,10 +74,9 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.FEED_HEALTH: LedgerStaging(
         writer=(
-            "idhazh.ledger.rows.write_segment, called with LedgerName.FEED_HEALTH by "
-            "`python -m idhazh plan`"
+            "idhazh.ledger.persist, called by idhazh.stages.plan.stage_plan and the canary"
         ),
-        symbol="idhazh.ledger.rows.write_segment",
+        symbol="idhazh.ledger.persist",
         job_labels=frozenset({"plan"}),
     ),
     LedgerName.ITEM_HEALTH: LedgerStaging(

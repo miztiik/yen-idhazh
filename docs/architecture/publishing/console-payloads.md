@@ -33,7 +33,7 @@ Every path below is under `frontend/public/`. Every shape is a contract under `b
 `feed-health/<YYYY-MM>.csv` were published for fourteen months each and no route
 ever fetched either - the console read both ledgers under `state/` at build time
 and always did. Today `evalRows` reads the eval ledger's packed files and
-`feedResults` the day files under `state/feed-health/`. The
+`feedResults` the feed record's. The
 published trees, their two projections and their two schemas are gone; the
 ledgers stay. What that removes from this page is the twelfth dataset and the
 twelfth reader, not a source the console needs.
@@ -136,7 +136,7 @@ day the run is publishing, and every projection's body stays in its own module
 
 | Producer | Writes | Reads |
 | --- | --- | --- |
-| `console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, the newest day's item-health rows and its day-metrics record, the host-fingerprint days over the widest window - both ledgers through `ledger.load_days` - and the newest day's `run.json` |
+| `console_band.py` | `console/band.json` | the run-day shards it wrote, the feed-health days over the widest window through `ledger.load_health`, the newest day's item-health rows and its day-metrics record, the host-fingerprint days over the widest window - all three ledgers through `ledger.load_days` - and the newest day's `run.json` |
 | `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
 | `machine.py` | `machine/<YYYY-MM>.csv` | one month of the item-health and host-fingerprint ledgers, through `ledger.load_days` |
@@ -188,7 +188,7 @@ TypeScript one. Two things about where it reads from:
  day payloads is the walk those shards exist to remove, and reading them makes
  the band and the console arithmetically identical rather than merely intended
  to be.
-- **The feed trouble comes from `state/feed-health/` through `discover.settled`,
+- **The feed trouble comes from the feed-health ledger through `discover.settled`,
  `discover.streak` and `discover.resting`** - the reducers the pipeline itself
  rested a feed by. A page running its own copy is how a console starts
  contradicting the run that produced it.
@@ -270,7 +270,7 @@ payloads, `day-metrics` has no age on the state side, and
 **`public_scores_keep_months` and `public_feed_health_keep_months` were two more
 until 2026-09-16.** They are refused by name now rather than ignored, because a
 config file still spelling one is an operator believing a number nothing reads.
-There is no successor to send them to: the `compact-summary-quality-evals` and `feed-health`
+There is no successor to send them to: the `compact-summary-quality-evals` and `compact-feed-health`
 declarations under `config/gardener/` govern the `state/` ledgers, which are
 still there and keep their own ages.
 
@@ -489,12 +489,12 @@ would count every item of that day twice. A list keyed by item id draws one
 story twice, which is how this surfaced: `MemoryBoard.svelte` threw on a repeated
 key. The packing settles each day under the ledger's own key and preference in
 `backend/idhazh/ledger/keys.py` before it writes the day's file, so
-`itemHealthRows` and `evalRows` in `frontend/src/lib/server/ledger-rows.ts` read
-days that already hold one row per item per run, or one per scored measurement.
-The frontend holds no key and no rule: a second settle there would be a second
-rule for one question. `feedResults` is the one reader here that still settles,
-with `settled` from `frontend/src/lib/feed-health.ts`, because `state/feed-health/`
-is still CSV day files.
+`itemHealthRows`, `evalRows` and `feedHealthRows` in `frontend/src/lib/server/ledger-rows.ts` read
+days that already hold one row per item per run, one per scored measurement, or
+one per feed per run. Those readers hold no key and no rule: a second settle
+there would be a second rule for one question. `feedResults` still passes the
+feed rows through `settled` from `frontend/src/lib/feed-health.ts`, the same rule
+`discover.settled` runs, so on a packed day it keeps every row.
 
 **The panels stop at the newest packed day, never at today.** A day is packed
 once a whole day has passed since it ended, so the day a run is still

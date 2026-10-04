@@ -324,21 +324,25 @@ def _gardener_config(config_dir: Path) -> GardenerConfig:
 
 
 def _declarations(config_dir: Path, names: tuple[str, ...]) -> dict[str, TaskPolicy]:
-    """Only declarations named in the gardener config, in sorted order."""
+    """The configured declarations, by name, opened without listing their directory."""
     folder = config_dir / GARDENER_TASKS_DIR
     found: dict[str, TaskPolicy] = {}
     for name in sorted(names):
         path = folder / f"{name}{DECLARATION_SUFFIX}"
         where = f"config/{GARDENER_TASKS_DIR}/{path.name}"
-        if not path.is_file():
-            raise ValueError(f"{where} is missing; config/{GARDENER_FILE} names it in task_names")
-        if not _A_TASK_NAME.fullmatch(path.stem):
+        if not _A_TASK_NAME.fullmatch(name):
             raise ValueError(
-                f"{where} is refused: a task is named by its file, and {path.stem!r} is "
+                f"{where} is refused: a task is named by its file, and {name!r} is "
                 "not a lower-case word or words joined by hyphens"
             )
+        if not path.is_file():
+            raise ValueError(f"{where} is missing; config/{GARDENER_FILE} names it in task_names")
         try:
             found[path.stem] = _TASK_POLICY.validate_json(path.read_text(encoding="utf-8"))
+        except FileNotFoundError as error:
+            raise ValueError(
+                f"{where} is refused: this configured task declaration is missing"
+            ) from error
         except ValidationError as error:
             raise ValueError(f"{where} is refused: {error}") from error
     return found
@@ -353,7 +357,7 @@ def refuse_what_the_declarations_break(
 ) -> None:
     """Every rule the declarations must keep that needs no task module to check."""
     _refuse_overlapping_claims(tasks)
-    _refuse_a_second_complement(tasks)
+
     _refuse_a_file_where_a_folder_belongs(tasks, repo_root)
     _refuse_a_window_under_its_floor(tasks, app)
     _refuse_a_series_the_task_cannot_keep(tasks)
@@ -397,12 +401,12 @@ def _refuse_overlapping_claims(tasks: Mapping[str, TaskPolicy]) -> None:
 
     Every status takes part. A paused task still owns what it owns, and a retired
     one keeps its claim so its window stays readable after its tree has moved.
-    The complement form is left out on purpose: it is everything nothing else
-    claims, so it holds every other task's folders by definition.
+    Every task names its folders directly. A task cannot claim an accumulating
+    parent and discover its children at run time.
     """
     for (first, one), (second, other) in combinations(tasks.items(), 2):
-        for mine in one.owns or ():
-            for theirs in other.owns or ():
+        for mine in one.owns:
+            for theirs in other.owns:
                 if _nested(mine, theirs):
                     raise ValueError(
                         f"config/{GARDENER_TASKS_DIR}/{first}.json owns {mine} and "
@@ -410,16 +414,6 @@ def _refuse_overlapping_claims(tasks: Mapping[str, TaskPolicy]) -> None:
                         "tasks may not own one folder or a folder inside the other's, "
                         "whatever their status, or both would delete in it"
                     )
-
-
-def _refuse_a_second_complement(tasks: Mapping[str, TaskPolicy]) -> None:
-    using = sorted(name for name, policy in tasks.items() if policy.owns is None)
-    if len(using) > 1:
-        raise ValueError(
-            f"{', '.join(using)} all own everything else under a root. One task may take "
-            "the complement; two would each claim what the other claims"
-        )
-
 
 def _refuse_a_file_where_a_folder_belongs(tasks: Mapping[str, TaskPolicy], repo_root: Path) -> None:
     """A shard lists the files under each folder a task owns, so an owned file would list none."""
@@ -538,7 +532,7 @@ def _governing(
         return name, compaction
     folder = "/".join((STATE_DIRNAME, *entry(ledger).prefix))
     for task, policy in tasks.items():
-        if isinstance(policy, RetentionPolicy) and folder in (policy.owns or ()):
+        if isinstance(policy, RetentionPolicy) and folder in policy.owns:
             return task, policy
     return None
 
@@ -841,12 +835,6 @@ def _refuse_a_compaction_that_cuts_its_ledger(
         raise ValueError(
             f"{where} compacts {ledger.value}, and a compaction is named for its ledger: "
             f"call it compact-{ledger.value}.json"
-        )
-    if policy.raw_index_keep_days < policy.daily_keep_days:
-        raise ValueError(
-            f"{where} keeps raw_index_keep_days {policy.raw_index_keep_days} and "
-            f"daily_keep_days {policy.daily_keep_days}. The raw index must outlive the "
-            "daily period, which may still need it to rebuild a daily file"
         )
     reach = _reach(policy)
     if ledger in app.ledger.published:

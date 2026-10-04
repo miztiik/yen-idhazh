@@ -30,7 +30,8 @@ import { viewsOf } from './support/views';
  * `panel-sufficiency.spec.ts`. This file makes the pictures and proves each one
  * is whole. Files are `<panel-id>--<width>--<theme>--<state>.png` under
  * `frontend/test-results/panels/`, so one panel at one width in one theme from
- * two runs lands side by side in a listing. `ci.yml` uploads the folder.
+ * two runs lands side by side in a listing. An explicit CI design-review run
+ * uploads the folder; routine CI skips this spec.
  *
  * **What makes an image whole.** A chart draws only once it is near the
  * window, so every panel is walked into view and the page is left to finish
