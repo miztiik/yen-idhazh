@@ -1310,25 +1310,6 @@ test('the candle reads out its day and every series at that column', async ({ pa
 	);
 });
 
-test('the old evals route moves bookmarks to the console', async ({ page }) => {
-	await page.goto('/evals/');
-
-	await expect(page).toHaveURL(/\/console\/$/);
-	await expect(page.getByRole('heading', { name: 'Console' })).toBeVisible();
-});
-
-test('the evals entry point keeps a no-JS link to the console', () => {
-	const page = readFileSync(resolve(process.cwd(), 'src', 'routes', 'evals', '+page.svelte'), 'utf8');
-
-	expect(page).toContain('http-equiv="refresh"');
-	expect(page).toContain('<link rel="canonical" href={consoleHref} />');
-	expect(page).toContain('<a href={consoleHref}');
-	expect(page).not.toContain('evalRows');
-	// The stub is a redirect, not a second dashboard. Two surfaces counting one
-	// ledger disagree the moment one count changes.
-	expect(page).not.toContain('$lib/bands');
-});
-
 test('keyboard alone pans the viewport and steps its window through the presets', async ({
 	page
 }) => {

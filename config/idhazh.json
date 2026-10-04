@@ -267,8 +267,7 @@
   },
   "page_weight": {
     "ceilings_bytes": {
-      "/404": 4400,
-      "/evals/": 6600
+      "/404": 4400
     },
     "cold_console_load_bytes": 2300000,
     "payload_ceilings_bytes": {

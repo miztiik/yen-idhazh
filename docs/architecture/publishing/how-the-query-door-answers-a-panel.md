@@ -472,10 +472,8 @@ static import from each page's own module, and fails when a file on that path
 carries the package's name or the name of its wasm or its worker. It names the
 file, not the page.
 
-Checked 2026-09-28 against a build with three deliberate edits, reverted
-afterwards: a static import of the package into the archive page; the same, plus
-a static `?url` import of the wasm, into the evals page; and a `slice()` call from
-the front page. That build broke in its prerender (next paragraph), so the gate
+Checked 2026-09-28 against a build with deliberate static imports of the
+package and its wasm, and a `slice()` call from the front page, reverted afterwards. That build broke in its prerender (next paragraph), so the gate
 read the browser output the break leaves whole. It failed on two files - the chunk
 holding the package, and a one-line chunk holding the wasm's address - and neither
 is on the front page's static path. Neither is a page's own module either, so the

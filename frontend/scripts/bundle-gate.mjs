@@ -209,8 +209,7 @@ let failed = false;
  * publishes** (owner, 2026-09-10). `/archive/` and the three `/console/` routes
  * were named until then and are not now: they grow when the pipeline appends a
  * day, so the gate fired on ordinary publishing and the only way past it was to
- * type a bigger number. `/404` and `/evals/` move only when a person edits
- * source, so they stay.
+ * type a bigger number. `/404` moves only when a person edits source.
  *
  * config/idhazh.json decides what is guarded. A route it names is measured and
  * failed when it is over; a route it does not name is measured and printed
