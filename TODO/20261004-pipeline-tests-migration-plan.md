@@ -58,7 +58,7 @@ Table D - PR phases
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D1 | 1 | Reusable migration operations ship | - | A | DONE | - | - | phased-migration-tool |
+| D1 | 1 | Reusable migration operations ship | - | A | DONE #1265 | - | #1265 | phased-migration-tool |
 | D2 | 2 | Readers understand nested trial roots | 1 | B | PENDING | - | - | - |
 | D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | PENDING | - | - | - |
 | D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | PENDING | - | - | - |
