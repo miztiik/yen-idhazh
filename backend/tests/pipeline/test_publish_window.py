@@ -1240,12 +1240,11 @@ def test_the_run_records_the_scoring_shape_that_decided_its_order() -> None:
 def test_a_run_records_how_many_feeds_a_desk_could_ask_and_against_what_floor() -> None:
     """`below_feed_floor` alone says a desk went dark and neither number that decided it.
 
-    The manifest is the only committed record of a plan - `plan.json` is a
-    one-day artifact - so a reader looking at why a desk was absent has nothing
-    else to read. Both numbers are carried straight from the plan and computed
-    nowhere else, so the run that published cannot disagree with the run that
-    decided. A desk whose plan carried no floor writes null, which is unknown
-    rather than a floor of zero.
+    The manifest is the record a reader of the published day opens to see why a
+    desk was absent, so both numbers ride on it. Both are carried straight from
+    the plan and computed nowhere else, so the run that published cannot disagree
+    with the run that decided. A desk whose plan carried no floor writes null,
+    which is unknown rather than a floor of zero.
     """
     settings = config.load(CONFIG_DIR)
     base = plan()

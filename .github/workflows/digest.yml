@@ -53,6 +53,7 @@ jobs:
     outputs:
       date: ${{ steps.decide.outputs.date }}
       day_dir: ${{ steps.decide.outputs.day_dir }}
+      plan_dir: ${{ steps.decide.outputs.plan_dir }}
       shards: ${{ steps.fanout.outputs.shards }}
       matrix: ${{ steps.fanout.outputs.matrix }}
       shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
@@ -93,6 +94,8 @@ jobs:
           FAITH="${{ inputs.faithfulness }}"
           [ -n "$FAITH" ] || FAITH=true
           echo "day_dir=frontend/public/digest/${DATE//-//}" >> "$GITHUB_OUTPUT"
+          # The run-plan ledger's folder for this day: the plan job hands it on.
+          echo "plan_dir=state/raw/run-plan/${DATE//-//}" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
           echo "faithfulness=$FAITH" >> "$GITHUB_OUTPUT"
 
@@ -147,6 +150,7 @@ jobs:
           set -euo pipefail
           python -m idhazh fingerprint \
             --date "${{ steps.decide.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             --shard 0 \
             --job plan
@@ -159,7 +163,7 @@ jobs:
           SHARD_PATTERN='^[1-8]$'
           SHARDS="${{ inputs.shards }}"
           if [ -z "$SHARDS" ]; then
-            SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}")
+            SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}" --execution "${{ github.run_id }}")
             # Clamp derived counts to the dispatch range; reject invalid inputs below.
             while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do
               SHARDS=$((SHARDS - 1))
@@ -178,6 +182,7 @@ jobs:
           set -euo pipefail
           python -m idhazh job-clock \
             --date "${{ steps.decide.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             --job plan \
             --shard 0 \
@@ -197,12 +202,13 @@ jobs:
           state
           frontend/public/publication.json
 
-      # Upload an existing plan after failure; fail here if it is missing.
+      # Hand this day's run plans on even after a failed push; fail here if the plan
+      # stage wrote none. Later jobs pick their own run's plan by --execution.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: plan
-          path: backend/var/run/${{ steps.decide.outputs.date }}/plan.json
+          path: ${{ steps.decide.outputs.plan_dir }}/
           retention-days: 1
           if-no-files-found: error
 
@@ -246,7 +252,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: plan
-          path: backend/var/run/${{ needs.plan.outputs.date }}/
+          path: ${{ needs.plan.outputs.plan_dir }}/
 
       # Probe before the model server consumes memory and bandwidth.
       - name: What machine this job drew
@@ -254,6 +260,7 @@ jobs:
           set -euo pipefail
           python -m idhazh fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             --shard ${{ matrix.shard }} \
             --job work
@@ -303,6 +310,7 @@ jobs:
         run: |
           python -m idhazh work \
             --date "${{ needs.plan.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
             ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }}
@@ -319,6 +327,7 @@ jobs:
         run: |
           python -m idhazh record \
             --date "${{ needs.plan.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }}
@@ -356,6 +365,7 @@ jobs:
           set -euo pipefail
           python -m idhazh job-clock \
             --date "${{ needs.plan.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             --job work \
             --shard ${{ matrix.shard }} \
@@ -485,7 +495,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: plan
-          path: backend/var/run/${{ needs.plan.outputs.date }}/
+          path: ${{ needs.plan.outputs.plan_dir }}/
 
       # The probe needs the downloaded plan and an otherwise idle runner.
       - name: What machine this job drew
@@ -494,6 +504,7 @@ jobs:
           set -euo pipefail
           python -m idhazh fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             --shard 0 \
             --job assemble
@@ -516,6 +527,7 @@ jobs:
         run: |
           python -m idhazh assemble \
             --date "${{ needs.plan.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             --runner ubuntu-latest
 
@@ -573,6 +585,7 @@ jobs:
           REFRESH_PATHS: ${{ steps.derived.outputs.refresh_paths }}
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
+            --execution ${{ github.run_id }}
             --commit ${{ github.sha }} --runner ubuntu-latest
           DROP_RACED_ASSETS_COMMAND: >-
             python backend/utilities/drop_raced_assets.py

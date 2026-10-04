@@ -108,7 +108,7 @@ The shapes, and where each one lives once written:
 | `Sources` | `sources` | `config/sources.json` |
 | `Taxonomy` | `taxonomy` | `config/taxonomy.json` |
 | `Watchlist` | `watchlist` | `config/watchlist.json` |
-| `RunPlan` | `run-plan` | the day's work list under the run directory |
+| `RunPlan` | `run-plan` | one row of `state/raw/run-plan/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/run-plan/` |
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
