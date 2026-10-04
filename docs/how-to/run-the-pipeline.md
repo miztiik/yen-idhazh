@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -113,7 +113,7 @@ declaration, and this is the order:
  month that is not the oldest, means a boundary is wrong and the switch waits.
  The item-health and feed-health rows are not on that list: their compactions
  delete them, and a compaction's own list is read as
- [the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-dry-run-does-and-what-the-record-says)
+ [the compaction page](../architecture/publishing/ledger-compaction.md#what-a-dry-run-does-and-what-the-record-says)
  says. The eval rows are on no list at all, because nothing deletes one.
 4. `compact-summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so a
  live pass packs the eval rows into fewer files and drops none of them
