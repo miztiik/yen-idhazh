@@ -271,7 +271,7 @@
     },
     "cold_console_load_bytes": 2300000,
     "payload_ceilings_bytes": {
-      "config/ledgers.json": 3200,
+      "config/ledgers.json": 3400,
       "console/band.json": 2000,
       "state/compact/candidate-models/index/": 2200,
       "state/compact/counterfactual-scores/index/": 2200,
