@@ -47,6 +47,10 @@ failure, ordering and sibling totals need two. The
 timeout test keeps a real socket timeout of 60 ms; the stopwatch test keeps a
 real server wait of 50 ms. Both exercise the production path without changing
 production timeouts. Longer waits and unrelated items add cost, not coverage.
+Machine-card checks for flags, copy speed, clock and uptime, the resting
+disclosure and L3 ratios share one page visit with named steps. Each step keeps
+its assertions and fixture calculations. Theme, window, control and missing-data
+checks keep separate visits so a changed page cannot affect a resting-state check.
 
 **The second one was the larger cost, and selection would not have touched it.**
 The browser job is the critical path and the backend suite is small beside it
