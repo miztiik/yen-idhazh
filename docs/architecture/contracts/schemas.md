@@ -115,13 +115,6 @@ The shapes, and where each one lives once written:
 | `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one row of `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/summary-quality-evals/` |
-| `ObservationIndexRow` | `observation-index-row` | legacy CSV ID row, read only by the [explicit lookup migration](../../how-to/migrate-observation-lookup.md) |
-| `ObservationLookupRoot` | `observation-lookup-root` | `state/summary-quality-evals-index/lookup/root.json` |
-| `ObservationLookupPage` | `observation-lookup-page` | content-addressed JSON routing node under the lookup root |
-| `ObservationLookupReceipt` | `observation-lookup-receipt` | a batch entry inside a SQLite lookup leaf, not a standalone receipt file |
-| `ObservationLookupTransaction` | `observation-lookup-transaction` | ignored `lookup/.transaction.json` for local recovery |
-| `ObservationBatch` | `observation-batch` | committed `incoming/<batch-id>.json` and the original ignored job-local input |
-| `ObservationPreparation` | `observation-preparation` | an ignored per-job or named-recovery manifest under `backend/var/evaluation-inputs/` |
 | `SeenRow` | `seen-row` | one row of `state/raw/seen/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/seen/` |
 | `PublishedRow` | `published-row` | one row of `state/raw/published/<YYYY>/<MM>/<DD>/`, in the raw file the assemble job files through the ledger door, packed later under `state/compact/published/` |
 | `FeedHealthRow` | `feed-health-row` | one row of `state/raw/feed-health/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/feed-health/` |
@@ -144,7 +137,7 @@ The shapes, and where each one lives once written:
 | `CorpusRow` | `corpus-row` | one line of `corpus/corpus.jsonl` |
 | `CorpusMeta` | `corpus-meta` | `corpus/corpus.meta.json` |
 
-`state/` holds row-ledger contracts and whole-document contracts. The six lookup envelopes above are registered in `CONTRACTS` and have golden fixtures under `tests/fixtures/contracts/`. Their layout, identity and recovery rules live in [observation-lookup.md](observation-lookup.md). Which ledgers a later run reads back, and what each answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
+`state/` holds row-ledger contracts and whole-document contracts. Which ledgers a later run reads back, and what each answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
 `ItemHealthSummaryRow` describes a derived row: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored. What decides when a month is folded is the `full-grain` series of `config/gardener/telemetry-aggregate.json`, and its deletion safeguards are in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
@@ -221,7 +214,6 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| `state/summary-quality-evals-index/` | `lookup/root.json`, bounded JSON routing nodes and SQLite leaves | none: nothing in the pipeline reads it ([evaluation.md](../../concepts/evaluation.md#design-rationale)) | no time window ([observation-lookup.md](observation-lookup.md)) |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
@@ -254,10 +246,6 @@ The scan has to read every row, so every shard gets opened anyway - the same
 bytes through more file handles, plus a directory listing and a stem loop that a
 single `open` does not need. Splitting a file you always read whole makes it
 slower, not faster.
-
-An exact-key lookup is not a whole-history scan. Its incoming keys select
-[bounded digest-prefix leaves](observation-lookup.md#physical-layout), with no
-time window and no historical ID scan.
 
 Two consequences worth stating so nobody re-derives them:
 

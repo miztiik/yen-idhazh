@@ -53,11 +53,10 @@ A ledger that goes through the ledger door files under two roots rather than one
 
 ## Ledgers outside raw and compact
 
-[Telemetry intent](../../concepts/telemetry-intent.md) N1 and N11 still have the seven CSV ledgers below to move, and N6 still has the `merge=union` driver on five of them to retire. The evaluation ID lookup is also outside these roots, but it is JSON and SQLite rather than CSV, so it has nothing to move. The last column says what has to happen before a ledger can move; the list under the table explains each term.
+[Telemetry intent](../../concepts/telemetry-intent.md) N1 and N11 still have the seven CSV ledgers below to move, and N6 still has the `merge=union` driver on five of them to retire. The last column says what has to happen before a ledger can move; the list under the table explains each term.
 
 | Ledger under `state/` | Writer, under `backend/idhazh/` | What reads its rows, besides upkeep: backend under `backend/idhazh/`, console under `frontend/src/lib/server/` | Two writers on one file | What blocks its move |
 | --- | --- | --- | --- | --- |
-| `summary-quality-evals-index` | nothing in the pipeline; only `backend/utilities/migrate_observation_lookup.py`, a person's own run | nothing in the pipeline | cannot happen: no pipeline job writes it | nothing: it is not CSV |
 | `item-health-summary` | `gardener/tasks/telemetry_aggregate.py` | nothing yet | cannot happen: one writer rewrites a month whole | a whole-month file |
 | `content-similarity-judge/scored-pairs` | `stages/count_verdicts.py` | `stages/set_merge_line.py` | the union driver keeps both | the nested folder name; three fixed-choice fields; `run_id` and `shard` |
 | `content-similarity-judge/fitted-thresholds` | `stages/set_merge_line.py` | `stages/set_merge_line.py`, `similarity/applied.py`, `similarity-ledger.ts` | the union driver keeps both | the nested folder name; two fixed-choice fields; `run_id` |
@@ -79,12 +78,12 @@ Each piece goes with its last user. Two pieces have none left: no ledger has fil
 | --- | --- | --- | --- |
 | `ledger.write_segment`, `ledger.extend_segment` and `ledger.day_shard_relpath` in `ledger/rows.py`, with `DAY_TREES` in `contracts/ledger_name.py` and `_TREE_SHAPES` in `ledger/keys.py` | write one writer's CSV file into a day tree | none: `DAY_TREES` is empty | now |
 | `gardener/closed_day_fold.py`, and the fold branch in `gardener/runner.py` | fold a closed day's writer files into one `settled.csv` | none: no retention declaration has a `fold` | now |
-| `day_shards.py` | read CSV day files and settle their rows | the migrator, the canary builder (`backend/utilities/build_canary_day.py`), the closed-day fold, the gardener's file walks (`gardener/named_trees.py`, `gardener/retention_files.py`), `path_classes.py` and `evals/observation_migration.py` | the migrator and the fold are gone |
+| `day_shards.py` | read CSV day files and settle their rows | the migrator, the canary builder (`backend/utilities/build_canary_day.py`), the closed-day fold, the gardener's file walks (`gardener/named_trees.py`, `gardener/retention_files.py`) and `path_classes.py` | the migrator and the fold are gone |
 | `ledger.extend_ledger_file` in `ledger/csv_file.py` | append rows to one CSV day file | the writers of the five ledgers above with a union driver | those five have moved |
 | `readDayShards` in `frontend/src/lib/server/payload.ts` | read CSV day files when the site builds | `similarity-ledger.ts` and `similarity-holdout.ts` | `fitted-thresholds` and `merge-line-holdout-scores` have moved |
 | `backend/utilities/ledger_migration/` | declare and read the old CSV layouts, then plan, write, prove and retire named months; `backend/utilities/migrate_to_parquet.py` is the command | the next ledger to move | no ledger a program writes is left on CSV ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
 | the five `merge=union` lines in `.gitattributes`, and `path_classes.UNION_SAFE` | let two writers append to one CSV file | the five ledgers above with a union driver | each of those ledgers has moved |
-| `_TARGET_LEDGERS`, and the `summary-quality-evals-index` line of `REFUSED`, in `telemetry/prune.py` | name the CSV ledgers the prune verb reaches, and the one it refuses | the five ledgers above with a union driver, and the ID lookup | the five have moved, and a retention declaration can carry a `prune_refusal` |
+| `_TARGET_LEDGERS` in `telemetry/prune.py` | name the CSV ledgers the prune verb reaches | the five ledgers above with a union driver | the five have moved |
 
 **Eight CSV files belong to no ledger.** Runs that started before the span summary retired (#1189) wrote four under `state/span-rollup/2026/10/02/`, and two in the `span-rollup` folder of each of two trial roots. Nothing reads or writes that folder now.
 
@@ -226,11 +225,6 @@ A producer hands the ledger its rows and the identity of the writer, and the led
 
 One module outside may ask, and none may carry a copy. `backend/idhazh/path_classes.py` answers whether a committed path was written by exactly one writer, which it can only do by reading the pattern that minted the name - so that pattern is public for it, and inlining a second copy of it is the thing being refused.
 
-The [observation lookup](observation-lookup.md#physical-layout) is not a row-file
-writer. It obtains its registered folder through `tree_root`, then derives node
-and pending-input paths from validated digests inside that folder. Its own
-contract controls those names; it does not copy the ledger's row filename rule.
-
 ## Design rationale
 
 **The set of ledgers is a config file, not a Python set and not a glob.** Owner decision, 2026-09-26.
@@ -251,7 +245,7 @@ The config carries where each ledger lives and each family's lifecycle status. I
 
 **The field is `lifecycle_status`, not `state`.** `state` is already the name of the folder every ledger sits in, so `state: paused` in a file that describes `state/` reads as a claim about the folder. `lifecycle_status` says what it is - where in its life the family is - and no key in the file is named `state`. The Python enum is `LedgerLifecycleStatus`, so it cannot be mistaken for the `LifecycleStatus` that `contracts/taxonomy.py` uses for desks, lenses and feeds.
 
-**The eval ledger is `summary-quality-evals`, and its ID folder is `summary-quality-evals-index`.** Each row measures one summary's quality; `summary-quality` stays free for fitted quality thresholds. The ID folder has no retention task or day/month fold. Its registered root holds the [observation lookup](observation-lookup.md), which nothing in the pipeline writes or reads; the [evaluation design rationale](../../concepts/evaluation.md#design-rationale) says why.
+**The eval ledger is `summary-quality-evals`.** Each row measures one summary's quality; `summary-quality` stays free for fitted quality thresholds. Its ID folder, `summary-quality-evals-index`, was deleted on 2026-10-04 with the lookup it held; the [evaluation design rationale](../../concepts/evaluation.md#design-rationale) says why.
 
 **A family carries no owner field.** Owner decision, 2026-09-27. An owner would say who answers for a family. One identity commits to this repository (CLAUDE.md section 8), so the field would hold the same value on every family and tell a reader nothing. The code that answers for a family is found by a search for its `LedgerName` members, because a module that reads or writes a ledger names it by its member and by nothing else.
 

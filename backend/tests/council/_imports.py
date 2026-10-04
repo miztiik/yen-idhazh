@@ -54,8 +54,6 @@ MODULE_NAMES = (
     "idhazh.contracts.ledger_index",
     "idhazh.contracts.ledger_name",
     "idhazh.contracts.ledgers",
-    "idhazh.contracts.observation_index",
-    "idhazh.contracts.observation_lookup",
     "idhazh.contracts.run_manifest",
     "idhazh.contracts.seen",
     "idhazh.contracts.sources",

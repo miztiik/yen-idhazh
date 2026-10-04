@@ -232,8 +232,7 @@ reads are here and not how many. These are `backend/`'s;
 | `measure_retrieval.report` | every published day and every committed month shard | it asks whether the index names every published item. A window would compare the days inside it and say nothing about the ones outside, which is the only place a dropped item can hide. It is a verb a person types, off the daily path, and it was a gated test until 2026-09-22 |
 | `ledger_families.listing` | every file under every ledger's folder in `state/` | the question is how many files each ledger holds, and only a listing answers it. It is a verb a person types, off the daily path, and its test drives it from a registry and a state tree the test writes (2026-09-27) |
 | the gardener's `run-tasks` listing, `gardener_publish.read_the_listing` | the name and size of every file under the folders one shard's tasks own or read, from one `git ls-tree -r -l` over the commit, and for a file the clone never downloaded one GitHub trees API request per listed folder. No file content | a task deletes what its window no longer keeps, so it has to see every name it owns. What still grows is the number of names listed, one entry a file: measured 2026-09-30, the whole repository held 3,493 files and 980 of them under `state/`. What no longer grows with the tree is what the shard downloads: its checkout holds only code and config, and a task fetches only the day or month folders it reads. Every row carries that as `downloaded_bytes` beside the owned folders' weight as `cone_bytes`, and a shard over `max_downloaded_mb` - committed at 128, an estimate - exits 1 once its record has landed ([the reasoning](../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
-| `backend/utilities/migrate_observation_lookup.py`, through `evals.observation_migration.migrate` | all legacy index CSVs and all raw and compact evaluation files and metadata in the explicitly named state directory | the one-time cutover must preserve every legacy ID and add current keys recomputed from all retained rows; a date range cannot recover a legacy ID's missing date. Cost grows with those files and rows. Source validation precedes CSV removal; evaluation bytes are never rewritten. It requires the [approved cutover procedure](../how-to/migrate-observation-lookup.md), not a routine writer call |
-| `evals.writer.records` | every row of the eval ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row, `grader_length_bias.py` joins every row, and the explicit lookup migration checks settled-row semantics. Each is an operator pass, off the daily path |
+| `evals.writer.records` | every row of the eval ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row, and `grader_length_bias.py` joins every row. Each is an operator pass, off the daily path |
 | `data_wrangler.py refill`'s score read, `measure_ledgers.py`, and `server_memory_mark.py` when it names no day | every row of the ledger each one reads, through `ledger.load_ledger_rows` | each is an operator verb whose question is the whole history; none runs on the daily path |
 | `backend/utilities/ledger_migration/csv_files.py` | only CSV days in the named months of each named ledger, under the folder the `CSV_LEDGERS` table declares, in each named state root: `state/`, and any trial run's tree inside it | a migration moves every day in those months, once, and a CSV file that lands later is moved by running it again. The table, the program and its tests are deleted when no ledger is left on CSV: every entry in `config/ledgers.json` is `raw-and-compact`, and `--check` finds no CSV file under any root |
 
@@ -712,14 +711,13 @@ listing the task's window pass already makes over the same tree, and it has to:
 which days still hold a writer file is a question about every day. The listing
 reads names only, and its row is in the inventory above.
 
-**A tree nothing ever trims settles by the month.** The eval ledger's ID folder
-keeps every file for ever, so one `settled.csv` a closed day still grew it by 365
-files a year, and the dedupe opens every one of them on every run. Its task's
-fold settles each closed month into one `settled.csv` in the month's own folder
-once the month's last day is closed (`fold.settles_months`), so the folder grows
-by twelve files a year. A settled month's rows name no day, so only a tree whose
-window keeps whole months may settle one, and the loader refuses the switch
-beside a window of days.
+**A tree nothing ever trims settles by the month.** `fold.settles_months`
+settles each closed month into one `settled.csv` in the month's own folder once
+the month's last day is closed, so a tree that keeps every file for ever grows
+by twelve files a year rather than 365. The eval ledger's ID folder was its one
+user until that folder was deleted on 2026-10-04. A settled month's rows name
+no day, so only a tree whose window keeps whole months may settle one, and the
+loader refuses the switch beside a window of days.
 
 **The item-health, summary-quality-evals and host-fingerprint ledgers have left this count.**
 They moved to the ledger door, where each ledger's compaction, not this fold,

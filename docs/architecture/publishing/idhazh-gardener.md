@@ -413,8 +413,7 @@ the files it read. It changes no answer a reader gets
 
 **The retention task that owns each tree folds it**, when its declaration
 carries a `fold` block. No current task carries one: feed-health now uses the
-ledger door, and the [evaluation ID lookup](../contracts/observation-lookup.md)
-uses JSON and SQLite. Neither is a CSV day tree. A future fold can run only for
+ledger door, so it is not a CSV day tree. A future fold can run only for
 a ledger registered in `DAY_TREES`, and the task that owns that tree must own
 its folder. Which trees a task folds is read from the folders it walks, so one
 job writes each tree a wake and no tree is checked out twice. Other ledgers

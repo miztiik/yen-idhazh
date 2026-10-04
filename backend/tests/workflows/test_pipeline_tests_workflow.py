@@ -815,7 +815,7 @@ def test_the_check_has_nothing_to_refuse_when_nothing_arrived(tmp_path: Path) ->
     ("relative", "because"),
     [
         (
-            f"a-tenant/summary-quality-evals-index/{TEST_CASE_DAY_PATH}/{TEST_CASE_WRITER}",
+            f"a-tenant/item-health/{TEST_CASE_DAY_PATH}/{TEST_CASE_WRITER}",
             "no declared test case",
         ),
         (

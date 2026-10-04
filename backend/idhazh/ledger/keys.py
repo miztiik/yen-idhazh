@@ -166,11 +166,6 @@ COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
 OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
 
 
-#: What makes two index rows the same record. The digest is the whole row apart
-#: from the stamp, so two of them say one thing twice and the fold keeps one.
-OBSERVATION_INDEX_KEY: Final = ("observation_digest",)
-
-
 #: What makes two validation rows the same record. One candidate, judged once,
 #: by one execution. `run_id` is in the key because two dispatches of one model
 #: on one day are two verdicts about two trees, and the committed ledger held

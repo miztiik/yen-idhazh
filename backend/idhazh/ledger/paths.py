@@ -142,10 +142,6 @@ def _segments(held: LedgerEntry, covers: str | None) -> tuple[str, ...]:
                 "addresses nothing. Drop the argument"
             )
         return (*held.prefix, f"{held.stem}{held.suffix}")
-    if held.grain is Grain.LOOKUP:
-        if covers is not None:
-            raise ValueError(f"{held.name} is an exact lookup, not a dated partition")
-        return held.prefix
     if covers is None:
         raise ValueError(
             f"{held.name} files by {held.grain.value} and needs {_PERIOD[held.grain]}. "

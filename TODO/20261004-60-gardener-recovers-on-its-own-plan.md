@@ -660,7 +660,6 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/gardener/period_inputs.py`
   - `backend/idhazh/gardener/named_trees.py`
   - `backend/idhazh/telemetry/door_prune.py`
-  - `backend/idhazh/evals/observation_migration.py`
   - `backend/utilities/migrate_to_parquet.py`
   - `backend/tests/contracts/test_ledger_index.py`
   - `backend/tests/contracts/test_page_ceilings.py`
@@ -675,7 +674,6 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/ledger/test_migrate_to_parquet.py`
   - `backend/tests/ledger/test_trial_roots.py`
   - `backend/tests/retention/test_prune_range.py`
-  - `backend/tests/evals/test_observation_migration.py`
   - `backend/tests/test_canary_packing.py`
   - `docs/architecture/contracts/persistence.md`
   - `docs/architecture/contracts/ledger-registry.md`
