@@ -26,7 +26,9 @@ import {
 	type FetchCost,
 	type LedgerName,
 	type Row,
-	type SpanCost
+	type SetAsideFiles,
+	type SpanCost,
+	type SpanGap
 } from './slice-shapes';
 
 export type RawListedThrough = Readonly<Partial<Record<LedgerName, DateStamp>>>;
@@ -37,6 +39,8 @@ type FileMeta = { ledger: LedgerName; day: DateStamp | null };
 type DayWindow = { from: DateStamp; to: DateStamp } | null;
 type PlannedFile = { file: WantedFile; meta: FileMeta; keeper: 'site' | 'archive'; window: DayWindow };
 type HeldSource = { name: string; window: DayWindow };
+/** The packed files a span reads, the days in it recorded lost, and the files its periods set aside. */
+type CompactChoice = { chosen: ChosenFile[]; lostDays: DateStamp[]; setAside: SetAsideFiles };
 type LedgerPlan = {
 	ledger: LedgerName;
 	through: DateStamp | null;
@@ -44,6 +48,8 @@ type LedgerPlan = {
 	emptySource: PlannedFile[];
 	unpackedDays: DateStamp[];
 	siteFrom: DateStamp | null;
+	lostDays: DateStamp[];
+	setAside: SetAsideFiles;
 	unreachable: AskResult | null;
 };
 type Plan = { ledgers: LedgerPlan[]; cost: SpanCost; files: PlannedFile[] };
@@ -193,17 +199,17 @@ function compactSelection(
 	from: DateStamp,
 	until: DateStamp,
 	indexes: Indexes
-): { chosen: ChosenFile[] } | AskResult {
+): CompactChoice | AskResult {
 	const first = newestNamed(indexes.daily, indexes.monthly, indexes.yearly) === null
 		? null
 		: firstNamed(indexes.daily, indexes.monthly, indexes.yearly);
-	if (first === null) return { chosen: [] };
+	if (first === null) return { chosen: [], lostDays: [], setAside: {} };
 	if (from < first && indexes.monthly.length === 0 && indexes.yearly.length === 0) {
 		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
 	}
 	const selection = filesFor(from, until, indexes.daily, indexes.monthly, indexes.yearly);
 	if ('hole' in selection) return { state: 'unreachable', ledger, at: selection.hole, fault: 'day-missing' };
-	return { chosen: selection.files };
+	return { chosen: selection.files, lostDays: selection.lostDays, setAside: selection.setAside };
 }
 
 /** The files an empty view takes its columns from: the ledger's newest day, from its listing
@@ -238,16 +244,25 @@ async function planLedger(
 ): Promise<LedgerPlan> {
 	const indexed = await compactIndexes(keeper, ledger, from, to);
 	if ('state' in indexed) {
-		return { ledger, through: null, files: [], emptySource: [], unpackedDays: [], siteFrom: null, unreachable: indexed };
+		return { ledger, through: null, files: [], emptySource: [], unpackedDays: [], siteFrom: null, lostDays: [], setAside: {}, unreachable: indexed };
 	}
 
 	const newestPacked = newestNamed(indexed.daily, indexed.monthly, indexed.yearly);
 	const siteFirst = compactFirst(indexed);
 	const through = later(newestPacked, rawListed[ledger] ?? null);
 	const files: PlannedFile[] = [];
+	const lostDays: DateStamp[] = [];
+	const setAside: Record<string, number> = {};
 	let unreachable: AskResult | null = null;
 	let siteFrom: DateStamp | null = null;
 	let siteStart = from;
+	/** One keeper's packed files for its part of the span, and what that part is missing.
+	 *  The archive's part comes first, so the lost days stay in order. */
+	const take = (choice: CompactChoice, held: 'site' | 'archive', until: DateStamp): void => {
+		files.push(...addCompactPlanned(choice.chosen, ledger, held, until));
+		lostDays.push(...choice.lostDays);
+		Object.assign(setAside, choice.setAside);
+	};
 
 	// Days before the site's oldest are the archive's to read; with no archive, the span
 	// starts at that day and the answer says so.
@@ -260,7 +275,7 @@ async function planLedger(
 			else {
 				const archive = compactSelection(ledger, from, archiveTo, archiveIndexed);
 				if ('state' in archive) unreachable = archive;
-				else files.push(...addCompactPlanned(archive.chosen, ledger, 'archive', archiveTo));
+				else take(archive, 'archive', archiveTo);
 			}
 		}
 		siteStart = siteFirst;
@@ -270,9 +285,7 @@ async function planLedger(
 		const until = to < newestPacked ? to : newestPacked;
 		const compact = compactSelection(ledger, siteStart, until, indexed);
 		if ('state' in compact) unreachable = compact;
-		else {
-			files.push(...addCompactPlanned(compact.chosen, ledger, 'site', until));
-		}
+		else take(compact, 'site', until);
 	}
 
 	const rawDays = siteStart <= to ? writerDaysFor(siteStart, to, newestPacked, rawListed[ledger] ?? null) : [];
@@ -296,8 +309,17 @@ async function planLedger(
 		emptySource: addPlanned(empty.files, empty.metas, 'site'),
 		unpackedDays: rawDays,
 		siteFrom,
+		lostDays,
+		setAside,
 		unreachable
 	};
+}
+
+/** Each selected ledger that is missing something inside the span, in the order chosen. */
+function gapsOf(plans: readonly LedgerPlan[]): SpanGap[] {
+	return plans
+		.filter((one) => one.lostDays.length > 0 || Object.keys(one.setAside).length > 0)
+		.map((one) => ({ ledger: one.ledger, lostDays: one.lostDays, setAside: one.setAside }));
 }
 
 async function plan(
@@ -310,7 +332,7 @@ async function plan(
 ): Promise<Plan | AskResult> {
 	const chosen = [...new Set(ledgers)];
 	if (chosen.length === 0) {
-		return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: 0 }, siteFrom: null };
+		return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: 0 }, siteFrom: null, gaps: [] };
 	}
 	for (const ledger of chosen) {
 		if (!(LEDGER_NAMES as readonly string[]).includes(ledger)) return { state: 'missing', ledger };
@@ -471,7 +493,7 @@ export async function readAsk(
 		}
 		const noFilesInSpan = planned.ledgers.every((one) => one.files.length === 0);
 		if (noFilesInSpan) {
-			return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: Date.now() - started }, siteFrom: planned.cost.siteFrom };
+			return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: Date.now() - started }, siteFrom: planned.cost.siteFrom, gaps: gapsOf(planned.ledgers) };
 		}
 		// An empty view over no file would reach the engine as `read_parquet([])`, which it refuses.
 		const sourceless = planned.ledgers.find((one) => one.files.length === 0 && one.emptySource.length === 0);
@@ -522,9 +544,10 @@ export async function readAsk(
 				readCost(siteFiles.map((one) => one.file), siteHeld.fetched, started),
 				archiveHeld === null ? { files: 0, bytes: 0, alreadyHeld: 0, ms: 0 } : readCost(archiveFiles.map((one) => one.file), archiveHeld.fetched, started)
 			], started);
+			const gaps = gapsOf(planned.ledgers);
 			return answer.rows.length === 0
-				? { state: 'quiet', columns, read, siteFrom: planned.cost.siteFrom }
-				: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, unpackedDays: planned.cost.unpackedDays, siteFrom: planned.cost.siteFrom };
+				? { state: 'quiet', columns, read, siteFrom: planned.cost.siteFrom, gaps }
+				: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, unpackedDays: planned.cost.unpackedDays, siteFrom: planned.cost.siteFrom, gaps };
 		} catch (error) {
 			return { state: 'refused', because: { kind: 'engine-error', message: error instanceof Error ? error.message : String(error) } };
 		} finally {

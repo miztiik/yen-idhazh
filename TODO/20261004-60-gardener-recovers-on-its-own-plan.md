@@ -67,6 +67,7 @@ Table A - what is out
 | 27 | A shard lands nothing stale, and says why when it cannot land | 3, 9 | C | DONE | urban-spoon | - | Plan 60 row 27: no stale landing |
 | 28 | The console can read the gardener ledger | 23 | F | PENDING | - | - | - |
 | 29 | doc_load.py measures every named Markdown page | 26 | A | DONE | effective-carnival | - | Plan 60 row 29: doc_load every page |
+| 31 | Panels say which days have no record | 8 | E | DONE | congenial-waddle | - | Plan 60 row 31: panels show lost days |
 
 ## 2. Shared declarations
 
@@ -1029,3 +1030,51 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- | --- | --- |
 | 1 | Print one line naming each skipped path | A plan still gets no row, and AGENTS.md step 3 asks for one row for each named page | A few lines | Fowler review, 2026-10-04 |
 | 2 | Leave it | Every plan check prints nothing, and AGENTS.md keeps a wrong sentence | Nothing | Fowler review, 2026-10-04 |
+
+### Row #31 - Panels say which days have no record
+
+- **Scope:** The console says which days have no record and how many files were set aside, wherever it shows a ledger's coverage. Every console route names, in a plain record note, each day its records' indexes record lost and each file their packing set aside, with the folder `state/raw/<ledger>/set-aside/`. A recording note dates an instrument's start by a lost day, never after it (Hardware and Summaries). The data explorer names each selected ledger's lost days and set-aside files under its span line, in an answer with rows and in a quiet one. The explorer's address reads a day such as `2026-08-32` with the door's `isDay()`, so the link shows its notice instead of throwing. Level 2: frontend only; `set_aside` was already declared (Table D, D1). Found by row 8's browser smoke, owner 2026-10-04.
+- **Files touched:**
+  - `frontend/src/lib/data/compact-index.ts` (the guard checks `set_aside` and hands it on)
+  - `frontend/src/lib/data/slice.ts` (`filesFor` returns `setAside`)
+  - `frontend/src/lib/data/slice-shapes.ts` (`SetAsideFiles`; `SliceResult` carries `setAside`; `SpanGap`; `AskResult` carries `gaps`)
+  - `frontend/src/lib/data/slice-reader.ts`
+  - `frontend/src/lib/data/ask-reader.ts`
+  - `frontend/src/lib/data/ledger.ts` (re-exports the two new types)
+  - `frontend/src/lib/server/ledger-rows.ts` (`newestRows` carries lost days and set-aside files)
+  - `frontend/src/lib/console/recording.ts` (`noRecordSentence`, `setAsideSentence`, record notes `lost` and `set-aside`, `daysWithNoRecord`)
+  - `frontend/src/lib/console/RecordNotes.svelte` (comment only)
+  - `frontend/src/lib/console/explorer/gaps.ts` (new)
+  - `frontend/src/lib/console/explorer/address.ts`
+  - `frontend/src/routes/console/data-explorer/+page.svelte`
+  - `frontend/src/routes/console/machine/+page.server.ts`
+  - `frontend/src/routes/console/model/+page.server.ts` (found during execution: the Summaries note dated its start the same way)
+  - `frontend/scripts/test-groups.ts`
+  - `frontend/tests/ledger-door.spec.ts`
+  - `frontend/tests/ledger-rows.spec.ts`
+  - `frontend/tests/console-chrome.spec.ts`
+  - `frontend/tests/console-data-explorer.spec.ts`
+  - `frontend/tests/console-data-explorer-address.spec.ts`
+  - `frontend/tests/console-data-explorer-gaps.spec.ts` (new)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
+  - `docs/architecture/publishing/console-payloads.md`
+  - `docs/how-to/query-a-ledger-from-the-console.md`
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list` and the checks it selects; `npm --prefix frontend run check`; the browser smoke in [run-the-gates.md](../docs/how-to/run-the-gates.md) on the Hardware page and the explorer, built from the canary state with a lost and an empty day, including a missing and an empty index (CLAUDE.md section 12); `doc_load.py` on the changed pages. CI: the full suite.
+- **Oracle:** each case fails on the main this row started from. The disk read of a tree with an `empty` day, a `lost` day and set-aside files names them (`ledger-rows.spec.ts`), and the Hardware oracle in that file prints the lost day as a plain record note and never dates the start after it. `console-chrome.spec.ts` dates the start by a lost day and by a destroyed one. `ledger-door.spec.ts` reads row 8's contract samples under `tests/fixtures/contracts/compact-index/` and counts their set-aside files by period, refuses a `set_aside` that is not a count, and names each ledger's gaps in a written answer. In the browser, `console-data-explorer.spec.ts` serves item-health's index with a lost day and two set-aside files and reads both lines under the answer, then the quiet answer for the lost day alone; and a link with `from=2026-08-32` shows the span notice and loads the ledgers. It cannot settle what the gardener writes: no committed index holds a lost day or a set-aside file until rows 12 and 18 land.
+- **Found during execution:** the explorer's date chart draws the days either side of a lost day next to each other, because its axis holds only days with rows (`dateSeries.ts`); a lost day the answer has no row for could sit on the axis with no value, so the line breaks there (Jony, 2026-10-04: a separate change). The explorer page's `validStoredDay` still accepts a stored `2026-08-32`, which reads as a span of no days rather than a notice. Row 18 must move a set-aside file to `state/raw/<ledger>/set-aside/`, the folder the console names (Table C, C5).
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The explorer says it once, under its span line, in the answer with rows and in the quiet one; one plain paragraph a ledger and a state, lost days first; nothing under the chart | Jony, 2026-10-04 |
+| 2 | A set-aside line counts files and says "when this data was packed", never "these days", because a month counts every file it set aside; it never ends on the folder | Jony, 2026-10-04 |
+| 3 | A console route names a lost day and set-aside files as plain record notes, one a record and a state, beside "packed as far as" | `RecordNotes.svelte`'s rule, one sentence a record and a state; Jony raised no objection, 2026-10-04 |
+| 4 | An instrument ran on a day its record lost, so that day dates its start. A day the record destroyed takes the same rule, and the start is no longer dated the day after it | Row 8, decision 3; worker, 2026-10-04 |
+| 5 | Set-aside files are counted over the periods a read takes, keyed by period, so two reads that meet one month count its files once | Worker, 2026-10-04 |
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | A note under the explorer's chart only | A reader of the table and a quiet answer, which draws no chart, would not see it | The same lines in the chart panel | Jony, 2026-10-04 |
+| 2 | The note in both explorer panels | One fact said twice on one screen | A second render of the same lines | Jony, 2026-10-04 |
+| 3 | Name lost days only in the Hardware route's windowed recording notes | The article and score records would stay silent on every other route, and one lost machine-record day would need a sentence from each of the route's two instruments | A field and a sentence for each instrument | Worker, 2026-10-04 |
+| 4 | A whole-ledger set-aside total from the reach | It would count files no panel on the route reads, and a day's count and its month's count could both be summed | One sum over the indexes the reach already reads | Worker, 2026-10-04 |

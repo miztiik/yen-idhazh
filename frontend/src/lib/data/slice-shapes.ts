@@ -62,19 +62,27 @@ export const LEDGER_FAULTS = ['not-packed', 'index-missing', 'file-missing', 'da
 
 export type LedgerFault = (typeof LEDGER_FAULTS)[number];
 
+/** How many files the packing set aside unread, by the period it set them aside
+ *  from: an entry's `covers`, a day, a month or a year. Only a period that set at
+ *  least one file aside is named. Keyed by period, so two reads that meet the
+ *  same month count its files once. */
+export type SetAsideFiles = Readonly<Record<string, number>>;
+
 /** What the door hands a panel. `rows` is empty for every state but `ok`.
  *  `through` is the newest day `daily.json` names, or `null` before the first
  *  compaction, so a panel can say how far its data reaches. `lostDays` names
  *  the days in the span an index records lost - a daily entry `lost`, or a day
  *  in a month's or a year's `lost_days` - ascending: each has no record, so a panel
- *  says so rather than drawing it as a day with no rows. `fault` names the
+ *  says so rather than drawing it as a day with no rows. `setAside` names the
+ *  periods the span is read from whose packing set files aside unread, so a
+ *  panel can say its rows may be short. `fault` names the
  *  missing file behind a `missing` or an `unreachable`, and is `null` for an
  *  `unreachable` with another cause: an index this build will not act on, a file
  *  that did not arrive whole, an engine that could not answer, or a span that
  *  starts before the oldest day any index names. */
 export type SliceResult =
-	| { state: 'ok'; rows: Row[]; through: DateStamp; lostDays: DateStamp[] }
-	| { state: 'quiet'; rows: []; through: DateStamp | null; lostDays: DateStamp[] }
+	| { state: 'ok'; rows: Row[]; through: DateStamp; lostDays: DateStamp[]; setAside: SetAsideFiles }
+	| { state: 'quiet'; rows: []; through: DateStamp | null; lostDays: DateStamp[]; setAside: SetAsideFiles }
 	| { state: 'missing'; rows: []; fault: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreachable'; rows: []; at: DateStamp; fault: Exclude<LedgerFault, 'not-packed'> | null };
 
@@ -190,9 +198,14 @@ export type AskRefusal =
 	| { kind: 'over-ceiling'; bytes: number; files: number; max: number }
 	| { kind: 'engine-error'; message: string };
 
+/** What one selected ledger is missing inside the span a written question read:
+ *  the days its indexes record lost, ascending, and the files its periods set
+ *  aside unread. An answer names only a ledger that is missing either. */
+export type SpanGap = { ledger: LedgerName; lostDays: readonly DateStamp[]; setAside: SetAsideFiles };
+
 export type AskResult =
-	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[]; siteFrom: DateStamp | null }
-	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; siteFrom: DateStamp | null }
+	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[]; siteFrom: DateStamp | null; gaps: readonly SpanGap[] }
+	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; siteFrom: DateStamp | null; gaps: readonly SpanGap[] }
 	| { state: 'missing'; ledger: LedgerName }
 	| { state: 'unreachable'; ledger: LedgerName | null; at: DateStamp | null; fault: AskFault }
 	| { state: 'refused'; because: AskRefusal };

@@ -508,6 +508,11 @@ more days before the newest published day (`recordNotes` in
 `frontend/src/lib/console/recording.ts`). A record that did not load because a
 packed file or a packed day is missing says which, because each has its own fix
 ([the four faults](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)).
+A record read whole can still be short, and says so in a plain line too: a day
+its packing recorded lost has no record, and a file it set aside unread holds
+rows no panel draws, so that line names the folder a person reads them in. A
+recording note never counts a lost day as a day before the recording started:
+the instrument ran that day, so the day dates its start.
 
 **Packing settles rows per day, not over the whole requested window.** This
 scope preserves historical rows; it does not define measurement identity.

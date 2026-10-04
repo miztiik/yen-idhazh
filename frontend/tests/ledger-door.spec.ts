@@ -15,7 +15,7 @@ import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper, type W
 import { daysBetween, filesFor, namesFile, newestFile, newestNamed } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
 import { dataPath, indexPath, rawIndexPath, readSlice } from '../src/lib/data/slice-reader';
-import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
+import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type LedgerName, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository } from '../src/lib/server/config';
 import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 
@@ -189,6 +189,15 @@ function fixtureEntries(period: Period, state: string = STATE): CompactEntry[] {
 	return reading.index.entries;
 }
 
+/** One of the contract's own sample indexes, under `tests/fixtures/contracts/compact-index/`,
+ *  as this build's guard hands it on. */
+function contractEntries(name: string, ledger: LedgerName, period: Period): CompactEntry[] {
+	const text = readFileSync(path.resolve(FIXTURE, '..', 'contracts', 'compact-index', `${name}.json`), 'utf8');
+	const reading = readIndex(JSON.parse(text), ledger, period);
+	if (!('index' in reading)) throw new Error(`the contract sample ${name} is refused: ${JSON.stringify(reading)}`);
+	return reading.index.entries;
+}
+
 const columns = ['date', 'run_id', 'job', 'shard', 'cores'] as const;
 const ask = (from: string, to: string, extra: Partial<SliceOptions> = {}): SliceOptions => ({
 	columns,
@@ -306,7 +315,8 @@ test.describe('which files a range needs', () => {
 		);
 		expect(selection).toEqual({
 			files: [{ period: 'yearly', entry: fixtureEntries('yearly', YEAR_STATE)[0], firstDay: '2026-08-30' }],
-			lostDays: []
+			lostDays: [],
+			setAside: {}
 		});
 	});
 
@@ -323,7 +333,8 @@ test.describe('which files a range needs', () => {
 				{ period: 'daily', entry: daily.find((entry) => entry.covers === '2026-09-02'), firstDay: '2026-09-02' },
 				{ period: 'daily', entry: daily.find((entry) => entry.covers === '2026-09-05'), firstDay: '2026-09-05' }
 			],
-			lostDays: ['2026-09-04']
+			lostDays: ['2026-09-04'],
+			setAside: {}
 		});
 	});
 
@@ -332,9 +343,31 @@ test.describe('which files a range needs', () => {
 		const lost = { ...year, lost_days: ['2026-09-04'] };
 		expect(filesFor('2026-09-02', '2026-09-05', [], [], [lost])).toEqual({
 			files: [{ period: 'yearly', entry: lost, firstDay: '2026-09-02' }],
-			lostDays: ['2026-09-04']
+			lostDays: ['2026-09-04'],
+			setAside: {}
 		});
-		expect(filesFor('2026-09-04', '2026-09-04', [], [], [lost])).toEqual({ files: [], lostDays: ['2026-09-04'] });
+		expect(filesFor('2026-09-04', '2026-09-04', [], [], [lost])).toEqual({ files: [], lostDays: ['2026-09-04'], setAside: {} });
+	});
+
+	test('each period whose packing set files aside comes back with its count, as the contract samples hold them', () => {
+		// Read through the guard, which hands set_aside on: a lost day that set two
+		// files aside and a packed day that set one aside are each counted.
+		const days = contractEntries('a-lost-day', 'item-health', 'daily');
+		expect(filesFor('2026-09-22', '2026-09-24', days, [], [])).toEqual({
+			files: [
+				{ period: 'daily', entry: days[0], firstDay: '2026-09-22' },
+				{ period: 'daily', entry: days[2], firstDay: '2026-09-24' }
+			],
+			lostDays: ['2026-09-23'],
+			setAside: { '2026-09-23': 2, '2026-09-24': 1 }
+		});
+		// A month counts its files once, under its own name, whichever of its days a span reads.
+		const months = contractEntries('a-month-with-lost-days', 'item-health', 'monthly');
+		expect(filesFor('2026-08-11', '2026-08-14', [], months, [])).toEqual({
+			files: [{ period: 'monthly', entry: months[1], firstDay: '2026-08-11' }],
+			lostDays: ['2026-08-12', '2026-08-13'],
+			setAside: { '2026-08': 1 }
+		});
 	});
 
 	test('only a packed entry names a file, and an entry written before entries had a state is packed', () => {
@@ -389,7 +422,8 @@ test.describe('the four states, before the engine is needed', () => {
 			state: 'quiet',
 			rows: [],
 			through: '2026-09-05',
-			lostDays: []
+			lostDays: [],
+			setAside: {}
 		});
 		expect(asked.map((one) => one.path)).toEqual([DAILY_INDEX]);
 		expect(engine.opened()).toBe(0);
@@ -401,7 +435,8 @@ test.describe('the four states, before the engine is needed', () => {
 			state: 'quiet',
 			rows: [],
 			through: '2026-09-05',
-			lostDays: []
+			lostDays: [],
+			setAside: {}
 		});
 		expect(asked.map((one) => one.path)).toEqual([DAILY_INDEX]);
 	});
@@ -508,7 +543,8 @@ test.describe('the four states, before the engine is needed', () => {
 			state: 'quiet',
 			rows: [],
 			through: '2026-09-05',
-			lostDays: []
+			lostDays: [],
+			setAside: {}
 		});
 	});
 
@@ -713,7 +749,7 @@ test.describe('THE ORACLE through the engine, at both entry points', () => {
 		if (narrowed.disk.state === 'ok') expect(narrowed.disk.rows.map((row) => row.job)).toEqual(['plan']);
 		expect(narrowed.browser).toEqual(narrowed.disk);
 		const nothing = await bothWays(ask('2026-09-01', '2026-09-03', { where: [{ column: 'shard', op: '>', value: 9 }] }));
-		expect(nothing.disk, nothing.warned.join('\n')).toEqual({ state: 'quiet', rows: [], through: '2026-09-05', lostDays: [] });
+		expect(nothing.disk, nothing.warned.join('\n')).toEqual({ state: 'quiet', rows: [], through: '2026-09-05', lostDays: [], setAside: {} });
 		expect(nothing.browser).toEqual(nothing.disk);
 	});
 });
@@ -907,7 +943,8 @@ test.describe('what a page keeps', () => {
 			state: 'quiet',
 			rows: [],
 			through: '2026-09-05',
-			lostDays: []
+			lostDays: [],
+			setAside: {}
 		});
 		const entry = fixtureEntries('daily').find((one) => one.covers === '2026-09-02');
 		expect(asked.filter((one) => one.path === dayFile('2026-09-02')).map((one) => one.version)).toEqual([
@@ -954,7 +991,8 @@ test.describe('what a page keeps', () => {
 			state: 'ok',
 			rows: [{ date: '2026-08-31', run_id: '2026-08-31-17810000001', shard: 0 }],
 			through: '2026-09-05',
-			lostDays: []
+			lostDays: [],
+			setAside: {}
 		});
 	});
 
@@ -1336,10 +1374,22 @@ test.describe('THE ORACLE for a period with no file: an empty day is quiet, a lo
 			state: 'quiet',
 			rows: [],
 			through: '2026-09-05',
-			lostDays: ['2026-09-04']
+			lostDays: ['2026-09-04'],
+			setAside: {}
 		});
 		expect(dataAsked(asked)).toEqual([]);
 		expect(engine.opened()).toBe(0);
+	});
+
+	test('a span names each period whose packing set files aside, with how many, beside the lost day', async () => {
+		const index = withNoFile();
+		const entries = index.entries.map((entry) =>
+			entry.covers === LOST_DAY.covers ? { ...entry, set_aside: 2 } : entry.covers === '2026-09-05' ? { ...entry, set_aside: 1 } : entry
+		);
+		const { fetcher } = recorded(servedWithNoFile({ ...index, entries }));
+		const result = await readSlice(freshPage(fetcher), LEDGER, ask('2026-09-01', '2026-09-05'));
+		expect(result).toMatchObject({ state: 'ok', lostDays: ['2026-09-04'] });
+		if (result.state === 'ok') expect(result.setAside).toEqual({ '2026-09-04': 2, '2026-09-05': 1 });
 	});
 
 	// Days the packing could really have recorded lost: the month file holds no row before
@@ -1384,7 +1434,8 @@ test.describe('THE ORACLE for a period with no file: an empty day is quiet, a lo
 			state: 'quiet',
 			rows: [],
 			through: '2026-09-06',
-			lostDays: ['2026-09-06']
+			lostDays: ['2026-09-06'],
+			setAside: {}
 		});
 	});
 
@@ -1392,7 +1443,8 @@ test.describe('THE ORACLE for a period with no file: an empty day is quiet, a lo
 		['a state the contract does not declare', { ...LOST_DAY, state: 'missing' as unknown as CompactEntry['state'] }],
 		['an empty entry that counts bytes', { ...EMPTY_DAY, bytes: 7950 }],
 		['a lost entry that counts rows', { ...LOST_DAY, rows: 2 }],
-		['lost_days on a day', { ...LOST_DAY, lost_days: ['2026-09-04'] }]
+		['lost_days on a day', { ...LOST_DAY, lost_days: ['2026-09-04'] }],
+		['a set_aside that is not a count', { ...LOST_DAY, set_aside: -1 }]
 	];
 	for (const [what, entry] of broken) {
 		test(`a daily index whose entry has ${what} is one this build will not act on`, async () => {
@@ -1530,6 +1582,28 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 			]
 		});
 		expect(dataAsked(asked).sort()).toEqual([dayFile('2026-09-01'), dayFile('2026-09-02'), dayFile('2026-09-05')]);
+	});
+
+	test('an answer names what each chosen ledger is missing in its span, and a ledger missing nothing is not named', async () => {
+		const index = withNoFile();
+		const entries = index.entries.map((entry) =>
+			entry.covers === LOST_DAY.covers ? { ...entry, set_aside: 2 } : entry.covers === '2026-09-05' ? { ...entry, set_aside: 1 } : entry
+		);
+		const page = freshPage(recorded(servedWithNoFile({ ...index, entries })).fetcher);
+		const question = { ...opts, sql: 'SELECT count(*) AS rows FROM "host-fingerprint"', maxRows: 10 };
+		const across = await readAsk(page, null, { ...question, ledgers: ['host-fingerprint'], from: '2026-09-01', to: '2026-09-05' }, {});
+		expect(across).toMatchObject({ state: 'ok' });
+		if (across.state === 'ok') {
+			expect(across.gaps).toEqual([
+				{ ledger: 'host-fingerprint', lostDays: ['2026-09-04'], setAside: { '2026-09-04': 2, '2026-09-05': 1 } }
+			]);
+		}
+		// item-health keeps every row of 2026-09-05, so only host-fingerprint is named.
+		const both = await readAsk(page, null, { ...question, ledgers: ['host-fingerprint', 'item-health'], from: '2026-09-05', to: '2026-09-05' }, {});
+		expect(both).toMatchObject({ state: 'ok', gaps: [{ ledger: 'host-fingerprint', lostDays: [], setAside: { '2026-09-05': 1 } }] });
+		// A span of nothing but the lost day runs no query, and its quiet answer still names it.
+		const lostOnly = await readAsk(page, null, { ...question, ledgers: ['host-fingerprint'], from: '2026-09-04', to: '2026-09-04' }, {});
+		expect(lostOnly).toMatchObject({ state: 'quiet', gaps: [{ ledger: 'host-fingerprint', lostDays: ['2026-09-04'], setAside: { '2026-09-04': 2 } }] });
 	});
 
 	test('a selected ledger whose newest days have no file answers an empty view over the newest file it has', async () => {

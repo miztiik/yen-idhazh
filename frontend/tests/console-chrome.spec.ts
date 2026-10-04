@@ -238,8 +238,34 @@ test.describe('what the recording was doing, in the owner words', () => {
 			lost: [{ date: '2026-09-16', articles: 431 }],
 			figures: 'machine record'
 		});
+		// The record ran on the day it lost, so that day dates its start; the day
+		// after the loss would be the lie the loss sentence exists to stop.
+		expect(notes.startedMidWindow).toContain('Recording started on 16 Sep 2026.');
 		expect(notes.startedMidWindow).toContain('The 2 days before it have no machine record');
 		expect(notes.recordDestroyed).not.toBeNull();
+	});
+
+	test('a day the record has no record for is a day it ran, never a day before it started', () => {
+		// The record's own index says the day was lost: an empty day, then a lost one,
+		// then the first day with rows. Counted the old way, the note said recording
+		// started on the day after the loss.
+		const notes = recordingNotes({
+			enabled: true,
+			recorded: ['2026-08-20'],
+			window: ['2026-08-17', '2026-08-19', '2026-08-20'],
+			daysWithNoRecord: ['2026-08-19'],
+			figures: 'machine record'
+		});
+		expect(notes.startedMidWindow).toBe(
+			'Recording started on 19 Aug 2026. The 1 day before it has no machine record, and the gap in the chart is a gap in the recording, not a quiet day.'
+		);
+		const lostFirst = recordingNotes({
+			enabled: true,
+			recorded: ['2026-08-20'],
+			window: ['2026-08-19', '2026-08-20'],
+			daysWithNoRecord: ['2026-08-19']
+		});
+		expect(lostFirst.startedMidWindow).toBeNull();
 	});
 
 	test('a day the record kept a row of is never counted as lost', () => {

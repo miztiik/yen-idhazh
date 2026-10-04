@@ -368,6 +368,69 @@ test('THE ORACLE: link notices render on the page', async ({ page }) => {
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The question in this link could not be read');
 });
 
+test('THE ORACLE: a link naming a day that does not exist shows the span notice, and the page still loads its ledgers', async ({ page }) => {
+	const thrown: string[] = [];
+	page.on('pageerror', (error) => thrown.push(error.message));
+	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
+	await page.goto(`/console/data-explorer/?ledgers=published&from=2026-08-32&end=${EXPLORER_CANARY_DAY}`, { waitUntil: 'domcontentloaded' });
+	await expect(page.locator('[data-explorer-action-line]')).toContainText(
+		`The link asked for 2026-08-32 to ${EXPLORER_CANARY_DAY}, which is not a span this page can read, so it ends today.`
+	);
+	await expect(page.locator('[data-ledger-name="published"] input')).toBeChecked({ timeout: 60_000 });
+	expect(thrown).toEqual([]);
+});
+
+test('THE ORACLE: a count by day names the day a ledger lost and the files it set aside, and draws no row for the lost day', async ({ page }) => {
+	// The canary packs every day whole, so the index is served as the packing writes a
+	// period it could not fill: the second-newest day with rows lost, and two files set
+	// aside from the newest. Only the index changes; the door reads the rest as served.
+	const marked: { lost?: string; setAside?: string } = {};
+	await page.route('**/state/compact/item-health/index/daily.json', async (route) => {
+		const response = await route.fetch();
+		const index = (await response.json()) as { entries: { covers: string; rows: number; bytes: number }[] };
+		const held = index.entries.filter((entry) => entry.rows > 0);
+		marked.lost = held.at(-2)?.covers;
+		marked.setAside = held.at(-1)?.covers;
+		await route.fulfill({
+			response,
+			json: {
+				...index,
+				entries: index.entries.map((entry) =>
+					entry.covers === marked.lost
+						? { ...entry, rows: 0, bytes: 0, state: 'lost' }
+						: entry.covers === marked.setAside
+							? { ...entry, set_aside: 2 }
+							: entry
+				)
+			}
+		});
+	});
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['item-health'], 'SELECT "covers" AS day, count(*) AS rows FROM "item-health" GROUP BY 1 ORDER BY 1');
+	await runExplorer(page);
+	const { lost, setAside } = marked;
+	if (lost === undefined || setAside === undefined) throw new Error('the canary packs fewer than two item-health days with rows');
+
+	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
+	await expect(note.locator('[data-explorer-gap="lost"][data-ledger="item-health"]')).toHaveText(
+		`There is no item-health record for ${shortDate(lost)}, so nothing from that day is in this answer. The record for that day was lost and could not be recovered; it was not a quiet day.`
+	);
+	await expect(note.locator('[data-explorer-gap="set-aside"][data-ledger="item-health"]')).toHaveText(
+		'2 item-health files were set aside unread when this data was packed, so this answer may be missing their rows. They wait in state/raw/item-health/set-aside/ for a person to read.'
+	);
+	const days = (await tableRows(page)).map(([day]) => day);
+	expect(days).toContain(setAside);
+	expect(days).not.toContain(lost);
+
+	// A span of nothing but the lost day is quiet, and the quiet answer names the day too.
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill(lost);
+	await page.getByRole('textbox', { name: 'To (UTC)' }).fill(lost);
+	await runExplorer(page);
+	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-state="quiet"] [data-explorer-gap="lost"]')).toHaveText(
+		`There is no item-health record for ${shortDate(lost)}, so nothing from that day is in this answer. The record for that day was lost and could not be recovered; it was not a quiet day.`
+	);
+});
+
 test('THE ORACLE: every chart case draws its type with a populated readout', async ({ page }) => {
 	await openExplorer(page);
 	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');

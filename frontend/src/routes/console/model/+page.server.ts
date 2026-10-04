@@ -266,7 +266,10 @@ export async function load() {
 				enabled: observability.evaluation_enabled,
 				rate: observability.sample_rate,
 				recorded: scoredDays,
-				window: [...new Set([...scoredDays, ...timedDays])].sort()
+				window: [...new Set([...scoredDays, ...timedDays])].sort(),
+				// Days the score record's own index records lost: the scorer ran on
+				// them, so they date its start and are never days before it.
+				daysWithNoRecord: scores.read.state === 'read' ? scores.read.lostDays : []
 			}),
 			// The other direction: the machine ran and we timed it, and nothing
 			// scored what it wrote. Null where every timed day was also scored.
