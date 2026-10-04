@@ -1,6 +1,6 @@
 # How to author an execution-ready plan-doc
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-10-04
 
 The procedure for turning a rough idea or draft into a `TODO/<YYYYMMDD>-<slug>-plan.md` that an autonomous agent can run end-to-end with no further instruction. This is the canonical home for the authoring ritual; the [`prepare-plan`](../../.claude/skills/prepare-plan/SKILL.md) skill is a thin wrapper that points here, mirroring how [`bootstrap`](../../.claude/skills/bootstrap/SKILL.md) points at [../agents/bootstrap.md](../agents/bootstrap.md).
 
@@ -67,7 +67,7 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
  - `Parallel-group` is a letter recording which rows the author believed were independent. It is a hint, not the dispatcher's input: a row is ready when its `Depends-on` are `DONE` and its `Files touched` list is disjoint from every row in flight ([execute-a-plan.md](execute-a-plan.md#parallel-fan-out)).
  - `Status` starts `PENDING`, flips through `IN-FLIGHT` to `DONE` or `COLLAPSED` (with cited rationale). Write `DONE #<pr>` when the row shipped on a pull request of its own.
  - **A pointer at another plan names that plan's row TITLE, never its row number.** A number points at whatever now occupies that position, so it goes wrong silently when the other plan is renumbered - and a plan is renumbered whenever a row collapses, splits or lands. A title survives a renumber and fails loudly when the row is gone. The same holds for a row that shipped: cite the pull request, which outlives the plan-doc. This has broken three times in this repository's history, each time only noticed when somebody re-read the pointer against the tree.
- - `Worktree` is the isolated absolute path the row was carried on, or `-` when it was carried in its owner's own checkout.
+ - `Worktree` is the folder name of the isolated worktree the row was carried on, or `-` when it was carried in its owner's own checkout. Never an absolute path: that would put a drive letter and a user name into committed text (CLAUDE.md section 2), and the project's plan-queue reader matches this cell to a live worktree by folder name or branch.
  - `Subagent` names the agent the row was delegated to, or `-` when its owner carried it directly.
 
 - **Section 2+ - one section per row, fixed shape, no prose padding:**

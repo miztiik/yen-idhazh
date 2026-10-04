@@ -526,10 +526,20 @@ def test_a_row_that_says_it_is_being_worked_on_where_nothing_is(tree: Path) -> N
     rows = [row for plan in read_plans(tree) for row in plan.rows]
     notes = stranded_rows(rows, [Worktree(Path("/w/a1"), "abc", "feat/first")])
     assert [note.subject for note in notes] == ["plan 31 row #11"]
-    assert "'gone-tree'" in notes[0].detail
+    assert notes[0].detail == "is IN-FLIGHT but names 'gone-tree', which is not on this box"
 
     backed = stranded_rows(rows, [Worktree(Path("/w/gone-tree"), "abc", "feat/eleven")])
     assert backed == []
+
+
+def test_an_in_flight_row_naming_no_worktree_says_only_that() -> None:
+    body = ALPHA.replace("| IN-FLIGHT | gone-tree |", "| IN-FLIGHT | - |")
+    plan = parse_plan(PurePosixPath("TODO/20260101-31-alpha-plan.md"), body)
+    assert plan is not None
+    notes = stranded_rows(plan.rows, [Worktree(Path("/w/a1"), "abc", "feat/first")])
+    assert [(note.subject, note.detail) for note in notes] == [
+        ("plan 31 row #11", "is IN-FLIGHT but names no worktree")
+    ]
 
 
 def test_a_branch_with_no_worktree_is_named(tree: Path) -> None:

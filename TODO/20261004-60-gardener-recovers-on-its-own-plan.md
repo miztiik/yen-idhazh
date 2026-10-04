@@ -35,10 +35,10 @@ Table A - what is out
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Compaction gets its own page | - | A | PENDING | - | - | - |
-| 2 | A dry run says nothing was deleted | - | A | PENDING | - | - | - |
+| 1 | Compaction gets its own page | - | A | DONE | fantastic-umbrella | - | Plan 60 row 1: compaction page |
+| 2 | A dry run says nothing was deleted | - | A | DONE | literate-parakeet | - | Plan 60 row 2: dry-run wording |
 | 3 | A read nobody named fails loudly | - | A | DONE | curly-parakeet | - | Plan 60 row 3: unnamed reads fail |
-| 4 | The ledger fault words live in contracts | - | A | PENDING | - | - | - |
+| 4 | The ledger fault words live in contracts | 1 | A | DONE | special-sniffle | - | Plan 60 row 4: fault words in contracts |
 | 5 | A ledger's marks are read in one place | - | A | PENDING | - | - | - |
 | 6 | One run id per workflow run | 1 | B | PENDING | - | - | - |
 | 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
@@ -60,6 +60,7 @@ Table A - what is out
 | 23 | The gardener ledger is packed live | 16, 22 | F | PENDING | - | - | - |
 | 24 | Months close 16 days after they end | 7, 17, 23 | F | PENDING | - | - | - |
 | 25 | The retired raw listings code goes | 15 | F | PENDING | - | - | - |
+| 26 | doc_load.py reads a web address as a web address | - | A | PENDING | - | - | - |
 
 ## 2. Shared declarations
 
@@ -179,7 +180,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The section moves whole, with its tables and its `## Design rationale` entries; the gardener page keeps a two-line pointer | Fowler, 2026-10-04 |
-| 2 | The link to a PROTOCOL.md that does not exist is removed | Fowler, 2026-10-04 |
+| 2 | The link to Delta Lake's PROTOCOL.md stays: it is a web address that `doc_load.py` reads as a path in this repository (found during execution; row 26 fixes the tool) | The owner, 2026-10-04 |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
@@ -230,6 +231,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/ledger/ledger_files.py`
   - `backend/tests/contracts/test_frontend_index_shapes.py`
   - `backend/tests/council/_imports.py`
+  - `docs/architecture/publishing/ledger-compaction.md` (found during execution)
+  - `frontend/src/lib/data/slice-shapes.ts` (found during execution)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 -m contract backend/tests/contracts/test_frontend_index_shapes.py`, the ledger tests the selector lists; ruff; mypy. CI: the full suite.
 - **Oracle:** this is a move, so behaviour does not change. The property that could break is the binding: the test still holds `LedgerFault` name for name to `frontend/src/lib/data/slice-shapes.ts`. It cannot settle callers outside the repository.
 
@@ -851,3 +854,22 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Delete the listings by hand now | A one-off commit outside the gardener, for files the gardener already deletes | One commit | Fowler, 2026-10-04 |
+
+### Row #26 - doc_load.py reads a web address as a web address
+
+- **Scope:** When `doc_load.py` looks for links to pages that are not there, it skips a target that starts with a scheme such as `https:`. A link to a document on another site is then no longer reported as a missing page. Level 1. Found while running row 1 on 2026-10-04: the compaction page links to Delta Lake's `PROTOCOL.md` on GitHub, and the tool reported it as missing.
+- **Files touched:**
+  - `backend/utilities/doc_load.py`
+  - `backend/tests/test_doc_load.py`
+- **Acceptance gates:** local: `python -m pytest -n 0 backend/tests/test_doc_load.py`; ruff; mypy; `python backend/utilities/doc_load.py docs/architecture/publishing/ledger-compaction.md` no longer reports the Delta Lake link. CI: the full suite.
+- **Oracle:** a page body that holds `](https://example.org/a/PROTOCOL.md)` and `](missing.md)` reports only `missing.md`; today it reports both. It cannot settle whether a remote page exists, because the tool never reads the network (CLAUDE.md section 13).
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | A target with a scheme is outside the repository, so the tool does not judge it | The owner, 2026-10-04 (on row 1's report) |
+| 2 | Only the missing-page checks skip such a target; the check that a "See also" section holds a link keeps counting it | Plan author, 2026-10-04 |
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Remove the link | The only source for the Delta Lake claim goes, to quiet a wrong report | One line | The owner, 2026-10-04 |
+| 2 | Fix the tool inside row 1 | Row 1 is documentation only | Code gates on a documentation row | The owner, 2026-10-04 |

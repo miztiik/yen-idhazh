@@ -1,6 +1,6 @@
 # Prune a collection
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-04
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
@@ -55,6 +55,7 @@ ceiling is `max_deletes_per_run` beside it.
 
 | Last line says | What it means | What to do |
 | --- | --- | --- |
+| `nothing was deleted - a live run would delete the members above` | the pass was a dry run; the line above it says why it stopped | to delete them, follow step 3 |
 | `the collection is exhausted` | nothing else is inside the window | one live pass finishes the job |
 | `the ceiling of N stopped this pass at <id>` | there is more | each later wake takes the next batch, until the line changes |
 | `the pass failed at <id>` | the members above it are gone | fix the cause; the next wake retries that member |
