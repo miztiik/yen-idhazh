@@ -11,6 +11,7 @@ would be a second home for something a module below already owns, and the two
 would drift.
 """
 
+from idhazh.contracts.ledger_fault import LedgerFault
 from idhazh.ledger import paths
 from idhazh.ledger.csv_file import (
     CsvContract,
@@ -21,7 +22,6 @@ from idhazh.ledger.csv_file import (
     require_matching_header,
 )
 from idhazh.ledger.day_removal import HeldFile, find_holding_files, rebuild_without
-from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.filenames import (
     BEFORE_PARTITION_NAME,
     PRE_IDENTITY_TRACE,
@@ -82,7 +82,6 @@ from idhazh.ledger.paths import (
     compact_path,
     entry,
     path,
-    raw_index_path,
     raw_path,
     raw_root,
     relpath,
@@ -105,7 +104,6 @@ from idhazh.ledger.persist import (
 from idhazh.ledger.raw_files import (
     RawFile,
     list_raw_files,
-    listed_days,
     load_current_rows,
     raw_days,
     read_day_files,
@@ -153,7 +151,6 @@ __all__ = [  # noqa: RUF022
     "entry",
     "path",
     "paths",
-    "raw_index_path",
     "raw_path",
     "raw_root",
     "relpath",
@@ -174,7 +171,6 @@ __all__ = [  # noqa: RUF022
     # raw_files.py: which raw files hold a ledger's current rows, and what they are.
     "RawFile",
     "list_raw_files",
-    "listed_days",
     "load_current_rows",
     "raw_days",
     "read_day_files",
@@ -193,7 +189,7 @@ __all__ = [  # noqa: RUF022
     "HeldFile",
     "find_holding_files",
     "rebuild_without",
-    # faults.py: the four ways a packed ledger can be missing a file, by name.
+    # contracts/ledger_fault.py: the four ways a packed ledger can be missing a file, by name.
     "LedgerFault",
     # lifecycle.py: whether a ledger takes new rows now.
     "accepts_new_rows",

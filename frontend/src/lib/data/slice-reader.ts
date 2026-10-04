@@ -12,7 +12,8 @@
  *   fault is `not-packed`.
  * - `quiet`: every day asked for is covered and no row matched, or the span lies
  *   wholly after the newest day compacted. A file whose entry says `rows: 0` is
- *   never fetched, so a span of quiet days loads no engine at all.
+ *   never fetched, and neither is a period whose entry is `empty` or `lost`,
+ *   which has no file, so a span of quiet days loads no engine at all.
  * - `unreachable`: `at` is the first day that could not be answered, and the
  *   console says why. Its fault is `index-missing` for a span that reaches back
  *   past the days `daily.json` names when there is no `monthly.json`, or past
@@ -24,6 +25,10 @@
  *   answer.
  * - `ok`: the rows, exactly as the files hold them. The door never merges rows:
  *   the compaction already wrote one row per record.
+ *
+ * `ok` and `quiet` carry `lostDays`, the days in the span an index records lost.
+ * Such a day has no file to read and no record to draw, so it is named rather
+ * than counted as a day with no rows, and the other days are read as usual.
  *
  * `through` is the newest day `daily.json` names. A day after it has not been
  * compacted yet, so it is clamped away rather than drawn as a zero.
@@ -220,7 +225,7 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	if ('refused' in daily) return unreachable(request.from, explainRefusal('daily', daily.refused));
 	const days = daily.index.entries;
 	const through = days.at(-1)?.covers ?? null;
-	if (through === null || request.from > through) return { state: 'quiet', rows: [], through };
+	if (through === null || request.from > through) return { state: 'quiet', rows: [], through, lostDays: [] };
 	const until = request.to < through ? request.to : through;
 
 	let months: CompactEntry[] = [];
@@ -250,8 +255,9 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 		}
 		return faulted(selection.hole, { fault: 'day-missing', day: selection.hole });
 	}
+	const { lostDays } = selection;
 	const holding = selection.files.filter((file) => file.entry.rows > 0);
-	if (holding.length === 0) return { state: 'quiet', rows: [], through };
+	if (holding.length === 0) return { state: 'quiet', rows: [], through, lostDays };
 
 	const wanted: WantedFile[] = holding.map((file) => ({
 		path: dataPath(ledger, file.period, file.entry.covers),
@@ -279,5 +285,5 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	} catch (error) {
 		return unreachable(request.from, `the query engine could not answer (${reason(error)})`);
 	}
-	return rows.length === 0 ? { state: 'quiet', rows: [], through } : { state: 'ok', rows, through };
+	return rows.length === 0 ? { state: 'quiet', rows: [], through, lostDays } : { state: 'ok', rows, through, lostDays };
 }

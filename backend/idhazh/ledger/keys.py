@@ -31,6 +31,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS as DROPPED_PAIR_CELLS,
@@ -156,14 +157,17 @@ COLLECTION_PRUNE_KEY: Final = ("date", "run_id", "task")
 COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
 
 
+# One plan is the settled planning answer for one execution of one UTC day.
+RUN_PLAN_KEY: Final = ("date", "run_id")
+
+
 #: What makes two eval rows the same measurement. The address says which article,
 #: the digest says which words came out, and the scorer version says which
 #: instrument read them. Change any one and the row is a new measurement worth
 #: keeping. `item_id` is deliberately absent: it is a slot on a page, not an
-#: identity. It carries no date either - re-measuring an article a year later is
-#: the same measurement - so it is the one key here that settles two rows of one
-#: day and leaves the cross-day question to the dedupe in
-#: `evals.writer.file_measurements`, which reads the index.
+#: identity. It carries no date either, so a read of named days keeps one row
+#: per measurement each day, and a read of the whole ledger keeps the first row
+#: across every day.
 OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
 
 
@@ -358,6 +362,7 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.FEED_HEALTH: _DoorShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),
+    LedgerName.RUN_PLAN: _DoorShape(RUN_PLAN_KEY, RunPlan),
 }
 
 

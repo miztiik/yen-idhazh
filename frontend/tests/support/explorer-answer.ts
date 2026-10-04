@@ -55,7 +55,7 @@ export async function expectedAsk(page: Page, options: AskOptions): Promise<AskR
 		() => nodeEngine(locate, engineExtensionRepository())
 	);
 	try {
-		return await readAsk(keeper, options, {});
+		return await readAsk(keeper, null, options, {});
 	} finally {
 		await keeper.release();
 	}
@@ -68,7 +68,7 @@ export async function expectedAskCost(page: Page, ledgers: readonly LedgerName[]
 		() => nodeEngine(locate, engineExtensionRepository())
 	);
 	try {
-		return await readAskCost(keeper, ledgers, from, to, {});
+		return await readAskCost(keeper, null, ledgers, from, to, {});
 	} finally {
 		await keeper.release();
 	}

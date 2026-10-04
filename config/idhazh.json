@@ -215,7 +215,7 @@
     "train_rows": 1000
   },
   "ledger": {
-    "archive_base_url": "",
+    "archive_base_url": "https://raw.githubusercontent.com/miztiik/yen-idhazh/main",
     "compression_compact": "zstd",
     "compression_raw": "snappy",
     "engine_extension_repository": "https://extensions.duckdb.org",
@@ -271,7 +271,7 @@
     },
     "cold_console_load_bytes": 2300000,
     "payload_ceilings_bytes": {
-      "config/ledgers.json": 3200,
+      "config/ledgers.json": 3400,
       "console/band.json": 2000,
       "state/compact/candidate-models/index/": 2200,
       "state/compact/counterfactual-scores/index/": 2200,

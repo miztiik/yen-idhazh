@@ -120,14 +120,19 @@ jobs:
           set -euo pipefail
           python3 backend/utilities/gardener_shards.py | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # One run id for every shard, read once. Re-running a failed shard keeps
-      # this job's outputs, so the shard keeps the run it belongs to.
+      # One run id for every shard and the history job, read once. Re-running a
+      # failed shard keeps this job's outputs, so the shard keeps the run it
+      # belongs to.
       - id: run
         run: |
           set -euo pipefail
           echo "run_id=$(date -u +%F)-${GITHUB_RUN_ID}" | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
   run-tasks:
+    # A run's page lists what every shard ran without opening a job. The names
+    # come from the plan's matrix, so this file holds the format and never a
+    # list of tasks.
+    name: "shard ${{ matrix.shard }}: ${{ join(matrix.task_names, ', ') }}"
     needs: plan
     if: needs.plan.outputs.any_active_task == 'true'
     runs-on: ubuntu-latest
@@ -178,10 +183,13 @@ jobs:
 
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
-      # code it earned: 2 ownership or integrity, 3 the push kept losing, 1 a
+      # code it earned: 2 ownership or integrity, 3 main refused the push, 1 a
       # task failed, the shard downloaded more than max_downloaded_mb, or the
-      # files under its folders could not be listed. The token also reads the
-      # size of each file the clone never downloaded, from GitHub's trees API.
+      # files under its folders could not be listed. A shard whose work is out
+      # of date lands nothing, warns and exits 0: main changed one of its paths
+      # after its commit, or main kept moving through every try. The token also
+      # reads the size of each file the clone never downloaded, from GitHub's
+      # trees API.
       - name: Run the shard's tasks and land its record
         env:
           SHARD: ${{ matrix.shard }}
@@ -263,11 +271,14 @@ jobs:
       #
       # A program rather than inline shell, so a test can drive it against a real
       # repository and watch it refuse. `today` is the due step's own reading, so
-      # the job reads the clock once.
+      # the job reads the clock once. The run id is the plan job's, so every
+      # record of one run carries one id even when the run crosses 00:00 UTC.
+      # This job makes its own only when the plan job failed and left none. The
+      # owner's ruling, 2026-10-04.
       - name: Squash the history, record the run and push it
         if: steps.due.outputs.due == 'true'
         env:
           TODAY: ${{ steps.due.outputs.today }}
-          RUN_ID: ${{ steps.due.outputs.today }}-${{ github.run_id }}
+          RUN_ID: ${{ needs.plan.outputs.run_id || format('{0}-{1}', steps.due.outputs.today, github.run_id) }}
           ATTEMPT: ${{ github.run_attempt }}
         run: python backend/utilities/corpus_history.py --today "$TODAY" --run-id "$RUN_ID" --attempt "$ATTEMPT"

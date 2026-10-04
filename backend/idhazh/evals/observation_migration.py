@@ -21,7 +21,7 @@ from idhazh import day_shards, ledger
 from idhazh.contracts.base import canonical_json, derive_text_digest
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.file_envelope import Format, Period, Tier
-from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex, Watermark
+from idhazh.contracts.ledger_index import CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.observation_lookup import (
@@ -32,7 +32,6 @@ from idhazh.contracts.observation_lookup import (
 from idhazh.evals import writer
 from idhazh.evals.observation_batches import lookup_root, row_digest
 from idhazh.evals.observation_lookup import ROOT_NAME, ObservationLookup
-from idhazh.ledger.paths import INDEX_DIRNAME
 
 
 @dataclass(frozen=True)
@@ -144,18 +143,14 @@ def _legacy_ids(paths: list[Path], state: Path) -> tuple[set[str], int]:
 
 def _metadata(path: Path, state: Path) -> bool:
     which = LedgerName.SUMMARY_QUALITY_EVALS
-    raw = ledger.raw_root(state, which)
-    if path.parent == raw / INDEX_DIRNAME:
-        listing = RawDayIndex.read(path)
-        if listing.ledger != which or path != ledger.raw_index_path(state, which, listing.date):
-            raise ValueError("a raw evaluation listing names another ledger or day")
-        return True
     for period in Period:
         if path == ledger.compact_index_path(state, which, period):
             index = CompactIndex.read(path)
             if (index.ledger, index.period) != (which, period):
                 raise ValueError("a compact evaluation index names another ledger or period")
             for entry in index.entries:
+                if not entry.names_file:
+                    continue
                 if not any(
                     ledger.compact_path(state, which, period, entry.covers, fmt=fmt).is_file()
                     for fmt in Format

@@ -161,21 +161,6 @@ def test_a_file_filed_under_another_day_is_skipped_and_named(
     assert f"raw/visual-prunes/2026/09/07/{wrong.name}" in caplog.text
 
 
-def test_the_day_listing_beside_the_years_is_not_read_as_rows(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """`index/` holds the compaction's listings, which are not ledger files."""
-    filed(tmp_path, a_pass())
-    listing = ledger.raw_index_path(tmp_path, WHICH, A_DAY)
-    listing.parent.mkdir(parents=True)
-    listing.write_text("{}", encoding="utf-8")
-
-    with caplog.at_level("WARNING"):
-        assert len(ledger.list_raw_files(tmp_path, WHICH)) == 1
-
-    assert "skipped" not in caplog.text
-
-
 # --- the settlement, over rows written out literally --------------------------------
 
 #: Two work units, spelled the way the door stamps a `unit_id` cell.
@@ -295,16 +280,10 @@ def test_one_days_files_are_read_strictly_and_a_stray_is_refused_by_name(tmp_pat
     assert ledger.read_day_files(tmp_path, WHICH, NEXT_DAY) == []
 
 
-def test_the_days_a_ledger_holds_raw_files_for_and_the_days_it_has_listings_for(
-    tmp_path: Path,
-) -> None:
-    """Folder names only: an emptied day is not a raw day, and a listing is named by its day."""
+def test_the_days_a_ledger_holds_raw_files_for(tmp_path: Path) -> None:
+    """Folder names only: an emptied day is not a raw day."""
     filed(tmp_path, a_pass(on=A_DAY))
     emptied = filed(tmp_path, a_pass(on=NEXT_DAY))
     emptied.unlink()
-    listing = ledger.raw_index_path(tmp_path, WHICH, A_DAY)
-    listing.parent.mkdir(parents=True)
-    listing.write_text("{}", encoding="ascii")
 
     assert ledger.raw_days(tmp_path, WHICH) == [A_DAY]
-    assert ledger.listed_days(tmp_path, WHICH) == [A_DAY]

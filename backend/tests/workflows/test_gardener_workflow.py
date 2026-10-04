@@ -5,9 +5,11 @@ into a temporary config, and nothing runs a workflow. What is decidable from tho
 is decided here: that the matrix can only ever produce a partition of the
 tasks, that every job the workflow spells is a job a record can name, that the
 plan job's sparse checkout holds every folder its reader opens, that only the
-history job takes the whole history, and that each job holds only the
-permissions it uses. Whether five shards pushing at once land is not decidable
-here; the first scheduled run's records answer it.
+history job takes the whole history, that each job holds only the permissions
+it uses, that each shard's job is named for the tasks it runs, and that the
+history job takes the plan job's run id and its own day.
+Whether five shards pushing at once land is not decidable here; the first
+scheduled run's records answer it.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from idhazh.ledger.paths import COMPACT_DIRNAME, RAW_DIRNAME
 from utilities import gardener_publish, gardener_shards
 
 from ._harness import (
+    PRUNE_PUSH_STEP,
     WORKFLOWS_DIR,
     _job,
     _load_workflows,
@@ -49,6 +52,9 @@ PLAN, RUN_TASKS, HISTORY = "plan", "run-tasks", "history"
 
 #: The program the plan job runs before anything of ours is installed.
 PLANNER: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
+
+#: A shard job's name: a format over the matrix leg the plan job wrote, never a list of tasks.
+RUN_TASKS_NAME: Final = "shard ${{ matrix.shard }}: ${{ join(matrix.task_names, ', ') }}"
 
 #: The person's gate on the history job, word for word and wrapper included:
 #: after every shard, whatever the shards did, unless the run was cancelled.
@@ -375,6 +381,18 @@ def test_a_shard_checks_out_only_its_code_and_runs_the_landing_program() -> None
     }
 
 
+def test_each_shard_jobs_name_lists_the_tasks_it_runs() -> None:
+    """A run's page shows what every shard ran without opening a job.
+
+    The name formats the matrix leg the plan job wrote - the shard's number and
+    its task names - so the workflow still names no task and adding one is
+    still a declaration alone. `test_gardener_plan_matrix.py` holds the keys it
+    reads to the ones a leg declares. This reads the expression, not a run: how
+    GitHub shortens a long name on screen is not decidable here.
+    """
+    assert _job(gardener(), RUN_TASKS).get("name") == RUN_TASKS_NAME
+
+
 def test_the_history_job_runs_last_and_unless_the_run_was_cancelled() -> None:
     """Every shard has ended before history is rewritten, and only a cancel stops the squash.
 
@@ -386,6 +404,30 @@ def test_the_history_job_runs_last_and_unless_the_run_was_cancelled() -> None:
     assert job.get("needs") == [PLAN, RUN_TASKS]
     assert job["if"] == HISTORY_GATE
     assert str(job["timeout-minutes"]) == "30"
+
+
+def test_the_history_step_takes_the_plan_jobs_run_id_and_its_own_day() -> None:
+    """One run carries one id, and the squash is due by the clock of the job that acts.
+
+    The plan job reads the run id once, for every shard, and the history step
+    takes the same id, so a run that crosses 00:00 UTC keeps one id. The step
+    makes its own only when the plan job left none: the job runs on
+    `!cancelled()`, so a failed plan job does not stop it. The day it squashes
+    against is the due step's own reading, so the job reads the clock once and
+    never takes a day from another job. The step's environment holds these three
+    values and nothing else, so no other step hands the program a commit or a
+    flag. This reads the expressions, not a run; the records of a run that
+    crossed midnight show whether it kept one id.
+    """
+    step = _step(gardener(), HISTORY, "name", PRUNE_PUSH_STEP)
+    assert _mapping(step.get("env"), "history step env") == {
+        "TODAY": "${{ steps.due.outputs.today }}",
+        "RUN_ID": (
+            "${{ needs.plan.outputs.run_id"
+            " || format('{0}-{1}', steps.due.outputs.today, github.run_id) }}"
+        ),
+        "ATTEMPT": "${{ github.run_attempt }}",
+    }
 
 
 def test_the_workflow_names_no_task_the_matrix_runs(tmp_path: Path) -> None:

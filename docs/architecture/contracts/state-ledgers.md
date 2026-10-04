@@ -26,8 +26,14 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this address gone for good? One file per writer, under the day the address was retired | raw and compact | the whole tree |
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
+| `state/raw/run-plan/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What plan did the day hand to its later stages? One row per plan execution | raw and compact | the named UTC day |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
+
+The run-plan ledger is the handoff between planning and later stages. The plan
+stage writes it through the ledger door, and readers ask for one named UTC day
+through `ledger.load_days`. If a day has more than one execution, the reader
+uses the newest `generated_at` value, then `run_id` as a stable tie-breaker.
 
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 

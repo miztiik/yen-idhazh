@@ -30,6 +30,12 @@ pytestmark = pytest.mark.contract
 DAILY_SEGMENT = "2026/08/20/2026-08-20-1-1-work-00.csv"
 
 
+def recorded(state: Path, candidates: set[str]) -> set[str]:
+    """The supplied measurement IDs the migrated lookup holds."""
+    with ObservationLookup(lookup_root(state)) as lookup:
+        return lookup.recorded(candidates)
+
+
 def a_row(day: str = "2026-08-20", *, number: int = 0) -> EvalRow:
     payload = json.loads((CONTRACT_FIXTURES_DIR / "eval-row" / "high.json").read_text("utf-8"))
     return EvalRow.model_validate({
@@ -182,13 +188,66 @@ def test_every_compact_row_and_late_raw_row_contributes_its_current_id(
     result = migrate(state, load_observation_lookup())
 
     wanted = {historical, row_digest(packed_row), row_digest(late_row)}
-    assert writer.recorded_observations(state, wanted) == wanted
+    assert recorded(state, wanted) == wanted
     assert result.evaluation_rows_read == 2
     assert list(writer.records(state)) == semantics
     for relative, content in before.items():
         if relative != csv_path.relative_to(state).as_posix():
             assert (state / relative).read_bytes() == content
     assert packed.exists() and all(path.exists() for path in late)
+
+
+@pytest.mark.parametrize("name", ["an-empty-day", "a-lost-day"])
+def test_a_day_whose_entry_names_no_file_is_not_a_missing_evaluation_file(
+    tmp_path: Path, name: str
+) -> None:
+    """A reader that treats every entry as a file refuses this tree as missing a file.
+
+    The committed sample names packed days around an `empty` or a `lost` one, which
+    has no file. Only the packed days are written, and only their rows are read.
+    """
+    state = tmp_path / "state"
+    sample = CompactIndex.from_json(
+        (CONTRACT_FIXTURES_DIR / "compact-index" / f"{name}.json").read_text("utf-8")
+    )
+    packed_rows = [
+        a_row(entry.covers, number=number)
+        for number, entry in enumerate(sample.entries)
+        if entry.names_file
+    ]
+    for row in packed_rows:
+        original = file_rows(state, [row])
+        ledger.persist_period(
+            state,
+            ledger.load_stored(original, model=EvalRow),
+            model=EvalRow,
+            ledger=LedgerName.SUMMARY_QUALITY_EVALS,
+            period=Period.DAILY,
+            covers=row.date,
+            identity=writer_identity("2026-09-28-1", producer="tests.observation-compaction"),
+            built_from=len(original),
+        )
+        for path in original:
+            path.unlink()
+    for which in Period:
+        index = (
+            sample.model_copy(update={"ledger": LedgerName.SUMMARY_QUALITY_EVALS})
+            if which is sample.period
+            else CompactIndex.model_validate(
+                {"ledger": LedgerName.SUMMARY_QUALITY_EVALS, "period": which, "entries": []}
+            )
+        )
+        path = ledger.compact_index_path(state, LedgerName.SUMMARY_QUALITY_EVALS, which)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(index.to_json().encode("ascii"))
+    historical = "a" * 64
+    legacy_file(state, "2026/07/settled.csv", [historical])
+
+    result = migrate(state, load_observation_lookup())
+
+    wanted = {historical} | {row_digest(row) for row in packed_rows}
+    assert recorded(state, wanted) == wanted
+    assert result.evaluation_rows_read == len(packed_rows) == 2
 
 
 def test_existing_lookup_requires_explicit_verification_and_keeps_extra_history(tmp_path: Path) -> None:
@@ -207,7 +266,7 @@ def test_existing_lookup_requires_explicit_verification_and_keeps_extra_history(
     assert result.existing_verified and result.generation == "d" * 64
     assert result.written_paths == ()
     assert bytes_under(lookup_root(state)) == lookup_bytes
-    assert writer.recorded_observations(state, {needed, earlier}) == {needed, earlier}
+    assert recorded(state, {needed, earlier}) == {needed, earlier}
 
 
 def test_retry_after_partial_csv_removal_keeps_ids_from_already_removed_files(tmp_path: Path) -> None:
@@ -223,7 +282,7 @@ def test_retry_after_partial_csv_removal_keeps_ids_from_already_removed_files(tm
 
     assert result.removed_paths == (remaining.relative_to(state).as_posix(),)
     assert bytes_under(lookup_root(state)) == before
-    assert writer.recorded_observations(state, {first, second}) == {first, second}
+    assert recorded(state, {first, second}) == {first, second}
 
 
 def test_retry_after_all_csvs_are_removed_does_not_reset_the_published_root(tmp_path: Path) -> None:
@@ -239,7 +298,7 @@ def test_retry_after_all_csvs_are_removed_does_not_reset_the_published_root(tmp_
     assert repeated.generation == first.generation
     assert repeated.written_paths == repeated.removed_paths == ()
     assert bytes_under(state) == before
-    assert writer.recorded_observations(state, identities) == identities
+    assert recorded(state, identities) == identities
 
 
 def test_retry_ignores_unpublished_private_work_and_preserves_other_agent_files(tmp_path: Path) -> None:
@@ -258,7 +317,7 @@ def test_retry_ignores_unpublished_private_work_and_preserves_other_agent_files(
 
     assert bytes_under(private) == before
     assert unrelated.read_bytes() == b"keep exactly\n"
-    assert writer.recorded_observations(state, {"a" * 64, "b" * 64}) == {"a" * 64, "b" * 64}
+    assert recorded(state, {"a" * 64, "b" * 64}) == {"a" * 64, "b" * 64}
 
 
 def test_an_existing_lookup_missing_an_id_is_not_rebuilt_or_cleaned_up(tmp_path: Path) -> None:
@@ -422,7 +481,7 @@ def test_the_explicit_cli_reports_real_counts_and_relative_paths(tmp_path: Path)
     assert result["required_ids"] == 2 and result["evaluation_rows_read"] == 1
     assert result["removed_paths"] == [f"summary-quality-evals-index/{DAILY_SEGMENT}"]
     assert all(not Path(path).is_absolute() and "\\" not in path for path in result["written_paths"])
-    assert writer.recorded_observations(state, {row_digest(row), "a" * 64}) == {row_digest(row), "a" * 64}
+    assert recorded(state, {row_digest(row), "a" * 64}) == {row_digest(row), "a" * 64}
     before = bytes_under(state)
     refused = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
     assert refused.returncode == 2 and "existing=verify" in refused.stderr
@@ -442,4 +501,4 @@ def test_declared_legacy_daily_names_remain_migratable(tmp_path: Path, name: str
     result = migrate(state, load_observation_lookup())
 
     assert result.legacy_ids == result.required_ids == 1
-    assert writer.recorded_observations(state, {"a" * 64}) == {"a" * 64}
+    assert recorded(state, {"a" * 64}) == {"a" * 64}

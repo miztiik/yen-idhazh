@@ -427,7 +427,7 @@ def stage_plan(
     ]
     LOG.info("first sights recorded new=%s ledger=%s covers=%s", landed, LedgerName.SEEN, date)
 
-    return RunPlan(
+    plan = RunPlan(
         version=RunPlan.schema_version(),
         date=date,
         run_id=run_id,
@@ -440,6 +440,19 @@ def stage_plan(
         verticals=verticals,
         items=items,
     )
+    plan_files = ledger.persist(
+        state,
+        [plan],
+        ledger=LedgerName.RUN_PLAN,
+        covers=date,
+        identity=identity,
+    )
+    LOG.info(
+        "run plan recorded date=%s files=%s",
+        date,
+        [f"{ledger.STATE_DIRNAME}/{path.relative_to(state).as_posix()}" for path in plan_files],
+    )
+    return plan
 
 
 def _plan_desks(

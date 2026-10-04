@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -43,11 +43,11 @@ Because the extension is data on the entry, a builder cannot emit the wrong one.
 
 ## A ledger under the two roots
 
-A ledger that goes through the ledger door files under two roots rather than one: what a writer wrote under `state/raw/`, and what compaction left under `state/compact/` ([persistence.md](persistence.md)). Its grain is `raw-and-compact`, the sixth. `gardener` is the first ledger born at it, `feed-retirements` and `visual-prunes` moved to it on 2026-09-28, `item-health`, `summary-quality-evals` and `host-fingerprint` followed through a one-time migration ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)), and `counterfactual-scores` and `candidate-models` moved after them, then `seen` and `published`, and `feed-health` last.
+A ledger that goes through the ledger door files under two roots rather than one: what a writer wrote under `state/raw/`, and what compaction left under `state/compact/` ([persistence.md](persistence.md)). Its grain is `raw-and-compact`, the sixth. `gardener` is the first ledger born at it, `feed-retirements` and `visual-prunes` moved to it on 2026-09-28, `item-health`, `summary-quality-evals` and `host-fingerprint` followed through a one-time migration ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)), and `counterfactual-scores` and `candidate-models` moved after them, then `seen` and `published`, and `feed-health` last. `run-plan` is the plan-stage handoff ledger and has no older CSV shape.
 
 **For this grain the `prefix` is the path inside each of the two roots.** Everywhere else it is the path from `state/`, but `["gardener"]` means `state/raw/gardener/` and `state/compact/gardener/`. The family check still passes, because the prefix still opens on the family's name, and the registry refuses any other prefix, because the root builders file the ledger under its own name.
 
-**The four builders above refuse the grain by name.** `path`, `relpath`, `tree_root` and `tree_relpath` each answer with an error that names the ledger and points at the ones that build its addresses: `raw_path`, `raw_index_path`, `compact_path`, `compact_index_path` and `watermark_path`, with `raw_root` for the folder a reader walks. So nothing reads or writes a moved ledger at its old CSV address by accident. `ledger_families.py` counts the named files under each root on a line of its own.
+**The four builders above refuse the grain by name.** `path`, `relpath`, `tree_root` and `tree_relpath` each answer with an error that names the ledger and points at the ones that build its addresses: `raw_path`, `compact_path`, `compact_index_path` and `watermark_path`, with `raw_root` for the folder a reader walks. So nothing reads or writes a moved ledger at its old CSV address by accident. `ledger_families.py` counts the named files under each root on a line of its own.
 
 **Moving a ledger is one switch: its entry's grain.** The door table in `ledger/keys.py` holds a ledger's key and row contract before the ledger moves, and nothing asks the door about a ledger the registry does not file under the two roots, so the change that moves one edits its entry and writes no key. Every rule that depends on a move reads that grain. `backend/tests/contracts/test_door_ledgers_keep_no_csv_path.py` holds each ledger filed under the two roots to no CSV path: no CSV settlement shape or day tree, no union merge driver, no CSV prune target, a compaction of its own, and no declaration owning a folder the registry does not build. Where a moved ledger's CSV sat is not written here, because the registry says what a ledger is now: the migrator's table records it, and is deleted with the migrator ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)).
 
@@ -57,7 +57,7 @@ A ledger that goes through the ledger door files under two roots rather than one
 
 | Ledger under `state/` | Writer, under `backend/idhazh/` | What reads its rows, besides upkeep: backend under `backend/idhazh/`, console under `frontend/src/lib/server/` | Two writers on one file | What blocks its move |
 | --- | --- | --- | --- | --- |
-| `summary-quality-evals-index` | `evals/observation_batches.py`, reached through `evals/writer.py` and publication preparation | `evals/observation_lookup.py` | shared root: a rejected push replays original batches against the winner ([protocol](observation-lookup.md#publication-across-jobs)) | nothing: it is not CSV |
+| `summary-quality-evals-index` | nothing in the pipeline; only `backend/utilities/migrate_observation_lookup.py`, a person's own run | nothing in the pipeline | cannot happen: no pipeline job writes it | nothing: it is not CSV |
 | `item-health-summary` | `gardener/tasks/telemetry_aggregate.py` | nothing yet | cannot happen: one writer rewrites a month whole | a whole-month file |
 | `content-similarity-judge/scored-pairs` | `stages/count_verdicts.py` | `stages/set_merge_line.py` | the union driver keeps both | the nested folder name; three fixed-choice fields; `run_id` and `shard` |
 | `content-similarity-judge/fitted-thresholds` | `stages/set_merge_line.py` | `stages/set_merge_line.py`, `similarity/applied.py`, `similarity-ledger.ts` | the union driver keeps both | the nested folder name; two fixed-choice fields; `run_id` |
@@ -251,7 +251,7 @@ The config carries where each ledger lives and each family's lifecycle status. I
 
 **The field is `lifecycle_status`, not `state`.** `state` is already the name of the folder every ledger sits in, so `state: paused` in a file that describes `state/` reads as a claim about the folder. `lifecycle_status` says what it is - where in its life the family is - and no key in the file is named `state`. The Python enum is `LedgerLifecycleStatus`, so it cannot be mistaken for the `LifecycleStatus` that `contracts/taxonomy.py` uses for desks, lenses and feeds.
 
-**The eval ledger is `summary-quality-evals`, and its ID folder is `summary-quality-evals-index`.** Each row measures one summary's quality; `summary-quality` stays free for fitted quality thresholds. The ID folder has no retention task or day/month fold. Its registered root contains the [observation lookup and pending batches](observation-lookup.md); legacy CSV input is handled only by the [explicit migration](../../how-to/migrate-observation-lookup.md).
+**The eval ledger is `summary-quality-evals`, and its ID folder is `summary-quality-evals-index`.** Each row measures one summary's quality; `summary-quality` stays free for fitted quality thresholds. The ID folder has no retention task or day/month fold. Its registered root holds the [observation lookup](observation-lookup.md), which nothing in the pipeline writes or reads; the [evaluation design rationale](../../concepts/evaluation.md#design-rationale) says why.
 
 **A family carries no owner field.** Owner decision, 2026-09-27. An owner would say who answers for a family. One identity commits to this repository (CLAUDE.md section 8), so the field would hold the same value on every family and tell a reader nothing. The code that answers for a family is found by a search for its `LedgerName` members, because a module that reads or writes a ledger names it by its member and by nothing else.
 

@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -19,6 +19,10 @@ backend/idhazh/contracts/*.py <- Pydantic models. HAND-WRITTEN. The source of tr
 To change a persisted shape you edit the Pydantic model. Where the frontend copies something, you edit the copy in the same change, and the two tests below fail if you do not.
 
 **A contract produces its own schema.** `Contract.json_schema()` is `model_json_schema()` plus this project's canonicalisation - the `$id`, the `$schema` dialect, the version stamp and the changelog. A reader outside Python is handed one when it asks.
+
+## Recursive ledger types
+
+The ledger layer reads a field annotation as a recursive tree: scalar (`string`, `int64`, `float64`, `bool`), list (`list[T]` and `tuple[T, ...]`), or struct (nested Pydantic model). A closed set of unions and wrapped aliases is reduced before the conversion, and unsupported shapes fail with the full nested field path. `backend/idhazh/ledger/arrow_schema.py` is the single entry point; `backend/idhazh/ledger/parquet.py` renders that tree to Arrow; `backend/idhazh/ledger/json_lines.py` stays format-generic and never adds contract-specific branches.
 
 ## What the frontend carries
 
@@ -46,7 +50,7 @@ The union alone cannot be tested against at run time, and a reader that has to n
 
 **An optional field is copied optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the copied type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
 
-**The query door carries a copy of the compact index, and the stamp it reads.** `frontend/src/lib/data/compact-index.ts` declares `CompactEntry` and `CompactIndex` by hand, because the door runs in a browser that fetches `state/compact/<ledger>/index/<period>.json` and cannot import the Pydantic model. Beside them sit `COMPACT_INDEX_STAMP`, the `CompactIndex` stamp this build reads, and `COMPACT_PERIODS`. **The stamp rule is the backend's own**: an index stamped at that stamp or older is read when the fields the door acts on pass its guard, and a newer one is refused with both stamps in the console, because only a build at least that new knows what the shape means. The door's rules are [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md).
+**The query door carries a copy of the compact index, and the stamp it reads.** `frontend/src/lib/data/compact-index.ts` declares `CompactEntry` and `CompactIndex` by hand, because the door runs in a browser that fetches `state/compact/<ledger>/index/<period>.json` and cannot import the Pydantic model. Beside them sit `COMPACT_INDEX_STAMP`, the `CompactIndex` stamp this build reads, `COMPACT_PERIODS`, and `ENTRY_STATES`, the closed set an entry's `state` is drawn from. **The stamp rule is the backend's own**: an index stamped at that stamp or older is read when the fields the door acts on pass its guard, and a newer one is refused with both stamps in the console, because only a build at least that new knows what the shape means. The door's rules are [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md).
 
 **The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. `FEED_HEALTH_COLUMNS` beside it names only the `FeedHealthRow` columns the Voices page reads, in the contract's order, and the same test fails when the contract renames or drops one of them. The two other records a console route reads keep no second list. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`, and `HOST_FINGERPRINT_COLUMNS` is keyed by the `HostFingerprintRow` copy above, so the compiler refuses a column that copy does not name.
 
@@ -59,7 +63,7 @@ Four tests in `backend/tests/contracts/`, each named for what it proves.
 | `test_frontend_field_set.py` | the hand-written `HostFingerprintRow` names exactly the columns the Pydantic one declares, in the same order, with the same TypeScript type for each. Types are computed from `json_schema()` by a narrow mapper that refuses a node kind it has not met, so a field with an unfamiliar shape fails rather than passes |
 | `test_frontend_vocabularies.py` | `SERVER_JOB` and `WATCHED_FLAG` hold exactly their Python enums' members, in order |
 | `test_frontend_console_lists.py` | eight console lists still name what their contracts declare - the eval panel's column map, the census row's and the feed record's column lists in `ledger-rows.ts`, the settings vocabulary, the doubt reasons, the bandwidth margin, the prompt-reuse column grammar, and the routes the strip draws: `RouteId` and `ROUTE_IDS` in `band.ts` name `RouteId`'s members in the order the band producer's `ROUTES` writes them |
-| `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; every ledger the door may query is a `LedgerName`; and the cell it filters days on is the ledger's own date cell |
+| `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; `ENTRY_STATES` is `EntryState`; every ledger the door may query is a `LedgerName`; the `RawDayIndex` copy in `raw-day-index.ts` names the contract's fields, requires `bytes`, and carries `RawDayIndex.schema_version()` as `RAW_DAY_INDEX_STAMP`; the cell it filters days on is the ledger's own date cell; and `LEDGER_FAULTS` in `slice-shapes.ts` names `LedgerFault`'s members in order |
 
 A fourth, `test_no_generated_layer.py`, refuses the generated trees coming back one file at a time.
 
@@ -91,7 +95,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `frontend/src/lib/server/host-fingerprint.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`. |
 | `frontend/src/lib/server/ledger-rows.ts` | `ITEM_HEALTH_COLUMNS` and `FEED_HEALTH_COLUMNS`, the column names of `ItemHealthRow` and `FeedHealthRow` a console route asks the door for. |
 | `frontend/src/lib/server/config.ts` | The hand copy of `ConsolePanelGroup`. |
-| `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, and the stamp the query door reads. |
+| `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, the entry states, and the stamp the query door reads. |
 | `frontend/src/lib/console/band.ts` | The hand copy of `RouteId` and `ROUTE_IDS`, the routes the console strip draws, in the order the band producer writes them. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `DigestDay`. Hand-written, and bound by nothing. |
 
@@ -217,7 +221,7 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| `state/summary-quality-evals-index/` | `lookup/root.json`, bounded JSON routing nodes and SQLite leaves; named JSON batches under `incoming/` | which supplied measurement IDs are already recorded? | no time window; exact keys select bounded leaves ([observation-lookup.md](observation-lookup.md)) |
+| `state/summary-quality-evals-index/` | `lookup/root.json`, bounded JSON routing nodes and SQLite leaves | none: nothing in the pipeline reads it ([evaluation.md](../../concepts/evaluation.md#design-rationale)) | no time window ([observation-lookup.md](observation-lookup.md)) |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |

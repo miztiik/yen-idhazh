@@ -43,13 +43,6 @@ month the window no longer keeps are past the ledger's reach, and are dropped.
 **A window that only reports keeps them instead**: it names their files for the
 record, and the pass takes those days like any other, a first run starting as if
 the window kept every month.
-
-**The compaction writes no raw listing, and deletes every one it finds.** A
-listing under `state/raw/<ledger>/index/` named the raw files a packed day was
-built from. Nothing read it: a day taken again is rebuilt from its daily file
-and the new raw files, and the site build writes its own listings into the
-staged site for days not packed yet. Listings an earlier build wrote go at the
-next pass, whether the window reports or not, because they hold no row.
 """
 
 from __future__ import annotations
@@ -69,13 +62,6 @@ from idhazh.gardener import named_trees, schedule
 from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
 
 logger = logging.getLogger(__name__)
-
-
-def drop_listings(tree: CompactTree) -> tuple[Stop, ...]:
-    """Every raw listing an earlier build left under `index/`. Nothing reads one."""
-    for day in named_trees.listed_days(tree.listing, tree.state_dir, tree.ledger):
-        tree.delete(ledger.raw_index_path(tree.state_dir, tree.ledger, day))
-    return ()
 
 
 def _past_the_window(

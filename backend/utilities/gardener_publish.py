@@ -38,6 +38,24 @@ shard. If `origin/main` already holds that path with those bytes, an earlier try
 landed and this one stops with success; the same path with other bytes is two
 runs claiming one identity, and that is exit 2.
 
+**A shard whose paths main changed after its commit lands nothing.** After each
+fetch, `git diff-tree` compares the commit this checkout is at - the one the
+shard ran on - with `origin/main`, over every path the shard writes or deletes
+but its record. A path it lists is one main changed after the shard's commit, so
+the shard's version is stale. A re-run is the usual cause: it checks out its
+run's old commit and names its record afresh, so the record check cannot catch
+it. Nothing lands, not even the record; the shard warns and exits 0, and the
+next wake does the work again on the new main. Only trees are compared, so
+nothing is downloaded.
+
+**When every try failed, main's tip says why.** The tip is fetched once more. If
+it moved after the last try's base, other writers are landing: a warning, and
+exit 0. If it did not move, main refused the push: exit 3. A push's error text
+is never read, because git's words change with versions and languages.
+
+How the shard came to rest is one word of `idhazh.contracts.shard_landing`, and
+the line that says so names it.
+
 **Three checks run over what was staged, before every commit.** Nothing outside
 the shard's writes and deletions is staged. Every write is staged, unless its
 bytes already equal `origin/main`'s, which is a write that already landed. And
@@ -64,6 +82,7 @@ from types import ModuleType
 from typing import Final
 
 from idhazh.config import GardenerSettings
+from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener import cli as gardener_cli
 from idhazh.gardener import github_collections, runner
 from idhazh.gardener import tasks as shipped_tasks
@@ -77,7 +96,7 @@ from idhazh.gardener.file_listing import (
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
-    EXIT_PUSH_KEPT_LOSING,
+    EXIT_PUSH_REFUSED,
     EXIT_TASK_FAILED,
     Outcome,
     Shard,
@@ -198,6 +217,37 @@ class Checkout:
         """The commit this checkout is at, or None when it is not a git checkout."""
         done = self._run("rev-parse", "--verify", "--quiet", "HEAD")
         return done.stdout.strip() if done.returncode == 0 else None
+
+    def fetch(self) -> str:
+        """Fetch `main` as it is now into `origin/main`, and hand back the commit it is at."""
+        self.git("fetch", "--quiet", REMOTE, BRANCH, "--depth=1")
+        return self.git("rev-parse", "--verify", f"{REMOTE}/{BRANCH}").strip()
+
+    def changed_on_main(self, paths: Sequence[str]) -> list[str]:
+        """Which of these paths differ between the commit this checkout is at and `origin/main`.
+
+        Trees only, so a partial clone downloads nothing: it holds every tree of
+        both commits. Rename detection is off, so each path is judged by its own
+        entry. The names are taken literally, as `ls-tree` takes them, in groups
+        below Windows' process limit.
+        """
+        listed: set[str] = set()
+        for batch in _pathspec_batches(paths):
+            listed.update(
+                self.git(
+                    "--literal-pathspecs",
+                    "diff-tree",
+                    "-r",
+                    "--no-renames",
+                    "--name-only",
+                    "-z",
+                    "HEAD",
+                    f"{REMOTE}/{BRANCH}",
+                    "--",
+                    *batch,
+                ).split("\0")
+            )
+        return sorted(listed - {""})
 
     def remote_blob(self, path: str) -> str | None:
         """The object `origin/main` holds at this path, or None when it holds nothing there."""
@@ -394,37 +444,65 @@ def publish(
     repo: Path,
     say: Callable[[str], None] = print,
 ) -> int:
-    """Commit and push this shard, trying again on a newer tip, `attempts` times at most."""
+    """Land this shard on main, trying again on a newer tip, `attempts` times at most.
+
+    Every way it comes to rest is said with its word from `ShardLanding`.
+    """
     refused = _refuse_a_directory(shard, repo)
     if refused is not None:
         say(f"shard {shard.index}: {refused}")
         return EXIT_INTEGRITY
     checkout = Checkout(repo)
     written, deleted = sorted(shard.written_paths), sorted(shard.deleted_paths)
+    compared = sorted((shard.written_paths | shard.deleted_paths) - {shard.record_path})
+    base = ""
     for attempt in range(1, attempts + 1):
-        checkout.git("fetch", "--quiet", REMOTE, BRANCH, "--depth=1")
+        base = checkout.fetch()
         landed = checkout.remote_blob(shard.record_path)
         if landed is not None:
             if landed == checkout.local_blob(shard.record_path):
-                say(f"shard {shard.index}: already on {BRANCH}, try {attempt}")
+                say(f"shard {shard.index}: {ShardLanding.ALREADY_ON_MAIN}, try {attempt}")
                 return EXIT_OK
             say(
                 f"shard {shard.index}: {shard.record_path} is on {BRANCH} with other bytes, "
                 "so two runs claimed one record"
             )
             return EXIT_INTEGRITY
+        stale = checkout.changed_on_main(compared)
+        if stale:
+            more = f" and {len(stale) - 1} more" if len(stale) > 1 else ""
+            say(
+                f"::warning::shard {shard.index}: {ShardLanding.STALE} - {BRANCH} changed "
+                f"{stale[0]}{more} after the commit this shard ran on, so nothing landed. "
+                f"The next wake does the work again on the new {BRANCH}"
+            )
+            return EXIT_OK
         index = checkout.stage(written, deleted)
         missed = _what_staging_missed(shard, checkout, index)
         if missed is not None:
             say(f"shard {shard.index}: {missed}")
             return EXIT_INTEGRITY
         if checkout.push(checkout.commit(index, shard.message)):
-            say(f"shard {shard.index}: landed on {BRANCH}, try {attempt} of {attempts}")
+            say(
+                f"shard {shard.index}: {ShardLanding.LANDED} on {BRANCH}, "
+                f"try {attempt} of {attempts}"
+            )
             return EXIT_OK
-        say(f"shard {shard.index}: try {attempt} of {attempts} lost the push")
+        say(f"shard {shard.index}: try {attempt} of {attempts}, the push failed")
         if attempt < attempts:
             sleep_with_jitter(attempt)
-    return EXIT_PUSH_KEPT_LOSING
+    if checkout.fetch() != base:
+        say(
+            f"::warning::shard {shard.index}: {ShardLanding.LOST} - {BRANCH} moved after try "
+            f"{attempts} of {attempts}, so other writers are landing. Nothing landed; the "
+            "next wake does the work again"
+        )
+        return EXIT_OK
+    say(
+        f"shard {shard.index}: {ShardLanding.REFUSED} - {BRANCH} did not move after try "
+        f"{attempts} of {attempts}, so {BRANCH} refused the push. Nothing landed"
+    )
+    return EXIT_PUSH_REFUSED
 
 
 def read_the_listing(
@@ -436,9 +514,11 @@ def read_the_listing(
 ) -> FileListing:
     """Every file the commit holds under these named period paths, with its size.
 
-    Git's size where the clone holds the file. For one it never downloaded,
-    GitHub's blob API is asked for that named file and its size is matched by
-    blob id. `trees` stands in for that API, and None reaches it for this repo.
+    The listing answers only for these paths, and refuses a path under its
+    folders that none of them names. Git's size where the clone holds the
+    file. For one it never downloaded, GitHub's blob API is asked for that
+    named file and its size is matched by blob id. `trees` stands in for that
+    API, and None reaches it for this repo.
 
     The checkout is widened only by a file the commit lists, a folder above one,
     or a name directly inside such a folder - a file an earlier task of the
@@ -476,7 +556,7 @@ def read_the_listing(
             )
         checkout.widen(wanted)
 
-    return FileListing.from_commit(repo_root, chosen, entries, sizes, widen=widen)
+    return FileListing.from_commit(repo_root, chosen, entries, sizes, paths=named, widen=widen)
 
 
 def declared_folders(

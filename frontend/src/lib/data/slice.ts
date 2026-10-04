@@ -10,10 +10,18 @@
  * instead of a file set: drawing the days around a hole would be an undercount
  * nobody could see.
  *
+ * **An entry may name a period that has no file.** An `empty` one held no row,
+ * so its days are quiet and nothing is fetched for them. A `lost` day lost its
+ * rows, and so did each day a month or a year lists in its `lost_days`: those
+ * days come back by name, beside the files, because a day with no record is not
+ * a day with no rows. `namesFile()` is the one reading of whether an entry has a
+ * file, so every reader and the site build agree on it.
+ *
  * Where the ledger starts is worked out here too, `firstNamed()`, so the slice
  * and the reach never disagree about which hole lies before it.
  *
  * Pure: it takes the range and the three entry lists, and reads nothing else.
+ * It imports types only, so the site build loads it in plain Node.
  */
 
 import type { CompactEntry, Period } from './compact-index';
@@ -26,10 +34,17 @@ export interface ChosenFile {
 	firstDay: DateStamp;
 }
 
-/** The files a range needs, in ascending order, or the first day nothing holds. */
-export type FileSelection = { files: ChosenFile[] } | { hole: DateStamp };
+/** The files a range needs, in ascending order, and the days in it recorded lost; or the first day nothing holds. */
+export type FileSelection = { files: ChosenFile[]; lostDays: DateStamp[] } | { hole: DateStamp };
 
 const DAY_MS = 86_400_000;
+
+/** Whether an index entry names a file. A `packed` period has one; an `empty`
+ *  or a `lost` one has none. An entry with no state was written before entries
+ *  had one, when every entry named a file, so it reads as `packed`. */
+export function namesFile(entry: CompactEntry): boolean {
+	return entry.state === undefined || entry.state === 'packed';
+}
 
 /** Every UTC day from `from` to `to`, both included, ascending. */
 export function daysBetween(from: DateStamp, to: DateStamp): DateStamp[] {
@@ -69,6 +84,12 @@ function lastDayOfMonth(month: string): DateStamp {
 	return new Date(Date.UTC(year ?? 0, oneBased ?? 0, 0)).toISOString().slice(0, 10);
 }
 
+/** The first and the last UTC day one entry covers: a day, a month or a year. */
+export function coveredDays(period: Period, covers: string): { first: DateStamp; last: DateStamp } {
+	if (period === 'daily') return { first: covers, last: covers };
+	return { first: FIRST_DAY[period](covers), last: period === 'monthly' ? lastDayOfMonth(covers) : `${covers}-12-31` };
+}
+
 /** The newest day any index names; a month counts through its last UTC day and a year through 31 December. */
 export function newestNamed(
 	daily: readonly CompactEntry[],
@@ -83,7 +104,24 @@ export function newestNamed(
 	return named.length === 0 ? null : named.sort().at(-1)!;
 }
 
-/** The files that answer every day from `from` to `to`, one file a day. */
+/** The file of the newest entry that names one, a day before a month before a
+ *  year, or null when no entry names a file. Whatever days it covers, it holds
+ *  the ledger's newest columns. */
+export function newestFile(
+	daily: readonly CompactEntry[],
+	monthly: readonly CompactEntry[],
+	yearly: readonly CompactEntry[]
+): ChosenFile | null {
+	const day = daily.findLast(namesFile);
+	if (day !== undefined) return { period: 'daily', entry: day, firstDay: day.covers };
+	const month = monthly.findLast(namesFile);
+	if (month !== undefined) return { period: 'monthly', entry: month, firstDay: FIRST_DAY.monthly(month.covers) };
+	const year = yearly.findLast(namesFile);
+	return year === undefined ? null : { period: 'yearly', entry: year, firstDay: FIRST_DAY.yearly(year.covers) };
+}
+
+/** The files that answer every day from `from` to `to`, one file a day, and the
+ *  days among them an index records lost. */
 export function filesFor(
 	from: DateStamp,
 	to: DateStamp,
@@ -95,16 +133,22 @@ export function filesFor(
 	const months = new Map(monthly.map((entry) => [entry.covers, entry]));
 	const days = new Map(daily.map((entry) => [entry.covers, entry]));
 	const chosen = new Map<string, ChosenFile>();
+	const lostDays: DateStamp[] = [];
 	for (const day of daysBetween(from, to)) {
 		const year = years.get(day.slice(0, 4));
 		const month = year === undefined ? months.get(day.slice(0, 7)) : undefined;
 		const period: Period = year ? 'yearly' : month ? 'monthly' : 'daily';
 		const entry = year ?? month ?? days.get(day);
 		if (entry === undefined) return { hole: day };
+		if (entry.state === 'lost' || entry.lost_days?.includes(day)) {
+			lostDays.push(day);
+			continue;
+		}
+		if (!namesFile(entry)) continue;
 		const key = `${period}/${entry.covers}`;
 		if (!chosen.has(key)) chosen.set(key, { period, entry, firstDay: day });
 	}
-	return { files: [...chosen.values()] };
+	return { files: [...chosen.values()], lostDays };
 }
 
 /** The days after the newest packed day that the staged site listed for a ledger. */

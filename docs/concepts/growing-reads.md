@@ -91,15 +91,8 @@ outgrows it.
 ### 2. A cover that is not a clock
 
 Sometimes a clock would answer a different question from the one asked. Then the
-answer is a cheaper cover, not a shorter memory. Three shapes, all in service
+answer is a cheaper cover, not a shorter memory. Two shapes, both in service
 today.
-
-**The inputs and files this job owns.** Evaluation publication takes a named
-batch manifest and the paths prepared from it. A push retry replays those
-original batches, not all recorded measurements. The
-[publication protocol](../architecture/contracts/observation-lookup.md#publication-across-jobs)
-owns the durable input and prepared-path rules. Its bound is the supplied work,
-not a date window; this does not bound a full Git checkout or fetch.
 
 **One run, or one date.** `ledger.load_settled_failures` and
 `ledger.load_source_counts` take a date and read that one day through
@@ -109,20 +102,8 @@ ledger the same way, because a run id already names its date.
 by construction - the input never had a clock, and putting one on it could only
 lose work the run just did.
 
-**The candidate identities themselves.** `evals.writer.recorded_observations`
-takes the supplied digests and asks which are already present. The
-[observation lookup](../architecture/contracts/observation-lookup.md) reads one
-fixed root, the bounded routes selected by those keys and capped SQLite leaves.
-It uses the leaf's primary-key index. It does not reconstruct the historical ID
-set, open unrelated leaves or scan evaluation rows. IDs never expire, so a
-measurement does not become new merely because it was last recorded long ago.
-
-The one-time [migration](../how-to/migrate-observation-lookup.md) reads all legacy
-IDs and raw and compact evaluation rows explicitly. It is not a fallback in the
-routine writer and is listed under [unbounded](#unbounded-and-it-says-so).
-
-`fingerprint.append_new` carries digests rather than built rows, and the set
-stops growing when the inputs stop changing.
+**The distinct inputs themselves.** `fingerprint.append_new` carries digests
+rather than built rows, and the set stops growing when the inputs stop changing.
 
 ### 3. Unbounded, on purpose, and it says so
 
@@ -218,7 +199,6 @@ reads are here and not how many. These are `backend/`'s;
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `evals.writer.recorded_observations` | the fixed lookup root, candidate-selected routing pages and capped SQLite leaves | the supplied candidate digests; routing depth and leaf bytes are bounded independently of retained history ([lookup bounds](../architecture/contracts/observation-lookup.md#bounds-and-costs)) |
 | `ledger.persist` on `LedgerName.COUNTERFACTUAL_SCORES` | one raw file of `state/raw/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day, through `ledger.load_days` | one date |
 | `ledger.load_story_similarity_pairs` | one day file of `state/content-similarity-judge/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
@@ -230,7 +210,7 @@ reads are here and not how many. These are `backend/`'s;
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
 | `gardener_publish.Checkout.committed_folders`, which the `trials` task's folders come from | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: "what under `state/` does nothing claim" is a question about every child of `state/`, and a wake whose checkout is empty for this task can only ask the commit |
 | the `trials` task's walk of each folder the listing hands it | every file under the trial trees - today `state/pipeline-tests/` alone | the trial trees and nothing else, and its own window empties them: what it walks is what the last 90 days of trial runs wrote, and a tree it empties is removed whole |
-| the compaction's listing of a ledger's days, `raw_files.raw_days` and `raw_files.listed_days` | the day folder names under `state/raw/<ledger>/` and the file names under its `index/`, never a file's contents | the raw days not compacted yet, and any listing an earlier build left, which every pass deletes. A live compaction empties both as it goes, so it names about two raw days and no listing. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
+| the compaction's listing of a ledger's days, `raw_files.raw_days` | the day folder names under `state/raw/<ledger>/`, never a file's contents | the raw days not compacted yet. A live compaction empties them as it goes, so it names about two raw days. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
 | the gardener's closed-day fold, `closed_day_fold` | the day folder and file names of each CSV day tree its task owns, then every file of each closed day that still holds a writer file, and, where the task's fold settles months, every file of each closed month that still holds a day's file | what it opens is the days closed since the last wake - about one a tree a day - plus any a failed wake left, and in a tree that settles months, the month just closed once a month and a month a late day landed in. What it lists is every day folder of the tree, the listing the task's window pass already makes over the same tree. A bounded input cannot answer it: which days still hold a writer file is a question about every day, and a day a failed wake skipped is still waiting however old it is |
 
 ### Unbounded, and it says so
