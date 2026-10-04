@@ -246,6 +246,12 @@ export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: Dat
 // For each selected ledger, in order, after `hold()` has returned its names:
 //   CREATE OR REPLACE VIEW "item-health" AS
 //     SELECT * FROM read_parquet(['door/1.parquet', 'door/2.parquet'], union_by_name = true)
+// A month or year file the span reads only some days of gets a read of its own (rule 9):
+//   CREATE OR REPLACE VIEW "item-health" AS
+//     SELECT * FROM read_parquet(['door/1.parquet'], union_by_name = true)
+//       WHERE "covers" >= '2026-08-31' AND "covers" <= '2026-08-31'
+//     UNION ALL BY NAME
+//     SELECT * FROM read_parquet(['door/2.parquet', 'door/3.parquet'], union_by_name = true)
 // For every name in LEDGER_NAMES that this call did NOT select:
 //   DROP VIEW IF EXISTS "item-health"
 ```
@@ -260,6 +266,7 @@ export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: Dat
 | 6 | The views are made after `hold()` returns, the statement runs, and then `done()` is called, answered or not | `done()` drops a year file opened at an address for this call alone (section 2.1 module 5). A view over a dropped name is rebuilt or dropped by the next call before its statement runs |
 | 7 | **`ask()` runs one call at a time.** A call starts only after the previous call's `done()` has run | Each call rewrites every view, and the engine has one connection. Two calls at once - and the page describes each selected ledger with a call of its own - could drop each other's view between creating it and reading it |
 | 8 | **A selected ledger with no file in the span gets a view over its own `through` day's files, with `LIMIT 0`.** The describe before the run already holds those files. When no selected ledger holds a file in the span, `ask()` answers `quiet` and starts no engine, as `slice()` does | `read_parquet` refuses an empty file list (DuckDB 1.5.5: "read_parquet needs at least one file to read"), so without this rule the engine's error would reach the page as `refused`. It happens today: `candidate-models` has packed nothing since 2026-09-08 |
+| 9 | **A month or year file is read for its own days of the span.** `filesFor()` picks the coarsest file that holds a day, so a span that starts or ends inside a month reads that month's file, and the archive and the site can both hold a month that crosses the site's oldest day. Such a file gets a read of its own, `WHERE "covers" >= '{first}' AND "covers" <= '{last}'`, and the reads join `UNION ALL BY NAME`. Neighbouring files read whole - a day file, a writer's file, a month or year file wholly inside its days - share one read, as rule 2 says. Each day is checked as `YYYY-MM-DD` before it is written into the statement, because it comes from an index | `covers` is the day a row was filed under: every packed row carries it, even inside a month or year file, and the files and the two keepers divide a ledger's days by it. `date` is not on every ledger - `published` and `seen` have none - so a filter on it fails every question over them. Without the filter, an answer holds rows from outside its span, and a day both keepers hold is counted twice. On the site a year file is opened by address, and the same filter lets the engine skip its row groups outside the span |
 
 **`LEDGER_NAMES` widens to every ledger `config/ledgers.json` declares.** It stays a hand-written closed union in `slice-shapes.ts`. Two existing tests read it, and row 2 changes both:
 
@@ -979,6 +986,7 @@ The owner's reference is a query workbench screenshot and its HTML: `code.html`,
   | 8 | **The borrowed-from inventory is a concepts page, not a plan appendix.** A plan is distilled and archived; the reasons three classes of feature were refused outlive it and decide the next addition | Fowler, CLAUDE.md section 5 |
   | 9 | **Two custom UTC date inputs make the reach past the cap usable** (section 2.8). `From (UTC)` and `To (UTC)` accept the reader's UTC day and the 364 UTC days before it by `console.explorer_reach_days`. Preset tiles stay as shortcuts ending today. A custom link carries `from=YYYY-MM-DD` and `end=YYYY-MM-DD`; a preset link keeps `days`. A saved question and a recent run keep the custom dates too, or a question saved about last spring would reopen ending today | owner, 2026-10-03 |
   | 10 | **With no archive address, a day the site does not hold is a neutral sentence, not a failed fetch.** Nothing failed: the site holds the widest preset's days by design, so the warn tint would teach the reader to distrust a working page | Susan, 2026-10-02 |
+  | 11 | **A month or year file is read for its own days of the span, by `covers`** (section 2.4 rule 9). The second archive root showed why: the year file holds days the site also serves, so without the filter those days counted twice, and a span that starts inside a month read the whole month. A filter on `date` fails every question over `published` and `seen`, which have no such column. The site keeps opening only a year file by address, as the panels do (`RANGED_PERIODS`) | orchestrator, review of #1263, 2026-10-04 |
 
 - **Rejected alternatives:**
 

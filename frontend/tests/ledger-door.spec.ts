@@ -660,8 +660,8 @@ test.describe('what a page keeps', () => {
 		const { fetcher, asked } = recorded();
 		const first = freshPage(fetcher);
 		const ledgers = ['host-fingerprint', 'item-health'] as const;
-		await readAskCost(first, ledgers, '2026-09-01', '2026-09-01', {});
-		await readAsk(first, {
+		await readAskCost(first, null, ledgers, '2026-09-01', '2026-09-01', {});
+		await readAsk(first, null, {
 			ledgers,
 			from: '2026-09-01',
 			to: '2026-09-01',
@@ -682,8 +682,8 @@ test.describe('what a page keeps', () => {
 
 		await first.release();
 		const second = freshPage(fetcher);
-		await readAskCost(second, ledgers, '2026-09-01', '2026-09-01', {});
-		await readAsk(second, {
+		await readAskCost(second, null, ledgers, '2026-09-01', '2026-09-01', {});
+		await readAsk(second, null, {
 			ledgers,
 			from: '2026-09-01',
 			to: '2026-09-01',
@@ -1235,7 +1235,7 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 
 	test('a join over two selected ledgers returns exactly the committed rows, capped', async () => {
 		const { fetcher } = recorded();
-		const answer = await readAsk(freshPage(fetcher), opts, {});
+		const answer = await readAsk(freshPage(fetcher), null, opts, {});
 		expect(answer).toMatchObject({ state: 'ok', capped: true });
 		if (answer.state !== 'ok') return;
 		expect(answer.columns.map((column) => column.name)).toEqual(['date', 'job', 'item_job']);
@@ -1245,24 +1245,24 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 
 	test('the next call drops the unselected ledger view', async () => {
 		const page = freshPage(recorded().fetcher);
-		expect((await readAsk(page, opts, {})).state).toBe('ok');
-		const answer = await readAsk(page, { ...opts, ledgers: ['host-fingerprint'], sql: 'SELECT * FROM "item-health"', maxRows: 10 }, {});
+		expect((await readAsk(page, null, opts, {})).state).toBe('ok');
+		const answer = await readAsk(page, null, { ...opts, ledgers: ['host-fingerprint'], sql: 'SELECT * FROM "item-health"', maxRows: 10 }, {});
 		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
 	});
 
 	test('the writers tier is priced from its listing and read once when listed through', async () => {
 		const page = freshPage(recorded().fetcher);
-		const cost = await readAskCost(page, ['item-health'], '2026-09-06', '2026-09-06', { 'item-health': '2026-09-06' });
+		const cost = await readAskCost(page, null, ['item-health'], '2026-09-06', '2026-09-06', { 'item-health': '2026-09-06' });
 		expect(cost.files).toBe(2);
 		expect(cost.unpackedDays).toEqual(['2026-09-06']);
-		const answer = await readAsk(page, { ledgers: ['item-health'], from: '2026-09-06', to: '2026-09-06', sql: 'SELECT date, run_id, hostile FROM "item-health" ORDER BY run_id', maxChars: 200, maxRows: 10, maxFetchBytes: 100_000_000 }, { 'item-health': '2026-09-06' });
+		const answer = await readAsk(page, null, { ledgers: ['item-health'], from: '2026-09-06', to: '2026-09-06', sql: 'SELECT date, run_id, hostile FROM "item-health" ORDER BY run_id', maxChars: 200, maxRows: 10, maxFetchBytes: 100_000_000 }, { 'item-health': '2026-09-06' });
 		expect(answer).toMatchObject({ state: 'ok', unpackedDays: ['2026-09-06'] });
 		if (answer.state === 'ok') expect(answer.rows).toEqual(expectedAnswer('raw-writer-day'));
 	});
 
 	test('a byte ceiling refuses before any data file is fetched', async () => {
 		const { fetcher, asked } = recorded();
-		const answer = await readAsk(freshPage(fetcher), { ...opts, maxFetchBytes: 1 }, {});
+		const answer = await readAsk(freshPage(fetcher), null, { ...opts, maxFetchBytes: 1 }, {});
 		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'over-ceiling' } });
 		expect(dataAsked(asked)).toEqual([]);
 	});
@@ -1279,14 +1279,14 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 			{ name: 'duplicate-id', sql: 'SELECT h.shard AS id, i.shard AS id FROM "host-fingerprint" h JOIN "item-health" i USING (date) ORDER BY h.shard, i.shard', maxRows: 3 }
 		];
 		for (const one of cases) {
-			const answer = await readAsk(page, { ...opts, sql: one.sql, maxRows: one.maxRows }, {});
+			const answer = await readAsk(page, null, { ...opts, sql: one.sql, maxRows: one.maxRows }, {});
 			expect(answer, one.name).toMatchObject({ state: 'ok' });
 			if (answer.state === 'ok') expect(answer.rows, one.name).toEqual(expectedAnswer(one.name));
 		}
 	});
 
 	test('a ledger with no file in the span can still answer through an empty view', async () => {
-		const answer = await readAsk(freshPage(recorded().fetcher), {
+		const answer = await readAsk(freshPage(recorded().fetcher), null, {
 			ledgers: ['host-fingerprint', 'item-health'],
 			from: '2026-09-06',
 			to: '2026-09-06',
@@ -1302,8 +1302,8 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 	test('a zero-row answer is quiet and still names every column and its type', async () => {
 		const page = freshPage(recorded().fetcher);
 		const one = { ...opts, ledgers: ['host-fingerprint'] as const, maxRows: 1 };
-		const full = await readAsk(page, { ...one, sql: 'SELECT * FROM "host-fingerprint"' }, {});
-		const none = await readAsk(page, { ...one, sql: 'SELECT * FROM "host-fingerprint" WHERE false' }, {});
+		const full = await readAsk(page, null, { ...one, sql: 'SELECT * FROM "host-fingerprint"' }, {});
+		const none = await readAsk(page, null, { ...one, sql: 'SELECT * FROM "host-fingerprint" WHERE false' }, {});
 		expect(full.state).toBe('ok');
 		expect(none.state).toBe('quiet');
 		if (full.state !== 'ok' || none.state !== 'quiet') return;
@@ -1320,21 +1320,24 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		if (!('index' in daily)) throw new Error(`the fixture's item-health daily index is refused: ${JSON.stringify(daily)}`);
 		const packed = daily.index.entries.find((entry) => entry.covers === '2026-09-05');
 		expect(packed, 'the fixture packs item-health on 2026-09-05').toBeDefined();
-		const answer = await readAsk(freshPage(fetcher), { ...opts, ledgers: ['item-health'], from: '2026-09-05', to: '2026-09-05', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-06' });
+		const answer = await readAsk(freshPage(fetcher), null, { ...opts, ledgers: ['item-health'], from: '2026-09-05', to: '2026-09-05', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-06' });
 		expect(answer).toMatchObject({ state: 'ok', rows: [{ rows: String(packed?.rows) }] });
 		expect(asked.filter((one) => one.path.startsWith('raw/'))).toEqual([]);
 	});
 
 	test('days after the newest listing are clamped away, and a missing listing inside the range is unreachable', async () => {
-		const quiet = await readAsk(freshPage(recorded().fetcher), { ...opts, ledgers: ['item-health'], from: '2026-09-07', to: '2026-09-07', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-06' });
+		const quiet = await readAsk(freshPage(recorded().fetcher), null, { ...opts, ledgers: ['item-health'], from: '2026-09-07', to: '2026-09-07', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-06' });
 		expect(quiet).toMatchObject({ state: 'quiet' });
-		const missing = await readAsk(freshPage(recorded().fetcher), { ...opts, ledgers: ['item-health'], from: '2026-09-07', to: '2026-09-07', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-07' });
+		const missing = await readAsk(freshPage(recorded().fetcher), null, { ...opts, ledgers: ['item-health'], from: '2026-09-07', to: '2026-09-07', sql: 'SELECT count(*) AS rows FROM "item-health"', maxRows: 10 }, { 'item-health': '2026-09-07' });
 		expect(missing).toEqual({ state: 'unreachable', ledger: 'item-health', at: '2026-09-07', fault: 'file-missing' });
 	});
 
-	test('a date in no tier is unreachable at that date', async () => {
-		const missing = await readAsk(freshPage(recorded().fetcher), { ...opts, from: '2026-07-30', to: '2026-07-30' }, {});
-		expect(missing).toMatchObject({ state: 'unreachable', at: '2026-07-30' });
+	test('a date in no tier is unreachable at that date, and with no archive the span starts at the site', async () => {
+		const archive = freshPage(recorded({}, YEAR_STATE, ARCHIVE_PREFIX).fetcher, counted(), ARCHIVE_PREFIX);
+		const missing = await readAsk(freshPage(recorded().fetcher), archive, { ...opts, from: '2025-07-30', to: '2025-07-30' }, {});
+		expect(missing).toMatchObject({ state: 'unreachable', at: '2025-07-30', fault: 'day-missing' });
+		const siteOnly = await readAsk(freshPage(recorded().fetcher), null, { ...opts, from: '2026-07-30', to: '2026-07-30' }, {});
+		expect(siteOnly).toMatchObject({ state: 'quiet', siteFrom: '2026-08-01' });
 	});
 
 	test('the archive tier answers days before the site starts, and empty archive clamps to the site', async () => {
@@ -1381,17 +1384,33 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		expect(clamped).toMatchObject({ siteFrom: '2026-09-01', files: 1, bytes: bytesOf(dayFile('2026-09-01')).byteLength });
 	});
 
+	test('a month file the span starts inside answers only the days the span asked for', async () => {
+		const { fetcher, asked } = recorded();
+		const answer = await readAsk(freshPage(fetcher), null, {
+			...opts,
+			ledgers: [LEDGER],
+			from: '2026-08-31',
+			to: '2026-09-01',
+			sql: 'SELECT covers, run_id, job, shard FROM "host-fingerprint" ORDER BY covers, run_id, job, shard',
+			maxRows: 20
+		}, {});
+		expect(answer).toMatchObject({ state: 'ok', capped: false, siteFrom: null });
+		if (answer.state !== 'ok') return;
+		expect(answer.rows).toEqual(expectedAnswer('month-edge'));
+		expect(dataAsked(asked)).toEqual([dataPath(LEDGER, 'monthly', '2026-08'), dataPath(LEDGER, 'daily', '2026-09-01')]);
+	});
+
 	test('two calls made at once over different ledgers run one after the other', async () => {
 		const page = freshPage(recorded().fetcher);
 		const count = (ledger: 'host-fingerprint' | 'item-health') =>
-			readAsk(page, { ...opts, ledgers: [ledger], sql: `SELECT count(*) AS rows FROM "${ledger}"`, maxRows: 10 }, {});
+			readAsk(page, null, { ...opts, ledgers: [ledger], sql: `SELECT count(*) AS rows FROM "${ledger}"`, maxRows: 10 }, {});
 		const [host, item] = await Promise.all([count('host-fingerprint'), count('item-health')]);
 		expect(host.state).toBe('ok');
 		expect(item.state).toBe('ok');
 	});
 
 	test('a ledger the call did not select names no table', async () => {
-		const answer = await readAsk(freshPage(recorded().fetcher), { ...opts, ledgers: ['host-fingerprint'], sql: 'SELECT * FROM "summary-quality-evals"', maxRows: 10 }, {});
+		const answer = await readAsk(freshPage(recorded().fetcher), null, { ...opts, ledgers: ['host-fingerprint'], sql: 'SELECT * FROM "summary-quality-evals"', maxRows: 10 }, {});
 		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
 		if (answer.state === 'refused' && answer.because.kind === 'engine-error') {
 			expect(answer.because.message).toContain('summary-quality-evals');
@@ -1404,19 +1423,19 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 			[DAILY_INDEX]: { status: 200, body: encoded(empty) },
 			[MONTHLY_INDEX]: { status: 200, body: encoded({ ...empty, period: 'monthly' }) },
 			[YEARLY_INDEX]: { status: 200, body: encoded({ ...empty, period: 'yearly' }) }
-		}).fetcher), { ...opts, ledgers: ['host-fingerprint', 'item-health'] }, {});
+		}).fetcher), null, { ...opts, ledgers: ['host-fingerprint', 'item-health'] }, {});
 		expect(missing).toEqual({ state: 'missing', ledger: 'host-fingerprint' });
 
-		const absent = await readAsk(freshPage(recorded({ [MONTHLY_INDEX]: { status: 404 } }).fetcher), opts, {});
+		const absent = await readAsk(freshPage(recorded({ [MONTHLY_INDEX]: { status: 404 } }).fetcher), null, opts, {});
 		expect(absent).toMatchObject({ state: 'unreachable', ledger: 'host-fingerprint', at: '2026-09-01', fault: 'index-missing' });
-		const refused = await readAsk(freshPage(recorded({ [MONTHLY_INDEX]: reshaped({ version: '2099-01-01' }) }).fetcher), opts, {});
+		const refused = await readAsk(freshPage(recorded({ [MONTHLY_INDEX]: reshaped({ version: '2099-01-01' }) }).fetcher), null, opts, {});
 		expect(refused).toMatchObject({ state: 'unreachable', ledger: 'host-fingerprint', at: '2026-09-01', fault: 'index-missing' });
 	});
 
 	test('a raw listing naming a non-parquet file is unreachable at its day', async () => {
 		const listing = decoded(readFileSync(path.join(STATE, 'raw', 'item-health', 'index', '2026-09-06.json')));
 		const bad = { ...listing, files: ['00000000-0000-8000-8000-000000000001.json'], bytes: [(listing.bytes as number[])[0]] };
-		const answer = await readAsk(freshPage(recorded({ [rawIndexPath('item-health', '2026-09-06')]: { status: 200, body: encoded(bad) } }).fetcher), {
+		const answer = await readAsk(freshPage(recorded({ [rawIndexPath('item-health', '2026-09-06')]: { status: 200, body: encoded(bad) } }).fetcher), null, {
 			ledgers: ['item-health'],
 			from: '2026-09-06',
 			to: '2026-09-06',
@@ -1443,11 +1462,11 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		const both = { ...opts, ledgers: ['host-fingerprint', 'item-health'] as const, maxRows: 10 };
 		const hostRows = fixtureEntries('daily').find((entry) => entry.covers === '2026-09-01')?.rows;
 		expect(hostRows).toBeGreaterThan(0);
-		expect(await readAsk(page, { ...both, sql: 'SELECT count(*) AS rows FROM "host-fingerprint"' }, {})).toMatchObject({
+		expect(await readAsk(page, null, { ...both, sql: 'SELECT count(*) AS rows FROM "host-fingerprint"' }, {})).toMatchObject({
 			state: 'ok',
 			rows: [{ rows: String(hostRows) }]
 		});
-		const empty = await readAsk(page, { ...both, sql: 'SELECT * FROM "item-health"' }, {});
+		const empty = await readAsk(page, null, { ...both, sql: 'SELECT * FROM "item-health"' }, {});
 		expect(empty.state).toBe('quiet');
 		if (empty.state === 'quiet') expect(empty.columns.map((column) => column.name)).toEqual(expect.arrayContaining([...columns]));
 	});
@@ -1469,7 +1488,7 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 			[rawIndexPath('item-health', '2026-09-05')]: nothingListed('2026-09-05'),
 			[rawIndexPath('item-health', '2026-09-06')]: nothingListed('2026-09-06')
 		}).fetcher);
-		const answer = await readAsk(page, {
+		const answer = await readAsk(page, null, {
 			...opts,
 			ledgers: ['host-fingerprint', 'item-health'],
 			from: '2026-09-05',
@@ -1483,15 +1502,15 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 	test('a bad statement is refused before the engine starts', async () => {
 		const engine = counted();
 		const page = freshPage(recorded().fetcher, engine);
-		expect(await readAsk(page, { ...opts, sql: 'SELECT 1; DROP VIEW "host-fingerprint"' }, {})).toEqual({
+		expect(await readAsk(page, null, { ...opts, sql: 'SELECT 1; DROP VIEW "host-fingerprint"' }, {})).toEqual({
 			state: 'refused',
 			because: { kind: 'statements', count: 2 }
 		});
-		expect(await readAsk(page, { ...opts, sql: 'CREATE TABLE t AS SELECT 1' }, {})).toEqual({
+		expect(await readAsk(page, null, { ...opts, sql: 'CREATE TABLE t AS SELECT 1' }, {})).toEqual({
 			state: 'refused',
 			because: { kind: 'not-read-only', word: 'CREATE' }
 		});
-		expect(await readAsk(page, { ...opts, sql: 'SELECT 12345', maxChars: 6 }, {})).toEqual({
+		expect(await readAsk(page, null, { ...opts, sql: 'SELECT 12345', maxChars: 6 }, {})).toEqual({
 			state: 'refused',
 			because: { kind: 'too-long', chars: 12, max: 6 }
 		});

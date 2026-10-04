@@ -138,6 +138,17 @@ def test_raw_listings_name_files_and_sizes() -> None:
         assert path.stat().st_size == size
 
 
+# The door reads the month for 2026-08-31 alone, by the day each row was filed under.
+MONTH_EDGE = (
+    "SELECT COLUMNS(*)::VARCHAR FROM ("
+    "SELECT covers, run_id, job, shard FROM read_parquet('{month}', union_by_name=true) "
+    "WHERE covers >= '2026-08-31' AND covers <= '2026-08-31' "
+    "UNION ALL "
+    "SELECT covers, run_id, job, shard FROM read_parquet('{day}', union_by_name=true) "
+    "ORDER BY covers, run_id, job, shard)"
+)
+
+
 def test_answer_fixtures_are_recomputed_with_duckdb() -> None:
     import duckdb
 
@@ -166,14 +177,19 @@ def test_answer_fixtures_are_recomputed_with_duckdb() -> None:
     rows = con.execute(
         f"SELECT COLUMNS(*)::VARCHAR FROM ("
         f"SELECT date, run_id, job, shard FROM read_parquet('{archive_year}', union_by_name=true) "
-        f"WHERE date >= '2026-08-30' AND date < '2026-09-01' "
+        f"WHERE covers >= '2026-08-30' AND covers <= '2026-08-31' "
         f"UNION ALL "
         f"SELECT date, run_id, job, shard FROM read_parquet('{site_day}', union_by_name=true) "
-        f"WHERE date = '2026-09-01' "
         f"ORDER BY date, run_id, shard)"
     ).fetchall()
     columns = [column[0] for column in con.description]
     expected = json.loads((FIXTURE / "answers" / "archive-before-site.json").read_text())
+    assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
+
+    site_month = (FIXTURE / "state" / "compact" / "host-fingerprint" / "monthly" / "2026" / "08.parquet").as_posix()
+    rows = con.execute(MONTH_EDGE.format(month=site_month, day=site_day)).fetchall()
+    columns = [column[0] for column in con.description]
+    expected = json.loads((FIXTURE / "answers" / "month-edge.json").read_text())
     assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
 
 

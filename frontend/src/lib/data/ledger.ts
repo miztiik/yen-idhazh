@@ -49,9 +49,12 @@ function keeper(): PageKeeper {
 	return kept;
 }
 
+/** The archive's prefix: this build's `ledger.archive_base_url`. A page script that sets
+ *  `__ARCHIVE_BASE_URL__` to an empty string reads the site alone, as the browser test of a
+ *  site-only span does; nothing on the page can point the archive at another address. */
 function archiveBaseUrl(): string {
 	const runtime = (globalThis as typeof globalThis & { __ARCHIVE_BASE_URL__?: unknown }).__ARCHIVE_BASE_URL__;
-	return typeof runtime === 'string' ? runtime : __ARCHIVE_BASE_URL__;
+	return runtime === '' ? '' : __ARCHIVE_BASE_URL__;
 }
 
 function archiveKeeper(): PageKeeper | null {

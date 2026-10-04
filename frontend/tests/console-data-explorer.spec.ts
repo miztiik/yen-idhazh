@@ -7,11 +7,12 @@ import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, expectedAsk, expectedAskCost, EXPLORER_CANARY_DAY, openExplorer, runExplorer, tableRows } from './support/explorer-answer';
 import { encodeQuestion } from '../src/lib/console/explorer/address';
 import { consoleConfig, explorerConfig } from '../src/lib/server/config';
+import { shortDate } from '../src/lib/format';
 import type { LedgerName } from '../src/lib/data/ledger';
 
-const JOIN_LEDGERS = ['host-fingerprint'] as const satisfies readonly LedgerName[];
-const JOIN_SQL = 'SELECT CAST(count(*) AS VARCHAR) AS rows FROM "host-fingerprint"';
-const JOIN_FROM = EXPLORER_CANARY_DAY;
+const JOIN_LEDGERS = ['published', 'item-health'] as const satisfies readonly LedgerName[];
+const JOIN_SQL = 'SELECT \'published x item-health\' AS pair, CAST(count(*) AS VARCHAR) AS rows FROM "published" p, "item-health" h';
+const JOIN_FROM = '2026-08-07';
 
 function addDays(day: string, delta: number): string {
 	const date = new Date(`${day}T00:00:00Z`);
@@ -106,29 +107,26 @@ test('THE ORACLE: custom date inputs expose reach bounds and presets end today',
 	await expect(to).toHaveValue(today);
 });
 
-test('THE ORACLE: with no archive prefix, old custom spans show a neutral site-only sentence', async ({ browser }) => {
-	const context = await browser.newContext({ serviceWorkers: 'block' });
-	const page = await context.newPage();
-	try {
-		await page.addInitScript(() => {
-			Object.defineProperty(globalThis, '__ARCHIVE_BASE_URL__', { value: '', configurable: true });
-		});
-		await openExplorer(page);
-		await page.getByRole('textbox', { name: 'To (UTC)' }).fill('2026-08-05');
-		await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2025-10-10');
-		await chooseOnly(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
-		await runExplorer(page);
-		const answer = page.locator('[data-console-panel-id="data-explorer-rows"]');
-		await expect(answer).toContainText('Days before');
-		await expect(answer).toContainText('are not on this site.');
-		await expect(answer.locator('[data-state="quiet"]')).toBeVisible();
-		await expect(answer.locator('[data-state="quiet"]')).not.toHaveClass(/warn/);
-	} finally {
-		await context.close();
-	}
+test('THE ORACLE: with no archive prefix, an old custom span reads from the site\'s oldest day and says so', async ({ page }) => {
+	await page.addInitScript(() => {
+		Object.defineProperty(globalThis, '__ARCHIVE_BASE_URL__', { value: '', configurable: true });
+	});
+	await openExplorer(page);
+	const from = addDays(EXPLORER_CANARY_DAY, 1 - explorerConfig().reach_days);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT min("covers") AS first_day FROM "published"');
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill(from);
+	const { siteFrom } = await expectedAskCost(page, ['published'], from, EXPLORER_CANARY_DAY);
+	if (siteFrom === null) throw new Error(`this site holds published days from ${from}, so the span was not cut`);
+	await runExplorer(page);
+	const panel = page.locator('[data-console-panel-id="data-explorer-rows"]');
+	await expect(panel.locator('.answer-note')).toContainText(`Days before ${shortDate(siteFrom)} are not on this site.`);
+	await expect(panel.locator('.warn')).toHaveCount(0);
+	const [[firstDay]] = await tableRows(page);
+	expect(firstDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+	expect(firstDay >= siteFrom, `the answer starts on ${firstDay}, before the site's ${siteFrom}`).toBe(true);
 });
 
-test('THE ORACLE: a typed question matches the query door and the run cost matches the network', async ({ page }) => {
+test('THE ORACLE: a typed join matches the query door and the run cost matches the network', async ({ page }) => {
 	await openExplorer(page);
 	const columnFetches: string[] = [];
 	page.on('response', (response) => {
@@ -137,11 +135,16 @@ test('THE ORACLE: a typed question matches the query door and the run cost match
 		if (pathname.includes('/state/') && pathname.endsWith('.parquet')) columnFetches.push(pathname);
 	});
 	await chooseExplorerQuestion(page, JOIN_LEDGERS, JOIN_SQL);
-	await page.getByRole('textbox', { name: 'To (UTC)' }).fill(EXPLORER_CANARY_DAY);
-	await page.getByRole('textbox', { name: 'From (UTC)' }).fill(EXPLORER_CANARY_DAY);
 	const fetchedLedgers = new Set(columnFetches.map((path) => path.match(/\/state\/(?:compact|raw)\/([^/]+)\//)?.[1]).filter(Boolean));
 	for (const ledger of JOIN_LEDGERS) expect(fetchedLedgers.has(ledger)).toBe(true);
 
+	const runResponses = new Map<string, Promise<number>>();
+	page.on('response', (response) => {
+		const url = response.url();
+		const pathname = new URL(url).pathname;
+		if (!pathname.includes('/state/') || !pathname.endsWith('.parquet')) return;
+		runResponses.set(url, response.body().then((body) => body.byteLength).catch(() => 0));
+	});
 	await runExplorer(page);
 	const expected = await expectedAsk(page, {
 		ledgers: JOIN_LEDGERS,
@@ -158,6 +161,7 @@ test('THE ORACLE: a typed question matches the query door and the run cost match
 	const line = page.locator('[data-explorer-action-line]');
 	expect(Number(await line.getAttribute('data-files'))).toBeGreaterThan(0);
 	expect(Number(await line.getAttribute('data-bytes'))).toBeGreaterThan(0);
+	expect(Number(await line.getAttribute('data-bytes'))).toBe((await Promise.all([...runResponses.values()])).reduce((sum, bytes) => sum + bytes, 0));
 });
 
 test('THE ORACLE: choosing ledgers fetches one through day for each chosen ledger and no other data file', async ({ page }) => {
@@ -225,7 +229,7 @@ test('THE ORACLE: every Records answer state renders distinct words, tint and ac
 
 	remember('quiet', await statePage(page, async (one) => {
 		await openExplorer(one);
-		await chooseExplorerQuestion(one, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint" WHERE false');
+		await chooseExplorerQuestion(one, ['published'], 'SELECT * FROM "published" WHERE false');
 		await runExplorer(one);
 		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="quiet"]')).toBeVisible();
 	}));
@@ -266,7 +270,7 @@ test('THE ORACLE: every Records answer state renders distinct words, tint and ac
 
 	remember('refused', await statePage(page, async (one) => {
 		await openExplorer(one);
-		await chooseExplorerQuestion(one, ['host-fingerprint'], 'SELECT 1; SELECT 2');
+		await chooseExplorerQuestion(one, ['published'], 'SELECT 1; SELECT 2');
 		await runExplorer(one);
 		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"]')).toBeVisible();
 	}));
@@ -323,7 +327,7 @@ test('THE ORACLE: the browser refuses an origin outside connect-src', async ({ p
 
 test('THE ORACLE: hostile cell text stays plain in the real table', async ({ page }) => {
 	await openExplorer(page);
-	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT \'<script>alert(1)</script> https://example.invalid/x\' AS hostile FROM "host-fingerprint" LIMIT 1');
+	await chooseExplorerQuestion(page, ['published'], 'SELECT \'<script>alert(1)</script> https://example.invalid/x\' AS hostile FROM "published" LIMIT 1');
 	await runExplorer(page);
 	const table = page.locator('[data-explorer-answer]');
 	await expect(table).toContainText('<script>alert(1)</script> https://example.invalid/x');
@@ -331,7 +335,7 @@ test('THE ORACLE: hostile cell text stays plain in the real table', async ({ pag
 });
 
 test('THE ORACLE: a shared address fills the editor and does not run itself', async ({ page }) => {
-	const sql = 'SELECT job, count(*) AS rows FROM "host-fingerprint" GROUP BY job ORDER BY job';
+	const sql = 'SELECT attempt, count(*) AS rows FROM "published" GROUP BY attempt ORDER BY attempt';
 	const q = await encodeQuestion(sql);
 	const fetched: string[] = [];
 	page.on('response', (response) => {
@@ -339,15 +343,15 @@ test('THE ORACLE: a shared address fills the editor and does not run itself', as
 		if (pathname.includes('/state/') && pathname.endsWith('.parquet')) fetched.push(pathname);
 	});
 	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
-	await page.goto(`/console/data-explorer/?ledgers=host-fingerprint&days=14&q=${q}`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`/console/data-explorer/?ledgers=published&days=14&q=${q}`, { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('#explorer-sql')).toHaveValue(sql);
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('This question came from a link');
 	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
 	await expect(page.locator('[data-explorer-action-line]')).not.toContainText('Answered in');
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
-	await expect(page.locator('[data-explorer-columns]')).toContainText('host-fingerprint.');
-	expect(fetched.every((path) => dataLedger(path) === 'host-fingerprint' && dataPathCoversDay(path, EXPLORER_CANARY_DAY)), 'a shared link fetched a span file before Run').toBe(true);
+	await expect(page.locator('[data-explorer-columns]')).toContainText('published.');
+	expect(fetched.every((path) => dataLedger(path) === 'published' && dataPathCoversDay(path, EXPLORER_CANARY_DAY)), 'a shared link fetched a span file before Run').toBe(true);
 	const beforeType = page.url();
 	await page.locator('#explorer-sql').fill(`${sql} `);
 	expect(page.url()).toBe(beforeType);
@@ -376,7 +380,7 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 		{ type: 'distribution', lede: 'Half of rows is at or under 84.5', sql: 'SELECT * FROM range(0, 170) AS t(rows)' }
 	] as const;
 	for (const { type, lede, sql } of cases) {
-		await chooseExplorerQuestion(page, ['host-fingerprint'], sql);
+		await chooseExplorerQuestion(page, ['published'], sql);
 		await runExplorer(page);
 		if (await page.locator(`[data-shape-choice="${type}"] input`).count()) {
 			await page.locator(`[data-shape-choice="${type}"] input`).check();
@@ -388,7 +392,7 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 		await expect(panel.locator('[title], title')).toHaveCount(0);
 	}
 
-	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT run_id FROM "host-fingerprint" LIMIT 1');
+	await chooseExplorerQuestion(page, ['published'], 'SELECT item_id FROM "published" LIMIT 1');
 	await runExplorer(page);
 	const none = panel.locator('[data-shape-none]');
 	await expect(none).toContainText('Nothing here to draw');
@@ -399,8 +403,8 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 test('THE ORACLE: Save, recent runs and Markdown copy preserve text without running a saved question', async ({ page, context }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	await openExplorer(page);
-	const sql = "SELECT 'header' AS label, '[x](https://example.invalid/a)|pipe\n`tick`' AS hostile FROM \"host-fingerprint\" LIMIT 1";
-	await chooseExplorerQuestion(page, ['host-fingerprint'], sql);
+	const sql = "SELECT 'header' AS label, '[x](https://example.invalid/a)|pipe\n`tick`' AS hostile FROM \"published\" LIMIT 1";
+	await chooseExplorerQuestion(page, ['published'], sql);
 	const beforeSave = page.url();
 	await page.getByRole('button', { name: /^Save$/ }).click();
 	await page.getByLabel('Name').fill('Hostile copy');
