@@ -137,18 +137,11 @@
     "zoom_factor": 1.5,
     "explorer_bar_spread_share": 0.5,
     "explorer_chrome": "workbench",
-    "explorer_readout_lines": [
-      3,
-      2,
-      2,
-      1
-    ],
-    "explorer_notice_ms": 6000,
     "explorer_cell_max_ch": 40,
     "explorer_counter_from_share": 0.9,
-    "explorer_editor_lines_shown": [
+    "explorer_editor_lines": [
       8,
-      10
+      20
     ],
     "explorer_examples": [
       {
@@ -204,10 +197,10 @@
     "explorer_rail_rem": 14,
     "explorer_row_page": 50,
     "explorer_strip_shown": [
-      0,
+      3,
       6
     ],
-    "explorer_answer_svh": 60,
+    "explorer_table_max_vh": 70,
     "explorer_chart_min_rows": 3,
     "explorer_rank_max": 30,
     "explorer_saved_max": 20,

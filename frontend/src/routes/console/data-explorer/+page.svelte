@@ -336,8 +336,11 @@
 			for (const ledger of picked) {
 				const day = cost.through[ledger] ?? nextSpan.to;
 				const answer = await ask({ ledgers: [ledger], from: day, to: day, sql: `DESCRIBE ${quoteLedger(ledger)}`, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
-				if ((answer.state === 'ok' || answer.state === 'quiet') && 'columns' in answer) {
-					for (const column of answer.columns) described.push({ name: `${ledger}.${column.name}`, type: column.type });
+				// DESCRIBE answers one row per column of the ledger: its name and its type.
+				if (answer.state === 'ok') {
+					for (const row of answer.rows) {
+						if (typeof row.column_name === 'string') described.push({ name: `${ledger}.${row.column_name}`, type: String(row.column_type ?? '') });
+					}
 				}
 			}
 			ledgerColumns = described;
@@ -442,7 +445,7 @@
 			<div class="editor-stack">
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}
 				<div data-workbench-region="editor">
-					<QueryEditor value={sql} maxChars={config.query_max_chars} minLines={config.editor_lines_shown[0]} maxLines={config.editor_lines_shown[1]} counterFromShare={config.counter_from_share} onInput={(value) => (sql = value)} onRun={run} />
+					<QueryEditor value={sql} maxChars={config.query_max_chars} minLines={config.editor_lines[0]} maxLines={config.editor_lines[1]} counterFromShare={config.counter_from_share} onInput={(value) => (sql = value)} onRun={run} />
 				</div>
 				<HistoryList runs={recentRuns} onPick={pickRun} />
 			</div>
@@ -484,7 +487,7 @@
 				{#if runSpan}Read from {spanDays()} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}
 				{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}
 			</div>
-		<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} tableMaxVh={config.answer_svh} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} onOrderChange={(rows) => (orderedRows = rows)} />
+		<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} tableMaxVh={config.table_max_vh} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} onOrderChange={(rows) => (orderedRows = rows)} />
 		{:else if result.state === 'quiet'}
 			<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}</div>
 	{:else if result.state === 'missing'}

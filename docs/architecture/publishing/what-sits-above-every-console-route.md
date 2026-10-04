@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 Three surfaces stand on a full console route: the strip - the route tabs and the
 days control on one row - the sentence under it that says how complete the

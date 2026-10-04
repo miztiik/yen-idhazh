@@ -170,6 +170,19 @@ test('THE ORACLE: Data explorer puts the span and Run in the workbench toolbar',
 	await expect(toolbar.getByRole('button', { name: /^Run$/ })).toHaveCount(1);
 });
 
+test('THE ORACLE: before a run the column rail names the selected ledger\'s own columns', async ({ page }) => {
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint"');
+	const rail = page.locator('[data-explorer-columns] li code');
+	const before = await rail.allTextContents();
+	expect(before.length, 'the rail names no column before a run').toBeGreaterThan(0);
+	expect(before.filter((name) => !name.startsWith('host-fingerprint.')), 'a rail entry not named for its ledger').toEqual([]);
+	await runExplorer(page);
+	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Answer columns');
+	const after = await rail.allTextContents();
+	expect(new Set(before.map((name) => name.slice('host-fingerprint.'.length))), 'the rail before a run is not the ledger\'s columns').toEqual(new Set(after));
+});
+
 test('THE ORACLE: the Data explorer fallback document carries the shipped content policy', () => {
 	const html = readFileSync(resolve(process.cwd(), 'build', '404.html'), 'utf8');
 	expect(html).toContain('content-security-policy');
