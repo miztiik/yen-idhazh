@@ -5,7 +5,9 @@ Four properties, and the third is the one the design exists for.
 The window decides which members qualify. The ceiling decides how many of them
 one pass takes. The refusal list decides which collections may be pointed at.
 And an interruption leaves members 1 to N deleted, N+1 onward untouched, and a
-record naming where the next pass starts - no rollback, nothing half-done.
+record naming where the next pass starts - no rollback, nothing half-done. A
+walk from a mark adds the day a pass handled through, which the next pass
+starts after.
 
 Every collection here is BUILT out of real files in `tmp_path` (CLAUDE.md
 section 13). The core's whole contract is three callables, so a test that
@@ -17,7 +19,7 @@ refusal from the real file system, not an exception somebody wrote.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 import pytest
@@ -327,6 +329,209 @@ def test_a_dry_run_names_every_member_and_deletes_none(tmp_path: Path) -> None:
     removed = one_at_a_time.take(collection_over(root), window=window, ceiling=5, dry_run=False)
     assert removed.taken == reported.taken
     assert removed.bytes_freed == reported.bytes_freed
+
+
+# --- A walk from a mark ----------------------------------------------------------
+
+
+def a_walk(root: Path, members: tuple[str, ...]) -> Collection[Path]:
+    """One real file per member, each named `<day>-<letter>`, listed in name order.
+
+    Several members share a day here, which a walk from a mark needs: the day
+    is where a pass may stop, and a member is not.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    for member in members:
+        (root / f"{member}.txt").write_text(member, encoding="utf-8", newline="\n")
+
+    def listing() -> Iterator[Path]:
+        yield from sorted(root.glob("*.txt"))
+
+    return Collection(
+        name="files",
+        listing=listing,
+        describe=lambda path: Member(
+            id=path.stem, day=path.stem[:10], size_bytes=path.stat().st_size, label=path.name
+        ),
+        delete=lambda path: path.unlink(),
+    )
+
+
+#: Three members on one day, then two on the next.
+WALK = ("2026-07-29-a", "2026-07-29-b", "2026-07-29-c", "2026-07-30-a", "2026-07-30-b")
+
+
+def test_a_walk_that_runs_out_has_handled_every_day_to_its_line(tmp_path: Path) -> None:
+    """The listing covers every day after the mark, so its end is the line, not the newest member."""
+    taken = one_at_a_time.take(
+        a_walk(tmp_path, WALK), window=Window(until="2026-08-02"), ceiling=None, mark="2026-07-28"
+    )
+
+    assert taken.stopped_because is StopReason.EXHAUSTED
+    assert taken.handled_through == "2026-08-02"
+
+
+def test_a_walk_passes_over_what_its_mark_has_handled(tmp_path: Path) -> None:
+    """A member on or before the mark was handled by an earlier pass, so it is not selected again."""
+    root = tmp_path / "files"
+
+    taken = one_at_a_time.take(
+        a_walk(root, ("2026-07-28-a", *WALK)),
+        window=Window(until="2026-08-02"),
+        ceiling=None,
+        dry_run=False,
+        mark="2026-07-28",
+    )
+
+    assert taken.taken == WALK
+    assert (taken.seen, taken.selected) == (6, 5)
+    assert on_disk(root) == ["2026-07-28-a"]
+
+
+@pytest.mark.parametrize(
+    ("ceiling", "through"),
+    [
+        pytest.param(2, "2026-07-28", id="inside-the-first-day"),
+        pytest.param(3, "2026-07-29", id="at-the-next-day"),
+    ],
+)
+def test_a_live_walk_its_ceiling_stops_leaves_the_mark_on_the_last_whole_day(
+    tmp_path: Path, ceiling: int, through: str
+) -> None:
+    """Stopped inside a day, the mark stays on the day before it; that day is read again."""
+    taken = one_at_a_time.take(
+        a_walk(tmp_path, WALK),
+        window=Window(until="2026-08-02"),
+        ceiling=ceiling,
+        dry_run=False,
+        mark="2026-07-28",
+    )
+
+    assert taken.stopped_because is StopReason.CEILING
+    assert taken.taken == WALK[:ceiling]
+    assert taken.handled_through == through
+
+
+def test_a_dry_walk_past_its_ceiling_counts_the_rest_of_the_day_and_moves_its_mark(
+    tmp_path: Path,
+) -> None:
+    """A dry run deletes nothing, so stopping inside a day would report it again every wake.
+
+    It names one member, counts the other two of that day without naming them,
+    and stops at the next day: the mark moves to the day it finished.
+    """
+    root = tmp_path / "files"
+
+    taken = one_at_a_time.take(
+        a_walk(root, WALK), window=Window(until="2026-08-02"), ceiling=1, mark="2026-07-28"
+    )
+
+    assert taken.taken == ("2026-07-29-a",)
+    assert (taken.stopped_because, taken.resume_from) == (StopReason.CEILING, "2026-07-29-b")
+    assert taken.selected == 4, "the rest of the day was not counted, or the next day was"
+    assert taken.handled_through == "2026-07-29"
+    assert on_disk(root) == list(WALK)
+
+
+def test_a_dry_walk_that_counts_to_the_end_of_its_listing_reaches_the_line(
+    tmp_path: Path,
+) -> None:
+    taken = one_at_a_time.take(
+        a_walk(tmp_path, WALK[:3]), window=Window(until="2026-08-02"), ceiling=1, mark="2026-07-28"
+    )
+
+    assert (taken.stopped_because, taken.resume_from) == (StopReason.CEILING, "2026-07-29-b")
+    assert taken.handled_through == "2026-08-02"
+
+
+def test_a_walk_whose_mark_is_its_line_reads_nothing(tmp_path: Path) -> None:
+    """Nothing is past the mark and inside the window, so the listing is never asked."""
+    asked: list[str] = []
+    walk = a_walk(tmp_path, WALK)
+
+    def listing() -> Iterable[Path]:
+        asked.append("listing")
+        return walk.listing()
+
+    untouched = Collection(
+        name=walk.name, listing=listing, describe=walk.describe, delete=walk.delete
+    )
+
+    taken = one_at_a_time.take(
+        untouched, window=Window(until="2026-07-30"), ceiling=None, mark="2026-07-30"
+    )
+
+    assert asked == []
+    assert (taken.stopped_because, taken.seen, taken.handled_through) == (
+        StopReason.EXHAUSTED,
+        0,
+        "2026-07-30",
+    )
+
+
+def test_a_walk_out_of_day_order_keeps_its_mark_and_says_so(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A member from an earlier day than one before it: which days are whole can no longer be said.
+
+    The pass still takes every member the window holds, because the window is
+    what keeps a delete safe, but its mark stays where it started.
+    """
+    walk = a_walk(tmp_path, WALK)
+    shuffled = Collection(
+        name=walk.name,
+        listing=lambda: iter(
+            sorted(tmp_path.glob("*.txt"), key=lambda path: (path.stem[-1], path.stem))
+        ),
+        describe=walk.describe,
+        delete=walk.delete,
+    )
+
+    with caplog.at_level("WARNING", logger="idhazh.gardener.one_at_a_time"):
+        taken = one_at_a_time.take(
+            shuffled, window=Window(until="2026-08-02"), ceiling=None, mark="2026-07-28"
+        )
+
+    assert sorted(taken.taken) == list(WALK)
+    assert taken.handled_through == "2026-07-28"
+    assert "out of day order" in caplog.text
+
+
+def test_a_live_walk_that_fails_keeps_its_mark_on_the_last_whole_day(tmp_path: Path) -> None:
+    """The member that cannot go is on 2026-07-30, so every day before it was handled whole."""
+    root = tmp_path / "files"
+    walk = a_walk(root, WALK)
+    (root / "2026-07-30-a.txt").unlink()
+    (root / "2026-07-30-a.txt").mkdir()
+
+    with pytest.raises(PruneInterruptedError) as stop:
+        one_at_a_time.take(
+            walk, window=Window(until="2026-08-02"), ceiling=None, dry_run=False, mark="2026-07-28"
+        )
+
+    assert stop.value.so_far.taken == WALK[:3]
+    assert stop.value.so_far.handled_through == "2026-07-29"
+
+
+def test_a_pass_with_no_mark_records_no_day(tmp_path: Path) -> None:
+    """Only a walk from a mark says where the next one starts."""
+    taken = one_at_a_time.take(a_collection(tmp_path), window=Window(until=DAYS[4]), ceiling=None)
+
+    assert taken.handled_through is None
+
+
+@pytest.mark.parametrize(
+    ("window", "mark", "refusal"),
+    [
+        pytest.param(Window(until="2026-08-02"), "2026-7-28", "YYYY-MM-DD", id="not-a-day"),
+        pytest.param(Window(since="2026-07-01"), "2026-07-28", "window's last day", id="no-line"),
+    ],
+)
+def test_a_walk_needs_a_day_to_start_after_and_a_line_to_end_on(
+    tmp_path: Path, window: Window, mark: str, refusal: str
+) -> None:
+    with pytest.raises(ValueError, match=refusal):
+        one_at_a_time.take(a_walk(tmp_path, WALK), window=window, ceiling=None, mark=mark)
 
 
 # --- The refusal list ----------------------------------------------------------

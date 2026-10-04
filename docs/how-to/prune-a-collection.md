@@ -38,7 +38,9 @@ Read the task's row in the gardener's record from the last wake, under
 `state/raw/gardener/<YYYY>/<MM>/<DD>/`: `selected` is how many members the window
 holds, `deleted` is how many a live pass would take, up to the ceiling, and
 `stopped_because` says whether there is more. That wake's log lists every member
-by id.
+by id. `workflow-runs` reads only the days after `handled_through` on its last
+row, so its `selected` counts the runs of those days, and `handled_through` says
+how far its walk has got.
 
 To see it now, run the task in a checkout with the two variables exported. It
 lists the collection, deletes nothing while the declaration says `dry_run: true`,
@@ -58,6 +60,7 @@ ceiling is `max_deletes_per_run` beside it.
 | `nothing was deleted - a live run would delete the members above` | the pass was a dry run; the line above it says why it stopped | to delete them, follow step 3 |
 | `the collection is exhausted` | nothing else is inside the window | one live pass finishes the job |
 | `the ceiling of N stopped this pass at <id>` | there is more | each later wake takes the next batch, until the line changes |
+| `the ceiling of N would stop a live pass at <id>; the rest of that day was counted, not listed` | a dry run of `workflow-runs` listed the ceiling's worth of one day's runs and counted the rest | nothing; the next dry run starts on the day after the one it names |
 | `the pass failed at <id>` | the members above it are gone | fix the cause; the next wake retries that member |
 | `the pass failed after N members, before it could name the next one` | the listing itself failed, or a member could not be read | fix the cause; the next wake starts from the oldest member the window holds |
 
