@@ -868,6 +868,8 @@ The owner's reference is a query workbench screenshot and its HTML: `code.html`,
 
 - **Scope:** the chart panel joins the group and draws the answer as a chart chosen by the rules in section 2.11, from the vocabulary page's list, with its readout strip, main figure and comparison - or one neutral sentence that stays. A question is saved in this browser under a name and drawn on the question strip; the last runs are listed; the answer copies as JSON or as a Markdown table; and the page address carries the ledgers, the days and the question, so a link reopens it **into the editor without running it**. The editor opens on this browser's most recent run (section 2.16 rule 11).
 
+**Split (owner, 2026-10-03, so it runs beside row 4):** `shape.ts`, `keep.ts` and `address.ts` with their tests, and the address-length benchmark record, ship in #<PR>; the knobs, the page wiring, the components and the icons ship as this row's own pull request.
+
 **What the address carries.**
 
 ```
