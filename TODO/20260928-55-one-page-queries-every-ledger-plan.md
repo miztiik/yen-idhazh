@@ -57,7 +57,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 2 | The door answers a written question, on the engine plan 51 shipped | 1 | B | DONE | p55r2 | #1201 | p55-r2-worker |
 | 3 | Every declared ledger reaches the site, capped at the widest span | 1 | B | DONE | p55r3 | #1200 | p55-r3-worker |
 | 4 | The page: pick the ledgers and the days, write the question, read the table | 1, 2, 3, 7 | D | DONE | p55r4 | #1235 | p55-r4-worker |
-| 5 | The answer gets a shape, and a question is kept, found again and shared | 4 | E | DONE | p55r5 | - | p55-r5-worker |
+| 5 | The answer gets a shape, and a question is kept, found again and shared | 4 | E | DONE | p55r5 | #1256 | p55-r5-worker |
 | 6 | Reach past the cap, the glyphs, the gates, the pictures and the how-to | 4, 5 | F | PENDING | - | - | - |
 | 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | #1229 | p55-r7-worker |
 
