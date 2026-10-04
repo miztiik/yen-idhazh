@@ -1,6 +1,6 @@
 """Can a program a job runs outside its install start when `pip install -e .` did not?
 
-Four programs in this repository are held to the standard library at import.
+Five programs in this repository are held to the standard library at import.
 The one that replaces a stale `state/` with what origin's tip carries puts a run
 back in a state it can work from, and a job reaches it when something has
 already gone wrong - a failed install is one of those things. The history job's
@@ -8,7 +8,8 @@ due check runs on a shallow checkout before any install at all, and it is what
 decides whether the job goes on to rewrite `main`. The history job's squash
 program keeps its push and the refusal in front of it drivable by a test with
 nothing of this project loaded. The gardener's plan job splits the tasks into
-shards on a checkout of two folders, and installs nothing at all.
+shards on a checkout of two folders, and installs nothing at all. The Pages
+workflow decides whether to publish on a bare checkout, before any install.
 
 Module scope only. A name imported inside a function is resolved when that
 function runs, and the squash program imports `idhazh` in the one function that
@@ -25,17 +26,24 @@ from typing import Final
 import pytest
 from conftest import read_text
 
-from ._harness import GARDENER_PLAN_MODULE, PRUNE_PUSH_MODULE, SQUASH_DUE_MODULE, TAKE_STATE_MODULE
+from ._harness import (
+    GARDENER_PLAN_MODULE,
+    PRUNE_PUSH_MODULE,
+    PUBLISH_DECISION_MODULE,
+    SQUASH_DUE_MODULE,
+    TAKE_STATE_MODULE,
+)
 
 pytestmark = pytest.mark.workflow
 
-#: Every program held to this, named one by one. A fifth program a broken job
+#: Every program held to this, named one by one. A sixth program a broken job
 #: reaches for is declared here or it is held to nothing.
 STANDALONE_PROGRAMS: Final = (
     TAKE_STATE_MODULE,
     SQUASH_DUE_MODULE,
     PRUNE_PUSH_MODULE,
     GARDENER_PLAN_MODULE,
+    PUBLISH_DECISION_MODULE,
 )
 
 
