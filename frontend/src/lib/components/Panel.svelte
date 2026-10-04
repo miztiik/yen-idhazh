@@ -20,6 +20,7 @@
 		wide = false,
 		heading = 'h2',
 		verdict = false,
+		actions = null,
 		children
 	}: {
 		title: string;
@@ -40,6 +41,8 @@
 		 * first, so an operator reads whether to trust the readings before he
 		 * reads ten of them. */
 		verdict?: boolean;
+		/** Optional controls that act on the panel as a whole. */
+		actions?: Snippet | null;
 		children: Snippet;
 	} = $props();
 </script>
@@ -54,11 +57,18 @@
 	class:wide
 >
 	<header class="panel-head">
-		{#if heading === 'h3'}
-			<h3 class="panel-title">{title}</h3>
-		{:else}
-			<h2 class="panel-title">{title}</h2>
-		{/if}
+		<div class="panel-title-row">
+			{#if heading === 'h3'}
+				<h3 class="panel-title">{title}</h3>
+			{:else}
+				<h2 class="panel-title">{title}</h2>
+			{/if}
+			{#if actions}
+				<div class="panel-actions">
+					{@render actions()}
+				</div>
+			{/if}
+		</div>
 		{#if note}<p class="panel-note">{note}</p>{/if}
 	</header>
 	<div class="panel-body">
@@ -93,6 +103,13 @@
 		margin-bottom: var(--space-3);
 	}
 
+	.panel-title-row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+
 	.panel-title {
 		margin: 0;
 		font-size: var(--text-lg);
@@ -105,6 +122,23 @@
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-tertiary);
+	}
+
+	.panel-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: var(--space-2);
+	}
+
+	@media (max-width: 1023px) {
+		.panel-title-row {
+			display: grid;
+		}
+
+		.panel-actions {
+			justify-content: flex-start;
+		}
 	}
 
 	/* A wide panel still has an edge; it just does not pad its content away from

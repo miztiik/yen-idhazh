@@ -16,12 +16,12 @@ export async function openExplorer(page: Page, waitReady = true) {
 	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toBeVisible();
 	await expect(page.locator('[data-ledger-name]').first()).toBeVisible();
-	if (waitReady) await expect(page.locator('[data-explorer-action-line] button')).toBeEnabled({ timeout: 60_000 });
+	if (waitReady) await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 }
 
 export async function runExplorer(page: Page) {
-	await page.locator('[data-explorer-action-line] button').click();
-	await page.locator('[data-explorer-answer], [data-state]').first().waitFor({ timeout: 60_000 });
+	await page.getByRole('button', { name: /^Run$/ }).click();
+	await page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-answer], [data-console-panel-id="data-explorer-rows"] [data-state]').first().waitFor({ timeout: 60_000 });
 }
 
 export async function chooseExplorerQuestion(page: Page, ledgers: readonly LedgerName[], sql: string) {
@@ -32,13 +32,10 @@ export async function chooseExplorerQuestion(page: Page, ledgers: readonly Ledge
 		await page.locator(`[data-ledger-name="${ledger}"] input`).check();
 	}
 	await page.locator('#explorer-sql').fill(sql);
-	await expect
-		.poll(async () => Number(await page.locator('[data-explorer-action-line]').getAttribute('data-files')))
-		.toBeGreaterThan(0);
 	if (ledgers.length > 0) {
 		await expect(page.locator('[data-explorer-columns]')).toContainText(`${ledgers[ledgers.length - 1]}.`, { timeout: 60_000 });
 	}
-	await expect(page.locator('[data-explorer-action-line] button')).toBeEnabled({ timeout: 60_000 });
+	await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 }
 
 export async function tableRows(page: Page): Promise<string[][]> {

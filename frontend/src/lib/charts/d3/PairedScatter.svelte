@@ -47,6 +47,7 @@
 		aria-label={label}
 		data-chart-type="pairedScatter"
 		data-chart-name={name}
+		data-readout-records={geometry.marks.length}
 	>
 		{#each geometry.y.ticks as tick (tick.value)}
 			<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />
@@ -75,9 +76,7 @@
 			{/if}
 		{/each}
 		{#each geometry.marks as mark, index (index)}
-			<circle cx={mark.cx} cy={mark.cy} r={DOT} fill="none" stroke="var(--chart-1)">
-				<title>{mark.label}: {mark.x}, {mark.y}</title>
-			</circle>
+			<circle cx={mark.cx} cy={mark.cy} r={DOT} fill="none" stroke="var(--chart-1)" aria-label={`${mark.label}: ${mark.x}, ${mark.y}`} />
 		{/each}
 	</svg>
 {/if}

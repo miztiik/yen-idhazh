@@ -49,6 +49,7 @@
 		aria-label={label}
 		data-chart-type="distribution"
 		data-chart-name={name}
+		data-readout-records={geometry.bins.length}
 	>
 		{#each geometry.y.ticks as tick (tick.value)}
 			<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />
@@ -77,9 +78,7 @@
 		{/each}
 
 		{#each geometry.bins as bin (bin.x0)}
-			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-1)">
-				<title>{bin.count} between {bin.x0} and {bin.x1}</title>
-			</rect>
+			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-1)" aria-label={`${bin.x0} to ${bin.x1}: ${bin.count} rows, ${bin.share.toFixed(1)}% at or below`} />
 		{/each}
 		<path d={geometry.cumulative} fill="none" stroke="var(--color-text)" stroke-width={CURVE} />
 
