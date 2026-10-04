@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -167,14 +167,15 @@ sweep therefore grows one day a day, and the growth is declared rather than
 removed - at the 727-day horizon the 1 GB Pages cap sets, about 645 MB reads in
 roughly 15 s on a laptop and 30-60 s on the 4-vCPU runner, against a 6 h job.
 
-**And three whole-tree walks that stayed.** `assemble.site_size` and
-`site_weight.measure` read the size of every file in the tree;
-`site_weight.count_published_items` parses every staged day payload. Each says so
-at the top of its own docstring with the measurement beside it: over
-`frontend/public/digest/` at 443 files and 25,070,521 bytes, 2026-09-07 on an
-a developer machine, `site_size` took 300.4 ms best and 563.4 ms worst over five
-runs and `measure` took 276.8 ms best and 352.3 ms worst - in a job that runs for
-hours. The reason they stayed is in
+**And one whole-tree walk that stayed.** `build_publication.record_build_inventory`
+reads the size of every file in the built site and parses every built day
+payload. The `site-weight` step runs it each time it measures, and then
+`site_weight.measure` and `site_weight.count_published_items` read the one
+inventory it wrote. `assemble.site_size` reads the source inventory,
+`frontend/public/publication.json`, rather than the tree. When `measure` still
+walked `frontend/public/digest/` itself - 443 files and 25,070,521 bytes,
+2026-09-07, on a developer machine - the walk took 276.8 ms best and 352.3 ms
+worst over five runs, in a job that runs for hours. The reason it stayed is in
 [what did not land](#two-rows-did-not-land-what-was-asked-and-the-page-is-more-useful-for-saying-so)
 below.
 
@@ -241,9 +242,8 @@ reads are here and not how many. These are `backend/`'s;
 | `corpus.read_rows` | `corpus/corpus.jsonl` | already rolling, capped at `finetune.corpus_rows` |
 | `contracts.base.Contract.read` | one payload | a validator cannot skip what it has not read |
 | `publication_checks.run_publication_checks` | every committed `digest.json` under `frontend/public/digest/` | a published day is frozen, but the contracts it is read through are not, so any day can stop matching on a commit that changes a shape. The receipt that used to skip an unchanged day was decommissioned on 2026-09-27: it settled a day on a recorded payload LENGTH, which let a receipt earned over one tree pass a same-length day in another. Measured 44 MB/s (2026-09-08), so the 727-day horizon reads in 30-60 s on the runner |
-| `assemble.site_size` | every file under `frontend/public/digest/` | three jobs write the tree, so no one process can carry the total |
-| `site_weight.measure` | every file under the built tree | it is the independent audit a maintained total is checked against |
-| `site_weight.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
+| `assemble.site_size` | `frontend/public/publication.json`, the source inventory, whose entries name every published file | three jobs write the tree, so no one process can carry the total; the inventory carries it, and grows by one entry a published file |
+| `build_publication.record_build_inventory`, run by the `site-weight` step | every file under the built tree, and every built day payload | it is the independent audit a maintained total is checked against, and bytes and items have to come from one corpus. `site_weight.measure` and `site_weight.count_published_items` read the one inventory it writes |
 | `retention.dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
 | `build_reference_dataset.archive_candidates` | every committed `digest.json` under `frontend/public/digest/` | the candidate pool for the frozen reference set has to be every article the pipeline has published, because the set is drawn on **outlet diversity** and a window would hide the outlets that publish rarely. It is a verb a person types, off the daily path and run once a set (2026-09-13) |
 | `item_health_provenance.archive_columns` | every row of the item-health ledger, through `ledger.load_ledger_rows` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is an on-demand [column diagnostic](../architecture/sources/item-health.md#diagnosing-missing-columns), not a saved architecture report. No test repeats it (`CLAUDE.md` section 13) |
@@ -655,13 +655,17 @@ broken.
 **The site-size total shipped its retraction half only.** `site_weight.SiteSize.minus`
 carries the total forward where one process both writes and deletes, so an
 ordinary deletion pass no longer re-reads the whole tree to learn a number it is
-already holding. The three walks above stayed, and the reason is structural
+already holding. The three walks of that time stayed, and the reason was structural
 rather than an excuse: **two separate jobs write `frontend/public/digest/`** -
 the work shards render and the assembly job writes the day payload - and the
 cleanup pass deletes from it, so a total one of them accumulated would silently
 miss what the others did, in the number that feeds the site-size card. Carrying
-one between three jobs means writing it down, which is a new persisted contract
-and a person's decision. So the three walks declare their growth instead.
+one between three jobs meant writing it down, which is a new persisted contract
+and a person's decision. That contract is now the source inventory,
+`frontend/public/publication.json`, which `assemble.site_size` reads. The walk
+that stays is the built tree's: every build regenerates that tree, so there is
+no earlier total to carry, and `record_build_inventory` walks it once each time
+the site is measured.
 
 **The state-prune row's premise was measured and refuted, so nothing was
 optimised.** The row asked for the dated walk that `retention.dated_days` gave

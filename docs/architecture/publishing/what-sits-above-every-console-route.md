@@ -52,11 +52,11 @@ because no tile carries a price any more:
 | ---: | ---: | ---: | ---: | --- |
 | 320 | 3 | 140px | 315px | hidden |
 | 360 | 3 | 160px | 291px | hidden |
-| 390 | 3 | 175px | 267px | hidden |
+| 390 | 3 | 175px | 323px | hidden |
 | 414 | 3 | 186px | 267px | hidden |
 | 480 | 2 | 142px | 238px | hidden |
 | 640 | 2 | 141px | 206px | hidden |
-| 768 | 1 | 135px | 154px | hidden |
+| 768 | 2 | 353px | 206px | hidden |
 | 900 | 1 | 161px | 154px | hidden |
 | 1024 | 1 | 148px | 152px | shown |
 | 1280 | 1 | 185px | 120px | shown |
@@ -67,14 +67,13 @@ Stuck, the strip is 70px at every width measured from 1024 to 1920. On
 a price; the shorter control took 81px off it there and 16px off every route at
 1440.
 
-**What a sixth tab does to the strip**, measured the same day on a local build
-with `console.data_explorer_tab` on. It adds a row of tabs only from 731 to
+**What the sixth tab does to the strip**, measured after Records became live. It adds a row of tabs only from 731 to
 871px, where five tabs fit one row and six do not, so Records stands alone on a
 second row. Below 435px six tabs stand two to a row in the same three rows five
 did, and from 435 to 730px in the same two - **but the strip still grows**, by
 56px at 390, because Voices then shares its row with Records and its worst state
 wraps inside the narrower tab. From 1024px the row scrolls, and every route opens
-with its own tab whole.
+with its own tab whole. The old flag is gone, so this is now the normal strip on every console route.
 
 **What moving the days control onto the strip cost a phone, and what it gave
 back.** Before, the control stood under the band. Measured the same way off the

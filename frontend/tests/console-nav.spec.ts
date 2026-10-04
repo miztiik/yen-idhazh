@@ -4,9 +4,9 @@ import { resolve } from 'node:path';
 import { BAND_UNREAD, readBand, stripRoutes } from '../src/lib/console/band';
 
 /**
- * The console is five routes, and this file is why it is routes and not tabs.
- * A sixth, Records, is declared on the band and drawn only while
- * `console.data_explorer_tab` is on, because its page does not exist yet.
+ * The console is six routes, and this file is why it is routes and not tabs.
+ * Records is live and is answered by the fallback document because it fetches
+ * all data after JavaScript starts.
  *
  * A tab strip that switches with script fails every assertion here: with
  * JavaScript off it shows one panel set and no way to reach the others, and
@@ -18,7 +18,7 @@ import { BAND_UNREAD, readBand, stripRoutes } from '../src/lib/console/band';
  * them did NOT move when two of the labels changed on 2026-08-31, which is what
  * makes that a rename and not a route change. The strip may never take the
  * health ramp: green, amber and red on a label would say a route is failing,
- * and a route is a noun. And since 2026-09-12 the strip has to FIT - five tabs
+ * and a route is a noun. And since 2026-09-12 the strip has to FIT - six tabs
  * on one row at 1440 and no more than three at 360 and 320, with no box
  * overlapping another.
  */
@@ -44,7 +44,8 @@ const ROUTES = [
 	{ id: 'model', label: 'Summaries', path: '/console/model/' },
 	{ id: 'machine', label: 'Hardware', path: '/console/machine/' },
 	{ id: 'judgement', label: 'Judgement', path: '/console/judgement/' },
-	{ id: 'voices', label: 'Voices', path: '/console/voices/' }
+	{ id: 'voices', label: 'Voices', path: '/console/voices/' },
+	{ id: 'data-explorer', label: 'Records', path: '/console/data-explorer/' }
 ] as const;
 
 /** The routes that still name something they do not draw.
@@ -93,9 +94,11 @@ async function tabs(page: Page) {
 test.describe('the strip', () => {
 	// One visit per route carries both the strip's own checks (this test) and
 	// the standing band's (in "the standing band" below), instead of each
-	// describe block re-visiting all five routes on its own: fifteen page
-	// visits for the two concerns, down to five, with every assertion kept.
-	test('each route draws the same five labels, marks its own, and the band matches across routes', async ({
+	// describe block re-visiting every route on its own: fifteen page visits
+	// for the two concerns, over the original five routes, down to five -
+	// with every assertion kept. A sixth route, Records, joined the strip
+	// later and rides the same single visit per route.
+	test('each route draws the same labels, marks its own, and the band matches across routes', async ({
 		page
 	}) => {
 		const bandByRoute: Record<string, { verdict: string; worst: string; size: string }> = {};
@@ -106,7 +109,7 @@ test.describe('the strip', () => {
 			const drawn = await tabs(page);
 			expect(
 				drawn.map((tab) => tab.id),
-				`${route.path}: the strip does not name the five routes in order`
+				`${route.path}: the strip does not name the same routes in order`
 			).toEqual(ROUTES.map((entry) => entry.id));
 			// Verbatim. A label that paraphrases the owner's word fails here.
 			for (const [index, entry] of ROUTES.entries()) {
@@ -145,8 +148,8 @@ test.describe('the strip', () => {
 			bandByRoute[route.id] = band;
 		}
 
-		// Derived once for all five, so they cannot disagree about which route is
-		// worst - which is the failure a per-route band eventually produces.
+		// Derived once for every route, so they cannot disagree about which route
+		// is worst - which is the failure a per-route band eventually produces.
 		const pipelines = bandByRoute[ROUTES[0].id];
 		for (const route of ROUTES.slice(1)) {
 			expect(bandByRoute[route.id], `the band differs on ${route.path}`).toEqual(pipelines);
@@ -163,7 +166,7 @@ test.describe('the strip', () => {
 		expect(
 			drawn.map((tab) => tab.id),
 			'a tab id moved, which is an address and not a label'
-		).toEqual(['pipelines', 'model', 'machine', 'judgement', 'voices']);
+		).toEqual(ROUTES.map((entry) => entry.id));
 
 		for (const [index, entry] of ROUTES.entries()) {
 			expect(drawn[index].href, `${entry.id} no longer points at its own route`).toContain(
@@ -171,7 +174,7 @@ test.describe('the strip', () => {
 			);
 		}
 
-		for (const entry of ROUTES) {
+		for (const entry of ROUTES.filter((route) => route.id !== 'data-explorer')) {
 			const answered = await page.request.get(entry.path);
 			expect(answered.status(), `${entry.path} stopped answering`).toBe(200);
 			expect(
@@ -179,6 +182,10 @@ test.describe('the strip', () => {
 				`${entry.path} no longer prints its own route marker`
 			).toContain(`data-console-route="${entry.id}"`);
 		}
+		const fallback = await page.request.get('/console/data-explorer/');
+		expect([200, 404], '/console/data-explorer/ is served by the fallback').toContain(
+			fallback.status()
+		);
 	});
 
 	test('every label carries a description, and the same words as its tooltip', async ({ page }) => {
@@ -190,7 +197,7 @@ test.describe('the strip', () => {
 				line: (node.querySelector('.tab-line')?.textContent ?? '').trim()
 			}))
 		);
-		expect(drawn).toHaveLength(5);
+		expect(drawn).toHaveLength(6);
 		for (const tab of drawn) {
 			expect(tab.line.length, `${tab.id} has no description under its label`).toBeGreaterThan(20);
 			expect(tab.title, `${tab.id}'s tooltip is not its description`).toBe(tab.line);
@@ -297,7 +304,7 @@ async function stripBoxes(page: Page) {
 	}));
 }
 
-/** Widths and the rows five tabs may stand on at each.
+/** Widths and the rows six tabs may stand on at each.
  *
  * 1440 is where the console is read; 360 is the narrowest phone the rest of
  * this suite drives; 320 is the narrowest screen still in use and is here
@@ -320,20 +327,20 @@ async function stripBoxes(page: Page) {
  */
 const STRIP_WIDTHS = [
 	{ width: 1440, height: 1000, rows: 1 },
-	{ width: 768, height: 1000, rows: 1 },
+	{ width: 768, height: 1000, rows: 2 },
 	{ width: 360, height: 780, rows: 3 },
 	{ width: 320, height: 780, rows: 3 }
 ] as const;
 
 for (const view of STRIP_WIDTHS) {
-	test(`THE ORACLE: five tabs stand on at most ${view.rows} rows at ${view.width}`, async ({
+	test(`THE ORACLE: six tabs stand on at most ${view.rows} rows at ${view.width}`, async ({
 		page
 	}) => {
 		await page.setViewportSize({ width: view.width, height: view.height });
 		await page.goto('/console/');
 
 		const { innerWidth, clientWidth, boxes } = await stripBoxes(page);
-		expect(boxes, `only ${boxes.length} tabs are drawn, so this proves nothing`).toHaveLength(5);
+		expect(boxes, `only ${boxes.length} tabs are drawn, so this proves nothing`).toHaveLength(6);
 
 		// A row is a distinct top. Read off the built page rather than off the
 		// rule, so a basis, a gap or a font change that breaks it fails here.
@@ -348,7 +355,7 @@ for (const view of STRIP_WIDTHS) {
 		);
 		expect(
 			rows.size,
-			`five tabs stand on ${rows.size} rows at innerWidth ${innerWidth} ` +
+			`six tabs stand on ${rows.size} rows at innerWidth ${innerWidth} ` +
 				`(clientWidth ${clientWidth}), over the ${view.rows} this width allows: ` +
 				boxes.map((box) => `${box.id}@${box.left}-${box.right}x${box.top}`).join(' ')
 		).toBeLessThanOrEqual(view.rows);
@@ -428,7 +435,7 @@ test.describe('with no script at all', () => {
 		const context = await browser.newContext({ javaScriptEnabled: false });
 		const page = await context.newPage();
 
-		for (const route of ROUTES) {
+		for (const route of ROUTES.filter((entry) => entry.id !== 'data-explorer')) {
 			const response = await page.goto(route.path);
 			expect(response?.status(), `${route.path} did not answer`).toBe(200);
 
@@ -461,9 +468,9 @@ test.describe('with no script at all', () => {
 
 		// Every one of the twenty-five links, followed. A strip whose anchors 404 is
 		// a strip that reads correctly and goes nowhere.
-		for (const route of ROUTES) {
+		for (const route of ROUTES.filter((entry) => entry.id !== 'data-explorer')) {
 			await page.goto(route.path);
-			for (const entry of ROUTES) {
+			for (const entry of ROUTES.filter((one) => one.id !== 'data-explorer')) {
 				const href = await page
 					.locator(`[data-console-tab="${entry.id}"]`)
 					.getAttribute('href');
@@ -482,8 +489,8 @@ test.describe('with no script at all', () => {
 
 test.describe('the standing band', () => {
 	// The per-route content/equality checks (same three facts, no control, and
-	// agreement across all five routes) live in "the strip" above, on the same
-	// five page visits that already check the labels - not a second pass.
+	// agreement across every route) live in "the strip" above, on the same
+	// page visits that already check the labels - not a second pass.
 
 	test('the worst thing names the route it is on, and that route exists', async ({ page }) => {
 		await page.goto('/console/');
@@ -572,10 +579,11 @@ test.describe('the cross-boundary carries', () => {
 		// points back at Pipelines because a broken feed is a question about a run,
 		// and the run record is the one thing Voices does not carry.
 		judgement: '/console/model/',
-		voices: '/console/'
+		voices: '/console/',
+		'data-explorer': '/console/'
 	};
 
-	for (const route of ROUTES) {
+	for (const route of ROUTES.filter((entry) => entry.id !== 'data-explorer')) {
 		test(`${route.path} carries one sentence pointing at another route`, async ({ page }) => {
 			await page.goto(route.path);
 			const carry = page.locator('[data-console-carry]');
@@ -589,32 +597,19 @@ test.describe('the cross-boundary carries', () => {
 	}
 });
 
-/** A band written before the sixth route existed. It names five routes, and a
- * page reading it must still draw a console. */
+/** A band written before Records existed still reads, and the fallback fills the route. */
 const OLD_BAND = resolve(process.cwd(), '..', 'tests', 'fixtures', 'contracts', 'console-band', 'newest-day.json');
 
-test.describe('the sixth tab waits for its page', () => {
-	// Checked without a page, because the flag reaches the strip through each
-	// route's prerendered data and a second build is not a test. What the strip
-	// draws is `stripRoutes()` of the band's routes, so this is the whole rule.
-	test('the strip draws five routes with the flag off and six with it on', () => {
+test.describe('old bands still draw every route', () => {
+	test('the strip draws Records from the fallback words', () => {
 		const payload = JSON.parse(readFileSync(OLD_BAND, 'utf8')) as { routes: { id: string }[] };
-		expect(
-			payload.routes.map((route) => route.id),
-			'the fixture already names the sixth route, so it is not an old band'
-		).not.toContain('data-explorer');
+		expect(payload.routes.map((route) => route.id)).not.toContain('data-explorer');
 		const band = readBand(payload);
 		expect(band.read, 'an old band no longer reads').toBe(true);
-
-		const five = ROUTES.map((entry) => entry.id);
-		expect(stripRoutes(band.routes, false).map((route) => route.id)).toEqual(five);
-		expect(stripRoutes(BAND_UNREAD.routes, false).map((route) => route.id)).toEqual(five);
-
-		const six = stripRoutes(band.routes, true);
-		expect(six.map((route) => route.id)).toEqual([...five, 'data-explorer']);
-		// Filled from the strip's own words, with no worst state: the old band
-		// never named the route, and Records judges nothing either way.
-		expect(six.at(-1)).toMatchObject({
+		const drawn = stripRoutes(band.routes);
+		expect(drawn.map((route) => route.id)).toEqual(ROUTES.map((entry) => entry.id));
+		expect(drawn.at(-1)).toMatchObject({
+			id: 'data-explorer',
 			label: 'Records',
 			href: '/console/data-explorer/',
 			description: 'What the ledgers hold, and whatever you ask of them.',

@@ -146,7 +146,7 @@ State cost before a download, progress while it is measurable, readiness when co
 
 Use the existing Lucide-derived icon system by id. Keep glyphs monochrome and inherit `currentColor`; do not add a handwritten inline path or a second theme-specific artwork set. [Icon provenance](../../frontend/src/lib/icons/PROVENANCE.md) owns source and update details.
 
-Icons belong in controls, chrome and declared classifications. Do not invent a story type with a decorative headline icon. `clock-alert` identifies a printed fallback time that came from this pipeline, not the publisher; absence of time provenance must not manufacture that claim. Tests check both missing ids and unused glyphs.
+Icons belong in controls, chrome and declared classifications. Do not invent a story type with a decorative headline icon. `clock-alert` identifies a printed fallback time that came from this pipeline, not the publisher; absence of time provenance must not manufacture that claim. Tests check both missing ids and unused glyphs. `icons.stroke_px` sets the line width in screen pixels, and `Icon.svelte` converts it to Lucide's 24-unit grid for each icon size. Susan picked 1.5 px from the comparison sheet: at 1.25 px, six 13 px lines in the dark theme were no brighter than secondary text and eight more sat just above it; at 1.5 px, no line is that dim. At density 3, a 1.5 px icon line is 1.50 px beside a weight-600 label stroke of 1.68 px, so the icon does not outweigh its label.
 
 ## Charts render in the browser
 

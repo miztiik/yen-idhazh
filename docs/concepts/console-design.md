@@ -139,6 +139,10 @@ owner's carve-out for that one, 2026-08-30, on conditions this section holds:
  the page and two builds have to agree; a locale-dependent separator moves the
  prerendered document and the byte gate reads it as a regression.
 
+## Records prints the engine answer as written
+
+The Records page is the exception to the console rule that translates ledger columns into prose. Its table prints column names, decimals, nulls and dates exactly as the engine returned them, because the operator writes the question and types those names back into the next one. Cells still render as text, never as links, images or HTML.
+
 ## An axis title and a column header take one form
 
 `Article length, words`. **Sentence case, a comma, the unit in lower case, and

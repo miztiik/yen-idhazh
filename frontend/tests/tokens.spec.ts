@@ -110,6 +110,16 @@ test.describe('the token layer', () => {
 		).toBeGreaterThan(TOKENS.indexOf(BASE_SELECTOR));
 	});
 
+
+	test('code colours clear 4.5 to 1 against their ground in both themes', () => {
+		for (const [name, css] of [['dark', block(TOKENS, BASE_SELECTOR)], ['light', block(TOKENS, OVERRIDE_SELECTOR)]] as const) {
+			const ground = valueOf(css, '--code-ground');
+			for (const token of ['--code-text', '--code-keyword', '--code-string', '--code-number', '--code-comment']) {
+				expect(contrast(valueOf(css, token), ground), `${name} ${token} does not clear 4.5:1`).toBeGreaterThanOrEqual(4.5);
+			}
+		}
+	});
+
 	test('every theme colour has a light override', () => {
 		const missing = DARK.filter(
 			(token) => !THEME_INDEPENDENT.test(token) && !LIGHT.includes(token)

@@ -20,7 +20,7 @@ Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributor
 
 ## What is committed
 
-Only the icons in use, as unmodified source SVG, under `svg/`. The upstream
+Only the icons in use, as unmodified source SVG, under `svg/`. Records added `query-run` from Lucide `play`, `list-refresh` from `refresh-cw`, `sort-ascending` from `arrow-up`, and `sort-descending` from `arrow-down`. The upstream
 package is NOT a dependency: it was installed once to extract these files and
 removed. Measured 2026-08-29: 29 files, 11,980 B, against the 40 KB budget in
 the row that added them.

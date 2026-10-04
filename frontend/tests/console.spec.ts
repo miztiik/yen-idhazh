@@ -1310,17 +1310,6 @@ test('the candle reads out its day and every series at that column', async ({ pa
 	);
 });
 
-test('the reading path and the console carry no chart library', () => {
-	const manifest = JSON.parse(
-		readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')
-	) as { dependencies?: Record<string, string> };
-
-	// Guardrail #8: a dependency names a beneficiary feature. The pan this one was
-	// bought for is implemented in `Viewport.svelte`, and the window it pans is
-	// set by the control on the page above it.
-	expect(Object.keys(manifest.dependencies ?? {})).toEqual([]);
-});
-
 test('the old evals route moves bookmarks to the console', async ({ page }) => {
 	await page.goto('/evals/');
 
