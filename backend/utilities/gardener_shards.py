@@ -87,7 +87,7 @@ def plan(config_root: Path) -> dict[str, Any]:
     for position, name in enumerate(names):
         dealt[position % count].append(name)
     shards = [{"index": index, "task_names": held} for index, held in enumerate(dealt)]
-    legs = [{"shard": shard["index"]} for shard in shards]
+    legs = [{"shard": shard["index"], "task_names": shard["task_names"]} for shard in shards]
     return {
         "any_active_task": bool(shards),
         "shard_count": count,

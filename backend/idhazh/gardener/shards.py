@@ -46,7 +46,9 @@ def plan(settings: GardenerSettings) -> GardenerPlan:
         any_active_task=bool(shards),
         shard_count=count,
         shards=shards,
-        matrix=Matrix(include=tuple(MatrixLeg(shard=s.index) for s in shards)),
+        matrix=Matrix(
+            include=tuple(MatrixLeg(shard=s.index, task_names=s.task_names) for s in shards)
+        ),
     )
 
 

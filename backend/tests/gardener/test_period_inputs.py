@@ -6,9 +6,9 @@ import json
 from datetime import date
 from pathlib import Path
 
-from idhazh import ledger, month_partition
+from idhazh import month_partition
 from idhazh.contracts.knobs.gardener import CompactionPolicy, RetentionPolicy
-from idhazh.gardener.period_inputs import paths_for_task, periods_in_range, scheduled_range
+from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 
 from ._garden import GARDENER_FIXTURES
 
@@ -64,30 +64,6 @@ def test_compaction_range_uses_its_configured_month_lookback() -> None:
     assert configured_range is not None
     assert len(month_partition.months_between(*default_range)) == 3
     assert len(month_partition.months_between(*configured_range)) == 5
-
-
-def test_compaction_inputs_do_not_name_retired_raw_indexes(tmp_path: Path) -> None:
-    policy = _compaction_policy()
-    today = date(2026, 9, 27)
-    period_range = scheduled_range("compact-gardener", policy, today)
-
-    assert period_range is not None
-    days, _ = periods_in_range(period_range)
-    paths = set(
-        paths_for_task(
-            tmp_path,
-            "compact-gardener",
-            policy,
-            period_range,
-            today=today,
-        )
-    )
-    old_indexes = {
-        ledger.raw_index_path(tmp_path / "state", policy.ledger, day.isoformat())
-        for day in days
-    }
-
-    assert paths.isdisjoint(old_indexes)
 
 
 def test_a_compaction_names_its_month_its_year_and_its_ledger_s_marks_and_nothing_else(
