@@ -966,6 +966,86 @@ def test_a_file_whose_every_row_goes_stays_as_an_empty_file_its_index_names(
     assert ledger.list_ledger_files(state, CENSUS).holes == ()
 
 
+def a_month_with_lost_days(state: Path) -> CompactIndex:
+    """Row 8's sample monthly index, written over a real file for the month that names one.
+
+    That month is packed through the door from census rows filed on two of its
+    days, and its entry counts that file's rows and bytes; its state, lost days
+    and set-aside count are the sample's. The daily and yearly indexes are
+    written empty, because a ledger's three indexes exist together.
+    """
+    sample = CompactIndex.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "compact-index" / "a-month-with-lost-days.json")
+    )
+    entries: list[CompactEntry] = []
+    for entry in sample.entries:
+        if not entry.names_file:
+            entries.append(entry)
+            continue
+        days = [f"{entry.covers}-05", f"{entry.covers}-20"]
+        for number, day in enumerate(days):
+            seed_item_health(
+                state, day, [health_row(day=day, run=1, number=number, stage=ItemStage.PUBLISH)]
+            )
+        raws = ledger.list_raw_files(state, CENSUS, days=days)
+        month = ledger.persist_period(
+            state,
+            ledger.load_stored([raw.path for raw in raws], model=ItemHealthRow),
+            model=ItemHealthRow,
+            ledger=CENSUS,
+            period=Period.MONTHLY,
+            covers=entry.covers,
+            identity=raws[0].envelope.identity,
+            built_from=len(raws),
+        )
+        for raw in raws:
+            raw.path.unlink()
+            day_partition.drop_empty_day_dirs(raw.path)
+        entries.append(entry.model_copy(update={"rows": len(days), "bytes": month.stat().st_size}))
+    planted = sample.model_copy(update={"entries": entries})
+    for period in Period:
+        index = (
+            planted
+            if period is planted.period
+            else CompactIndex(
+                version=CompactIndex.schema_version(), ledger=CENSUS, period=period, entries=[]
+            )
+        )
+        path = ledger.compact_index_path(state, CENSUS, period)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(index.to_json().encode("ascii"))
+    return planted
+
+
+def test_a_rebuilt_entry_keeps_its_state_its_lost_days_and_what_was_set_aside(
+    tmp_path: Path,
+) -> None:
+    """A prune that builds the rebuilt month's entry afresh fails this: it counts the rows and
+    bytes left and drops the two days recorded lost and the file set aside, so the record of
+    a gap is gone. The empty month beside it is carried as it was."""
+    state = tmp_path / ledger.STATE_DIRNAME
+    empty, packed = a_month_with_lost_days(state).entries
+
+    prune_range(
+        state,
+        target=CENSUS,
+        since=f"{packed.covers}-05",
+        until=f"{packed.covers}-05",
+        dry_run=False,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+
+    month = ledger.compact_file(state, CENSUS, Period.MONTHLY, packed.covers)
+    assert month is not None
+    left = ledger.load([month], model=ItemHealthRow)
+    assert [row.date for row in left] == [f"{packed.covers}-20"]
+    assert indexes(state)[Period.MONTHLY] == [
+        empty,
+        packed.model_copy(update={"rows": len(left), "bytes": month.stat().st_size}),
+    ]
+
+
 def test_a_rebuilt_file_names_the_prune_as_its_writer_and_each_kept_row_keeps_its_own(
     every_tier: Path, tmp_path: Path
 ) -> None:
