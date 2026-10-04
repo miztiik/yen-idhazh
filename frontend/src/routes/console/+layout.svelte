@@ -83,7 +83,7 @@
 	/** The tabs the strip draws. The band carries every route; the Records tab
 	 * waits for `console.data_explorer_tab`, and a route that loaded no knobs
 	 * keeps it hidden. */
-	const strip = $derived(stripRoutes(data.routes, configured?.data_explorer_tab === true));
+	const strip = $derived(stripRoutes(data.routes));
 	const windowSource = $derived<WindowSource | null>(
 		handed ??
 			(configured === undefined
@@ -93,6 +93,7 @@
 						presets: configured.window_presets,
 						busy: false,
 						ready: false,
+						statusLine: null,
 						monthsFor: () => 0,
 						onChange: () => {}
 					})
@@ -196,6 +197,7 @@
 			monthsFor={windowSource.monthsFor}
 			busy={windowSource.busy}
 			ready={windowSource.ready}
+			statusLine={windowSource.statusLine ?? null}
 		/>
 	{/if}
 

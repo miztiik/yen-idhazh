@@ -504,9 +504,19 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-03",
+            version="2026-10-04",
+            change="Records fetch-ceiling reading and held-byte total recorded.",
+            why="A refused run still leaves fetched files in the page keeper.",
+        ),
+        ChangelogEntry(
+            version="2026-10-03T12:00",
             change="icons.stroke_px added; icon strokes are fixed in screen pixels.",
             why="One icon line weight keeps every glyph aligned with text at every size.",
+        ),
+        ChangelogEntry(
+            version="2026-10-03",
+            change="console.data_explorer_tab removed; Records knobs and panel group added.",
+            why="The Records page is live and draws its own controls.",
         ),
         ChangelogEntry(
             version="2026-10-02",
@@ -515,16 +525,6 @@ class AppearanceConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-30",
-            change="console.machine_colour_stops 7 to 5, and three machine-panel knobs added.",
-            why="A machine's colour is a speed ramp of five steps, not a key-ordered palette.",
-        ),
-        ChangelogEntry(
-            version="2026-09-28",
-            change="console.judged_panel_ids and console.plot_min_fill_share, additive.",
-            why="The sufficiency gates judge an opt-in list of panels against a fill floor.",
-        ),
-        ChangelogEntry(
-            version="2026-09-24",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),

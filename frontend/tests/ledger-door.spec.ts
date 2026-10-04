@@ -644,6 +644,46 @@ test.describe('what a page keeps', () => {
 		if (!('failed' in second)) await second.done();
 	});
 
+	test('the Records startAfresh path makes the next askCost and ask read every index again', async () => {
+		const { fetcher, asked } = recorded();
+		const first = freshPage(fetcher);
+		const ledgers = ['host-fingerprint', 'item-health'] as const;
+		await readAskCost(first, ledgers, '2026-09-01', '2026-09-01', {});
+		await readAsk(first, {
+			ledgers,
+			from: '2026-09-01',
+			to: '2026-09-01',
+			sql: 'SELECT count(*) AS rows FROM "host-fingerprint"',
+			maxChars: 100,
+			maxRows: 10,
+			maxFetchBytes: 100_000_000
+		}, {});
+		const firstIndexes = asked.filter((one) => one.path.endsWith('.json')).map((one) => one.path).sort();
+		expect(firstIndexes).toEqual([
+			indexPath('host-fingerprint', 'daily'),
+			indexPath('host-fingerprint', 'monthly'),
+			indexPath('host-fingerprint', 'yearly'),
+			indexPath('item-health', 'daily'),
+			indexPath('item-health', 'monthly'),
+			indexPath('item-health', 'yearly')
+		].sort());
+
+		await first.release();
+		const second = freshPage(fetcher);
+		await readAskCost(second, ledgers, '2026-09-01', '2026-09-01', {});
+		await readAsk(second, {
+			ledgers,
+			from: '2026-09-01',
+			to: '2026-09-01',
+			sql: 'SELECT count(*) AS rows FROM "item-health"',
+			maxChars: 100,
+			maxRows: 10,
+			maxFetchBytes: 100_000_000
+		}, {});
+		const counts = askedCounts(asked.filter((one) => one.path.endsWith('.json')));
+		for (const path of firstIndexes) expect(counts[path], `${path} was not read again after startAfresh`).toBe(2);
+	});
+
 	const MONTH_FILE = dataPath(LEDGER, 'monthly', '2026-08');
 	/** Both indexes and every file a span from 2026-08-30 to 2026-09-02 reads, each once. */
 	const ONCE_EACH = {
