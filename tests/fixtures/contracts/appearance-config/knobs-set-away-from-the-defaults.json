@@ -197,6 +197,7 @@
   },
   "icons": {
     "size_px": 16,
+    "stroke_px": 1.25,
     "tint_mode": "semantic",
     "topic_icons_enabled": true
   },
@@ -215,5 +216,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-08-29"
+  "version": "2026-10-03"
 }
