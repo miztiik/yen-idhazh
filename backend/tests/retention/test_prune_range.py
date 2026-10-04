@@ -356,27 +356,23 @@ def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
 
 
 #: The ledgers whose rows must never be forgotten, so a range of them is refused
-#: by name: two that stop a repeat publication or discovery, and the eval
-#: ledger's ID folder, whose IDs stop a measurement counting as new.
+#: by name: they stop a repeat publication or discovery.
 MUST_NOT_FORGET: Final = (
     LedgerName.PUBLISHED,
     LedgerName.SEEN,
-    LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
 )
 
 
 @pytest.mark.parametrize("target", MUST_NOT_FORGET)
 def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: str) -> None:
-    """`published`, `seen` and the eval ledger's ID folder are refused by name, with the reason.
+    """`published` and `seen` are refused by name, with the reason.
 
     Refused rather than left out of the vocabulary: a ledger missing from a list
     reads as an oversight, and somebody who typed one of these is holding a real
-    question whose answer is why the answer is no. The first two are on the
-    ledger door, so each one's compaction declaration gives its reason in
-    `prune_refusal`; the ID folder, which no compaction declares, is in `REFUSED`.
+    question whose answer is why the answer is no. Both are on the ledger door,
+    so each one's compaction declaration gives its reason in `prune_refusal`.
     """
-    assert set(prune.REFUSED) == {LedgerName.SUMMARY_QUALITY_EVALS_INDEX}
-    reasons = {**prune.REFUSED, **prune.door_refusals(committed_tasks())}
+    reasons = prune.door_refusals(committed_tasks())
     state = a_threshold_record(tmp_path / "state")
     before = fingerprints(state)
 

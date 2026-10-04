@@ -44,7 +44,7 @@ Table A - what is out
 | 4 | The ledger fault words live in contracts | 1 | A | DONE | special-sniffle | #1276 | Plan 60 row 4: fault words in contracts |
 | 5 | A ledger's marks are read in one place | - | A | DONE | silver-dollop | #1279 | Plan 60 row 5: marks in one place |
 | 6 | One run id per workflow run | 1 | B | DONE | automatic-adventure | #1278 | Plan 60 row 6: one run id |
-| 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
+| 7 | The month-delete switch is named for what it does | 1 | B | DONE | ubiquitous-journey | - | Plan 60 row 7: rename month switch |
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | - | Plan 60 row 8: site reads lost periods |
 | 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | #1282 | Plan 60 row 9: job names |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
@@ -306,23 +306,26 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #7 - The month-delete switch is named for what it does
 
 - **Scope:** `monthly_window_dry_run` becomes `month_deletes_dry_run: bool` everywhere in one change, and a declaration that still carries the old key is refused by name. Level 2.
-- **Files touched** (from a search for `monthly_window_dry_run`, 2026-10-04; search again at dispatch):
-  - the 11 files `config/gardener/compact-*.json`
+- **Files touched** - corrected during execution (Fowler review 2026-10-04), from a search for `monthly_window_dry_run` at dispatch:
+  - every compaction declaration, `config/gardener/compact-*.json`, `compact-run-plan.json` included
   - `backend/idhazh/contracts/knobs/gardener.py`
   - `backend/idhazh/gardener/tasks/compaction.py`
-  - `backend/utilities/migrate_to_parquet.py`
+  - `backend/utilities/ledger_migration/packing.py`
   - `tests/fixtures/gardener/runner/compact-gardener.json`
   - `tests/fixtures/gardener/garden/compact-gardener.json`
   - `tests/fixtures/gardener/garden/compact-feed-health.json`
   - `backend/tests/gardener/tasks/test_compaction.py`
   - `backend/tests/gardener/tasks/test_compaction_years.py`
   - `backend/tests/contracts/test_gardener_config.py`
+  - `backend/tests/ledger_migration/test_packing_governance.py`
   - `docs/concepts/config/idhazh-gardener.md`
   - `docs/concepts/config/retention-ages.md`
   - `docs/architecture/sources/health.md`
   - `docs/architecture/publishing/ledger-compaction.md`
   - `TODO/20260928-55-one-page-queries-every-ledger-plan.md`
-- **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/contracts/test_gardener_config.py backend/tests/gardener/tasks/test_compaction.py backend/tests/gardener/tasks/test_compaction_years.py backend/tests/ledger/test_migrate_to_parquet.py`; ruff; mypy; `doc_load.py` on the changed docs. CI: the full suite.
+  - `TODO/20261004-pipeline-tests-migration-plan.md`
+  - attempts description: carried from row 27 (#1291), owner 2026-10-04
+- **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/contracts/test_gardener_config.py backend/tests/gardener/tasks/test_compaction.py backend/tests/gardener/tasks/test_compaction_years.py backend/tests/ledger_migration/` (the migration tests' path corrected during execution (Fowler review 2026-10-04)); ruff; mypy; `doc_load.py` on the changed docs. CI: the full suite.
 - **Oracle:** a declaration that carries the old key fails to load, and the error names the key (`extra="forbid"`). A search for the old name finds only git history. It cannot settle a copy of the name outside the repository.
 
 | # | Decision | Authority |
@@ -708,7 +711,6 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/gardener/period_inputs.py`
   - `backend/idhazh/gardener/named_trees.py`
   - `backend/idhazh/telemetry/door_prune.py`
-  - `backend/idhazh/evals/observation_migration.py`
   - `backend/utilities/ledger_migration/packing_files.py` (its docstring names a watermark; it names the marks through `ledger_marks.name_marks` since #1281)
   - `backend/utilities/benchmark_compaction.py` (it times `write_watermark`)
   - `frontend/scripts/published-ledgers.mjs` (its comment on keeping `daily/watermark.json` off the site)
@@ -727,7 +729,6 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/ledger_migration/test_packing_parity.py` (its watermark reads)
   - `backend/tests/ledger_migration/test_packing_scope.py` (its watermark writes and checks)
   - `backend/tests/retention/test_prune_range.py`
-  - `backend/tests/evals/test_observation_migration.py`
   - `backend/tests/test_canary_packing.py`
   - `frontend/tests/ledger-copy.spec.ts`
   - `frontend/tests/published-ledgers.spec.ts`
@@ -1041,7 +1042,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `docs/architecture/contracts/persistence.md`
   - `backend/utilities/ledger_migration/readback.py` (read, no change: it reads the check's answer, and a recorded period with no file is not missing output)
   - `backend/idhazh/ledger/day_removal.py` (read, no change: it names a file only for an entry that counts a row, and an entry with no file counts none)
-  - `backend/idhazh/ledger/ledger_files.py` and `backend/idhazh/evals/observation_migration.py` (read, no change: row 8 taught both `names_file`)
+  - `backend/idhazh/ledger/ledger_files.py` (read, no change: row 8 taught it `names_file`)
   - `backend/idhazh/gardener/ledger_marks.py` and `backend/idhazh/gardener/tasks/_compact_tree.py` (read, no change: each carries every entry whole)
   - `backend/idhazh/gardener/tasks/_daily_period.py`, `_monthly_period.py` and `_yearly_period.py` (read, no change: decision 3)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/ledger/test_stored_output.py backend/tests/retention/test_prune_range.py backend/tests/ledger_migration/test_readback.py`; ruff; mypy; `npm --prefix frontend run test:changed -- --list` and the checks it selects; `python backend/utilities/doc_load.py docs/architecture/contracts/persistence.md`. CI: the full suite.

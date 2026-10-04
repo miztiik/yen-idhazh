@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -60,7 +60,7 @@ The plan stage reads back the newest 31 days the ledger holds - just enough that
 
 **`state/raw/feed-retirements/` is never a candidate.** It is a ledger of its own with its own compaction, and it carries no time window at all: one row is one address a server reported permanently gone. The evidence that retired an address lives in days this ledger's window is entitled to delete, so the record has to outlive them - a run that forgot it would start asking a dead address again on the day the last 410 row aged out.
 
-**The window ships reporting.** `monthly_window_dry_run` is true, so a wake logs every month file a live window would delete and deletes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit a person makes after a scheduled wake has printed the list. Worked out from `first_kept_month` in `backend/idhazh/gardener/tasks/_monthly_period.py` on 2026-10-02: the first month a live window would take is August 2026, at the first wake on or after 2027-12-16. It is arithmetic on a fixed calendar, so there is no spread.
+**The window ships reporting.** `month_deletes_dry_run` is true, so a wake logs every month file a live window would delete and deletes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit a person makes after a scheduled wake has printed the list. Worked out from `first_kept_month` in `backend/idhazh/gardener/tasks/_monthly_period.py` on 2026-10-02: the first month a live window would take is August 2026, at the first wake on or after 2027-12-16. It is arithmetic on a fixed calendar, so there is no spread.
 
 ## One row per feed per run, enforced rather than assumed
 

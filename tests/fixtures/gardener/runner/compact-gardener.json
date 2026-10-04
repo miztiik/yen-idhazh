@@ -13,7 +13,7 @@
     "unit": "months",
     "value": 13
   },
-  "monthly_window_dry_run": false,
+  "month_deletes_dry_run": false,
   "owns": [
     "state/compact/gardener"
   ],
