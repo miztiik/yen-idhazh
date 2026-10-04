@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
@@ -11,6 +11,8 @@ The query door can run one operator-written, read-only DuckDB statement over the
 Each call first drops every unselected ledger view. This matters because the page keeper can still hold files from an earlier run. Without the drop, a later statement could read a ledger the operator did not select and did not see priced.
 
 Calls run one at a time. The engine has one connection, and each call rewrites the same set of ledger views.
+
+A selected ledger with no file in the span still gets a view, so a statement that names it binds: an empty view (`LIMIT 0`) over the files of its newest day. That day's files come from its listing when the build listed a day after the newest packed one, and otherwise from the packed tier. A packed file with zero rows is used here, though a span's own read skips it: the empty view needs only the file's columns, and a ledger whose packed days all hold zero rows, as `candidate-models` does today, would otherwise reach the engine as `read_parquet([])`, which DuckDB refuses. A selected ledger with no file at all to read its columns from answers `missing`.
 
 ## Statement wraps
 
