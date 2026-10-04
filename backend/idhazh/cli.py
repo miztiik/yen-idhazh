@@ -4,7 +4,7 @@ Each stage takes a file and writes a file, which is the whole reason the
 pipeline can be sharded across disposable machines and re-run cheaply. A stage
 that only works as part of the whole is a stage nobody can debug.
 
-    idhazh plan       read feeds, rank, record      -> run/<date>/plan.json
+    idhazh plan       read feeds, rank, record      -> state/raw/run-plan/
     idhazh work       fetch, extract, summarize, score -> run/<date>/items/*
     idhazh record     commit what one shard settled -> state/
     idhazh assemble   collect what finished        -> frontend/public/... + state/
@@ -50,7 +50,6 @@ from typing import Final
 
 from idhazh import (
     assemble,
-    atomic_write,
     config,
     path_classes,
 )
@@ -714,7 +713,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             cap=args.cap,
             execution=args.execution,
         )
-        atomic_write.write_atomic(common._plan_path(date), plan.to_json())
         common.LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
     if args.stage in ("work", "run"):

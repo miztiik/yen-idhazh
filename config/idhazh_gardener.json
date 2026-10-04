@@ -11,6 +11,7 @@
     "compact-host-fingerprint",
     "compact-item-health",
     "compact-published",
+    "compact-run-plan",
     "compact-seen",
     "compact-summary-quality-evals",
     "compact-visual-prunes",
