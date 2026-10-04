@@ -3,8 +3,8 @@
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { Column, Row } from '$lib/data/ledger';
 	import { nextSort, numericBarShare, printCell, sortedRows, type SortSpec } from './answer';
-	let { columns, rows, capped = false, maxRows, pageSize, tableMaxVh, cellMaxCh, barSpreadShare }: {
-		columns: readonly Column[]; rows: readonly Row[]; capped?: boolean; maxRows: number; pageSize: number; tableMaxVh: number; cellMaxCh: number; barSpreadShare: number;
+	let { columns, rows, capped = false, maxRows, pageSize, tableMaxVh, cellMaxCh, barSpreadShare, onOrderChange }: {
+		columns: readonly Column[]; rows: readonly Row[]; capped?: boolean; maxRows: number; pageSize: number; tableMaxVh: number; cellMaxCh: number; barSpreadShare: number; onOrderChange?: (rows: Row[]) => void;
 	} = $props();
 	let sort = $state<SortSpec>({ column: '', direction: null });
 	// svelte-ignore state_referenced_locally
@@ -12,6 +12,7 @@
 	const ordered = $derived(sortedRows(rows, columns, sort));
 	const visible = $derived(ordered.slice(0, shown));
 	const bars = $derived(new Map(columns.map((column) => [column.name, numericBarShare(column, rows, barSpreadShare)])));
+	$effect(() => onOrderChange?.(ordered));
 </script>
 
 <div class="answer-summary">
