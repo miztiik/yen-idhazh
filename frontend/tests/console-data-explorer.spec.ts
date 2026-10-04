@@ -151,7 +151,7 @@ test('THE ORACLE: a typed join matches the query door and the run cost matches t
 		from: JOIN_FROM,
 		to: EXPLORER_CANARY_DAY,
 		sql: JOIN_SQL,
-		maxChars: 5776,
+		maxChars: 5798,
 		maxRows: 1000,
 		maxFetchBytes: 64 * 1024 * 1024
 	});
