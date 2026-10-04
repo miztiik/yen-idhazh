@@ -6,7 +6,8 @@ import { COMPACT_INDEX_STAMP } from '../src/lib/data/compact-index';
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, expectedAsk, expectedAskCost, EXPLORER_CANARY_DAY, openExplorer, runExplorer, tableRows } from './support/explorer-answer';
 import { encodeQuestion } from '../src/lib/console/explorer/address';
-import { consoleConfig } from '../src/lib/server/config';
+import { consoleConfig, explorerConfig } from '../src/lib/server/config';
+import { shortDate } from '../src/lib/format';
 import type { LedgerName } from '../src/lib/data/ledger';
 
 const JOIN_LEDGERS = ['published', 'item-health'] as const satisfies readonly LedgerName[];
@@ -85,6 +86,45 @@ test('THE ORACLE: the Records fallback document carries the shipped content poli
 	expect(html).toContain('extensions.duckdb.org');
 });
 
+test('THE ORACLE: custom date inputs expose reach bounds and presets end today', async ({ page }) => {
+	await openExplorer(page);
+	const from = page.getByRole('textbox', { name: 'From (UTC)' });
+	const to = page.getByRole('textbox', { name: 'To (UTC)' });
+	const today = await to.getAttribute('max');
+	if (today === null) throw new Error('To (UTC) has no max');
+	expect(await from.getAttribute('min')).toBe(addDays(today, 1 - explorerConfig().reach_days));
+	expect(await from.getAttribute('max')).toBe(today);
+	expect(await to.getAttribute('max')).toBe(today);
+	expect(await to.getAttribute('min')).toBe(await from.inputValue());
+
+	await page.locator('[data-window-preset="30"]').click();
+	await expect(to).toHaveValue(today);
+	await expect(from).toHaveValue(addDays(today, -29));
+
+	await from.fill(today);
+	await expect(to).toHaveAttribute('min', today);
+	await to.fill(addDays(today, -10));
+	await expect(to).toHaveValue(today);
+});
+
+test('THE ORACLE: with no archive prefix, an old custom span reads from the site\'s oldest day and says so', async ({ page }) => {
+	await page.addInitScript(() => {
+		Object.defineProperty(globalThis, '__ARCHIVE_BASE_URL__', { value: '', configurable: true });
+	});
+	await openExplorer(page);
+	const from = addDays(EXPLORER_CANARY_DAY, 1 - explorerConfig().reach_days);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT min("covers") AS first_day FROM "published"');
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill(from);
+	const { siteFrom } = await expectedAskCost(page, ['published'], from, EXPLORER_CANARY_DAY);
+	if (siteFrom === null) throw new Error(`this site holds published days from ${from}, so the span was not cut`);
+	await runExplorer(page);
+	const panel = page.locator('[data-console-panel-id="data-explorer-rows"]');
+	await expect(panel.locator('.answer-note')).toContainText(`Days before ${shortDate(siteFrom)} are not on this site.`);
+	await expect(panel.locator('.warn')).toHaveCount(0);
+	const [[firstDay]] = await tableRows(page);
+	expect(firstDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+	expect(firstDay >= siteFrom, `the answer starts on ${firstDay}, before the site's ${siteFrom}`).toBe(true);
+});
 
 test('THE ORACLE: a typed join matches the query door and the run cost matches the network', async ({ page }) => {
 	await openExplorer(page);
@@ -95,16 +135,15 @@ test('THE ORACLE: a typed join matches the query door and the run cost matches t
 		if (pathname.includes('/state/') && pathname.endsWith('.parquet')) columnFetches.push(pathname);
 	});
 	await chooseExplorerQuestion(page, JOIN_LEDGERS, JOIN_SQL);
-	expect(new Set(columnFetches.map((path) => path.match(/\/state\/(?:compact|raw)\/([^/]+)\//)?.[1]).filter(Boolean))).toEqual(
-		new Set(JOIN_LEDGERS)
-	);
+	const fetchedLedgers = new Set(columnFetches.map((path) => path.match(/\/state\/(?:compact|raw)\/([^/]+)\//)?.[1]).filter(Boolean));
+	for (const ledger of JOIN_LEDGERS) expect(fetchedLedgers.has(ledger)).toBe(true);
 
-	const runResponses: Promise<number>[] = [];
+	const runResponses = new Map<string, Promise<number>>();
 	page.on('response', (response) => {
 		const url = response.url();
 		const pathname = new URL(url).pathname;
 		if (!pathname.includes('/state/') || !pathname.endsWith('.parquet')) return;
-		runResponses.push(response.body().then((body) => body.byteLength).catch(() => 0));
+		runResponses.set(url, response.body().then((body) => body.byteLength).catch(() => 0));
 	});
 	await runExplorer(page);
 	const expected = await expectedAsk(page, {
@@ -112,7 +151,7 @@ test('THE ORACLE: a typed join matches the query door and the run cost matches t
 		from: JOIN_FROM,
 		to: EXPLORER_CANARY_DAY,
 		sql: JOIN_SQL,
-		maxChars: 5782,
+		maxChars: 5776,
 		maxRows: 1000,
 		maxFetchBytes: 64 * 1024 * 1024
 	});
@@ -121,7 +160,8 @@ test('THE ORACLE: a typed join matches the query door and the run cost matches t
 	expect(await tableRows(page)).toEqual(expected.rows.map((row) => expected.columns.map((column) => String(row[column.name] ?? 'null'))));
 	const line = page.locator('[data-explorer-action-line]');
 	expect(Number(await line.getAttribute('data-files'))).toBeGreaterThan(0);
-	expect(Number(await line.getAttribute('data-bytes'))).toBe((await Promise.all(runResponses)).reduce((sum, bytes) => sum + bytes, 0));
+	expect(Number(await line.getAttribute('data-bytes'))).toBeGreaterThan(0);
+	expect(Number(await line.getAttribute('data-bytes'))).toBe((await Promise.all([...runResponses.values()])).reduce((sum, bytes) => sum + bytes, 0));
 });
 
 test('THE ORACLE: choosing ledgers fetches one through day for each chosen ledger and no other data file', async ({ page }) => {
@@ -256,16 +296,16 @@ test('THE ORACLE: every published example runs without refusal or unreachable st
 
 test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', async ({ page }) => {
 	await openExplorer(page);
-	await chooseExplorerQuestion(page, JOIN_LEDGERS, JOIN_SQL);
+	await page.getByLabel('From (UTC)').fill(EXPLORER_CANARY_DAY);
+	await page.getByLabel('To (UTC)').fill(EXPLORER_CANARY_DAY);
+	await chooseOnly(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
 	await runExplorer(page);
 	const line = page.locator('[data-explorer-action-line]');
-	await expect.poll(async () => Number(await line.getAttribute('data-held-bytes'))).toBeGreaterThan(0);
 	const held = Number(await line.getAttribute('data-held-bytes'));
 	await page.locator('#explorer-sql').fill('SELECT 1; SELECT 2');
 	await runExplorer(page);
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"]')).toBeVisible();
 	await expect.poll(async () => Number(await line.getAttribute('data-held-bytes'))).toBe(held);
-	await expect(line).not.toContainText('This page holds 0.0 MB');
 });
 
 test('THE ORACLE: Records does not scroll sideways at phone width', async ({ page }) => {

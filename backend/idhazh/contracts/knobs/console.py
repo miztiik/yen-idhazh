@@ -511,13 +511,21 @@ class ConsoleConfig(Model):
         ),
     )
     explorer_query_max_chars: int = Field(
-        default=5782,
+        default=5776,
         ge=1,
         description=(
             "Most characters one Records SQL statement may hold. The value comes "
-            "from docs/reference/benchmarks/address-length-on-pages.md: 5,782 "
+            "from docs/reference/benchmarks/address-length-on-pages.md: 5,776 "
             "ASCII characters is the longest worst-case question that fits the "
             "measured GitHub Pages request target with every ledger selected."
+        ),
+    )
+    explorer_reach_days: int = Field(
+        default=365,
+        ge=1,
+        description=(
+            "The number of UTC days the Records page's custom From and To date "
+            "inputs may reach, including the reader's UTC day."
         ),
     )
     explorer_chart_min_rows: int = Field(

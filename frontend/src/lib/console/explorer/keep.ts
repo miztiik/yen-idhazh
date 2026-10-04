@@ -6,6 +6,8 @@ export type KeptQuestion = {
 	statement: string;
 	ledgers: readonly LedgerName[];
 	days: number;
+	from?: string;
+	end?: string;
 	updatedAt: string;
 };
 
@@ -14,6 +16,8 @@ export type RecentRun = {
 	statement: string;
 	ledgers: readonly LedgerName[];
 	days: number;
+	from?: string;
+	end?: string;
 	rows: number;
 	ms: number;
 	askedAt: string;

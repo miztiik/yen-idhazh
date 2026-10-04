@@ -215,7 +215,7 @@
     "train_rows": 1000
   },
   "ledger": {
-    "archive_base_url": "",
+    "archive_base_url": "https://raw.githubusercontent.com/miztiik/yen-idhazh/main",
     "compression_compact": "zstd",
     "compression_raw": "snappy",
     "engine_extension_repository": "https://extensions.duckdb.org",

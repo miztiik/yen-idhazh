@@ -72,8 +72,8 @@ test.describe('the asset base URL ships shut', () => {
 		expect(engineOrigins()).toEqual([new URL(repository).origin]);
 	});
 
-	test('the archive origin ships shut', () => {
-		expect(archiveOrigins()).toEqual([]);
+	test('the archive origin is the committed raw GitHub prefix and no other GitHub origin', () => {
+		expect(archiveOrigins()).toEqual(['https://raw.githubusercontent.com']);
 	});
 
 	test('the encoder origins are the hosts the committed config names', () => {
@@ -94,7 +94,7 @@ test.describe('the asset base URL ships shut', () => {
 		// attempts, measured 2026-09-09), so admitting one would widen the surface
 		// for a fetch that cannot work.
 		const shipped = connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins(), ...archiveOrigins()]);
-		expect(shipped.filter((source) => source.includes('github'))).toEqual([]);
+		expect(shipped.filter((source) => source.includes('github'))).toEqual(['https://raw.githubusercontent.com']);
 		for (const source of shipped.slice(1)) {
 			expect(new URL(source).origin).toBe(source);
 		}

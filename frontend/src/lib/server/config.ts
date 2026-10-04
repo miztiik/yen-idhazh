@@ -335,6 +335,7 @@ export interface ExplorerConfig {
 	max_rows: number;
 	max_fetch_bytes: number;
 	query_max_chars: number;
+	reach_days: number;
 	chart_min_rows: number;
 	rank_max: number;
 	saved_max: number;
@@ -593,7 +594,8 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	row_page: 50,
 	max_rows: 1000,
 	max_fetch_bytes: 67108864,
-	query_max_chars: 5782,
+	query_max_chars: 5776,
+	reach_days: 365,
 	chart_min_rows: 3,
 	rank_max: 30,
 	saved_max: 20,
@@ -770,7 +772,7 @@ interface RawConfig {
 	observability?: Partial<ObservabilityConfig>;
 	visuals?: Partial<VisualsConfig>;
 	/** The one `ledger` knob the site reads. */
-	ledger?: { engine_extension_repository?: string };
+	ledger?: LedgerBlock;
 	/** Where the merge line's own block sits. Nested under `same_story` rather
 	 * than flat, because a knob whose legal value depends on another knob's value
 	 * belongs where a validator can see both. */
@@ -840,6 +842,10 @@ type DigestBlock = Partial<UiConfig> &
  * only the sufficiency specs read, straight from the file - so no type here
  * names them and `consoleConfig()` leaves them out too. */
 type ConsoleBlock = Partial<ConsoleConfig> & { panel_groups?: PanelGroups } & Partial<Record<`explorer_${string}`, any>>;
+type LedgerBlock = {
+	engine_extension_repository?: string;
+	archive_base_url?: string;
+};
 
 interface RawAppearance {
 	digest?: DigestBlock;
@@ -1086,6 +1092,12 @@ export function engineExtensionRepository(): string {
 	return typeof value === 'string' ? value : '';
 }
 
+/** Where Records reads packed ledgers older than this site carries; empty means site only. */
+export function ledgerArchiveBaseUrl(): string {
+	const value = raw().ledger?.archive_base_url;
+	return typeof value === 'string' ? value : '';
+}
+
 export function inferenceConfig(): InferenceConfig {
 	const declared = models().summarizer?.server?.['--ctx-size'];
 	return typeof declared === 'number' ? { n_ctx: declared } : { ...INFERENCE_DEFAULTS };
@@ -1141,6 +1153,7 @@ export function explorerConfig(): ExplorerConfig {
 		max_rows: consoleBlock.explorer_max_rows ?? EXPLORER_DEFAULTS.max_rows,
 		max_fetch_bytes: consoleBlock.explorer_max_fetch_bytes ?? EXPLORER_DEFAULTS.max_fetch_bytes,
 		query_max_chars: consoleBlock.explorer_query_max_chars ?? EXPLORER_DEFAULTS.query_max_chars,
+		reach_days: consoleBlock.explorer_reach_days ?? EXPLORER_DEFAULTS.reach_days,
 		chart_min_rows: consoleBlock.explorer_chart_min_rows ?? EXPLORER_DEFAULTS.chart_min_rows,
 		rank_max: consoleBlock.explorer_rank_max ?? EXPLORER_DEFAULTS.rank_max,
 		saved_max: consoleBlock.explorer_saved_max ?? EXPLORER_DEFAULTS.saved_max,

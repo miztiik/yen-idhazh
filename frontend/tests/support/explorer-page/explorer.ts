@@ -14,4 +14,4 @@ const keeper = pageKeeper(
 	() => import('../../../src/lib/data/engine').then((engine) => engine.browserEngine(new URL('/ext', location.href).href))
 );
 
-window.explorerAsk = (options) => readAsk(keeper, options, {});
+window.explorerAsk = (options) => readAsk(keeper, null, options, {});

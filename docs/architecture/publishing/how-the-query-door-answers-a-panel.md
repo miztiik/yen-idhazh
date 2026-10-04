@@ -608,6 +608,7 @@ wrong count nobody can see.
 
 ## See also
 
+- [how-the-query-door-answers-a-written-question.md](how-the-query-door-answers-a-written-question.md) - the Records page entry point.
 - [../../concepts/console-design/how-a-console-chart-gets-its-data.md](../../concepts/console-design/how-a-console-chart-gets-its-data.md) - the seven rules a panel's data obeys.
 - [../contracts/schemas.md](../contracts/schemas.md) - the hand copy of the index shapes and the test that binds it.
 - [../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md](../../reference/benchmarks/what-a-month-out-of-a-year-file-costs.md) - what one month read by byte range out of a year file costs, read once, read again on one page, and across a deploy.

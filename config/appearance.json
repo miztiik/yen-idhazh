@@ -191,7 +191,8 @@
     ],
     "explorer_max_fetch_bytes": 67108864,
     "explorer_max_rows": 1000,
-    "explorer_query_max_chars": 5782,
+    "explorer_query_max_chars": 5776,
+    "explorer_reach_days": 365,
     "explorer_rail_rem": 14,
     "explorer_row_page": 50,
     "explorer_strip_shown": [

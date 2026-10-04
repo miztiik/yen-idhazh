@@ -161,6 +161,7 @@ export type SpanCost = {
 	files: number;
 	bytes: number;
 	unpackedDays: readonly DateStamp[];
+	siteFrom: DateStamp | null;
 	through: Readonly<Partial<Record<LedgerName, DateStamp>>>;
 };
 
@@ -184,8 +185,8 @@ export type AskRefusal =
 	| { kind: 'engine-error'; message: string };
 
 export type AskResult =
-	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[] }
-	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost }
+	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[]; siteFrom: DateStamp | null }
+	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; siteFrom: DateStamp | null }
 	| { state: 'missing'; ledger: LedgerName }
 	| { state: 'unreachable'; ledger: LedgerName | null; at: DateStamp | null; fault: AskFault }
 	| { state: 'refused'; because: AskRefusal };
