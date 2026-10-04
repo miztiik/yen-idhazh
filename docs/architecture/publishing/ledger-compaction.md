@@ -40,7 +40,7 @@ flowchart TB
   RAWF[("state/raw/ledger/YYYY/MM/DD/file_id.parquet<br/>written once, many writers")]
 
   subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
-    DROP["1 and 2. drop the listings, and the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while monthly_window_dry_run is true"]
+    DROP["1 and 2. drop the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while monthly_window_dry_run is true"]
     YDONE{"a year done?<br/>monthly_keep_days since it ended,<br/>its next January absorbed, every month named"}
     YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
     YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
@@ -119,7 +119,7 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 | Step | What it does |
 | --- | --- |
 | 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
-| 2 | Drops every raw listing an earlier build left under `state/raw/<ledger>/index/`, and every raw day in a month the window no longer keeps. While the window only reports, the listings still go, and those raw days are named and kept |
+| 2 | Drops every raw day in a month the window no longer keeps. While the window only reports, names them and keeps them |
 | 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
 | 4 | Absorbs every month that is done into its month file |
 | 5 | Takes every raw day that is due into its day file |
@@ -312,8 +312,7 @@ compaction live is the list the live pass carries out.
 it `true`, steps 1 and 2 name every month file past the window and every raw
 file of a day in a month past it, and keep them; steps 3 to 5 then pack those
 days and months like any other, as if the window kept every month, so a first
-pass does not start at the oldest month the window keeps. The raw listings of
-step 2 still go, because they hold no row. `dry_run` still
+pass does not start at the oldest month the window keeps. `dry_run` still
 decides whether anything lands, so a dry run with the window reporting names
 what that live pass would do. With it `false`, a pass drops what the window no
 longer keeps, as above.
@@ -345,10 +344,19 @@ after its last day is taken (Carmack).
 90 days. Nothing read it: a browser reads the daily index for a packed day, and
 the site build stages its own listing, with sizes, for a day not packed yet. A
 re-run is rebuilt from the day file and the new raw files, never the listing.
-So every pass now deletes each listing it finds, and the setting that kept them
+So the setting that kept them
 is gone. A pass lists the raw day folders once, by name, and opens only the
 days it takes, so what one pass reads is bounded by its budget rather than by
 the backlog (Fowler, Carmack).
+
+**2026-10-04: the leftover listings were deleted in one commit, and the code
+meant to delete them is gone.** The 2026-10-03 change made each pass delete
+every listing it found. That step never ran: a pass sees only the files its
+scheduled window names, and no window names `index/`. So the 325 listings left
+in seven ledgers were deleted from `state/` by hand. The code that found, read
+or deleted a listing in `state/` was deleted with them. No check refuses a new
+one: no code writes a listing there, and nothing reads one. The person's
+ruling, 2026-10-04.
 
 **2026-09-28: the monthly window counts from the month's absorption.** A month
 file goes when the month `monthly_window` later is absorbed, so the period holds

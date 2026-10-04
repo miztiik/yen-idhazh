@@ -14,7 +14,7 @@ from idhazh.ledger.raw_files import read_day_files
 
 
 def check_raw_day(state_dir: Path, which: LedgerName, day: str) -> bool:
-    """Validate actual raw files, not the obsolete listing in state/, and report presence."""
+    """Validate actual raw files and report presence."""
     raw = read_day_files(state_dir, which, day)
     for held in raw:
         stored = load_stored([held.path], model=keys.door_contract(which))

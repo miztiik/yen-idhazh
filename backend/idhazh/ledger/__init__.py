@@ -82,7 +82,6 @@ from idhazh.ledger.paths import (
     compact_path,
     entry,
     path,
-    raw_index_path,
     raw_path,
     raw_root,
     relpath,
@@ -105,7 +104,6 @@ from idhazh.ledger.persist import (
 from idhazh.ledger.raw_files import (
     RawFile,
     list_raw_files,
-    listed_days,
     load_current_rows,
     raw_days,
     read_day_files,
@@ -153,7 +151,6 @@ __all__ = [  # noqa: RUF022
     "entry",
     "path",
     "paths",
-    "raw_index_path",
     "raw_path",
     "raw_root",
     "relpath",
@@ -174,7 +171,6 @@ __all__ = [  # noqa: RUF022
     # raw_files.py: which raw files hold a ledger's current rows, and what they are.
     "RawFile",
     "list_raw_files",
-    "listed_days",
     "load_current_rows",
     "raw_days",
     "read_day_files",

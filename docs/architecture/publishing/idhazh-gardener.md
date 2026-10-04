@@ -135,7 +135,6 @@ flowchart TB
 
   subgraph TREE["The committed tree - state/"]
     RAW[("state/raw/ledger/YYYY/MM/DD/file_id.parquet")]
-    RIDX[("state/raw/ledger/index/YYYY-MM-DD.json")]
     COMPACT[("state/compact/ledger/daily, monthly, index")]
     WM[("watermark.json, one for each period")]
   end
@@ -162,8 +161,7 @@ flowchart TB
   LOST --> HIST
   IDLE --> HIST
   REAPPLY -->|"the record, and every live task's files"| RAW
-  RAW -->|"a live compaction lists a due day"| RIDX
-  RIDX -->|"then takes it into its day file"| COMPACT
+  RAW -->|"a live compaction takes a due day into its day file"| COMPACT
   COMPACT -->|"watermark moved last"| WM
   WM -.->|"Next compaction reads the updated watermark"| RUN
 
@@ -181,7 +179,7 @@ flowchart TB
   class OK yes;
   class OUTSIDE,LOST,ALARM no;
   class IDLE warn;
-  class RAW,RIDX,COMPACT,WM ledger;
+  class RAW,COMPACT,WM ledger;
   class OPS sysOps;
   class TREE sysPublish;
 ```

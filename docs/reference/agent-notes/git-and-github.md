@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 Checks for agents using Git and GitHub. Follow the
 [PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#8-git-hygiene).
@@ -27,6 +27,7 @@ Checks for agents using Git and GitHub. Follow the
   URL-specific credential helpers through `GIT_CONFIG_PARAMETERS`; a generic
   helper does not replace them. After confirming the keyring account has access,
   use a fresh shell for this push only; leave global credentials unchanged.
+  A push refused for a missing `workflow` scope (seen 2026-10-04), not a 403, is the same credential fault; the reset below fixes it.
   ```powershell
   if (Test-Path Env:GH_TOKEN) { Remove-Item Env:GH_TOKEN }
   if (Test-Path Env:GIT_CONFIG_PARAMETERS) { Remove-Item Env:GIT_CONFIG_PARAMETERS }
