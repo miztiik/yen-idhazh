@@ -24,7 +24,14 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.ledger.arrow_schema import Column, ColumnType, columns_of
+from idhazh.ledger.arrow_schema import (
+    Column,
+    ColumnType,
+    LogicalField,
+    LogicalType,
+    columns_of,
+    logical_type_of,
+)
 
 pytestmark = pytest.mark.contract
 
@@ -166,3 +173,96 @@ def test_an_annotation_the_table_does_not_name_is_refused_by_name(annotation: ob
 def test_every_field_of_a_contract_the_door_files_maps(model: type[Contract]) -> None:
     """A ledger moved onto the door must not stop at its first write."""
     assert [column.name for column in columns_of(model)] == list(model.model_fields)
+
+
+class NestedItem(Contract):
+    """A nested model used to prove recursive logical types and arrow schemas."""
+
+    __schema_stem__: ClassVar[str] = "nested-item"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-04",
+            change="Initial shape: a nested item for ledger logical-type tests.",
+            why="The recursive tree is proven against a real nested contract.",
+        ),
+    )
+
+    key: str
+    count: int | None = None
+
+
+class OuterRow(Contract):
+    """A row with lists, nested models and nullable members."""
+
+    __schema_stem__: ClassVar[str] = "outer-row"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-04",
+            change="Initial shape: list and nested model support for the ledger path.",
+            why="A nested row exercises the recursive logical tree under both engines.",
+        ),
+    )
+
+    title: str
+    tags: list[str]
+    items: list[NestedItem]
+    maybe_item: NestedItem | None = None
+    values: tuple[int, ...] = ()
+    names: list[str | None]
+
+
+def test_recursive_logical_tree_maps_expected_shapes() -> None:
+    tags = logical_type_of(list[str], field_path="tags")
+    assert tags == LogicalType(kind="list", item_type=LogicalType(kind="scalar", scalar="string"), item_nullable=False)
+
+    items = logical_type_of(list[NestedItem], field_path="items")
+    assert items.kind == "list"
+    assert items.item_type.kind == "struct"
+    assert [field.name for field in items.item_type.fields] == ["version", "key", "count"]
+    assert items.item_type.fields[2].nullable is True
+
+    maybe_item = logical_type_of(NestedItem | None, field_path="maybe_item")
+    assert maybe_item.kind == "struct"
+    assert maybe_item.nullable is True
+
+    inner_alias = type("NameAlias", (str,), {})
+    assert logical_type_of(inner_alias, field_path="name").kind == "scalar"
+    assert logical_type_of(tuple[str, ...], field_path="values") == logical_type_of(list[str], field_path="values")
+
+
+@pytest.mark.parametrize(
+    "annotation",
+    [
+        dict[str, str],
+        tuple[str, str],
+        int | str,
+        list[dict[str, str]],
+        set[str],
+    ],
+    ids=["dict", "fixed-tuple", "mixed-union", "list-of-dict", "set"],
+)
+def test_unsupported_annotations_are_refused_with_a_full_path(annotation: object) -> None:
+    with pytest.raises(TypeError, match=r"items\[\]"):
+        logical_type_of(annotation, field_path="items[]")
+
+
+def test_recursive_arrow_schema_keeps_nested_nullability() -> None:
+    from idhazh.ledger import parquet
+
+    logical = LogicalType(
+        kind="list",
+        item_type=LogicalType(
+            kind="struct",
+            fields=(
+                LogicalField(name="key", type=LogicalType(kind="scalar", scalar="string"), nullable=False),
+                LogicalField(name="count", type=LogicalType(kind="scalar", scalar="int64"), nullable=True),
+            ),
+        ),
+        item_nullable=False,
+    )
+    schema = parquet._schema([Column("items", logical, nullable=False)], metadata=None)
+    field = schema.field("items")
+    assert field.nullable is False
+    item = field.type
+    assert item.value_field.nullable is False
+    assert item.value_field.type.field("count").nullable is True

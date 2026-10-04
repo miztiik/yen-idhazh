@@ -30,7 +30,7 @@ from typing import Any, Final
 import pyarrow.parquet
 
 from idhazh.contracts.file_envelope import Compression
-from idhazh.ledger.arrow_schema import Column, ColumnType
+from idhazh.ledger.arrow_schema import Column, ColumnType, LogicalType
 
 #: The key prefix pyarrow uses for its own serialized schema beside our keys.
 #: Not part of the envelope, so it is dropped on the way back.
@@ -45,6 +45,31 @@ _ARROW_TYPES: Final[dict[ColumnType, Any]] = {
 }
 
 
+def _arrow_type(logical: ColumnType | LogicalType) -> Any:
+    """A logical scalar, list or struct into the engine's native type."""
+    if isinstance(logical, ColumnType):
+        return _ARROW_TYPES[logical]
+    if logical.kind == "scalar":
+        mapping = {
+            "string": pyarrow.string(),
+            "int64": pyarrow.int64(),
+            "float64": pyarrow.float64(),
+            "bool": pyarrow.bool_(),
+        }
+        return mapping[logical.scalar]
+    if logical.kind == "list":
+        item = _arrow_type(logical.item_type)
+        return pyarrow.list_(pyarrow.field("item", item, nullable=logical.item_nullable))
+    if logical.kind == "struct":
+        return pyarrow.struct(
+            [
+                pyarrow.field(field.name, _arrow_type(field.type), field.nullable)
+                for field in logical.fields
+            ]
+        )
+    raise TypeError(f"{logical!r} is not a supported logical tree")
+
+
 def engine_version() -> str:
     """The engine's own version, which the envelope records because bytes vary by it."""
     return str(pyarrow.__version__)
@@ -54,7 +79,7 @@ def _schema(columns: Sequence[Column], metadata: Mapping[bytes, bytes] | None) -
     """The arrow schema these columns make, carrying `metadata` when there is any."""
     return pyarrow.schema(
         [
-            pyarrow.field(column.name, _ARROW_TYPES[column.type], column.nullable)
+            pyarrow.field(column.name, _arrow_type(column.type), column.nullable)
             for column in columns
         ],
         metadata=None if metadata is None else dict(metadata),
@@ -63,6 +88,17 @@ def _schema(columns: Sequence[Column], metadata: Mapping[bytes, bytes] | None) -
 
 def _codec(compression: Compression) -> str | None:
     return None if compression is Compression.NONE else compression.value
+
+
+def _jsonable(value: Any) -> Any:
+    """Convert nested models and enums to the JSON-shape pyarrow itself reads back."""
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if isinstance(value, Mapping):
+        return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    return value
 
 
 def render(
@@ -74,7 +110,7 @@ def render(
 ) -> bytes:
     """One whole parquet file: these rows under these columns, the envelope in its footer."""
     schema = _schema(columns, envelope)
-    table = pyarrow.Table.from_pylist([dict(row) for row in rows], schema=schema)
+    table = pyarrow.Table.from_pylist([_jsonable(dict(row)) for row in rows], schema=schema)
     sink = pyarrow.BufferOutputStream()
     pyarrow.parquet.write_table(table, sink, compression=_codec(compression))
     return bytes(sink.getvalue().to_pybytes())
@@ -100,7 +136,7 @@ def render_groups(
     with pyarrow.parquet.ParquetWriter(sink, schema, compression=_codec(compression)) as writer:
         for rows in groups:
             if rows:
-                table = pyarrow.Table.from_pylist([dict(row) for row in rows], schema=schema)
+                table = pyarrow.Table.from_pylist([_jsonable(dict(row)) for row in rows], schema=schema)
                 writer.write_table(table, row_group_size=len(rows))
         writer.add_key_value_metadata(dict(envelope()))
     return bytes(sink.getvalue().to_pybytes())

@@ -1,19 +1,16 @@
-"""Which column type each field of a contract becomes in a columnar ledger file.
+"""Annotation-to-logical-shape rules for the ledger layer.
 
-The mapping is a literal table, not a fallback chain, and not inferred from the
-first row: a nullable column whose first row is null would infer as a null type
-and then refuse the second row. An annotation the table does not name raises by
-name, so a contract that grows a field this file cannot place stops at the first
-write rather than landing a column nobody declared.
-
-The types are named after the arrow types they become, and nothing here imports
-the engine. `idhazh.ledger.parquet` is the one module that turns a name into an
-engine type, so swapping the engine is a change to that one file.
+The mapping is explicit, not inferred from the first row. A contract field can
+be a scalar, a list, or a nested struct, and the same recursive tree is what the
+PyArrow adapter turns into a native schema. The historical flat column table is
+kept for the existing row-ledger code, but the new generic tree is the single
+entry point for recursive shapes.
 """
 
 from __future__ import annotations
 
 import types
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from typing import Annotated, Any, Union, get_args, get_origin
@@ -33,19 +30,36 @@ class ColumnType(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class LogicalField:
+    """One field of a nested struct, including its recursive logical type."""
+
+    name: str
+    type: "LogicalType"
+    nullable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class LogicalType:
+    """A recursive logical tree: scalar, list or struct."""
+
+    kind: str
+    scalar: str | None = None
+    nullable: bool = False
+    item_type: "LogicalType | None" = None
+    item_nullable: bool = False
+    fields: tuple[LogicalField, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class Column:
     """One column: its name, its type, and whether a row may leave it empty."""
 
     name: str
-    type: ColumnType
+    type: ColumnType | LogicalType
     nullable: bool
 
 
 #: Every plain Python type a field may be declared as, and the column it becomes.
-#: A constrained string alias from `contracts/base.py` - a date stamp, a run id,
-#: a digest - is a `str` underneath and lands here as one. A date stays a string
-#: rather than a date type: it is a stamp a person reads in a diff and in a
-#: partition path, and a second type would be a second spelling of one value.
 _PLAIN: dict[type, ColumnType] = {
     str: ColumnType.STRING,
     int: ColumnType.INT64,
@@ -59,6 +73,111 @@ def _unwrapped(annotation: Any) -> Any:
     while get_origin(annotation) is Annotated:
         annotation = get_args(annotation)[0]
     return annotation
+
+
+def _field_path(base: str, name: str) -> str:
+    """A nested field path like `items[].field` rather than a Python path."""
+    return f"{base}.{name}" if base else name
+
+
+def _with_nullable(logical: LogicalType, nullable: bool) -> LogicalType:
+    """In-place nullability on the root value without changing its logical shape."""
+    return LogicalType(
+        kind=logical.kind,
+        scalar=logical.scalar,
+        nullable=nullable or logical.nullable,
+        item_type=logical.item_type,
+        item_nullable=logical.item_nullable,
+        fields=logical.fields,
+    )
+
+
+def logical_type_of(annotation: Any, *, field_path: str = "root", model_stack: tuple[type[BaseModel], ...] = ()) -> LogicalType:
+    """The logical tree of an annotation, naming the full nested field path on refusal."""
+    bare = _unwrapped(annotation)
+    if bare is type(None):
+        raise TypeError(f"{field_path} is declared {annotation!r}, which is only supported as a union member")
+
+    origin = get_origin(bare)
+    if origin in (Union, types.UnionType):
+        members = [_unwrapped(member) for member in get_args(bare)]
+        present = [member for member in members if member is not type(None)]
+        if not present:
+            raise TypeError(f"{field_path} is declared {annotation!r}, which is a null-only union")
+        nullable = len(present) < len(members)
+        resolved = [logical_type_of(member, field_path=field_path, model_stack=model_stack) for member in present]
+        if len(resolved) == 1:
+            return _with_nullable(resolved[0], nullable)
+        first = resolved[0]
+        for candidate in resolved[1:]:
+            if candidate != first:
+                raise TypeError(
+                    f"{field_path} is declared {annotation!r}, whose non-null members do not reduce to the same logical type"
+                )
+        return _with_nullable(first, nullable)
+
+    if origin in (list, tuple):
+        args = get_args(bare)
+        if not args:
+            raise TypeError(f"{field_path} is declared {annotation!r}, and an empty list type is unsupported")
+        if origin is tuple:
+            if len(args) != 2 or args[1] is not Ellipsis:
+                raise TypeError(f"{field_path} is declared {annotation!r}, and fixed tuples are unsupported")
+            item_annotation = args[0]
+        else:
+            item_annotation = args[0]
+        item_type = logical_type_of(item_annotation, field_path=f"{field_path}[]", model_stack=model_stack)
+        return LogicalType(
+            kind="list",
+            item_type=item_type,
+            item_nullable=item_type.nullable,
+            nullable=False,
+        )
+
+    if isinstance(bare, type):
+        if bare in _PLAIN:
+            return LogicalType(
+                kind="scalar",
+                scalar={str: "string", int: "int64", float: "float64", bool: "bool"}[bare],
+            )
+        if issubclass(bare, str):
+            return LogicalType(kind="scalar", scalar="string")
+        if issubclass(bare, bool):
+            return LogicalType(kind="scalar", scalar="bool")
+        if issubclass(bare, int):
+            return LogicalType(kind="scalar", scalar="int64")
+        if issubclass(bare, float):
+            return LogicalType(kind="scalar", scalar="float64")
+        if issubclass(bare, StrEnum):
+            return LogicalType(kind="scalar", scalar="string")
+        if issubclass(bare, IntEnum):
+            return LogicalType(kind="scalar", scalar="int64")
+        if issubclass(bare, BaseModel):
+            if bare in model_stack:
+                raise TypeError(f"{field_path} is a recursive model reference to {bare.__name__}")
+            fields: list[LogicalField] = []
+            for name, field in bare.model_fields.items():
+                child_path = _field_path(field_path, name)
+                child = logical_type_of(field.annotation, field_path=child_path, model_stack=model_stack + (bare,))
+                fields.append(LogicalField(name=name, type=child, nullable=child.nullable))
+            return LogicalType(kind="struct", fields=tuple(fields))
+        if issubclass(bare, Mapping):
+            raise TypeError(f"{field_path} is declared {annotation!r}, and dictionaries or mappings are unsupported")
+        if issubclass(bare, (set, frozenset)):
+            raise TypeError(f"{field_path} is declared {annotation!r}, and sets are unsupported")
+        if bare is Any or bare is object:
+            raise TypeError(f"{field_path} is declared {annotation!r}, and Any/object are unsupported")
+        raise TypeError(
+            f"{field_path} is declared {annotation!r}, which no logical type in idhazh/ledger/arrow_schema.py maps"
+        )
+
+    if origin in (dict, Mapping):
+        raise TypeError(f"{field_path} is declared {annotation!r}, and dictionaries or mappings are unsupported")
+    if origin in (set, frozenset):
+        raise TypeError(f"{field_path} is declared {annotation!r}, and sets are unsupported")
+    raise TypeError(
+        f"{field_path} is declared {annotation!r}, which no logical type in idhazh/ledger/arrow_schema.py maps"
+    )
 
 
 def _is_a_string(annotation: Any) -> bool:
@@ -77,7 +196,6 @@ def _column_type(name: str, annotation: Any) -> tuple[ColumnType, bool]:
         nullable = len(present) < len(members)
         if len(present) == 1:
             bare = present[0]
-        # Every member a string, as `Sha256 | str` is: one string column holds them all.
         elif all(_is_a_string(member) for member in present):
             return ColumnType.STRING, nullable
     if get_origin(bare) is tuple:
@@ -87,12 +205,16 @@ def _column_type(name: str, annotation: Any) -> tuple[ColumnType, bool]:
     if isinstance(bare, type):
         if bare in _PLAIN:
             return _PLAIN[bare], nullable
-        # An enum stays its string value, never a dictionary column: a dictionary
-        # encoding is the engine's choice, and this file is read by two engines.
+        if issubclass(bare, str):
+            return ColumnType.STRING, nullable
+        if issubclass(bare, bool):
+            return ColumnType.BOOL, nullable
+        if issubclass(bare, int):
+            return ColumnType.INT64, nullable
+        if issubclass(bare, float):
+            return ColumnType.FLOAT64, nullable
         if issubclass(bare, StrEnum):
             return ColumnType.STRING, nullable
-        # An integer enum stays its number, the value its JSON form already carries,
-        # so a reader filters on the number a person reads in the contract.
         if issubclass(bare, IntEnum):
             return ColumnType.INT64, nullable
     raise TypeError(
@@ -102,8 +224,20 @@ def _column_type(name: str, annotation: Any) -> tuple[ColumnType, bool]:
     )
 
 
+def logical_fields_of(model: type[BaseModel]) -> tuple[LogicalField, ...]:
+    """Each field of a Pydantic model as a recursive logical field, in field order."""
+    return tuple(
+        LogicalField(
+            name=name,
+            type=logical_type_of(field.annotation, field_path=name),
+            nullable=logical_type_of(field.annotation, field_path=name).nullable,
+        )
+        for name, field in model.model_fields.items()
+    )
+
+
 def columns_of(model: type[BaseModel]) -> tuple[Column, ...]:
-    """Every field of this contract as a column, in the contract's own field order."""
+    """Every field of this contract as a plain column when it is still flat."""
     return tuple(
         Column(name, *_column_type(name, field.annotation))
         for name, field in model.model_fields.items()
