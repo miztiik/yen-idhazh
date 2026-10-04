@@ -91,24 +91,67 @@ async function tabs(page: Page) {
 }
 
 test.describe('the strip', () => {
-	for (const route of ROUTES) {
-		test(`${route.path} draws the same five labels and marks its own`, async ({ page }) => {
+	// One visit per route carries both the strip's own checks (this test) and
+	// the standing band's (in "the standing band" below), instead of each
+	// describe block re-visiting all five routes on its own: fifteen page
+	// visits for the two concerns, down to five, with every assertion kept.
+	test('each route draws the same five labels, marks its own, and the band matches across routes', async ({
+		page
+	}) => {
+		const bandByRoute: Record<string, { verdict: string; worst: string; size: string }> = {};
+
+		for (const route of ROUTES) {
 			await page.goto(route.path);
 
 			const drawn = await tabs(page);
-			expect(drawn.map((tab) => tab.id), 'the strip does not name the five routes in order').toEqual(
-				ROUTES.map((entry) => entry.id)
-			);
+			expect(
+				drawn.map((tab) => tab.id),
+				`${route.path}: the strip does not name the five routes in order`
+			).toEqual(ROUTES.map((entry) => entry.id));
 			// Verbatim. A label that paraphrases the owner's word fails here.
 			for (const [index, entry] of ROUTES.entries()) {
-				expect(drawn[index].text, `${entry.id} lost its label`).toContain(entry.label);
+				expect(drawn[index].text, `${route.path}: ${entry.id} lost its label`).toContain(
+					entry.label
+				);
 			}
 			expect(
 				drawn.filter((tab) => tab.current === 'page').map((tab) => tab.id),
-				'exactly one label says which route this is'
+				`${route.path}: exactly one label says which route this is`
 			).toEqual([route.id]);
-		});
-	}
+
+			// Three facts and no control. A band that grows becomes a fourth page
+			// nobody chose to open, and the control governs nothing inside it.
+			const facts = await page
+				.locator('[data-console-band] [data-band-fact]')
+				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-band-fact') ?? ''));
+			expect(facts, `${route.path}: the band does not carry exactly verdict, worst, size`).toEqual([
+				'verdict',
+				'worst',
+				'size'
+			]);
+			await expect(
+				page.locator('[data-console-band] [data-window-control]'),
+				`${route.path}: the band carries a control`
+			).toHaveCount(0);
+
+			const band = { verdict: '', worst: '', size: '' };
+			for (const key of ['verdict', 'worst', 'size'] as const) {
+				const text = (
+					await page.locator(`[data-console-band] [data-band-${key}]`).innerText()
+				).trim();
+				expect(text.length, `${route.path} left [data-band-${key}] empty`).toBeGreaterThan(20);
+				band[key] = text;
+			}
+			bandByRoute[route.id] = band;
+		}
+
+		// Derived once for all five, so they cannot disagree about which route is
+		// worst - which is the failure a per-route band eventually produces.
+		const pipelines = bandByRoute[ROUTES[0].id];
+		for (const route of ROUTES.slice(1)) {
+			expect(bandByRoute[route.id], `the band differs on ${route.path}`).toEqual(pipelines);
+		}
+	});
 
 	test('THE ORACLE: a label changed and no address moved with it', async ({ page }) => {
 		// Two of the three labels were rewritten on 2026-08-31. The whole risk of a
@@ -438,40 +481,9 @@ test.describe('with no script at all', () => {
 });
 
 test.describe('the standing band', () => {
-	for (const route of ROUTES) {
-		test(`${route.path} carries the same three things and no others`, async ({ page }) => {
-			await page.goto(route.path);
-			const facts = await page
-				.locator('[data-console-band] [data-band-fact]')
-				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-band-fact') ?? ''));
-			// Three facts and no control. A band that grows becomes a fourth page
-			// nobody chose to open, and the control governs nothing inside it.
-			expect(facts).toEqual(['verdict', 'worst', 'size']);
-			await expect(page.locator('[data-console-band] [data-window-control]')).toHaveCount(0);
-
-			for (const marker of ['[data-band-verdict]', '[data-band-worst]', '[data-band-size]']) {
-				const text = (await page.locator(`[data-console-band] ${marker}`).innerText()).trim();
-				expect(text.length, `${route.path} left ${marker} empty`).toBeGreaterThan(20);
-			}
-		});
-	}
-
-	test('the band says the same thing on every route', async ({ page }) => {
-		const read = async (path: string) => {
-			await page.goto(path);
-			return {
-				verdict: (await page.locator('[data-band-verdict]').innerText()).trim(),
-				worst: (await page.locator('[data-band-worst]').innerText()).trim(),
-				size: (await page.locator('[data-band-size]').innerText()).trim()
-			};
-		};
-		// Derived once for all five, so they cannot disagree about which route is
-		// worst - which is the failure a per-route band eventually produces.
-		const pipelines = await read('/console/');
-		for (const route of ROUTES.slice(1)) {
-			expect(await read(route.path), `the band differs on ${route.path}`).toEqual(pipelines);
-		}
-	});
+	// The per-route content/equality checks (same three facts, no control, and
+	// agreement across all five routes) live in "the strip" above, on the same
+	// five page visits that already check the labels - not a second pass.
 
 	test('the worst thing names the route it is on, and that route exists', async ({ page }) => {
 		await page.goto('/console/');
