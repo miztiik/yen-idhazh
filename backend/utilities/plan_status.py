@@ -804,8 +804,8 @@ def stranded_rows(rows: Iterable[Row], trees: Sequence[Worktree]) -> list[Note]:
     for row in rows:
         said = EMPHASIS.sub("", row.worktree).strip().lower()
         if row.state == "in-flight" and (said in EMPTY or said not in live):
-            where = f"names {said!r}, which" if said not in EMPTY else "names no worktree, and none"
-            notes.append(Note(row.name, f"is IN-FLIGHT but {where} is on this box"))
+            where = "no worktree" if said in EMPTY else f"{said!r}, which is not on this box"
+            notes.append(Note(row.name, f"is IN-FLIGHT but names {where}"))
     return notes
 
 
