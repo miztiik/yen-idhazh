@@ -28,6 +28,7 @@ from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.console_band import ConsoleBand
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.day_metrics import DayMetrics
@@ -134,6 +135,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     ContentSimilarityJudgeMetrics,
     CorpusMeta,
     CorpusRow,
+    CouncilRunRecord,
     CouncilShardOutcome,
     CounterfactualScoreRow,
     DayMetrics,
