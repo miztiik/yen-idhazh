@@ -29,7 +29,7 @@ test('THE ORACLE: sorting is total, nulls stay last, and third press restores en
 	expect(sortedRows(rows, [column], original)).toEqual(rows);
 });
 
-test('THE ORACLE: the Records route and explorer components never render cell text as HTML', () => {
+test('THE ORACLE: the Data explorer route and explorer components never render cell text as HTML', () => {
 	const files = [
 		'src/routes/console/data-explorer/+page.svelte',
 		'src/lib/console/explorer/AnswerTable.svelte',

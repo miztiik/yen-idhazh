@@ -43,11 +43,13 @@
     "context_high_percentile": 99.0,
     "default_window_days": 30,
     "doubt_rows": 10,
+    "explorer_answer_svh": 71,
     "explorer_bar_spread_share": 0.6,
     "explorer_cell_max_ch": 41,
     "explorer_chart_min_rows": 4,
+    "explorer_chrome": "console",
     "explorer_counter_from_share": 1.0,
-    "explorer_editor_lines": [
+    "explorer_editor_lines_shown": [
       8,
       20
     ],
@@ -102,10 +104,17 @@
     "explorer_history_max": 11,
     "explorer_max_fetch_bytes": 67108865,
     "explorer_max_rows": 1001,
+    "explorer_notice_ms": 6001,
     "explorer_query_max_chars": 5777,
     "explorer_rail_rem": 15.0,
     "explorer_rank_max": 31,
     "explorer_reach_days": 366,
+    "explorer_readout_lines": [
+      4,
+      3,
+      2,
+      1
+    ],
     "explorer_row_page": 51,
     "explorer_save_name_max_chars": 41,
     "explorer_saved_max": 21,
@@ -114,7 +123,6 @@
       3,
       6
     ],
-    "explorer_table_max_vh": 71,
     "failure_list_max": 25,
     "faithfulness_axis_floor_max": 60,
     "faithfulness_axis_step": 10,

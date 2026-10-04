@@ -5,7 +5,7 @@ import { BAND_UNREAD, readBand, stripRoutes } from '../src/lib/console/band';
 
 /**
  * The console is six routes, and this file is why it is routes and not tabs.
- * Records is live and is answered by the fallback document because it fetches
+ * Data explorer is live and is answered by the fallback document because it fetches
  * all data after JavaScript starts.
  *
  * A tab strip that switches with script fails every assertion here: with
@@ -45,7 +45,7 @@ const ROUTES = [
 	{ id: 'machine', label: 'Hardware', path: '/console/machine/' },
 	{ id: 'judgement', label: 'Judgement', path: '/console/judgement/' },
 	{ id: 'voices', label: 'Voices', path: '/console/voices/' },
-	{ id: 'data-explorer', label: 'Records', path: '/console/data-explorer/' }
+	{ id: 'data-explorer', label: 'Data explorer', path: '/console/data-explorer/' }
 ] as const;
 
 /** The routes that still name something they do not draw.
@@ -96,7 +96,7 @@ test.describe('the strip', () => {
 	// the standing band's (in "the standing band" below), instead of each
 	// describe block re-visiting every route on its own: fifteen page visits
 	// for the two concerns, over the original five routes, down to five -
-	// with every assertion kept. A sixth route, Records, joined the strip
+	// with every assertion kept. A sixth route, Data explorer, joined the strip
 	// later and rides the same single visit per route.
 	test('each route draws the same labels, marks its own, and the band matches across routes', async ({
 		page
@@ -121,6 +121,11 @@ test.describe('the strip', () => {
 				drawn.filter((tab) => tab.current === 'page').map((tab) => tab.id),
 				`${route.path}: exactly one label says which route this is`
 			).toEqual([route.id]);
+
+			if (route.id === 'data-explorer') {
+				await expect(page.locator('[data-console-band]')).toHaveCount(0);
+				continue;
+			}
 
 			// Three facts and no control. A band that grows becomes a fourth page
 			// nobody chose to open, and the control governs nothing inside it.
@@ -151,7 +156,7 @@ test.describe('the strip', () => {
 		// Derived once for every route, so they cannot disagree about which route
 		// is worst - which is the failure a per-route band eventually produces.
 		const pipelines = bandByRoute[ROUTES[0].id];
-		for (const route of ROUTES.slice(1)) {
+		for (const route of ROUTES.slice(1).filter((entry) => entry.id !== 'data-explorer')) {
 			expect(bandByRoute[route.id], `the band differs on ${route.path}`).toEqual(pipelines);
 		}
 	});
@@ -315,7 +320,7 @@ async function stripBoxes(page: Page) {
  * push the verdict off a phone's first screen.
  *
  * **One row at 768.** From 731 to 871 px five 8rem tabs fit one row and a sixth
- * does not, so this is the width where the sixth tab, Records, costs a row of
+ * does not, so this is the width where the sixth tab, Data explorer, costs a row of
  * its own - and no strip test checked any width between a phone and 1440 until
  * that tab was foreseen.
  *
@@ -597,11 +602,11 @@ test.describe('the cross-boundary carries', () => {
 	}
 });
 
-/** A band written before Records existed still reads, and the fallback fills the route. */
+/** A band written before Data explorer existed still reads, and the fallback fills the route. */
 const OLD_BAND = resolve(process.cwd(), '..', 'tests', 'fixtures', 'contracts', 'console-band', 'newest-day.json');
 
 test.describe('old bands still draw every route', () => {
-	test('the strip draws Records from the fallback words', () => {
+	test('the strip draws Data explorer from the fallback words', () => {
 		const payload = JSON.parse(readFileSync(OLD_BAND, 'utf8')) as { routes: { id: string }[] };
 		expect(payload.routes.map((route) => route.id)).not.toContain('data-explorer');
 		const band = readBand(payload);
@@ -610,7 +615,7 @@ test.describe('old bands still draw every route', () => {
 		expect(drawn.map((route) => route.id)).toEqual(ROUTES.map((entry) => entry.id));
 		expect(drawn.at(-1)).toMatchObject({
 			id: 'data-explorer',
-			label: 'Records',
+			label: 'Data explorer',
 			href: '/console/data-explorer/',
 			description: 'What the ledgers hold, and whatever you ask of them.',
 			worst: null

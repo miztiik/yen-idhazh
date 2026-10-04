@@ -73,9 +73,9 @@ legible, tables must fit their container, and titles must use plain words.
 | `/console/machine/` | **Hardware** | Which hardware ran the work, and how much did it vary? |
 | `/console/judgement/` | **Judgement** | What decisions were made about articles, and where did evaluation disagree? |
 | `/console/voices/` | **Voices** | Who supplied the day, and how are feeds discounted? |
-| `/console/data-explorer/` | **Records** | What do the ledgers hold, and what does a question of my own return? |
+| `/console/data-explorer/` | **Data explorer** | What do the ledgers hold, and what does a question of my own return? |
 
-**Records is live.** It is the one console route that prerenders no document of its own: GitHub Pages serves the fallback document, then the browser fetches the registry, indexes and files after the operator chooses a question. The old `console.data_explorer_tab` flag is gone because a tab no longer points at a missing page.
+**Data explorer is live.** It is the one console route that prerenders no document of its own: GitHub Pages serves the fallback document, then the browser fetches the registry, indexes and files after the operator chooses a question. The old `console.data_explorer_tab` flag is gone because a tab no longer points at a missing page.
 
 Feed and source panels belong to Voices, not Pipelines. Keep `/console/` as the
 Pipelines address; renaming a label is not a reason to break an existing bookmark.

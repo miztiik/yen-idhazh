@@ -330,7 +330,10 @@ export interface ExplorerExample {
 	sql: string;
 }
 
+export type ConsoleChrome = 'console' | 'workbench';
+
 export interface ExplorerConfig {
+	chrome: ConsoleChrome;
 	row_page: number;
 	max_rows: number;
 	max_fetch_bytes: number;
@@ -343,9 +346,11 @@ export interface ExplorerConfig {
 	save_name_max_chars: number;
 	series_floor_share: number;
 	rail_rem: number;
-	editor_lines: [number, number];
+	editor_lines_shown: [number, number];
 	strip_shown: [number, number];
-	table_max_vh: number;
+	readout_lines: [number, number, number, number];
+	notice_ms: number;
+	answer_svh: number;
 	cell_max_ch: number;
 	bar_spread_share: number;
 	counter_from_share: number;
@@ -591,6 +596,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	context_cut_off_reason: 'length'
 };
 const EXPLORER_DEFAULTS: ExplorerConfig = {
+	chrome: 'workbench',
 	row_page: 50,
 	max_rows: 1000,
 	max_fetch_bytes: 67108864,
@@ -603,9 +609,11 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	save_name_max_chars: 40,
 	series_floor_share: 0.05,
 	rail_rem: 14,
-	editor_lines: [8, 20],
-	strip_shown: [3, 6],
-	table_max_vh: 70,
+	editor_lines_shown: [8, 10],
+	strip_shown: [0, 6],
+	readout_lines: [3, 2, 2, 1],
+	notice_ms: 6000,
+	answer_svh: 60,
 	cell_max_ch: 40,
 	bar_spread_share: 0.5,
 	counter_from_share: 0.9,
@@ -1092,7 +1100,7 @@ export function engineExtensionRepository(): string {
 	return typeof value === 'string' ? value : '';
 }
 
-/** Where Records reads packed ledgers older than this site carries; empty means site only. */
+/** Where Data explorer reads packed ledgers older than this site carries; empty means site only. */
 export function ledgerArchiveBaseUrl(): string {
 	const value = raw().ledger?.archive_base_url;
 	return typeof value === 'string' ? value : '';
@@ -1160,10 +1168,13 @@ export function explorerConfig(): ExplorerConfig {
 		history_max: consoleBlock.explorer_history_max ?? EXPLORER_DEFAULTS.history_max,
 		save_name_max_chars: consoleBlock.explorer_save_name_max_chars ?? EXPLORER_DEFAULTS.save_name_max_chars,
 		series_floor_share: consoleBlock.explorer_series_floor_share ?? EXPLORER_DEFAULTS.series_floor_share,
+		chrome: consoleBlock.explorer_chrome === 'console' ? 'console' : EXPLORER_DEFAULTS.chrome,
 		rail_rem: consoleBlock.explorer_rail_rem ?? EXPLORER_DEFAULTS.rail_rem,
-		editor_lines: (consoleBlock.explorer_editor_lines ?? EXPLORER_DEFAULTS.editor_lines) as [number, number],
+		editor_lines_shown: (consoleBlock.explorer_editor_lines_shown ?? EXPLORER_DEFAULTS.editor_lines_shown) as [number, number],
 		strip_shown: (consoleBlock.explorer_strip_shown ?? EXPLORER_DEFAULTS.strip_shown) as [number, number],
-		table_max_vh: consoleBlock.explorer_table_max_vh ?? EXPLORER_DEFAULTS.table_max_vh,
+		readout_lines: (consoleBlock.explorer_readout_lines ?? EXPLORER_DEFAULTS.readout_lines) as [number, number, number, number],
+		notice_ms: consoleBlock.explorer_notice_ms ?? EXPLORER_DEFAULTS.notice_ms,
+		answer_svh: consoleBlock.explorer_answer_svh ?? EXPLORER_DEFAULTS.answer_svh,
 		cell_max_ch: consoleBlock.explorer_cell_max_ch ?? EXPLORER_DEFAULTS.cell_max_ch,
 		bar_spread_share: consoleBlock.explorer_bar_spread_share ?? EXPLORER_DEFAULTS.bar_spread_share,
 		counter_from_share: consoleBlock.explorer_counter_from_share ?? EXPLORER_DEFAULTS.counter_from_share,
