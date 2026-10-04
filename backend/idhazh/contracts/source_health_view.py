@@ -56,6 +56,7 @@ from idhazh.contracts.base import (
     RunId,
     Slug,
     Timestamp,
+    records_json,
 )
 
 #: The curated title of a source, from `config/sources.json`. A person wrote it
@@ -333,6 +334,10 @@ class SourceHealthRow(Model):
 
 class SourceHealthView(Contract):
     """Every address the run may ask, and what the committed record says about it."""
+
+    def to_json(self) -> str:
+        """Keep each source and its nested history together on one line."""
+        return records_json(self.model_dump(mode="json"), record_lists=frozenset({"sources"}))
 
     __schema_stem__: ClassVar[str] = "source-health-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
