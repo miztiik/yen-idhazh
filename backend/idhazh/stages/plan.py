@@ -118,16 +118,7 @@ def stage_plan(
     # Named by the execution that made it, not by a count of what is committed.
     # See `_next_run_n` for what the count could not do.
     run_id = _run_id(date, execution)
-    # Who wrote every file this stage files through the ledger door: built once,
-    # so its writers name one run, one attempt and one commit.
-    identity = WriterIdentity(
-        run_id=run_id,
-        attempt=run_context.run_attempt(),
-        job=ServerJob.PLAN,
-        shard=PLAN_SHARD,
-        producer=PRODUCER,
-        git_sha=commit_sha,
-    )
+    identity = plan_writer(run_id, commit_sha)
 
     candidates: list[discover.Candidate] = []
     health: list[FeedHealthRow] = []
@@ -948,3 +939,20 @@ def _run_id(date: str, execution: int | None) -> str:
     one run's rows under two names.
     """
     return f"{date}-{execution if execution is not None else _next_run_n(date)}"
+
+
+def plan_writer(run_id: str, commit_sha: str) -> WriterIdentity:
+    """Who files what the plan stage writes for one run: one run, one attempt, one commit.
+
+    The bench files its cut of a run's plan under this writer too. One writer's
+    later file replaces its earlier one when the ledger is read, so the run's
+    later stages read the cut and not the whole plan.
+    """
+    return WriterIdentity(
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.PLAN,
+        shard=PLAN_SHARD,
+        producer=PRODUCER,
+        git_sha=commit_sha,
+    )

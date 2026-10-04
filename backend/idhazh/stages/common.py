@@ -110,6 +110,17 @@ CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
 STATE_ROOT: Path = config.REPO_ROOT / ledger.STATE_DIRNAME
 
 
+def state_root_of(settings: config.Settings, *, base: Path) -> Path:
+    """Where a run under these settings files its ledgers: `base`, or its trial folder.
+
+    A trial run - a bench, a qualification, a pipeline test - takes production's
+    code path and must not be readable as a production day, so its whole state
+    root moves under `run.trial_state_dirname`.
+    """
+    dirname = settings.app.run.trial_state_dirname
+    return base / dirname if dirname else base
+
+
 #: Where a shard leaves its recorded input manifest for the assemble stage.
 #: One name for every shard of a run: they all observe one configuration, so
 #: they all write the same bytes and the atomic rename settles it.
@@ -748,15 +759,18 @@ def published_days(root: Path) -> list[Path]:
     ]
 
 
-def _load_plan(date: str, run_id: str | None = None) -> RunPlan:
+def _load_plan(date: str, run_id: str | None = None, *, state_dir: Path | None = None) -> RunPlan:
     """One run's plan for one UTC day, read from the run-plan ledger.
 
     `run_id` names the run, and every job of a workflow run passes its own: two
     runs of one day can overlap, so the newest plan of the day can be the other
     run's. Left out, the newest plan of the day is read, which is right only
     where one process plans and then works alone, as `idhazh run` does.
+    `state_dir` is for a program that is not `idhazh` itself and so never had
+    `STATE_ROOT` moved onto its trial folder.
     """
-    plans = ledger.load_days(STATE_ROOT, LedgerName.RUN_PLAN, [date], model=RunPlan)
+    state = state_dir if state_dir is not None else STATE_ROOT
+    plans = ledger.load_days(state, LedgerName.RUN_PLAN, [date], model=RunPlan)
     if run_id is not None:
         plans = [plan for plan in plans if plan.run_id == run_id]
     if not plans:

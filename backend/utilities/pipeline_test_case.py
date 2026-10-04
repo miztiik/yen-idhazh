@@ -8,14 +8,16 @@ commands a work job runs - `work`, then `record` - and then the run is filed
 beside the test case's config for the upload to take.
 
 Every test case runs the same plan, so every test case records the same item
-ids. The plan is copied in rather than written here: a runner minting its own
-would be a runner reading different articles.
+ids. The drawn plan is filed into the test case's own trial ledger rather than
+drawn here: a runner minting its own would be a runner reading different
+articles, and `work` and `record` read a plan only from the run-plan ledger,
+picking this run's by `--execution`.
 
 **The exit code is the contract.** `2` means this program was asked for something
 it cannot serve - a test case the config does not declare or does not switch
-on, a runner that holds no shard, or a dispatch with no plan - and any other
-non-zero code is the one the pipeline itself returned. A person reading the run
-page can then tell a typo from a test case that really failed.
+on, a runner that holds no shard, or a dispatch with no plan for this run - and
+any other non-zero code is the one the pipeline itself returned. A person reading
+the run page can then tell a typo from a test case that really failed.
 
 The faithfulness scorer is skipped. It is a second model download, and this
 workflow checks that a model walks the production path quickly; how good its
@@ -31,11 +33,27 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Final
 
+from pydantic import ValidationError
+
+from idhazh import ledger, run_context
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.contracts.run_plan import RunPlan
+from idhazh.stages import plan as plan_stage
 
 #: What a call this program cannot serve exits with.
 REFUSED = 2
+
+#: Who files the drawn plan into a test case's ledger, as the envelope names a writer.
+PRODUCER: Final = "utilities.pipeline_test_case"
+
+#: The commit the plan's file names. This runner is handed none, and the
+#: `record` it starts runs without `--commit` for the same reason.
+UNNAMED_COMMIT: Final = "0" * 40
 
 #: Where each test case's tree lives: the config root the config step writes,
 #: and the run this program files beside it. The config writer and the report
@@ -64,7 +82,9 @@ def jobs(settings: PipelineTestsConfig) -> str:
     return f"{JOBS_KEY}={json.dumps(matrix, separators=(',', ':'))}"
 
 
-def _stage(stage: str, *, date: str, config_root: Path, shard: int, shards: int) -> list[str]:
+def _stage(
+    stage: str, *, date: str, execution: int, config_root: Path, shard: int, shards: int
+) -> list[str]:
     """One production command, on the interpreter that started this program."""
     return [
         sys.executable,
@@ -73,6 +93,8 @@ def _stage(stage: str, *, date: str, config_root: Path, shard: int, shards: int)
         stage,
         "--date",
         date,
+        "--execution",
+        str(execution),
         "--config",
         config_root.as_posix(),
         "--shard",
@@ -82,12 +104,36 @@ def _stage(stage: str, *, date: str, config_root: Path, shard: int, shards: int)
     ]
 
 
+def _file_the_plan(drawn: RunPlan, *, trial_state_dirname: str) -> None:
+    """File the drawn plan into one test case's trial ledger, where its stages read it.
+
+    The trial root is spelled from the working folder, as every other path here is,
+    and the workflow runs this program from the checkout `idhazh` resolves.
+    """
+    ledger.persist(
+        Path(ledger.STATE_DIRNAME) / trial_state_dirname,
+        [drawn],
+        ledger=LedgerName.RUN_PLAN,
+        covers=drawn.date,
+        identity=WriterIdentity(
+            run_id=drawn.run_id,
+            attempt=run_context.run_attempt(),
+            job=ServerJob.PLAN,
+            shard=0,
+            producer=PRODUCER,
+            git_sha=UNNAMED_COMMIT,
+        ),
+    )
+
+
 def _refuse(message: str) -> int:
     print(message, file=sys.stderr)
     return REFUSED
 
 
-def run(settings: PipelineTestsConfig, test_case_id: str, date: str, runner: int) -> int:
+def run(
+    settings: PipelineTestsConfig, test_case_id: str, date: str, runner: int, execution: int
+) -> int:
     """Work every shard this runner holds at once, record each, and file the run.
 
     A process per shard, because a shard is a process with its own memory in
@@ -117,19 +163,33 @@ def run(settings: PipelineTestsConfig, test_case_id: str, date: str, runner: int
     # reader of the log has to go and find. This names what is missing.
     if not PLAN.is_file():
         return _refuse("no plan to run - the plan job comes before every test case")
+    try:
+        drawn = RunPlan.from_json(PLAN.read_text(encoding="utf-8"))
+    except ValidationError as error:
+        return _refuse(f"the plan the plan job wrote cannot be read: {error}")
+    asked = plan_stage._run_id(date, execution)
+    if drawn.run_id != asked:
+        return _refuse(f"the plan was drawn for run {drawn.run_id}, not for run {asked}")
 
     run_root = RUN_ROOT / date
     shutil.rmtree(run_root, ignore_errors=True)
     shutil.rmtree(test_case_root / "run", ignore_errors=True)
     run_root.mkdir(parents=True)
-    shutil.copy(PLAN, run_root / "plan.json")
+    _file_the_plan(drawn, trial_state_dirname=test_case.trial_state_dirname)
 
     shards = settings.shard_count()
     started = time.monotonic()
     working = [
         subprocess.Popen(
             [
-                *_stage("work", date=date, config_root=config_root, shard=shard, shards=shards),
+                *_stage(
+                    "work",
+                    date=date,
+                    execution=execution,
+                    config_root=config_root,
+                    shard=shard,
+                    shards=shards,
+                ),
                 "--no-faithfulness",
             ]
         )
@@ -138,7 +198,14 @@ def run(settings: PipelineTestsConfig, test_case_id: str, date: str, runner: int
     failed = [code for code in (worker.wait() for worker in working) if code != 0]
     for shard in held:
         recorded = subprocess.run(
-            _stage("record", date=date, config_root=config_root, shard=shard, shards=shards),
+            _stage(
+                "record",
+                date=date,
+                execution=execution,
+                config_root=config_root,
+                shard=shard,
+                shards=shards,
+            ),
             check=False,
         )
         if recorded.returncode != 0:
@@ -162,6 +229,9 @@ def main(argv: list[str] | None = None) -> int:
     one.add_argument("test_case", help="an id config/pipeline-tests.json switches on")
     one.add_argument("date", help="the day the plan was written for")
     one.add_argument("--runner", type=int, default=0, help="which of the test case's runners")
+    one.add_argument(
+        "--execution", type=int, required=True, help="the run the plan was drawn for"
+    )
     args = parser.parse_args(argv)
 
     settings = PipelineTestsConfig.from_json(
@@ -170,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.verb == "jobs":
         print(jobs(settings))
         return 0
-    return run(settings, args.test_case, args.date, args.runner)
+    return run(settings, args.test_case, args.date, args.runner, args.execution)
 
 
 if __name__ == "__main__":

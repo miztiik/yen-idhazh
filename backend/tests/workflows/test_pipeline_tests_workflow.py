@@ -1243,9 +1243,13 @@ def _switched_off_id() -> str:
         ([], "usage:"),
         (["run"], "usage:"),
         (["run", "{enabled}"], "usage:"),
-        (["run", "not-a-test-case", "2026-09-14"], "unknown test case"),
-        (["run", "{off}", "2026-09-14"], "is switched off"),
-        (["run", "{enabled}", "2026-09-14", "--runner", "7"], "holds no shard"),
+        (["run", "{enabled}", "2026-09-14"], "--execution"),
+        (["run", "not-a-test-case", "2026-09-14", "--execution", "1"], "unknown test case"),
+        (["run", "{off}", "2026-09-14", "--execution", "1"], "is switched off"),
+        (
+            ["run", "{enabled}", "2026-09-14", "--runner", "7", "--execution", "1"],
+            "holds no shard",
+        ),
     ],
 )
 def test_the_test_case_runner_refuses_a_call_it_cannot_serve(
@@ -1275,9 +1279,40 @@ def test_the_test_case_runner_refuses_to_run_without_the_plan_the_test_cases_sha
     which job writes it.
     """
     (tmp_path / pipeline_test_case.TEST_CASES_ROOT / _enabled_id() / "config").mkdir(parents=True)
-    completed = _ran_a_test_case(tmp_path, ["run", _enabled_id(), "2026-09-14"])
+    completed = _ran_a_test_case(
+        tmp_path, ["run", _enabled_id(), "2026-09-14", "--execution", "1"]
+    )
     assert completed.returncode == 2
     assert "no plan to run" in completed.stderr
+
+
+def _drawn_plan(tmp_path: Path, date: str, execution: int) -> RunPlan:
+    """The plan the plan job draws for one run, left where the runner takes it."""
+    drawn = RunPlan.model_validate(
+        {
+            **RunPlan.from_json(
+                read_text(REPO_ROOT / "tests" / "fixtures" / "contracts" / "run-plan" / "one-day.json")
+            ).model_dump(mode="json"),
+            "date": date,
+            "run_id": f"{date}-{execution}",
+            "generated_at": f"{date}T06:00:04Z",
+        }
+    )
+    written = tmp_path / pipeline_test_case.PLAN
+    written.parent.mkdir(parents=True, exist_ok=True)
+    written.write_text(drawn.to_json(), encoding="utf-8")
+    return drawn
+
+
+def test_the_test_case_runner_refuses_a_plan_drawn_for_another_run(tmp_path: Path) -> None:
+    """A plan left from another dispatch would run that dispatch's articles under this one's name."""
+    (tmp_path / pipeline_test_case.TEST_CASES_ROOT / _enabled_id() / "config").mkdir(parents=True)
+    _drawn_plan(tmp_path, "2026-09-14", 1)
+    completed = _ran_a_test_case(
+        tmp_path, ["run", _enabled_id(), "2026-09-14", "--execution", "2"]
+    )
+    assert completed.returncode == 2
+    assert "drawn for run 2026-09-14-1" in completed.stderr
 
 
 def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_not_serve(
@@ -1298,15 +1333,15 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
     """
     test_case_root = tmp_path / pipeline_test_case.TEST_CASES_ROOT / _enabled_id()
     (test_case_root / "config").mkdir(parents=True)
-    plan = tmp_path / pipeline_test_case.PLAN
-    plan.parent.mkdir(parents=True)
-    plan.write_text("{}", encoding="utf-8")
+    drawn = _drawn_plan(tmp_path, "2026-09-14", 1)
 
     one_shard = PipelineTestsConfig.model_validate(
         {**_settings().model_dump(mode="json"), "articles_a_dispatch": 1}
     )
     assert one_shard.shard_count() == 1
-    completed = _ran_a_test_case(tmp_path, ["run", _enabled_id(), "2026-09-14"], one_shard)
+    completed = _ran_a_test_case(
+        tmp_path, ["run", _enabled_id(), "2026-09-14", "--execution", "1"], one_shard
+    )
     assert completed.returncode != 0, "a failed pipeline fails the step that ran it"
     assert completed.returncode != 2, (
         "2 is reserved for a call this program cannot serve, so a failed "
@@ -1314,6 +1349,15 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
     )
     assert not (test_case_root / "run").exists(), (
         "nothing is filed under a test case that did not finish"
+    )
+    trial = next(
+        test_case for test_case in one_shard.test_cases if test_case.id == _enabled_id()
+    ).trial_state_dirname
+    filed = ledger.load_days(
+        tmp_path / ledger.STATE_DIRNAME / trial, LedgerName.RUN_PLAN, ["2026-09-14"], model=RunPlan
+    )
+    assert [plan.run_id for plan in filed] == [drawn.run_id], (
+        "the drawn plan is filed where this test case's stages read a plan, before they start"
     )
 
 
