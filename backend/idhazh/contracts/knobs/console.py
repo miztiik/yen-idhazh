@@ -95,20 +95,6 @@ class ConsoleConfig(Model):
             "today, so at least one, which is why zero is refused."
         ),
     )
-    # REMOVE THIS FLAG in the change that ships the page at /console/data-explorer/.
-    # The condition is in the description too, because an operator reads the
-    # schema and not this.
-    data_explorer_tab: bool = Field(
-        default=False,
-        description=(
-            "Whether the strip draws its sixth tab, Records, which opens "
-            "/console/data-explorer/. Off until that page exists, because a tab "
-            "pointing at a page that is not there is worse than no tab. The band "
-            "carries the route either way; this decides only whether the strip "
-            "draws it. Retire it in the change that ships the page, which deletes "
-            "this field and its readers."
-        ),
-    )
     pan_days: int = Field(default=7, ge=1, description="Days moved by one arrow-key pan.")
     zoom_factor: float = Field(default=1.5, gt=1.0)
     min_window_days: int = Field(
@@ -501,6 +487,133 @@ class ConsoleConfig(Model):
             "that could not name the other word could not say that."
         ),
     )
+
+    explorer_row_page: int = Field(
+        default=50,
+        ge=1,
+        description="Rows added by one Show more press on the Records answer table.",
+    )
+    explorer_max_rows: int = Field(
+        default=1000,
+        ge=1,
+        description="Most rows one Records answer holds before it is capped.",
+    )
+    explorer_max_fetch_bytes: int = Field(
+        default=67108864,
+        ge=1,
+        description=(
+            "Most bytes one Records question may fetch. Measured 2026-10-04 on a local "
+            "real build in Chromium with the CPU slowed 4x: a question fetching 9.9 MB "
+            "(10,379,116 bytes, 138 files, six ledgers over 30 days) answered in about "
+            "6 seconds, and no main-thread task passed 1 second; the longest of three "
+            "runs was 857 ms. So 64 MiB stands, but the site holds only 22.5 MB today, "
+            "so 64 MiB itself is untested until a ledger holds 90 days."
+        ),
+    )
+    explorer_query_max_chars: int = Field(
+        default=4000,
+        ge=1,
+        description="Most characters one Records SQL statement may hold.",
+    )
+    explorer_rail_rem: float = Field(
+        default=14.0,
+        gt=0.0,
+        description="Side rail width on the Records question panel, in rem.",
+    )
+    explorer_editor_lines: tuple[int, int] = Field(
+        default=(8, 20),
+        description="Minimum and maximum visible lines for the Records SQL editor.",
+    )
+    explorer_strip_shown: tuple[int, int] = Field(
+        default=(3, 6),
+        description="Example chips shown before the rest fold at phone and wider widths.",
+    )
+    explorer_table_max_vh: int = Field(
+        default=70,
+        ge=10,
+        le=100,
+        description="Tallest Records answer table box, in svh percent.",
+    )
+    explorer_cell_max_ch: int = Field(
+        default=40,
+        ge=1,
+        description="Text cell wrap width in the Records answer table, in characters.",
+    )
+    explorer_bar_spread_share: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Largest allowed minimum-to-maximum share for in-cell bars.",
+    )
+    explorer_counter_from_share: float = Field(
+        default=0.9,
+        ge=0.0,
+        le=1.0,
+        description="Share of the SQL character limit at which the counter appears.",
+    )
+    explorer_examples: list[dict[str, object]] = Field(
+        default_factory=lambda: [
+            {
+                "id": "p99-by-machine",
+                "title": "p99 job time by machine kind",
+                "ledgers": ['host-fingerprint'],
+                "days": 14,
+                "sql": (
+                    "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds, "
+                    "count(job_seconds) AS jobs FROM \"host-fingerprint\" "
+                    "WHERE job_seconds IS NOT NULL GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
+                ),
+            },
+            {
+                "id": "throughput-by-machine",
+                "title": "Prompt throughput by machine kind",
+                "ledgers": ['host-fingerprint'],
+                "days": 14,
+                "sql": (
+                    "SELECT cpu_model, sum(server_prompt_tokens) / sum(server_prompt_seconds) "
+                    "AS prompt_tokens_per_second, count(*) AS jobs FROM \"host-fingerprint\" "
+                    "WHERE server_prompt_seconds > 0 GROUP BY cpu_model "
+                    "ORDER BY prompt_tokens_per_second DESC"
+                ),
+            },
+            {
+                "id": "feeds-gone-quiet",
+                "title": "Feeds with no good fetch in the span",
+                "ledgers": ['feed-health'],
+                "days": 14,
+                "sql": (
+                    "SELECT feed_id, count(*) AS checks, max(checked_at) AS last_checked "
+                    "FROM \"feed-health\" GROUP BY feed_id "
+                    "HAVING count(*) FILTER (WHERE outcome = 'ok') = 0 ORDER BY checks DESC"
+                ),
+            },
+            {
+                "id": "why-items-failed",
+                "title": "What failed to summarize, and why",
+                "ledgers": ['item-health'],
+                "days": 14,
+                "sql": (
+                    "SELECT stage, code, count(*) AS items FROM \"item-health\" "
+                    "WHERE outcome = 'failed' GROUP BY stage, code ORDER BY items DESC"
+                ),
+            },
+            {
+                "id": "scored-per-day",
+                "title": "Summaries scored, day by day",
+                "ledgers": ['summary-quality-evals'],
+                "days": 14,
+                "sql": (
+                    "SELECT date, count(*) AS scored FROM \"summary-quality-evals\" "
+                    "GROUP BY date ORDER BY date"
+                ),
+            }
+        ],
+        description=(
+            "Example questions shown on the Records page. Each statement is written "
+            "against its ledgers' row contracts and answers what its title says."
+        ),
+    )
+
     panel_groups: dict[str, list[ConsolePanelGroup]] = Field(
         default_factory=lambda: {
             "pipelines": [
@@ -562,6 +675,13 @@ class ConsoleConfig(Model):
                         "counterfactual-cost",
                     ],
                 ),
+            ],
+            "data-explorer": [
+                ConsolePanelGroup(
+                    id="data-explorer",
+                    title="",
+                    panels=["data-explorer-ask", "data-explorer-rows"],
+                )
             ],
         },
         description=(
@@ -664,6 +784,20 @@ class ConsoleConfig(Model):
                     f"console.{signal}_marked must not exceed {signal}_named: a day the "
                     "headline names is a day the strip has already marked"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _explorer_editor_bounds(self) -> Self:
+        if (
+            self.explorer_editor_lines[0] < 1
+            or self.explorer_editor_lines[0] > self.explorer_editor_lines[1]
+        ):
+            raise ValueError("console.explorer_editor_lines must be ascending and positive")
+        if (
+            self.explorer_strip_shown[0] < 1
+            or self.explorer_strip_shown[0] > self.explorer_strip_shown[1]
+        ):
+            raise ValueError("console.explorer_strip_shown must be ascending and positive")
         return self
 
     @model_validator(mode="after")

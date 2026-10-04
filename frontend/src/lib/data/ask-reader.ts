@@ -161,19 +161,29 @@ function compactSelection(
 	};
 }
 
-async function filesForDay(
+/** The files an empty view takes its columns from: the ledger's newest day, from its listing
+ *  when the build listed a day after the newest packed one, else from the packed tier.
+ *  A zero-row packed file is kept, because a view that reads no rows needs only the file's
+ *  columns, and a ledger whose packed days all hold zero rows would otherwise have no file. */
+async function viewSource(
 	keeper: PageKeeper,
 	ledger: LedgerName,
-	day: DateStamp,
+	newestPacked: DateStamp | null,
 	indexes: Indexes,
 	rawListed: RawListedThrough
 ): Promise<{ files: WantedFile[]; metas: FileMeta[] }> {
-	if ((rawListed[ledger] ?? '') >= day) {
-		const raw = await rawListing(keeper, ledger, day);
-		if (!('state' in raw)) return raw;
+	const listedThrough = rawListed[ledger] ?? null;
+	if (listedThrough !== null && (newestPacked === null || listedThrough > newestPacked)) {
+		const raw = await rawListing(keeper, ledger, listedThrough);
+		if (!('state' in raw) && raw.files.length > 0) return raw;
 	}
-	const compact = compactSelection(ledger, day, day, indexes);
-	return 'state' in compact ? { files: [], metas: [] } : compact;
+	if (newestPacked === null) return { files: [], metas: [] };
+	const selection = filesFor(newestPacked, newestPacked, indexes.daily, indexes.monthly, indexes.yearly);
+	if ('hole' in selection) return { files: [], metas: [] };
+	return {
+		files: selection.files.map((file) => wanted(file.period, ledger, file)),
+		metas: selection.files.map((file) => ({ ledger, day: file.firstDay }))
+	};
 }
 
 async function planLedger(
@@ -218,7 +228,7 @@ async function planLedger(
 	// A ledger with no file in the span is read through an empty view over its newest day's
 	// files, so only such a ledger needs that day planned, and its listing fetched.
 	const needsEmptyView = files.length === 0 && unreachable === null && through !== null;
-	const empty = needsEmptyView ? await filesForDay(keeper, ledger, through, indexed, rawListed) : { files: [], metas: [] };
+	const empty = needsEmptyView ? await viewSource(keeper, ledger, newestPacked, indexed, rawListed) : { files: [], metas: [] };
 	return {
 		ledger,
 		through,
@@ -347,6 +357,9 @@ export async function readAsk(keeper: PageKeeper, opts: AskOptions, rawListed: R
 		if (noFilesInSpan) {
 			return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: Date.now() - started } };
 		}
+		// An empty view over no file would reach the engine as `read_parquet([])`, which it refuses.
+		const sourceless = planned.ledgers.find((one) => one.files.length === 0 && one.emptySource.length === 0);
+		if (sourceless) return { state: 'missing', ledger: sourceless.ledger };
 
 		const files = planned.ledgers.flatMap((one) => (one.files.length > 0 ? one.files : one.emptySource));
 		const metas = planned.ledgers.flatMap((one) => (one.files.length > 0 ? one.metas : one.emptyMetas));
@@ -358,7 +371,8 @@ export async function readAsk(keeper: PageKeeper, opts: AskOptions, rawListed: R
 		}
 		if ('failed' in held) {
 			const meta = metas[held.failed];
-			return { state: 'unreachable', ledger: meta?.ledger ?? null, at: meta?.day ?? null, fault: null };
+			const fault = held.shortfall.reason === 'absent' ? 'file-missing' : null;
+			return { state: 'unreachable', ledger: meta?.ledger ?? null, at: meta?.day ?? null, fault };
 		}
 
 		try {

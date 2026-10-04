@@ -121,6 +121,10 @@ read the populated root again. This checks that a reader neither falls back to
 the archive nor reuses another root's rows. They do not require a function call
 to have one spelling. Day-split tests compare the seed and remainder directly
 with the original stories; no unused reconstruction helper is kept for tests.
+The console spec's empty `package.json` `dependencies` assertion did not measure
+browser code. The existing bundle gate still checks first-load encoders and the
+configured gzip limits for routes and fetched payloads; no test requires
+`dependencies` to be empty.
 
 ## Rejected alternatives
 

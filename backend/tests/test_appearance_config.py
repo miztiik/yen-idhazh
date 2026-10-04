@@ -38,6 +38,7 @@ from idhazh.contracts.appearance_config import (
     AppearanceConfig,
     ChartConfig,
     FrameConfig,
+    IconsConfig,
     MotionConfig,
     ThemeConfig,
 )
@@ -192,6 +193,15 @@ def test_a_readout_may_not_be_wider_than_the_plot_or_zero_wide() -> None:
             ChartConfig(readout_max_share=refused)
     assert ChartConfig(readout_max_share=0.5).readout_max_share == 0.5
     assert ChartConfig().readout_max_share == 1.0
+
+
+def test_the_icon_stroke_is_a_screen_pixel_weight() -> None:
+    """The whole icon set takes one readable line weight."""
+    for refused in (0.0, 0.49, 3.01):
+        with pytest.raises(ValidationError):
+            IconsConfig(stroke_px=refused)
+    assert IconsConfig().stroke_px == 1.5
+    assert IconsConfig(stroke_px=1.25).stroke_px == 1.25
 
 
 def test_fast_motion_is_faster_than_base_motion() -> None:
