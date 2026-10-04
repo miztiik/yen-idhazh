@@ -845,6 +845,12 @@
       "items": 0,
       "path": "raw/feed-health/2026/10/04/01a1060a-e39e-8dfd-b022-34d657a82471.parquet",
       "root": "state"
+    },
+    {
+      "bytes": 21202,
+      "items": 0,
+      "path": "raw/feed-health/2026/10/04/01a106e3-5a66-8741-9867-c329a04e0d09.parquet",
+      "root": "state"
     }
   ],
   "total_bytes": 52012835,
