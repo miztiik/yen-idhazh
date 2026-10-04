@@ -559,8 +559,9 @@ class ConsoleConfig(Model):
                 "ledgers": ['host-fingerprint'],
                 "days": 14,
                 "sql": (
-                    "SELECT job AS cpu_model, count(*) AS p99_job_seconds "
-                    "FROM \"host-fingerprint\" GROUP BY job ORDER BY p99_job_seconds DESC"
+                    "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds, "
+                    "count(job_seconds) AS jobs FROM \"host-fingerprint\" "
+                    "WHERE job_seconds IS NOT NULL GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
                 ),
             },
             {
@@ -569,9 +570,10 @@ class ConsoleConfig(Model):
                 "ledgers": ['host-fingerprint'],
                 "days": 14,
                 "sql": (
-                    "SELECT job AS cpu_model, avg(cores) AS prompt_throughput "
-                    "FROM \"host-fingerprint\" GROUP BY job "
-                    "ORDER BY prompt_throughput DESC"
+                    "SELECT cpu_model, sum(server_prompt_tokens) / sum(server_prompt_seconds) "
+                    "AS prompt_tokens_per_second, count(*) AS jobs FROM \"host-fingerprint\" "
+                    "WHERE server_prompt_seconds > 0 GROUP BY cpu_model "
+                    "ORDER BY prompt_tokens_per_second DESC"
                 ),
             },
             {
@@ -580,8 +582,9 @@ class ConsoleConfig(Model):
                 "ledgers": ['feed-health'],
                 "days": 14,
                 "sql": (
-                    "SELECT feed_url, count(*) AS checks FROM \"feed-health\" "
-                    "GROUP BY feed_url ORDER BY checks DESC"
+                    "SELECT feed_id, count(*) AS checks, max(checked_at) AS last_checked "
+                    "FROM \"feed-health\" GROUP BY feed_id "
+                    "HAVING count(*) FILTER (WHERE outcome = 'ok') = 0 ORDER BY checks DESC"
                 ),
             },
             {
@@ -590,7 +593,8 @@ class ConsoleConfig(Model):
                 "ledgers": ['item-health'],
                 "days": 14,
                 "sql": (
-                    "SELECT count(*) AS items FROM \"item-health\""
+                    "SELECT stage, code, count(*) AS items FROM \"item-health\" "
+                    "WHERE outcome = 'failed' GROUP BY stage, code ORDER BY items DESC"
                 ),
             },
             {
@@ -600,11 +604,14 @@ class ConsoleConfig(Model):
                 "days": 14,
                 "sql": (
                     "SELECT date, count(*) AS scored FROM \"summary-quality-evals\" "
-                    "GROUP BY date ORDER BY date DESC"
+                    "GROUP BY date ORDER BY date"
                 ),
             }
         ],
-        description="Example questions shown on the Records page.",
+        description=(
+            "Example questions shown on the Records page. Each statement is written "
+            "against its ledgers' row contracts and answers what its title says."
+        ),
     )
 
     panel_groups: dict[str, list[ConsolePanelGroup]] = Field(

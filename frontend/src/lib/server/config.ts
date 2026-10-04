@@ -601,35 +601,35 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 			title: "p99 job time by machine kind",
 			ledgers: ["host-fingerprint"],
 			days: 14,
-			sql: "SELECT job AS cpu_model, count(*) AS p99_job_seconds FROM \"host-fingerprint\" GROUP BY job ORDER BY p99_job_seconds DESC"
+			sql: "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds, count(job_seconds) AS jobs FROM \"host-fingerprint\" WHERE job_seconds IS NOT NULL GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
 		},
 		{
 			id: "throughput-by-machine",
 			title: "Prompt throughput by machine kind",
 			ledgers: ["host-fingerprint"],
 			days: 14,
-			sql: "SELECT job AS cpu_model, avg(cores) AS prompt_throughput FROM \"host-fingerprint\" GROUP BY job ORDER BY prompt_throughput DESC"
+			sql: "SELECT cpu_model, sum(server_prompt_tokens) / sum(server_prompt_seconds) AS prompt_tokens_per_second, count(*) AS jobs FROM \"host-fingerprint\" WHERE server_prompt_seconds > 0 GROUP BY cpu_model ORDER BY prompt_tokens_per_second DESC"
 		},
 		{
 			id: "feeds-gone-quiet",
 			title: "Feeds with no good fetch in the span",
 			ledgers: ["feed-health"],
 			days: 14,
-			sql: "SELECT feed_url, count(*) AS checks FROM \"feed-health\" GROUP BY feed_url ORDER BY checks DESC"
+			sql: "SELECT feed_id, count(*) AS checks, max(checked_at) AS last_checked FROM \"feed-health\" GROUP BY feed_id HAVING count(*) FILTER (WHERE outcome = 'ok') = 0 ORDER BY checks DESC"
 		},
 		{
 			id: "why-items-failed",
 			title: "What failed to summarize, and why",
 			ledgers: ["item-health"],
 			days: 14,
-			sql: "SELECT count(*) AS items FROM \"item-health\""
+			sql: "SELECT stage, code, count(*) AS items FROM \"item-health\" WHERE outcome = 'failed' GROUP BY stage, code ORDER BY items DESC"
 		},
 		{
 			id: "scored-per-day",
 			title: "Summaries scored, day by day",
 			ledgers: ["summary-quality-evals"],
 			days: 14,
-			sql: "SELECT date, count(*) AS scored FROM \"summary-quality-evals\" GROUP BY date ORDER BY date DESC"
+			sql: "SELECT date, count(*) AS scored FROM \"summary-quality-evals\" GROUP BY date ORDER BY date"
 		}
 	]
 };
