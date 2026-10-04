@@ -12,13 +12,14 @@
 		disabled = false,
 		notice = '',
 		saveName = '',
+		saveNameMaxChars,
 		canSave = true,
 		canCopyQuestion = false,
 		onRun,
 		onSave,
 		onCopyQuestion
 	}: {
-		files?: number; bytes?: number; heldBytes?: number; read?: FetchCost | null; busy?: boolean; disabled?: boolean; notice?: string; saveName?: string; canSave?: boolean; canCopyQuestion?: boolean; onRun: () => void; onSave?: (name: string) => void; onCopyQuestion?: () => void;
+		files?: number; bytes?: number; heldBytes?: number; read?: FetchCost | null; busy?: boolean; disabled?: boolean; notice?: string; saveName?: string; saveNameMaxChars: number; canSave?: boolean; canCopyQuestion?: boolean; onRun: () => void; onSave?: (name: string) => void; onCopyQuestion?: () => void;
 	} = $props();
 	let saving = $state(false);
 	let draftName = $state('');
@@ -36,7 +37,7 @@
 	<p>{line} This page holds {megabytes(heldBytes)} MB of fetched files; a reload empties it.</p>
 	<div class="actions">
 		{#if saving}
-			<label>Name <input bind:value={draftName} maxlength="80" /></label>
+			<label>Name <input bind:value={draftName} maxlength={saveNameMaxChars} /></label>
 			<button type="button" class="secondary" onclick={() => { onSave?.(draftName); saving = false; }} disabled={!draftName.trim()}>
 				<Icon id="saved" /> Keep
 			</button>

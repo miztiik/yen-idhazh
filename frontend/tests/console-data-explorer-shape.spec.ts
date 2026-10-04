@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { chooseExplorerShape, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
+import { chooseExplorerShape, chooseExplorerShapes, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
 import type { Column, Row } from '../src/lib/data/slice-shapes';
 
 const bounds: ExplorerShapeBounds = {
@@ -123,4 +123,24 @@ test('no-chart reasons follow the first matching documented case', () => {
 		code: 'too-many-text-columns',
 		reason: 'Nothing here to draw: two number columns pair up with at most one text column naming each point, and this answer has 2.'
 	});
+});
+
+test('an answer can qualify for more than one chart type for the operator switch', () => {
+	const result = chooseExplorerShapes([
+		{ name: 'source', type: 'VARCHAR' },
+		{ name: 'items', type: 'INTEGER' }
+	], [
+		{ source: 'a', items: 5 },
+		{ source: 'b', items: 2 },
+		{ source: 'c', items: 1 }
+	], bounds);
+	expect(result.map((shape) => shape.kind === 'chart' ? shape.type : shape.code)).toEqual(['rankedList', 'distribution']);
+	expect(chooseExplorerShape([
+		{ name: 'source', type: 'VARCHAR' },
+		{ name: 'items', type: 'INTEGER' }
+	], [
+		{ source: 'a', items: 5 },
+		{ source: 'b', items: 2 },
+		{ source: 'c', items: 1 }
+	], bounds)).toMatchObject({ kind: 'chart', type: 'rankedList' });
 });

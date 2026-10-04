@@ -306,45 +306,112 @@ test('THE ORACLE: a shared address fills the editor and does not run itself', as
 	await expect(page.locator('#explorer-sql')).toHaveValue(sql);
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('This question came from a link');
 	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
+	await expect(page.locator('[data-explorer-action-line]')).not.toContainText('Answered in');
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
-	await expect.poll(() => fetched.length, { message: 'the link may only fetch column-description data before Run' }).toBeGreaterThan(0);
+	await expect(page.locator('[data-explorer-columns]')).toContainText('published.');
+	expect(fetched.every((path) => dataLedger(path) === 'published' && dataPathCoversDay(path, EXPLORER_CANARY_DAY)), 'a shared link fetched a span file before Run').toBe(true);
+	const beforeType = page.url();
+	await page.locator('#explorer-sql').fill(`${sql} `);
+	expect(page.url()).toBe(beforeType);
 	await runExplorer(page);
 	await expect(page.locator('[data-explorer-answer]')).toHaveCount(1);
+	expect(page.url()).not.toBe(beforeType);
 });
 
-test('THE ORACLE: the chart panel follows the answer columns and keeps neutral no-chart words', async ({ page }) => {
+test('THE ORACLE: link notices render on the page', async ({ page }) => {
+	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
+	await page.goto('/console/data-explorer/?ledgers=published,unknown-ledger&days=365&q=not-valid-***', { waitUntil: 'domcontentloaded' });
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link named "unknown-ledger"');
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link asked for 365 days');
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('The question in this link could not be read');
+});
+
+test('THE ORACLE: every chart case draws its type with a populated readout', async ({ page }) => {
 	await openExplorer(page);
-	await chooseExplorerQuestion(page, ['summary-quality-evals'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
-	await runExplorer(page);
-	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-chart-type="dateSeries"]')).toHaveCount(1);
-	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-lede]')).toBeVisible();
-	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-comparison]')).toContainText('against');
+	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+	const cases = [
+		['dateSeries', "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)"],
+		['rankedList', "SELECT * FROM (VALUES ('a', 9), ('b', 4), ('c', 2)) AS t(name, rows)"],
+		['pairedScatter', "SELECT 'row-' || i::VARCHAR AS name, i AS x, 170 - i AS y FROM range(0, 170) AS t(i)"],
+		['distribution', 'SELECT * FROM range(0, 170) AS t(rows)']
+	] as const;
+	for (const [type, sql] of cases) {
+		await chooseExplorerQuestion(page, ['published'], sql);
+		await runExplorer(page);
+		if (await page.locator(`[data-shape-choice="${type}"] input`).count()) {
+			await page.locator(`[data-shape-choice="${type}"] input`).check();
+		}
+		await expect(panel.locator(`[data-chart-type="${type}"]`)).toHaveCount(1);
+		await expect(panel.locator('[data-readout] [data-readout-row]').first()).toBeVisible();
+		await expect(panel.locator('[data-lede]')).toBeVisible();
+		await expect(panel.locator('[data-comparison]')).toContainText('against');
+		await expect(panel.locator('[title], title')).toHaveCount(0);
+	}
 
 	await chooseExplorerQuestion(page, ['published'], 'SELECT item_id FROM "published" LIMIT 1');
 	await runExplorer(page);
-	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-shape-none]')).toContainText('Nothing here to draw');
+	const height = await panel.boundingBox().then((box) => box?.height ?? 0);
+	await expect(panel.locator('[data-shape-none]')).toContainText('Nothing here to draw');
+	expect(height, 'the no-chart panel did not keep chart room').toBeGreaterThan(220);
 });
 
 test('THE ORACLE: Save, recent runs and Markdown copy preserve text without running a saved question', async ({ page, context }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	await openExplorer(page);
-	const sql = "SELECT '[x](https://example.invalid/a)|pipe' AS hostile FROM \"published\" LIMIT 1";
+	const sql = "SELECT 'header' AS label, '[x](https://example.invalid/a)|pipe\n`tick`' AS hostile FROM \"published\" LIMIT 1";
 	await chooseExplorerQuestion(page, ['published'], sql);
+	const beforeSave = page.url();
 	await page.getByRole('button', { name: /^Save$/ }).click();
 	await page.getByLabel('Name').fill('Hostile copy');
 	await page.getByRole('button', { name: /^Keep$/ }).click();
 	await expect(page.locator('.saved-chip .example').filter({ hasText: 'Hostile copy' })).toHaveCount(1);
+	expect(page.url()).not.toBe(beforeSave);
+	const beforeSavedPick = await page.locator('[data-explorer-action-line]').getAttribute('data-files');
+	await page.locator('.saved-chip .example').filter({ hasText: 'Hostile copy' }).click();
+	await expect(page.locator('#explorer-sql')).toHaveValue(sql);
+	await expect(page.locator('[data-explorer-action-line]')).toHaveAttribute('data-files', beforeSavedPick ?? '');
 
 	await runExplorer(page);
 	await page.getByRole('button', { name: /^Copy as table$/ }).click();
 	await expect(page.locator('.copy-answer')).toContainText('Copied 1 row as a table.');
 	const copied = await page.evaluate(() => navigator.clipboard.readText());
-	expect(copied).toContain('`[x](https://example.invalid/a)\\|pipe`');
+	expect(copied).toContain('`label`');
+	expect(copied).toContain('``[x](https://example.invalid/a)\\|pipe `tick```');
+	expect(copied.split('\n')).toHaveLength(3);
+	await expect(page.locator('[data-explorer-answer] a, [data-explorer-answer] img')).toHaveCount(0);
 
-	await page.getByText('Asked in this browser').click();
+	await page.locator('.history-list summary').click();
 	await expect(page.locator('.history-list button')).toContainText('1 row');
 	await page.locator('.history-list button').first().click();
 	await expect(page.locator('#explorer-sql')).toHaveValue(sql);
 	await expect(page.locator('[data-explorer-answer]')).toHaveCount(1);
+});
+
+test('THE ORACLE: browser storage is parsed against closed lists and saved overflow names the drop', async ({ page }) => {
+	const bad = [
+		{ id: 'bad-ledger', name: 'Bad ledger', statement: 'SELECT 1', ledgers: ['unknown-ledger'], days: 14, updatedAt: '2026-10-04T00:00:00Z' },
+		{ id: 'bad-days', name: 'Bad days', statement: 'SELECT 1', ledgers: ['published'], days: 365, updatedAt: '2026-10-04T00:00:00Z' },
+		{ id: 'bad-statement', name: 'Bad statement', statement: 1, ledgers: ['published'], days: 14, updatedAt: '2026-10-04T00:00:00Z' }
+	];
+	await page.addInitScript((entries) => {
+		localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(entries));
+		localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify(entries.map((entry) => ({ ...entry, rows: 1, ms: 1, askedAt: '2026-10-04T00:00:00Z' }))));
+	}, bad);
+	const logs: string[] = [];
+	page.on('console', (message) => logs.push(message.text()));
+	await openExplorer(page);
+	await expect(page.locator('.saved-chip')).toHaveCount(0);
+	await page.locator('.history-list summary').click();
+	await expect(page.locator('.history-list button')).toHaveCount(0);
+	expect(logs.filter((line) => line.includes('Records storage')).length).toBeGreaterThanOrEqual(3);
+
+	for (let index = 0; index < 21; index += 1) {
+		await page.locator('#explorer-sql').fill(`SELECT ${index}`);
+		await page.getByRole('button', { name: /^Save$/ }).click();
+		await page.getByLabel('Name').fill(`Saved ${index}`);
+		await page.getByRole('button', { name: /^Keep$/ }).click();
+	}
+	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toContainText('Saved "Saved 20". "Saved 0" was the oldest of 20 and is no longer kept.');
+	await expect(page.locator('.saved-chip .example')).toHaveCount(20);
 });
