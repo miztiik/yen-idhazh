@@ -26,9 +26,9 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.ledger_fault import LedgerFault
 from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.keys import DATE_CELL
 
 pytestmark = pytest.mark.contract
@@ -172,5 +172,5 @@ def test_the_four_missing_file_faults_are_one_list_on_both_sides() -> None:
     names = constant_list(read_text(shapes), "LEDGER_FAULTS", shapes)
     assert names == [fault.value for fault in LedgerFault], (
         f"{shapes.name} names the faults {names} and LedgerFault in "
-        f"backend/idhazh/ledger/faults.py names {[fault.value for fault in LedgerFault]}"
+        f"backend/idhazh/contracts/ledger_fault.py names {[fault.value for fault in LedgerFault]}"
     )

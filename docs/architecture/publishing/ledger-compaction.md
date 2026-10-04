@@ -283,7 +283,7 @@ fails that wake, and a person restores the file from git history.
 
 **A missing file has one of four names**, declared once as `LEDGER_FAULTS` in
 `frontend/src/lib/data/slice-shapes.ts`. The backend's copy is `LedgerFault` in
-`backend/idhazh/ledger/faults.py`, and
+`backend/idhazh/contracts/ledger_fault.py`, and
 `backend/tests/contracts/test_frontend_index_shapes.py` holds the two to one list.
 The query door carries the name on its answer
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)),

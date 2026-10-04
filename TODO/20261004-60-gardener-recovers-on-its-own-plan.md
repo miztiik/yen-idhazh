@@ -38,7 +38,7 @@ Table A - what is out
 | 1 | Compaction gets its own page | - | A | DONE | fantastic-umbrella | - | Plan 60 row 1: compaction page |
 | 2 | A dry run says nothing was deleted | - | A | DONE | literate-parakeet | - | Plan 60 row 2: dry-run wording |
 | 3 | A read nobody named fails loudly | - | A | PENDING | - | - | - |
-| 4 | The ledger fault words live in contracts | - | A | PENDING | - | - | - |
+| 4 | The ledger fault words live in contracts | 1 | A | DONE | special-sniffle | - | Plan 60 row 4: fault words in contracts |
 | 5 | A ledger's marks are read in one place | - | A | PENDING | - | - | - |
 | 6 | One run id per workflow run | 1 | B | PENDING | - | - | - |
 | 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
@@ -231,6 +231,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/ledger/ledger_files.py`
   - `backend/tests/contracts/test_frontend_index_shapes.py`
   - `backend/tests/council/_imports.py`
+  - `docs/architecture/publishing/ledger-compaction.md` (found during execution)
+  - `frontend/src/lib/data/slice-shapes.ts` (found during execution)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 -m contract backend/tests/contracts/test_frontend_index_shapes.py`, the ledger tests the selector lists; ruff; mypy. CI: the full suite.
 - **Oracle:** this is a move, so behaviour does not change. The property that could break is the binding: the test still holds `LedgerFault` name for name to `frontend/src/lib/data/slice-shapes.ts`. It cannot settle callers outside the repository.
 
