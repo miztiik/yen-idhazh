@@ -584,19 +584,37 @@ class ConsoleConfig(Model):
         gt=0.0,
         description="Side rail width on the Data explorer question panel, in rem.",
     )
-    explorer_editor_lines: tuple[int, int] = Field(
-        default=(8, 20),
-        description="Minimum and maximum visible lines for the Data explorer SQL editor.",
+    explorer_readout_lines: tuple[int, int, int, int] = Field(
+        default=(3, 2, 2, 1),
+        description=(
+            "Lines reserved by the Data explorer status bar, answer note and chart "
+            "foot, for the four frame breakpoint bands from narrowest to widest."
+        ),
+    )
+    explorer_notice_ms: int = Field(
+        default=6000,
+        ge=0,
+        description=(
+            "How long a Data explorer notice that answers a press stays visible, "
+            "in milliseconds. Focus or hover holds it."
+        ),
+    )
+    explorer_editor_lines_shown: tuple[int, int] = Field(
+        default=(8, 10),
+        description=(
+            "Fixed visible lines for the Data explorer SQL editor, below 1024 px "
+            "and from 1024 px."
+        ),
     )
     explorer_strip_shown: tuple[int, int] = Field(
         default=(3, 6),
         description="Example chips shown before the rest fold at phone and wider widths.",
     )
-    explorer_table_max_vh: int = Field(
-        default=70,
+    explorer_answer_svh: int = Field(
+        default=60,
         ge=10,
         le=100,
-        description="Tallest Data explorer answer table box, in svh percent.",
+        description="Fixed Data explorer answer region height, in svh percent.",
     )
     explorer_cell_max_ch: int = Field(
         default=40,
@@ -856,11 +874,13 @@ class ConsoleConfig(Model):
 
     @model_validator(mode="after")
     def _explorer_editor_bounds(self) -> Self:
+        if len(self.explorer_readout_lines) != 4 or any(lines < 1 for lines in self.explorer_readout_lines):
+            raise ValueError("console.explorer_readout_lines must hold four positive values")
         if (
-            self.explorer_editor_lines[0] < 1
-            or self.explorer_editor_lines[0] > self.explorer_editor_lines[1]
+            self.explorer_editor_lines_shown[0] < 1
+            or self.explorer_editor_lines_shown[0] > self.explorer_editor_lines_shown[1]
         ):
-            raise ValueError("console.explorer_editor_lines must be ascending and positive")
+            raise ValueError("console.explorer_editor_lines_shown must be ascending and positive")
         if (
             self.explorer_strip_shown[0] < 1
             or self.explorer_strip_shown[0] > self.explorer_strip_shown[1]

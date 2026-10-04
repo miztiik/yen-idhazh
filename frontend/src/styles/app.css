@@ -478,6 +478,17 @@ body {
 	from {
 		background-position: -100% 0;
 	}
+
+	@keyframes toastIn {
+		from {
+			opacity: 0;
+			transform: translateY(var(--space-2));
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
 	to {
 		background-position: 100% 0;
 	}

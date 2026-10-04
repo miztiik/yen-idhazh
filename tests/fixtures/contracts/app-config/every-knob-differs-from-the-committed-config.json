@@ -119,10 +119,6 @@
     "explorer_chart_min_rows": 4,
     "explorer_chrome": "console",
     "explorer_counter_from_share": 1.0,
-    "explorer_editor_lines": [
-      8,
-      20
-    ],
     "explorer_examples": [
       {
         "days": 14,
@@ -186,7 +182,6 @@
       3,
       6
     ],
-    "explorer_table_max_vh": 71,
     "failure_list_max": 10,
     "faithfulness_axis_floor_max": 60,
     "faithfulness_axis_step": 10,
@@ -273,7 +268,19 @@
       60,
       180
     ],
-    "zoom_factor": 2.0
+    "zoom_factor": 2.0,
+    "explorer_readout_lines": [
+      4,
+      3,
+      3,
+      2
+    ],
+    "explorer_notice_ms": 5001,
+    "explorer_editor_lines_shown": [
+      8,
+      11
+    ],
+    "explorer_answer_svh": 61
   },
   "council": {
     "first_night": "2026-09-20",

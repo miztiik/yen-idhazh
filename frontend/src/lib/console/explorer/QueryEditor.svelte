@@ -1,6 +1,5 @@
 <script lang="ts">
-	let { value, maxChars, minLines, maxLines, counterFromShare, onInput, onRun }: { value: string; maxChars: number; minLines: number; maxLines: number; counterFromShare: number; onInput: (value: string) => void; onRun?: () => void } = $props();
-	const lines = $derived(Math.min(maxLines, Math.max(minLines, value.split('\n').length)));
+	let { value, maxChars, lines, counterFromShare, onInput, onRun }: { value: string; maxChars: number; lines: number; counterFromShare: number; onInput: (value: string) => void; onRun?: () => void } = $props();
 	const count = $derived(value.length);
 	const showCounter = $derived(count >= maxChars * counterFromShare);
 	const rows = $derived((value || ' ').split('\n'));
@@ -37,10 +36,11 @@
 <style>
 	.editor { display: grid; gap: var(--space-2); }
 	label { font-weight: 600; }
-	.frame { position: relative; display: grid; grid-template-columns: 3.5rem 1fr; min-block-size: calc(var(--lines) * var(--leading-base) + var(--space-4)); max-block-size: calc(var(--lines) * var(--leading-base) + var(--space-4)); overflow: auto; border: 1px solid var(--color-rule-strong); border-radius: var(--radius-md); background: var(--code-ground); font-family: var(--font-data); font-size: var(--text-base); line-height: var(--leading-base); }
+	.frame { position: relative; display: grid; grid-template-columns: calc(3ch + var(--space-3)) 1fr; block-size: calc(var(--lines) * var(--workbench-field-leading) + 2 * var(--space-3)); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; border: 1px solid var(--color-rule-strong); border-radius: var(--radius-md); background: var(--code-ground); font-family: var(--font-data); font-size: var(--workbench-field-text); line-height: var(--workbench-field-leading); }
 	.frame:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 	.numbers { display: grid; align-content: start; padding: var(--space-3) var(--space-2); color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; text-align: end; user-select: none; }
-	.numbers span, .line { min-block-size: var(--leading-base); }
+	.numbers { border-inline-end: 1px solid var(--color-rule); }
+	.numbers span, .line { min-block-size: var(--workbench-field-leading); }
 	.highlight { grid-column: 2; grid-row: 1; margin: 0; padding: var(--space-3); color: var(--code-text); white-space: pre-wrap; overflow-wrap: anywhere; pointer-events: none; }
 	.line { display: block; }
 	textarea { grid-column: 2; grid-row: 1; min-block-size: 100%; overflow: hidden; resize: none; border: 0; background: transparent; color: transparent; caret-color: var(--code-text); padding: var(--space-3); font: inherit; line-height: inherit; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
