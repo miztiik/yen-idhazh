@@ -1,4 +1,4 @@
-import type { LedgerName } from '../../data/slice-shapes';
+import { isDay, type LedgerName } from '../../data/slice-shapes';
 
 export const UNKNOWN_LEDGER_NOTICE = (name: string): string => `The link named "${name}", which this site does not have, so it was left out.`;
 export const DAYS_NOTICE = (value: string, fallback: number): string => `The link asked for ${value} days, which this page does not offer, so it reads ${fallback} days.`;
@@ -124,11 +124,6 @@ export async function explorerAddress(input: ExplorerAddressInput): Promise<Expl
 		return { href, query, linkedStatement: false, notices: [LINK_TOO_LONG_NOTICE] };
 	}
 	return { href, query, linkedStatement: true, notices: [] };
-}
-
-function isDay(value: string): boolean {
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-	return new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
 }
 
 function addDays(day: string, delta: number): string {

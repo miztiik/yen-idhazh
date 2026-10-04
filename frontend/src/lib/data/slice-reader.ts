@@ -29,6 +29,8 @@
  * `ok` and `quiet` carry `lostDays`, the days in the span an index records lost.
  * Such a day has no file to read and no record to draw, so it is named rather
  * than counted as a day with no rows, and the other days are read as usual.
+ * They also carry `setAside`, the periods the span is read from whose packing
+ * set files aside unread, so a panel can say its rows may be short.
  *
  * `through` is the newest day `daily.json` names. A day after it has not been
  * compacted yet, so it is clamped away rather than drawn as a zero.
@@ -225,7 +227,7 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	if ('refused' in daily) return unreachable(request.from, explainRefusal('daily', daily.refused));
 	const days = daily.index.entries;
 	const through = days.at(-1)?.covers ?? null;
-	if (through === null || request.from > through) return { state: 'quiet', rows: [], through, lostDays: [] };
+	if (through === null || request.from > through) return { state: 'quiet', rows: [], through, lostDays: [], setAside: {} };
 	const until = request.to < through ? request.to : through;
 
 	let months: CompactEntry[] = [];
@@ -255,9 +257,9 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 		}
 		return faulted(selection.hole, { fault: 'day-missing', day: selection.hole });
 	}
-	const { lostDays } = selection;
+	const { lostDays, setAside } = selection;
 	const holding = selection.files.filter((file) => file.entry.rows > 0);
-	if (holding.length === 0) return { state: 'quiet', rows: [], through, lostDays };
+	if (holding.length === 0) return { state: 'quiet', rows: [], through, lostDays, setAside };
 
 	const wanted: WantedFile[] = holding.map((file) => ({
 		path: dataPath(ledger, file.period, file.entry.covers),
@@ -285,5 +287,7 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	} catch (error) {
 		return unreachable(request.from, `the query engine could not answer (${reason(error)})`);
 	}
-	return rows.length === 0 ? { state: 'quiet', rows: [], through, lostDays } : { state: 'ok', rows, through, lostDays };
+	return rows.length === 0
+		? { state: 'quiet', rows: [], through, lostDays, setAside }
+		: { state: 'ok', rows, through, lostDays, setAside };
 }

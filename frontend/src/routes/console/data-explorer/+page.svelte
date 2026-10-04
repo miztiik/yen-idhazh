@@ -1,7 +1,7 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost } from '$lib/data/ledger';
+	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
@@ -17,6 +17,7 @@
 	import HistoryList from '$lib/console/explorer/HistoryList.svelte';
 	import ShapePanel from '$lib/console/explorer/ShapePanel.svelte';
 	import { chooseExplorerShapes, type ExplorerChartType } from '$lib/console/explorer/shape';
+	import { gapLines } from '$lib/console/explorer/gaps';
 	import { explorerAddress, parseExplorerAddress, LINK_TOO_LONG_NOTICE } from '$lib/console/explorer/address';
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
 	import { fetchRegistry, flattenRegistry, type LedgerRegistry, type RegistryLedger } from '$lib/console/explorer/registry';
@@ -477,6 +478,12 @@
 	{/if}
 {/snippet}
 
+{#snippet gapNotes(gaps: readonly SpanGap[])}
+	{#each gapLines(gaps) as line (`${line.ledger} ${line.kind}`)}
+		<p class="gap-note" data-explorer-gap={line.kind} data-ledger={line.ledger}>{line.text}</p>
+	{/each}
+{/snippet}
+
 <Panel id="data-explorer-rows" title="The answer" wide actions={answerActions}>
 	{#if running}
 		<div class="answer-state shimmer" data-state="loading"></div>
@@ -486,10 +493,11 @@
 			<div class="answer-note">
 				{#if runSpan}Read from {spanDays()} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}
 				{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}
+				{@render gapNotes(result.gaps)}
 			</div>
 		<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} tableMaxVh={config.table_max_vh} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} onOrderChange={(rows) => (orderedRows = rows)} />
 		{:else if result.state === 'quiet'}
-			<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}</div>
+			<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}{@render gapNotes(result.gaps)}</div>
 	{:else if result.state === 'missing'}
 		<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
 	{:else if result.state === 'unreachable'}
@@ -530,6 +538,7 @@
 	.question-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 	.editor-stack { display: grid; gap: var(--space-4); align-content: start; }
 	.state, .answer-note { margin: 0; color: var(--color-text-secondary); }
+	.gap-note { margin: var(--space-1) 0 0; }
 	.warn { color: var(--band-low); }
 	.answer-state { min-block-size: var(--idle-height); display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); border: 1px solid var(--color-rule); border-radius: var(--radius-md); }
 	.answer-state pre { max-inline-size: 100%; overflow-x: auto; white-space: pre; font-family: var(--font-data); color: var(--code-string); }

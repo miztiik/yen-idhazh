@@ -22,6 +22,8 @@ The page never runs a question from a link by itself. A shared link fills the ed
 
 The answer table prints every cell as text. It never turns a cell into a link, image, fetch address or style. The chart panel draws only shapes the answer can support. If no chart fits, the table is still the answer.
 
+Under the line that says which days were read, the answer names what each selected ledger is missing in those days. A day whose record was lost has no rows in the answer; it was not a quiet day. A file the packing set aside unread may hold rows the answer lacks; the line says how many files and which folder holds them, `state/raw/<ledger>/set-aside/`, for a person to read.
+
 The action line prices the next run before it fetches data. A wide span can be refused before any file is fetched when it would pass `console.explorer_max_fetch_bytes`.
 
 ## Share or keep a question

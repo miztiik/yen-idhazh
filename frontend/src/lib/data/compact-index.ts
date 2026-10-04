@@ -19,11 +19,11 @@
  * **The guard checks what the door acts on, and nothing else.** An older index
  * may carry a field this build no longer declares, and that is not a reason to
  * refuse it. The ledger, the period and every entry's `covers`, `rows`, `bytes`,
- * `state` and `lost_days` are checked in full, because file selection trusts
- * them and a `covers` becomes part of a file's address. `set_aside` is declared
- * and not acted on, so it is neither checked nor handed on. An entry that
- * carries no `state` or `lost_days` was written before entries had them, and is
- * handed on without them: `namesFile()` in `slice.ts` reads it as packed, as the
+ * `state`, `lost_days` and `set_aside` are checked in full, because file
+ * selection and the answers trust them and a `covers` becomes part of a file's
+ * address. An entry that carries no `state`, `lost_days` or `set_aside` was
+ * written before entries had them, and is handed on without them: `namesFile()`
+ * in `slice.ts` reads it as packed, with nothing lost or set aside, as the
  * contract does.
  *
  * Imports nothing tied to one environment, so a Node test loads it as it is.
@@ -114,7 +114,7 @@ function brokenEntry(entries: unknown[], period: Period): string | null {
 	let previous = '';
 	for (const [at, entry] of entries.entries()) {
 		if (!isRecord(entry)) return `entry ${at} is not an object`;
-		const { covers, rows, bytes, state, lost_days: lostDays } = entry;
+		const { covers, rows, bytes, state, lost_days: lostDays, set_aside: setAside } = entry;
 		if (typeof covers !== 'string' || !COVERS[period].test(covers)) {
 			return `entry ${at} covers ${JSON.stringify(covers)}, which is not a ${period} period`;
 		}
@@ -130,6 +130,9 @@ function brokenEntry(entries: unknown[], period: Period): string | null {
 		}
 		const lost = lostDays === undefined ? null : brokenLostDays(lostDays, covers, period);
 		if (lost !== null) return `entry ${at} (${covers}) ${lost}`;
+		if (setAside !== undefined && !isCount(setAside)) {
+			return `entry ${at} (${covers}) has set_aside ${JSON.stringify(setAside)}`;
+		}
 		previous = covers;
 	}
 	return null;
@@ -155,12 +158,13 @@ export function readIndex(value: unknown, ledger: LedgerName, period: Period): I
 	if (!Array.isArray(value.entries)) return unreadable('it has no list of entries');
 	const broken = brokenEntry(value.entries, period);
 	if (broken !== null) return unreadable(broken);
-	const entries = (value.entries as CompactEntry[]).map(({ covers, rows, bytes, state, lost_days }) => ({
+	const entries = (value.entries as CompactEntry[]).map(({ covers, rows, bytes, state, lost_days, set_aside }) => ({
 		covers,
 		rows,
 		bytes,
 		state,
-		lost_days
+		lost_days,
+		set_aside
 	}));
 	return { index: { version: stamp, ledger, period, entries } };
 }

@@ -55,7 +55,10 @@ after `through` has not been compacted yet, so it is clamped away rather than
 drawn as a zero. `ok` and `quiet` also carry `lostDays`, the days in the span an
 index records lost, ascending: each has no record, so a panel says so rather than
 drawing it as a day with no rows, and the other days are drawn as usual. A span
-of nothing but lost days is `quiet` with every day in `lostDays`. `missing` and
+of nothing but lost days is `quiet` with every day in `lostDays`. They carry
+`setAside` too: each period the span is read from whose packing set files aside
+unread, keyed by the period's `covers`, with how many, so a panel can say its rows
+may be short. `missing` and
 `unreachable` carry `fault`, the name of the missing file behind them, or `null`
 for an `unreachable` with another cause.
 
@@ -88,7 +91,9 @@ index for a period never packed names nothing - and declared as `CompactIndex` i
 5. **A day an index records lost is named, never drawn.** It is a daily entry
    `lost`, or a day a month or a year lists in its `lost_days`; only a day is
    ever `lost`. It is not a hole, because an entry names it; the answer lists it
-   in `lostDays`, and the door reads the rest of the span as usual.
+   in `lostDays`, and the door reads the rest of the span as usual. A period
+   whose entry counts files set aside unread (`set_aside`) is read as usual too,
+   and the answer names it with its count in `setAside`.
 6. **A file whose decoded length differs from its entry's `bytes` is refused**, and
    so is one that does not arrive; one the site answers is not there is
    `file-missing`. The decoded length, never `Content-Length`,
@@ -217,11 +222,15 @@ prints it once a call. The line is `faultLine()` in
 `frontend/src/lib/data/slice-reader.ts`. A route's note for a record uses the
 same names: a record whose packed file or packed day is missing says which,
 because each has its own fix (`recordNotes` in
-`frontend/src/lib/console/recording.ts`).
+`frontend/src/lib/console/recording.ts`). A record read whole gets a plain line
+for each day it has no record for, and one for the files its packing set aside
+unread, which names the folder a person reads them in,
+`state/raw/<ledger>/set-aside/`.
 
 **Some gaps are expected, and none of them is a fault or a request**: a day
 after the newest packed day is clamped away, an entry with `rows: 0` or one that
-names no file is never fetched, a lost day is named in `lostDays`, and an empty
+names no file is never fetched, a lost day is named in `lostDays`, a period that
+set files aside is named in `setAside`, and an empty
 `monthly.json` or `yearly.json` names nothing. None of them makes the door
 ask the site for a file that is not there, and `frontend/tests/ledger-door.spec.ts`
 counts what a byte source is asked to prove it.
@@ -437,8 +446,8 @@ in the console, and no data file is fetched. The gardener rewrites an index at i
 own wake rather than in the commit that moves the shape, so a build that demanded
 its own stamp exactly would blank every panel from a shape change until the next
 wake. The guard checks the fields the door acts on - the ledger, the period, and
-each entry's `covers`, `rows`, `bytes`, `state` and `lost_days`, ascending and
-none twice - and ignores any other field, `set_aside` included. An entry from
+each entry's `covers`, `rows`, `bytes`, `state`, `lost_days`, ascending and none
+twice, and `set_aside`, a count - and ignores any other field. An entry from
 before entries had a `state` is read as `packed`, as the contract reads it.
 
 ## The engine

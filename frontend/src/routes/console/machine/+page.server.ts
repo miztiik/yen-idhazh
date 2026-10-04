@@ -193,6 +193,11 @@ export async function load() {
 	// fleet and every panel below take their rows from these two reads, so no two
 	// panels on this route can answer over different days.
 	const machine = await machineRecord(days);
+	// The days the machine record's own index records lost. No row of them
+	// survives, so the server's counters and the machine record both ran on them
+	// and neither has a figure: each note below dates its instrument's start by
+	// them, and the record notes name them.
+	const machineLost = machine.read.state === 'read' ? machine.read.lostDays : [];
 	// The header as well as the rows: how many requests an article makes is a
 	// fact the ledger's own column names carry, and the reuse panel reads it off
 	// them rather than off a constant anybody would have to remember to change.
@@ -284,6 +289,7 @@ export async function load() {
 
 		const runs = inSpan(counters.runs);
 		const lostInSpan = inSpan(lostDays);
+		const machineLostInSpan = machineLost.filter((date) => date >= span.start && date <= span.end);
 		const spanDays = [...new Set(inSpan(dates.map((date) => ({ date }))).map((row) => row.date))].sort();
 		const healthRows = health.filter(
 			(row) => (row.date ?? '') >= span.start && (row.date ?? '') <= span.end
@@ -333,7 +339,8 @@ export async function load() {
 				window: spanDays,
 				coveredElsewhere: [...new Set(healthRows.map((row) => row.date ?? ''))]
 					.filter((date) => date !== '')
-					.sort()
+					.sort(),
+				daysWithNoRecord: machineLostInSpan
 			}),
 			// The machine record is the other instrument on this route, and it has
 			// its own three states. It carries no sampling knob, so it owes no
@@ -343,6 +350,7 @@ export async function load() {
 				recorded: [...new Set(inSpan(fingerprints).map((row) => row.date))].sort(),
 				window: spanDays,
 				lost: lostInSpan,
+				daysWithNoRecord: machineLostInSpan,
 				figures: 'machine record'
 			}),
 			reuse: promptReuse(healthRows, healthTable.columns),
@@ -532,8 +540,9 @@ export async function load() {
 		clocksTolerancePct: CLOCKS_AGREE_WITHIN_PCT,
 		panelGroups: panelGroupsFor('machine', DRAWN_PANELS),
 		// What the page says about the two records every panel here is built on,
-		// before any of them draws: one not packed yet, one that did not load, or
-		// one packed some days short of the newest published day.
+		// before any of them draws: one not packed yet, one that did not load, one
+		// packed some days short of the newest published day, or one with a day it
+		// has no record for or files it set aside unread.
 		recordNotes: recordNotes(
 			[
 				{ record: 'machine', read: machine.read },
