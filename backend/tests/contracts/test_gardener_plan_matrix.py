@@ -5,8 +5,9 @@ ours is installed - so the payload crosses the boundary as a hand-written copy
 on both sides of it: `backend/utilities/gardener_shards.py` writes it and the
 workflow's expressions read it. An expression naming a key the payload does not
 carry evaluates to the empty string with no error, so a misspelt `shard` hands
-the landing step no shard to run and nothing says why. So both sides are held
-to the model here, field for field.
+the landing step no shard to run, a misspelt `task_names` names every shard's
+job for no task, and nothing says why. So both sides are held to the model
+here, field for field.
 """
 
 from __future__ import annotations
@@ -27,6 +28,9 @@ WORKFLOW: Final = REPO_ROOT / ".github" / "workflows" / "idhazh-gardener.yml"
 
 #: The step in the plan job whose outputs are the payload's fields.
 PLAN_STEP: Final = "shards"
+
+#: A read of one leg's field: the `matrix` context, never a name that ends in `matrix`.
+LEG_FIELD: Final = r"(?<![\w.])matrix\.([A-Za-z_]+)"
 
 
 def the_workflow() -> dict[str, Any]:
@@ -60,7 +64,12 @@ def test_the_plan_job_hands_on_only_fields_the_payload_declares() -> None:
 
 
 def test_the_matrix_expression_reads_only_keys_the_models_declare() -> None:
-    """The fan-out reads the plan's outputs, the matrix's `include` and each leg's fields."""
+    """The fan-out reads the plan's outputs, the matrix's `include` and each leg's fields.
+
+    A leg is read anywhere in the shard job: its name lists the shard's tasks,
+    and its steps hand the shard on. Both are read here, so a job name that
+    reads a key the leg does not declare is refused.
+    """
     jobs = the_workflow()["jobs"]
     planned = set(jobs["plan"]["outputs"])
     shard_job = jobs["run-tasks"]
@@ -71,8 +80,13 @@ def test_the_matrix_expression_reads_only_keys_the_models_declare() -> None:
     assert spelled(r"fromJSON\(needs\.plan\.outputs\.matrix\)\.([A-Za-z_]+)", shard_job) <= set(
         Matrix.model_fields
     )
-    legs = spelled(r"matrix\.([A-Za-z_]+)", shard_job["steps"])
-    assert legs, "no step reads the matrix, so this checks nothing"
+    assert spelled(LEG_FIELD, shard_job.get("name", "")), (
+        "the job's name reads no leg, so this checks nothing"
+    )
+    assert spelled(LEG_FIELD, shard_job["steps"]), (
+        "no step reads the matrix, so this checks nothing"
+    )
+    legs = spelled(LEG_FIELD, shard_job)
     assert legs <= set(MatrixLeg.model_fields), legs - set(MatrixLeg.model_fields)
 
 

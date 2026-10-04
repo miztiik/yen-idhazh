@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from idhazh.contracts.base import Model, Slug
 
@@ -35,9 +35,24 @@ class ShardPlan(Model):
 
 
 class MatrixLeg(Model):
-    """One entry of the matrix: the shard a job runs."""
+    """One entry of the matrix: the shard a job runs, and the tasks its job's name lists."""
 
     shard: int = Field(ge=0, description="Which shard this job runs.")
+    task_names: tuple[Slug, ...] = Field(
+        min_length=1,
+        description=(
+            "The tasks this shard runs, in sorted order. Never none. The job's name lists "
+            "them, so a run's page shows what every shard ran without opening a job."
+        ),
+    )
+
+    @field_validator("task_names")
+    @classmethod
+    def _in_sorted_order(cls, names: tuple[str, ...]) -> tuple[str, ...]:
+        """One deal always gives one job name, so the names are in sorted order."""
+        if list(names) != sorted(names):
+            raise ValueError("a leg lists its task_names in sorted order")
+        return names
 
 
 class Matrix(Model):
@@ -76,6 +91,11 @@ class GardenerPlan(Model):
             raise ValueError("shards are numbered from 0 in order, with no gap")
         if [leg.shard for leg in self.matrix.include] != [shard.index for shard in self.shards]:
             raise ValueError("the matrix has one leg per shard, in shard order")
+        if [leg.task_names for leg in self.matrix.include] != [s.task_names for s in self.shards]:
+            raise ValueError(
+                "each leg names the tasks its shard runs and no others, so a job's name "
+                "says what that job ran"
+            )
         named = [name for shard in self.shards for name in shard.task_names]
         if len(named) != len(set(named)):
             raise ValueError("a task runs in one shard of a wake, never two")

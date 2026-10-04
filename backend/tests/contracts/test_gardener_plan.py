@@ -25,7 +25,7 @@ from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import ValidationError
 
 from idhazh import config
-from idhazh.contracts.gardener_plan import GardenerPlan
+from idhazh.contracts.gardener_plan import GardenerPlan, MatrixLeg
 from idhazh.gardener import shards
 from utilities import gardener_shards
 
@@ -127,7 +127,12 @@ def _a_plan() -> dict[str, object]:
             {"index": 0, "task_names": ["seen"]},
             {"index": 1, "task_names": ["traces"]},
         ],
-        "matrix": {"include": [{"shard": 0}, {"shard": 1}]},
+        "matrix": {
+            "include": [
+                {"shard": 0, "task_names": ["seen"]},
+                {"shard": 1, "task_names": ["traces"]},
+            ]
+        },
     }
 
 
@@ -136,7 +141,18 @@ def _a_plan() -> dict[str, object]:
     [
         ({"shard_count": 3}, "shard_count is 3"),
         ({"any_active_task": False}, "any_active_task"),
-        ({"matrix": {"include": [{"shard": 0}]}}, "one leg per shard"),
+        ({"matrix": {"include": [{"shard": 0, "task_names": ["seen"]}]}}, "one leg per shard"),
+        (
+            {
+                "matrix": {
+                    "include": [
+                        {"shard": 0, "task_names": ["seen"]},
+                        {"shard": 1, "task_names": ["seen"]},
+                    ]
+                }
+            },
+            "tasks its shard runs",
+        ),
         (
             {
                 "shards": [
@@ -151,7 +167,13 @@ def _a_plan() -> dict[str, object]:
                 "shards": [
                     {"index": 0, "task_names": ["seen"]},
                     {"index": 1, "task_names": ["seen"]},
-                ]
+                ],
+                "matrix": {
+                    "include": [
+                        {"shard": 0, "task_names": ["seen"]},
+                        {"shard": 1, "task_names": ["seen"]},
+                    ]
+                },
             },
             "never two",
         ),
@@ -173,3 +195,15 @@ def test_a_shard_with_no_task_is_refused() -> None:
     ]
     with pytest.raises(ValidationError, match="at least 1"):
         GardenerPlan.model_validate(empty)
+
+
+@pytest.mark.parametrize(
+    ("task_names", "refusal"), [([], "at least 1"), (["traces", "seen"], "sorted order")]
+)
+def test_a_leg_lists_its_tasks_in_sorted_order_and_never_none(
+    task_names: list[str], refusal: str
+) -> None:
+    """One deal always gives one job name, and a job named for no task says nothing."""
+    MatrixLeg.model_validate({"shard": 0, "task_names": ["seen", "traces"]})
+    with pytest.raises(ValidationError, match=refusal):
+        MatrixLeg.model_validate({"shard": 0, "task_names": task_names})

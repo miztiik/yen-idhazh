@@ -6,7 +6,8 @@ is decided here: that the matrix can only ever produce a partition of the
 tasks, that every job the workflow spells is a job a record can name, that the
 plan job's sparse checkout holds every folder its reader opens, that only the
 history job takes the whole history, that each job holds only the permissions
-it uses, and that the history job takes the plan job's run id and its own day.
+it uses, that each shard's job is named for the tasks it runs, and that the
+history job takes the plan job's run id and its own day.
 Whether five shards pushing at once land is not decidable here; the first
 scheduled run's records answer it.
 """
@@ -51,6 +52,9 @@ PLAN, RUN_TASKS, HISTORY = "plan", "run-tasks", "history"
 
 #: The program the plan job runs before anything of ours is installed.
 PLANNER: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
+
+#: A shard job's name: a format over the matrix leg the plan job wrote, never a list of tasks.
+RUN_TASKS_NAME: Final = "shard ${{ matrix.shard }}: ${{ join(matrix.task_names, ', ') }}"
 
 #: The person's gate on the history job, word for word and wrapper included:
 #: after every shard, whatever the shards did, unless the run was cancelled.
@@ -375,6 +379,18 @@ def test_a_shard_checks_out_only_its_code_and_runs_the_landing_program() -> None
         "ATTEMPT": "${{ github.run_attempt }}",
         "GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}",
     }
+
+
+def test_each_shard_jobs_name_lists_the_tasks_it_runs() -> None:
+    """A run's page shows what every shard ran without opening a job.
+
+    The name formats the matrix leg the plan job wrote - the shard's number and
+    its task names - so the workflow still names no task and adding one is
+    still a declaration alone. `test_gardener_plan_matrix.py` holds the keys it
+    reads to the ones a leg declares. This reads the expression, not a run: how
+    GitHub shortens a long name on screen is not decidable here.
+    """
+    assert _job(gardener(), RUN_TASKS).get("name") == RUN_TASKS_NAME
 
 
 def test_the_history_job_runs_last_and_unless_the_run_was_cancelled() -> None:

@@ -43,7 +43,7 @@ Table A - what is out
 | 6 | One run id per workflow run | 1 | B | DONE | automatic-adventure | - | Plan 60 row 6: one run id |
 | 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | PENDING | - | - | - |
-| 9 | Each job's name says what its shard runs | 6 | C | PENDING | - | - | - |
+| 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | - | Plan 60 row 9: job names |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
 | 12 | Which months may close | 3, 5, 7, 8 | D | PENDING | - | - | - |
