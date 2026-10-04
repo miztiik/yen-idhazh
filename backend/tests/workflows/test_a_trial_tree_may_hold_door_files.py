@@ -332,14 +332,6 @@ def _loose_in_the_ledger_folder(root: Path, filed: Path) -> Path:
     return _moved(filed, ledger.raw_root(root, LedgerName.ITEM_HEALTH) / filed.name)
 
 
-def _a_day_listing(root: Path, filed: Path) -> Path:
-    """The listing a compaction writes under `index/`, which a test case run never writes."""
-    return _written(
-        ledger.raw_index_path(root, LedgerName.ITEM_HEALTH, DAY),
-        (json.dumps([filed.name]) + "\n").encode("ascii"),
-    )
-
-
 def _a_compact_file(root: Path, filed: Path) -> Path:
     """A copy where a compaction files a day, which a test case run never does."""
     return _copied(filed, ledger.compact_path(root, LedgerName.ITEM_HEALTH, Period.DAILY, DAY))
@@ -381,7 +373,6 @@ def _a_row_its_contract_refuses(root: Path, filed: Path) -> Path:
         pytest.param(_on_a_day_no_calendar_has, id="a-day-no-calendar-has"),
         pytest.param(_under_a_two_digit_year, id="a-folder-that-is-not-a-year"),
         pytest.param(_loose_in_the_ledger_folder, id="in-no-day-folder"),
-        pytest.param(_a_day_listing, id="an-index-listing"),
         pytest.param(_a_compact_file, id="a-compact-file"),
         pytest.param(_not_a_ledger_file, id="not-a-ledger-file"),
         pytest.param(_a_row_its_contract_refuses, id="a-row-its-contract-refuses"),

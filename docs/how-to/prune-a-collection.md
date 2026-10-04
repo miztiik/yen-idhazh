@@ -1,6 +1,6 @@
 # Prune a collection
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-04
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
@@ -98,8 +98,7 @@ Which ledgers this may be pointed at, and which are refused and why, are in
 A ledger whose `config/ledgers.json` entry says `raw-and-compact` keeps a day's
 rows in its raw files until a compaction packs them into a daily file, then a
 month file, then a year file. One file can hold many days, so a pass takes rows,
-not files. For the days it takes, it deletes their raw files and their listings
-under `state/raw/<ledger>/index/`, rebuilds each daily, monthly or yearly file
+not files. For the days it takes, it deletes their raw files, rebuilds each daily, monthly or yearly file
 that holds one of them without their rows, and rewrites the index beside it. A
 file whose every row goes stays as an empty file, so no index has a hole.
 

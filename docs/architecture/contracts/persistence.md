@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -10,7 +10,6 @@ Everything the door writes sits under one of two folders inside `state/`, and no
 
 ```
 state/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.parquet    many writers, each file written once
-state/raw/<ledger>/index/<YYYY-MM-DD>.json               one day's listing
 state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet    one writer: what a compaction left
 state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet
 state/compact/<ledger>/yearly/<YYYY>/<YYYY>.parquet      only where the compaction packs years
@@ -22,7 +21,7 @@ state/compact/<ledger>/<period>/watermark.json
 
 **A raw file carries a minted name; a compact file carries a date.** Raw has many writers that never coordinate, so the minted `<file_id>` is what stops two of them taking one path. A compact period has exactly one writer, so its path is the period it covers and a reader can compute the address.
 
-Six builders in `backend/idhazh/ledger/paths.py` are the only code that spells these paths: `raw_root` for the folder a reader walks, and `raw_path`, `raw_index_path`, `compact_path`, `compact_index_path` and `watermark_path` for the files. `raw_path` and `raw_index_path` are built from `raw_root`, so the folder a reader walks and the file a writer puts in it cannot disagree. Each takes the state root first, the way every ledger builder does, so a trial run and the test suite write where they point it. **Each refuses a path whose first folder under the state root is neither `raw` nor `compact`**, checked on the resolved path so `raw/../scores` is refused too - a third root is a `ValueError` naming the path and the rule, never a folder somebody forgot. `claimed_roots()` claims both roots, so the gardener's `trials` task never reads them as strays. Claimed means "not a stray", never "not pruned": a compaction bounds what sits in them.
+Five builders in `backend/idhazh/ledger/paths.py` are the only code that spells these paths: `raw_root` for the folder a reader walks, and `raw_path`, `compact_path`, `compact_index_path` and `watermark_path` for the files. `raw_path` is built from `raw_root`, so the folder a reader walks and the file a writer puts in it cannot disagree. Each takes the state root first, the way every ledger builder does, so a trial run and the test suite write where they point it. **Each refuses a path whose first folder under the state root is neither `raw` nor `compact`**, checked on the resolved path so `raw/../scores` is refused too - a third root is a `ValueError` naming the path and the rule, never a folder somebody forgot. `claimed_roots()` claims both roots, so the gardener's `trials` task never reads them as strays. Claimed means "not a stray", never "not pruned": a compaction bounds what sits in them.
 
 `.gitattributes` gives every data file, index and watermark under the two roots `-merge`, because each has one writer and a text merge could only splice two writers' bytes into a file neither wrote. `*.parquet` is `binary`.
 
@@ -86,11 +85,11 @@ The paths come back ascending by the day each file covers, never by path string.
 | --- | --- |
 | `list_raw_files(state_dir, ledger, days=None)` | every file under `raw/<ledger>/<YYYY>/<MM>/<DD>/` whose envelope this build can read, oldest first; `days` names the only days to open |
 | `read_day_files(state_dir, ledger, day)` | one day's files, oldest first, or a `ValueError` naming the first one it cannot read - for the compaction, which deletes what it read and so may not skip a file |
-| `raw_days(state_dir, ledger)`, `listed_days(state_dir, ledger)` | which days have a raw folder holding something, and which have a listing under `index/`, from folder and file names alone |
+| `raw_days(state_dir, ledger)` | which days have a raw folder holding something, from folder names alone |
 | `settle_rows(files, key)` | the current rows of a union, each file's rows passed on their own, oldest file first: one file's rows per `unit_id`, then the first row of each `key` |
 | `load_current_rows(state_dir, ledger, model=, key=, days=None)` | the raw files' rows, settled |
 
-**Oldest first is an explicit sort, read from each file's envelope**: the day it covers, then `written_at_ms`, then `file_id`. A directory listing agrees today only because a `file_id` starts with its clock, and a reader that leaned on it would change its answer the day the name grammar did. Every file in a day folder is read whatever its suffix, because `ledger.format` may be JSON lines, and `index/` beside the years is passed over, because a listing is not a row.
+**Oldest first is an explicit sort, read from each file's envelope**: the day it covers, then `written_at_ms`, then `file_id`. A directory listing agrees today only because a `file_id` starts with its clock, and a reader that leaned on it would change its answer the day the name grammar did. Every file in a day folder is read whatever its suffix, because `ledger.format` may be JSON lines.
 
 **The first row of a key wins, unless the key declares a preference.** Every ledger that reads this way keeps one record per key: a retirement per `endpoint_key`, a cleanup pass per `(date, run_id)`, a gardener task's pass per `(date, run_id, task)`, a census row per `(date, run_id, item_id)`, a measurement per `(url_key, output_digest, scorer_version)`, and a machine row per `(date, run_id, job, shard)`. Two stale checkouts can each file one address, as two work units, and the earlier one is kept. A key that declares a preference in `ledger/keys.py` keeps the later row where the preference says so. Item-health's does: a work shard files a census row as the item settles and assemble files one for the whole day afterwards, and the row that names the machine that ran the item, `machine_job`, is kept. Either way a row is kept or dropped whole, and a cell only the dropped row filled is named in a warning.
 

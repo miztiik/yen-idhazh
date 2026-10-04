@@ -1067,7 +1067,7 @@ class _Packed:
 
     Each daily file's path, row count, source count, content digest and rows
     beside the identity their raw file gave them; the daily watermark's day; and
-    the raw days still waiting and the days listed. A file's envelope also names
+    the raw days still waiting. A file's envelope also names
     its writer and the instant it was written, which two writers never share.
     """
 
@@ -1075,7 +1075,6 @@ class _Packed:
     through: str
     monthly: bool
     raw: list[str]
-    listed: list[str]
 
 
 def _packed(state: Path, which: LedgerName) -> _Packed:
@@ -1099,7 +1098,6 @@ def _packed(state: Path, which: LedgerName) -> _Packed:
         through=Watermark.read(ledger.watermark_path(state, which, Period.DAILY)).through,
         monthly=ledger.compact_index_path(state, which, Period.MONTHLY).exists(),
         raw=ledger.raw_days(state, which),
-        listed=ledger.listed_days(state, which),
     )
 
 

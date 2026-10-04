@@ -72,16 +72,12 @@ def _skip(state_dir: Path, path: Path, reason: object) -> None:
 def _day_folders(state_dir: Path, root: Path) -> list[tuple[str, Path]]:
     """Every `<YYYY>/<MM>/<DD>` folder under one ledger's raw root, with the day it names.
 
-    The index listings sit beside the years, in `index/`, and are not rows, so
-    that one name is passed over in silence. Anything else that is not a day
-    folder is named in a warning and left alone.
+    Anything that is not a day folder is named in a warning and left alone.
     """
     if not root.is_dir():
         return []
     found: list[tuple[str, Path]] = []
     for year in sorted(root.iterdir()):
-        if year.name == paths.INDEX_DIRNAME and year.is_dir():
-            continue
         if not (year.is_dir() and day_partition.is_segment(year.name, day_partition.YEAR_WIDTH)):
             _skip(state_dir, year, "not a YYYY folder")
             continue
@@ -120,27 +116,6 @@ def raw_days(state_dir: Path, ledger: LedgerName) -> list[str]:
         for day, folder in _day_folders(state_dir, paths.raw_root(state_dir, ledger))
         if next(folder.iterdir(), None) is not None
     ]
-
-
-def listed_days(state_dir: Path, ledger: LedgerName) -> list[str]:
-    """Every UTC day a raw listing of this ledger sits under `index/` for, oldest first.
-
-    The listings are the compaction's record of which raw files a day held. A
-    name that is not a `<YYYY-MM-DD>.json` listing is left out with a warning.
-    """
-    folder = paths.raw_root(state_dir, ledger) / paths.INDEX_DIRNAME
-    if not folder.is_dir():
-        return []
-    found: list[str] = []
-    for path in sorted(folder.iterdir()):
-        try:
-            if path.suffix != ".json" or paths.raw_index_path(state_dir, ledger, path.stem) != path:
-                raise ValueError("not a day's listing")
-        except ValueError as refusal:
-            _skip(state_dir, path, refusal)
-            continue
-        found.append(path.stem)
-    return found
 
 
 def _held(ledger: LedgerName, covers: str, path: Path) -> RawFile:

@@ -13,7 +13,7 @@ that window only reports is no change at all: the pass names it with `spare`,
 so the record can count it, and keeps it.
 
 **Names come from the task's listing, and content is fetched before it is
-read.** The raw day folders, the listings, which compact files exist and what
+read.** The raw day folders, which compact files exist and what
 each weighs are all read off the listing. The watermarks and the indexes are
 fetched once, before they are read, and each step fetches the day or month
 folders it opens before it opens one.
@@ -296,7 +296,7 @@ class CompactTree:
 
         A deleted file takes any date folder it leaves empty with it, so the next
         listing of the raw tree does not meet a day that holds nothing. A file
-        deleted by its name alone - a raw listing an earlier build left - may never have
+        deleted by its name alone - a month file the monthly window drops - may never have
         been downloaded, and its deletion lands from the name.
         """
         for change in self.changes:
