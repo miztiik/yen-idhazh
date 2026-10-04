@@ -50,6 +50,8 @@ def _arrow_type(logical: ColumnType | LogicalType) -> Any:
     if isinstance(logical, ColumnType):
         return _ARROW_TYPES[logical]
     if logical.kind == "scalar":
+        if logical.scalar is None:
+            raise TypeError(f"{logical!r} is a scalar without a scalar name")
         mapping = {
             "string": pyarrow.string(),
             "int64": pyarrow.int64(),
@@ -58,6 +60,8 @@ def _arrow_type(logical: ColumnType | LogicalType) -> Any:
         }
         return mapping[logical.scalar]
     if logical.kind == "list":
+        if logical.item_type is None:
+            raise TypeError(f"{logical!r} is a list without an item type")
         item = _arrow_type(logical.item_type)
         return pyarrow.list_(pyarrow.field("item", item, nullable=logical.item_nullable))
     if logical.kind == "struct":
@@ -90,17 +94,6 @@ def _codec(compression: Compression) -> str | None:
     return None if compression is Compression.NONE else compression.value
 
 
-def _jsonable(value: Any) -> Any:
-    """Convert nested models and enums to the JSON-shape pyarrow itself reads back."""
-    if hasattr(value, "model_dump"):
-        return value.model_dump(mode="json")
-    if isinstance(value, Mapping):
-        return {key: _jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(item) for item in value]
-    return value
-
-
 def render(
     columns: Sequence[Column],
     rows: Sequence[Mapping[str, Any]],
@@ -110,7 +103,7 @@ def render(
 ) -> bytes:
     """One whole parquet file: these rows under these columns, the envelope in its footer."""
     schema = _schema(columns, envelope)
-    table = pyarrow.Table.from_pylist([_jsonable(dict(row)) for row in rows], schema=schema)
+    table = pyarrow.Table.from_pylist([dict(row) for row in rows], schema=schema)
     sink = pyarrow.BufferOutputStream()
     pyarrow.parquet.write_table(table, sink, compression=_codec(compression))
     return bytes(sink.getvalue().to_pybytes())
@@ -136,7 +129,7 @@ def render_groups(
     with pyarrow.parquet.ParquetWriter(sink, schema, compression=_codec(compression)) as writer:
         for rows in groups:
             if rows:
-                table = pyarrow.Table.from_pylist([_jsonable(dict(row)) for row in rows], schema=schema)
+                table = pyarrow.Table.from_pylist([dict(row) for row in rows], schema=schema)
                 writer.write_table(table, row_group_size=len(rows))
         writer.add_key_value_metadata(dict(envelope()))
     return bytes(sink.getvalue().to_pybytes())

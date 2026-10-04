@@ -34,7 +34,7 @@ class LogicalField:
     """One field of a nested struct, including its recursive logical type."""
 
     name: str
-    type: "LogicalType"
+    type: LogicalType
     nullable: bool
 
 
@@ -45,7 +45,7 @@ class LogicalType:
     kind: str
     scalar: str | None = None
     nullable: bool = False
-    item_type: "LogicalType | None" = None
+    item_type: LogicalType | None = None
     item_nullable: bool = False
     fields: tuple[LogicalField, ...] = ()
 
@@ -92,11 +92,17 @@ def _with_nullable(logical: LogicalType, nullable: bool) -> LogicalType:
     )
 
 
-def logical_type_of(annotation: Any, *, field_path: str = "root", model_stack: tuple[type[BaseModel], ...] = ()) -> LogicalType:
+def logical_type_of(
+    annotation: Any, *, field_path: str = "root", model_stack: tuple[type[BaseModel], ...] = ()
+) -> LogicalType:
     """The logical tree of an annotation, naming the full nested field path on refusal."""
     bare = _unwrapped(annotation)
+    if bare is Any or bare is object:
+        raise TypeError(f"{field_path} is declared {annotation!r}, and Any/object are unsupported")
     if bare is type(None):
-        raise TypeError(f"{field_path} is declared {annotation!r}, which is only supported as a union member")
+        raise TypeError(
+            f"{field_path} is declared {annotation!r}, which is only supported as a union member"
+        )
 
     origin = get_origin(bare)
     if origin in (Union, types.UnionType):
@@ -104,29 +110,50 @@ def logical_type_of(annotation: Any, *, field_path: str = "root", model_stack: t
         present = [member for member in members if member is not type(None)]
         if not present:
             raise TypeError(f"{field_path} is declared {annotation!r}, which is a null-only union")
+        model_members = {
+            member
+            for member in present
+            if isinstance(member, type) and issubclass(member, BaseModel)
+        }
+        if len(model_members) > 1:
+            names = ", ".join(sorted(member.__name__ for member in model_members))
+            raise TypeError(
+                f"{field_path} is declared {annotation!r}, and unions of different "
+                f"model types are unsupported ({names})"
+            )
         nullable = len(present) < len(members)
-        resolved = [logical_type_of(member, field_path=field_path, model_stack=model_stack) for member in present]
+        resolved = [
+            logical_type_of(member, field_path=field_path, model_stack=model_stack)
+            for member in present
+        ]
         if len(resolved) == 1:
             return _with_nullable(resolved[0], nullable)
         first = resolved[0]
         for candidate in resolved[1:]:
             if candidate != first:
                 raise TypeError(
-                    f"{field_path} is declared {annotation!r}, whose non-null members do not reduce to the same logical type"
+                    f"{field_path} is declared {annotation!r}, whose non-null members "
+                    "do not reduce to the same logical type"
                 )
         return _with_nullable(first, nullable)
 
     if origin in (list, tuple):
         args = get_args(bare)
         if not args:
-            raise TypeError(f"{field_path} is declared {annotation!r}, and an empty list type is unsupported")
+            raise TypeError(
+                f"{field_path} is declared {annotation!r}, and an empty list type is unsupported"
+            )
         if origin is tuple:
             if len(args) != 2 or args[1] is not Ellipsis:
-                raise TypeError(f"{field_path} is declared {annotation!r}, and fixed tuples are unsupported")
+                raise TypeError(
+                    f"{field_path} is declared {annotation!r}, and fixed tuples are unsupported"
+                )
             item_annotation = args[0]
         else:
             item_annotation = args[0]
-        item_type = logical_type_of(item_annotation, field_path=f"{field_path}[]", model_stack=model_stack)
+        item_type = logical_type_of(
+            item_annotation, field_path=f"{field_path}[]", model_stack=model_stack
+        )
         return LogicalType(
             kind="list",
             item_type=item_type,
@@ -158,25 +185,34 @@ def logical_type_of(annotation: Any, *, field_path: str = "root", model_stack: t
             fields: list[LogicalField] = []
             for name, field in bare.model_fields.items():
                 child_path = _field_path(field_path, name)
-                child = logical_type_of(field.annotation, field_path=child_path, model_stack=model_stack + (bare,))
+                child = logical_type_of(
+                    field.annotation,
+                    field_path=child_path,
+                    model_stack=(*model_stack, bare),
+                )
                 fields.append(LogicalField(name=name, type=child, nullable=child.nullable))
             return LogicalType(kind="struct", fields=tuple(fields))
         if issubclass(bare, Mapping):
-            raise TypeError(f"{field_path} is declared {annotation!r}, and dictionaries or mappings are unsupported")
+            raise TypeError(
+                f"{field_path} is declared {annotation!r}, and dictionaries or "
+                "mappings are unsupported"
+            )
         if issubclass(bare, (set, frozenset)):
             raise TypeError(f"{field_path} is declared {annotation!r}, and sets are unsupported")
-        if bare is Any or bare is object:
-            raise TypeError(f"{field_path} is declared {annotation!r}, and Any/object are unsupported")
         raise TypeError(
-            f"{field_path} is declared {annotation!r}, which no logical type in idhazh/ledger/arrow_schema.py maps"
+            f"{field_path} is declared {annotation!r}, which no logical type in "
+            "idhazh/ledger/arrow_schema.py maps"
         )
 
     if origin in (dict, Mapping):
-        raise TypeError(f"{field_path} is declared {annotation!r}, and dictionaries or mappings are unsupported")
+        raise TypeError(
+            f"{field_path} is declared {annotation!r}, and dictionaries or mappings are unsupported"
+        )
     if origin in (set, frozenset):
         raise TypeError(f"{field_path} is declared {annotation!r}, and sets are unsupported")
     raise TypeError(
-        f"{field_path} is declared {annotation!r}, which no logical type in idhazh/ledger/arrow_schema.py maps"
+        f"{field_path} is declared {annotation!r}, which no logical type in "
+        "idhazh/ledger/arrow_schema.py maps"
     )
 
 
@@ -224,21 +260,14 @@ def _column_type(name: str, annotation: Any) -> tuple[ColumnType, bool]:
     )
 
 
-def logical_fields_of(model: type[BaseModel]) -> tuple[LogicalField, ...]:
-    """Each field of a Pydantic model as a recursive logical field, in field order."""
-    return tuple(
-        LogicalField(
-            name=name,
-            type=logical_type_of(field.annotation, field_path=name),
-            nullable=logical_type_of(field.annotation, field_path=name).nullable,
-        )
-        for name, field in model.model_fields.items()
-    )
-
-
 def columns_of(model: type[BaseModel]) -> tuple[Column, ...]:
-    """Every field of this contract as a plain column when it is still flat."""
-    return tuple(
-        Column(name, *_column_type(name, field.annotation))
-        for name, field in model.model_fields.items()
-    )
+    """Every field as a legacy flat column where possible, else a recursive tree."""
+    columns: list[Column] = []
+    for name, field in model.model_fields.items():
+        try:
+            cell_type, nullable = _column_type(name, field.annotation)
+            columns.append(Column(name=name, type=cell_type, nullable=nullable))
+        except TypeError:
+            logical = logical_type_of(field.annotation, field_path=name)
+            columns.append(Column(name=name, type=logical, nullable=logical.nullable))
+    return tuple(columns)

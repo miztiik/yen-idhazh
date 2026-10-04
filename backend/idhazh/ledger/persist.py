@@ -159,16 +159,8 @@ def _compression(fmt: Format, tier: Tier, knobs: LedgerConfig) -> Compression:
 
 def _columns(model: type[Contract]) -> tuple[Column, ...]:
     """The contract's own columns, then every identity column it does not declare itself."""
-    own: list[Column] = []
-    for name, field in model.model_fields.items():
-        annotation = field.annotation
-        try:
-            cell_type, nullable = arrow_schema._column_type(name, annotation)
-            own.append(Column(name=name, type=cell_type, nullable=nullable))
-        except TypeError:
-            logical = arrow_schema.logical_type_of(annotation, field_path=name)
-            own.append(Column(name=name, type=logical, nullable=logical.nullable))
-    return tuple(own) + tuple(
+    own = arrow_schema.columns_of(model)
+    return own + tuple(
         column for column in _IDENTITY_COLUMNS if column.name not in model.model_fields
     )
 
@@ -343,9 +335,7 @@ def persist(
     if not rows:
         return []
     model = _one_contract(rows)
-    if identity.job not in MAINTENANCE_JOBS and not lifecycle.accepts_new_rows(
-        ledger, len(rows)
-    ):
+    if identity.job not in MAINTENANCE_JOBS and not lifecycle.accepts_new_rows(ledger, len(rows)):
         return []
     knobs = _knobs()
     chosen = knobs.format if fmt is None else fmt
