@@ -41,7 +41,7 @@ cannot change which tasks a wake plans.
 | 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
-| 6 | `run-tasks` | `gardener_publish.publish` | Builds one commit of exactly what the shard wrote and deleted, pushes it, and tries again on a newer tip if it lost |
+| 6 | `run-tasks` | `gardener_publish.publish` | Builds one commit of exactly what the shard wrote and deleted, pushes it, and tries again on a newer tip if the push failed. Lands nothing when `main` changed one of those paths after the commit the shard ran on |
 | 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has ended, unless the run was cancelled: reads whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` with a lease on the tip it read, squashing again on a new tip when the push is refused |
 
 **The split is round-robin over sorted names.** Every task the matrix runs - an
@@ -124,12 +124,16 @@ flowchart TB
     OWNED{"every path a task<br/>wrote or deleted inside<br/>that task's owns?"}
     OUTSIDE["exit 2<br/>the ownership<br/>claim is wrong"]
     LANDED{"this shard's record<br/>already on origin/main?"}
+    STALE{"main changed one of<br/>the shard's paths after<br/>the commit it ran on?"}
+    STALEW["stale: a warning,<br/>nothing lands"]
     REAPPLY["an index of its own from<br/>origin/main: the same writes<br/>set, the same deletions out"]
     PUSHED{"push accepted?"}
+    MOVED{"main moved<br/>after the last try?"}
+    LOSTW["lost: a warning,<br/>nothing landed"]
     CLEAN{"every task passed,<br/>and what it downloaded<br/>within max_downloaded_mb?"}
     OK["exit 0"]
-    ALARM["exit 1<br/>the record landed,<br/>naming the failed task<br/>or what it downloaded"]
-    LOST["exit 3<br/>attempts exhausted,<br/>nothing landed"]
+    ALARM["exit 1<br/>naming the failed task<br/>or what it downloaded"]
+    REFUSED["exit 3<br/>refused: main did not<br/>move, nothing landed"]
     HIST["history job, once every shard<br/>has ended, unless the run was cancelled:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main<br/>with a lease on the tip it read"]
   end
 
@@ -148,17 +152,23 @@ flowchart TB
   OWNED -->|"no"| OUTSIDE
   OWNED -->|"yes"| LANDED
   LANDED -->|"yes"| CLEAN
-  LANDED -->|"no"| REAPPLY
+  LANDED -->|"no"| STALE
+  STALE -->|"yes"| STALEW
+  STALE -->|"no"| REAPPLY
+  STALEW --> CLEAN
   REAPPLY --> PUSHED
   PUSHED -->|"yes"| CLEAN
   PUSHED -->|"no, attempts left"| LANDED
-  PUSHED -->|"no, attempts gone"| LOST
+  PUSHED -->|"no, attempts gone"| MOVED
+  MOVED -->|"yes"| LOSTW
+  MOVED -->|"no"| REFUSED
+  LOSTW --> CLEAN
   CLEAN -->|"yes"| OK
   CLEAN -->|"no"| ALARM
   OK --> HIST
   ALARM --> HIST
   OUTSIDE --> HIST
-  LOST --> HIST
+  REFUSED --> HIST
   IDLE --> HIST
   REAPPLY -->|"the record, and every live task's files"| RAW
   RAW -->|"a live compaction takes a due day into its day file"| COMPACT
@@ -175,10 +185,10 @@ flowchart TB
   classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
 
   class WAKE,PLAN,TEND,RUN,REAPPLY,HIST stage;
-  class ANY,OWNED,LANDED,PUSHED,CLEAN decision;
+  class ANY,OWNED,LANDED,STALE,PUSHED,MOVED,CLEAN decision;
   class OK yes;
-  class OUTSIDE,LOST,ALARM no;
-  class IDLE warn;
+  class OUTSIDE,REFUSED,ALARM no;
+  class IDLE,STALEW,LOSTW warn;
   class RAW,COMPACT,WM ledger;
   class OPS sysOps;
   class TREE sysPublish;
@@ -234,10 +244,10 @@ one writer into an older day, and a compaction takes its file at the next wake
 
 | Exit | What it means | Retried |
 | --- | --- | --- |
-| 0 | every task ran and the record landed, or had already landed | - |
+| 0 | every task ran and the record landed, or had already landed. Also 0, with a warning, when nothing landed because the shard's work is out of date: `main` changed one of its paths after the commit it ran on (`stale`), or every try failed and `main` moved after the last one (`lost`) | a `stale` or `lost` shard's work is done again at the next wake |
 | 1 | a task failed - its row says `failed` and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, and either way the record still landed; or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; a download over the ceiling goes on failing until a person acts |
 | 2 | ownership or integrity: a module that cannot serve, a history task handed to the runner, a path outside what a task owns, a record outside the gardener's ledger, one record path with two sets of bytes, or a deletion of a file the commit did not list | never; a person fixes it |
-| 3 | the push kept losing for every attempt | at the next wake |
+| 3 | `main` refused the push: every try failed, and `main` did not move after the last one (`refused`) | at the next wake |
 
 A shard reports the worst code it earned, in the order 2, 3, 1, 0.
 
@@ -335,7 +345,7 @@ whole objects: a delta against a file the clone lacks could only be computed by
 downloading the file, and with lazy fetching off the push would fail instead.
 Every git call but the one that widens the checkout runs with lazy fetching
 off, so a call that would download a file fails rather than pays for it
-quietly. A lost push waits a random time - up to 1, 2, 4, 8 and then 8 seconds -
+quietly. A failed push waits a random time - up to 1, 2, 4, 8 and then 8 seconds -
 and tries again on the new tip. No wait follows the last attempt. A deletion of
 a file the commit did not list lands nothing, and the shard exits 2: a task
 decided it from something other than the commit.
@@ -343,6 +353,31 @@ decided it from something other than the commit.
 **The record decides whether the shard already landed.** Its bytes are unique to
 the shard, so `main` holding that path with those bytes means an earlier attempt
 landed and this one stops with 0; the same path with other bytes is exit 2.
+
+**A shard whose paths `main` changed lands nothing.** After each fetch the
+publisher compares the commit the shard ran on with `main`, over every path the
+shard writes or deletes but its record, with `git diff-tree -r --no-renames
+--name-only`, in groups below Windows' command-line limit. A path it lists is one
+`main` changed after the shard's commit, so the shard's version of it is older
+than `main`'s. A re-run is the usual cause: it checks out its run's commit again,
+after later runs have landed, and it names its record afresh, so the record check
+above cannot catch it. Nothing lands, not even the record. The shard writes a
+warning naming the first such path and exits 0, and the next wake does the work
+again on the new `main`. The comparison reads trees only, so the clone downloads
+no file for it.
+
+**When every try failed, `main`'s tip says why.** The publisher fetches `main`
+once more after the last try. If `main` moved after the last try's base, other
+writers are landing: the shard writes a warning and exits 0, and the next wake
+does the work again. If it did not move, `main` refused this push, and the shard
+exits 3 and its job is red. The publisher never reads the push's error text,
+because git's words change with versions and languages. A GitHub outage through
+every try reads as a refusal, so it costs one red job.
+
+**Each way a shard comes to rest has one word.** Its log line names it:
+`landed`, `already-on-main`, `stale`, `lost` or `refused`. The words live in
+`backend/idhazh/contracts/shard_landing.py`. They are not persisted: the record
+lands inside the commit, so it cannot say how that commit landed.
 
 **Three checks run over what was staged, before every commit.** Nothing outside
 the shard's writes and deletions is staged. Every write is staged, unless its
@@ -563,6 +598,20 @@ thin push under the flag was refused by the remote, because its deltas point at
 files the clone lacks. Every command on that index runs with the checkout's
 sparse patterns off, because git applies them to any index it reads, and that
 reads files the clone never downloaded (Carmack).
+
+**2026-10-04: a stale shard lands nothing, and `main`'s tip tells a lost push
+from a refused one.** The publisher used to check only whether `main` held the
+shard's record. A re-run checks out its run's old commit and names its record
+afresh, so it landed its old indexes over newer ones, and the next wake read a
+ledger that had forgotten work. Now a shard whose paths `main` changed after its
+commit lands nothing, not even its record, and the next wake does the work again
+on the new `main`. Two other answers were rejected. Refusing every re-run of an
+earlier day's run misses a stale re-run on the same day, and refuses a good one
+whose paths nobody touched. Running the tasks again inside the push loop repeats
+minutes of work, and the downloads, on every lost try. When every try fails,
+whether `main` moved decides between a warning and a red job. Reading git's
+error text instead was rejected: it is not a contract, it changes with versions
+and languages, and a misread is silent (Fowler).
 
 **2026-09-30: a task names the folders it only reads.** The census summary finds
 its due months in the item-health census, which the census compaction owns, and
