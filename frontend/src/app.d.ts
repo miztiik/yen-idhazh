@@ -34,6 +34,9 @@ declare global {
 	/** The newest staged raw day listing per ledger. */
 	const __RAW_LISTED_THROUGH__: Partial<Record<string, string>>;
 
+	/** `icons.stroke_px`: the icon line width in screen pixels. */
+	const __ICON_STROKE_PX__: number;
+
 	namespace App {}
 }
 

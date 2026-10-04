@@ -435,6 +435,7 @@ export interface ChartConfig {
 
 export interface IconsConfig {
 	size_px: number;
+	stroke_px: number;
 	tint_mode: 'semantic' | 'mono';
 	topic_icons_enabled: boolean;
 }
@@ -657,6 +658,7 @@ const CHART_DEFAULTS: ChartConfig = {
 };
 const ICONS_DEFAULTS: IconsConfig = {
 	size_px: 16,
+	stroke_px: 1.5,
 	tint_mode: 'semantic',
 	topic_icons_enabled: true
 };
