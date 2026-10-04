@@ -32,6 +32,26 @@ def _monthly_fold_policy() -> RetentionPolicy:
     )
 
 
+def _ledger_reader_policy() -> RetentionPolicy:
+    """A retention task that reads one ledger's packed and raw files, as telemetry-aggregate does."""
+    return RetentionPolicy.model_validate(
+        {
+            "kind": "retention",
+            "lifecycle_status": "active",
+            "dry_run": True,
+            "max_deletes_per_run": None,
+            "owns": ["state/item-health-summary"],
+            "reads": ["state/compact/item-health", "state/raw/item-health"],
+            "window": {"unit": "months", "value": 14},
+        }
+    )
+
+
+def _named(root: Path, paths: tuple[Path, ...]) -> list[str]:
+    """Each path as a repository path, in text order on every platform."""
+    return sorted(path.relative_to(root).as_posix() for path in paths)
+
+
 def test_compaction_range_uses_its_configured_month_lookback() -> None:
     policy = _compaction_policy()
 
@@ -68,6 +88,64 @@ def test_compaction_inputs_do_not_name_retired_raw_indexes(tmp_path: Path) -> No
     }
 
     assert paths.isdisjoint(old_indexes)
+
+
+def test_a_compaction_names_its_month_its_year_and_its_ledger_s_marks_and_nothing_else(
+    tmp_path: Path,
+) -> None:
+    """A listing that lost a mark would hand the pass an index or watermark it reads as absent."""
+    paths = paths_for_task(
+        tmp_path,
+        "compact-gardener",
+        _compaction_policy(),
+        ("2026-08", "2026-08"),
+        today=date(2026, 9, 27),
+    )
+
+    assert _named(tmp_path, paths) == [
+        "state/compact/gardener/daily/2026/08",
+        "state/compact/gardener/daily/watermark.json",
+        "state/compact/gardener/index/daily.json",
+        "state/compact/gardener/index/monthly.json",
+        "state/compact/gardener/index/yearly.json",
+        "state/compact/gardener/monthly/2026/08.json",
+        "state/compact/gardener/monthly/2026/08.parquet",
+        "state/compact/gardener/monthly/watermark.json",
+        "state/compact/gardener/yearly/2026/2026.json",
+        "state/compact/gardener/yearly/2026/2026.parquet",
+        "state/compact/gardener/yearly/watermark.json",
+    ]
+
+
+def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_nothing_else(
+    tmp_path: Path,
+) -> None:
+    paths = paths_for_task(
+        tmp_path,
+        "telemetry-aggregate",
+        _ledger_reader_policy(),
+        ("2026-09-20", "2026-09-20"),
+        today=date(2026, 9, 27),
+    )
+
+    assert _named(tmp_path, paths) == [
+        "state/compact/item-health/daily/2026/09/20.json",
+        "state/compact/item-health/daily/2026/09/20.parquet",
+        "state/compact/item-health/daily/watermark.json",
+        "state/compact/item-health/index/daily.json",
+        "state/compact/item-health/index/monthly.json",
+        "state/compact/item-health/index/yearly.json",
+        "state/compact/item-health/monthly/watermark.json",
+        "state/compact/item-health/yearly/2026/2026.json",
+        "state/compact/item-health/yearly/2026/2026.parquet",
+        "state/compact/item-health/yearly/watermark.json",
+        "state/item-health-summary/2026/09/20",
+        "state/item-health-summary/2026/09/20.csv",
+        "state/item-health-summary/2026/09/20.json",
+        "state/item-health-summary/2026/09/20.jsonl",
+        "state/item-health-summary/2026/09/20.parquet",
+        "state/raw/item-health/2026/09/20",
+    ]
 
 
 def test_monthly_fold_also_lists_its_fixed_closed_day_window(tmp_path: Path) -> None:

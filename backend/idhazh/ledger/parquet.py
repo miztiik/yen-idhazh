@@ -30,7 +30,7 @@ from typing import Any, Final
 import pyarrow.parquet
 
 from idhazh.contracts.file_envelope import Compression
-from idhazh.ledger.arrow_schema import Column, ColumnType
+from idhazh.ledger.arrow_schema import Column, ColumnType, LogicalType
 
 #: The key prefix pyarrow uses for its own serialized schema beside our keys.
 #: Not part of the envelope, so it is dropped on the way back.
@@ -45,6 +45,35 @@ _ARROW_TYPES: Final[dict[ColumnType, Any]] = {
 }
 
 
+def _arrow_type(logical: ColumnType | LogicalType) -> Any:
+    """A logical scalar, list or struct into the engine's native type."""
+    if isinstance(logical, ColumnType):
+        return _ARROW_TYPES[logical]
+    if logical.kind == "scalar":
+        if logical.scalar is None:
+            raise TypeError(f"{logical!r} is a scalar without a scalar name")
+        mapping = {
+            "string": pyarrow.string(),
+            "int64": pyarrow.int64(),
+            "float64": pyarrow.float64(),
+            "bool": pyarrow.bool_(),
+        }
+        return mapping[logical.scalar]
+    if logical.kind == "list":
+        if logical.item_type is None:
+            raise TypeError(f"{logical!r} is a list without an item type")
+        item = _arrow_type(logical.item_type)
+        return pyarrow.list_(pyarrow.field("item", item, nullable=logical.item_nullable))
+    if logical.kind == "struct":
+        return pyarrow.struct(
+            [
+                pyarrow.field(field.name, _arrow_type(field.type), field.nullable)
+                for field in logical.fields
+            ]
+        )
+    raise TypeError(f"{logical!r} is not a supported logical tree")
+
+
 def engine_version() -> str:
     """The engine's own version, which the envelope records because bytes vary by it."""
     return str(pyarrow.__version__)
@@ -54,7 +83,7 @@ def _schema(columns: Sequence[Column], metadata: Mapping[bytes, bytes] | None) -
     """The arrow schema these columns make, carrying `metadata` when there is any."""
     return pyarrow.schema(
         [
-            pyarrow.field(column.name, _ARROW_TYPES[column.type], column.nullable)
+            pyarrow.field(column.name, _arrow_type(column.type), column.nullable)
             for column in columns
         ],
         metadata=None if metadata is None else dict(metadata),

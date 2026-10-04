@@ -63,10 +63,10 @@ from typing import Final
 
 from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.file_envelope import Format, Period
+from idhazh.contracts.ledger_fault import LedgerFault
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths, raw_files
-from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.persist import StoredRow, load_stored
 
 logger = logging.getLogger(__name__)
