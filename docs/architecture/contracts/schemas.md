@@ -444,6 +444,13 @@ line each. The state day-metrics writer is unchanged. Existing helper callers
 keep their layout. All three producers preserve fields, values and stamps;
 older layouts load normally and take the new layout when rewritten.
 
+The published run-days month encoder keeps days expanded and puts runs on one
+line each. `SourceHealthView` puts each source, including its nested history,
+on one line. `ConsoleBand` puts routes and runs on one line each.
+`PublicationInventory` puts file entries and changelog records on one line
+each. `VisualData` puts chart marks on one line each and keeps the encoding
+expanded. These producer layouts change no fields, values or version stamps.
+
 **The layout is held still by a test, because nothing else can hold it.** Every layout parses to the same payload, so a hand edit that indents one record across ten lines is invisible to a schema and to every reader. `backend/tests/contracts/test_curated_registries.py` asserts the committed bytes are what the contract's own writer produces, and separately counts the record lines in the file - the first catches a drifting edit, the second catches the day the writer itself changes shape. Both are parametrized over one mapping, so a fourth curated registry is one entry rather than a fourth pair of tests. A field is spelled out even when it holds its default, so what a curator reads is what the model holds.
 
 Timestamps are pinned as text - UTC, second precision, `Z` - rather than as a date type, for the same reason: one spelling, no offset ambiguity, and no serializer whose formatting can drift underneath a committed file.

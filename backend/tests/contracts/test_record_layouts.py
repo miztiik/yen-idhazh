@@ -9,10 +9,14 @@ from pathlib import Path
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR
 
-from idhazh.contracts.base import canonical_json, records_json
+from idhazh.contracts.base import Contract, canonical_json, records_json
+from idhazh.contracts.console_band import ConsoleBand
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.source_health_view import SourceHealthView
+from idhazh.contracts.visual_data import VisualData
 from idhazh.telemetry.publish import day_metrics
 
 
@@ -33,10 +37,14 @@ def test_selected_record_lists_leave_outer_records_expanded() -> None:
     [
         (DigestDay, "digest-day/two-runs.json", {"items", "runs", "leads", "verticals"}),
         (RunManifest, "run-manifest/two-runs.json", {"config_digests", "verticals"}),
+        (ConsoleBand, "console-band/newest-day.json", {"routes"}),
+        (PublicationInventory, "publication-inventory/published.json", {"entries", "changelog"}),
+        (SourceHealthView, "source-health-view/four-facts.json", {"sources"}),
+        (VisualData, "visual-data/bars-from-the-committed-plan.json", {"marks"}),
     ],
 )
 def test_published_contracts_compact_only_selected_lists(
-    model: type[DigestDay] | type[RunManifest], fixture: str, lists: set[str]
+    model: type[Contract], fixture: str, lists: set[str]
 ) -> None:
     payload = json.loads((CONTRACT_FIXTURES_DIR / fixture).read_text(encoding="utf-8"))
     record = model.from_json(canonical_json(payload))
@@ -59,6 +67,9 @@ def test_published_contracts_compact_only_selected_lists(
                         json.dumps(row, sort_keys=True, ensure_ascii=True, separators=(",", ": "))
                         in text
                     )
+    if model is ConsoleBand:
+        for row in expected["verdict"]["runs"]:
+            assert json.dumps(row, sort_keys=True, separators=(",", ": ")) in text
 
 
 def test_month_producer_keeps_days_expanded_and_sources_on_one_line(tmp_path: Path) -> None:
