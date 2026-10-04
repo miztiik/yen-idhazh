@@ -24,6 +24,8 @@
 		label?: string;
 		class?: string;
 	} = $props();
+
+	const strokeWidth = $derived((__ICON_STROKE_PX__ * 24) / size);
 </script>
 
 <svg
@@ -33,7 +35,7 @@
 	viewBox="0 0 24 24"
 	fill="none"
 	stroke="currentColor"
-	stroke-width="2"
+	stroke-width={strokeWidth}
 	stroke-linecap="round"
 	stroke-linejoin="round"
 	role={label ? 'img' : 'presentation'}
