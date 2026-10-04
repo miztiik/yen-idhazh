@@ -739,7 +739,7 @@ test.describe('what a page keeps', () => {
 		if (!('failed' in second)) await second.done();
 	});
 
-	test('the Records startAfresh path makes the next askCost and ask read every index again', async () => {
+	test('the Data explorer startAfresh path makes the next askCost and ask read every index again', async () => {
 		const { fetcher, asked } = recorded();
 		const first = freshPage(fetcher);
 		const ledgers = ['host-fingerprint', 'item-health'] as const;
