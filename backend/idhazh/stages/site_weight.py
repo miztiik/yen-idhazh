@@ -11,6 +11,7 @@ from pathlib import Path
 from idhazh import (
     site_weight,
 )
+from idhazh.build_publication import record_build_inventory
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.stages.common import LOG
 
@@ -81,6 +82,10 @@ def stage_site_weight(
 
     There is no default tree. A default is how this pointed at the wrong one.
 
+    The step writes the tree's inventory itself, then reads it. It is the only
+    reader, and writing it here keeps backend Python out of the site build, which
+    the Pages deploy runs with Node alone.
+
     The cap comes from `retention.pages_hard_cap_mb` and not from a flag. A flag
     is a per-invocation override, which is the one shape a ceiling must not have -
     the job that is about to breach it is the job that would pass the flag. The
@@ -95,6 +100,7 @@ def stage_site_weight(
     day anybody wanted to first learn the date.
     """
     cap_mb = config.pages_hard_cap_mb
+    record_build_inventory(tree)
     size = site_weight.measure(tree)
     if size.files == 0:
         LOG.error(
