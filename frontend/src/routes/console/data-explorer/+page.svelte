@@ -158,8 +158,8 @@
 			lastMs = Math.round(performance.now() - started);
 			result = answer;
 			showAnswerColumns = answer.state === 'ok' || answer.state === 'quiet';
+			heldBytes = pageHeldBytes();
 			if ((answer.state === 'ok' || answer.state === 'quiet') && 'read' in answer) {
-				heldBytes = pageHeldBytes();
 				lastMs = answer.read.ms;
 				lastRead = answer.read;
 			}

@@ -250,6 +250,20 @@ test('THE ORACLE: every published example runs without refusal or unreachable st
 	}
 });
 
+test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', async ({ page }) => {
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, JOIN_LEDGERS, JOIN_SQL);
+	await runExplorer(page);
+	const line = page.locator('[data-explorer-action-line]');
+	await expect.poll(async () => Number(await line.getAttribute('data-held-bytes'))).toBeGreaterThan(0);
+	const held = Number(await line.getAttribute('data-held-bytes'));
+	await page.locator('#explorer-sql').fill('SELECT 1; SELECT 2');
+	await runExplorer(page);
+	await expect(page.locator('[data-state="refused"]')).toBeVisible();
+	await expect.poll(async () => Number(await line.getAttribute('data-held-bytes'))).toBe(held);
+	await expect(line).not.toContainText('This page holds 0.0 MB');
+});
+
 test('THE ORACLE: Records does not scroll sideways at phone width', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 900 });
 	await openExplorer(page);

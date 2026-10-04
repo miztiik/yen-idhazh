@@ -502,12 +502,12 @@ class ConsoleConfig(Model):
         default=67108864,
         ge=1,
         description=(
-            "Most bytes one Records question may fetch. Estimate: 64 MiB. Re-derived "
-            "2026-10-03 from the committed indexes: 15,782,599 bytes, or 15.0 MiB, "
-            "for the seven packed published ledgers on origin/main, so no span possible "
-            "today is refused. Local Chromium on Windows with CPU throttled 4x ran the "
-            "widest 90-day count query three times without stalling; see the pull request "
-            "for the three timings and long-task readings."
+            "Most bytes one Records question may fetch. Measured 2026-10-04 on a local "
+            "real build in Chromium with the CPU slowed 4x: a question fetching 9.9 MB "
+            "(10,379,116 bytes, 138 files, six ledgers over 30 days) answered in about "
+            "6 seconds, and no main-thread task passed 1 second; the longest of three "
+            "runs was 857 ms. So 64 MiB stands, but the site holds only 22.5 MB today, "
+            "so 64 MiB itself is untested until a ledger holds 90 days."
         ),
     )
     explorer_query_max_chars: int = Field(
