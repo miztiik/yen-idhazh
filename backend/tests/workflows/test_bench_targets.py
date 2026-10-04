@@ -19,6 +19,8 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.stages import common
+from idhazh.stages import plan as plan_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
 from utilities import (
@@ -86,7 +88,48 @@ from ._harness import (
 #: than in the shared harness because one module reads it.
 BUDGETS_START_STEP = "Start the tokenizer"
 
+#: The run a bench test plans and cuts: the GitHub run id the workflow would pass.
+BENCH_EXECUTION = 41000000001
+
 pytestmark = pytest.mark.workflow
+
+
+def _fixture_plan() -> RunPlan:
+    return RunPlan.from_json(
+        read_text(REPO_ROOT / "tests" / "fixtures" / "contracts" / "run-plan" / "one-day.json")
+    )
+
+
+def _filed_plan(state: Path, date: str) -> str:
+    """The fixture plan filed for one bench run, as `idhazh plan` files it. Returns its run id."""
+    run_id = f"{date}-{BENCH_EXECUTION}"
+    filed = RunPlan.model_validate(
+        {
+            **_fixture_plan().model_dump(mode="json"),
+            "date": date,
+            "run_id": run_id,
+            "generated_at": f"{date}T06:00:04Z",
+        }
+    )
+    ledger.persist(
+        state,
+        [filed],
+        ledger=LedgerName.RUN_PLAN,
+        covers=date,
+        identity=plan_stage.plan_writer(run_id, SEED_COMMIT),
+    )
+    return run_id
+
+
+def _freeze(state: Path, date: str, *, items: int, offset: int = 0) -> None:
+    runtime_sweep.freeze_corpus(
+        date,
+        items=items,
+        offset=offset,
+        execution=BENCH_EXECUTION,
+        commit_sha=SEED_COMMIT,
+        state_dir=state,
+    )
 
 
 def test_the_bench_is_one_target_that_runs_two_cases_in_order() -> None:
@@ -664,28 +707,26 @@ def test_the_bench_corpus_size_is_a_knob_and_the_cut_follows_it(
     assert runtime_sweep.corpus_items(scratch) == 2
     assert runtime_sweep.corpus_items(None) == 3, "the committed tree is unchanged"
 
-    fixture = json.loads(
-        read_text(REPO_ROOT / "tests" / "fixtures" / "contracts" / "run-plan" / "one-day.json")
-    )
-    day = tmp_path / "run" / "2026-09-17"
-    day.mkdir(parents=True)
-    (day / "plan.json").write_text(json.dumps(fixture), encoding="utf-8")
-    monkeypatch.setattr(runtime_sweep, "RUN_ROOT", tmp_path / "run")
+    state = tmp_path / "state"
     monkeypatch.setattr(runtime_sweep, "ROOT", tmp_path / "runtime-sweep")
+    run_id = _filed_plan(state, "2026-09-17")
 
-    runtime_sweep.freeze_corpus("2026-09-17", items=runtime_sweep.corpus_items(scratch))
+    _freeze(state, "2026-09-17", items=runtime_sweep.corpus_items(scratch))
 
-    cut = json.loads((day / "plan.json").read_text(encoding="utf-8"))
-    assert len(cut["items"]) == 2, "the config said two, so two is what a repeat reads"
-    assert {vertical["id"]: vertical["planned"] for vertical in cut["verticals"]} == {
+    cut = common._load_plan("2026-09-17", run_id, state_dir=state)
+    assert len(cut.items) == 2, "the config said two, so two is what a repeat reads"
+    assert {vertical.id: vertical.planned for vertical in cut.verticals} == {
         "ai": 2,
         "energy": 0,
     }, "the per-vertical counts follow the cut, or the plan contradicts itself"
+    kept = RunPlan.from_json(read_text(tmp_path / "runtime-sweep" / "plan.json"))
+    assert [item.item_id for item in kept.items] == [item.item_id for item in cut.items], (
+        "the copy beside the readings is the corpus the repeats read"
+    )
 
-    short = dict(fixture, items=fixture["items"][:1])
-    (day / "plan.json").write_text(json.dumps(short), encoding="utf-8")
+    _freeze(state, "2026-09-17", items=1)
     with pytest.raises(SystemExit, match="needs 2 planned articles"):
-        runtime_sweep.freeze_corpus("2026-09-17", items=2)
+        _freeze(state, "2026-09-17", items=2)
 
 
 def test_a_named_candidate_runs_the_baseline_and_rejects_a_difference() -> None:
@@ -806,28 +847,24 @@ def test_an_offset_dispatch_measures_different_articles_than_the_one_before_it(
     different articles, and the plan is ranked, so without an offset all three
     take the same top two and report two articles as six.
     """
-    fixture = json.loads(
-        read_text(REPO_ROOT / "tests" / "fixtures" / "contracts" / "run-plan" / "one-day.json")
-    )
-    day = tmp_path / "run" / "2026-09-19"
-    day.mkdir(parents=True)
-    monkeypatch.setattr(runtime_sweep, "RUN_ROOT", tmp_path / "run")
     monkeypatch.setattr(runtime_sweep, "ROOT", tmp_path / "runtime-sweep")
 
     taken = []
     for offset in (0, 1):
-        (day / "plan.json").write_text(json.dumps(fixture), encoding="utf-8")
-        runtime_sweep.freeze_corpus("2026-09-19", items=1, offset=offset)
-        cut = json.loads((day / "plan.json").read_text(encoding="utf-8"))
-        taken.append([item["item_id"] for item in cut["items"]])
+        state = tmp_path / f"state-{offset}"
+        run_id = _filed_plan(state, "2026-09-19")
+        _freeze(state, "2026-09-19", items=1, offset=offset)
+        cut = common._load_plan("2026-09-19", run_id, state_dir=state)
+        taken.append([item.item_id for item in cut.items])
 
     assert taken[0] != taken[1], "two dispatches took the same slice, so the breadth is fiction"
     assert len(taken[0]) == 1 and len(taken[1]) == 1
 
     # A plan that cannot fill the slice dies here, not an hour into the run.
-    (day / "plan.json").write_text(json.dumps(fixture), encoding="utf-8")
+    state = tmp_path / "state-short"
+    _filed_plan(state, "2026-09-19")
     with pytest.raises(SystemExit, match="from offset"):
-        runtime_sweep.freeze_corpus("2026-09-19", items=2, offset=len(fixture["items"]))
+        _freeze(state, "2026-09-19", items=2, offset=len(_fixture_plan().items))
 
 
 def test_the_plan_is_capped_to_hold_the_slice_and_what_it_skips() -> None:

@@ -98,7 +98,7 @@ function processorSecondsFrom(
 }
 
 /** Each machine record's count under the column named, keyed the way an item
- * row finds it. Records that left the column empty are absent, not zero. */
+ * row finds it. Rows that left the column empty are absent, not zero. */
 async function countsBy(column: string): Promise<Map<string, number>> {
 	const found = new Map<string, number>();
 	for (const row of await canaryMachineRows()) {

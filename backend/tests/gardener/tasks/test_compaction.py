@@ -6,8 +6,9 @@ through the registry the way the runner finds it, live over trees built under
 a test turns that off for itself only. Each oracle is named where it is
 checked: a compact file holds exactly what settling its raw files gives; after
 every pass the newest day the daily index names is the daily watermark; every
-date is read from exactly one file and a missing day is named; a re-run that
-lands after its day was compacted replaces its first attempt; no pass
+date is read from exactly one file, and a day lost with its file is named in
+its closed month; a re-run that lands after its day was compacted replaces its
+first attempt; no pass
 writes a path it deletes; and a monthly window that only reports keeps every
 file it would drop, packs the rest exactly as a live one would, and counts what
 it kept in `selected`.
@@ -32,8 +33,9 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.knobs.gardener import MonthsWindow
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -417,9 +419,10 @@ def test_a_month_is_absorbed_whole_at_the_wake_after_its_days_and_each_date_is_r
     assert disjoint(first) and disjoint(second)
 
 
-def test_a_month_the_daily_index_does_not_fully_name_is_refused_and_the_day_is_named(
+def test_a_day_the_daily_index_lost_with_its_file_is_recorded_lost_and_its_month_closes(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """A hole nothing can rebuild no longer stops the month: the month closes and names the day."""
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-08-05"))
     compact(root, date(2026, 10, 20), max_periods_per_run=100)
@@ -431,14 +434,15 @@ def test_a_month_the_daily_index_does_not_fully_name_is_refused_and_the_day_is_n
     assert lost is not None
     lost.unlink()
 
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         outcome = compact(root, date(2026, 10, 20), max_periods_per_run=100)
 
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-08")
-    assert watermark(root, Period.MONTHLY) is None
-    assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-11") is not None
-    assert ledger.list_ledger_files(state(root), VISUALS).holes == ("2026-08-10",)
-    assert refusals(caplog, "month=2026-08") == [f"fault={ledger.LedgerFault.DAY_MISSING}"]
+    assert outcome.stopped_because is StopReason.EXHAUSTED
+    assert watermark(root, Period.MONTHLY) == "2026-08"
+    (august,) = CompactIndex.read(index_of(root, Period.MONTHLY)).entries
+    assert (august.state, august.lost_days) == (EntryState.PACKED, ["2026-08-10"])
+    assert compact_rows(root, Period.MONTHLY, "2026-08") == [a_pass("2026-08-05")]
+    assert recovered(caplog, "2026-08-10") == [f"note={RecoveryNote.RECORDED_LOST}"]
 
 
 def test_a_month_whose_day_file_is_gone_is_refused_as_file_missing(
@@ -468,6 +472,17 @@ def refusals(caplog: pytest.LogCaptureFixture, naming: str) -> list[str]:
         if record.levelno >= logging.ERROR and naming in record.getMessage()
         for word in record.getMessage().split()
         if word.startswith("fault=")
+    ]
+
+
+def recovered(caplog: pytest.LogCaptureFixture, period: str) -> list[str]:
+    """The `note=` word of every recovery the pass logged about one period."""
+    return [
+        word
+        for record in caplog.records
+        if f"period={period} " in record.getMessage()
+        for word in record.getMessage().split()
+        if word.startswith("note=")
     ]
 
 
@@ -738,7 +753,7 @@ def window_pass(root: Path, today: date, *, reports: bool) -> Pass:
         today,
         max_periods_per_run=200,
         monthly_window=ONE_MONTH,
-        monthly_window_dry_run=reports,
+        month_deletes_dry_run=reports,
     )
 
 
@@ -846,7 +861,7 @@ def test_a_dry_run_whose_window_only_reports_names_what_that_live_pass_does(
         today=NOVEMBER_WAKE,
         max_periods_per_run=200,
         monthly_window=ONE_MONTH,
-        monthly_window_dry_run=True,
+        month_deletes_dry_run=True,
     )
     live = window_pass(trees[1], NOVEMBER_WAKE, reports=True)
 

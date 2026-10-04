@@ -13,7 +13,7 @@ from idhazh import ledger
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.gardener.tasks import _daily_period, _monthly_period
+from idhazh.gardener.tasks import _compaction_periods, _daily_period, _monthly_period
 from idhazh.gardener.tasks._compact_tree import CompactTree
 
 from ._task import context_for
@@ -64,7 +64,10 @@ def decide(root: Path, today: date) -> CompactTree:
     )
     assert (
         _monthly_period.absorb(
-            tree, policy, now=now, stamp="2026-03-05T00:00:00Z", identity=identity
+            tree,
+            _compaction_periods.choose(tree, policy, now=now, operator_range=None).months,
+            stamp="2026-03-05T00:00:00Z",
+            identity=identity,
         )
         == ()
     )

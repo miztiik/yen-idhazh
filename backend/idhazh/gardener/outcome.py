@@ -7,9 +7,11 @@ what the two share: the four exit codes, the order that picks the worst, and the
 `Shard` one hands the other.
 
 **Exit codes, worst first:** 2 is ownership or integrity and is never retried;
-3 is a push that kept losing and is retried at the next wake; 1 is a task that
-failed and is retried at the next wake; 0 is everything landed. A shard reports
-the worst code any part of it earned.
+3 is a push main refused - every try failed, and main did not move after the
+last - and is retried at the next wake; 1 is a task that failed and is retried
+at the next wake; 0 is everything landed, or nothing did because main moved on
+and the next wake does the work again. A shard reports the worst code any part
+of it earned.
 """
 
 from __future__ import annotations
@@ -25,10 +27,10 @@ from idhazh.contracts.base import Model, RelPath
 EXIT_OK: Final = 0
 EXIT_TASK_FAILED: Final = 1
 EXIT_INTEGRITY: Final = 2
-EXIT_PUSH_KEPT_LOSING: Final = 3
+EXIT_PUSH_REFUSED: Final = 3
 
 #: The four codes in the order a shard reports them: the worst one it earned.
-_WORST_FIRST: Final = (EXIT_INTEGRITY, EXIT_PUSH_KEPT_LOSING, EXIT_TASK_FAILED, EXIT_OK)
+_WORST_FIRST: Final = (EXIT_INTEGRITY, EXIT_PUSH_REFUSED, EXIT_TASK_FAILED, EXIT_OK)
 
 
 def worst(*codes: int) -> int:

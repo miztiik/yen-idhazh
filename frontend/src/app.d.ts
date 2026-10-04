@@ -31,13 +31,13 @@ declare global {
 	/** `ledger.engine_extension_repository`: where the query engine downloads its add-ons. */
 	const __ENGINE_EXTENSION_REPOSITORY__: string;
 
-	/** `ledger.archive_base_url`: where Records reads older packed ledgers whole. */
+	/** `ledger.archive_base_url`: where Data explorer reads older packed ledgers whole. */
 	const __ARCHIVE_BASE_URL__: string;
 
-	/** Console knobs for the Records route, injected by `vite.config.ts`. */
+	/** Console knobs for the Data explorer route, injected by `vite.config.ts`. */
 	const __CONSOLE_CONFIG__: import('$lib/server/config').ConsoleConfig;
 
-	/** Records route knobs, injected by `vite.config.ts`. */
+	/** Data explorer route knobs, injected by `vite.config.ts`. */
 	const __EXPLORER_CONFIG__: import('$lib/server/config').ExplorerConfig;
 
 	/** Frame knobs, injected by `vite.config.ts`. */

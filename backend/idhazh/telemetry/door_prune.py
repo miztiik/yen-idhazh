@@ -19,8 +19,10 @@ day of the range a ceiling left.
 2. it rebuilds each daily, monthly and yearly file that holds a row of them,
    once, without their rows - a file whose every row goes stays as an empty
    file, so no index and no watermark has a hole;
-3. it rewrites each index that names a rebuilt file, with that file's new row
-   count and size, in the bytes the compaction writes an index in.
+3. it rewrites each index that names a rebuilt file, in the bytes the
+   compaction writes an index in. The rebuilt file's entry takes the file's
+   new row count and size and keeps every other field as it was, so the days
+   it records lost and the files it counts set aside outlive the prune.
 
 Deletes first, so a day the pass has not finished still holds a row in a
 compact file, or its index still says it does, and the same command takes it
@@ -123,8 +125,9 @@ def _changes(
         if found.period not in entries:
             index = CompactIndex.read(ledger.compact_index_path(state_dir, name, found.period))
             entries[found.period] = {entry.covers: entry for entry in index.entries}
-        entries[found.period][found.covers] = CompactEntry(
-            covers=found.covers, rows=built.rows, bytes=len(built.data)
+        named = entries[found.period]
+        named[found.covers] = named[found.covers].model_copy(
+            update={"rows": built.rows, "bytes": len(built.data)}
         )
     indexes: list[_Change] = []
     for period, named in entries.items():

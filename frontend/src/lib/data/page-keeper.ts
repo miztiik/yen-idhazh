@@ -6,7 +6,7 @@
  * enters the engine twice, and no line reaches the console twice.
  *
  * A keeper lives as long as whoever made it. In a browser, `ledger.ts` makes one
- * on first use and keeps it until the page is reloaded, except the Records page
+ * on first use and keeps it until the page is reloaded, except the Data explorer page
  * calls `startAfresh()` on Refresh; every panel the page draws asks through it. At build time `sliceFromDisk()` makes one for each call
  * and releases it when the call ends.
  *
@@ -102,7 +102,7 @@ export interface PageKeeper {
 	 *  range for this call alone. Rejects when the engine cannot start or cannot
 	 *  take a file. */
 	hold(files: readonly WantedFile[]): Promise<Holding>;
-	/** Drops every file this keeper keeps registered. A build-time call does this when it ends; the Records page also does it when Refresh starts afresh. */
+	/** Drops every file this keeper keeps registered. A build-time call does this when it ends; the Data explorer page also does it when Refresh starts afresh. */
 	release(): Promise<void>;
 	/** Whole-file bytes this keeper currently holds in the engine. Byte-range files are not kept. */
 	heldBytes(): number;

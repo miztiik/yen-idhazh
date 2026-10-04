@@ -677,8 +677,9 @@ export async function load() {
 		// operator moves it without editing a component.
 		chart: chartConfig(),
 		// What the page says about the article record before the cut-short table
-		// draws from it: not packed yet, did not load, or packed some days short of
-		// the newest published day.
+		// draws from it: not packed yet, did not load, packed some days short of
+		// the newest published day, or with a day it has no record for or files it
+		// set aside unread.
 		recordNotes: recordNotes([{ record: 'article', read: items.read }], latestDate(undefined, 1)),
 		today: new Date().toISOString().slice(0, 10)
 	};

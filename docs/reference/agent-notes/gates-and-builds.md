@@ -50,6 +50,16 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   cmd /c rmdir frontend\node_modules
   ```
 
+- **`test_page_ceilings` fails locally on an index ceiling while CI passes; the
+  local zlib made the index larger, not the change.** On 2026-10-04 the Windows
+  Python 3.14.2 here used zlib-ng 2.2.4 and compressed the candidate-models
+  index to 1,112 bytes, 12 bytes over its 1,100-byte ceiling; the same test
+  passed on the `ubuntu-latest` runner (CI run 37226217109). The tell is a
+  `ZLIB_VERSION` ending in `.zlib-ng`. Take this test's answer from CI:
+  ```powershell
+  python -c "import zlib; print(zlib.ZLIB_VERSION, getattr(zlib, 'ZLIBNG_VERSION', None))"
+  ```
+
 ## Two heavy gates on one box
 
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.

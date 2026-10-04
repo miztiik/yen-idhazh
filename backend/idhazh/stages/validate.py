@@ -15,6 +15,7 @@ from idhazh import (
 )
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.evals import golden
 from idhazh.evals.hhem import (
@@ -30,7 +31,7 @@ from idhazh.llm.server import (
     resolve_endpoint,
 )
 from idhazh.stages import common
-from idhazh.stages.common import LOG, Fetcher, _ask_the_model, _fetch_one, _load_plan, silent_tracer
+from idhazh.stages.common import LOG, Fetcher, _ask_the_model, _fetch_one, silent_tracer
 
 
 def _summarize_one(
@@ -104,7 +105,7 @@ def _summarize_one(
 def stage_validate(
     *,
     settings: config.Settings,
-    date: str,
+    plan: RunPlan,
     leaderboard: float,
     scorer: object,
     fetcher: Fetcher | None = None,
@@ -118,15 +119,14 @@ def stage_validate(
     seventeen. The plan is regenerated per validation, so it never rots, needs no
     curation, and is the real corpus rather than a proxy for it.
 
-    Both models read the same committed plan file, so the only thing differing
-    between their two numbers is the weights.
+    Both models read the same plan, so the only thing differing between their two
+    numbers is the weights.
     """
     if scorer is None:
         raise SystemExit("validation without a faithfulness scorer measures nothing")
 
     model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     read_url = fetcher or common.live_fetcher(settings)
-    plan = _load_plan(date)
     model = settings.models.summarizer
     model_id = model.id
     markers = derive_turn_markers(

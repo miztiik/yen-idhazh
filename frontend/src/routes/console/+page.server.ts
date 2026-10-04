@@ -378,8 +378,9 @@ export async function load() {
 		chart,
 		summarizeBands: summarize.bands,
 		// What the page says about the two records it read before any panel draws
-		// from them: one not packed yet, one that did not load, or one packed some
-		// days short of the newest published day.
+		// from them: one not packed yet, one that did not load, one packed some
+		// days short of the newest published day, or one with a day it has no
+		// record for or files it set aside unread.
 		recordNotes: recordNotes(
 			[
 				{ record: 'article', read: items.read },

@@ -48,7 +48,6 @@ from idhazh.ledger.keys import (
     ITEM_HEALTH_KEY,
     ITEM_HEALTH_RULE,
     MERGE_LINE_HOLDOUT_SCORE_KEY,
-    OBSERVATION_INDEX_KEY,
     OBSERVATION_KEY,
     STORY_SIMILARITY_PAIR_CARRIED,
     STORY_SIMILARITY_PAIR_KEY,
@@ -90,6 +89,7 @@ from idhazh.ledger.paths import (
     watermark_path,
 )
 from idhazh.ledger.persist import (
+    FileFooter,
     PeriodFile,
     StoredRow,
     load,
@@ -97,6 +97,7 @@ from idhazh.ledger.persist import (
     persist,
     persist_period,
     read_envelope,
+    read_footer,
     render_grouped_period,
     render_period,
     render_renamed,
@@ -158,6 +159,7 @@ __all__ = [  # noqa: RUF022
     "tree_root",
     "watermark_path",
     # persist.py: the one door a contract payload takes to disk, and back.
+    "FileFooter",
     "PeriodFile",
     "StoredRow",
     "load",
@@ -165,6 +167,7 @@ __all__ = [  # noqa: RUF022
     "persist",
     "persist_period",
     "read_envelope",
+    "read_footer",
     "render_grouped_period",
     "render_period",
     "render_renamed",
@@ -206,7 +209,6 @@ __all__ = [  # noqa: RUF022
     "ITEM_HEALTH_KEY",
     "ITEM_HEALTH_RULE",
     "MERGE_LINE_HOLDOUT_SCORE_KEY",
-    "OBSERVATION_INDEX_KEY",
     "OBSERVATION_KEY",
     "STORY_SIMILARITY_PAIR_CARRIED",
     "STORY_SIMILARITY_PAIR_KEY",

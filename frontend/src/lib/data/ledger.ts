@@ -28,7 +28,7 @@ import type { QueryEngine } from './slice-query';
 import type { AskOptions, AskResult, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
 
 export type { LedgerReach } from './ledger-reach';
-export type { AskFault, AskOptions, AskRefusal, AskResult, Column, DateStamp, FetchCost, LedgerFault, LedgerName, Predicate, Row, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
+export type { AskFault, AskOptions, AskRefusal, AskResult, Column, DateStamp, FetchCost, LedgerFault, LedgerName, Predicate, Row, SetAsideFiles, SliceOptions, SliceResult, SpanCost, SpanGap } from './slice-shapes';
 
 let kept: PageKeeper | null = null;
 let keptArchive: PageKeeper | null = null;

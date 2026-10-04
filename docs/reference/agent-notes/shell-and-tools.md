@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 Checks before trusting command output or an editor operation. Keep instructions portable; omit machine configuration and session transcripts.
 
@@ -29,6 +29,10 @@ Checks before trusting command output or an editor operation. Keep instructions 
 - Confirm a claimed absence with a direct search or file read before deleting or redoing work. When tool results disagree, check the current file bytes and Git diff.
 - Edit one file sequentially. Create an input before starting its reader, inspect structural diffs, and check for unintended files after a move.
 - In a worktree outside the open workspace, the file reader can return a copy from before the last edit. Read such a file through the terminal before an edit depends on its text.
+- **A new file reads as LF text and is CRLF on disk.** On 2026-10-04, on a Windows machine, the agent's file-creation tools wrote Windows line endings into new files. Git normalises only at `git add`, too late for a test that reads the working file. Check the bytes and convert before the first test:
+  ```powershell
+  python -c "import sys;p=sys.argv[1];b=open(p,'rb').read();print(b.count(b'\r\n'));open(p,'wb').write(b.replace(b'\r\n',b'\n'))" <path>
+  ```
 
 ## Nested subagents
 

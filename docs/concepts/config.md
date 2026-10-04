@@ -122,7 +122,7 @@ Most knobs are read only by the producer and never reach a reader: source lists,
 A knob is shipped **only** when a published surface genuinely needs it - for example, how the dashboard buckets the ledger it renders. When that happens the value is *imported into the bundle at build time*, never fetched at read time: it is tiny, it is needed before the first paint, and fetching it would put a round trip on the critical path for something that cannot change between builds.
 
 The exception is `config/ledgers.json`. It is a registry, not a knob: a list of
-ledger families and ledgers that the Records page refreshes and compares with
+ledger families and ledgers that the Data explorer page refreshes and compares with
 the site's published list. The build copies it verbatim to the site at the same
 path, and the page fetches it when the operator opens that page. That makes the
 refresh a real read of the site's declaration rather than a rebuild-time

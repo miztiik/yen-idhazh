@@ -505,7 +505,7 @@ class AppearanceConfig(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-10-04",
-            change="Records fetch-ceiling reading and held-byte total recorded.",
+            change="Data explorer fetch-ceiling reading and held-byte total recorded.",
             why="A refused run still leaves fetched files in the page keeper.",
         ),
         ChangelogEntry(
@@ -515,8 +515,8 @@ class AppearanceConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-10-03",
-            change="console.data_explorer_tab removed; Records knobs and panel group added.",
-            why="The Records page is live and draws its own controls.",
+            change="console.data_explorer_tab removed; Data explorer knobs and panel group added.",
+            why="The Data explorer page is live and draws its own controls.",
         ),
         ChangelogEntry(
             version="2026-10-02",

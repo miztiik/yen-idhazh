@@ -23,12 +23,15 @@ from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.model_server import port_of_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.llm.server import loopback_url, server_argv
+from idhazh.stages import common
+from idhazh.stages import plan as plan_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
 from utilities import sweep_verdict
@@ -435,6 +438,7 @@ def run_once(
     worker_count: int,
     *,
     date: str,
+    execution: int,
     candidate: str,
     candidate_file: str,
     candidate_id: str,
@@ -490,6 +494,8 @@ def run_once(
                         str(cfg),
                         "--date",
                         date,
+                        "--execution",
+                        str(execution),
                         "--shard",
                         str(shard),
                         "--shards",
@@ -562,8 +568,16 @@ def corpus_offset(dispatch: str) -> int:
     return offset
 
 
-def freeze_corpus(date: str, *, items: int, offset: int = 0) -> None:
-    """Cut the day's plan to `items` articles and keep a copy beside the readings.
+def freeze_corpus(
+    date: str,
+    *,
+    items: int,
+    execution: int,
+    commit_sha: str,
+    state_dir: Path,
+    offset: int = 0,
+) -> None:
+    """Cut this run's plan to `items` articles, file the cut as its plan, and keep a copy.
 
     The plan is frozen so every repeat reads the same ADDRESSES. Their text is
     refetched each time, which is what `sweep_verdict` exists to notice.
@@ -571,21 +585,37 @@ def freeze_corpus(date: str, *, items: int, offset: int = 0) -> None:
     `offset` takes a later slice, so two dispatches of one day measure different
     articles. The refusal below is what makes a short plan a failure before the
     server starts rather than an hour in.
+
+    The cut is filed under the plan stage's own writer, because the run-plan
+    ledger is the only place `idhazh work` reads a plan from: one writer's later
+    file replaces its earlier one, so every repeat reads the cut. The copy beside
+    the readings is the record of what was measured, and nothing reads it as a plan.
     """
-    plan_path = RUN_ROOT / date / "plan.json"
-    payload = json.loads(plan_path.read_text(encoding="utf-8"))
-    payload["items"] = payload["items"][offset : offset + items]
-    if len(payload["items"]) != items:
+    run_id = plan_stage._run_id(date, execution)
+    planned = common._load_plan(date, run_id, state_dir=state_dir)
+    kept = planned.items[offset : offset + items]
+    if len(kept) != items:
         raise SystemExit(
             f"the runtime sweep needs {items} planned articles from offset {offset}"
         )
-    counts = Counter(item["vertical"] for item in payload["items"])
+    counts = Counter(item.vertical for item in kept)
+    payload = planned.model_dump(mode="json")
+    payload["items"] = [item.model_dump(mode="json") for item in kept]
     for vertical in payload["verticals"]:
         vertical["planned"] = counts.get(vertical["id"], 0)
-    text = RunPlan.model_validate(payload).to_json()
-    plan_path.write_text(text, encoding="utf-8")
+    cut = RunPlan.model_validate(payload)
+    ledger.persist(
+        state_dir,
+        [cut],
+        ledger=LedgerName.RUN_PLAN,
+        covers=date,
+        identity=plan_stage.plan_writer(run_id, commit_sha),
+    )
+    filed = common._load_plan(date, run_id, state_dir=state_dir)
+    if [item.item_id for item in filed.items] != [item.item_id for item in cut.items]:
+        raise SystemExit(f"the cut of run {run_id}'s plan did not replace the plan it was cut from")
     ROOT.mkdir(parents=True, exist_ok=True)
-    (ROOT / "plan.json").write_text(text, encoding="utf-8")
+    (ROOT / "plan.json").write_text(cut.to_json(), encoding="utf-8")
 
 
 def _bounded(name: str, value: int) -> int:
@@ -636,6 +666,7 @@ def sweep(args: argparse.Namespace) -> int:
                 repeat,
                 worker_count,
                 date=args.date,
+                execution=args.execution,
                 candidate=candidate,
                 candidate_file=args.candidate_file,
                 candidate_id=args.candidate_id,
@@ -700,10 +731,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
 
-    freeze = sub.add_parser("freeze-corpus", help="Cut the day's plan to the configured size.")
+    freeze = sub.add_parser("freeze-corpus", help="Cut the run's plan to the configured size.")
     freeze.add_argument("--date", required=True)
     freeze.add_argument("--config", type=Path, default=None)
     freeze.add_argument("--offset", default="", help="Skip this many planned articles first.")
+    freeze.add_argument(
+        "--execution", type=int, required=True, help="The run whose plan is cut."
+    )
+    freeze.add_argument(
+        "--commit", required=True, help="The commit the run checked out, named in the cut."
+    )
 
     cap = sub.add_parser(
         "corpus-cap",
@@ -714,6 +751,9 @@ def main(argv: list[str] | None = None) -> int:
 
     run = sub.add_parser("sweep", help="Time the candidate against the baseline.")
     run.add_argument("--date", required=True)
+    run.add_argument(
+        "--execution", type=int, required=True, help="The run whose plan every repeat works."
+    )
     run.add_argument("--candidate", required=True)
     run.add_argument("--candidate-file", required=True)
     run.add_argument("--candidate-id", required=True)
@@ -736,10 +776,14 @@ def main(argv: list[str] | None = None) -> int:
         print(corpus_items(args.config) + corpus_offset(args.offset))
         return 0
     if args.command == "freeze-corpus":
+        settings = config.load(args.config) if args.config is not None else config.load()
         freeze_corpus(
             args.date,
             items=corpus_items(args.config),
             offset=corpus_offset(args.offset),
+            execution=args.execution,
+            commit_sha=args.commit,
+            state_dir=common.state_root_of(settings, base=common.STATE_ROOT),
         )
         return 0
     return sweep(args)

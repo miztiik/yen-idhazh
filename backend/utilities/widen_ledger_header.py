@@ -13,10 +13,7 @@ compaction verb, which folds a segment into a head and has no ledger argument.
 This is the operator's door onto it.
 
 The ledger is named from the prune verb's own word list, so one set of words means
-one set of ledgers wherever an operator types one - and that list is taken whole,
-including the word the prune verb refuses by name, `summary-quality-evals-index`.
-It is refused there because an identity taken out of it makes a measurement count
-as new, and re-filing a header takes nothing out. The contract that reads a row
+one set of ledgers wherever an operator types one. The contract that reads a row
 comes off the two registries that already pair a committed file with its reader -
 `ledger.keys._TREE_SHAPES` through `segment_contract` for a day tree, and
 `ledger.keyed_paths` for a ledger the post-merge settlement still covers. No list
@@ -66,14 +63,9 @@ from idhazh.telemetry import prune
 
 DEFAULT_STATE_DIR: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 
-#: Which ledgers this can re-file, as a path under `state/`. The prune verb's
-#: whole word list, INCLUDING the word it refuses by name:
-#: `summary-quality-evals-index` is refused there because an identity taken out of
-#: it makes a measurement count as new, and re-filing a header takes nothing out.
-#: One vocabulary, two commands, and each one says its own no.
-LEDGERS: Final[Mapping[str, str]] = MappingProxyType(
-    dict(sorted({**prune.TARGETS, **{name: name for name in prune.REFUSED}}.items()))
-)
+#: Which ledgers this can re-file, as a path under `state/`: the prune verb's CSV
+#: word list. One vocabulary, two commands, and each one says its own no.
+LEDGERS: Final[Mapping[str, str]] = MappingProxyType(dict(sorted(prune.TARGETS.items())))
 
 
 @dataclass(frozen=True, slots=True)

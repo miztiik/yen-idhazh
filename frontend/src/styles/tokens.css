@@ -379,6 +379,12 @@
 	--text-3xl: 2.25rem;
 	--leading-3xl: 2.6rem;
 
+	--workbench-control: 2.75rem;
+	--workbench-row: 1.5rem;
+	--workbench-field-text: var(--text-base);
+	--workbench-field-leading: var(--leading-base);
+	--tracking-label: 0.04em;
+
 	/* --- The wordmark ----------------------------------------------------
 	   Its own step rather than a rung of the type scale. Nothing else on the
 	   site is set at this size, and a --text-4xl minted for one string is a
@@ -419,4 +425,13 @@
 	--zone-mark: 1.75rem;
 	--zone-rail: 14rem;
 	--zone-aside: 18rem;
+}
+
+
+@media (pointer: fine) {
+	:root {
+		--workbench-control: 2rem;
+		--workbench-field-text: var(--text-sm);
+		--workbench-field-leading: var(--leading-sm);
+	}
 }

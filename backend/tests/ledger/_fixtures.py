@@ -43,7 +43,6 @@ FIXTURE_NAMES = {
         "every-reading-taken.json",
         "the-clock-a-job-kept.json",
     ),
-    "observation-index-row": ("one.json",),
     "published-row": ("one-item.json",),
     "seen-row": ("first-sight.json",),
     "story-similarity-pair": (

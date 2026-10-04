@@ -154,6 +154,13 @@ const MODULE_TESTS: Record<string, string[]> = {
 	telemetry: ['backend/tests/test_telemetry.py', 'backend/tests/test_publish_telemetry.py']
 };
 
+// A utility that no stage, build or workflow imports or runs, so a change to it
+// can break only its own test module. One that something else reaches stays off
+// this list and falls to full coverage.
+const UTILITY_TESTS: Record<string, string> = {
+	'backend/utilities/doc_load.py': 'backend/tests/test_doc_load.py'
+};
+
 export function selectPaths(paths: readonly string[]): Selection {
 	const groups = new Set<TestGroup>();
 	const backendFiles = new Set<string>();
@@ -206,6 +213,10 @@ export function selectPaths(paths: readonly string[]): Selection {
 			if (['extract', 'sanitize'].includes(module)) selected.push('logic', 'publishing');
 			if (['ledger', 'telemetry'].includes(module)) selected.push(...FRONTEND_GROUPS);
 			reason = 'module tests and declared consumers';
+		} else if (Object.hasOwn(UTILITY_TESTS, path)) {
+			selected = ['backend'];
+			backendFiles.add(UTILITY_TESTS[path]);
+			reason = 'utility nothing else runs; its own tests';
 		} else if (/^backend\/idhazh\/(?!contracts\/).+\.py$/.test(path)) {
 			// The browser reaches backend code only through the canary build, so a
 			// pull request answers with the whole backend suite, and the merge push

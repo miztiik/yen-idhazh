@@ -272,11 +272,12 @@ jobs:
           TEST_CASE: ${{ matrix.test_case }}
           RUNNER: ${{ matrix.runner }}
           RUN_DATE: ${{ needs.plan.outputs.date }}
+          RUN_EXECUTION: ${{ github.run_id }}
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
         run: |
           set -euo pipefail
           python3 backend/utilities/pipeline_test_case.py run \
-            "$TEST_CASE" "$RUN_DATE" --runner "$RUNNER"
+            "$TEST_CASE" "$RUN_DATE" --runner "$RUNNER" --execution "$RUN_EXECUTION"
 
       - name: Stop the model
         if: always()

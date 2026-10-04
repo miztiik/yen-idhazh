@@ -32,7 +32,7 @@ from idhazh.contracts.qualification import (
     ScorerIdentity,
     SummarySample,
 )
-from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.evals import metrics, qualification_summary, qualify
 from idhazh.evals.hhem import (
@@ -62,7 +62,6 @@ from idhazh.stages.common import (
     LOG,
     Fetcher,
     _fetch_one,
-    _load_plan,
     _one_call,
     _run_canaries,
     _run_dir,
@@ -396,6 +395,7 @@ def _sample(frozen: _Frozen, summary: Summary, score: ItemScore) -> SummarySampl
 def stage_qualify(
     *,
     settings: config.Settings,
+    plan: RunPlan,
     date: str,
     shard: int,
     shards: int,
@@ -444,7 +444,6 @@ def stage_qualify(
         ),
     )
 
-    plan = _load_plan(date)
     mine = shard_of(plan, shard=shard, shards=shards)
     share = corpus_share(settings.app.evaluation)
     frozen, attempted, unmet = _freeze(mine, settings, read_url, keep=corpus_per_shard, share=share)

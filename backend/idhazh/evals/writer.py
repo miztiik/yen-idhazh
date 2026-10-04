@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.base import canonical_json, derive_text_digest
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
@@ -50,18 +49,6 @@ def read_header(path: Path) -> tuple[str, ...]:
 def observation(payload: Mapping[str, object]) -> tuple[str, ...]:
     """The identity of one measurement, read from a row or from a CSV record."""
     return tuple(str(payload[name]) for name in OBSERVATION_KEY)
-
-
-def observation_digest(payload: Mapping[str, object]) -> str:
-    """The same identity as one hash.
-
-    A fixed-width record instead of a second copy of the addresses. Digested
-    through the project's own canonical serialization rather than joined with a
-    separator, so no value can contain the thing that separates two values -
-    `scorer_version` carries semicolons, slashes and an at-sign, and a join is
-    one grammar change away from two different keys digesting the same.
-    """
-    return derive_text_digest(canonical_json(list(observation(payload))))
 
 
 def file_measurements(

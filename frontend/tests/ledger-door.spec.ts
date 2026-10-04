@@ -12,10 +12,10 @@ import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
 import { readAsk, readAskCost } from '../src/lib/data/ask-reader';
 import { readReach } from '../src/lib/data/ledger-reach';
 import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper, type WantedFile } from '../src/lib/data/page-keeper';
-import { daysBetween, filesFor, newestNamed } from '../src/lib/data/slice';
+import { daysBetween, filesFor, namesFile, newestFile, newestNamed } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
 import { dataPath, indexPath, rawIndexPath, readSlice } from '../src/lib/data/slice-reader';
-import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
+import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type LedgerName, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository } from '../src/lib/server/config';
 import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 
@@ -43,6 +43,11 @@ import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledge
  * one row group a month, under a yearly index and one zero-row day in 2027. Each
  * root carries all three indexes, as the compaction writes them: the first
  * root's yearly index and the second root's monthly index name nothing.
+ *
+ * A period with no file is the fixture rewritten inside the test that asks: the
+ * zero-row day recorded `empty` and the hole recorded `lost`, as the packing now
+ * records them, or a day the month or the year file holds no row for listed in
+ * that entry's `lost_days`.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -184,6 +189,15 @@ function fixtureEntries(period: Period, state: string = STATE): CompactEntry[] {
 	return reading.index.entries;
 }
 
+/** One of the contract's own sample indexes, under `tests/fixtures/contracts/compact-index/`,
+ *  as this build's guard hands it on. */
+function contractEntries(name: string, ledger: LedgerName, period: Period): CompactEntry[] {
+	const text = readFileSync(path.resolve(FIXTURE, '..', 'contracts', 'compact-index', `${name}.json`), 'utf8');
+	const reading = readIndex(JSON.parse(text), ledger, period);
+	if (!('index' in reading)) throw new Error(`the contract sample ${name} is refused: ${JSON.stringify(reading)}`);
+	return reading.index.entries;
+}
+
 const columns = ['date', 'run_id', 'job', 'shard', 'cores'] as const;
 const ask = (from: string, to: string, extra: Partial<SliceOptions> = {}): SliceOptions => ({
 	columns,
@@ -206,6 +220,32 @@ const bytesOf = (relative: string): Uint8Array => new Uint8Array(readFileSync(pa
 const expectedAnswer = (name: string): Record<string, string | null>[] => JSON.parse(readFileSync(path.join(FIXTURE, 'answers', `${name}.json`), 'utf8'));
 /** The digest a listing that names no file carries: SHA-256 over no names, the empty string. */
 const EMPTY_NAMES_DIGEST = createHash('sha256').update('', 'utf8').digest('hex');
+
+/** The fixture's zero-row day, as the packing now records a day that held no row: an entry with no file. */
+const EMPTY_DAY: CompactEntry = { covers: '2026-09-03', rows: 0, bytes: 0, state: 'empty' };
+/** The fixture's hole, as the packing now records a day whose rows it could not recover. */
+const LOST_DAY: CompactEntry = { covers: '2026-09-04', rows: 0, bytes: 0, state: 'lost' };
+
+/** The fixture's daily index as the packing now writes it: the zero-row day `empty`, the
+ *  hole `lost`, and `more` after the newest day. */
+function withNoFile(more: CompactEntry[] = []): { version: string; ledger: typeof LEDGER; period: Period; entries: CompactEntry[] } {
+	const entries = fixtureEntries('daily').flatMap((entry) => (entry.covers === EMPTY_DAY.covers ? [EMPTY_DAY, LOST_DAY] : [entry]));
+	return { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'daily', entries: [...entries, ...more] };
+}
+
+/** That index as the site serves it: a period with no file has no file to send. */
+function servedWithNoFile(index = withNoFile()): Record<string, Rule> {
+	const rules: Record<string, Rule> = { [DAILY_INDEX]: { status: 200, body: encoded(index) } };
+	for (const entry of index.entries) if (!namesFile(entry)) rules[dayFile(entry.covers)] = { status: 404 };
+	return rules;
+}
+
+/** Rows a slice answered, counted by the day each holds. */
+function rowsPerDay(result: SliceResult): Record<string, number> {
+	const perDay: Record<string, number> = {};
+	for (const row of result.rows) perDay[String(row.date)] = (perDay[String(row.date)] ?? 0) + 1;
+	return perDay;
+}
 
 test('the engine starts while a whole file is still arriving', async () => {
 	const { fetcher } = recorded();
@@ -274,7 +314,9 @@ test.describe('which files a range needs', () => {
 			fixtureEntries('yearly', YEAR_STATE)
 		);
 		expect(selection).toEqual({
-			files: [{ period: 'yearly', entry: fixtureEntries('yearly', YEAR_STATE)[0], firstDay: '2026-08-30' }]
+			files: [{ period: 'yearly', entry: fixtureEntries('yearly', YEAR_STATE)[0], firstDay: '2026-08-30' }],
+			lostDays: [],
+			setAside: {}
 		});
 	});
 
@@ -282,6 +324,76 @@ test.describe('which files a range needs', () => {
 		expect(filesFor('2026-09-02', '2026-09-05', fixtureEntries('daily'), fixtureEntries('monthly'), [])).toEqual({
 			hole: '2026-09-04'
 		});
+	});
+
+	test('an empty day names no file and a lost day comes back by name, and neither is a hole', () => {
+		const daily = withNoFile().entries;
+		expect(filesFor('2026-09-02', '2026-09-05', daily, fixtureEntries('monthly'), [])).toEqual({
+			files: [
+				{ period: 'daily', entry: daily.find((entry) => entry.covers === '2026-09-02'), firstDay: '2026-09-02' },
+				{ period: 'daily', entry: daily.find((entry) => entry.covers === '2026-09-05'), firstDay: '2026-09-05' }
+			],
+			lostDays: ['2026-09-04'],
+			setAside: {}
+		});
+	});
+
+	test('a day a year lists as lost comes back by name, and the year file still answers the rest', () => {
+		const [year] = fixtureEntries('yearly', YEAR_STATE);
+		const lost = { ...year, lost_days: ['2026-09-04'] };
+		expect(filesFor('2026-09-02', '2026-09-05', [], [], [lost])).toEqual({
+			files: [{ period: 'yearly', entry: lost, firstDay: '2026-09-02' }],
+			lostDays: ['2026-09-04'],
+			setAside: {}
+		});
+		expect(filesFor('2026-09-04', '2026-09-04', [], [], [lost])).toEqual({ files: [], lostDays: ['2026-09-04'], setAside: {} });
+	});
+
+	test('each period whose packing set files aside comes back with its count, as the contract samples hold them', () => {
+		// Read through the guard, which hands set_aside on: a lost day that set two
+		// files aside and a packed day that set one aside are each counted.
+		const days = contractEntries('a-lost-day', 'item-health', 'daily');
+		expect(filesFor('2026-09-22', '2026-09-24', days, [], [])).toEqual({
+			files: [
+				{ period: 'daily', entry: days[0], firstDay: '2026-09-22' },
+				{ period: 'daily', entry: days[2], firstDay: '2026-09-24' }
+			],
+			lostDays: ['2026-09-23'],
+			setAside: { '2026-09-23': 2, '2026-09-24': 1 }
+		});
+		// A month counts its files once, under its own name, whichever of its days a span reads.
+		const months = contractEntries('a-month-with-lost-days', 'item-health', 'monthly');
+		expect(filesFor('2026-08-11', '2026-08-14', [], months, [])).toEqual({
+			files: [{ period: 'monthly', entry: months[1], firstDay: '2026-08-11' }],
+			lostDays: ['2026-08-12', '2026-08-13'],
+			setAside: { '2026-08': 1 }
+		});
+	});
+
+	test('only a packed entry names a file, and an entry written before entries had a state is packed', () => {
+		const written = { covers: '2026-09-01', rows: 1, bytes: 1 };
+		expect([
+			namesFile(written),
+			namesFile({ ...written, state: 'packed' }),
+			namesFile({ ...written, rows: 0, bytes: 0, state: 'empty' }),
+			namesFile({ ...written, rows: 0, bytes: 0, state: 'lost' })
+		]).toEqual([true, true, false, false]);
+	});
+
+	test('the newest file the indexes name skips a newest day that has none', () => {
+		const daily = withNoFile([{ ...LOST_DAY, covers: '2026-09-06' }]).entries;
+		expect(newestFile(daily, fixtureEntries('monthly'), [])).toEqual({
+			period: 'daily',
+			entry: daily.find((entry) => entry.covers === '2026-09-05'),
+			firstDay: '2026-09-05'
+		});
+		const none = [EMPTY_DAY, LOST_DAY];
+		expect(newestFile(none, fixtureEntries('monthly'), [])).toEqual({
+			period: 'monthly',
+			entry: fixtureEntries('monthly')[0],
+			firstDay: '2026-08-01'
+		});
+		expect(newestFile(none, [], [])).toBeNull();
 	});
 
 	test('a year file sits in a folder named for its year', () => {
@@ -309,7 +421,9 @@ test.describe('the four states, before the engine is needed', () => {
 		expect(await readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-03', '2026-09-03'))).toEqual({
 			state: 'quiet',
 			rows: [],
-			through: '2026-09-05'
+			through: '2026-09-05',
+			lostDays: [],
+			setAside: {}
 		});
 		expect(asked.map((one) => one.path)).toEqual([DAILY_INDEX]);
 		expect(engine.opened()).toBe(0);
@@ -320,7 +434,9 @@ test.describe('the four states, before the engine is needed', () => {
 		expect(await readSlice(freshPage(fetcher), LEDGER, ask('2026-09-06', '2026-09-10'))).toEqual({
 			state: 'quiet',
 			rows: [],
-			through: '2026-09-05'
+			through: '2026-09-05',
+			lostDays: [],
+			setAside: {}
 		});
 		expect(asked.map((one) => one.path)).toEqual([DAILY_INDEX]);
 	});
@@ -426,7 +542,9 @@ test.describe('the four states, before the engine is needed', () => {
 		expect(await readSlice(freshPage(fetcher), LEDGER, ask('2026-09-03', '2026-09-03'))).toEqual({
 			state: 'quiet',
 			rows: [],
-			through: '2026-09-05'
+			through: '2026-09-05',
+			lostDays: [],
+			setAside: {}
 		});
 	});
 
@@ -526,6 +644,7 @@ test.describe('a request the door refuses before it fetches anything', () => {
 		['"from" after "to"', ask('2026-09-02', '2026-09-01')],
 		['a day that is not a day', ask('2026-9-1', '2026-09-02')],
 		['a day that does not exist', ask('2026-02-30', '2026-03-01')],
+		['a day past the 31st', ask('2026-08-32', '2026-09-01')],
 		['an empty "in" list', { ...ask('2026-09-01', '2026-09-02'), where: [{ column: 'job', op: 'in', value: [] }] }]
 	];
 	for (const [what, options] of refused) {
@@ -630,7 +749,7 @@ test.describe('THE ORACLE through the engine, at both entry points', () => {
 		if (narrowed.disk.state === 'ok') expect(narrowed.disk.rows.map((row) => row.job)).toEqual(['plan']);
 		expect(narrowed.browser).toEqual(narrowed.disk);
 		const nothing = await bothWays(ask('2026-09-01', '2026-09-03', { where: [{ column: 'shard', op: '>', value: 9 }] }));
-		expect(nothing.disk, nothing.warned.join('\n')).toEqual({ state: 'quiet', rows: [], through: '2026-09-05' });
+		expect(nothing.disk, nothing.warned.join('\n')).toEqual({ state: 'quiet', rows: [], through: '2026-09-05', lostDays: [], setAside: {} });
 		expect(nothing.browser).toEqual(nothing.disk);
 	});
 });
@@ -656,7 +775,7 @@ test.describe('what a page keeps', () => {
 		if (!('failed' in second)) await second.done();
 	});
 
-	test('the Records startAfresh path makes the next askCost and ask read every index again', async () => {
+	test('the Data explorer startAfresh path makes the next askCost and ask read every index again', async () => {
 		const { fetcher, asked } = recorded();
 		const first = freshPage(fetcher);
 		const ledgers = ['host-fingerprint', 'item-health'] as const;
@@ -823,7 +942,9 @@ test.describe('what a page keeps', () => {
 		expect(await readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-02', '2026-09-02'))).toEqual({
 			state: 'quiet',
 			rows: [],
-			through: '2026-09-05'
+			through: '2026-09-05',
+			lostDays: [],
+			setAside: {}
 		});
 		const entry = fixtureEntries('daily').find((one) => one.covers === '2026-09-02');
 		expect(asked.filter((one) => one.path === dayFile('2026-09-02')).map((one) => one.version)).toEqual([
@@ -869,7 +990,9 @@ test.describe('what a page keeps', () => {
 		expect(await readSlice(reloaded, LEDGER, ask('2026-08-31', '2026-08-31', { columns: ['date', 'run_id', 'shard'] }))).toEqual({
 			state: 'ok',
 			rows: [{ date: '2026-08-31', run_id: '2026-08-31-17810000001', shard: 0 }],
-			through: '2026-09-05'
+			through: '2026-09-05',
+			lostDays: [],
+			setAside: {}
 		});
 	});
 
@@ -1222,6 +1345,147 @@ test.describe('an empty monthly.json or yearly.json is a gap the design expects:
 	});
 });
 
+test.describe('THE ORACLE for a period with no file: an empty day is quiet, a lost day is named, and neither is fetched', () => {
+	test('a span across them returns the other days\' rows and names the lost day, the same both ways', async () => {
+		const span = ask('2026-09-01', '2026-09-05');
+		const { fetcher, asked } = recorded(servedWithNoFile());
+		const engine = counted();
+		const { result: browser, warned } = await warnings(() => readSlice(freshPage(fetcher, engine), LEDGER, span));
+		const root = fixtureTreeWithout(dayFile(EMPTY_DAY.covers));
+		try {
+			writeFileSync(path.join(root, ...DAILY_INDEX.split('/')), JSON.stringify(withNoFile()));
+			const { result: disk, warned: more } = await warnings(() => sliceFromDisk(root, LEDGER, span));
+			expect(disk, [...warned, ...more].join('\n')).toMatchObject({ state: 'ok', through: '2026-09-05', lostDays: ['2026-09-04'] });
+			expect(browser).toEqual(disk);
+			expect(rowsPerDay(disk)).toEqual({ '2026-09-01': 3, '2026-09-02': 2, '2026-09-05': 2 });
+			expect(more).toEqual([]);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+		expect(dataAsked(asked).sort()).toEqual([dayFile('2026-09-01'), dayFile('2026-09-02'), dayFile('2026-09-05')]);
+		expect(engine.registered).toHaveLength(3);
+		expect(warned).toEqual([]);
+	});
+
+	test('a span of only an empty and a lost day is quiet, names the lost day, and starts no engine', async () => {
+		const { fetcher, asked } = recorded(servedWithNoFile());
+		const engine = counted();
+		expect(await readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-03', '2026-09-04'))).toEqual({
+			state: 'quiet',
+			rows: [],
+			through: '2026-09-05',
+			lostDays: ['2026-09-04'],
+			setAside: {}
+		});
+		expect(dataAsked(asked)).toEqual([]);
+		expect(engine.opened()).toBe(0);
+	});
+
+	test('a span names each period whose packing set files aside, with how many, beside the lost day', async () => {
+		const index = withNoFile();
+		const entries = index.entries.map((entry) =>
+			entry.covers === LOST_DAY.covers ? { ...entry, set_aside: 2 } : entry.covers === '2026-09-05' ? { ...entry, set_aside: 1 } : entry
+		);
+		const { fetcher } = recorded(servedWithNoFile({ ...index, entries }));
+		const result = await readSlice(freshPage(fetcher), LEDGER, ask('2026-09-01', '2026-09-05'));
+		expect(result).toMatchObject({ state: 'ok', lostDays: ['2026-09-04'] });
+		if (result.state === 'ok') expect(result.setAside).toEqual({ '2026-09-04': 2, '2026-09-05': 1 });
+	});
+
+	// Days the packing could really have recorded lost: the month file holds no row before
+	// 2026-08-30, and the year file none on 2026-09-03 or 2026-09-04.
+	const coarser: { period: Exclude<Period, 'daily'>; state: string; span: SliceOptions; lost: string[]; perDay: Record<string, number>; file: string }[] = [
+		{
+			period: 'monthly',
+			state: STATE,
+			span: ask('2026-08-29', '2026-09-01'),
+			lost: ['2026-08-29'],
+			perDay: { '2026-08-30': 2, '2026-08-31': 1, '2026-09-01': 3 },
+			file: dataPath(LEDGER, 'monthly', '2026-08')
+		},
+		{
+			period: 'yearly',
+			state: YEAR_STATE,
+			span: ask('2026-09-02', '2026-09-05'),
+			lost: ['2026-09-03', '2026-09-04'],
+			perDay: { '2026-09-02': 2, '2026-09-05': 2 },
+			file: dataPath(LEDGER, 'yearly', '2026')
+		}
+	];
+	for (const one of coarser) {
+		test(`a day a ${one.period} entry lists as lost is named, and the rest of its file is read`, async () => {
+			const { fetcher, asked } = recorded(
+				{ [indexPath(LEDGER, one.period)]: reshaped({ entries: fixtureEntries(one.period, one.state).map((entry) => ({ ...entry, lost_days: one.lost })) }) },
+				one.state
+			);
+			const { result, warned } = await warnings(() => readSlice(freshPage(fetcher), LEDGER, one.span));
+			expect(result, warned.join('\n')).toMatchObject({ state: 'ok', lostDays: one.lost });
+			expect(rowsPerDay(result)).toEqual(one.perDay);
+			expect(dataAsked(asked)).toContain(one.file);
+		});
+	}
+
+	test('an empty or a lost day is a day the ledger reaches, newest day included', async () => {
+		const newestLost = withNoFile([{ ...LOST_DAY, covers: '2026-09-06' }]);
+		const { fetcher } = recorded(servedWithNoFile(newestLost));
+		const page = freshPage(fetcher);
+		expect(await readReach(page, LEDGER)).toEqual({ state: 'ok', first: '2026-08-01', through: '2026-09-06', fault: null });
+		expect(await readSlice(page, LEDGER, ask('2026-09-06', '2026-09-06'))).toEqual({
+			state: 'quiet',
+			rows: [],
+			through: '2026-09-06',
+			lostDays: ['2026-09-06'],
+			setAside: {}
+		});
+	});
+
+	const broken: [string, CompactEntry][] = [
+		['a state the contract does not declare', { ...LOST_DAY, state: 'missing' as unknown as CompactEntry['state'] }],
+		['an empty entry that counts bytes', { ...EMPTY_DAY, bytes: 7950 }],
+		['a lost entry that counts rows', { ...LOST_DAY, rows: 2 }],
+		['lost_days on a day', { ...LOST_DAY, lost_days: ['2026-09-04'] }],
+		['a set_aside that is not a count', { ...LOST_DAY, set_aside: -1 }]
+	];
+	for (const [what, entry] of broken) {
+		test(`a daily index whose entry has ${what} is one this build will not act on`, async () => {
+			const index = withNoFile();
+			const entries = index.entries.map((one) => (one.covers === entry.covers ? entry : one));
+			const { fetcher, asked } = recorded({ [DAILY_INDEX]: { status: 200, body: encoded({ ...index, entries }) } });
+			const { result, warned } = await warnings(() => readSlice(freshPage(fetcher), LEDGER, ask('2026-09-01', '2026-09-05')));
+			expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-01', fault: null });
+			expect(dataAsked(asked)).toEqual([]);
+			expect(warned.join('\n')).toContain(`(${entry.covers})`);
+		});
+	}
+
+	const strayLostDays: [string, string[]][] = [
+		['a day of another month', ['2026-09-01']],
+		['no calendar day', ['2026-08-32']],
+		['days out of order', ['2026-08-30', '2026-08-29']]
+	];
+	for (const [what, lost] of strayLostDays) {
+		test(`a monthly index whose lost_days names ${what} is one this build will not act on`, async () => {
+			const { fetcher } = recorded({
+				[MONTHLY_INDEX]: reshaped({ entries: fixtureEntries('monthly').map((entry) => ({ ...entry, lost_days: lost })) })
+			});
+			const { result, warned } = await warnings(() => readSlice(freshPage(fetcher), LEDGER, ask('2026-08-29', '2026-09-01')));
+			expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-29', fault: null });
+			expect(warned.join('\n')).toContain('monthly.json cannot be read: entry 0 (2026-08)');
+		});
+	}
+
+	test('a monthly index whose month is marked lost is one this build will not act on: only a day is lost', async () => {
+		const { fetcher } = recorded({
+			[MONTHLY_INDEX]: reshaped({
+				entries: fixtureEntries('monthly').map((entry) => ({ ...entry, rows: 0, bytes: 0, state: 'lost' }))
+			})
+		});
+		const { result, warned } = await warnings(() => readSlice(freshPage(fetcher), LEDGER, ask('2026-08-29', '2026-09-01')));
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-29', fault: null });
+		expect(warned.join('\n')).toContain('entry 0 (2026-08) is lost, and only a day is');
+	});
+});
+
 test.describe('THE ORACLE for ask(): a written question over chosen ledgers', () => {
 	const opts = {
 		ledgers: ['host-fingerprint', 'item-health'] as const,
@@ -1297,6 +1561,69 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		}, { 'item-health': '2026-09-06' });
 		expect(answer).toMatchObject({ state: 'ok' });
 		if (answer.state === 'ok') expect(answer.rows).toEqual([{ rows: '0' }]);
+	});
+
+	test('a question over an empty and a lost day fetches neither, and counts the other days', async () => {
+		const { fetcher, asked } = recorded(servedWithNoFile());
+		const answer = await readAsk(freshPage(fetcher), null, {
+			...opts,
+			ledgers: ['host-fingerprint'],
+			from: '2026-09-01',
+			to: '2026-09-05',
+			sql: 'SELECT date, count(*) AS n FROM "host-fingerprint" GROUP BY date ORDER BY date',
+			maxRows: 10
+		}, {});
+		expect(answer).toMatchObject({
+			state: 'ok',
+			rows: [
+				{ date: '2026-09-01', n: '3' },
+				{ date: '2026-09-02', n: '2' },
+				{ date: '2026-09-05', n: '2' }
+			]
+		});
+		expect(dataAsked(asked).sort()).toEqual([dayFile('2026-09-01'), dayFile('2026-09-02'), dayFile('2026-09-05')]);
+	});
+
+	test('an answer names what each chosen ledger is missing in its span, and a ledger missing nothing is not named', async () => {
+		const index = withNoFile();
+		const entries = index.entries.map((entry) =>
+			entry.covers === LOST_DAY.covers ? { ...entry, set_aside: 2 } : entry.covers === '2026-09-05' ? { ...entry, set_aside: 1 } : entry
+		);
+		const page = freshPage(recorded(servedWithNoFile({ ...index, entries })).fetcher);
+		const question = { ...opts, sql: 'SELECT count(*) AS rows FROM "host-fingerprint"', maxRows: 10 };
+		const across = await readAsk(page, null, { ...question, ledgers: ['host-fingerprint'], from: '2026-09-01', to: '2026-09-05' }, {});
+		expect(across).toMatchObject({ state: 'ok' });
+		if (across.state === 'ok') {
+			expect(across.gaps).toEqual([
+				{ ledger: 'host-fingerprint', lostDays: ['2026-09-04'], setAside: { '2026-09-04': 2, '2026-09-05': 1 } }
+			]);
+		}
+		// item-health keeps every row of 2026-09-05, so only host-fingerprint is named.
+		const both = await readAsk(page, null, { ...question, ledgers: ['host-fingerprint', 'item-health'], from: '2026-09-05', to: '2026-09-05' }, {});
+		expect(both).toMatchObject({ state: 'ok', gaps: [{ ledger: 'host-fingerprint', lostDays: [], setAside: { '2026-09-05': 1 } }] });
+		// A span of nothing but the lost day runs no query, and its quiet answer still names it.
+		const lostOnly = await readAsk(page, null, { ...question, ledgers: ['host-fingerprint'], from: '2026-09-04', to: '2026-09-04' }, {});
+		expect(lostOnly).toMatchObject({ state: 'quiet', gaps: [{ ledger: 'host-fingerprint', lostDays: ['2026-09-04'], setAside: { '2026-09-04': 2 } }] });
+	});
+
+	test('a selected ledger whose newest days have no file answers an empty view over the newest file it has', async () => {
+		const index = withNoFile();
+		const lostNewest = {
+			...index,
+			entries: index.entries.map((entry) => (entry.covers === '2026-09-05' ? { ...LOST_DAY, covers: '2026-09-05' } : entry))
+		};
+		const { fetcher, asked } = recorded(servedWithNoFile(lostNewest));
+		const answer = await readAsk(freshPage(fetcher), null, {
+			...opts,
+			ledgers: ['host-fingerprint', 'item-health'],
+			from: '2026-09-05',
+			to: '2026-09-05',
+			sql: 'SELECT count(*) AS rows FROM "host-fingerprint"',
+			maxRows: 10
+		}, {});
+		expect(answer).toMatchObject({ state: 'ok', rows: [{ rows: '0' }] });
+		expect(dataAsked(asked)).toContain(dayFile('2026-09-02'));
+		expect(dataAsked(asked)).not.toContain(dayFile('2026-09-05'));
 	});
 
 	test('a zero-row answer is quiet and still names every column and its type', async () => {

@@ -85,9 +85,11 @@ class GardenerConfig(Model):
     attempts: int = Field(
         ge=1,
         description=(
-            "How many times one shard may try to push its commit before it gives up "
-            "with exit 3. Each try fetches main again, so a push that lost to another "
-            "shard is retried against the new tip. No sleep follows the last try."
+            "How many times one shard may try to push its commit. Each try fetches main "
+            "again, so a push that lost to another shard is retried against the new tip. "
+            "No sleep follows the last try. If every try fails and main did not move, main "
+            "refused the push, and the shard exits 3. If main moved, other writers are "
+            "landing, and the shard warns and exits 0."
         ),
     )
     shards: int = Field(
@@ -424,7 +426,7 @@ class CompactionPolicy(_Declared):
     `max_deletes_per_run` is null. A declaration that sets `monthly_keep_days`
     also packs each finished year's month files into one yearly file, kept for
     ever. It has two switches, because packing loses no row and its monthly
-    window does: `dry_run` for the whole pass, and `monthly_window_dry_run` for
+    window does: `dry_run` for the whole pass, and `month_deletes_dry_run` for
     what the window deletes, so a ledger can pack live while its window only
     reports.
     """
@@ -473,7 +475,7 @@ class CompactionPolicy(_Declared):
             "packed into its year."
         ),
     )
-    monthly_window_dry_run: bool = Field(
+    month_deletes_dry_run: bool = Field(
         description=(
             "True keeps every file monthly_window would delete - each month file past "
             "it and each raw day in a month past it - and packs those days and months "

@@ -37,8 +37,7 @@ def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     """A summary costs kilobytes and is what makes a year-over-year claim citable.
 
     The eval ledger has no summary at all. Every row is kept for ever, so its
-    compaction may pack a month and never drops one, and the index the dedupe
-    reads keeps every day.
+    compaction may pack a month and never drops one.
     """
     tasks = config.load_gardener().tasks
     folded = tasks["telemetry-aggregate"]
@@ -50,9 +49,6 @@ def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     assert isinstance(packed, CompactionPolicy)
     assert isinstance(packed.monthly_window, ForeverWindow), (
         "config/gardener/compact-summary-quality-evals.json drops a month of eval rows"
-    )
-    assert "summary-quality-evals-index" not in tasks, (
-        "the exact evaluation lookup has no dated partitions to fold or prune"
     )
 
 

@@ -76,21 +76,6 @@
       ]
     },
     {
-      "name": "summary-quality-evals-index",
-      "lifecycle_status": "active",
-      "description": "Which measurements the summary-quality evals already hold, so one summary is not counted twice.",
-      "onboarded": "2026-09-08",
-      "ledgers": [
-        {
-          "name": "summary-quality-evals-index",
-          "grain": "lookup",
-          "prefix": ["summary-quality-evals-index"],
-          "stem": null,
-          "suffix": null
-        }
-      ]
-    },
-    {
       "name": "candidate-models",
       "lifecycle_status": "active",
       "description": "The verdict on each candidate model, filed on the day it was measured.",
@@ -307,6 +292,21 @@
           "name": "gardener",
           "grain": "raw-and-compact",
           "prefix": ["gardener"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "run-plan",
+      "lifecycle_status": "active",
+      "description": "The ranked plan that a UTC day hands to its later pipeline stages.",
+      "onboarded": "2026-10-05",
+      "ledgers": [
+        {
+          "name": "run-plan",
+          "grain": "raw-and-compact",
+          "prefix": ["run-plan"],
           "stem": null,
           "suffix": null
         }

@@ -24,7 +24,7 @@ from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import named_trees
-from idhazh.gardener.file_listing import FileListing
+from idhazh.gardener.file_listing import FileListing, PathNotNamedError
 from idhazh.site_weight import measure
 
 pytestmark = pytest.mark.contract
@@ -80,14 +80,34 @@ SHARD_TREES: Final = {
 @pytest.mark.parametrize("shape", sorted(SHARD_TREES))
 def test_the_writer_files_of_a_day_tree_are_the_disk_walks(tmp_path: Path, shape: str) -> None:
     """A closed month's own settled file is a member of both walks, beside its days."""
-    root = plant(tmp_path / "state" / "summary-quality-evals-index", SHARD_TREES[shape])
-    listing = listing_of(tmp_path, "state/summary-quality-evals-index")
+    root = plant(tmp_path / "state" / "a-day-tree", SHARD_TREES[shape])
+    listing = listing_of(tmp_path, "state/a-day-tree")
 
     on_disk = walked(lambda: day_shards.shard_files(root, days=UNBOUNDED_WINDOW))
     by_name = walked(lambda: named_trees.shard_files(listing, root))
 
     assert by_name == on_disk
     assert on_disk[1] is (shape != "clean"), "the tree does not exercise what it is named for"
+
+
+def test_a_walk_covers_the_periods_a_task_named_and_nothing_else_of_its_root(
+    tmp_path: Path,
+) -> None:
+    """A wake names day folders one by one, so a walk over the root reads those days alone."""
+    root = plant(
+        tmp_path / "state" / "a-day-tree",
+        ["2026/09/01/a.csv", "2026/09/02/b.csv", "2026/09/03/c.csv"],
+    )
+    listing = FileListing.from_disk(
+        tmp_path, ["state/a-day-tree"], paths=[root / "2026/09/01", root / "2026/09/03"]
+    )
+
+    assert list(named_trees.shard_files(listing, root)) == [
+        root / "2026/09/01/a.csv",
+        root / "2026/09/03/c.csv",
+    ]
+    with pytest.raises(PathNotNamedError):
+        listing.files_under(root)
 
 
 PUBLISHED: Final = [

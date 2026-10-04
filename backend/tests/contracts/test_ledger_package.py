@@ -22,12 +22,10 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import writer_identity
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.evals.observation_batches import preparation_path
 from idhazh.ledger import filenames, paths
 
 pytestmark = [pytest.mark.contract, pytest.mark.slow]
@@ -48,13 +46,6 @@ A_SHARD: Final = 7
 WRITTEN_INTO: Final[tuple[LedgerName, ...]] = tuple(
     sorted(DAY_TREES, key=lambda member: member.value)
 )
-
-
-def test_evaluation_job_manifests_live_outside_state(tmp_path: Path) -> None:
-    state = tmp_path / ledger.STATE_DIRNAME
-    manifest = preparation_path(state, writer_identity(A_RUN))
-    assert manifest.is_relative_to(tmp_path / "backend" / "var")
-    assert not manifest.is_relative_to(state)
 
 
 def _fresh_interpreter(body: str) -> subprocess.CompletedProcess[str]:

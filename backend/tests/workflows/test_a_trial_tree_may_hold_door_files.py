@@ -35,7 +35,6 @@ from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.evals.observation_batches import input_root, preparation_path
 from idhazh.telemetry import traces
 from utilities import pipeline_test_ledgers
 
@@ -159,17 +158,6 @@ def test_the_check_passes_the_raw_files_a_test_case_run_files(
     assert pipeline_test_ledgers.refusals(gathered, roots=roots) == []
 
 
-def test_trial_inputs_are_ignored_runtime_files_and_do_not_share_job_manifests(tmp_path: Path) -> None:
-    tree, root, _ = _a_trial_tree(tmp_path)
-    identity = writer_identity(RUN_ID)
-    production = tmp_path / "backend" / "var" / "evaluation-inputs"
-
-    assert input_root(tree) == production
-    assert input_root(root) == production / "trials" / root.name
-    assert preparation_path(root, identity) != preparation_path(tree, identity)
-    assert not input_root(root).is_relative_to(tree)
-
-
 def test_a_trace_still_passes_beside_the_door_files(tmp_path: Path) -> None:
     """A trace remains allowed beside raw ledger files."""
     tree, root, roots = _a_trial_tree(tmp_path)
@@ -237,16 +225,6 @@ def _under_another_door_ledger(root: Path, filed: Path) -> Path:
     )
 
 
-def _under_a_day_tree_ledger(root: Path, filed: Path) -> Path:
-    """A copy under `raw/summary-quality-evals-index/`, a ledger that files day trees."""
-    return _copied(
-        filed,
-        ledger.raw_path(
-            root, LedgerName.SUMMARY_QUALITY_EVALS_INDEX, DAY, uuid.UUID(filed.stem)
-        ),
-    )
-
-
 def _under_a_day_file_ledger(root: Path, filed: Path) -> Path:
     """A copy under `raw/shard-outcomes/`, a ledger that files one CSV file a day."""
     return _copied(
@@ -310,7 +288,6 @@ def _a_row_its_contract_refuses(root: Path, filed: Path) -> Path:
         pytest.param(_renamed, id="renamed-away-from-its-file-id"),
         pytest.param(_in_the_next_day, id="moved-into-another-day"),
         pytest.param(_under_another_door_ledger, id="moved-under-another-ledger"),
-        pytest.param(_under_a_day_tree_ledger, id="a-day-tree-ledger"),
         pytest.param(_under_a_day_file_ledger, id="a-day-file-ledger"),
         pytest.param(_on_a_day_no_calendar_has, id="a-day-no-calendar-has"),
         pytest.param(_under_a_two_digit_year, id="a-folder-that-is-not-a-year"),

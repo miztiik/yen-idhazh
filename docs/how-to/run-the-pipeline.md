@@ -54,6 +54,7 @@ starts its own server and probes it on loopback.
 | Flag | For |
 | --- | --- |
 | `--date YYYY-MM-DD` | Re-run a specific day. Defaults to today, UTC. |
+| `--execution N` | Name the run. The plan stage files its plan under this run, and a later stage reads this run's plan. Left out, a later stage reads the newest plan of the day. |
 | `--shard N --shards M` | Take one worker's share. Round-robin, so lengths spread evenly. |
 | `--no-faithfulness` | Skip the scorer. The digest still publishes; **the eval ledger stays empty.** |
 | `--config PATH` | Point at a different `config/` directory. |
@@ -62,7 +63,7 @@ starts its own server and probes it on loopback.
 
 | Path | What | Committed |
 | --- | --- | --- |
-| `backend/var/run/<date>/plan.json` | The day's work list | no - gitignored |
+| `state/raw/run-plan/<YYYY>/<MM>/<DD>/` | The day's work list, one row per run that planned it, packed later under `state/compact/run-plan/` | **yes** |
 | `backend/var/run/<date>/items/*.json` | Per-item article, summary and eval | no - gitignored |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
 | `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/` | One row per scored item, packed later under `state/compact/summary-quality-evals/` | **yes** |
@@ -262,8 +263,11 @@ strikes and no inherited retirement
 ## In CI
 
 `.github/workflows/digest.yml`, displayed as `Content refresh`, starts at 02:20,
-06:20, 10:20, 14:20, and 18:20 UTC. A plan job loads no weights. A matrix of
-worker jobs each restores the weights once and works a shard. A scheduled run
+06:20, 10:20, 14:20, and 18:20 UTC. A plan job loads no weights. It files the
+day's plan in the run-plan ledger and hands that day's folder of plans to the
+later jobs, and every step after it names its run with `--execution`
+([../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md)).
+A matrix of worker jobs each restores the weights once and works a shard. A scheduled run
 derives its own worker count from the day it just planned - at most four, and
 fewer on a small day. Manual runs accept one to eight and default to four; the
 plan rejects any other dispatched value before it creates the matrix. The `visuals` job uses

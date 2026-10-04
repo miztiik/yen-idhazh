@@ -9,12 +9,19 @@ shard lands all of them in one commit:
 2. raw days past the monthly window are dropped;
 3. every year that is done is packed into its year file, where the declaration
    sets `monthly_keep_days`;
-4. every month that is done is absorbed into its month file;
+4. every month chosen for this wake is closed into its month file;
 5. every raw day that is due is taken into its daily file.
+
+**Each step chooses its own periods.** The months step 4 closes are chosen
+before any step runs, from the ledger's own marks and the wake's day
+(`_compaction_periods`), and logged once as `PeriodsChosen`; an operator range,
+or the months a migration names, limits that choice, and the window the
+planner named for the other steps does not. Steps 1, 2, 3 and 5 still read the
+window the planner named.
 
 **The monthly window has a switch of its own.** Steps 3 to 5 delete only files
 whose rows they have just written into a coarser file; the window's drops in
-steps 1 and 2 delete rows. So while `monthly_window_dry_run` is true, steps 1 and
+steps 1 and 2 delete rows. So while `month_deletes_dry_run` is true, steps 1 and
 2 name the month files and raw days the window would drop and keep them, and
 the packing steps take those periods like any other, as if the window kept
 every month. `dry_run` still decides whether anything at all lands.
@@ -58,7 +65,11 @@ KIND = TaskKind.COMPACTION
 
 
 def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
-    """Drop, or only name, what the window no longer keeps; pack years and months; take days."""
+    """Drop, or only name, what the window no longer keeps; pack years and months; take days.
+
+    `months` are the months a migration names. Every step reads only those,
+    and the month step closes nothing outside the first to the last of them.
+    """
     import logging
     from datetime import UTC, datetime, time
     from pathlib import Path
@@ -68,7 +79,12 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     from idhazh.contracts.file_envelope import WriterIdentity
     from idhazh.contracts.knobs.gardener import CompactionPolicy
     from idhazh.gardener import schedule
-    from idhazh.gardener.tasks import _daily_period, _monthly_period, _yearly_period
+    from idhazh.gardener.tasks import (
+        _compaction_periods,
+        _daily_period,
+        _monthly_period,
+        _yearly_period,
+    )
     from idhazh.gardener.tasks._compact_tree import CompactTree
 
     policy = context.policy
@@ -84,19 +100,24 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
         producer=__name__.partition(".")[2],
         git_sha=context.git_sha,
     )
-    if context.period_range is not None:
+    operator_range = (min(months), max(months)) if months else context.operator_range
+    if months is None and context.period_range is not None:
         months = frozenset(month_partition.months_between(*context.period_range))
     tree = CompactTree.read(context.state_dir, policy.ledger, context.listing, months=months)
+    chosen = _compaction_periods.choose(tree, policy, now=now, operator_range=operator_range)
+    logging.getLogger(__name__).info(
+        "periods chosen %s", chosen.model_dump_json(exclude_none=True)
+    )
     first_kept = _monthly_period.first_kept_month(
         now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
     )
     # A window that only reports keeps what it would drop, so packing reads it as forever.
-    reports = policy.monthly_window_dry_run
+    reports = policy.month_deletes_dry_run
     stops = (
         *(_monthly_period.spare if reports else _monthly_period.drop)(tree, first_kept=first_kept),
         *(_daily_period.spare if reports else _daily_period.drop)(tree, first_kept=first_kept),
         *_yearly_period.absorb(tree, policy, now=now, stamp=stamp, identity=identity),
-        *_monthly_period.absorb(tree, policy, now=now, stamp=stamp, identity=identity),
+        *_monthly_period.absorb(tree, chosen.months, stamp=stamp, identity=identity),
         *_daily_period.compact(
             tree,
             policy,

@@ -299,8 +299,8 @@ def test_a_window_that_only_reports_packs_a_year_as_a_live_one_does(tmp_path: Pa
     """A window kept for ever drops nothing, so its switch changes nothing a pass packs."""
     trees = [a_finished_year(tmp_path / "live"), a_finished_year(tmp_path / "reports")]
 
-    live = compact(trees[0], TODAY, **PACKS, monthly_window_dry_run=False)
-    reports = compact(trees[1], TODAY, **PACKS, monthly_window_dry_run=True)
+    live = compact(trees[0], TODAY, **PACKS, month_deletes_dry_run=False)
+    reports = compact(trees[1], TODAY, **PACKS, month_deletes_dry_run=True)
 
     assert (reports.taken, reports.written) == (live.taken, live.written)
     assert reports.selected == live.selected == len(live.taken)

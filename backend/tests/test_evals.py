@@ -25,7 +25,7 @@ from conftest import (
 )
 from pydantic import ValidationError
 
-from idhazh import cli, ledger
+from idhazh import ledger
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
@@ -789,31 +789,6 @@ def test_a_scorer_that_never_loaded_cannot_name_its_weights() -> None:
         weights_digest(HhemScorer())
 
 
-# --- The observation digest --------------------------------------------------
-
-
-def test_an_observation_digest_cannot_be_forged_by_moving_a_separator() -> None:
-    """The scorer version carries semicolons and slashes, so a join is not a key.
-
-    Two different observations whose values differ only in where a separator
-    falls must digest differently. A `"|".join` would give them one digest and
-    silently drop the second measurement for ever.
-    """
-
-    def observed(url_key: str, output_digest: str) -> dict[str, str]:
-        return {
-            "url_key": url_key,
-            "output_digest": output_digest,
-            "scorer_version": "hhem-2.2-open@cccccccc;metrics-4",
-        }
-
-    left = writer.observation_digest(observed("a;b", "c"))
-    right = writer.observation_digest(observed("a", "b;c"))
-
-    assert left != right
-    assert writer.observation_digest(observed("a;b", "c")) == left, "the digest is not stable"
-
-
 # --- Filing measurements -------------------------------------------------------
 
 
@@ -827,12 +802,12 @@ def test_every_filed_day_and_scorer_is_read_back(tmp_path: Path) -> None:
     retaken = january[0].model_copy(update={"scorer_version": "hhem-2.2-open@cccccccc;metrics-4"})
     rows = [*january, retaken, *february]
     state = tmp_path / "state"
-    expected = {writer.observation_digest(row.model_dump(mode="json")) for row in rows}
+    expected = {writer.observation(row.model_dump(mode="json")) for row in rows}
 
     assert len(expected) == len(rows), "the fixture repeated an observation"
     assert put(state, rows) == len(rows)
 
-    produced = {writer.observation_digest(record) for record in writer.records(state)}
+    produced = {writer.observation(record) for record in writer.records(state)}
     assert produced == expected
     assert ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS) == [
         "2026-01-09",
@@ -882,14 +857,14 @@ def _measurement(number: int) -> EvalRow:
     )
 
 
-def _read_digests(state: Path) -> list[str]:
+def _read_measurements(state: Path) -> list[tuple[str, ...]]:
     """Every measurement the ledger's reader hands back, one entry per row read."""
-    return sorted(writer.observation_digest(record) for record in writer.records(state))
+    return sorted(writer.observation(record) for record in writer.records(state))
 
 
-def _digests(rows: Sequence[EvalRow]) -> list[str]:
+def _measurements_of(rows: Sequence[EvalRow]) -> list[tuple[str, ...]]:
     """The measurements these rows are, one entry per distinct measurement."""
-    return sorted({writer.observation_digest(row.model_dump(mode="json")) for row in rows})
+    return sorted({writer.observation(row.model_dump(mode="json")) for row in rows})
 
 
 @pytest.mark.parametrize(
@@ -917,7 +892,7 @@ def test_one_measurement_filed_twice_on_one_day_is_read_once(
     assert seed_scores(state, again, run_id=run_id, job=job, attempt=attempt) == len(again)
 
     assert len(ledger.list_raw_files(state, LedgerName.SUMMARY_QUALITY_EVALS)) == 2
-    assert _read_digests(state) == _digests(again), "one measurement was read twice"
+    assert _read_measurements(state) == _measurements_of(again), "one measurement was read twice"
 
 
 def test_a_repeat_on_another_day_is_kept_under_each_day_and_once_in_the_whole_ledger(
@@ -971,33 +946,7 @@ def test_filing_opens_no_file_already_on_disk(
     )
 
     assert not set(opened) & before, f"the writer read {sorted(set(opened) & before)} first"
-    assert _read_digests(state) == _digests([*first, _measurement(9)])
-
-
-@pytest.mark.parametrize("options", [[], ["--month", "2026-02"], ["--every-shard"]])
-def test_the_retired_rebuild_command_is_refused(
-    options: list[str], capsys: pytest.CaptureFixture[str]
-) -> None:
-    """A global identity lookup cannot report extra identities for one day."""
-    with pytest.raises(SystemExit) as retired:
-        cli.main(["rebuild-summary-quality-evals-index", *options])
-
-    assert retired.value.code == 2
-    assert "invalid choice" in capsys.readouterr().err
-    assert "rebuild-summary-quality-evals-index" not in cli.STAGES
-
-
-def test_the_retired_rebuild_options_are_not_advertised(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with pytest.raises(SystemExit) as help_requested:
-        cli.main(["--help"])
-
-    assert help_requested.value.code == 0
-    help_text = capsys.readouterr().out
-    assert "rebuild-summary-quality-evals-index" not in help_text
-    assert "--month" not in help_text
-    assert "--every-shard" not in help_text
+    assert _read_measurements(state) == _measurements_of([*first, _measurement(9)])
 
 
 def _scored_row(number: int) -> EvalRow:

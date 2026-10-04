@@ -174,6 +174,33 @@ test('a file an index names and the tree lacks is reported, and the rest still s
 	expect(copy.files).not.toContain('compact/host-fingerprint/daily/2026/09/02.parquet');
 });
 
+test('an empty or a lost day stays in its index and names no file, so none is copied or missing', () => {
+	const tree = aWholeLedger('host-fingerprint');
+	const entries = [
+		{ bytes: 4, covers: '2026-09-01', rows: 1 },
+		{ bytes: 0, covers: '2026-09-02', rows: 0, state: 'empty' },
+		{ bytes: 0, covers: '2026-09-03', rows: 0, state: 'lost' }
+	];
+	tree['compact/host-fingerprint/index/daily.json'] = `${JSON.stringify(
+		{ entries, ledger: 'host-fingerprint', period: 'daily', version: '2026-10-04' },
+		null,
+		2
+	)}\n`;
+	delete tree['compact/host-fingerprint/daily/2026/09/02.parquet'];
+	delete tree['compact/host-fingerprint/daily/2026/09/03.parquet'];
+	const copy = ledgerCopy(aStateTree(tree), ['host-fingerprint']);
+	expect(copy.refused).toEqual([]);
+	expect(copy.missing).toEqual([]);
+	expect(copy.files.filter((file) => file.startsWith('compact/host-fingerprint/daily/'))).toEqual([
+		'compact/host-fingerprint/daily/2026/09/01.parquet'
+	]);
+	expect(coversIn(copy.indexes['compact/host-fingerprint/index/daily.json'])).toEqual([
+		'2026-09-01',
+		'2026-09-02',
+		'2026-09-03'
+	]);
+});
+
 test('an index that is not this ledger\'s, or names a path rather than a day, stops the build', () => {
 	const tree = aWholeLedger('summary-quality-evals');
 	tree['compact/summary-quality-evals/index/daily.json'] = anIndex('item-health', 'daily', ['2026-09-01']);

@@ -336,7 +336,7 @@ would go at the first wake on or after 2027-12-16 once a person turns that
 window live. The item-health rows go when the 15-month
 `monthly_window` of their compaction passes, and that compaction packs live; no
 eval row is ever deleted. A compaction's window has a switch of its own,
-`monthly_window_dry_run`, so a ledger can pack live while its window only
+`month_deletes_dry_run`, so a ledger can pack live while its window only
 reports what it would delete; the item-health and host-fingerprint windows are
 live with their packing
 ([idhazh-gardener.md](idhazh-gardener.md#the-keys-of-a-compaction)).

@@ -40,7 +40,7 @@ export interface ConsoleRoute {
 	/** The strip's word for the route. `Pipelines` is the owner's own, taken
 	 * verbatim on 2026-08-30; `Summaries` and `Hardware` replaced `Model` and
 	 * `Machine` on 2026-08-31. The id and the href did not move with them.
-	 * `Judgement` and `Voices` joined on 2026-09-12, and `Records` on 2026-10-02. */
+	 * `Judgement` and `Voices` joined on 2026-09-12, and `Data explorer` on 2026-10-02. */
 	label: string;
 	/** Route-relative and trailing-slashed. A component prefixes `base`. */
 	href: string;
@@ -159,7 +159,7 @@ const ROUTE_WORDS: Record<RouteId, { label: string; href: string; description: s
 		description: 'Who supplied the day, and how far each feed is discounted.'
 	},
 	'data-explorer': {
-		label: 'Records',
+		label: 'Data explorer',
 		href: '/console/data-explorer/',
 		description: 'What the ledgers hold, and whatever you ask of them.'
 	}

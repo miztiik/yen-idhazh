@@ -214,6 +214,18 @@ test('specific backend modules select existing module and integration tests', ()
 	assert.ok(selectPaths(['backend/idhazh/extract.py']).backendFiles.includes('backend/tests/test_evals.py'));
 });
 
+test('a utility nothing else runs selects only its own test module', () => {
+	const path = 'backend/utilities/doc_load.py';
+	const selection = selectPaths([path]);
+	assert.deepEqual(selection.groups, ['backend']);
+	assert.deepEqual(selection.backendFiles, ['backend/tests/test_doc_load.py']);
+	assert.deepEqual(ciAnswer([path], true), {
+		browser: false, code: true, modelAbsent: false, console: false, panels: false, robots: false, validateAll: false
+	});
+	// A closed list, not a directory rule: the canary build runs this one.
+	assert.equal(selectPaths(['backend/utilities/build_canary_day.py']).backendFiles, null);
+});
+
 test('a test module inside a package is selected like a flat one', () => {
 	// The five biggest test modules became packages. A selector that only knew
 	// the flat shape would answer "documentation only" for a change to one of

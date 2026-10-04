@@ -1,6 +1,6 @@
 # Troubleshoot One URL Locally
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-10-04
 
 Use the real network, extraction boundary and local model to inspect one article
 without publishing a digest.
@@ -19,10 +19,13 @@ The CLI does **not** have:
 
 What exists:
 
-- `work` consumes `backend/var/run/<date>/plan.json`;
+- `work` reads its plan from the run-plan ledger,
+ `state/raw/run-plan/<YYYY>/<MM>/<DD>/`, and takes the plan of the run
+ `--execution` names;
 - `--shard N --shards M` can select exactly one item already in that plan;
 - a manually created `RunPlan` can carry one arbitrary URL **when** its live
- `source_id` and feed headline are known; and
+ `source_id` and feed headline are known, filed under a scratch trial folder
+ so it never lands beside a production day's plans; and
 - `work` then runs the normal fetch -> extract -> sanitize -> summarize ->
  optional score chain.
 
@@ -37,21 +40,25 @@ sanitizer and model-output schema all remain active.
 
 ## What this procedure writes
 
-It writes only gitignored diagnostics under:
+It writes these gitignored diagnostics:
 
 ```text
-backend/var/run/<date>/plan.json
 backend/var/run/<date>/items/<item-id>.article.json
 backend/var/run/<date>/items/<item-id>.summary.json
 backend/var/run/<date>/items/<item-id>.eval.json
 ```
 
 The eval file exists only when faithfulness scoring is enabled and succeeds.
+Path B also writes a scratch copy of `config/` under
+`backend/var/scratch-url-config/` and files its one-item plan, and anything else
+`work` records, under the scratch trial folder `state/scratch-url/`. The clean-up
+below deletes both.
 
 Do **not** run `assemble` for a scratch plan. Assemble writes the published
 digest and committed ledgers. This runbook stops after `work`.
 
-Path A assumes a plan already exists. Do not run `plan` merely to create a
+Path A reads a plan the pipeline already filed: the committed run-plan ledger
+holds every planned day, one plan per run. Do not run `plan` merely to create a
 scratch input unless its normal side effects are wanted: it reads every feed and
 updates the seen and feed-health ledgers under `state/`.
 
@@ -97,35 +104,39 @@ $env:DATE = "2026-08-24"
 $env:TARGET_URL = "https://publisher.example/article"
 ```
 
-Locate the item's zero-based index. With `shards` equal to the number of items,
-that index selects exactly one item:
+Locate the run whose plan holds the URL, and the item's zero-based index. With
+`shards` equal to the number of items, that index selects exactly one item:
 
 ```powershell
 @'
 import sys
 from pathlib import Path
 
+from idhazh import ledger
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.discover import canonicalise
 
 date, raw_url = sys.argv[1:3]
-path = Path("backend/var/run") / date / "plan.json"
-plan = RunPlan.from_json(path.read_text(encoding="utf-8"))
 target = canonicalise(raw_url)
-matches = [
- (index, item)
- for index, item in enumerate(plan.items)
- if item.canonical_url == target or item.source_url == raw_url
-]
-if len(matches) != 1:
- raise SystemExit(f"expected one planned URL, found {len(matches)}")
-index, item = matches[0]
-print(f"item_id={item.item_id}")
-print(
- f".venv\\Scripts\\python.exe -m idhazh work --date {date} "
- f"--shard {index} --shards {len(plan.items)} --no-faithfulness"
-)
-'@ |.venv\Scripts\python.exe - $env:DATE $env:TARGET_URL
+for plan in ledger.load_days(Path("state"), LedgerName.RUN_PLAN, [date], model=RunPlan):
+    matches = [
+        index
+        for index, item in enumerate(plan.items)
+        if item.canonical_url == target or item.source_url == raw_url
+    ]
+    if len(matches) == 1:
+        index = matches[0]
+        execution = plan.run_id.rsplit("-", 1)[1]
+        print(f"run_id={plan.run_id} item_id={plan.items[index].item_id}")
+        print(
+            f".venv\\Scripts\\python.exe -m idhazh work --date {date} --execution {execution} "
+            f"--shard {index} --shards {len(plan.items)} --no-faithfulness"
+        )
+        break
+else:
+    raise SystemExit("no plan filed for that day holds the URL exactly once")
+'@ | .venv\Scripts\python.exe - $env:DATE $env:TARGET_URL
 ```
 
 Run the command it prints. Remove `--no-faithfulness` when troubleshooting the
@@ -146,7 +157,7 @@ You must supply:
 List live source ids when needed:
 
 ```powershell
-.venv\Scripts\python.exe -c "from idhazh import config; [print(feed.id) for feed in config.load.sources.feeds]"
+.venv\Scripts\python.exe -c "from idhazh import config; [print(feed.id) for feed in config.load().sources.feeds]"
 ```
 
 Set the inputs:
@@ -158,86 +169,97 @@ $env:TARGET_TITLE = "Headline supplied by the feed"
 $env:SOURCE_ID = "configured-feed-id"
 ```
 
-The scratch date must not already have a local plan. The script refuses to
-overwrite one.
+The scratch date must not already have a scratch plan. The script refuses to
+file a second one.
 
-Create the one-item plan:
+Create the one-item plan, and the scratch config that points `work` at it:
 
 ```powershell
 @'
+import json
 import os
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
-from idhazh import atomic_write, config
+from idhazh import config, ledger
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.discover import canonicalise, clean_title
 from idhazh.rank import item_id
+from idhazh.stages.plan import plan_writer
+
+SCRATCH_CONFIG = Path("backend/var/scratch-url-config")
+SCRATCH_STATE = Path("state") / "scratch-url"
 
 settings = config.load(Path("config"))
 feed = next(
- (
- candidate
- for candidate in settings.sources.feeds
- if candidate.id == os.environ["SOURCE_ID"]
- ),
- None,
+    (candidate for candidate in settings.sources.feeds if candidate.id == os.environ["SOURCE_ID"]),
+    None,
 )
 if feed is None:
- raise SystemExit("SOURCE_ID must name a live feed in config/sources.json")
+    raise SystemExit("SOURCE_ID must name a live feed in config/sources.json")
 
 title = clean_title(os.environ["TARGET_TITLE"])
 if title is None:
- raise SystemExit("TARGET_TITLE must contain a usable feed headline")
+    raise SystemExit("TARGET_TITLE must contain a usable feed headline")
 
 source_url = os.environ["TARGET_URL"]
 canonical_url = canonicalise(source_url)
 url_key = derive_url_key(canonical_url)
 date = os.environ["DATE"]
-generated_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+run_id = f"{date}-0"
+if ledger.load_days(SCRATCH_STATE, LedgerName.RUN_PLAN, [date], model=RunPlan):
+    raise SystemExit(f"a scratch plan is already filed for {date} under {SCRATCH_STATE.as_posix()}")
 
 item = PlannedItem(
- item_id=item_id(feed.vertical, url_key),
- url_key=url_key,
- source_url=source_url,
- canonical_url=canonical_url,
- source_id=feed.id,
- tier=feed.tier,
- source_form=feed.form,
- vertical=feed.vertical,
- title=title,
- rank_score=0.0,
+    item_id=item_id(feed.vertical, url_key),
+    url_key=url_key,
+    source_url=source_url,
+    canonical_url=canonical_url,
+    source_id=feed.id,
+    tier=feed.tier,
+    source_form=feed.form,
+    vertical=feed.vertical,
+    title=title,
+    rank_score=0.0,
 )
 plan = RunPlan(
- version=RunPlan.schema_version,
- date=date,
- run_id=f"{date}-0",
- generated_at=generated_at,
- verticals=[
- VerticalPlan(
- id=feed.vertical,
- considered=1,
- planned=1,
- eligible_feeds=1,
- )
- ],
- items=[item],
+    version=RunPlan.schema_version(),
+    date=date,
+    run_id=run_id,
+    generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    verticals=[VerticalPlan(id=feed.vertical, considered=1, planned=1, eligible_feeds=1)],
+    items=[item],
 )
 
-path = Path("backend/var/run") / date / "plan.json"
-if path.exists:
- raise SystemExit(f"scratch plan already exists: {path.as_posix}")
-atomic_write.write_atomic(path, plan.to_json)
-print(f"wrote {path.as_posix} item_id={item.item_id}")
-'@ |.venv\Scripts\python.exe -
+# A copy of config/ whose one difference moves every ledger of this run onto the
+# scratch trial folder, so nothing lands beside a production day.
+shutil.copytree(Path("config"), SCRATCH_CONFIG, dirs_exist_ok=True)
+app_file = SCRATCH_CONFIG / "idhazh.json"
+app = json.loads(app_file.read_text(encoding="utf-8"))
+app["run"]["trial_state_dirname"] = SCRATCH_STATE.name
+app_file.write_text(json.dumps(app, indent=2) + "\n", encoding="utf-8")
+
+ledger.persist(
+    SCRATCH_STATE,
+    [plan],
+    ledger=LedgerName.RUN_PLAN,
+    covers=date,
+    identity=plan_writer(run_id, "0" * 40),
+)
+print(f"filed run {run_id} under {SCRATCH_STATE.as_posix()} item_id={item.item_id}")
+'@ | .venv\Scripts\python.exe -
 ```
 
-Run the one-item chain:
+Run the one-item chain against the scratch config, naming the scratch run:
 
 ```powershell
 .venv\Scripts\python.exe -m idhazh work `
+ --config backend\var\scratch-url-config `
  --date $env:DATE `
+ --execution 0 `
  --shard 0 `
  --shards 1 `
  --no-faithfulness
@@ -316,6 +338,12 @@ Stop the llama server, then delete only the scratch run:
 
 ```powershell
 Remove-Item -Recurse -Force "backend\var\run\$env:DATE"
+```
+
+Path B leaves its scratch config and scratch trial folder too. Delete both:
+
+```powershell
+Remove-Item -Recurse -Force "backend\var\scratch-url-config", "state\scratch-url"
 ```
 
 Confirm no diagnostic payload is tracked:

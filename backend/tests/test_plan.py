@@ -715,7 +715,12 @@ def test_the_cap_flag_reaches_the_plan_stage(
 
     assert cli.main(["plan", "--date", DATE, "--config", str(config_dir), "--cap", "1"]) == 0
 
-    written = RunPlan.from_json((tmp_path / "run" / DATE / "plan.json").read_text(encoding="utf-8"))
+    written = ledger.load_days(
+        tmp_path / "state",
+        LedgerName.RUN_PLAN,
+        [DATE],
+        model=RunPlan,
+    )[0]
     assert len(written.items) == 1
     assert len(plan([LAB, TRADE, COMMUNITY]).items) > 1, "the same day is bigger uncapped"
 

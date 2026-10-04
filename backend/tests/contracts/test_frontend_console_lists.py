@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Final
+from typing import Final, get_args
 
 import pytest
 from conftest import REPO_ROOT, read_text
@@ -32,6 +32,7 @@ from idhazh.contracts.eval_row import BandReason, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.knobs.console import ConsoleChrome
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.telemetry.publish.console_band import ROUTES
 
@@ -62,6 +63,13 @@ def quoted_strings(text: str, name: str) -> list[str]:
     return re.findall(r"'([^']*)'", found[1])
 
 
+def const_strings(text: str, name: str) -> list[str]:
+    """Every quoted string inside `export const <name> = [ ... ] as const;`."""
+    found = re.search(rf"export const {name}\b[^=]*= \[(.*?)\] as const;", text, re.DOTALL)
+    assert found, f"no exported constant array named {name}"
+    return re.findall(r"'([^']*)'", found[1])
+
+
 def test_the_strip_names_every_route_the_band_declares_in_the_order_it_writes_them() -> None:
     """The fallback strip and the published one must name one set of routes, in one order.
 
@@ -86,6 +94,12 @@ def test_the_strip_names_every_route_the_band_declares_in_the_order_it_writes_th
     assert re.findall(r"'([^']*)'", listed[1]) == written, (
         "ROUTE_IDS in band.ts is not RouteId's members in the order ROUTES writes them"
     )
+
+
+def test_the_frontend_console_chrome_vocabulary_matches_the_contract() -> None:
+    """The route chrome knob crosses from Python config to the Svelte layout."""
+    text = read_text(CONSOLE / "chrome.ts")
+    assert const_strings(text, "CONSOLE_CHROMES") == list(get_args(ConsoleChrome))
 
 
 def test_the_article_record_asks_for_every_column_the_contract_declares_in_its_order() -> None:

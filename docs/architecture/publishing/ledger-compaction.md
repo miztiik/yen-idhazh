@@ -40,15 +40,15 @@ flowchart TB
   RAWF[("state/raw/ledger/YYYY/MM/DD/file_id.parquet<br/>written once, many writers")]
 
   subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
-    DROP["1 and 2. drop the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while monthly_window_dry_run is true"]
+    DROP["1 and 2. drop the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while month_deletes_dry_run is true"]
     YDONE{"a year done?<br/>monthly_keep_days since it ended,<br/>its next January absorbed, every month named"}
     YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
     YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
     PACK["3. plan year files, one row group a month:<br/>indexes and deletes wait for the end of the pass"]
-    MDONE{"a month done?<br/>daily_keep_days since it ended,<br/>every day compacted, no raw day left"}
-    MWAIT["the month waits for a later wake"]
-    MHOLE["a day of it is named nowhere:<br/>refused by name, exit 1"]
-    ABSORB["4. plan month files:<br/>indexes and deletes wait for the end of the pass"]
+    MDONE{"a month chosen for this wake?<br/>after the monthly mark, daily_keep_days<br/>since it ended, its last day packed"}
+    MWAIT["not yet, or a raw day still waits in it:<br/>the month waits for a later wake"]
+    MREC["each day from the ledger's first:<br/>a day no index names is adopted<br/>from its own file, or listed lost"]
+    ABSORB["4. plan month files, or an empty entry:<br/>indexes and deletes wait for the end of the pass"]
     DDUE{"compact_after_days whole days<br/>since the day ended?"}
     DHOLD["the day waits: a run may still be writing"]
     TAKE["5. plan day files:<br/>write all data, each final index once,<br/>delete sources, each watermark once last"]
@@ -72,10 +72,9 @@ flowchart TB
   YHOLE --> MDONE
   PACK --> MDONE
   MDONE -->|"not yet"| MWAIT
-  MDONE -->|"a day missing"| MHOLE
-  MDONE -->|"yes"| ABSORB
+  MDONE -->|"yes"| MREC
+  MREC --> ABSORB
   MWAIT --> DDUE
-  MHOLE --> DDUE
   ABSORB --> DDUE
   DDUE -->|"no"| DHOLD
   DDUE -->|"yes"| TAKE
@@ -103,8 +102,8 @@ flowchart TB
   class W,DROP,PACK,ABSORB,TAKE,READER stage;
   class YDONE,MDONE,DDUE,DRY decision;
   class LAND yes;
-  class YHOLE,MHOLE no;
-  class YWAIT,MWAIT,DHOLD,REPORT warn;
+  class YHOLE no;
+  class YWAIT,MWAIT,MREC,DHOLD,REPORT warn;
   class RAWF,DAILY,MONTHLY,YEARLY ledger;
   class REFRESH sysPublish;
   class GARDEN sysOps;
@@ -121,8 +120,16 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 | 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
 | 2 | Drops every raw day in a month the window no longer keeps. While the window only reports, names them and keeps them |
 | 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
-| 4 | Absorbs every month that is done into its month file |
+| 4 | Closes every month chosen for this wake into its month file, or into an entry with no file |
 | 5 | Takes every raw day that is due into its day file |
+
+**The month step chooses its own months; the other steps do not yet.** Before
+any step runs, the pass chooses the months step 4 may close from the ledger's
+own marks and the wake's UTC day, and logs the choice once as one
+`periods chosen` line, the JSON of `PeriodsChosen`
+(`backend/idhazh/contracts/gardener_events.py`). Steps 1, 2, 3 and 5 still read
+the fixed window the planner names for each task
+([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
 
 **Drops first and days last, because no pass may write a path it deletes.** A
 shard refuses a path it both wrote and deleted, so a pass that did either would
@@ -184,15 +191,47 @@ check a month makes for a missing day is exact.
 
 ## A month
 
-**A month is absorbed whole or not at all, and only when four things are
-true**: `daily_keep_days` whole days have passed since it ended; the daily
-watermark is past its last day; `index/daily.json` names every one of its days;
-and none of its raw days still holds files. The first two say the month is done,
-the third that nothing of it is missing, and the fourth that no re-run is still
-waiting in it. A month that fails the first, second or fourth waits for a later
-wake. **A month whose days the daily index does not all name is a hole**: it is
-refused by name, the watermark stays, and the task exits 1, because absorbing it
-would put the missing day in no file.
+**The month step chooses which months may close.** It starts at the month
+after the monthly mark; with no mark, at the oldest month an index names; with
+nothing indexed, it takes nothing. It takes consecutive months, each at least
+`daily_keep_days` whole days past its end and each one whose last day the daily
+mark has reached, at most `max_periods_per_run` of them, and the month after
+the last one is where the next wake starts. It reads nothing the planner named
+for the other steps, so it is never offered a month from before its ledger
+began. An operator range (`--from` and `--to` on one named task, or the months a
+migration names) limits the choice, and never makes the step skip a month: a
+range that starts after a month ready to close is refused at that month, so the
+person widens the range. The step names what it reads of its months - each
+month's daily folder, raw folder and month file - and the shard lists them from
+its commit then ([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
+
+**A month is closed whole or not at all, and a missing day no longer stops
+it.** A month that a raw day still waits in is held: the day step packs that day
+on the same wake, and the month closes at the next. A month accounts for every
+day from its 1st, or from the ledger's first day when the ledger began inside
+it, so a day before a ledger began is never called missing. A day with a
+`packed` entry gives its file's rows; an `empty` day gives none; a `lost` day
+is listed in the month's `lost_days`. A day no index names is a hole, and the
+pass recovers it instead of stopping:
+
+| # | The hole | What the pass does | Logged as |
+| --- | --- | --- | --- |
+| 1 | Its own packed file is at its named path | Adopts the file: its bytes from the listing, its rows and envelope from its footer. A file whose envelope names another period is refused by name | `note=index-rebuilt` |
+| 2 | Its raw files are still there | Holds the month; the day step packs the day from them, and from its own file when row 1 adopted one first | - |
+| 3 | Neither | Lists the day in the month's `lost_days` | `note=recorded-lost` |
+
+A month whose days give no row is an `empty` entry with no file. Only a day is
+ever `lost`; a month or a year lists its lost days. Each recovery is one log
+line naming its note and its period, and the note words are declared in
+`backend/idhazh/contracts/gardener_fault.py`.
+
+**A month's own file is never written over.** A month file at its path that no
+monthly entry names is the month's record when its days give no row, and the
+month takes its rows and no lost day. It is kept when it holds exactly the rows
+its days hold, which is what a pass that stopped before its indexes leaves. When
+the two differ, the month is refused by name and waits for a person. A day whose
+entry says `packed` while its file is not there is refused as `file-missing`,
+and the month waits.
 
 Month files follow the pass-wide write order described above. A pass that stops
 before the monthly index lands keeps all daily sources. Once that index names
@@ -294,12 +333,13 @@ and the gardener's logs and the backend's own ledger reader print it as
 | --- | --- | --- | --- |
 | 1 | `not-packed` | `index/daily.json`: no day of the ledger is packed | A first pass writes all three indexes |
 | 2 | `index-missing` | `index/monthly.json` or `index/yearly.json`, while `index/daily.json` is there | Writes an empty one when no period of its kind was ever packed; stops the pass by name when that period's watermark says one was |
-| 3 | `file-missing` | A file an index names | Refuses the year it would pack, the month it would absorb, or the day it would take again, and keeps every file it would have read; a person restores the file from git history |
-| 4 | `day-missing` | A day between the first and the newest packed day that no index names | Refuses the month or the year that holds it |
+| 3 | `file-missing` | A file an index names | Refuses the year it would pack, the month it would absorb, or the day it would take again, and keeps every file it would have read; a person restores the file from git history. An `empty` or `lost` entry names no file, so nothing is missing |
+| 4 | `day-missing` | A day between the first and the newest packed day that no index names | A month adopts the day's own file or lists the day lost ([A month](#a-month)); a year that would pack a month no index names refuses it |
 
-**Three gaps are expected, and none of them is a fault**: a day newer than the
-newest packed day, an entry with `rows: 0`, and an index with no entries. None
-of them makes a reader ask for a file that is not there.
+**Four gaps are expected, and none of them is a fault**: a day newer than the
+newest packed day, an entry with `rows: 0`, an entry `empty` or `lost`, and an
+index with no entries. None of them makes a reader ask for a file that is not
+there.
 
 ## What a dry run does, and what the record says
 
@@ -308,7 +348,7 @@ settles the rows, builds every file in memory, and reports every path a live
 pass would write and delete. So the list a person reads before turning a
 compaction live is the list the live pass carries out.
 
-**The monthly window has a switch of its own, `monthly_window_dry_run`.** With
+**The monthly window has a switch of its own, `month_deletes_dry_run`.** With
 it `true`, steps 1 and 2 name every month file past the window and every raw
 file of a day in a month past it, and keep them; steps 3 to 5 then pack those
 days and months like any other, as if the window kept every month, so a first
@@ -381,7 +421,7 @@ declarations set 31, and the four that only report set 45.
 **A compaction's monthly window has a switch of its own.** Packing deletes only
 files whose rows it has just written into a coarser file; the monthly window
 deletes rows. With one `dry_run` for both, a ledger could not pack live while its
-window only reported, so `monthly_window_dry_run` reports the window's drops
+window only reported, so `month_deletes_dry_run` reports the window's drops
 while the rest of the pass runs live. A window of forever where the window
 should only report would have taken the retention number out of the file a
 person reads. A second task for the window's drops would have had two tasks
@@ -410,13 +450,36 @@ ledger that packs no year still carries an empty `yearly.json`. **No
 field in `daily.json` names the other indexes**: it would change a stored shape
 to say what an empty file already says.
 
-**2026-09-28: a first pass starts on the first of a month.** Starting at the
-oldest raw day would leave the daily index holding part of a month, and that
-month's check would call the days before it holes. The start asks the same
-function the window drops months by, `first_kept_month`, so a first pass never
-takes a day the same pass would drop; while the window only reports, nothing is
-dropped, and the first pass starts without regard to the window (Carmack and
-Fowler).
+**2026-09-28: a first pass starts on the first of a month.** The start asks the
+same function the window drops months by, `first_kept_month`, so a first pass
+never takes a day the same pass would drop; while the window only reports,
+nothing is dropped, and the first pass starts without regard to the window
+(Carmack and Fowler).
+
+**2026-10-04: the month step chooses its own months, and recovers a missing day
+instead of stopping.** Every compaction step used to read one window, built for
+the step that drops old months, so the month step offered months from before
+each ledger began: on 2026-10-04 seven of eleven compactions ended `failed`
+with `day-missing`. Now the month step chooses from its ledger's own marks,
+counts a month's days from the ledger's first day, and recovers a hole: its own
+file is adopted, its raw files hold the month for the day step, or it is listed
+lost. The person's ruling, 2026-10-04 (recovery theme), on Fowler's design.
+
+| # | Option | Why rejected | What it would cost to take |
+| --- | --- | --- | --- |
+| 1 | Fill a ledger's first month from the 1st with zero-row days | Files that say nothing, which the owner ruled waste | Up to 30 files a ledger, once |
+| 2 | Keep failing with `day-missing` and ask a person to restore the day | A red run and manual work for a gap the gardener can record | Nothing to build; a red run per hole |
+| 3 | The planner reads the marks and names every path a step will read | The step rules in two places, and one ledger's fault fails the whole shard | A second pass over the marks |
+
+**2026-10-04: a range never makes the month step skip a month, and a month's
+own file is never written over.** An operator range that starts after a month
+ready to close is refused at that month rather than taking nothing quietly,
+because a month closes only in order. A month file no entry names is adopted,
+kept, or refused, never rebuilt over: rebuilding it from its days would lose any
+row the days no longer hold. Fowler's ruling, 2026-10-04; the case where the
+file holds exactly its days' rows was found during execution, because a pass
+that stopped before its indexes leaves exactly that, and the next pass must
+finish it.
 
 **A finished year's month files may be packed into one year file.** A ledger
 may pack each finished year into one file, kept for ever, rather than delete its

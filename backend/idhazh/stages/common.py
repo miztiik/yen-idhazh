@@ -40,6 +40,7 @@ from idhazh.contracts.feed_health import (
 )
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.extract import ExtractConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.qualification import (
     CanaryObservation,
 )
@@ -107,6 +108,17 @@ CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
 #: stage opens a ledger, and the suite has always redirected it the same way so
 #: a test cannot write a committed file.
 STATE_ROOT: Path = config.REPO_ROOT / ledger.STATE_DIRNAME
+
+
+def state_root_of(settings: config.Settings, *, base: Path) -> Path:
+    """Where a run under these settings files its ledgers: `base`, or its trial folder.
+
+    A trial run - a bench, a qualification, a pipeline test - takes production's
+    code path and must not be readable as a production day, so its whole state
+    root moves under `run.trial_state_dirname`.
+    """
+    dirname = settings.app.run.trial_state_dirname
+    return base / dirname if dirname else base
 
 
 #: Where a shard leaves its recorded input manifest for the assemble stage.
@@ -747,9 +759,21 @@ def published_days(root: Path) -> list[Path]:
     ]
 
 
-def _plan_path(date: str) -> Path:
-    return _run_dir(date) / "plan.json"
+def _load_plan(date: str, run_id: str | None = None, *, state_dir: Path | None = None) -> RunPlan:
+    """One run's plan for one UTC day, read from the run-plan ledger.
 
-
-def _load_plan(date: str) -> RunPlan:
-    return RunPlan.read(_plan_path(date))
+    `run_id` names the run, and every job of a workflow run passes its own: two
+    runs of one day can overlap, so the newest plan of the day can be the other
+    run's. Left out, the newest plan of the day is read, which is right only
+    where one process plans and then works alone, as `idhazh run` does.
+    `state_dir` is for a program that is not `idhazh` itself and so never had
+    `STATE_ROOT` moved onto its trial folder.
+    """
+    state = state_dir if state_dir is not None else STATE_ROOT
+    plans = ledger.load_days(state, LedgerName.RUN_PLAN, [date], model=RunPlan)
+    if run_id is not None:
+        plans = [plan for plan in plans if plan.run_id == run_id]
+    if not plans:
+        whose = f"run {run_id}" if run_id is not None else "any run"
+        raise FileNotFoundError(f"no run plan is recorded for {whose} on UTC day {date}")
+    return max(plans, key=lambda plan: (plan.generated_at, plan.run_id))

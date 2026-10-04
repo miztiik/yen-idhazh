@@ -11,7 +11,7 @@
 | 1 | The first upkeep run after feed health moved is read | - | A | PENDING | - | - | - |
 | 2 | The CSV code no ledger uses any more is deleted | - | A | PENDING | - | - | - |
 | 3 | The person rules on what blocks each ledger left on CSV | - | A | PENDING | - | - | - |
-| 4 | The five ledgers with a union driver move to the door | 3 | B | PENDING | - | - | - |
+| 4 | The judge ledgers with a union driver move to the door | 3 | B | PENDING | - | - | - |
 | 5 | The item health summary moves to the door, or stays CSV by ruling | 3 | B | PENDING | - | - | - |
 
 ## 2. The rows
@@ -30,14 +30,14 @@ This row also deletes the four `span-rollup` CSV files under `state/span-rollup/
 
 What each ruling decides is in the map. In short:
 
-- **Field names the file envelope reserves.** Every door file records the `run_id` and `shard` of the job that wrote it. `scored-pairs`, `metrics` and `shard-outcomes` carry `run_id` and `shard` fields of their own, and `fitted-thresholds` and `merge-line-holdout-scores` carry `run_id`. For each, the person rules whether the field means what the envelope means. A field that means something else must be renamed, which changes a persisted contract (CLAUDE.md section 6, Level 5).
-- **The nested folder name.** The five sit one folder below their family, as in `content-similarity-judge/scored-pairs`, and the door files a ledger under its own name. The registry needs a rule for that name before any of them moves.
+- **Field names the file envelope reserves.** Ruled by the person on 2026-10-04: `shard` on a saved row means only the shard of the job that wrote it; `run_id` on a council or judge row is the council run, except `merge-line-holdout-scores`, whose `run_id` is the run of the person who files it; a per-part row names its part `work_part_index`. Plan 61's row "The council's run record has its own contract, and it reads every old row" (`TODO/20261004-61-council-run-records-plan.md`) writes the rule into `docs/architecture/contracts/ledger-registry.md`. `shard-outcomes` moves under Plan 61; `scored-pairs` and `metrics` rename `shard` when each moves.
+- **The nested folder name.** The four judge ledgers sit one folder below their family, as in `content-similarity-judge/scored-pairs`, and the door files a ledger under its own name. The registry needs a rule for that name before any of them moves. The council's ledger leaves the nest: Plan 61 files it as its own family, `council-run-records`.
 - **`item-health-summary`.** One writer rewrites a whole month file on each run, and the migrator reads only day files. Moving it needs a month layout in the migrator, or a ruling that it stays CSV.
 - **`content-similarity-judge/holdout-pairs.csv`** stays CSV while a person edits it by hand. It moves only if the person rules that a program writes it.
 
-### Row #4 - The five ledgers with a union driver move to the door
+### Row #4 - The judge ledgers with a union driver move to the door
 
-`content-similarity-judge/scored-pairs`, `fitted-thresholds`, `metrics` and `merge-line-holdout-scores`, and `llm-council/shard-outcomes`, each moved by the procedure in [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md). The parquet column mapper, `backend/idhazh/ledger/arrow_schema.py`, learns the fixed-choice (`Literal`) fields four of them carry. As each moves, its `merge=union` line and its `UNION_SAFE` entry go, and the prune verb's `_TARGET_LEDGERS` empties. `extend_ledger_file`, the frontend's `readDayShards` and `backend/idhazh/day_shards.py` go with their last user.
+`content-similarity-judge/scored-pairs`, `fitted-thresholds`, `metrics` and `merge-line-holdout-scores`, each moved by the procedure in [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md). `llm-council/shard-outcomes` moves under Plan 61. The parquet column mapper, `backend/idhazh/ledger/arrow_schema.py`, learns the fixed-choice (`Literal`) fields four of them carry. As each moves, its `merge=union` line and its `UNION_SAFE` entry go, and the prune verb's `_TARGET_LEDGERS` empties. `extend_ledger_file`, the frontend's `readDayShards` and `backend/idhazh/day_shards.py` go with their last user.
 
 ### Row #5 - The item health summary moves to the door, or stays CSV by ruling
 

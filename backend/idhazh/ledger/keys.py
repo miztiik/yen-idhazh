@@ -31,6 +31,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS as DROPPED_PAIR_CELLS,
@@ -156,6 +157,10 @@ COLLECTION_PRUNE_KEY: Final = ("date", "run_id", "task")
 COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
 
 
+# One plan is the settled planning answer for one execution of one UTC day.
+RUN_PLAN_KEY: Final = ("date", "run_id")
+
+
 #: What makes two eval rows the same measurement. The address says which article,
 #: the digest says which words came out, and the scorer version says which
 #: instrument read them. Change any one and the row is a new measurement worth
@@ -164,11 +169,6 @@ COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
 #: per measurement each day, and a read of the whole ledger keeps the first row
 #: across every day.
 OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
-
-
-#: What makes two index rows the same record. The digest is the whole row apart
-#: from the stamp, so two of them say one thing twice and the fold keeps one.
-OBSERVATION_INDEX_KEY: Final = ("observation_digest",)
 
 
 #: What makes two validation rows the same record. One candidate, judged once,
@@ -357,6 +357,7 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.FEED_HEALTH: _DoorShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),
+    LedgerName.RUN_PLAN: _DoorShape(RUN_PLAN_KEY, RunPlan),
 }
 
 

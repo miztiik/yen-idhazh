@@ -4,6 +4,7 @@ export const ssr = false;
 
 export function load() {
 	return {
+		chrome: __EXPLORER_CONFIG__.chrome,
 		console: __CONSOLE_CONFIG__,
 		explorer: __EXPLORER_CONFIG__,
 		publishedLedgers: __PUBLISHED_LEDGERS__,

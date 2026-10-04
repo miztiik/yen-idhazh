@@ -853,7 +853,7 @@ def test_the_strip_carries_six_routes_and_every_one_answers_at_its_own_address(
 
     The ids, the addresses and the order are what a browser resolves, so they
     are asserted here rather than left to the component that draws them. The
-    band carries `Records` before its page exists; the strip draws that tab only
+    band carries `Data explorer` before its page exists; the strip draws that tab only
     while `console.data_explorer_tab` is on, which is what keeps the strip true.
     """
     state, digest = tree
@@ -882,14 +882,14 @@ def test_the_strip_carries_six_routes_and_every_one_answers_at_its_own_address(
         "Hardware",
         "Judgement",
         "Voices",
-        "Records",
+        "Data explorer",
     ]
     # Every route points at a panel another route owns, the newest ones
     # included: a route carrying nothing is a route that hides the page which
     # explains it.
     for route in band.routes:
         assert len(route.carries) > 20, route.id
-    # Records judges nothing, so it never carries a worst state of its own.
+    # Data explorer judges nothing, so it never carries a worst state of its own.
     records = next(route for route in band.routes if route.id is RouteId.DATA_EXPLORER)
     assert records.worst is None
     assert records.severity == console_band.CLEAR

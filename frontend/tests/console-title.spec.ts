@@ -209,7 +209,7 @@ test('THE ORACLE: the labels moved and the addresses did not', async ({ page }) 
 	expect(
 		drawn.map((tab) => tab.label),
 		'the strip does not carry the six labels'
-	).toEqual(['Pipelines', 'Summaries', 'Hardware', 'Judgement', 'Voices', 'Records']);
+	).toEqual(['Pipelines', 'Summaries', 'Hardware', 'Judgement', 'Voices', 'Data explorer']);
 
 	// The ids did not, and neither did what they point at. Typed out in strip
 	// order rather than read off `ROUTES`: that map is keyed for the grammar

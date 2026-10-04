@@ -183,10 +183,13 @@ jobs:
 
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
-      # code it earned: 2 ownership or integrity, 3 the push kept losing, 1 a
+      # code it earned: 2 ownership or integrity, 3 main refused the push, 1 a
       # task failed, the shard downloaded more than max_downloaded_mb, or the
-      # files under its folders could not be listed. The token also reads the
-      # size of each file the clone never downloaded, from GitHub's trees API.
+      # files under its folders could not be listed. A shard whose work is out
+      # of date lands nothing, warns and exits 0: main changed one of its paths
+      # after its commit, or main kept moving through every try. The token also
+      # reads the size of each file the clone never downloaded, from GitHub's
+      # trees API.
       - name: Run the shard's tasks and land its record
         env:
           SHARD: ${{ matrix.shard }}

@@ -38,13 +38,7 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json  optional visual, drawn i
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
 state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/ the ledger - read as one row per measurement a day, never published twice, kept for ever
-state/summary-quality-evals-index/lookup/root.json the current exact-ID lookup generation
-state/summary-quality-evals-index/lookup/nodes/<prefix>/<digest>.json bounded routing page
-state/summary-quality-evals-index/lookup/nodes/<prefix>/<digest>.sqlite capped membership leaf
 ```
-
-The [observation lookup](../contracts/observation-lookup.md) owns these index
-paths, which nothing in the pipeline writes or reads; they are not reader-facing URLs.
 
 ```
 / the newest published day, rendered inline moving

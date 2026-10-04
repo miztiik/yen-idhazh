@@ -266,7 +266,10 @@ export async function load() {
 				enabled: observability.evaluation_enabled,
 				rate: observability.sample_rate,
 				recorded: scoredDays,
-				window: [...new Set([...scoredDays, ...timedDays])].sort()
+				window: [...new Set([...scoredDays, ...timedDays])].sort(),
+				// Days the score record's own index records lost: the scorer ran on
+				// them, so they date its start and are never days before it.
+				daysWithNoRecord: scores.read.state === 'read' ? scores.read.lostDays : []
 			}),
 			// The other direction: the machine ran and we timed it, and nothing
 			// scored what it wrote. Null where every timed day was also scored.
@@ -339,8 +342,9 @@ export async function load() {
 		console,
 		chart: chartConfig(),
 		// What the page says about the two records it read before any panel draws
-		// from them: one not packed yet, one that did not load, or one packed some
-		// days short of the newest published day.
+		// from them: one not packed yet, one that did not load, one packed some
+		// days short of the newest published day, or one with a day it has no
+		// record for or files it set aside unread.
 		recordNotes: recordNotes(
 			[
 				{ record: 'article', read: items.read },
