@@ -20,8 +20,8 @@ travels to a labeller as a workflow artifact with a finite life.
 it crosses a process boundary and usually a machine boundary, which is what makes
 a shape a payload rather than a local variable (section 1a). The label CLI has to
 be able to refuse a file it cannot trust, and refusing needs a shape to check
-against. `backend/var/run/<date>/plan.json` and `<item_id>.article.json` are
-gitignored and regenerable in exactly the same way and are contracts for exactly
+against. `<item_id>.article.json` is gitignored and regenerable in exactly the same way
+and is a contract for exactly
 the same reason.
 
 **It is a contract under Guardrail #3 and not a migration surface under section 11.**
