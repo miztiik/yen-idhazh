@@ -12,7 +12,7 @@ import pytest
 from conftest import CONFIG_DIR, read_text
 from retention._trees import site
 
-from idhazh.build_publication import record_build_inventory
+from idhazh.build_publication import inventory_path, record_build_inventory
 from idhazh.cli import main
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
@@ -350,6 +350,23 @@ def built_site(root: Path, megabytes: int) -> Path:
 def test_a_site_inside_budget_passes_quietly(tmp_path: Path) -> None:
     tree = built_site(tmp_path / "build", 3)
     assert stage_site_weight(tree, RetentionConfig()) == 0
+
+
+def test_the_step_measures_the_tree_as_it_is_not_an_inventory_left_beside_it(
+    tmp_path: Path,
+) -> None:
+    """The deploy builds with Node alone, so the step that reads the inventory writes it."""
+    tree = tmp_path / "build"
+    (tree / "2026-08-24").mkdir(parents=True)
+    (tree / "2026-08-24" / "index.html").write_bytes(b"x" * BYTES_PER_MB)
+    assert not inventory_path(tree).exists()
+
+    assert stage_site_weight(tree, RetentionConfig()) == 0
+    assert measure(tree).files == 1
+
+    (tree / "late.html").write_bytes(b"x" * 10)
+    assert stage_site_weight(tree, RetentionConfig()) == 0
+    assert measure(tree).files == 2
 
 
 def test_the_alarm_fires_when_the_built_site_crosses_the_alarm_point(

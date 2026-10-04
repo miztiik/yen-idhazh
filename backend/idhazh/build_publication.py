@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 from pathlib import Path
@@ -26,7 +25,7 @@ def read_build_inventory(tree: Path) -> PublicationInventory:
     path = inventory_path(tree)
     if not path.is_file():
         raise FileNotFoundError(
-            f"{path.name} is missing; run npm run build before measuring the deployed site"
+            f"{path.name} is missing; run npm run build, then idhazh site-weight"
         )
     inventory = PublicationInventory.read(path)
     if any(entry.root != "public" for entry in inventory.entries):
@@ -35,10 +34,10 @@ def read_build_inventory(tree: Path) -> PublicationInventory:
 
 
 def record_build_inventory(tree: Path) -> PublicationInventory:
-    """Inventory only this run's generated tree after the build certifies its output."""
+    """Inventory one generated tree, right before the site-weight step measures it."""
     inventory_path(tree).unlink(missing_ok=True)
     if not tree.is_dir():
-        raise FileNotFoundError("adapter-static output is missing; build the site first")
+        raise FileNotFoundError("adapter-static output is missing; run npm run build first")
     entries: list[PublicationEntry] = []
     dates: set[str] = set()
     for path in tree.rglob("*"):
@@ -69,14 +68,3 @@ def record_build_inventory(tree: Path) -> PublicationInventory:
     )
     write_atomic(inventory_path(tree), inventory.to_json())
     return inventory
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tree", type=Path, required=True)
-    args = parser.parse_args()
-    record_build_inventory(args.tree)
-
-
-if __name__ == "__main__":
-    main()

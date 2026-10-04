@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { assertBuild, beginBuild, buildMode, changedInputNote, completeBuild, inputFingerprint, recordBuild } from '../build-state.ts';
 
 function fixture() {
@@ -219,19 +220,19 @@ test('source changes during compilation do not certify old output as current', (
 	} finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('failed inventory finalization cannot certify a successful build', () => {
+test('a site build completes on a machine with no Python', () => {
 	const root = fixture();
 	try {
-		beginBuild(root, 'real');
+		const script = join(root, 'frontend/scripts/build-state.ts');
+		mkdirSync(join(root, 'frontend/scripts'), { recursive: true });
+		writeFileSync(join(root, 'frontend/package.json'), '{ "type": "module" }\n');
+		copyFileSync(fileURLToPath(new URL('../build-state.ts', import.meta.url)), script);
+		const env = { ...process.env, IDHAZH_PYTHON: join(root, 'no-python-here') };
+		for (const name of ['DIGEST_ROOT', 'STATE_ROOT', 'TELEMETRY_ROOT']) delete env[name];
+		execFileSync(process.execPath, [script, '--begin'], { env, stdio: 'pipe' });
 		mkdirSync(join(root, 'frontend/build'));
 		writeFileSync(join(root, 'frontend/build/index.html'), '<h1>A fresh build</h1>\n');
-		assert.throws(
-			() => completeBuild(root, 'real', process.env, () => {
-				readFileSync(join(root, 'missing-inventory-input'));
-			}),
-			/ENOENT/
-		);
-		assert.throws(() => assertBuild(root, 'real'), /No verified real build/);
-		assert.equal(existsSync(join(root, 'backend/var/checks/build-start.json')), true);
+		execFileSync(process.execPath, [script, '--complete'], { env, stdio: 'pipe' });
+		assert.doesNotThrow(() => assertBuild(root, 'real', env));
 	} finally { rmSync(root, { recursive: true, force: true }); }
 });
