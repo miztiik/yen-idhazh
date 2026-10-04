@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -1025,7 +1025,7 @@ when it draws. The `monthly_window` of `config/gardener/compact-summary-quality-
 `forever`, so the `compact-summary-quality-evals` compaction may pack a month's rows into fewer files
 and never drops one, and its `monthly_keep_days` packs a finished year's month
 files into one year file
-([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md#design-rationale)).
+([../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md#design-rationale)).
 Why the rows are kept rather than summarised, and what that costs in bytes, is
 the [design rationale](#design-rationale) above.
 

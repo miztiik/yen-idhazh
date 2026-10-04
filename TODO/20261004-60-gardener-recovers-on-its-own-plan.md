@@ -35,7 +35,7 @@ Table A - what is out
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Compaction gets its own page | - | A | PENDING | - | - | - |
+| 1 | Compaction gets its own page | - | A | DONE | fantastic-umbrella | - | Plan 60 row 1: compaction page |
 | 2 | A dry run says nothing was deleted | - | A | PENDING | - | - | - |
 | 3 | A read nobody named fails loudly | - | A | PENDING | - | - | - |
 | 4 | The ledger fault words live in contracts | - | A | PENDING | - | - | - |
@@ -179,7 +179,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The section moves whole, with its tables and its `## Design rationale` entries; the gardener page keeps a two-line pointer | Fowler, 2026-10-04 |
-| 2 | The link to a PROTOCOL.md that does not exist is removed | Fowler, 2026-10-04 |
+| 2 | The link to Delta Lake's PROTOCOL.md stays: it is a web address that `doc_load.py` reads as a path in this repository (found during execution; row 26 fixes the tool) | The owner, 2026-10-04 |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
