@@ -60,7 +60,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 5 | The answer gets a shape, and a question is kept, found again and shared | 4 | E | DONE | p55r5 | #1256 | p55-r5-worker |
 | 6 | Reach past the cap, the glyphs, the gates, the pictures and the how-to | 4, 5 | F | DONE | p55r6 | #1263 | p55-r6-worker |
 | 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | #1229 | p55-r7-worker |
-| 8 | The Data explorer draws the workbench chrome | 6 | G | DONE | p55r8 | - | p55-redesign-worker |
+| 8 | The Data explorer draws the workbench chrome | 6 | G | DONE | p55r8 | #1298 | p55-redesign-worker |
 | 9 | Run moves nothing on the Data explorer | 8 | H | PENDING | p55r9 | - | p55-redesign-worker |
 | 10 | The Data explorer reaches the reference's density | 9 | I | PENDING | p55r10 | - | p55-redesign-worker |
 
