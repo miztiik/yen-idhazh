@@ -36,19 +36,24 @@
 	);
 	const lineFiles = $derived(read?.files ?? files);
 	const lineBytes = $derived(read?.bytes ?? bytes);
-	function changeFrom(value: string) {
-		onDates?.(value > to ? to : value, to);
+	const invalidDates = $derived(from < minDay || from > to || to < from || to > maxDay);
+	function changeFrom(input: HTMLInputElement) {
+		const next = input.value > to ? to : input.value;
+		input.value = next;
+		onDates?.(next, to);
 	}
-	function changeTo(value: string) {
-		onDates?.(from, value < from ? from : value);
+	function changeTo(input: HTMLInputElement) {
+		const next = input.value < from ? from : input.value;
+		input.value = next;
+		onDates?.(from, next);
 	}
 </script>
 
 <div class="action-line" data-explorer-action-line data-files={lineFiles} data-bytes={lineBytes} data-held-bytes={heldBytes}>
 	<p>{line} This page holds {megabytes(heldBytes)} MB of fetched files; a reload empties it.</p>
 	<div class="actions">
-		<label>From (UTC)<input type="date" value={from} min={minDay} max={to < maxDay ? to : maxDay} onchange={(event) => changeFrom(event.currentTarget.value)} /></label>
-		<label>To (UTC)<input type="date" value={to} min={from > minDay ? from : minDay} max={maxDay} onchange={(event) => changeTo(event.currentTarget.value)} /></label>
+		<label>From (UTC)<input type="date" value={from} min={minDay} max={to < maxDay ? to : maxDay} oninput={(event) => changeFrom(event.currentTarget)} onchange={(event) => changeFrom(event.currentTarget)} /></label>
+		<label>To (UTC)<input type="date" value={to} min={from > minDay ? from : minDay} max={maxDay} oninput={(event) => changeTo(event.currentTarget)} onchange={(event) => changeTo(event.currentTarget)} /></label>
 		{#if saving}
 			<label>Name <input bind:value={draftName} maxlength={saveNameMaxChars} /></label>
 			<button type="button" class="secondary" onclick={() => { onSave?.(draftName); saving = false; }} disabled={!draftName.trim()}>
@@ -62,7 +67,7 @@
 			{#if canCopyQuestion}
 				<button type="button" class="secondary" onclick={onCopyQuestion}><Icon id="copy" /> Copy question</button>
 			{/if}
-			<button type="button" onclick={onRun} disabled={disabled || busy}><Icon id="query-run" /> {busy ? 'Running' : 'Run'}</button>
+			<button type="button" onclick={onRun} disabled={disabled || busy || invalidDates}><Icon id="query-run" /> {busy ? 'Running' : 'Run'}</button>
 		{/if}
 	</div>
 </div>

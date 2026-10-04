@@ -161,6 +161,21 @@ def test_answer_fixtures_are_recomputed_with_duckdb() -> None:
     expected = json.loads((FIXTURE / "answers" / "raw-writer-day.json").read_text())
     assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
 
+    archive_year = (FIXTURE / "year-state" / "compact" / "host-fingerprint" / "yearly" / "2026" / "2026.parquet").as_posix()
+    site_day = (FIXTURE / "state" / "compact" / "host-fingerprint" / "daily" / "2026" / "09" / "01.parquet").as_posix()
+    rows = con.execute(
+        f"SELECT COLUMNS(*)::VARCHAR FROM ("
+        f"SELECT date, run_id, job, shard FROM read_parquet('{archive_year}', union_by_name=true) "
+        f"WHERE date >= '2026-08-30' AND date < '2026-09-01' "
+        f"UNION ALL "
+        f"SELECT date, run_id, job, shard FROM read_parquet('{site_day}', union_by_name=true) "
+        f"WHERE date = '2026-09-01' "
+        f"ORDER BY date, run_id, shard)"
+    ).fetchall()
+    columns = [column[0] for column in con.description]
+    expected = json.loads((FIXTURE / "answers" / "archive-before-site.json").read_text())
+    assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
+
 
 def test_additional_answer_fixtures_are_recomputed_with_duckdb() -> None:
     import duckdb

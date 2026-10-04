@@ -51,6 +51,7 @@ const STATE = path.join(FIXTURE, 'state');
 const YEAR_STATE = path.join(FIXTURE, 'year-state');
 const LEDGER = 'host-fingerprint' as const;
 const PREFIX = 'https://pages.test/yen-idhazh';
+const ARCHIVE_PREFIX = 'https://archive.test/yen-idhazh';
 const DAILY_INDEX = indexPath(LEDGER, 'daily');
 const MONTHLY_INDEX = indexPath(LEDGER, 'monthly');
 const YEARLY_INDEX = indexPath(LEDGER, 'yearly');
@@ -61,17 +62,19 @@ type Answer = { status: number; body?: Uint8Array } | 'throw';
 type Rule = Answer | ((onDisk: Uint8Array) => Answer);
 
 interface Asked {
+	url: string;
 	path: string;
 	version: string | null;
 	cache: RequestCache | undefined;
+	headers: Record<string, string>;
 	/** What the recorded response answered: a status, or a fetch that threw. */
 	answered: number | 'throw';
 }
 
 /** Answers from the files under `state`, the first fixture root unless named, unless `rules` names the path. */
-function recorded(rules: Record<string, Rule> = {}, state: string = STATE): { fetcher: Fetcher; asked: Asked[] } {
+function recorded(rules: Record<string, Rule> = {}, state: string = STATE, prefix = PREFIX): { fetcher: Fetcher; asked: Asked[] } {
 	const asked: Asked[] = [];
-	const root = `${PREFIX}/state/`;
+	const root = `${prefix}/state/`;
 	const fetcher: Fetcher = async (url, init) => {
 		expect(url.startsWith(root), `${url} is not under ${root}`).toBe(true);
 		const address = new URL(url);
@@ -84,15 +87,24 @@ function recorded(rules: Record<string, Rule> = {}, state: string = STATE): { fe
 				? rule(onDisk ?? new Uint8Array())
 				: (rule ?? (onDisk === null ? { status: 404 } : { status: 200, body: onDisk }));
 		asked.push({
+			url,
 			path: relative,
 			version: address.searchParams.get('v'),
 			cache: init.cache,
+			headers: headersOf(init.headers),
 			answered: answer === 'throw' ? 'throw' : answer.status
 		});
 		if (answer === 'throw') throw new TypeError('Failed to fetch');
 		return new Response(answer.body === undefined ? null : answer.body.slice().buffer, { status: answer.status });
 	};
 	return { fetcher, asked };
+}
+
+function headersOf(headers: HeadersInit | undefined): Record<string, string> {
+	const out: Record<string, string> = {};
+	if (headers === undefined) return out;
+	for (const [key, value] of new Headers(headers).entries()) out[key.toLowerCase()] = value;
+	return out;
 }
 
 const decoded = (bytes: Uint8Array): Record<string, unknown> => JSON.parse(new TextDecoder().decode(bytes));
@@ -147,8 +159,8 @@ function counted(): CountedEngine {
 
 /** A page that has read nothing yet: a keeper over recorded responses, as
  *  `ledger.ts` makes one over `fetch`. */
-function freshPage(fetcher: Fetcher, engine: CountedEngine = counted()): PageKeeper {
-	return pageKeeper(fetchedBytes(PREFIX, fetcher), engine.open);
+function freshPage(fetcher: Fetcher, engine: CountedEngine = counted(), prefix = PREFIX): PageKeeper {
+	return pageKeeper(fetchedBytes(prefix, fetcher), engine.open);
 }
 
 /** Every console warning `work` prints, and its result. */
@@ -1336,9 +1348,9 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 			[DAILY_INDEX]: { status: 200, body: encoded(siteDaily) },
 			[MONTHLY_INDEX]: { status: 200, body: encoded(emptyMonthly) }
 		});
-		const archive = recorded();
+		const archive = recorded({}, YEAR_STATE, ARCHIVE_PREFIX);
 		const sitePage = freshPage(site.fetcher);
-		const archivePage = freshPage(archive.fetcher);
+		const archivePage = freshPage(archive.fetcher, counted(), ARCHIVE_PREFIX);
 		const query = {
 			...opts,
 			ledgers: [LEDGER],
@@ -1350,17 +1362,17 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		const answer = await readAsk(sitePage, archivePage, query, {});
 		expect(answer).toMatchObject({ state: 'ok', siteFrom: null });
 		if (answer.state !== 'ok') return;
-		expect(answer.rows).toEqual([
-			{ date: '2026-08-30', run_id: '2026-08-30-17800000001', job: 'work', shard: '0' },
-			{ date: '2026-08-30', run_id: '2026-08-30-17800000001', job: 'work', shard: '1' },
-			{ date: '2026-08-31', run_id: '2026-08-31-17810000001', job: 'work', shard: '0' },
-			{ date: '2026-09-01', run_id: '2026-09-01-17820000001', job: 'plan', shard: '0' },
-			{ date: '2026-09-01', run_id: '2026-09-01-17820000001', job: 'work', shard: '0' },
-			{ date: '2026-09-01', run_id: '2026-09-01-17820000001', job: 'work', shard: '1' }
-		]);
-		expect(dataAsked(archive.asked)).toEqual([dataPath(LEDGER, 'monthly', '2026-08')]);
+		expect(answer.rows).toEqual(expectedAnswer('archive-before-site'));
+		expect(dataAsked(archive.asked)).toEqual([dataPath(LEDGER, 'yearly', '2026')]);
 		expect(dataAsked(site.asked)).toEqual([dataPath(LEDGER, 'daily', '2026-09-01')]);
-		expect(archive.asked.filter((one) => one.path.endsWith('.parquet')).every((one) => one.version !== null)).toBe(true);
+		for (const request of archive.asked.filter((one) => one.path.endsWith('.parquet'))) {
+			expect(request.url.startsWith(`${ARCHIVE_PREFIX}/state/`)).toBe(true);
+			expect(request.version).not.toBeNull();
+			expect(request.headers.range).toBeUndefined();
+		}
+		for (const request of site.asked.filter((one) => one.path.endsWith('.parquet'))) {
+			expect(request.url.startsWith(`${PREFIX}/state/`)).toBe(true);
+		}
 
 		const clamped = await readAskCost(freshPage(recorded({
 			[DAILY_INDEX]: { status: 200, body: encoded(siteDaily) },

@@ -49,10 +49,16 @@ function keeper(): PageKeeper {
 	return kept;
 }
 
+function archiveBaseUrl(): string {
+	const runtime = (globalThis as typeof globalThis & { __ARCHIVE_BASE_URL__?: unknown }).__ARCHIVE_BASE_URL__;
+	return typeof runtime === 'string' ? runtime : __ARCHIVE_BASE_URL__;
+}
+
 function archiveKeeper(): PageKeeper | null {
-	if (!__ARCHIVE_BASE_URL__) return null;
+	const baseUrl = archiveBaseUrl();
+	if (!baseUrl) return null;
 	keptArchive ??= pageKeeper(
-		((source) => ({ index: source.index, data: source.data }))(fetchedBytes(__ARCHIVE_BASE_URL__, (url, init) => fetch(url, init))),
+		((source) => ({ index: source.index, data: source.data }))(fetchedBytes(baseUrl, (url, init) => fetch(url, init))),
 		openEngine
 	);
 	return keptArchive;

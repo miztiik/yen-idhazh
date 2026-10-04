@@ -33,7 +33,8 @@ export type RawListedThrough = Readonly<Partial<Record<LedgerName, DateStamp>>>;
 
 type Indexes = { daily: CompactEntry[]; monthly: CompactEntry[]; yearly: CompactEntry[] };
 type FileMeta = { ledger: LedgerName; day: DateStamp | null };
-type PlannedFile = { file: WantedFile; meta: FileMeta; keeper: 'site' | 'archive' };
+type PlannedFile = { file: WantedFile; meta: FileMeta; keeper: 'site' | 'archive'; from: DateStamp; to: DateStamp };
+type HeldSource = { name: string; from: DateStamp; to: DateStamp };
 type LedgerPlan = {
 	ledger: LedgerName;
 	through: DateStamp | null;
@@ -67,8 +68,8 @@ function previousDay(day: DateStamp): DateStamp {
 	return at.toISOString().slice(0, 10);
 }
 
-function addPlanned(files: WantedFile[], metas: FileMeta[], keeper: 'site' | 'archive'): PlannedFile[] {
-	return files.map((file, at) => ({ file, meta: metas[at] ?? { ledger: 'seen', day: null }, keeper }));
+function addPlanned(files: WantedFile[], metas: FileMeta[], keeper: 'site' | 'archive', from: DateStamp, to: DateStamp): PlannedFile[] {
+	return files.map((file, at) => ({ file, meta: metas[at] ?? { ledger: 'seen', day: null }, keeper, from, to }));
 }
 
 function compactFirst(indexes: Indexes): DateStamp | null {
@@ -81,6 +82,31 @@ function later(a: DateStamp | null, b: DateStamp | null): DateStamp | null {
 	if (a === null) return b;
 	if (b === null) return a;
 	return a > b ? a : b;
+}
+
+function periodLastDay(period: Period, covers: string): DateStamp {
+	if (period === 'daily') return covers;
+	if (period === 'yearly') return `${covers}-12-31`;
+	const [year, oneBased] = covers.split('-').map(Number);
+	return new Date(Date.UTC(year ?? 0, oneBased ?? 0, 0)).toISOString().slice(0, 10);
+}
+
+function addCompactPlanned(
+	files: readonly ChosenFile[],
+	ledger: LedgerName,
+	keeper: 'site' | 'archive',
+	until: DateStamp,
+	byRange: boolean
+): PlannedFile[] {
+	return files
+		.filter((file) => file.entry.rows > 0)
+		.map((file) => ({
+			file: wanted(file.period, ledger, file, byRange),
+			meta: { ledger, day: file.firstDay },
+			keeper,
+			from: file.firstDay,
+			to: periodLastDay(file.period, file.entry.covers) < until ? periodLastDay(file.period, file.entry.covers) : until
+		}));
 }
 
 function wanted(period: Period, ledger: LedgerName, file: ChosenFile, byRange = RANGED_PERIODS.has(period)): WantedFile {
@@ -159,23 +185,18 @@ function compactSelection(
 	from: DateStamp,
 	until: DateStamp,
 	indexes: Indexes,
-	byRange = true
-): { files: WantedFile[]; metas: FileMeta[] } | AskResult {
+	_byRange = true
+): { chosen: ChosenFile[] } | AskResult {
 	const first = newestNamed(indexes.daily, indexes.monthly, indexes.yearly) === null
 		? null
 		: firstNamed(indexes.daily, indexes.monthly, indexes.yearly);
-	if (first === null) return { files: [], metas: [] };
+	if (first === null) return { chosen: [] };
 	if (from < first && indexes.monthly.length === 0 && indexes.yearly.length === 0) {
 		return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
 	}
 	const selection = filesFor(from, until, indexes.daily, indexes.monthly, indexes.yearly);
 	if ('hole' in selection) return { state: 'unreachable', ledger, at: selection.hole, fault: 'day-missing' };
-	return {
-		files: selection.files.filter((file) => file.entry.rows > 0).map((file) => wanted(file.period, ledger, file, byRange)),
-		metas: selection.files
-			.filter((file) => file.entry.rows > 0)
-			.map((file) => ({ ledger, day: file.firstDay }))
-	};
+	return { chosen: selection.files };
 }
 
 /** The files an empty view takes its columns from: the ledger's newest day, from its listing
@@ -239,7 +260,7 @@ async function planLedger(
 			else {
 				const archive = compactSelection(ledger, from, archiveTo, archiveIndexed, false);
 				if ('state' in archive) unreachable = archive;
-				else files.push(...addPlanned(archive.files, archive.metas, 'archive'));
+				else files.push(...addCompactPlanned(archive.chosen, ledger, 'archive', archiveTo, false));
 			}
 			siteStart = siteFirst;
 		}
@@ -250,7 +271,7 @@ async function planLedger(
 		const compact = compactSelection(ledger, siteStart, until, indexed);
 		if ('state' in compact) unreachable = compact;
 		else {
-			files.push(...addPlanned(compact.files, compact.metas, 'site'));
+			files.push(...addCompactPlanned(compact.chosen, ledger, 'site', until, true));
 		}
 	}
 
@@ -261,7 +282,7 @@ async function planLedger(
 			unreachable ??= listed;
 			continue;
 		}
-		files.push(...addPlanned(listed.files, listed.metas, 'site'));
+		files.push(...addPlanned(listed.files, listed.metas, 'site', day, day));
 	}
 
 	// A ledger with no file in the span is read through an empty view over its newest day's
@@ -272,7 +293,7 @@ async function planLedger(
 		ledger,
 		through,
 		files,
-		emptySource: addPlanned(empty.files, empty.metas, 'site'),
+		emptySource: addPlanned(empty.files, empty.metas, 'site', through ?? to, through ?? to),
 		unpackedDays: rawDays,
 		siteFrom,
 		unreachable
@@ -319,17 +340,24 @@ function quoteIdent(name: LedgerName): string {
 	return `"${name.replaceAll('"', '""')}"`;
 }
 
-function viewStatement(ledger: LedgerName, names: readonly string[], empty: boolean): string {
-	return `CREATE OR REPLACE VIEW ${quoteIdent(ledger)} AS SELECT * FROM read_parquet(${listOf(names)}, union_by_name = true)${empty ? ' LIMIT 0' : ''}`;
+function viewStatement(ledger: LedgerName, sources: readonly HeldSource[], empty: boolean): string {
+	const parts = sources.map((source) =>
+		`SELECT * FROM read_parquet(${listOf([source.name])}, union_by_name = true) WHERE "date" >= '${source.from}' AND "date" <= '${source.to}'`
+	);
+	return `CREATE OR REPLACE VIEW ${quoteIdent(ledger)} AS ${parts.join(' UNION ALL ')}${empty ? ' LIMIT 0' : ''}`;
 }
 
-async function prepareViews(engine: QueryEngine, plans: readonly LedgerPlan[], heldNames: readonly string[][]): Promise<void> {
+async function prepareViews(
+	engine: QueryEngine,
+	plans: readonly LedgerPlan[],
+	heldSources: readonly HeldSource[][]
+): Promise<void> {
 	const selected = new Set(plans.map((one) => one.ledger));
 	for (const ledger of LEDGER_NAMES) {
 		if (!selected.has(ledger)) await engine.rows(`DROP VIEW IF EXISTS ${quoteIdent(ledger)}`, []);
 	}
 	for (const [at, one] of plans.entries()) {
-		await engine.rows(viewStatement(one.ledger, heldNames[at] ?? [], one.files.length === 0), []);
+		await engine.rows(viewStatement(one.ledger, heldSources[at] ?? [], one.files.length === 0), []);
 	}
 }
 
@@ -468,18 +496,18 @@ export async function readAsk(
 		}
 
 		try {
-			const namesByLedger: string[][] = [];
+			const sourcesByLedger: HeldSource[][] = [];
 			for (const one of planned.ledgers) {
 				const files = one.files.length > 0 ? one.files : one.emptySource;
-				namesByLedger.push(files.map((plannedFile) => {
+				sourcesByLedger.push(files.map((plannedFile) => {
 					const group = plannedFile.keeper === 'site' ? siteFiles : archiveFiles;
 					const held = plannedFile.keeper === 'site' ? siteHeld : archiveHeld;
 					if (held === null || 'failed' in held) throw new Error('planned file was not held');
 					const at = group.indexOf(plannedFile);
-					return held.names[at] ?? '';
+					return { name: held.names[at] ?? '', from: plannedFile.from, to: plannedFile.to };
 				}));
 			}
-			await prepareViews(siteHeld.engine, planned.ledgers, namesByLedger);
+			await prepareViews(siteHeld.engine, planned.ledgers, sourcesByLedger);
 			const columns = await describe(siteHeld.engine, checked.sql);
 			const answer = await runRows(siteHeld.engine, checked.sql, opts.maxRows, columns);
 			const read = sumCost([
