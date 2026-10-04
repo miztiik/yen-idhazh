@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-04
 
-How long a Records page address can be before GitHub Pages refuses it, and how long an ASCII question can be while still fitting a shared link.
+How long a Data explorer page address can be before GitHub Pages refuses it, and how long an ASCII question can be while still fitting a shared link.
 
 GitHub Pages answered a request target of 8,192 bytes and refused 8,193 bytes. For this page, that means the largest ASCII statement that fits a worst-case custom-date link is 5,790 characters. ASCII means one byte per character; non-ASCII text can still fit, but this number does not promise it.
 
@@ -24,7 +24,7 @@ The probe did not run through a browser and did not load the page. It measured t
 The script doubled `q` until GitHub Pages refused the request, then bisected the last accepted and first refused lengths. It used base64url characters so every `q` character was one byte in the address.
 
 ```js
-// Row 5's reading: the longest address GitHub Pages answers for the Records page.
+// Row 5's reading: the longest address GitHub Pages answers for the Data explorer page.
 const base = 'https://miztiik.github.io/yen-idhazh/console/data-explorer/?q=';
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const q = (n) => Array.from({ length: n }, (_, i) => alphabet[(i * 7) % 64]).join('');
@@ -60,7 +60,7 @@ The origin, `https://miztiik.github.io`, is 25 bytes. Removing it leaves the req
 
 ## Query size in force
 
-The Records page link must leave room for the path, every ledger name and a custom span with `from=YYYY-MM-DD` and `end=YYYY-MM-DD`. The address writer uses `URLSearchParams`, so each comma between ledgers is `%2C`, three bytes.
+The Data explorer page link must leave room for the path, every ledger name and a custom span with `from=YYYY-MM-DD` and `end=YYYY-MM-DD`. The address writer uses `URLSearchParams`, so each comma between ledgers is `%2C`, three bytes.
 
 | Part | Bytes |
 | --- | ---: |
@@ -84,7 +84,7 @@ ceil(4 * (5791 + 5) / 3) = 7728
 465 + 7728 = 8193, which is 1 byte too long
 ```
 
-So the current answer is 5,790 ASCII characters. The test `frontend/tests/console-data-explorer-address.spec.ts` binds this number to the real encoder by writing a 5,790-character printable ASCII statement, adding every ledger name and using a custom span with `from` and `end`. A ledger added to the list or taken off it moves the fixed total, so the test fails until this number and `console.explorer_query_max_chars` are worked out again.
+So the measured worst-case limit is 5,790 ASCII characters for this path and ledger list. The configured cap is 5,790. The test `frontend/tests/console-data-explorer-address.spec.ts` checks that a statement at the configured cap can be shared with every ledger and a custom span; it does not require the cap to be the largest possible statement.
 
 ## What would make this stale
 

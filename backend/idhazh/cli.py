@@ -59,6 +59,7 @@ from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
 )
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.council import session as council_session
 from idhazh.embed import Embedder
 from idhazh.evals import sampling
@@ -275,6 +276,18 @@ def _scores_this_run(
     return True
 
 
+def _planned(date: str, execution: int | None) -> RunPlan:
+    """The plan a later stage works from: the plan of the run `--execution` names.
+
+    Without `--execution` the newest plan of the day is read, which is only right
+    for a person's own run where one process planned alone. The run id is built
+    here only when the execution is given: the plan stage's fallback counts off
+    the next free run number, which names a run that has not planned yet.
+    """
+    run_id = plan_stage._run_id(date, execution) if execution is not None else None
+    return common._load_plan(date, run_id)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     words = list(sys.argv[1:]) if argv is None else list(argv)
     if words and words[0] == telemetry_cli.VERB:
@@ -311,7 +324,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "CI passes the GitHub run id: GitHub allocates it, it is unique across "
             "every run of every workflow here, and no second execution can compute "
             "it. Left out, the run counts off the last committed manifest, which two "
-            "overlapping runs were able to read the same answer from."
+            "overlapping runs were able to read the same answer from. A stage after "
+            "the plan reads the plan of the run this names; left out, it reads the "
+            "newest plan of the day, which may be another run's."
         ),
     )
     parser.add_argument(
@@ -701,7 +716,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "shards":
         # stdout carries the answer and stderr carries the logs, so a caller
         # reads one number without parsing a log line.
-        print(shard_count(len(common._load_plan(date).items), run=settings.app.run))
+        print(shard_count(len(_planned(date, args.execution).items), run=settings.app.run))
         return 0
 
     if args.stage in ("plan", "run"):
@@ -716,7 +731,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         common.LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
     if args.stage in ("work", "run"):
-        work_plan = common._load_plan(date)
+        work_plan = _planned(date, args.execution)
         work.stage_work(
             work_plan,
             settings=settings,
@@ -734,7 +749,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "record":
         record.stage_record(
-            common._load_plan(date),
+            _planned(date, args.execution),
             settings=settings,
             commit_sha=args.commit,
             shard=args.shard,
@@ -744,7 +759,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "fingerprint":
         silicon.stage_fingerprint(
-            common._load_plan(date),
+            _planned(date, args.execution),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
@@ -755,7 +770,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "job-clock":
         silicon.stage_job_clock(
-            common._load_plan(date),
+            _planned(date, args.execution),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
@@ -768,7 +783,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.stage in ("assemble", "run"):
-        assemble_plan = common._load_plan(date)
+        assemble_plan = _planned(date, args.execution)
         assemble_stage.stage_assemble(
             assemble_plan,
             settings=settings,

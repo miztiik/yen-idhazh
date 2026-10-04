@@ -1,6 +1,6 @@
 # Architecture overview
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-04
 
 How the whole system fits together, in one page. Every box here has a deeper
 document behind it; this page exists so you can find the right one.
@@ -55,7 +55,7 @@ and the pipeline replayable.
 
 | Stage | Input | Output | Owns |
 | --- | --- | --- | --- |
-| `plan` | feed list | `run-plan.json` | Which URLs get worked today, and their order. Loads no model. |
+| `plan` | feed list | one row of the run-plan ledger, `state/raw/run-plan/` | Which URLs get worked today, and their order. Loads no model. |
 | `work` | one shard of the plan | `*.article.json`, `*.summary.json`, `*.eval.json`, `*.health.json` | Fetching, sanitising, summarizing, scoring. |
 | `visuals` | article + summary | `*.visual.json` + an SVG | Whether an item gets a picture, and drawing it. |
 | `assemble` | everything above | `digest.json`, `run.json`, ledger rows | The published day. |

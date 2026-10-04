@@ -1,4 +1,4 @@
-"""Does every Records example question bind against the row contracts of the ledgers it names?
+"""Does every Data explorer example question bind against the row contracts of the ledgers it names?
 
 The page offers an example only when every ledger it names is published, and the browser
 suite runs only the examples whose ledgers the canary build publishes. So an example over

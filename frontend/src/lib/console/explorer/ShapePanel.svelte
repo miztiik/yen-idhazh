@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** Draws a Records answer with the chart type its columns can honestly support. */
+	/** Draws a Data explorer answer with the chart type its columns can honestly support. */
 	import type { Column, Row } from '$lib/data/ledger';
 	import { tooFewSentence } from '$lib/console/waiting';
 	import { frame } from '$lib/charts/frame';
