@@ -77,15 +77,11 @@ class GardenerConfig(Model):
         description="The UTC day this file's shape was last changed, as YYYY-MM-DD."
     )
     task_names: tuple[Slug, ...] = Field(
-        description="The explicit list of declaration names to read under config/gardener/."
+        description=(
+            "The complete configured task-name list. Declaration readers open only these "
+            "named files and never discover tasks by listing the config directory."
+        )
     )
-
-    @model_validator(mode="after")
-    def refuse_repeated_tasks(self) -> GardenerConfig:
-        if len(self.task_names) != len(set(self.task_names)):
-            raise ValueError("task_names repeats a task")
-        return self
-
     attempts: int = Field(
         ge=1,
         description=(
@@ -129,6 +125,8 @@ class GardenerConfig(Model):
                 "other shard first, so at attempts == shards it has no try left for a "
                 "push from outside the wake"
             )
+        if len(self.task_names) != len(set(self.task_names)):
+            raise ValueError("task_names repeats a task")
         return self
 
 
@@ -195,6 +193,11 @@ Window = Annotated[DaysWindow | MonthsWindow | ForeverWindow, Field(discriminato
 #: because both answer "how long do I keep this" and one question has one spelling.
 SeriesWindow = Window
 
+#: Default number of earlier periods a scheduled day-grain pass also examines.
+DEFAULT_DAY_LOOKBACK_PERIODS: Final = 7
+#: Default number of earlier periods a scheduled month-grain pass also examines.
+DEFAULT_MONTH_LOOKBACK_PERIODS: Final = 2
+
 
 class _Declared(Model):
     """The keys every declaration carries, whatever its kind."""
@@ -218,19 +221,11 @@ class _Declared(Model):
             "up the token's hourly allowance on one backlog."
         ),
     )
-    owns: list[RelPath] | None = Field(
-        default=None,
+    owns: list[RelPath] = Field(
         description=(
             "The repository-relative folders this task may delete or write under. A "
             "folder, never a file: a shard lists the files under each folder, so a "
             "file here would list nothing."
-        ),
-    )
-    owns_everything_else_under: list[RelPath] | None = Field(
-        default=None,
-        description=(
-            "The complement form: every folder under these that no other task owns and "
-            "no ledger family claims. At most one task may use it."
         ),
     )
     appends_to: list[LedgerName] = Field(
@@ -252,24 +247,9 @@ class _Declared(Model):
     )
 
     @model_validator(mode="after")
-    def _one_way_of_owning(self) -> Self:
-        if (self.owns is None) == (self.owns_everything_else_under is None):
-            raise ValueError(
-                "a declaration names exactly one of owns and owns_everything_else_under: "
-                "what a task may touch is either a list of folders or everything under a "
-                "root that nothing else owns"
-            )
-        return self
-
-    @model_validator(mode="after")
     def _reads_only_what_it_does_not_own(self) -> Self:
-        if self.reads and self.owns is None:
-            raise ValueError(
-                "a task that owns everything else under a root already lists every folder "
-                "there, so it declares no reads"
-            )
         for read in self.reads:
-            for owned in self.owns or ():
+            for owned in self.owns:
                 inner, outer = PurePosixPath(read).parts, PurePosixPath(owned).parts
                 if inner[: len(outer)] == outer or outer[: len(inner)] == inner:
                     raise ValueError(
@@ -280,8 +260,13 @@ class _Declared(Model):
         return self
 
     def claims(self) -> tuple[str, ...]:
-        """The folders this declaration names, in either form."""
-        return tuple(self.owns if self.owns is not None else self.owns_everything_else_under or ())
+        """The exact folders this declaration names."""
+        return tuple(self.owns)
+
+    @property
+    def lookback_periods(self) -> int:
+        """A non-retention declaration has no period lookback."""
+        return 0
 
 
 #: How many whole days after a UTC day ends before a fold acts on it, where the
@@ -333,6 +318,14 @@ class RetentionPolicy(_Declared):
     """A task that deletes what its window has aged out of the trees it owns."""
 
     kind: Literal[TaskKind.RETENTION]
+    lookback: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "How many earlier periods a scheduled pass checks beyond the period that "
+            "just expired. Defaults to 7 days or 2 months."
+        ),
+    )
     series: dict[Slug, SeriesWindow] | None = Field(
         default=None,
         description=(
@@ -348,6 +341,23 @@ class RetentionPolicy(_Declared):
             "window has run. Absent on a task that owns no such tree."
         ),
     )
+
+    @property
+    def lookback_periods(self) -> int:
+        """The configured lookback, or the default for this window's grain."""
+        if self.lookback is not None:
+            return self.lookback
+        if isinstance(self.window, MonthsWindow):
+            return DEFAULT_MONTH_LOOKBACK_PERIODS
+        if isinstance(self.window, DaysWindow):
+            return DEFAULT_DAY_LOOKBACK_PERIODS
+        if self.fold is not None:
+            return (
+                DEFAULT_MONTH_LOOKBACK_PERIODS
+                if self.fold.settles_months
+                else DEFAULT_DAY_LOOKBACK_PERIODS
+            )
+        return 0
 
     @model_validator(mode="after")
     def _a_month_settles_only_where_the_window_keeps_whole_months(self) -> Self:
@@ -438,11 +448,12 @@ class CompactionPolicy(_Declared):
             "and the declaration must be called compact-<ledger>."
         )
     )
-    raw_index_keep_days: int = Field(
+    lookback: int | None = Field(
+        default=None,
         ge=1,
         description=(
-            "How many days after a UTC day ends its raw listing survives. Never shorter "
-            "than daily_keep_days, or a daily file loses the index it would be rebuilt from."
+            "How many earlier months a scheduled compaction pass checks beyond the month "
+            "that just expired. Defaults to two months."
         ),
     )
     daily_keep_days: int = Field(
@@ -510,6 +521,11 @@ class CompactionPolicy(_Declared):
             "many words."
         ),
     )
+
+    @property
+    def lookback_periods(self) -> int:
+        """The configured extra months a scheduled compaction pass examines."""
+        return self.lookback or DEFAULT_MONTH_LOOKBACK_PERIODS
 
     @model_validator(mode="after")
     def _a_year_packs_every_month_it_holds(self) -> Self:

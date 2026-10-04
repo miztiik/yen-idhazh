@@ -13,6 +13,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      panel_captures:
+        description: Generate panel pictures for design review
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -54,6 +59,7 @@ jobs:
     outputs:
       browser: ${{ steps.decide.outputs.browser }}
       code: ${{ steps.decide.outputs.code }}
+      model_absent: ${{ steps.decide.outputs.model_absent }}
       console: ${{ steps.decide.outputs.console }}
       panels: ${{ steps.decide.outputs.panels }}
       robots: ${{ steps.decide.outputs.robots }}
@@ -293,6 +299,7 @@ jobs:
       # the data the story list fetches has to survive the parking that proves
       # the model is optional.
       - name: Model-absent gate - the digest does not depend on any of it
+        if: needs.scope.outputs.model_absent == 'true'
         working-directory: frontend
         run: |
           set -euo pipefail
@@ -378,19 +385,25 @@ jobs:
         env:
           SKIP_CONSOLE_SUITE: ${{ needs.scope.outputs.console == 'false' }}
           SKIP_PANELS_SUITE: ${{ needs.scope.outputs.panels == 'false' }}
+          SKIP_PANEL_CAPTURES: ${{ inputs.panel_captures != true }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/browser/results.json
           # 4 vCPU with nothing else on it, so a worker per core: 344 s at one
           # worker, 207 s at four, runs 33989034726 and 33991122503, 2026-09-05.
           PLAYWRIGHT_WORKERS: '4'
-        run: npm run test:browser
+        run: npm run test:browser -- --reporter=github,json
 
-      # Every console panel at three widths in both themes, plus the narrowest
-      # dark picture with every data request refused. A reviewer reads them;
-      # nothing diffs them, so there is no committed baseline to re-bless.
-      # Uploaded whether the suite passed or failed - a capture that exists only
-      # on a red run is one nobody can read - and skipped only for a cancelled
-      # run. No compression, because a PNG does not get smaller in a zip.
       - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() && needs.scope.outputs.panels == 'true' }}
+        if: ${{ !cancelled() }}
+        with:
+          name: browser-results
+          path: frontend/test-results/browser/results.json
+          retention-days: 7
+          if-no-files-found: error
+
+      # Pictures are explicit design-review material. Routine runs retain the
+      # panel assertions but do not generate or upload the bulk captures.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && inputs.panel_captures == true }}
         with:
           name: panel-captures
           path: frontend/test-results/panels/
@@ -407,5 +420,6 @@ jobs:
           path: |
             frontend/test-results/
             !frontend/test-results/panels/
+            !frontend/test-results/browser/results.json
           retention-days: 7
           if-no-files-found: ignore

@@ -579,29 +579,35 @@ def _one_line(record: Any) -> str:
     return json.dumps(record, sort_keys=True, ensure_ascii=True, separators=(",", ": "))
 
 
-def _record_lines(value: Any, indent: str) -> str:
+def _record_lines(
+    value: Any, indent: str, record_lists: frozenset[str] | None = None, key: str | None = None
+) -> str:
     """`canonical_json`'s layout, except that a list of objects is one object a line."""
     step = indent + "  "
     if isinstance(value, dict):
         if not value:
             return "{}"
         pairs = (
-            f"{step}{json.dumps(key, ensure_ascii=True)}: {_record_lines(value[key], step)}"
-            for key in sorted(value)
+            f"{step}{json.dumps(name, ensure_ascii=True)}: "
+            f"{_record_lines(value[name], step, record_lists, name)}"
+            for name in sorted(value)
         )
         return "{\n" + ",\n".join(pairs) + f"\n{indent}}}"
     if isinstance(value, list):
         if not value:
             return "[]"
-        records = all(isinstance(item, dict) for item in value)
+        records = (record_lists is None or key in record_lists) and all(
+            isinstance(item, dict) for item in value
+        )
         items = (
-            step + (_one_line(item) if records else _record_lines(item, step)) for item in value
+            step + (_one_line(item) if records else _record_lines(item, step, record_lists))
+            for item in value
         )
         return "[\n" + ",\n".join(items) + f"\n{indent}]"
     return json.dumps(value, ensure_ascii=True)
 
 
-def records_json(payload: Any) -> str:
+def records_json(payload: Any, *, record_lists: frozenset[str] | None = None) -> str:
     """The same serialization with each record on one line.
 
     Sorted keys, ASCII-escaped, one trailing newline and the same two-space
@@ -610,6 +616,9 @@ def records_json(payload: Any) -> str:
     a reshuffled dict. The one thing that moves is where the newlines go: a
     list of objects is written one object a line, and everything else is
     unchanged.
+
+    When `record_lists` is supplied, only lists under those keys use one line
+    per object. Outer days, runs and model settings can then remain expanded.
 
     A payload uses this when a person curates it by hand and its entries are
     records of a dozen short fields that are read together or not at all. A
@@ -620,7 +629,7 @@ def records_json(payload: Any) -> str:
     changed. Every other payload keeps the field-a-line layout, because a
     payload a program writes is reviewed by reading down a single record.
     """
-    return _record_lines(payload, "") + "\n"
+    return _record_lines(payload, "", record_lists) + "\n"
 
 
 def derive_output_digest(summary: str | None, *, title: str | None = None) -> str:

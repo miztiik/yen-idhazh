@@ -18,7 +18,6 @@
     "state/compact/gardener"
   ],
   "prune_refusal": null,
-  "raw_index_keep_days": 90,
   "window": {
     "unit": "forever"
   }

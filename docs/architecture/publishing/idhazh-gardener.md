@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-03
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -23,22 +23,22 @@ The gardener runs **tasks**. A task is two things that land together:
   names: `KIND`, the kind it serves, and `run`, which takes a `TaskContext` and
   returns a `Pass`.
 
-There is no list of tasks anywhere. `registry.discover()` imports every module
-in `tasks/`, and `registry.bind()` finds the module that runs one declaration in
-two lookups: the module named for the task (hyphens become underscores), else
-the module named for its kind. A config value never names a module, so text in
-a file cannot choose which code runs (Guardrail #11).
+`config/idhazh_gardener.json` names the complete task list. For each listed
+task, `registry.discover()` imports only its named module and the shared module
+for its kind as a fallback. `registry.bind()` selects the named module first.
+A config value never names a module, so text in a file cannot choose which
+code runs (Guardrail #11).
 
-**The folder is the only count.** `config/gardener/` says how many tasks there
-are, and nothing else does: a task joins when its declaration and its module
-land together, and the pre-flight below refuses either one arriving alone.
+**The named list is the task set.** The loader opens only the declaration files
+named in `config/idhazh_gardener.json`. An unrelated file in `config/gardener/`
+cannot change which tasks a wake plans.
 
 ## A wake, in order
 
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
 | 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Reads the commit the checkout is at and lists the name and size of every file under the folders the shard's tasks own or read, downloading none of them, then loads the declarations through the typed loader, finds the modules, and runs the pre-flight |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each task's fixed UTC period window, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
 | 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
@@ -355,6 +355,22 @@ commit as `--git-sha`, because the package does not start git to read it. The
 utility takes the same line without that flag, and both are built from one
 parser in `idhazh.gardener.cli`.
 
+Scheduled retention tasks inspect the period that just expired plus the
+configured earlier periods, using UTC dates. Their counts describe only those
+named periods. To drain an older backlog, run one task with an inclusive range:
+
+```text
+idhazh gardener run-task NAME --from YYYY-MM-DD --to YYYY-MM-DD ...
+idhazh gardener run-task NAME --from YYYY-MM --to YYYY-MM ...
+```
+
+The task's window decides whether the endpoints must be dates or months. The
+range is accepted only for one named task, never a scheduled shard. Run the
+operator pass once for each backlog range. If an older backlog exists when a
+fixed window is introduced, drain it once with a known inclusive range; the
+scheduled task does not scan the archive to discover it. The next scheduled
+wake returns to its fixed window.
+
 ## The collection tasks
 
 **Two tasks delete what GitHub keeps for this repository rather than what it
@@ -423,7 +439,7 @@ flowchart TB
     ABSORB["4. plan month files:<br/>indexes and deletes wait for the end of the pass"]
     DDUE{"compact_after_days whole days<br/>since the day ended?"}
     DHOLD["the day waits: a run may still be writing"]
-    TAKE["5. plan day listings and files:<br/>write all data, each final index once,<br/>delete sources, each watermark once last"]
+    TAKE["5. plan day files:<br/>write all data, each final index once,<br/>delete sources, each watermark once last"]
     DRY{"dry_run?"}
     REPORT["report every path, land the record only<br/>four of the six compactions, today"]
     LAND["land every write and delete<br/>in the shard's one commit"]
@@ -491,7 +507,7 @@ tree, in [the closed-day fold](#the-closed-day-fold) below.
 | Step | What it does |
 | --- | --- |
 | 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
-| 2 | Drops each raw listing older than `raw_index_keep_days` whose day is compacted and whose raw folder is empty, and every raw day in a month the window no longer keeps. While the window only reports, the listings still go, and those raw days are named and kept |
+| 2 | Drops every raw listing an earlier build left under `state/raw/<ledger>/index/`, and every raw day in a month the window no longer keeps. While the window only reports, the listings still go, and those raw days are named and kept |
 | 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
 | 4 | Absorbs every month that is done into its month file |
 | 5 | Takes every raw day that is due into its day file |
@@ -514,8 +530,7 @@ ended.** At one, a wake on the 25th takes the days up to the 23rd.
 Days go in order, each on its own, at most `max_periods_per_run` a pass. For each
 one the pass reads every raw file of the day and settles the rows: one file's
 rows per work unit - the last file of its highest attempt - then the first row
-of each key. It writes the day's listing,
-`state/raw/<ledger>/index/<YYYY-MM-DD>.json`, then its day file.
+of each key. It writes the day's day file and no raw listing.
 After all stages decide their files, the pass writes each final index once,
 in yearly, monthly, daily order; deletes source files; then writes each changed
 watermark once, last. Monthly absorption and new days share one final daily
@@ -686,7 +701,7 @@ it `true`, steps 1 and 2 name every month file past the window and every raw
 file of a day in a month past it, and keep them; steps 3 to 5 then pack those
 days and months like any other, as if the window kept every month, so a first
 pass does not start at the oldest month the window keeps. The raw listings of
-step 2 still go, because their days' rows are in day files. `dry_run` still
+step 2 still go, because they hold no row. `dry_run` still
 decides whether anything lands, so a dry run with the window reporting names
 what that live pass would do. With it `false`, a pass drops what the window no
 longer keeps, as above.
@@ -716,13 +731,13 @@ the files it read. It changes no answer a reader gets
 ([../../concepts/partitions.md](../../concepts/partitions.md)).
 
 **The retention task that owns each tree folds it**, when its declaration
-carries a `fold` block. The current task is `feed-health`.
-Which trees a task folds is read off the folders it walks, so
-one job writes each tree a wake and no tree is checked out twice. The
-item-health, summary-quality-evals, host-fingerprint, counterfactual-scores and
-candidate-models ledgers are not CSV day trees any more, so no fold reads them:
-their compaction packs them. The [evaluation ID lookup](../contracts/observation-lookup.md)
-has no day/month fold or age-deletion task.
+carries a `fold` block. No current task carries one: feed-health now uses the
+ledger door, and the [evaluation ID lookup](../contracts/observation-lookup.md)
+uses JSON and SQLite. Neither is a CSV day tree. A future fold can run only for
+a ledger registered in `DAY_TREES`, and the task that owns that tree must own
+its folder. Which trees a task folds is read from the folders it walks, so one
+job writes each tree a wake and no tree is checked out twice. Other ledgers
+under `state/raw/` are packed by their own compaction tasks.
 
 **A task may settle a closed month whole.** With `fold.settles_months`, once a
 month's last day is closed - `fold.after_days` whole days after the month ends -
@@ -738,7 +753,7 @@ days, which would take the month's file whole once its first day aged out.
 | --- | --- |
 | 1 | The task's window runs first, dry or live, and returns what it took |
 | 2 | The runner calls the fold, unless the window failed - then the fold waits a wake, and the row's fold cells stay empty |
-| 3 | The fold lists every day of each tree the task walks and takes each day that is closed - `fold.after_days` whole days after it ended, default 1, the rule `compact_after_days` reads - and still holds a writer file. With `fold.settles_months` it first takes each closed month that still holds a day's file, and leaves that month's days to it |
+| 3 | The fold lists only its fixed day and month windows, then takes each closed period that still holds a writer file. `fold.after_days` sets when a period closes; `fold.settles_months` settles a closed month whole and leaves its days to it |
 | 4 | It skips a day folder the window took, or would take on a dry run, and a month holding one: a shard refuses a path it both writes and deletes |
 | 5 | It settles each month, then each day, writes `settled.csv` in its folder and deletes the rest - or, on a dry run, reads and settles each one and changes nothing |
 
@@ -809,11 +824,15 @@ then absorbs the month that holds it - writing a day file and deleting it in one
 pass - which would stall every later wake. The order costs a month one more wake
 after its last day is taken (Carmack).
 
-**2026-09-28: a day's listing is written when the day is taken, not at every
-wake.** A listing of a day not yet taken would be rewritten on the day it is.
-A pass lists the raw day folders once, by name, and opens only the days it
-takes, so what one pass reads is bounded by its budget rather than by the
-backlog (Carmack).
+**2026-10-03: the compaction writes no raw listing.** It used to write
+`state/raw/<ledger>/index/<YYYY-MM-DD>.json` for each day it took and keep it
+90 days. Nothing read it: a browser reads the daily index for a packed day, and
+the site build stages its own listing, with sizes, for a day not packed yet. A
+re-run is rebuilt from the day file and the new raw files, never the listing.
+So every pass now deletes each listing it finds, and the setting that kept them
+is gone. A pass lists the raw day folders once, by name, and opens only the
+days it takes, so what one pass reads is bounded by its budget rather than by
+the backlog (Fowler, Carmack).
 
 **2026-09-28: the monthly window counts from the month's absorption.** A month
 file goes when the month `monthly_window` later is absorbed, so the period holds

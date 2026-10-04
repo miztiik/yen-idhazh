@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -167,14 +167,15 @@ sweep therefore grows one day a day, and the growth is declared rather than
 removed - at the 727-day horizon the 1 GB Pages cap sets, about 645 MB reads in
 roughly 15 s on a laptop and 30-60 s on the 4-vCPU runner, against a 6 h job.
 
-**And three whole-tree walks that stayed.** `assemble.site_size` and
-`site_weight.measure` read the size of every file in the tree;
-`site_weight.count_published_items` parses every staged day payload. Each says so
-at the top of its own docstring with the measurement beside it: over
-`frontend/public/digest/` at 443 files and 25,070,521 bytes, 2026-09-07 on an
-a developer machine, `site_size` took 300.4 ms best and 563.4 ms worst over five
-runs and `measure` took 276.8 ms best and 352.3 ms worst - in a job that runs for
-hours. The reason they stayed is in
+**And one whole-tree walk that stayed.** `build_publication.record_build_inventory`
+reads the size of every file in the built site and parses every built day
+payload. The `site-weight` step runs it each time it measures, and then
+`site_weight.measure` and `site_weight.count_published_items` read the one
+inventory it wrote. `assemble.site_size` reads the source inventory,
+`frontend/public/publication.json`, rather than the tree. When `measure` still
+walked `frontend/public/digest/` itself - 443 files and 25,070,521 bytes,
+2026-09-07, on a developer machine - the walk took 276.8 ms best and 352.3 ms
+worst over five runs, in a job that runs for hours. The reason it stayed is in
 [what did not land](#two-rows-did-not-land-what-was-asked-and-the-page-is-more-useful-for-saying-so)
 below.
 
@@ -200,7 +201,7 @@ reads are here and not how many. These are `backend/`'s;
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `ledger.load_seen` | the days it is handed, through `ledger.load_days`: the compact indexes of `state/compact/seen/`, the compact file that serves each day, and the raw files under `state/raw/seen/` of only the days no index names | `collect.seen_window_days`, committed at 90 |
-| `ledger.load_health` | day files of `state/feed-health/` | `ledger.HEALTH_WINDOW_DAYS`, 31 |
+| `ledger.load_health` | the newest `within_days` days the feed-health ledger holds a row for, named from its indexes and raw folder names alone (`ledger_files.held_days`), then those days through `ledger.load_days`: the compact indexes of `state/compact/feed-health/`, the compact file that serves each day, and the raw files under `state/raw/feed-health/` of only the days no index names | `ledger.HEALTH_WINDOW_DAYS`, 31 |
 | `ledger.load_days` | the compact indexes of one door ledger, the one compact file that serves each day it is handed, and the raw files of only the days no index names. A day of a packed year opens that year's whole file, once however many of its days are asked | the days its caller names. Every reader of `item-health`, `summary-quality-evals` and `host-fingerprint` that asks about a window or a date calls it: the drift review, `console_band.publish`'s machine rows, `machine.publish`, `run_timeline.publish`, `public_telemetry.publish`, `day_metrics`, `source_health._recent_item_health`, `reconcile_prefill.py` and the `telemetry-aggregate` task among them |
 | `ledger.load_fitted_thresholds` | day files of `state/content-similarity-judge/fitted-thresholds/` | the caller's `within_days`, and the fit asks for `max(settled_window_days, step_change_window_rows * 2)` - 28 days on the committed knobs. **The cover is in days and the guard's median is in rows, which is why it is twice the row count rather than equal to it.** One missed run leaves 13 rows inside a 14-day cover, the median returns nothing, and a guard that silently never fires is worse than one that fires too readily. A bound set by two knobs, never by what the archive holds |
 | `similarity.applied.applied_line` | the same day files, through `load_fitted_thresholds` | `assemble.same_story.adaptive_dedup_threshold.applied_lookback_days`, committed at 7. It runs on every publish, so the bound is the one that matters most on this page: 8 file opens on the thousandth day and on the third. A gap longer than the lookback means the judge has been down that long, and the committed config floor is the honest answer - so the cover is also the policy |
@@ -229,7 +230,7 @@ reads are here and not how many. These are `backend/`'s;
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
 | `gardener_publish.Checkout.committed_folders`, which the `trials` task's folders come from | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: "what under `state/` does nothing claim" is a question about every child of `state/`, and a wake whose checkout is empty for this task can only ask the commit |
 | the `trials` task's walk of each folder the listing hands it | every file under the trial trees - today `state/pipeline-tests/` alone | the trial trees and nothing else, and its own window empties them: what it walks is what the last 90 days of trial runs wrote, and a tree it empties is removed whole |
-| the compaction's listing of a ledger's days, `raw_files.raw_days` and `raw_files.listed_days` | the day folder names under `state/raw/<ledger>/` and the file names under its `index/`, never a file's contents | the raw days not compacted yet, and the listings `raw_index_keep_days` keeps, committed at 90. A live compaction empties both as it goes, so it names about two raw days and 90 listings. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
+| the compaction's listing of a ledger's days, `raw_files.raw_days` and `raw_files.listed_days` | the day folder names under `state/raw/<ledger>/` and the file names under its `index/`, never a file's contents | the raw days not compacted yet, and any listing an earlier build left, which every pass deletes. A live compaction empties both as it goes, so it names about two raw days and no listing. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
 | the gardener's closed-day fold, `closed_day_fold` | the day folder and file names of each CSV day tree its task owns, then every file of each closed day that still holds a writer file, and, where the task's fold settles months, every file of each closed month that still holds a day's file | what it opens is the days closed since the last wake - about one a tree a day - plus any a failed wake left, and in a tree that settles months, the month just closed once a month and a month a late day landed in. What it lists is every day folder of the tree, the listing the task's window pass already makes over the same tree. A bounded input cannot answer it: which days still hold a writer file is a question about every day, and a day a failed wake skipped is still waiting however old it is |
 
 ### Unbounded, and it says so
@@ -241,9 +242,8 @@ reads are here and not how many. These are `backend/`'s;
 | `corpus.read_rows` | `corpus/corpus.jsonl` | already rolling, capped at `finetune.corpus_rows` |
 | `contracts.base.Contract.read` | one payload | a validator cannot skip what it has not read |
 | `publication_checks.run_publication_checks` | every committed `digest.json` under `frontend/public/digest/` | a published day is frozen, but the contracts it is read through are not, so any day can stop matching on a commit that changes a shape. The receipt that used to skip an unchanged day was decommissioned on 2026-09-27: it settled a day on a recorded payload LENGTH, which let a receipt earned over one tree pass a same-length day in another. Measured 44 MB/s (2026-09-08), so the 727-day horizon reads in 30-60 s on the runner |
-| `assemble.site_size` | every file under `frontend/public/digest/` | three jobs write the tree, so no one process can carry the total |
-| `site_weight.measure` | every file under the built tree | it is the independent audit a maintained total is checked against |
-| `site_weight.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
+| `assemble.site_size` | `frontend/public/publication.json`, the source inventory, whose entries name every published file | three jobs write the tree, so no one process can carry the total; the inventory carries it, and grows by one entry a published file |
+| `build_publication.record_build_inventory`, run by the `site-weight` step | every file under the built tree, and every built day payload | it is the independent audit a maintained total is checked against, and bytes and items have to come from one corpus. `site_weight.measure` and `site_weight.count_published_items` read the one inventory it writes |
 | `retention.dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
 | `build_reference_dataset.archive_candidates` | every committed `digest.json` under `frontend/public/digest/` | the candidate pool for the frozen reference set has to be every article the pipeline has published, because the set is drawn on **outlet diversity** and a window would hide the outlets that publish rarely. It is a verb a person types, off the daily path and run once a set (2026-09-13) |
 | `item_health_provenance.archive_columns` | every row of the item-health ledger, through `ledger.load_ledger_rows` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is an on-demand [column diagnostic](../architecture/sources/item-health.md#diagnosing-missing-columns), not a saved architecture report. No test repeats it (`CLAUDE.md` section 13) |
@@ -432,8 +432,8 @@ the last day there was.
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
 | `payload.readDayShards`, `payload.dayShardFiles` | the shards of the newest `days` recorded days of a CSV day tree | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts days, never files** - see below |
-| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `host-fingerprint.machineRecord` | the ledger's compact indexes, then the newest `days` packed days of the item-health, summary-quality-evals or host-fingerprint ledger, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the same 91, counted back from the newest packed day that holds a row: when the newest packed days hold none, the reader reads as many earlier days to make up for them. `-1` reads every packed day, and a caller that passes it says why beside the call. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
-| `payload.feedResults` | through `readDayShards`, over `state/feed-health/` | the same 91 |
+| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord` | the ledger's compact indexes, then the newest `days` packed days of the item-health, summary-quality-evals, feed-health or host-fingerprint ledger, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the same 91, counted back from the newest packed day that holds a row: when the newest packed days hold none, the reader reads as many earlier days to make up for them. `-1` reads every packed day, and a caller that passes it says why beside the call. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
+| `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same 91 |
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
 | `similarity-holdout.mergeLineHoldoutScore` | through `readDayShards`, over `state/content-similarity-judge/merge-line-holdout-scores/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
@@ -655,13 +655,17 @@ broken.
 **The site-size total shipped its retraction half only.** `site_weight.SiteSize.minus`
 carries the total forward where one process both writes and deletes, so an
 ordinary deletion pass no longer re-reads the whole tree to learn a number it is
-already holding. The three walks above stayed, and the reason is structural
+already holding. The three walks of that time stayed, and the reason was structural
 rather than an excuse: **two separate jobs write `frontend/public/digest/`** -
 the work shards render and the assembly job writes the day payload - and the
 cleanup pass deletes from it, so a total one of them accumulated would silently
 miss what the others did, in the number that feeds the site-size card. Carrying
-one between three jobs means writing it down, which is a new persisted contract
-and a person's decision. So the three walks declare their growth instead.
+one between three jobs meant writing it down, which is a new persisted contract
+and a person's decision. That contract is now the source inventory,
+`frontend/public/publication.json`, which `assemble.site_size` reads. The walk
+that stays is the built tree's: every build regenerates that tree, so there is
+no earlier total to carry, and `record_build_inventory` walks it once each time
+the site is measured.
 
 **The state-prune row's premise was measured and refuted, so nothing was
 optimised.** The row asked for the dated walk that `retention.dated_days` gave

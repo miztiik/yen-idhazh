@@ -6,10 +6,7 @@
       "commit_sha": "9caa16fbc3f9ead557b3019aa486f444bb63e978",
       "completed_at": "2026-08-21T06:44:12Z",
       "config_digests": [
-        {
-          "path": "config/idhazh.json",
-          "sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"
-        }
+        {"path": "config/idhazh.json","sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"}
       ],
       "determinism_violations": 0,
       "evaluation_enabled": null,
@@ -135,30 +132,9 @@
       "started_at": "2026-08-21T06:00:00Z",
       "status": "partial",
       "verticals": [
-        {
-          "below_feed_floor": false,
-          "eligible_feeds": null,
-          "feed_floor": null,
-          "id": "ai",
-          "planned": 1,
-          "published": 1
-        },
-        {
-          "below_feed_floor": false,
-          "eligible_feeds": null,
-          "feed_floor": null,
-          "id": "energy",
-          "planned": 1,
-          "published": 1
-        },
-        {
-          "below_feed_floor": false,
-          "eligible_feeds": null,
-          "feed_floor": null,
-          "id": "world",
-          "planned": 1,
-          "published": 0
-        }
+        {"below_feed_floor": false,"eligible_feeds": null,"feed_floor": null,"id": "ai","planned": 1,"published": 1},
+        {"below_feed_floor": false,"eligible_feeds": null,"feed_floor": null,"id": "energy","planned": 1,"published": 1},
+        {"below_feed_floor": false,"eligible_feeds": null,"feed_floor": null,"id": "world","planned": 1,"published": 0}
       ]
     },
     {
@@ -166,10 +142,7 @@
       "commit_sha": "36b42cd95d6ddd2f9b44509cc35014e29ab3f933",
       "completed_at": "2026-08-21T18:22:05Z",
       "config_digests": [
-        {
-          "path": "config/idhazh.json",
-          "sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"
-        }
+        {"path": "config/idhazh.json","sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"}
       ],
       "determinism_violations": 1,
       "evaluation_enabled": true,
@@ -247,22 +220,8 @@
       "started_at": "2026-08-21T18:00:00Z",
       "status": "completed",
       "verticals": [
-        {
-          "below_feed_floor": false,
-          "eligible_feeds": null,
-          "feed_floor": null,
-          "id": "ai",
-          "planned": 2,
-          "published": 2
-        },
-        {
-          "below_feed_floor": false,
-          "eligible_feeds": null,
-          "feed_floor": null,
-          "id": "energy",
-          "planned": 1,
-          "published": 1
-        }
+        {"below_feed_floor": false,"eligible_feeds": null,"feed_floor": null,"id": "ai","planned": 2,"published": 2},
+        {"below_feed_floor": false,"eligible_feeds": null,"feed_floor": null,"id": "energy","planned": 1,"published": 1}
       ]
     },
     {
@@ -270,10 +229,7 @@
       "commit_sha": "36b42cd95d6ddd2f9b44509cc35014e29ab3f933",
       "completed_at": "2026-08-21T22:18:41Z",
       "config_digests": [
-        {
-          "path": "config/idhazh.json",
-          "sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"
-        }
+        {"path": "config/idhazh.json","sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"}
       ],
       "determinism_violations": 1,
       "evaluation_enabled": true,
@@ -351,22 +307,8 @@
       "started_at": "2026-08-21T22:00:00Z",
       "status": "completed",
       "verticals": [
-        {
-          "below_feed_floor": false,
-          "eligible_feeds": null,
-          "feed_floor": null,
-          "id": "ai",
-          "planned": 2,
-          "published": 2
-        },
-        {
-          "below_feed_floor": false,
-          "eligible_feeds": null,
-          "feed_floor": null,
-          "id": "energy",
-          "planned": 1,
-          "published": 1
-        }
+        {"below_feed_floor": false,"eligible_feeds": null,"feed_floor": null,"id": "ai","planned": 2,"published": 2},
+        {"below_feed_floor": false,"eligible_feeds": null,"feed_floor": null,"id": "energy","planned": 1,"published": 1}
       ]
     }
   ],

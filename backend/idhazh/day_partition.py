@@ -123,9 +123,9 @@ def date_of(day_file: Path) -> str:
     """The `<YYYY-MM-DD>` a day file holds, read off its own path.
 
     The peer of `month_of`, and both exist because a boundary is either a month
-    or a day. The gardener's `telemetry-aggregate` and `feed-health` tasks compare
-    a month because their windows are months; the prune verb compares a day,
-    because an operator names its range in days. A caller
+    or a day. The gardener's `telemetry-aggregate` task compares a month because
+    its windows are months; the prune verb compares a day, because an operator
+    names its range in days. A caller
     with a day boundary that spelled this itself would be the second place the
     path layout is written down.
     """
@@ -196,3 +196,13 @@ def days_in_window(today: str, within_days: int) -> list[str]:
     """
     end = date_type.fromisoformat(today)
     return [(end - timedelta(days=offset)).isoformat() for offset in range(within_days + 1)]
+
+
+def days_before(first_kept: date_type, lookback: int) -> list[date_type]:
+    """The `lookback` days immediately before an exclusive boundary, oldest first."""
+    if lookback < 1:
+        raise ValueError("day lookback must be at least one")
+    return [
+        first_kept - timedelta(days=offset)
+        for offset in range(lookback, 0, -1)
+    ]

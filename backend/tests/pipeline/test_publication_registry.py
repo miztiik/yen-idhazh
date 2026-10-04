@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import record_fixture_day
 
 from idhazh.cli import main
 from idhazh.contracts.ledger_name import LedgerName
@@ -115,17 +116,18 @@ def test_two_modules_claiming_one_name_are_both_named(
         discover()
 
 
-def test_a_check_naming_a_ledger_with_no_tree_shape_is_refused() -> None:
+def test_a_check_naming_a_ledger_the_door_has_no_entry_for_is_refused() -> None:
     """Failure 4. The write would fail after the gate had already passed the day.
 
-    `SEEN` is a real ledger with no day-tree shape, so this is the fault an
-    author actually makes: a name that exists, used where it cannot be written.
+    The eval ledger's ID folder is a real ledger the door has no entry for, so
+    this is the fault an author actually makes: a name that exists, used where
+    it cannot be written.
     """
-    with pytest.raises(PublicationCheckError, match="no tree-shape entry"):
-        validate_registry([a_check("probe", LedgerName.SEEN)])
+    with pytest.raises(PublicationCheckError, match="no ledger-door entry"):
+        validate_registry([a_check("probe", LedgerName.SUMMARY_QUALITY_EVALS_INDEX)])
 
 
-def test_a_check_naming_a_day_tree_ledger_passes() -> None:
+def test_a_check_naming_a_door_ledger_passes() -> None:
     """The denominator: a refusal that refused everything would look the same."""
     validate_registry([a_check("probe", LedgerName.FEED_HEALTH)])
     validate_registry([a_check("probe")])
@@ -144,6 +146,7 @@ def test_a_mis_wired_gate_exits_two_rather_than_failing_the_day(
     day = tmp_path / "digest" / "2026" / "08" / "21"
     day.mkdir(parents=True)
     (day / "digest.json").write_text("{}", encoding="utf-8")
+    record_fixture_day(tmp_path, "2026-08-21")
 
     def refuse() -> tuple[Check, ...]:
         raise PublicationCheckError("two modules declare check 'pictures'")

@@ -18,6 +18,7 @@ from typing import Final
 import pytest
 
 from idhazh import day_shards, ledger, month_partition, retention
+from idhazh.build_publication import record_build_inventory
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
@@ -53,7 +54,7 @@ def walked[T](walk: Callable[[], Iterable[T]]) -> tuple[list[T], bool]:
 
 
 def listing_of(repo: Path, folder: str) -> FileListing:
-    return FileListing.from_disk(repo, [folder])
+    return FileListing.from_disk(repo, [folder], paths=[repo / folder])
 
 
 SHARD_TREES: Final = {
@@ -79,8 +80,8 @@ SHARD_TREES: Final = {
 @pytest.mark.parametrize("shape", sorted(SHARD_TREES))
 def test_the_writer_files_of_a_day_tree_are_the_disk_walks(tmp_path: Path, shape: str) -> None:
     """A closed month's own settled file is a member of both walks, beside its days."""
-    root = plant(tmp_path / "state" / "feed-health", SHARD_TREES[shape])
-    listing = listing_of(tmp_path, "state/feed-health")
+    root = plant(tmp_path / "state" / "summary-quality-evals-index", SHARD_TREES[shape])
+    listing = listing_of(tmp_path, "state/summary-quality-evals-index")
 
     on_disk = walked(lambda: day_shards.shard_files(root, days=UNBOUNDED_WINDOW))
     by_name = walked(lambda: named_trees.shard_files(listing, root))
@@ -101,6 +102,12 @@ PUBLISHED: Final = [
     "2027/11/15/ai-0005.json",
     "2027/11/15/digest.json",
 ]
+PUBLISHED_DAY_DATES: Final = (
+    date(2026, 10, 19),
+    date(2026, 10, 20),
+    date(2026, 10, 21),
+    date(2027, 11, 15),
+)
 STRAYS: Final = {
     "clean": [],
     "a month that is no month": ["2026/13/01/ai-0001.json"],
@@ -118,16 +125,17 @@ def test_the_days_of_a_published_tree_are_the_disk_walks(
     root = plant(tmp_path / "frontend" / "public" / "digest", [*PUBLISHED, *STRAYS[stray]])
     listing = listing_of(tmp_path, "frontend/public/digest")
 
+    days = [published for published in PUBLISHED_DAY_DATES if before is None or published < before]
     on_disk = walked(
         lambda: [
             (published, folder, tuple(path for path in sorted(folder.iterdir()) if path.is_file()))
-            for published, folder in retention.dated_days(root, before=before)
+            for published, folder in retention.dated_days(root, days)
         ]
     )
     by_name = walked(
         lambda: [
             (day.published, day.folder, day.files)
-            for day in named_trees.dated_days(listing, root, before=before)
+            for day in named_trees.dated_days(listing, root, days)
         ]
     )
 
@@ -140,11 +148,13 @@ def test_the_pictures_past_a_cutoff_and_the_oldest_one_are_the_disk_walks(
 ) -> None:
     root = plant(tmp_path / "frontend" / "public" / "digest", PUBLISHED)
     listing = listing_of(tmp_path, "frontend/public/digest")
+    days = [published for published in PUBLISHED_DAY_DATES if published < limit]
 
-    assert named_trees.visuals_older_than(listing, root, limit) == retention.visuals_older_than(
-        root, limit
+    assert named_trees.visuals_older_than(listing, root, days) == retention.visuals_older_than(
+        root, days
     )
-    assert named_trees.oldest_visual(listing, root) == retention.oldest_visual(root)
+    first = min(PUBLISHED_DAY_DATES)
+    assert named_trees.oldest_visual(listing, root, first) == retention.oldest_visual(root, first)
 
 
 def test_the_oldest_picture_leaves_out_what_a_pass_just_deleted(tmp_path: Path) -> None:
@@ -155,13 +165,16 @@ def test_the_oldest_picture_leaves_out_what_a_pass_just_deleted(tmp_path: Path) 
     for path in taken:
         path.unlink()
 
-    assert named_trees.oldest_visual(listing, root, without=taken) == retention.oldest_visual(root)
+    first = min(PUBLISHED_DAY_DATES)
+    assert named_trees.oldest_visual(listing, root, first, without=taken) == retention.oldest_visual(
+        root, first
+    )
 
 
 def test_a_trees_weight_is_the_disk_walks(tmp_path: Path) -> None:
     root = plant(tmp_path / "frontend" / "public" / "digest", PUBLISHED)
     listing = listing_of(tmp_path, "frontend/public/digest")
-
+    record_build_inventory(root)
     assert named_trees.measure(listing, root) == measure(root)
 
 
@@ -180,9 +193,12 @@ def test_the_month_files_of_a_folder_are_the_disk_walks(tmp_path: Path) -> None:
     listing = listing_of(tmp_path, "state/item-health-summary")
 
     for suffix in (".csv", ".json"):
-        assert named_trees.month_files(listing, folder, suffix) == month_partition.month_files(
-            folder, suffix
-        )
+        months = ["2026-08", "2026-09"]
+        assert named_trees.month_files(
+            listing, folder, suffix, months
+        ) == month_partition.month_files(folder, suffix, months)
+    with pytest.raises(ValueError, match="real YYYY-MM month"):
+        month_partition.month_files(folder, ".csv", ["2026-13"])
 
 
 def test_every_file_under_a_tree_is_the_disk_walks(tmp_path: Path) -> None:
@@ -280,7 +296,9 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
     an_index(state, Period.DAILY, ["2026-08-01", "2026-08-02"])
     compacted = ledger.watermark_path(state, RAW, Period.DAILY).parent.parent
     listing = FileListing.from_disk(
-        tmp_path, [raw.relative_to(tmp_path).as_posix(), compacted.relative_to(tmp_path).as_posix()]
+        tmp_path,
+        [raw.relative_to(tmp_path).as_posix(), compacted.relative_to(tmp_path).as_posix()],
+        paths=[raw, compacted],
     )
 
     year = [f"2025-{number:02d}" for number in range(1, 13)]

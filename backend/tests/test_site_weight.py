@@ -12,6 +12,7 @@ import pytest
 from conftest import CONFIG_DIR, read_text
 from retention._trees import site
 
+from idhazh.build_publication import inventory_path, record_build_inventory
 from idhazh.cli import main
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
@@ -47,12 +48,18 @@ def days_of_warning(budget_mb: int, kb_per_day: int) -> int:
 
 
 def test_an_absent_site_measures_as_nothing(tmp_path: Path) -> None:
-    assert measure(tmp_path / "missing").bytes_used == 0
+    with pytest.raises(FileNotFoundError, match="run npm run build"):
+        measure(tmp_path / "missing")
+
+
+def measured_fixture(root: Path) -> SiteSize:
+    record_build_inventory(root)
+    return measure(root)
 
 
 def test_the_site_is_measured_every_run(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp", "b-0000000002.webp"]})
-    size = measure(root)
+    size = measured_fixture(root)
     assert size.files == 3
     assert size.bytes_used > 2000
 
@@ -99,21 +106,21 @@ def test_the_alarm_only_reports(tmp_path: Path) -> None:
     """It is an alarm, not a gate: it says yes and deletes nothing."""
     root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
     (root / "2026" / "08" / "21" / "big-0000000005.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
-    before = measure(root)
+    before = measured_fixture(root)
     assert over_budget(before, RetentionConfig(site_budget_mb=1)) is True
     assert measure(root) == before
 
 
 def test_a_small_site_is_not_over_budget(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
-    assert not over_budget(measure(root), RetentionConfig())
+    assert not over_budget(measured_fixture(root), RetentionConfig())
 
 
 def test_the_alarm_speaks_only_when_over_budget(tmp_path: Path) -> None:
     """The words the run logs: None below the budget, a headroom line above it."""
     root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
     (root / "2026" / "08" / "21" / "big-0000000005.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
-    over = measure(root)
+    over = measured_fixture(root)
     assert budget_alarm(over, RetentionConfig()) is None
     line = budget_alarm(over, RetentionConfig(site_budget_mb=1))
     assert line is not None
@@ -123,7 +130,7 @@ def test_the_alarm_speaks_only_when_over_budget(tmp_path: Path) -> None:
 
 def test_headroom_is_measured_against_the_hard_cap(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
-    assert headroom_mb(measure(root)) == pytest.approx(PAGES_HARD_CAP_MB, abs=1)
+    assert headroom_mb(measured_fixture(root)) == pytest.approx(PAGES_HARD_CAP_MB, abs=1)
 
 
 #: The item ceiling in force. Read from the config rather than copied beside it:
@@ -138,6 +145,7 @@ def sized_tree(root: Path, weights: dict[str, int]) -> Path:
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"x" * count)
+    record_build_inventory(root)
     return root
 
 
@@ -150,6 +158,7 @@ def staged_days(root: Path, days: dict[str, int]) -> Path:
             json.dumps({"date": day, "items": [{"item_id": str(n)} for n in range(count)]}),
             encoding="utf-8",
         )
+    record_build_inventory(root)
     return root
 
 
@@ -164,8 +173,8 @@ def test_the_split_sums_to_the_total_and_names_what_grew(tmp_path: Path) -> None
         {
             "index.html": 900,
             "_app/immutable/chunk.js": 40_000,
-            "digest/2026/08/21/digest.json": 5_000,
-            "digest/2026/08/22/digest.json": 7_000,
+            "digest/2026/08/21/run.json": 5_000,
+            "digest/2026/08/22/run.json": 7_000,
             "console/index.html": 9_000,
         },
     )
@@ -186,16 +195,16 @@ def test_published_items_are_counted_from_the_tree_that_was_measured(tmp_path: P
     """Bytes and items have to come from one corpus, or the rate divides two."""
     root = staged_days(tmp_path / "build", {"2026-08-21": 3, "2026-08-22": 5})
     assert count_published_items(root) == 8
-    assert count_published_items(tmp_path / "never-built") == 0
+    with pytest.raises(FileNotFoundError, match="run npm run build"):
+        count_published_items(tmp_path / "never-built")
 
 
 def reads_during(work: Callable[[], object]) -> int:
     """How many files an operation asks for a size.
 
     Counted rather than timed. A timing assertion is flaky and says nothing about
-    what the code read, and what this row is about is what gets read: `measure`
-    asks every file in the tree, so its count rises with the archive, and the
-    maintained total asks none, so its count does not.
+    what the code read: `measure` asks one inventory regardless of file count,
+    and the maintained total asks no files.
     """
     seen = 0
     real = Path.stat
@@ -220,29 +229,29 @@ def test_a_retracted_deletion_equals_an_independent_walk(tmp_path: Path) -> None
     """
     root = site(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
     (root / "sitemap.xml").write_bytes(b"x" * 40)
-    before = measure(root)
+    before = measured_fixture(root)
 
     doomed = [root / "2020" / "01" / "01" / "a-0000000001.webp", root / "sitemap.xml"]
     sizes = {path: path.stat().st_size for path in doomed}
     for path in doomed:
         path.unlink()
 
-    assert before.minus(root, sizes) == measure(root)
+    assert before.minus(root, sizes) == measured_fixture(root)
 
 
 def test_maintaining_the_total_does_not_read_more_as_the_tree_grows(tmp_path: Path) -> None:
-    """Guardrail #12, counted. The walk grows with the archive and the retraction does not."""
+    """The inventory reader's I/O count does not grow with the generated tree."""
     small = site(tmp_path / "small", {"2026-08-20": ["a-0000000001.webp", "b-0000000002.webp"]})
     large = site(
         tmp_path / "large",
         {f"2026-08-{day:02d}": [f"p-{n:010d}.webp" for n in range(6)] for day in range(1, 11)},
     )
 
-    walked_small = reads_during(lambda: measure(small))
-    walked_large = reads_during(lambda: measure(large))
-    assert walked_large > walked_small, (
-        "the independent walk is supposed to grow with the tree - it is the audit"
-    )
+    record_build_inventory(small)
+    record_build_inventory(large)
+    read_small = reads_during(lambda: measure(small))
+    read_large = reads_during(lambda: measure(large))
+    assert read_large == read_small, "the reader opens one inventory, not its named files"
 
     carried_small = measure(small)
     carried_large = measure(large)
@@ -262,7 +271,8 @@ def test_the_runway_is_headroom_over_the_marginal_rate(tmp_path: Path) -> None:
     """
     weight = 6 * BYTES_PER_MB
     root = sized_tree(tmp_path / "build", {"index.html": weight})
-    size = measure(root, published_items=300)
+    measured = measure(root)
+    size = SiteSize(measured.bytes_used, measured.files, measured.by_directory, 300)
 
     per_item = weight / 300
     rate = per_item * ITEMS_PER_DAY
@@ -284,7 +294,9 @@ def test_a_runway_from_nothing_raises_rather_than_reading_as_forever(tmp_path: P
     Same defect as the green light on the wrong tree: the comfortable answer is
     the one an absent build produces, so the absent build must not produce one.
     """
-    empty = measure(tmp_path / "never-built")
+    empty_root = tmp_path / "empty"
+    empty_root.mkdir()
+    empty = measured_fixture(empty_root)
     assert empty.files == 0
 
     with pytest.raises(ValueError):
@@ -294,7 +306,7 @@ def test_a_runway_from_nothing_raises_rather_than_reading_as_forever(tmp_path: P
     with pytest.raises(ValueError):
         days_to_alarm(empty, RetentionConfig(), ITEMS_PER_DAY)
 
-    real = measure(sized_tree(tmp_path / "build", {"index.html": 1_000}), published_items=10)
+    real = SiteSize(1_000, 1, {"index.html": 1_000}, 10)
     with pytest.raises(ValueError):
         days_to_cap(real, 0)
 
@@ -331,12 +343,30 @@ def built_site(root: Path, megabytes: int) -> Path:
     page = root / "2026-08-24"
     page.mkdir(parents=True, exist_ok=True)
     (page / "index.html").write_bytes(b"x" * megabytes * BYTES_PER_MB)
+    record_build_inventory(root)
     return root
 
 
 def test_a_site_inside_budget_passes_quietly(tmp_path: Path) -> None:
     tree = built_site(tmp_path / "build", 3)
     assert stage_site_weight(tree, RetentionConfig()) == 0
+
+
+def test_the_step_measures_the_tree_as_it_is_not_an_inventory_left_beside_it(
+    tmp_path: Path,
+) -> None:
+    """The deploy builds with Node alone, so the step that reads the inventory writes it."""
+    tree = tmp_path / "build"
+    (tree / "2026-08-24").mkdir(parents=True)
+    (tree / "2026-08-24" / "index.html").write_bytes(b"x" * BYTES_PER_MB)
+    assert not inventory_path(tree).exists()
+
+    assert stage_site_weight(tree, RetentionConfig()) == 0
+    assert measure(tree).files == 1
+
+    (tree / "late.html").write_bytes(b"x" * 10)
+    assert stage_site_weight(tree, RetentionConfig()) == 0
+    assert measure(tree).files == 2
 
 
 def test_the_alarm_fires_when_the_built_site_crosses_the_alarm_point(
@@ -391,7 +421,7 @@ def test_lowering_the_cap_moves_the_gate_and_the_headroom_it_prints(tmp_path: Pa
     assert stage_site_weight(tree, RetentionConfig()) == 0
     assert stage_site_weight(tree, RetentionConfig(pages_hard_cap_mb=2)) == 1
 
-    size = measure(tree, published_items=count_published_items(tree))
+    size = measure(tree)
     shipped = budget_alarm(size, RetentionConfig(site_budget_mb=2))
     lowered = budget_alarm(size, RetentionConfig(site_budget_mb=2, pages_hard_cap_mb=500))
     assert shipped is not None
@@ -423,10 +453,12 @@ def test_a_site_measured_as_nothing_fails_rather_than_passes(tmp_path: Path) -> 
 
     Both shapes: a tree that was never built, and one that built nothing.
     """
-    assert stage_site_weight(tmp_path / "never-built", RetentionConfig()) == 1
+    with pytest.raises(FileNotFoundError, match="run npm run build"):
+        stage_site_weight(tmp_path / "never-built", RetentionConfig())
 
     empty = tmp_path / "build"
     empty.mkdir()
+    record_build_inventory(empty)
     assert stage_site_weight(empty, RetentionConfig()) == 1
 
 
@@ -450,4 +482,4 @@ def test_the_committed_payload_tree_is_not_the_site(tmp_path: Path) -> None:
     """
     payloads = site(tmp_path / "public", {"2026-08-24": ["ai-01.svg"]})
     bundle = built_site(tmp_path / "build", 3)
-    assert measure(payloads).bytes_used < measure(bundle).bytes_used
+    assert measured_fixture(payloads).bytes_used < measure(bundle).bytes_used

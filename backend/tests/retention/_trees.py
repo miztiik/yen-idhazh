@@ -13,8 +13,6 @@ from typing import Final
 from conftest import seed_host_fingerprint, seed_item_health
 
 from idhazh import day_shards, ledger
-from idhazh.contracts.base import ServerJob
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     TERMINAL_STAGES,
@@ -24,7 +22,6 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 
 #: The run every row these tests write is filed under. One value, so a test that
@@ -231,44 +228,6 @@ NOT_MONTHS: Final = (
     #: as January 2025, so a naive check finds two files claiming one month.
     "\u0662\u0660\u0662\u0665-\u0660\u0661",
 )
-
-def feed_health_history(state_dir: Path, months: list[str], *, day_of_month: int = 11) -> None:
-    """A real feed-health file per month, written through the real producer."""
-    for index, month in enumerate(months):
-        day = f"{month}-{day_of_month:02d}"
-        ledger.write_segment(
-            state_dir,
-            LedgerName.FEED_HEALTH,
-            [
-                FeedHealthRow(
-                    version=FeedHealthRow.schema_version(),
-                    run_id=f"{day}-1",
-                    date=day,
-                    feed_id=f"example-{index:02d}",
-                    checked_at=f"{day}T06:00:00Z",
-                    outcome=FetchOutcome.OK,
-                    status=200,
-                    items=3,
-                    detail=None,
-                )
-            ],
-            run_id=f"{day}-1",
-            attempt=1,
-            job=ServerJob.PLAN,
-            shard=0,
-        )
-
-
-def feed_health_months(state_dir: Path) -> list[str]:
-    """Which months the feed-health day tree still holds, oldest first.
-
-    The boundary the prune works on is still a month; only the files below it are
-    days, so a test about what the prune kept asks in months.
-    """
-    return sorted(
-        day_shards.shards_by_month(ledger.tree_root(state_dir, LedgerName.FEED_HEALTH), days=UNBOUNDED_WINDOW)
-    )
-
 
 def host_fingerprint_history(
     state_dir: Path, months: list[str], *, day_of_month: int = 11
