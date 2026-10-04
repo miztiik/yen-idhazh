@@ -358,6 +358,15 @@ def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None
     jobs = _mapping(workflows["pages.yml"]["jobs"], "pages.yml jobs")
     decide = _mapping(jobs["decide"], "pages.yml decide job")
     condition = str(decide["if"])
+    assert " ".join(condition.split()) == (
+        "github.event_name != 'workflow_run'"
+        " || github.event.workflow_run.name != 'CI'"
+        " || (github.event.workflow_run.conclusion == 'success'"
+        " && github.event.workflow_run.event == 'push')"
+    ), (
+        "only a push's passing CI publishes: a pull request's CI judges a commit "
+        "nobody merged, and deploying it puts unmerged code in front of readers"
+    )
     assert "conclusion == 'success'" in condition, (
         "a workflow_run trigger cannot be filtered by conclusion, so a CI run "
         "that failed has to be refused by the job that reads it"

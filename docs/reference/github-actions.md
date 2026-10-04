@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-04
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -13,7 +13,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `ci.yml` | `CI` | Pull request; push to `main` | Code and site checks |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
-| `pages.yml` | `Pages publication` | Completed `CI` or `Content refresh` run | Static site |
+| `pages.yml` | `Pages publication` | Passing `CI` run on a push to `main`; completed `Content refresh` run | Static site |
 | `drift.yml` | `Drift review` | `0 8 * * 0` | Quality drift review |
 | `validate.yml` | `Model validation` | none | Candidate quality verdict |
 | `measure.yml` | `Measurements` | none | Runtime, corpus and budget measurements |
@@ -38,8 +38,10 @@ publishes nothing. Overlapping runs use distinct writer identities and the
 ## Pages publication
 
 - Build committed data only. Do not run the producer or a model during publication.
-- After successful CI, publish its verified commit only if `frontend/`,
-  `config/idhazh.json` or `state/` changed. Failed CI does not publish.
+- After CI passes on a push to `main`, publish its verified commit only if
+  `frontend/`, `config/idhazh.json`, `config/ledgers.json` or `state/` changed. A
+  pull request's CI, a failed CI and a manual CI run do not publish: a pull request
+  publishes when it merges.
 - After Content refresh completes, publish the branch tip regardless of the run's
   overall conclusion. Its producer validated the committed day; a sibling failure
   does not invalidate it. The run's starting commit does not contain its new day.
