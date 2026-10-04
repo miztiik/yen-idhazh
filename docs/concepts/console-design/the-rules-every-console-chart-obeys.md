@@ -466,3 +466,7 @@ to need editing.
 - [../../architecture/publishing/console.md](../../architecture/publishing/console.md) - which surface answers which question.
 - [../../architecture/publishing/console-charts.md](../../architecture/publishing/console-charts.md) - the chart frame these rules are implemented in.
 - [../config/appearance.md](../config/appearance.md) - `chart.*` and `console.*`, the knobs these rules read.
+
+## Records table exception
+
+The Records page table is not a chart. It prints what DuckDB returned so the operator can copy names and values into the next question. Its later chart panel must still follow the chart rules on this page.

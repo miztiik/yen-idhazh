@@ -22,7 +22,8 @@
 		presets,
 		monthsFor,
 		busy = false,
-		ready = false
+		ready = false,
+		statusLine = null
 	}: {
 		days: number;
 		presets: readonly number[];
@@ -31,6 +32,7 @@
 		busy?: boolean;
 		/** False until a browser has run the route. */
 		ready?: boolean;
+		statusLine?: string | null;
 	} = $props();
 
 	const pending = $derived(monthsFor(days));
@@ -44,6 +46,7 @@
 	);
 
 	const status = $derived.by(() => {
+		if (statusLine !== null) return statusLine;
 		if (!ready) {
 			// It said the sections below were "showing N days" until 2026-09-09.
 			// That stopped being true when the page stopped holding telemetry rows
