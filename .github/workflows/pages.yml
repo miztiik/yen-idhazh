@@ -39,11 +39,14 @@ jobs:
   # `check-publication` before its own commit, so the day is verified by its
   # producer, and a sibling job failing afterwards does not unvalidate it.
   # Holding it back would leave a good day unpublished for up to four hours.
+  # A pull request's CI judges a commit nobody has merged, so only a push's
+  # verdict publishes; the pull request publishes when it merges.
   decide:
     if: >-
       github.event_name != 'workflow_run'
       || github.event.workflow_run.name != 'CI'
-      || github.event.workflow_run.conclusion == 'success'
+      || (github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
