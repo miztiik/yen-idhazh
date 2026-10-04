@@ -98,19 +98,19 @@
       "root": "public"
     },
     {
-      "bytes": 386304,
+      "bytes": 406272,
       "items": 0,
       "path": "assist/index/2026-10.bin",
       "root": "public"
     },
     {
-      "bytes": 170302,
+      "bytes": 179169,
       "items": 0,
       "path": "assist/index/2026-10.json",
       "root": "public"
     },
     {
-      "bytes": 2893,
+      "bytes": 2978,
       "items": 0,
       "path": "console/band.json",
       "root": "public"
@@ -128,7 +128,7 @@
       "root": "public"
     },
     {
-      "bytes": 39601,
+      "bytes": 40246,
       "items": 0,
       "path": "day-metrics/2026-10.json",
       "root": "public"
@@ -650,13 +650,13 @@
       "root": "public"
     },
     {
-      "bytes": 245664,
-      "items": 128,
+      "bytes": 344997,
+      "items": 180,
       "path": "digest/2026/10/04/digest.json",
       "root": "public"
     },
     {
-      "bytes": 11412,
+      "bytes": 17084,
       "items": 0,
       "path": "digest/2026/10/04/run.json",
       "root": "public"
@@ -674,7 +674,7 @@
       "root": "public"
     },
     {
-      "bytes": 12222,
+      "bytes": 12824,
       "items": 0,
       "path": "machine/2026-10.csv",
       "root": "public"
@@ -692,7 +692,7 @@
       "root": "public"
     },
     {
-      "bytes": 7085,
+      "bytes": 7469,
       "items": 0,
       "path": "run-days/2026-10.json",
       "root": "public"
@@ -704,13 +704,13 @@
       "root": "public"
     },
     {
-      "bytes": 153799,
+      "bytes": 163164,
       "items": 0,
       "path": "run-timeline/2026-10.csv",
       "root": "public"
     },
     {
-      "bytes": 384273,
+      "bytes": 384250,
       "items": 0,
       "path": "source-health.json",
       "root": "public"
@@ -728,7 +728,7 @@
       "root": "public"
     },
     {
-      "bytes": 420515,
+      "bytes": 445904,
       "items": 0,
       "path": "telemetry/2026-10.csv",
       "root": "public"
@@ -878,7 +878,7 @@
       "root": "state"
     }
   ],
-  "total_bytes": 52421887,
-  "total_items": 14853,
+  "total_bytes": 52592174,
+  "total_items": 14905,
   "version": "2026-10-03T13:33"
 }
