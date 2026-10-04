@@ -1,35 +1,12 @@
 name: Content refresh
 
-# The run, five times a day. An orchestrator that never does the work,
-# disposable workers that do, and an assemble step that publishes whatever
-# finished.
-#
-# The shape mirrors the runner's own economics (Guardrail #2): weights are
-# restored once per JOB rather than once per run, so a worker handles a shard of
-# several items to amortize the restore rather than one item per machine.
+# Plan once, run work shards, and publish completed items.
+# Workflow rules: docs/reference/github-actions.md.
 
 on:
   schedule:
-    # Five UTC runs, four hours apart. A story that broke at 07:00 waited a full
-    # day under a daily schedule, and the digest is only worth opening if it is
-    # current.
-    #
-    # The 02:20 slot exists so a finished digest is waiting before 06:30. A
-    # scheduled run here starts 40-70 min after its cron minute and then takes
-    # 164-184 min (ubuntu-latest, 2026-08-23/24, n=3), so the old 06:20 first
-    # slot did not publish until about 10:30.
-    #
-    # :20, not :00. GitHub queues scheduled jobs by load and the top of the hour
-    # is the busiest minute on the platform; twenty past costs a reader nothing
-    # and buys a run that starts closer to when it was asked for.
-    #
-    # Five lines rather than one `20 2,6,10,14,18 * * *`. The schedule is
-    # identical and `github.event.schedule` is not: with one line it returns the
-    # whole expression and a run cannot tell which of the five slots fired, so
-    # nothing could say how late it was. GitHub drops scheduled slots under load
-    # and 8 of 13 went missing between 2026-08-27 and 2026-08-29 without one
-    # failure to show for it (docs/reference/github-actions.md). Five lines are
-    # what let the run report that itself.
+    # Separate UTC cron entries identify each slot in github.event.schedule.
+    # Run off the hour to reduce scheduler contention.
     - cron: '20 2 * * *'
     - cron: '20 6 * * *'
     - cron: '20 10 * * *'
@@ -61,36 +38,12 @@ on:
 permissions:
   contents: write
 
-# No concurrency group, and the absence is the decision. Two runs of this
-# workflow are meant to overlap.
-#
-# Every committed path a job here writes carries that run's own identity in the
-# filename, so two runs at once name two files rather than one and the rebase
-# applies both whole. A group on top of that bought no safety. It bought a
-# queue, and the queue cost two things. GitHub keeps ONE pending run per group
-# and cancels the older without an error anywhere, so a dispatch fired during a
-# run disappeared. And a run that did wait then read a ledger its own wait had
-# made stale: run 35660521768 waited 46 minutes and folded a 46-minute-old
-# ledger, then lost the whole day at the push.
-#
-# Re-adding a group brings both back. What settles two writers here is the
-# filename and the read that settles it, not a queue.
+# No concurrency group: a newer pending run can cancel an earlier dispatch.
+# Writer identities and commit retries handle overlapping runs.
 
-# No model ref lives here. `config/idhazh.json` is the only place one is written
-# and the model block reads it where it is used, so every job below reads one
-# answer. A copy here was a second answer: the alias already came from config
-# while the weights came from this block, so one edit could serve 8B bytes under
-# a 9B alias and file every eval row under a model that never ran (Guardrail #10).
-#
-# No llama.cpp pin either. It is `config/llama-cpp-pin.json`, which the install
-# reads and the `plan` job publishes, so the build this run installs, the build
-# its cache key names and the build its run manifest records are one answer and
-# cannot drift apart.
+# Model settings and the runtime pin are read from config, not copied here.
 env:
-  # Where this job's own probes ask. It is not where the stage posts - that is
-  # `model_server.base_url`, and the server command binds the port inside it.
-  # This is the one place this workflow writes an address, and it is always
-  # loopback because the server is on this runner (Guardrail #6).
+  # Runner-local health probe; inference uses model_server.base_url from config.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
 
 jobs:
@@ -106,12 +59,7 @@ jobs:
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
       llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
     steps:
-      # First, before the checkout, for the reason written above the shard's own
-      # stamp: the number then covers the checkout and the install as well as the
-      # feed reads. That is the whole question - the case for splitting this job
-      # rests on a figure nothing in this repository can check, and this is the
-      # instrument. The job-clock step below subtracts this stamp and files the
-      # difference onto the host row this job already opens.
+      # Start before checkout so elapsed time includes setup.
       - name: Stamp the plan clock
         run: |
           set -euo pipefail
@@ -130,59 +78,25 @@ jobs:
 
       - id: decide
         env:
-          # Through `env`, not pasted into the program below. A value read by
-          # name is a value, whatever it contains.
+          # Pass dispatch input as data, not interpolated shell code.
           DISPATCH_DATE: ${{ inputs.date }}
         run: |
           set -euo pipefail
           DATE="${DISPATCH_DATE:-}"
           [ -n "$DATE" ] || DATE=$(date -u +%F)
-          # The shape check runs AFTER the default, so one pattern covers both
-          # paths and the scheduled one is the case it is proved against:
-          # `date -u +%F` writes 2026-08-27 and the pattern accepts it. The
-          # month and the day are bounded as well as counted, because
-          # 2026-13-45 is as publishable as 2026-08-27 and nothing downstream
-          # reads either one as a calendar date.
-          #
-          # This is a correctness check, not a permission check. Dispatching
-          # this workflow already needs write access, so the person typing the
-          # date could commit to `main` by hand. What they cannot see is the
-          # cost of a typo: `2026-8-27`, or a trailing space, publishes a day
-          # directory at an address no reader and no archive page will ever
-          # look at, silently, after a run of about three hours.
+          # Reject malformed dates before they become published paths.
           if ! [[ "$DATE" =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]]; then
             echo "date must be YYYY-MM-DD, and it becomes the day's address" >&2
             exit 1
           fi
-          # A scheduled run has no inputs at all, so every one of these is the
-          # empty string and every one needs its default here. `faithfulness`
-          # is normalized to a STRING for the same reason: read as a boolean,
-          # the empty string compares equal to `false` and silently turned the
-          # scorer off on every scheduled run - which is every automatic run.
+          # Scheduled runs have no inputs; compare faithfulness as a string.
           FAITH="${{ inputs.faithfulness }}"
           [ -n "$FAITH" ] || FAITH=true
-          # Where the day's payload lives. Derived once, here, because the date
-          # becomes a fact for the whole run here - and the assemble job needs
-          # to name `digest.json` and `run.json` one file at a time.
           echo "day_dir=frontend/public/digest/${DATE//-//}" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
           echo "faithfulness=$FAITH" >> "$GITHUB_OUTPUT"
 
-      # The build every worker is about to install, asked once of the file that
-      # decides it. It travels as a job OUTPUT because `needs` resolves before a
-      # worker's first step and `steps` does not, and the weights cache key has
-      # to name the build it holds.
-      #
-      # Reading it from its one home is what stops this workflow carrying a
-      # second copy. Three things have to agree about which binary decoded the
-      # day - the install, the cache key, and the `runtime_build` the run
-      # manifest stamps - and they now agree by construction rather than by
-      # three edits landing together (Guardrail #10).
-      #
-      # The model's own refs no longer travel this way. They used to be read
-      # here and relayed through seven job outputs to the step that downloaded
-      # them; the download reads the file itself now, so there is nothing to
-      # relay and nothing that can disagree with it.
+      # Share the installed runtime pin with cache keys and run manifests.
       - id: runtime
         name: Say which llama.cpp build this run installs
         run: |
@@ -190,92 +104,36 @@ jobs:
           python3 backend/utilities/model_runtime.py print-pinned-build \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # How long a worker may take, and how long any job here may keep trying to
-      # push what it committed. Both read from the one file that says so, and
-      # both travel as job OUTPUTS for the same reason the model refs do: a
-      # job's `timeout-minutes` resolves from `needs` before that job's first
-      # step, and `steps` is not readable there.
-      #
-      # Each is asserted to be a bare positive whole number here, at the one
-      # point that writes it. `timeout-minutes` takes whatever it is handed, so a
-      # value Actions cannot read as a number leaves the worker with no bound at
-      # all and the run finds out six hours later.
-      #
-      # One reader and one refusal for both, because a second utility would be a
-      # second answer to what a bound is. The key is a dotted path, so a knob in
-      # another block is read without a second program.
+      # Publish the validated timeout before worker job expressions resolve.
       - id: bounds
         run: |
           set -euo pipefail
           python3 backend/utilities/shard_bound.py >> "$GITHUB_OUTPUT"
 
-      # GitHub queues a scheduled workflow by load and silently drops the slots
-      # it cannot place. Measured 2026-08-27 to 2026-08-29: 13 slots elapsed, 5
-      # produced a run, and every run that started succeeded. So a thin day is a
-      # run that never happened rather than a run that failed, and nothing in
-      # this repository said so - the run list showed five green runs and no
-      # trace of the eight that were never created.
-      #
-      # This step cannot make the platform reliable. It makes the loss visible
-      # in the one place a person already looks, and it is why the cron is five
-      # one-slot lines: `github.event.schedule` names the line that fired, so
-      # the run can say which slot it is and how late.
       - name: Say which slot this is and how late it started
         if: github.event_name == 'schedule'
         env:
-          # Through `env`, not pasted into the script. A value read by name is a
-          # value, whatever it contains.
           SLOT: ${{ github.event.schedule }}
         run: |
           set -euo pipefail
           SLOT_MINUTE=$(printf '%s' "$SLOT" | cut -d' ' -f1)
           SLOT_HOUR=$(printf '%s' "$SLOT" | cut -d' ' -f2)
-          # A leading zero is octal to the shell, so every field is forced to
-          # base ten. `date -u +%H` writes 08 at eight in the morning.
+          # Force decimal arithmetic for zero-padded UTC clock fields.
           ASKED=$(( 10#$SLOT_HOUR * 60 + 10#$SLOT_MINUTE ))
           NOW=$(( 10#$(date -u +%H) * 60 + 10#$(date -u +%M) ))
           LATE=$(( NOW - ASKED ))
-          # A slot placed after midnight is late by yesterday's clock, not early
-          # by today's. That case is the one worth catching: it is how the 18:20
-          # slot of 2026-08-28 became a run on 2026-08-29 and published to the
-          # wrong day.
+          # A negative difference means the slot ran after midnight.
           [ "$LATE" -ge 0 ] || LATE=$(( LATE + 1440 ))
           echo "slot ${SLOT_HOUR}:${SLOT_MINUTE} UTC, started ${LATE} minutes late"
-          # 120 minutes is DERIVED, not measured: a scheduled run here normally
-          # starts 40-70 minutes after its cron minute, so this is roughly twice
-          # the recorded normal. It is a reporting threshold and nothing reads it
-          # to make a decision.
           if [ "$LATE" -ge 120 ]; then
             echo "::warning title=Late run::Slot ${SLOT_HOUR}:${SLOT_MINUTE} UTC started ${LATE} minutes late. GitHub queues scheduled runs by load and drops slots it cannot place - see docs/reference/github-actions.md."
           fi
 
-      # The fold below derives a committed file from other committed files, and
-      # `actions/checkout` hands it the commit this run was TRIGGERED at. The
-      # `digest` concurrency group holds a queued run until the run ahead of it
-      # finishes, so those two moments are an unbounded distance apart: run
-      # 35660521768 was created at 22:02 and started here at 22:48, five commits
-      # and one whole digest behind. It folded segments the run ahead had
-      # already folded and deleted, wrote five day heads that run had already
-      # written, and the rebase then held two derived versions of one file with
-      # no way to choose. The day was lost at the push.
-      #
-      # Ahead of everything else in this job that writes under `state/` - which
-      # is everything after it.
+      # Checkout uses the trigger commit; refresh state before planning writes it.
       - name: Take the run state from the tip, not from the trigger commit
         run: python3 backend/utilities/take_state_from_the_tip.py state
 
-      # No weights load here. The plan job is feed reads and arithmetic, and it
-      # finishes in seconds - which is what makes fanning out afterwards cheap.
-      #
-      # `--execution` is what every ledger row of this run is filed under. It has
-      # to be a number no second execution can compute, and the count of runs in
-      # the committed manifest was not one: `actions/checkout` pins this job to
-      # the commit the run was triggered at, so a run that starts while another
-      # is still working reads a manifest that has never heard of it. On
-      # 2026-08-29 runs 33270983446 and 33274853468 both derived `2026-08-29-3`.
-      # `github.run_id` is allocated by GitHub, is unique across every run of
-      # every workflow here, and is written once - into plan.json, which every
-      # shard downloads - so all of a run's shards file under one id.
+      # github.run_id gives every shard the same unique execution identity.
       - name: Plan the day
         run: >-
           python -m idhazh plan
@@ -283,16 +141,7 @@ jobs:
           --execution "${{ github.run_id }}"
           --commit "${{ github.sha }}"
 
-      # Every job draws its own runner, so every job records the one it drew. A
-      # run is only as fast as its slowest job, and until now only `work` said
-      # what machine it was on - so the two jobs either side of it cost time
-      # nobody could attribute to a processor.
-      #
-      # After the plan and not before it: the probe files its row under the
-      # run's own id, and the plan is where that id is written. Before the
-      # fan-out, because nothing heavy has started - the feed reads are done and
-      # the bandwidth probe wants a gigabyte and an idle machine, which is the
-      # same reason it sits ahead of the model server in `work`.
+      # The probe needs the plan's execution ID and an otherwise idle runner.
       - name: What machine this job drew
         run: |
           set -euo pipefail
@@ -302,17 +151,8 @@ jobs:
             --shard 0 \
             --job plan
 
-      # The day decides the fan-out, so this runs after the plan rather than
-      # beside the date. `run.shard_size` is what one worker is sized to carry,
-      # so a small day spends fewer jobs and restores the weights fewer times
-      # (Guardrail #2). The derivation is bounded by `run.max_parallel`, which is
-      # four, so a scheduled run still never asks for more workers than the four
-      # it has always had - the eight in the dispatch form above is the ceiling
-      # an operator may ask for, and moving the automatic path onto it needs the
-      # three conditions in docs/reference/pipeline-cost.md, not this step. A
-      # dispatch input still wins, which is why the guard stays a hard failure
-      # there. What this step writes is also what caps the workers that run at
-      # once, so the fan-out and its concurrency cap cannot disagree.
+          # Size workers after planning; a dispatch count overrides the configured size.
+          # Use the same count for the matrix and its concurrency cap.
       - id: fanout
         run: |
           set -euo pipefail
@@ -320,11 +160,7 @@ jobs:
           SHARDS="${{ inputs.shards }}"
           if [ -z "$SHARDS" ]; then
             SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}")
-            # The derivation is bounded by run.max_parallel, which this pattern
-            # does not read. Walk a derived count down into what the pattern
-            # accepts instead of exiting: the feeds have already been read by
-            # now, and a config the pattern disagrees with must cost the tail of
-            # the fan-out rather than the whole day.
+            # Clamp derived counts to the dispatch range; reject invalid inputs below.
             while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do
               SHARDS=$((SHARDS - 1))
             done
@@ -336,21 +172,7 @@ jobs:
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
           echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
-      # The other end of `What machine this job drew`, exactly as in `work`: the
-      # probe opens the row before anything heavy, and what the job cost is only
-      # knowable near its end, so this writes a second row of the same key and
-      # the settlement unites them - every reader settles a day by key, and the
-      # gardener's fold writes that answer down once the day is closed.
-      #
-      # Before the commit step and not after the artifact upload, because the
-      # commit below is what carries this row off the runner - a segment written
-      # after it goes in the bin with the machine. So the number stops short of
-      # the commit and the upload, which is the same bound the shard's clock has.
-      #
-      # No `--server-log` and no `--counters-file`: this job stands no model
-      # server up, so the three cells they fill stay empty. An empty cell says
-      # the reading was not taken, where a zero would claim a job that read no
-      # tokens.
+      # Record elapsed time before committing; commit and upload time are excluded.
       - name: What this job cost
         run: |
           set -euo pipefail
@@ -361,35 +183,9 @@ jobs:
             --shard 0 \
             --job-started-at "${JOB_STARTED_AT:-}"
 
-      # The plan job writes the sight and health ledgers, so the plan job commits
-      # them - not assemble. A run that dies in the worker still saw what it saw,
-      # and the next run needs that: first sight is the only age an undated
-      # article has, and a feed we never recorded is a feed we cannot quarantine.
-      # A bad day is exactly the day worth measuring, so waiting for a successful
-      # publish would lose the records that matter most.
-      #
-      # `state` whole, and it used to be five paths named one at a time. Naming
-      # the directory rather than its contents is what makes the step survive a
-      # fresh clone: `git add` runs under `set -euo pipefail`, so a path missing
-      # from the checkout aborts the whole step and costs every ledger beside
-      # it. `state` is in every checkout; a collection inside it need not be.
-      # The work shards and the two assemble commits stage `state` whole for the
-      # same reason.
-      #
-      # A second attempt at this same plan writes its own files rather than the
-      # files the first attempt wrote: the attempt is in every name, so the two
-      # never open one path and there is nothing for a merge driver to settle.
-      # Until 2026-09-19 `.gitattributes` gave the shared feed-health file a
-      # union driver and the merge kept both verdicts; the driver went, and the
-      # next shape of that failure was a rebase nobody could settle. The name is
-      # what removes it rather than making it quiet.
-      #
-      # `continue-on-error` because the plan this job exists to produce is the
-      # artifact below, not this push. Run `35660521768` died here: the push lost
-      # a race, the step failed, and the upload after it was skipped - so a plan
-      # that had already been computed never reached the shards and the whole day
-      # was lost to a ledger commit. The rows this push carries are worth a run;
-      # they are not worth the run.
+          # Persist seen and health records even if workers fail later.
+          # A failed push must not prevent the plan artifact from reaching workers.
+          # Stage state as a directory so absent collections do not fail a fresh clone.
       - name: Commit what the plan saw
         continue-on-error: true
         env:
@@ -401,13 +197,7 @@ jobs:
           state
           frontend/public/publication.json
 
-      # `error` rather than the default: `assemble` downloads this by name and
-      # cannot be built without it, so a plan job that finishes having written no
-      # plan has to fail here, where the cause is, and not one job later.
-      #
-      # `always()` so that a step above failing cannot throw away a plan this job
-      # already wrote. The `error` setting is what keeps that honest: a job that
-      # reaches here with no plan.json still fails, and it fails naming the file.
+      # Upload an existing plan after failure; fail here if it is missing.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -416,42 +206,19 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # This bound is the backstop, not the budget, and it is written in exactly one
-  # place: `run.shard_timeout_minutes` in config/idhazh.json, which the plan job
-  # publishes above. It used to say 330 here while config said 150, so anyone
-  # sizing a model against config was reading a number production ignored.
-  #
-  # 150 minutes is half again the slowest worker ever measured at the current
-  # item ceiling - 94.5 minutes on 2026-08-26 - and it still sits above the
-  # 117.5-minute slowest worker of 2026-08-24, when a day handed each worker 50
-  # items instead of 40. Raising it is not the fix for a slow worker (Guardrail #2);
-  # lowering `run.safety_ceiling_per_run` is, and that is the lever the ceiling
-  # was last moved with.
+  # The worker timeout comes from run.shard_timeout_minutes in config.
   work:
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJSON(needs.plan.outputs.shard_timeout_minutes) }}
     strategy:
       fail-fast: false
-      # The run's own worker count, so no worker ever waits for a sibling on
-      # either path: a scheduled run derives four from config, and a dispatch
-      # may name up to eight. A fixed number here is a second answer to how wide
-      # the fan-out is, and the two can disagree - at four it would have queued
-      # half of an eight-shard dispatch and handed back the wall-clock the
-      # fan-out buys. Eight workers is well inside Guardrail #2's 20 concurrent
-      # jobs.
+      # Match the planned count so larger dispatches do not queue sibling shards.
       max-parallel: ${{ fromJSON(needs.plan.outputs.shards) }}
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      # First, before the checkout, so the number covers everything the job
-      # does: the cache restore, the weight load and the warmup as well as the
-      # model time. The truncation cap reverts when the slowest work job passes
-      # 110 minutes, and until this stamp existed the only place a job's clock
-      # lived was the GitHub jobs API - which drops a job record when the run
-      # ages out, so the rollback rule was a person making an API call by hand
-      # (docs/reference/pipeline-cost.md). The job-clock step subtracts this and
-      # files the difference onto the host row this shard opened.
+      # Include checkout, installation, cache restore and model startup in timing.
       - name: Stamp the shard clock
         run: |
           set -euo pipefail
@@ -465,18 +232,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # Before anything that imports `idhazh`, which now includes the step that
-      # builds the server command. It used to run after that step, and the whole
-      # reason a second copy of the flag list existed was to be readable from a
-      # job that had not installed the package yet.
-      #
-      # `torch` comes from the processor-only index first, and the extra then
-      # finds it already satisfied. The default PyPI wheel for Linux carries the
-      # graphics-card runtime, and this runner has no graphics card (Guardrail
-      # #2) - so every shard of every run downloaded and unpacked a few gigabytes
-      # it could never execute. The index is the one `measure.yml` already names.
-      # It cannot go in the extra: a local version pinned there would follow a
-      # developer whose machine does have a card.
+      # Install before commands that import idhazh.
+      # CPU-only torch avoids unused GPU dependencies in the faithfulness extra.
       - name: Install
         run: |
           if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
@@ -491,13 +248,7 @@ jobs:
           name: plan
           path: backend/var/run/${{ needs.plan.outputs.date }}/
 
-      # Before the model block, and the reason is unchanged: the bandwidth probe
-      # wants a gigabyte and an idle machine, and once llama-server holds the
-      # memory it has neither. It sat between the digest check and the server
-      # start until the block became one action, which cannot be entered
-      # halfway. Nothing the probe measures moved with it - the restore ahead of
-      # it is disk traffic that has finished by the time this step runs, and the
-      # memory it needs is held by no process either side of the move.
+      # Probe before the model server consumes memory and bandwidth.
       - name: What machine this job drew
         run: |
           set -euo pipefail
@@ -507,15 +258,7 @@ jobs:
             --shard ${{ matrix.shard }} \
             --job work
 
-      # The cache, the fetch, the digest check, the server and the health probe.
-      # One action, shared with `llm-council.yml`, which ran the same steps as a
-      # second copy - so the two share one cache entry by construction rather
-      # than by a test comparing two literals.
-      #
-      # The port is handed over rather than inherited: it has one home, the
-      # workflow `env` above, and this is the line that carries it in. Nothing
-      # about the model is handed over at all - the action reads the same config
-      # this run was planned from.
+          # Share runtime setup and caches with the other model workflows.
       - uses: ./.github/actions/model-server
         id: model_server
         with:
@@ -523,38 +266,15 @@ jobs:
           probe_url: ${{ env.MODEL_SERVER_PROBE }}
           llama_cpp_build: ${{ needs.plan.outputs.llama_cpp_build }}
 
-      # Healthy says a server answers and the step above says which file it
-      # opened. Neither says the entry is true. Row #2 moved the turn envelope
-      # onto the model entry, so the entry now CLAIMS how a turn opens and
-      # closes - and a wrong marker renders a prompt with no turn structure that
-      # the grammar still accepts, so the only symptom is worse summaries and
-      # nothing goes red.
-      #
-      # Five cases, and none of them has a skip flag: the render, the prefix
-      # cache, the grammar, the architecture in the weights, and the window
-      # against the length the model was trained for. Each refuses by name and
-      # says what was declared and what was reported.
-      #
-      # Here rather than anywhere later, because a refusal costs this step where
-      # the failure it prevents costs a shard of summaries filed under a model
-      # that never rendered a turn. Per server rather than per run: every shard
-      # starts its own. It costs one template render, two tokenisations, two
-      # completions of at most 32 tokens, one model list and a few kilobytes off
-      # the front of the weights file.
-      #
-      # The schema is handed in from the module that builds it rather than
-      # copied here, so the grammar case is held to the shape this run really
-      # sends (`docs/architecture/summarize/model-boundary.md`).
+      # Verify each server's template, prefix cache, grammar, architecture and window.
+      # A healthy endpoint alone does not prove the configured model entry is correct.
+      # Contract: docs/architecture/summarize/model-boundary.md.
       - name: The server proves the entry
         run: |
           set -euo pipefail
           python3 backend/utilities/prove_the_entry.py --config-root config
 
-      # A shard's throughput varies with the host it drew, and no run log named
-      # the host, the binary or the weights - so no number a shard produced could
-      # say which bytes produced it (Guardrail #10). These six lines settle all three.
-      # `always()`, because the shard that failed is the one whose host is worth
-      # naming.
+      # Record host, runtime and weights even if the shard fails.
       - name: What this runner is
         if: always()
         env:
@@ -569,32 +289,14 @@ jobs:
           sha256sum backend/bin/llama-server || true
           sha256sum "${MODEL_PATH}" || true
 
-      # Neither of the two runs this shape was read from measured memory at all,
-      # and the runner has 16 GB (Guardrail #2). `measure.yml` already samples exactly
-      # this; the daily path did not.
-      #
-      # The sampler is `backend/utilities/memory_sampler.py`, which shares its
-      # `/proc` read with the sweep that has taken the same reading for longer.
-      # Every key it writes, and why each one is there, is in that module's own
-      # docstring.
-      #
-      # This step is the parent and it exits: the loop is launched into its own
-      # session and the pid written is the LOOP's. The shell this replaced
-      # backgrounded itself and wrote `$!`, which named the shell rather than
-      # the sampler, so a loop that died at once left a green step.
+      # Detach the sampler so it survives this step; track the sampler's own PID.
       - name: Sample memory
         run: |
           set -euo pipefail
           python3 backend/utilities/memory_sampler.py start-sampler \
             --pid "$(cat llama-server.pid)"
 
-      # `LLAMA_CPP_BUILD` is what the run manifest stamps as `runtime_build`,
-      # the llama.cpp release that decoded this shard's bytes. It used to reach
-      # here as workflow `env` beside a copy of the pin; it now comes from the
-      # step that read the pin, so the build stamped and the build installed are
-      # one answer. Unset it degrades to `build-not-recorded` rather than
-      # failing, so losing it would publish a day whose manifest cannot say what
-      # decoded it (Guardrail #10).
+      # Stamp the same runtime build that the model-server action installed.
       - name: Work the shard
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
@@ -609,21 +311,8 @@ jobs:
         if: failure()
         run: tail -50 llama-server.log || true
 
-      # The rows this shard earned, committed here rather than three hours later
-      # in assemble. Until then they exist only inside the items artifact at the
-      # end of this job, which is never committed and expires - so a run stopped
-      # after the workers had measured every item recorded none of it.
-      #
-      # First of the `always()` steps for that reason: a cancelled job runs them
-      # in order inside a grace period, and this is the one whose loss the pair
-      # exists to prevent.
-      #
-      # Neither step may fail the shard. What this job owes the run is the items
-      # artifact assemble publishes from, and assemble writes the same census
-      # again - so a ledger that will not push costs this run an early copy of
-      # rows it is going to get anyway, while a failed shard costs the day a
-      # worker. `continue-on-error` says that out loud instead of leaving it to
-      # whether the last command in a `run:` body happens to return zero.
+      # Record partial results first in the cancellation grace period.
+      # Reporting failures must not block the items artifact.
       - name: Record what this shard measured
         if: always()
         continue-on-error: true
@@ -634,35 +323,14 @@ jobs:
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }}
 
-      # llama-server counts these already and only publishes them under
-      # `--metrics`, which `config/idhazh.json` turns on. Read once, at the end:
-      # they are cumulative over the job, so a per-request scrape would add
-      # requests to the thing it measures and still report only the last one.
-      # One server serves one shard for a whole job, so one read covers it all.
-      #
-      # Before `What this job cost`, because that step reads the file this one
-      # writes and puts two of its counters onto the host row. Until they were
-      # committed these numbers reached only this job log, which keeps them for
-      # two days - and that is what made the prefill rate the throughput doc and
-      # the console publish impossible to check against anything (Guardrail #10).
-      # See docs/architecture/summarize/throughput.md.
-      #
-      # `always()`, because the shard that died is the shard whose context high
-      # water mark matters most. `continue-on-error` for the reason written above
-      # the record step: an unreadable scrape costs one observation row, a failed
-      # shard costs the day a worker. The endpoint is llama-server's own loopback
-      # surface inside this job - nothing a reader can reach (Guardrail #1).
+      # Read cumulative counters once, before job-clock consumes them.
       - name: What the server counted
         if: always()
         continue-on-error: true
         run: |
           curl -sf --max-time 30 "${MODEL_SERVER_PROBE}/metrics" -o llama-metrics.prom || true
           if [ -s llama-metrics.prom ]; then
-            # The whole counter set, so a llama.cpp rename is visible rather than
-            # silently absent, and then the four a reader names: the two a run is
-            # read by, and the two the job-clock step below parses onto the host
-            # row. Either pair renamed says so here, where a person reading a
-            # failed shard will find it, rather than arriving as an empty cell.
+            # Print all counters and name missing expected series after runtime changes.
             grep -E '^llamacpp:' llama-metrics.prom || true
             for series in llamacpp:n_busy_slots_per_decode llamacpp:n_tokens_max \
                           llamacpp:prompt_tokens_total llamacpp:prompt_seconds_total; do
@@ -672,36 +340,15 @@ jobs:
           else
             echo "no metrics: llama-server was already gone, or the role's inference.metrics is off"
           fi
-          # The kernel's own peak, for the runtime artifact and the operator
-          # step below. The stage never opens `/sys` itself: that tree is on the
-          # runner and on no developer machine this project is written on, so a
-          # stage that read it could not be run or tested anywhere else.
+          # Capture the runner's cgroup peak here; the portable stage reads this file.
           if [ -f /sys/fs/cgroup/memory.peak ]; then
             echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" > memory-peak.txt
           else
             echo "cgroup_memory_peak_bytes=unavailable" > memory-peak.txt
           fi
 
-      # The other end of `What machine this job drew`. That step probes the host
-      # before the model server starts, because the bandwidth reading wants a
-      # gigabyte and an idle machine; the four cells below are only knowable once
-      # the job is over. So the host row is written in two halves that fill
-      # different cells, into the one segment this job owns, and the settlement
-      # unites them - one row a job in the day either way.
-      #
-      # Every reading is already on this runner: `JOB_STARTED_AT` was stamped by
-      # the first step of this job, before the checkout, so the clock covers the
-      # cache restore and the weight load as well as the model time; llama-server's
-      # own log brackets the model load with two stamps; and the step above wrote
-      # what the server counted. That scrape is read here as well as there because
-      # the two prompt counters on it are the second instrument - the only reading
-      # on the site that can disagree with the item ledger's own arithmetic.
-      #
-      # `always()` and `continue-on-error`, for the reason written above the two
-      # steps before it: a job clock nobody recorded costs this run one cell,
-      # where a failed shard costs the day a worker. `:-` so a stamp that never
-      # arrived leaves an empty cell rather than sending the word "unbound" to a
-      # contract that would refuse it.
+      # Combine startup timing, the server log and counters in the host record.
+      # An absent start stamp leaves a missing reading, not a failed shard.
       - name: What this job cost
         if: always()
         continue-on-error: true
@@ -716,23 +363,9 @@ jobs:
             --server-log llama-server.log \
             --counters-file llama-metrics.prom
 
-      # Full evaluation inputs are committed before rows, index and receipts.
-      # Preparation replays the named inputs after each rejected push. Its fresh
-      # path list is separate from the saved job input manifest.
-      #
-      # `state` whole is what this stages now, and naming the directory rather
-      # than its contents is what makes the step survive a fresh clone: `git add`
-      # runs under `set -euo pipefail`, so a path missing from the checkout
-      # aborts the whole step and costs every ledger beside it. `state` is in
-      # every checkout; a collection inside it need not be. It is also what the
-      # plan job and the assemble commit have always staged.
-      #
-      # config/push-retry.json gives work shards their shorter deadline, so the
-      # push leaves time for the artifact upload after the last item.
-      #
-      # `SHARD` is here so the `push attempt` record names which of the shards
-      # it came from. Eight of them commit to one branch, and a contention
-      # figure nobody can attribute to a writer answers nothing.
+          # Publish evaluation inputs before their rows, index and receipts.
+          # Replay saved inputs after rejected pushes; keep prepared paths separate.
+          # The shard's deadline in config/push-retry.json leaves time to upload items.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -758,37 +391,15 @@ jobs:
             echo "llama-server.log not found"
             exit 0
           fi
-          # A fixed list of known lines hid the proof of prefix reuse for two
-          # measured runs: the list greps `kv cache rm [`, which this build never
-          # emits, while the line that settles it starts `slot get_availabl:`.
-          # The list was replaced by `^(srv|slot) `, which was worse - it can
-          # match nothing at all, because every line the runtime prints opens
-          # with a timestamp and a level letter:
-          #   `0.04.686.486 I srv    load_model: initializing, n_slots = 4, ...`
-          # Measured against the four captures in `tests/fixtures/runtime/`:
-          # that pattern found 1 line of 40 per capture, and the one it found
-          # was matched by `n_ctx_slot` rather than by the anchor. The tag is
-          # the third field, so the anchor reads the first two. It now finds 38
-          # of 40; the two it leaves are tagged `cmn` and are the common-args
-          # block, which this step is not for.
-          # `n_ctx_slot` and `n_ctx_seq` are one field under two llama.cpp
-          # spellings, and the pin does not stop a later bump from renaming it.
+          # Runtime lines start with a timestamp and level before the srv/slot tag.
+          # Match alternate context-field spellings across runtime builds.
           pattern='^[0-9.]+ [A-Z] (srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq'
           grep -E "$pattern" llama-server.log || true
-          # What that pattern found, against what the log holds. A pattern that
-          # matches nothing prints nothing and exits 0, which is how `^(srv|slot) `
-          # survived two measured runs finding 1 line in 40 - the line beside it
-          # did match, so the step never looked empty. This counts on the real
-          # log, on the real build, on every run, so it says so the day
-          # llama.cpp renames a field.
+          # Report match coverage so a runtime log-format change stays visible.
           matched=$(grep -cE "$pattern" llama-server.log || true)
           total=$(wc -l < llama-server.log)
           echo "matched ${matched:-0} of ${total} lines of llama-server.log"
-          # `f_sim_best` is the shared prefix over the incoming prompt and
-          # `f_keep` the same prefix over what the slot held. The distribution is
-          # where a prefix-reuse loss shows; the presence of the line is not.
-          # Both of these do match a real line - checked the same way, against
-          # the same four captures.
+          # f_sim_best measures reuse against the new prompt; f_keep against the old slot.
           for field in f_sim_best f_keep; do
             grep -oE "${field} = [0-9.]+" llama-server.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
               { v[NR] = $1 + 0 }
@@ -801,15 +412,6 @@ jobs:
               }'
           done
 
-      # The operator's read of the same two files the host row read, in the
-      # job log where a person looking at a failed shard will find it. It writes
-      # nothing: `memory-peak.txt` is written by the scrape step above, so the
-      # number printed here and the number the sampler took are one reading.
-      #
-      # The five figures and the roll-call behind them come off the module that
-      # wrote the records, rather than off an `awk` program reading a
-      # tab-separated file by column name. Both are keyed JSON now, so a key
-      # cannot move and there is no column position left to get wrong.
       - name: What memory this shard used
         if: always()
         run: |
@@ -830,34 +432,8 @@ jobs:
           retention-days: 2
           if-no-files-found: ignore
 
-      # Seven days, not one. Assemble reads this within the
-      # hour, so one day was enough for the run itself - but it is also the only
-      # copy of the article text a finished run leaves behind, and
-      # `data_wrangler.py backfill` replays it into the training corpus.
-      #
-      # At one day the scheduled harvest is the only way rows ever arrive, and it
-      # takes one run every `finetune.harvest_every_days` - about 85 rows a week
-      # measured over runs 33179908136 and 33227285523 on 2026-08-29, which is
-      # roughly six months to fill a 2000-row window. At seven days a single
-      # backfill reaches every run of the past week and fills it in one sitting.
-      #
-      # Measured 2026-08-29: one run's four shards are 555,842 bytes, so five
-      # runs a day held for seven days is 18.6 MB against the 500 MB of artifact
-      # storage Guardrail #2 allows - 3.7 percent of the budget, for the only copy of
-      # the text that exists.
-      #
-      # `always()`, because a step with no condition runs on `success()` and a
-      # job stopped by `timeout-minutes` is cancelled rather than successful.
-      # Run 34852763827 on 2026-09-14 is what that cost: three of four shards
-      # were cancelled at the bound, the `always()` ledger steps above them ran
-      # and filed 33 items as published, and this upload was skipped on all
-      # three - so assemble composed the day from shard 3 alone. The census read
-      # 46 published items and the committed day carries 13.
-      #
-      # There is something to upload because `work` writes each item's payloads
-      # as it finishes that item rather than once at the end. The record step
-      # above reads this same directory and did file rows on every cancelled
-      # shard, which is the evidence the files are on disk when the bound lands.
+      # Keep article text for training-corpus backfill.
+      # Upload completed items even after failure or timeout.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -866,26 +442,8 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # The pictures this shard drew. The summarize-and-plan call writes the
-      # summary and the plan in
-      # one reply, so `work` is the only job that renders, and a decision naming
-      # an asset whose bytes never left this runner is a broken image on the
-      # page - `_picture_faults` calls it "names a picture file that is not
-      # there". A day where nothing was drawable matches nothing here, which
-      # `if-no-files-found: ignore` makes a green no-op.
-      #
-      # The decisions themselves need no line: they are written into the items
-      # directory above and travel in that artifact.
-      #
-      # This run's day and never the whole tree: `render.write.asset_relpath`
-      # files every chart under the day that names it, so a wider line sends
-      # every committed day back to Actions on every run (Guardrail #12).
-      #
-      # `always()` for the reason written over the items artifact, and it has to
-      # be the same answer for both: the decision naming a chart travels in
-      # `items/` and the chart's bytes travel here, so guarding one alone
-      # publishes a story naming a picture file that is not there - which is
-      # what `_picture_faults` refuses the day for.
+      # Upload only this run's day, including completed charts after failure.
+      # Chart decisions travel in items; their image bytes must travel here.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -894,21 +452,8 @@ jobs:
           retention-days: 1
           if-no-files-found: ignore
 
-      # The article and the summary each scored item was judged on, for the
-      # person who labels the faithfulness queue by hand. The committed ledger
-      # keeps digests and no text, and this checkout is deleted when the job
-      # ends, so this artifact is the only copy that survives the run.
-      #
-      # Kept longer than every other artifact here and still not forever.
-      # Labelling sixty rows is an evening of a person's time, not a job step,
-      # so one day is not a window; ninety days would be a promise this project
-      # does not make about somebody else's article body. Fourteen days is a
-      # deadline a labeller can plan around, and it is what bounds the storage
-      # this costs (Guardrail #2). See
-      # docs/how-to/label-the-faithfulness-queue.md.
-      #
-      # Never committed, and deliberately not named in any commit call: an
-      # article body is never republished to a reader.
+      # Retain article/summary evidence for manual faithfulness labelling.
+      # See docs/how-to/label-the-faithfulness-queue.md.
       - uses: actions/upload-artifact@v7
         with:
           name: evidence-${{ matrix.shard }}
@@ -916,23 +461,8 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-      # What each model call was sent and what came back. The census row says a
-      # reply was 1,158 tokens where it used to be 229; it cannot say what the
-      # model was asked, so it cannot say whether the prompt moved, the article
-      # was longer, or the decoder simply ran on. That question was open for six
-      # days on the regression this exists for, and it was open because the only
-      # copy of the text was on a runner that had already been deleted.
-      #
-      # Ninety days, which is the longest window anything here keeps and is
-      # deliberate: a regression is found by comparing today with a run from
-      # weeks ago, and fourteen days would put the comparison run out of reach
-      # exactly when it is wanted. It is bounded by the two flags that fill it -
-      # `logging.capture_prompts` and `logging.capture_replies` - and with both
-      # off the directory is empty and this line is a green no-op.
-      #
-      # Never committed, and deliberately not named in any commit call: a
-      # rendered prompt carries the article body inside it, and an article body
-      # is never republished to a reader.
+      # Retain prompts and replies for regression comparisons, not site publication.
+      # logging.capture_prompts and logging.capture_replies control collection.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -943,19 +473,8 @@ jobs:
 
   assemble:
     needs: [plan, work]
-    # Runs even when a worker failed, because a run that publishes nothing on a
-    # bad day is a run whose bad days are invisible.
-    #
-    # `always()` said more than that and started this job when the PLAN failed
-    # too. There is nothing to assemble then - the plan is the artifact the step
-    # below downloads by name - so the run's one real failure arrived with a
-    # second, louder one stacked on top of it about a missing artifact, and the
-    # job that reported the cause was not the one anybody opened. A cancelled
-    # run started it as well.
-    #
-    # The status function is what keeps the failed-worker path: without one,
-    # GitHub applies an implicit `success()` and the workers would have to pass
-    # too.
+    # Keep completed work when workers fail; require a successful plan.
+    # !cancelled() overrides implicit success() without reviving cancelled runs.
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -976,16 +495,7 @@ jobs:
           name: plan
           path: backend/var/run/${{ needs.plan.outputs.date }}/
 
-      # The third job that draws its own runner, and the last one to say so. It
-      # sits straight after the plan arrives and before anything else runs: the
-      # probe reads the plan for the run's id, and the bandwidth reading wants a
-      # gigabyte and an idle machine, which this job stops having the moment it
-      # starts embedding a day and building a site.
-      #
-      # `if: always()` on the job means this runs on a bad day too, which is the
-      # day worth measuring. `continue-on-error` for the reason the ledger steps
-      # below carry it: what this job owes a reader is the published day, and a
-      # probe must never be what costs one.
+      # The probe needs the downloaded plan and an otherwise idle runner.
       - name: What machine this job drew
         continue-on-error: true
         run: |
@@ -1002,12 +512,7 @@ jobs:
           merge-multiple: true
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
 
-      # The pictures the work shards drew. The summarize-and-plan call writes
-      # the summary and the
-      # plan in one reply, so a chart is rendered on the shard that read the
-      # article and travels with it - one artifact per shard, and
-      # `continue-on-error` because a day where nothing was drawable is a normal
-      # day rather than a failed one.
+      # Missing visuals are valid when no shard produced a chart.
       - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
@@ -1022,21 +527,8 @@ jobs:
             --commit "${{ github.sha }}" \
             --runner ubuntu-latest
 
-      # The training window, built here because here is the only place the text
-      # exists. `backend/var/run/<date>/items/` is gitignored and travels as a
-      # one-day artifact, so a scheduled workflow of its own would check out a
-      # fresh tree, find an empty directory and harvest nothing - silently, every
-      # week, until somebody went looking.
-      #
-      # It is still a stage that runs alone with a file in and a file out
-      # (CLAUDE.md section 4): what moved is the workflow it is invoked from, not
-      # the command. The cadence is `finetune.harvest_every_days` and the step
-      # decides for itself, because `on.schedule` is parsed before any step runs
-      # and no config value can reach a cron line.
-      #
-      # `continue-on-error`, for the reason the two worker ledger steps carry it:
-      # what this job owes a reader is the published day, and a corpus that will
-      # not build must never be what stops one.
+          # Harvest while downloaded item text is available.
+          # The stage enforces finetune.harvest_every_days; failure must not block publication.
       - name: Harvest the training corpus
         continue-on-error: true
         run: python -m idhazh harvest --date "${{ needs.plan.outputs.date }}"
@@ -1051,26 +543,8 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # The day just written rides inside frontend/public, and /archive/ inlines
-      # every committed day for the on-device search - so this job is the one
-      # that can push a page past its ceiling or a payload no reader can read.
-      # Those are two different severities and they now sit on opposite sides of
-      # the commit below.
-      #
-      # An invalid payload means the day must not publish, so the two checks that
-      # find one run BEFORE the commit and stop it. The weight ratchet runs
-      # after. See ../../docs/architecture/publishing/layout.md.
-      #
-      # `check-publication` is the first of the two and it is the one that opens
-      # every story. Since the reading routes split on 2026-09-01 a document
-      # carries a seed and a browser fetches the rest, so the build below never
-      # looks at the stories past the seed and cannot fail on one.
-      #
-      # This run wrote one day, so it names that day. Every other committed day
-      # is frozen and was validated before it was pushed, and re-opening all of
-      # them costs about 0.27 s a day - measured 2026-09-05, 16 days in 6.6 s -
-      # five times a day, forever (Guardrail #12). `ci.yml` re-reads the whole tree
-      # on the change that can actually invalidate it: one that moves a contract.
+      # Validate this run's day before committing; older days are unchanged.
+      # The site build does not read every story fetched later by the browser.
       - name: The day this run wrote still matches its contracts
         run: python -m idhazh check-publication --day "${{ needs.plan.outputs.date }}"
 
@@ -1078,30 +552,14 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      # The 1 GB Pages cap is measured HERE and nowhere else, because `build` is
-      # the tree the deploy uploads and it does not exist until the step above
-      # has run. `assemble` can only see the committed payloads, which are a
-      # different tree eighteen times smaller - measuring those was an alarm that
-      # could never fire. Over the alarm point this prints and passes; past the
-      # cap it fails, before the day is pushed rather than at the deploy.
+      # Measure the built deployment tree, not the smaller committed payloads.
+      # Stop before committing if the built site exceeds the Pages size cap.
       - name: Measure the built site against the Pages cap
         working-directory: frontend
         run: python -m idhazh site-weight --site-tree build
 
-      # The paths the rebuild below owns, read from `backend/idhazh/path_classes.py`
-      # rather than written out here. They were a space-split string in this
-      # file, under a header warning that no path in it may carry a space - a
-      # rule nothing could check - and the workflow tests carried a second copy
-      # of the same list. Three lists that can drift is the defect; there is one
-      # now, and both this step and the tests read it.
-      #
-      # Through `$GITHUB_OUTPUT` and never `$GITHUB_ENV`. An env var set here
-      # reaches every later step of this job, and a later step that ran the
-      # commit script with no `REGENERATE_COMMAND` would be refused - the script
-      # refuses a refresh with no rebuild and exits 2.
-      #
-      # `DAY_DIR` through `env`, not pasted into the line below: a value read by
-      # name is a value, whatever it contains.
+      # Read rebuild-owned paths from their shared declaration.
+      # Use a step output: a job-wide refresh value would affect unrelated commits.
       - id: derived
         name: Say which committed paths a rebuild owns
         env:
@@ -1110,32 +568,10 @@ jobs:
           set -euo pipefail
           python -m idhazh derived-paths --day-dir "$DAY_DIR" >> "$GITHUB_OUTPUT"
 
-      # The checkout above carries main's tip at TRIGGER time, and this run has
-      # been going for two to three hours by now. So the day was just built on a
-      # base that old, and the push below is the first thing to find out.
-      #
-      # `REGENERATE_COMMAND` is the same invocation as the step above: when the
-      # push loses a race, the fix is to build the day again against the tip the
-      # push wants, not to ask git to text-merge two digests. `REFRESH_PATHS` is
-      # what that rebuild owns, named one file at a time under the day's
-      # directory - the `shard-visuals-*` artifacts unpacked this run's rendered
-      # charts into that same directory, and no producer here can make those
-      # again.
-      #
-      # `DROP_RACED_ASSETS_COMMAND` is what keeps those charts from being the
-      # thing that loses the day. A chart is filed under its item's own id, so a
-      # path a run that pushed while this one worked has already taken is that
-      # same item's chart. Its file is published; this run's copy is not, and
-      # the rebuild keeps the published item anyway, so this run's copy goes.
-      #
-      # `corpus` is staged here and is deliberately NOT in `REFRESH_PATHS`. The
-      # window records what this run saw rather than deriving from the tip, so a
-      # race is answered by replaying this run's rows onto the new base - the
-      # same branch of the script this run's own ledger files take - and never by
-      # rebuilding them.
-      #
-      # The `id` is here so the rebuild below can read this step's `rebased`
-      # output. Nothing else reads it.
+      # After a rejected push, regenerate derived files against the new tip.
+      # Refresh named files only; do not discard this run's rendered charts.
+      # Drop duplicate charts only when that item's chart is already published.
+      # Replay corpus and state rows; they record this run rather than derive from the tip.
       - name: Commit the day
         id: commit_day
         env:
@@ -1163,84 +599,21 @@ jobs:
           frontend/public/machine
           frontend/public/run-timeline state corpus
 
-      # The commit step above rebases when the push loses a race, and the
-      # rebuild there rewrites the day against the tip that won. `frontend/build`
-      # still holds the build made before any of that, so the gate below would
-      # weigh one tree's pages against another tree's records. Run 33270983446
-      # failed exactly there: /console/ read 746 B under a record that arrived
-      # with the rebase, while the build it measured was 5 B off the record its
-      # own source carried. The day was fine and had already published.
-      #
-      # So this runs when the day's commit rewrote the checkout and not
-      # otherwise. Until 2026-09-28 a second commit step came after it - the
-      # closed-day fold's, which staged `frontend/public/telemetry` - and was
-      # named here too, because either one rebasing left this build's input
-      # stale. That fold is the gardener's now, and nothing in this job commits
-      # after the day.
-      #
-      # An output nobody wrote is the empty string, so a commit step that was
-      # skipped or that died before it could answer reads as "no rebase" and
-      # this step does not run. That is the right answer: the tree was not
-      # pushed, so there is nothing to rebuild against, and a commit step that
-      # failed has already failed the job.
-      #
-      # What this saves today is nothing, and the reason is worth writing down.
-      # Measured 2026-09-09 over the 20 most recent successful runs
-      # (33901670861 through 34260129217): the day's push lost the race in 20 of
-      # 20, so the rebuild was needed every time. It costs a median 24 s, spread
-      # 17-27 s. The cause is this job racing its own run - the checkout above
-      # is main's tip at trigger time, and `plan` and every `work` shard have
-      # pushed to main since. Fix that and this `if:` starts paying: 24 s times
-      # five publishes a day, about two minutes of wall-clock a day.
-      #
-      # `npm ci` is deliberately not repeated. frontend/package-lock.json moved
-      # 8 times in 60 days against about 8 frontend source commits a day, so a
-      # reinstall would delete node_modules on every run to cover the rarer of
-      # the two. The build alone is 17 s and writes only gitignored output.
+      # A push retry can change source data after the first build.
+      # Rebuild only then, so the bundle gate measures the tree that was pushed.
       - name: Rebuild the site against the tree that was pushed
         if: steps.commit_day.outputs.rebased == 'true'
         working-directory: frontend
         run: npm run build
 
-      # The other severity, and the reason it is down here. A page heavier than
-      # the weight recorded for it in config/idhazh.json still reads correctly:
-      # what grew is the document, not the meaning. Losing the day for it also
-      # throws away the two to three hours that built it, to hold a number we
-      # wrote down ourselves. So the day publishes first.
-      #
-      # It stays fatal. The job goes red, main's next CI goes red with it, and
-      # somebody re-measures the ceiling - one line in config/idhazh.json.
-      #
-      # It reads the rebuild above, so its numbers describe the tree that was
-      # pushed rather than the one this job started from.
+      # Run the bundle gate after committing: excess page weight must not discard
+      # a valid day. A failure still marks the job red.
       - name: Bundle gate - encoder, page ceilings and payload ceilings
         working-directory: frontend
         run: npm run bundle-gate
 
-      # Every visual decision this day made, laid out so a person can look at
-      # them and say whether the machine kept the visual they would have kept.
-      # It gates nothing: nothing downloads this and nothing reads it back. A
-      # model verdict is allowed to reach a publish decision since CLAUDE.md
-      # section 1a lifted the ban; none does here, by choice and not by rule.
-      #
-      # This job because it is the only one holding every population at once -
-      # `items-*` carries the decisions and `shard-visuals-*` carries the
-      # drawings - and a job of its own would re-pay a checkout, an install and
-      # a second download of both to isolate about twenty seconds of file
-      # copying.
-      #
-      # Last, and `continue-on-error`, for the reason the corpus harvest carries
-      # it: what this job owes a reader is the published day, and a contact
-      # sheet is further from the reader than the training corpus is. The
-      # step-level bound is what `continue-on-error` cannot give - it does not
-      # stop a hung step spending the job's remaining minutes.
-      #
-      # The tree lands under backend/var/, which .gitignore already covers, so
-      # no commit step names it and no rebuild owns it.
-      # `always()` because the upload below already carries one, and an upload
-      # reachable on a failed day with nothing to upload records nothing. The
-      # decisions this reads came out of the `items-*` artifact, which a failed
-      # push does not touch.
+      # Review downloaded items and charts without gating publication.
+      # Keep failed-day results; a step timeout bounds optional work.
       - name: Build the day's review tree
         if: always()
         continue-on-error: true
@@ -1250,22 +623,7 @@ jobs:
             --date "${{ needs.plan.outputs.date }}" \
             --budget-mb 5
 
-      # Seven days, and the number is not the evidence package's 14. A review
-      # tree is rebuilt by every run that publishes a day, so a reviewer who
-      # misses a week loses freshness and nothing else; `evidence-*` is 14
-      # because a missed day there is an article body that cannot be recovered,
-      # and that reason does not transfer.
-      #
-      # What it costs, stated rather than implied: the `--budget-mb` above caps
-      # one run's tree at 5 MB, so the five cron slots held for seven days is
-      # 175 MB worst case against the 500 MB of artifact storage Guardrail #2
-      # allows - 35 percent, and that assumes every run fills its whole budget.
-      # A typical day's rendered set has measured 324,580 bytes
-      # (../../docs/concepts/adaptive-pruning.md, 2026-09-13), which puts the
-      # real figure near 5 percent.
-      #
-      # `if: always()`, because the step above may have degraded and a partial
-      # sheet is still worth looking at.
+          # Retain partial review results even when review generation fails.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
