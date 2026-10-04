@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -158,18 +158,14 @@ to be folded first: the file a writer closes is already the ledger, and the
 reader decides what two rows of one key mean at read time -
 `day_shards.settled_rows` for a CSV day, the door's `settle_rows` for a raw one.
 
-Evaluation publication also updates a shared exact-ID lookup. Its
-[batch protocol](../architecture/contracts/observation-lookup.md#publication-across-jobs)
-replays original input against the winning root after a rejected push; separate
-raw files alone do not prevent two jobs from recording the same measurement.
-
 `state/host-fingerprint/` was the first ledger through it, from 2026-09-17. Ten
 jobs of one run each draw a machine and each record it, and on 2026-09-16 those
 ten pushes raced and left the day file with nothing but its header.
 
 Work shards and assemble both write item-health and summary-quality evaluation
-rows for one day. The item census is where a repeat is visible to a reader: the count
-of rows in a day feeds a feed's share of the day and the day's own metrics.
+rows for one day, and the reader keeps one row per key. The item census is where
+a repeat is visible to a reader: the count of rows in a day feeds a feed's share
+of the day and the day's own metrics.
 
 **A staging directory sat above all of them until 2026-09-22 and is gone.** A
 writer filed into `state/segments/` and a later fold read it into a `<DD>.csv`

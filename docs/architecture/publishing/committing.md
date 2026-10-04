@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the rebase loop and the clock
@@ -89,12 +89,6 @@ go to a CSV named
 `state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, or through
 the ledger door to a raw file under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, and
 either name belongs to that writer. Those paths rebase independently.
-
-Evaluation publication also changes a shared lookup root. Its raw rows and
-lookup must be prepared together against the winning root after a rejected
-push. The [observation lookup protocol](../contracts/observation-lookup.md#publication-across-jobs)
-owns that exception; file ownership alone does not prevent duplicate
-measurements across jobs. Work and assemble use the preparation hook below.
 
 `actions/checkout` still starts from the trigger commit. Other runs can move
 the state before this job begins, so the plan job first takes a current base.
@@ -242,12 +236,8 @@ the new preparation result and stages the named files and deletions. A file
 that is both absent and untracked needs no staging. The same rule stages the
 job's own path list, so prepared and named paths go through one `git add`.
 
-Evaluation preparation first makes the original input durable. After that inbox
-push succeeds, a failed final publication leaves a named pending batch or an
-applied receipt. The lookup page owns the
-[atomic publication guarantee](../contracts/observation-lookup.md#publication-across-jobs);
-the [operator procedure](../../how-to/migrate-observation-lookup.md#recover-a-named-pending-batch)
-gives the exact recovery command.
+No workflow sets these two values: no job has a derived file that only
+preparation can name.
 
 ## A conflicted path is settled by who wrote it, never by which side it came from
 

@@ -102,7 +102,7 @@ def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvR
     writer off - and rewriting the append beside that caller would give one
     ledger two shapes.
 
-    `evals.writer.file_measurements` does, against its `OBSERVATION_KEY`, and the
+    The eval ledger does, on read, one row per `OBSERVATION_KEY` a day, and the
     reason the two differ is what a row means. There a row is a measurement, so
     re-measuring an item nothing changed about has nothing new to say. Here a row
     is a fact about a run - this feed answered at this hour, this item finished -

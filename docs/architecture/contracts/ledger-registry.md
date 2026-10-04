@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -57,7 +57,7 @@ A ledger that goes through the ledger door files under two roots rather than one
 
 | Ledger under `state/` | Writer, under `backend/idhazh/` | What reads its rows, besides upkeep: backend under `backend/idhazh/`, console under `frontend/src/lib/server/` | Two writers on one file | What blocks its move |
 | --- | --- | --- | --- | --- |
-| `summary-quality-evals-index` | `evals/observation_batches.py`, reached through `evals/writer.py` and publication preparation | `evals/observation_lookup.py` | shared root: a rejected push replays original batches against the winner ([protocol](observation-lookup.md#publication-across-jobs)) | nothing: it is not CSV |
+| `summary-quality-evals-index` | nothing in the pipeline; only `backend/utilities/migrate_observation_lookup.py`, a person's own run | nothing in the pipeline | cannot happen: no pipeline job writes it | nothing: it is not CSV |
 | `item-health-summary` | `gardener/tasks/telemetry_aggregate.py` | nothing yet | cannot happen: one writer rewrites a month whole | a whole-month file |
 | `content-similarity-judge/scored-pairs` | `stages/count_verdicts.py` | `stages/set_merge_line.py` | the union driver keeps both | the nested folder name; three fixed-choice fields; `run_id` and `shard` |
 | `content-similarity-judge/fitted-thresholds` | `stages/set_merge_line.py` | `stages/set_merge_line.py`, `similarity/applied.py`, `similarity-ledger.ts` | the union driver keeps both | the nested folder name; two fixed-choice fields; `run_id` |
@@ -251,7 +251,7 @@ The config carries where each ledger lives and each family's lifecycle status. I
 
 **The field is `lifecycle_status`, not `state`.** `state` is already the name of the folder every ledger sits in, so `state: paused` in a file that describes `state/` reads as a claim about the folder. `lifecycle_status` says what it is - where in its life the family is - and no key in the file is named `state`. The Python enum is `LedgerLifecycleStatus`, so it cannot be mistaken for the `LifecycleStatus` that `contracts/taxonomy.py` uses for desks, lenses and feeds.
 
-**The eval ledger is `summary-quality-evals`, and its ID folder is `summary-quality-evals-index`.** Each row measures one summary's quality; `summary-quality` stays free for fitted quality thresholds. The ID folder has no retention task or day/month fold. Its registered root contains the [observation lookup and pending batches](observation-lookup.md); legacy CSV input is handled only by the [explicit migration](../../how-to/migrate-observation-lookup.md).
+**The eval ledger is `summary-quality-evals`, and its ID folder is `summary-quality-evals-index`.** Each row measures one summary's quality; `summary-quality` stays free for fitted quality thresholds. The ID folder has no retention task or day/month fold. Its registered root holds the [observation lookup](observation-lookup.md), which nothing in the pipeline writes or reads; the [evaluation design rationale](../../concepts/evaluation.md#design-rationale) says why.
 
 **A family carries no owner field.** Owner decision, 2026-09-27. An owner would say who answers for a family. One identity commits to this repository (CLAUDE.md section 8), so the field would hold the same value on every family and tell a reader nothing. The code that answers for a family is found by a search for its `LedgerName` members, because a module that reads or writes a ledger names it by its member and by nothing else.
 

@@ -64,27 +64,29 @@ def test_two_days_of_rows_land_in_two_files(tmp_path: Path) -> None:
     assert [record["date"] for record in writer.records(state)] == [august.date, september.date]
 
 
-def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) -> None:
-    """The doc's promise: an item whose inputs did not change writes no row at all.
+def test_a_re_observation_on_a_later_day_keeps_its_own_days_row(tmp_path: Path) -> None:
+    """A later day can re-plan an address the published ledger has no record of.
 
-    A later day can re-plan an address the published ledger has no record of. The
-    summary comes back word for word, the scorer reads it with the same
-    instrument, and the second row would only inflate the denominator.
+    If the summary comes back word for word and the scorer reads it with the
+    same instrument, the later day files its own row, so a read of that day
+    still sees what the day measured.
     """
     state = tmp_path / "state"
     assert put(state, [row()]) == 1
     again = row(date="2026-08-22", run_id="2026-08-22-1", item_id="ai-07")
-    assert put(state, [again], run_id="2026-08-22-1") == 0
-    assert len(list(writer.records(state))) == 1
-    assert ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS) == ["2026-08-21"]
+    assert put(state, [again], run_id="2026-08-22-1") == 1
+
+    assert ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS) == ["2026-08-21", "2026-08-22"]
+    assert ledger.load_days(
+        state, LedgerName.SUMMARY_QUALITY_EVALS, [again.date], model=EvalRow
+    ) == [again]
 
 
-def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -> None:
-    """Dedupe spans the partitions, or filing by day would quietly reopen the door.
+def test_a_whole_ledger_read_keeps_one_row_across_months(tmp_path: Path) -> None:
+    """A whole-ledger read settles across every partition, so a count over it counts measurements.
 
-    The promise is that a count over the ledger is a count of items. A dedupe
-    scoped to the day being written would let August's measurement come back
-    in September as a second row about the same thing.
+    August's measurement filed again in September is read once, and the row
+    kept is the first.
     """
     state = tmp_path / "state"
     held = row()
@@ -92,28 +94,31 @@ def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -
 
     later = row(date="2026-09-14", run_id="2026-09-14-1", item_id="ai-07")
 
-    assert put(state, [later], run_id="2026-09-14-1") == 0
-    assert ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS) == [held.date]
+    assert put(state, [later], run_id="2026-09-14-1") == 1
+    assert list(writer.records(state)) == [held.csv_row()]
 
 
-def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> None:
-    """The guard reads the batch as well as the file, or a fresh ledger dodges it."""
+def test_one_write_carrying_the_same_measurement_twice_is_read_once(tmp_path: Path) -> None:
+    """The settlement reads the file as well as the ledger, or a fresh ledger dodges it."""
     state = tmp_path / "state"
-    assert put(state, [row(), row(item_id="ai-09")]) == 1
+    assert put(state, [row(), row(item_id="ai-09")]) == 2
+    assert len(list(writer.records(state))) == 1
 
 
 def test_a_changed_output_is_a_new_measurement(tmp_path: Path) -> None:
     """Identical inputs and different words is the defect the ledger exists to catch."""
     state = tmp_path / "state"
     put(state, [row()])
-    assert put(state, [row(output_digest="c" * 64)], attempt=2) == 1
+    put(state, [row(output_digest="c" * 64)], run_id="2026-08-21-2")
+    assert len(list(writer.records(state))) == 2
 
 
 def test_a_changed_scorer_is_a_new_measurement(tmp_path: Path) -> None:
     """Same words read by a different instrument is a reading worth keeping."""
     state = tmp_path / "state"
     put(state, [row()])
-    assert put(state, [row(scorer_version="hhem-2.2-open@cccccccc")], attempt=2) == 1
+    put(state, [row(scorer_version="hhem-2.2-open@cccccccc")], run_id="2026-08-21-2")
+    assert len(list(writer.records(state))) == 2
 
 
 def test_writing_nothing_creates_nothing(tmp_path: Path) -> None:

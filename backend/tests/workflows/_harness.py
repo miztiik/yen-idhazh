@@ -680,14 +680,12 @@ COMMIT_BASE_ENV: Final = frozenset(
 # rebase.
 COMMIT_SCRIPT_ENV: Final = {
     "plan": COMMIT_BASE_ENV,
-    "work": COMMIT_BASE_ENV | {"SHARD", "PREPARE_COMMAND", "PREPARED_PATHS_FILE"},
+    "work": COMMIT_BASE_ENV | {"SHARD"},
     "assemble": COMMIT_BASE_ENV
     | {
         "REFRESH_PATHS",
         "REGENERATE_COMMAND",
         "DROP_RACED_ASSETS_COMMAND",
-        "PREPARE_COMMAND",
-        "PREPARED_PATHS_FILE",
     },
     "bench": COMMIT_BASE_ENV,
 }

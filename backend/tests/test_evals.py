@@ -14,7 +14,7 @@ import hashlib
 import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
 
 import pytest
 from conftest import (
@@ -22,13 +22,12 @@ from conftest import (
     FIXTURES_DIR,
     read_text,
     seed_scores,
-    writer_identity,
 )
 from pydantic import ValidationError
 
 from idhazh import cli, ledger
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
@@ -815,7 +814,10 @@ def test_an_observation_digest_cannot_be_forged_by_moving_a_separator() -> None:
     assert writer.observation_digest(observed("a;b", "c")) == left, "the digest is not stable"
 
 
-def test_the_lookup_keeps_every_filed_day_and_scorer(tmp_path: Path) -> None:
+# --- Filing measurements -------------------------------------------------------
+
+
+def test_every_filed_day_and_scorer_is_read_back(tmp_path: Path) -> None:
     """Distinct scorer identities survive filing, including rows from different months."""
     january = [_measurement(number) for number in range(6)]
     february = [
@@ -832,7 +834,6 @@ def test_the_lookup_keeps_every_filed_day_and_scorer(tmp_path: Path) -> None:
 
     produced = {writer.observation_digest(record) for record in writer.records(state)}
     assert produced == expected
-    assert writer.recorded_observations(state, expected) == expected
     assert ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS) == [
         "2026-01-09",
         "2026-02-03",
@@ -881,166 +882,96 @@ def _measurement(number: int) -> EvalRow:
     )
 
 
-#: Who files the rows `_seeded` lays down: a writer of its own, so its file is
-#: never taken for a later write of the work unit `put` files as.
-ROWS_ONLY_PRODUCER: Final = "tests.test_evals:rows-only"
+def _read_digests(state: Path) -> list[str]:
+    """Every measurement the ledger's reader hands back, one entry per row read."""
+    return sorted(writer.observation_digest(record) for record in writer.records(state))
 
 
-def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
-    """A ledger holding `rows` with no index beside them, each row filed `copies` times.
-
-    Filed through the ledger door and not through the writer, so no digest is
-    minted: this is what a day looks like when its rows arrived from something
-    that never knew the index existed. More than one copy is a real state, not a
-    contrivance: two writers of one day can each file the same observation, and
-    the reader settles them. It is also the case that separates "the read grows
-    with the rows" from "the read grows with the measurements".
-    """
-    ledger.persist(
-        state,
-        [row for row in rows for _ in range(copies)],
-        ledger=LedgerName.SUMMARY_QUALITY_EVALS,
-        covers=rows[0].date,
-        identity=writer_identity(a_scoring_run(rows[0].date), producer=ROWS_ONLY_PRODUCER),
-    )
+def _digests(rows: Sequence[EvalRow]) -> list[str]:
+    """The measurements these rows are, one entry per distinct measurement."""
+    return sorted({writer.observation_digest(row.model_dump(mode="json")) for row in rows})
 
 
-def _day_digests(state: Path, date: str) -> set[str]:
-    """The distinct observations one day's rows hold, derived from the rows.
+@pytest.mark.parametrize(
+    ("job", "attempt"),
+    [
+        pytest.param(ServerJob.ASSEMBLE, 1, id="assemble-after-the-shard"),
+        pytest.param(ServerJob.WORK, 2, id="the-shard-re-run"),
+    ],
+)
+def test_one_measurement_filed_twice_on_one_day_is_read_once(
+    tmp_path: Path, job: ServerJob, attempt: int
+) -> None:
+    """A work shard files its rows, then assemble or a re-run of the shard files them again.
 
-    The one read of the score rows in this section, and it is here so a test can
-    say what the index is supposed to mirror without asking the index.
-    """
-    return {
-        writer.observation_digest(row.model_dump(mode="json"))
-        for row in ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, [date], model=EvalRow)
-    }
-
-
-def test_a_repeat_is_still_refused_when_the_index_is_the_only_thing_read(tmp_path: Path) -> None:
-    """The invariant. Nothing about how the answer is stored may move it.
-
-    Same address, same pipeline, same words, same scorer is the same
-    measurement, and the ledger counts measurements rather than times the
-    pipeline looked.
+    Both files stay on disk, and the reader keeps one row per measurement a day:
+    assemble's copy is a second work unit whose repeats the key removes, and a
+    re-run replaces its first try.
     """
     state = tmp_path / "state"
     rows = [_measurement(number) for number in range(4)]
+    run_id = a_scoring_run(rows[0].date)
+    again = [*rows, _measurement(9)]
 
-    assert put(state, rows) == 4
-    assert put(state, rows) == 0, "a measurement already held came back as new"
-    assert put(state, [_measurement(9)]) == 1, "a new measurement was refused"
+    assert seed_scores(state, rows, run_id=run_id, job=ServerJob.WORK) == len(rows)
+    assert seed_scores(state, again, run_id=run_id, job=job, attempt=attempt) == len(again)
 
-    expected = {
-        writer.observation_digest(row.model_dump(mode="json"))
-        for row in [*rows, _measurement(9)]
-    }
-    assert {writer.observation_digest(record) for record in writer.records(state)} == expected
-    assert writer.recorded_observations(state, expected) == expected
+    assert len(ledger.list_raw_files(state, LedgerName.SUMMARY_QUALITY_EVALS)) == 2
+    assert _read_digests(state) == _digests(again), "one measurement was read twice"
 
 
-def test_a_repeat_across_months_is_not_a_new_measurement(tmp_path: Path) -> None:
+def test_a_repeat_on_another_day_is_kept_under_each_day_and_once_in_the_whole_ledger(
+    tmp_path: Path,
+) -> None:
+    """The same words filed on two days: each day keeps its row, and a read of every day keeps one.
+
+    Accepted on purpose: no index recognises a measurement across days, so a
+    named day's read still shows what that day filed, while a whole-ledger read
+    settles once and keeps the earlier row.
+    """
     state = tmp_path / "state"
     original = _measurement(0)
     later = original.model_copy(update={"date": "2026-02-03", "run_id": "2026-02-03-1"})
 
     assert put(state, [original]) == 1
-    assert put(state, [later]) == 0
+    assert put(state, [later]) == 1
+    days = [original.date, later.date]
+    assert ledger.load_days(
+        state, LedgerName.SUMMARY_QUALITY_EVALS, days, model=EvalRow
+    ) == [original, later]
     assert list(writer.records(state)) == [original.csv_row()]
 
 
-def test_two_copies_in_one_batch_are_filed_once(tmp_path: Path) -> None:
+def test_two_copies_in_one_write_are_read_once(tmp_path: Path) -> None:
     state = tmp_path / "state"
     row = _measurement(0)
 
-    assert put(state, [row, row]) == 1
+    assert put(state, [row, row]) == 2
     assert list(writer.records(state)) == [row.csv_row()]
 
 
-def test_candidate_lookup_returns_only_requested_recorded_ids(tmp_path: Path) -> None:
-    state = tmp_path / "state"
-    rows = [_measurement(number) for number in range(3)]
-    assert put(state, rows) == 3
-    held = writer.observation_digest(rows[0].model_dump(mode="json"))
-    absent = writer.observation_digest(_measurement(9).model_dump(mode="json"))
-
-    assert writer.recorded_observations(state, iter([held, absent, held])) == {held}
-    assert writer.recorded_observations(state, []) == set()
-
-
-def test_candidate_lookup_refuses_a_missing_index(tmp_path: Path) -> None:
-    candidate = writer.observation_digest(_measurement(0).model_dump(mode="json"))
-
-    with pytest.raises(FileNotFoundError):
-        writer.recorded_observations(tmp_path / "state", [candidate])
-
-
-def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
+def test_filing_opens_no_file_already_on_disk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Guardrail #12, as bytes rather than as a clock.
+    """Guardrail #12, as files rather than as a clock.
 
-    Two trees hold the same two measurements. One carries each row once, the
-    other carries it ten more times in a second writer's file, so the rows are
-    eleven times the bytes and the identities are identical. What the writer
-    opens has to be the same figure, and the score rows have to be absent from
-    it entirely.
+    The writer adds one new file a day and reads nothing first, so no history
+    it has filed before can make the next write cost more. The second write is
+    another run's, so it is a work unit of its own rather than a re-run that
+    replaces the first.
     """
-    rows = [_measurement(number) for number in range(2)]
-    lean = tmp_path / "lean" / "state"
-    fat = tmp_path / "fat" / "state"
-    for state in (lean, fat):
-        put(state, rows)  # the rows and the index the writer minted beside them
-    _seeded(fat, rows, copies=10)  # the same two measurements, ten times the rows
+    state = tmp_path / "state"
+    first = [_measurement(number) for number in range(3)]
+    put(state, first)
+    before = {path.relative_to(state).as_posix() for path in state.rglob("*") if path.is_file()}
+    assert before, "nothing was filed first, so this proves nothing"
 
-    candidates = {writer.observation_digest(rows[0].model_dump(mode="json"))}
-    thin = _opened_bytes(monkeypatch, lean, lambda: writer.recorded_observations(lean, candidates))
-    thick = _opened_bytes(monkeypatch, fat, lambda: writer.recorded_observations(fat, candidates))
-
-    rows_live_under = [
-        f"{tier}/{LedgerName.SUMMARY_QUALITY_EVALS.value}/"
-        for tier in (ledger.paths.RAW_DIRNAME, ledger.paths.COMPACT_DIRNAME)
-    ]
-    opened_there = [name for name in thick if name.startswith(tuple(rows_live_under))]
-    assert not opened_there, f"the writer opened {opened_there}, which is what this row removes"
-    assert sorted(thin.values()) == sorted(thick.values()), (
-        "the writer's read moved with the rows: "
-        f"{sum(thin.values())} B against {sum(thick.values())} B over the same two measurements"
+    opened = _opened_bytes(
+        monkeypatch, state, lambda: put(state, [_measurement(9)], run_id="2026-01-09-2")
     )
-    assert sum(thick.values()) > 0, "the writer read nothing at all, so this proves nothing"
 
-
-def test_a_tree_with_rows_and_no_index_requires_explicit_migration(tmp_path: Path) -> None:
-    """Unindexed history must not silently admit measurements it already holds."""
-    rows = [_measurement(number) for number in range(5)]
-    state = tmp_path / "state"
-    _seeded(state, rows)
-    before = list(writer.records(state))
-
-    with pytest.raises(FileNotFoundError, match="explicit observation lookup migration"):
-        put(state, rows)
-
-    assert list(writer.records(state)) == before
-
-
-def test_an_append_keeps_every_filed_days_observations_recorded(tmp_path: Path) -> None:
-    """Every persisted row remains findable after several batches across months."""
-    state = tmp_path / "state"
-    january = [_measurement(number) for number in range(4)]
-    february = [
-        row.model_copy(update={"date": "2026-02-03", "run_id": "2026-02-03-1"})
-        for row in (_measurement(80), _measurement(81))
-    ]
-
-    assert put(state, january) == 4
-    assert put(state, january) == 0, "a held measurement came back as new"
-    assert put(state, february) == 2
-
-    days = ledger.held_days(state, LedgerName.SUMMARY_QUALITY_EVALS)
-    assert days == ["2026-01-09", "2026-02-03"], f"both days were not written: {days}"
-    for date in days:
-        candidates = _day_digests(state, date)
-        assert writer.recorded_observations(state, candidates) == candidates
+    assert not set(opened) & before, f"the writer read {sorted(set(opened) & before)} first"
+    assert _read_digests(state) == _digests([*first, _measurement(9)])
 
 
 @pytest.mark.parametrize("options", [[], ["--month", "2026-02"], ["--every-shard"]])

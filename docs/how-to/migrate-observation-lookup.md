@@ -6,6 +6,11 @@ How to cut existing evaluation history over to the exact lookup and recover a
 named pending batch. This procedure is project-specific because it publishes
 the evaluation ledger described in [observation-lookup.md](../architecture/contracts/observation-lookup.md).
 
+**Nothing produces a pending batch since 2026-10-04.** The evaluation writer no
+longer seals batches or publishes them through `incoming/`, so the recovery
+below has nothing left to recover; the
+[evaluation design rationale](../concepts/evaluation.md#design-rationale) says why.
+
 ## Approve the live cutover first
 
 The normal cutover excludes evaluation writers, their retries and evaluation

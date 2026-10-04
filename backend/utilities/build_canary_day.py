@@ -1548,9 +1548,8 @@ def _fixture_writer(run_id: str) -> WriterIdentity:
 def file_scores(state: Path, items: Sequence[DigestItem], evaluation: EvaluationConfig) -> int:
     """File the day's rows through the writer the pipeline files with.
 
-    Not rows written by hand: the contract validates every field, the writer
-    owns the index beside the rows, and a column added to `EvalRow` lands here
-    without this file being told about it.
+    Not rows written by hand: the contract validates every field, and a column
+    added to `EvalRow` lands here without this file being told about it.
     """
     return writer.file_measurements(
         state, score_rows(items, evaluation), identity=_fixture_writer(SCORE_RUN_ID)

@@ -252,11 +252,10 @@ def seed_scores(
     job: ServerJob = ServerJob.ASSEMBLE,
     shard: int = 0,
 ) -> int:
-    """Put measurements on disk the way a finished run leaves them, index and all.
+    """Put measurements on disk the way a finished run leaves them.
 
-    The real writer, so the index beside the rows is written too - a test that
-    put rows down without one would find every measurement offered again as new.
-    `run_id` has no default because the index is filed under the run's own day.
+    The real writer, so the raw file is the one a run files. `run_id` has no
+    default because a run's own day is what its file covers.
     """
     return eval_writer.file_measurements(
         state_dir,

@@ -63,20 +63,6 @@ from ._harness import (
 pytestmark = pytest.mark.workflow
 
 
-def test_the_daily_fixture_ignores_the_production_prepared_manifest(tmp_path: Path) -> None:
-    environment = _isolated_env(tmp_path)
-    _, runner = _digest_origin(tmp_path, environment, SUBSTITUTED_DATE)
-    manifest = _commit_call("assemble")[1]["PREPARED_PATHS_FILE"]
-    _write(runner / manifest, "[]\n")
-
-    assert _git(runner, environment, "check-ignore", "--verbose", "--", manifest).startswith(
-        ".gitignore:"
-    )
-    assert not _git(runner, environment, "ls-files", "--", manifest).strip()
-    assert "GIT_CONFIG_COUNT" not in environment
-    assert not any(name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")) for name in environment)
-
-
 def test_the_production_backoff_grows_and_caps() -> None:
     retry = load_retry(CONFIG_DIR / "push-retry.json")
     assert [retry.backoff_seconds(count) for count in range(1, 8)] == [1, 2, 4, 8, 8, 8, 8]

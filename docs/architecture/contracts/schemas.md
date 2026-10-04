@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -221,7 +221,7 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| `state/summary-quality-evals-index/` | `lookup/root.json`, bounded JSON routing nodes and SQLite leaves; named JSON batches under `incoming/` | which supplied measurement IDs are already recorded? | no time window; exact keys select bounded leaves ([observation-lookup.md](observation-lookup.md)) |
+| `state/summary-quality-evals-index/` | `lookup/root.json`, bounded JSON routing nodes and SQLite leaves | none: nothing in the pipeline reads it ([evaluation.md](../../concepts/evaluation.md#design-rationale)) | no time window ([observation-lookup.md](observation-lookup.md)) |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |

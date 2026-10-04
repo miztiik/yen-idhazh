@@ -35,12 +35,9 @@ from utilities.evaluation_inbox import publish_inputs
 from ._harness import (
     _git,
     _isolated_env,
-    _load_workflows,
-    _mapping,
     _reject_the_first_pushes,
     _run_commit_script,
     _scripted_origin,
-    _step,
     _write,
 )
 
@@ -541,30 +538,6 @@ def test_a_successful_push_reported_as_failed_does_not_publish_twice(tmp_path: P
         assert lookup.receipt(batch.batch_id) is not None
         assert lookup.recorded(row_digest(row) for row in rows) == {row_digest(row) for row in rows}
     assert not incoming_path(published / "state", batch.batch_id).exists()
-
-
-@pytest.mark.parametrize(
-    "job,step_name,job_file",
-    [
-        ("work", "Commit what this shard measured", "work-${{ matrix.shard }}"),
-        ("assemble", "Commit the day", "assemble-0"),
-    ],
-)
-def test_both_workflow_commits_prepare_their_actual_job_inputs(
-    job: str, step_name: str, job_file: str
-) -> None:
-    step = _step(_load_workflows()["digest.yml"], job, "name", step_name)
-    environment = _mapping(step["env"], "evaluation commit environment")
-    command = str(environment["PREPARE_COMMAND"])
-    inputs = (
-        "backend/var/evaluation-inputs/"
-        f"${{{{ needs.plan.outputs.date }}}}-${{{{ github.run_id }}}}/{job_file}.json"
-    )
-    assert f"--inputs {inputs}" in command
-    assert "--state-dir state" in command
-    assert "--attempt ${{ github.run_attempt }}" in command
-    assert f"--paths-file {environment['PREPARED_PATHS_FILE']}" in command
-    assert environment["PREPARED_PATHS_FILE"] != inputs
 
 
 @pytest.mark.parametrize("committed", [False, True], ids=["local-only", "published"])

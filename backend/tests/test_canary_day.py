@@ -24,7 +24,6 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.sources import SourceForm
-from idhazh.evals import writer
 from utilities import build_canary_day
 
 
@@ -225,17 +224,12 @@ def test_the_scores_are_filed_by_the_pipelines_writer(tmp_path: Path) -> None:
     """Filed by the writer the pipeline files with, so no shape can be invented here.
 
     The rows read back through the ledger door are the rows the builder scored,
-    field for field, and the index beside them holds one digest for each of
-    them, which only the writer writes.
+    field for field.
     """
     rows = scored()
     assert build_canary_day.file_scores(tmp_path, published(), evaluation()) == len(rows)
 
     assert filed_rows(tmp_path) == rows
-    candidates = {
-        writer.observation_digest(row.model_dump(mode="json")) for row in rows
-    }
-    assert writer.recorded_observations(tmp_path, candidates) == candidates
 
 
 def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:
@@ -254,8 +248,8 @@ def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:
     assert written[0] == written[1] == written[2]
 
 
-def test_filing_the_same_day_twice_adds_nothing(tmp_path: Path) -> None:
-    """The second write is the same measurement, so the writer drops it.
+def test_filing_the_same_day_twice_reads_back_the_same_rows(tmp_path: Path) -> None:
+    """The second write is the same work unit, so a read takes it in place of the first.
 
     The builder clears its state directory before writing, so this is the belt
     behind that brace: a ledger that survived the clear still cannot double.
@@ -263,10 +257,6 @@ def test_filing_the_same_day_twice_adds_nothing(tmp_path: Path) -> None:
     items, settings = published(), evaluation()
     assert build_canary_day.file_scores(tmp_path, items, settings) == len(items)
     once = filed_rows(tmp_path)
-    files = ledger.list_raw_files(tmp_path, LedgerName.SUMMARY_QUALITY_EVALS)
 
-    assert build_canary_day.file_scores(tmp_path, items, settings) == 0
+    assert build_canary_day.file_scores(tmp_path, items, settings) == len(items)
     assert filed_rows(tmp_path) == once
-    assert ledger.list_raw_files(tmp_path, LedgerName.SUMMARY_QUALITY_EVALS) == files, (
-        "a second write that filed nothing still left a file"
-    )

@@ -345,43 +345,31 @@ def test_every_path_the_work_job_stages_is_in_a_fresh_checkout() -> None:
         assert carriers, f"{relative} must hold at least one committed file"
 
 
-def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
-    """The index is what the writer reads instead of the rows, so it has to be committed.
+def test_the_eval_rows_travel_with_the_shard_that_filed_them() -> None:
+    """A shard's eval file is inside the path it stages, and assemble never hands it back.
 
-    A shard pushed without its index is a day the next run cannot recognise. The
-    dedupe would read an index that stops short of the rows beside it, call every
-    measurement past that point new, and record each one a second time - the one
-    promise the eval ledger makes about itself.
-
-    **The two now travel as one commit rather than as two staged heads.** A work
-    shard files its rows through the ledger door under `state/raw/summary-quality-evals/` and
-    writes its digests into `state/summary-quality-evals-index/<day>/`, and both are inside the
-    one path the shard stages - so there is no order in which one is committed
-    and the other is not.
-
-    Neither is handed back any more. A file one writer filed is computed by
-    nothing else, so restoring the tip's copy would delete this shard's own and
-    the producer would not write it again. That is why both trees left the
-    derived set on 2026-09-22.
+    A work shard files its rows through the ledger door under
+    `state/raw/summary-quality-evals/`, inside the one path the shard stages, so
+    the rows are committed by the job that measured them. A file one writer
+    filed is computed by nothing else, so restoring the tip's copy would delete
+    this shard's own and the producer would not write it again.
 
     The path the shard stages is `state` whole. Its raw tree need not have a
-    committed sample file: it holds nothing
-    until a shard files into it, and nothing again once the compaction has packed
-    every day in it.
+    committed sample file: it holds nothing until a shard files into it, and
+    nothing again once the compaction has packed every day in it.
     """
     staged = COMMIT_STAGED_PATHS["work"]
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
-    for tree in (
-        ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.SUMMARY_QUALITY_EVALS).as_posix(),
-        ledger.tree_relpath(LedgerName.SUMMARY_QUALITY_EVALS_INDEX),
-    ):
-        carriers = [path for path in staged if _under(tree, path)]
-        assert carriers, f"{tree} is written by this shard and no path in {staged} carries it"
-        assert not any(_under(tree, path) for path in refreshed), (
-            f"{tree} holds a file one writer filed, so handing it back deletes it"
-        )
-        for carrier in carriers:
-            assert (REPO_ROOT / carrier).is_dir(), f"{carrier} must be in a fresh checkout"
+    tree = ledger.raw_root(
+        Path(ledger.STATE_DIRNAME), LedgerName.SUMMARY_QUALITY_EVALS
+    ).as_posix()
+    carriers = [path for path in staged if _under(tree, path)]
+    assert carriers, f"{tree} is written by this shard and no path in {staged} carries it"
+    assert not any(_under(tree, path) for path in refreshed), (
+        f"{tree} holds a file one writer filed, so handing it back deletes it"
+    )
+    for carrier in carriers:
+        assert (REPO_ROOT / carrier).is_dir(), f"{carrier} must be in a fresh checkout"
 
 
 def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_union() -> None:
