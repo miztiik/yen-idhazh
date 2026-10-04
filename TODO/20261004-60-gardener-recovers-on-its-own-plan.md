@@ -43,7 +43,7 @@ Table A - what is out
 | 6 | One run id per workflow run | 1 | B | DONE | automatic-adventure | - | Plan 60 row 6: one run id |
 | 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | - | Plan 60 row 8: site reads lost periods |
-| 9 | Each job's name says what its shard runs | 6 | C | PENDING | - | - | - |
+| 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | - | Plan 60 row 9: job names |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
 | 12 | Which months may close | 3, 5, 7, 8 | D | PENDING | - | - | - |
@@ -60,7 +60,7 @@ Table A - what is out
 | 23 | The gardener ledger is packed live | 16, 22 | F | PENDING | - | - | - |
 | 24 | Months close 16 days after they end | 7, 17, 23 | F | PENDING | - | - | - |
 | 25 | The retired raw listings code goes | 15 | F | PENDING | - | - | - |
-| 26 | doc_load.py reads a web address as a web address | - | A | PENDING | - | - | - |
+| 26 | doc_load.py reads a web address as a web address | - | A | DONE | stunning-garbanzo | - | Plan 60 row 26: doc_load web links |
 
 ## 2. Shared declarations
 

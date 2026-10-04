@@ -43,6 +43,11 @@ LINK = re.compile(r"\]\(([^)\s]+\.md)[)#]")
 #: exists proves nothing about the heading somebody meant to land on.
 ANCHORED = re.compile(r"\]\(([^)\s#]+\.md)#([^)\s]+)\)")
 
+#: A target that opens with a scheme, such as `https:`, is an address on another
+#: site. The tool never reads the network, so it does not judge one. A scheme is
+#: two characters at least, so a drive such as `C:` is still judged as a path.
+SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]+:")
+
 #: What GitHub does to a heading to make its anchor: lowercase it, drop anything
 #: that is not a word character, a space or a hyphen, then hyphenate the spaces.
 NOT_IN_ANCHOR = re.compile(r"[^\w\s-]")
@@ -70,6 +75,15 @@ def prose(text: str) -> list[str]:
         elif not fence:
             out.append(line)
     return out
+
+
+def names_a_page_here(href: str) -> bool:
+    """Does this link target name a page in this repository?
+
+    A placeholder in a worked example, such as `<slug>.md`, names no page. An
+    address on another site names a page this tool cannot see.
+    """
+    return "<" not in href and not SCHEME.match(href)
 
 
 def is_there(target: Path) -> bool:
@@ -145,6 +159,8 @@ def measure(root: Path, named: Sequence[str]) -> list[Row]:
     inbound: dict[Path, set[Path]] = {p: set() for p in pages}
     for src, body in text.items():
         for href in LINK.findall(body):
+            if not names_a_page_here(href):
+                continue
             target = (src.parent / href).resolve()
             if target in inbound and target != src:
                 inbound[target].add(src)
@@ -222,12 +238,12 @@ def faults(root: Path, named: Sequence[str]) -> dict[str, list[str]]:
             shown = " ".join(f"U+{ord(ch):04X}" for ch in odd[:4])
             found.append(f"{len(odd)} non-ASCII characters, first: {shown}")
         for href in sorted(set(LINK.findall(body))):
-            if "<" in href:
-                continue  # a placeholder in a worked example names no page
+            if not names_a_page_here(href):
+                continue
             if not is_there(page.parent / href):
                 found.append(f"links to a page that is not there: {href}")
         for href, fragment in sorted(set(ANCHORED.findall(body))):
-            if "<" in href:
+            if not names_a_page_here(href):
                 continue
             target = (page.parent / href).resolve()
             if target not in here and is_there(page.parent / href):

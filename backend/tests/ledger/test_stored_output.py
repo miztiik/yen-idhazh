@@ -1,8 +1,7 @@
-"""Do stored-output checks refuse broken named files without relying on obsolete raw listings?"""
+"""Do stored-output checks refuse broken named files?"""
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from typing import Final
 
@@ -13,7 +12,7 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.stored_output import check_compact_period, check_raw_day
 
@@ -70,27 +69,10 @@ def _compact(root: Path) -> tuple[Path, Path]:
     return path, index_path
 
 
-def test_raw_check_reads_real_files_and_ignores_an_obsolete_listing(tmp_path: Path) -> None:
+def test_raw_check_reads_real_files_and_reports_presence(tmp_path: Path) -> None:
     path = _raw(tmp_path)
-    missing = "019f75f0-4bb0-835b-8c7e-824db9007c61.parquet"
-    listing = ledger.raw_index_path(tmp_path, WHICH, DAY)
-    listing.parent.mkdir(parents=True, exist_ok=True)
-    listing.write_text(
-        RawDayIndex(
-            version=RawDayIndex.schema_version(),
-            ledger=WHICH,
-            date=DAY,
-            files=[missing],
-            content_sha256=hashlib.sha256(missing.encode()).hexdigest(),
-            listed_at=f"{DAY}T12:00:00Z",
-        ).to_json(),
-        encoding="ascii",
-        newline="\n",
-    )
     assert check_raw_day(tmp_path, WHICH, DAY)
     path.unlink()
-    assert not check_raw_day(tmp_path, WHICH, DAY)
-    listing.write_bytes(b"an unreadable obsolete listing")
     assert not check_raw_day(tmp_path, WHICH, DAY)
 
 

@@ -129,6 +129,10 @@ jobs:
           echo "run_id=$(date -u +%F)-${GITHUB_RUN_ID}" | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
   run-tasks:
+    # A run's page lists what every shard ran without opening a job. The names
+    # come from the plan's matrix, so this file holds the format and never a
+    # list of tasks.
+    name: "shard ${{ matrix.shard }}: ${{ join(matrix.task_names, ', ') }}"
     needs: plan
     if: needs.plan.outputs.any_active_task == 'true'
     runs-on: ubuntu-latest
