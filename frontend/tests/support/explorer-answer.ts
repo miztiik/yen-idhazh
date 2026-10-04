@@ -21,7 +21,11 @@ export async function openExplorer(page: Page, waitReady = true) {
 
 export async function runExplorer(page: Page) {
 	await page.getByRole('button', { name: /^Run$/ }).click();
-	await page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-answer], [data-console-panel-id="data-explorer-rows"] [data-state]').first().waitFor({ timeout: 60_000 });
+	await page.waitForFunction(() => {
+		const panel = document.querySelector('[data-console-panel-id="data-explorer-rows"]');
+		const state = panel?.querySelector('[data-state]')?.getAttribute('data-state');
+		return panel?.querySelector('[data-explorer-answer]') !== null || (state !== null && state !== undefined && state !== 'loading');
+	}, undefined, { timeout: 60_000 });
 }
 
 export async function chooseExplorerQuestion(page: Page, ledgers: readonly LedgerName[], sql: string) {

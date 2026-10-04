@@ -57,18 +57,16 @@
 	class:wide
 >
 	<header class="panel-head">
-		<div class="panel-title-row">
-			{#if heading === 'h3'}
-				<h3 class="panel-title">{title}</h3>
-			{:else}
-				<h2 class="panel-title">{title}</h2>
-			{/if}
-			{#if actions}
-				<div class="panel-actions">
-					{@render actions()}
-				</div>
-			{/if}
-		</div>
+		{#if heading === 'h3'}
+			<h3 class="panel-title">{title}</h3>
+		{:else}
+			<h2 class="panel-title">{title}</h2>
+		{/if}
+		{#if actions}
+			<div class="panel-actions">
+				{@render actions()}
+			</div>
+		{/if}
 		{#if note}<p class="panel-note">{note}</p>{/if}
 	</header>
 	<div class="panel-body">
@@ -100,14 +98,11 @@
 	}
 
 	.panel-head {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: start;
+		gap: var(--space-2) var(--space-3);
 		margin-bottom: var(--space-3);
-	}
-
-	.panel-title-row {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: var(--space-3);
 	}
 
 	.panel-title {
@@ -122,6 +117,7 @@
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-tertiary);
+		grid-column: 1 / -1;
 	}
 
 	.panel-actions {
@@ -132,8 +128,8 @@
 	}
 
 	@media (max-width: 1023px) {
-		.panel-title-row {
-			display: grid;
+		.panel-head {
+			grid-template-columns: minmax(0, 1fr);
 		}
 
 		.panel-actions {
