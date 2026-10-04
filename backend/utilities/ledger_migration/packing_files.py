@@ -1,4 +1,4 @@
-"""Which named files may one packing pass see for a ledger's named UTC months?"""
+"""Which period paths does one packing pass name for a ledger's named UTC months?"""
 
 from __future__ import annotations
 
@@ -12,28 +12,25 @@ from utilities.named_inputs import month_directories
 
 
 def packing_paths(state_dir: Path, which: LedgerName, months: Sequence[str]) -> list[Path]:
-    """Files in named raw and daily months, plus named periods' files and index metadata."""
-    paths: set[Path] = set()
-    for folder in month_directories(ledger.raw_root(state_dir, which), months):
-        if folder.is_dir():
-            paths.update(path for path in folder.rglob("*") if path.is_file())
-    for folder in month_directories(
-        ledger.compact_path(state_dir, which, Period.DAILY, f"{months[0]}-01").parents[2],
-        months,
-    ):
-        if folder.is_dir():
-            paths.update(path for path in folder.iterdir() if path.is_file())
+    """Named raw and daily month folders, named periods' files, and index metadata.
+
+    Each path is named whether or not it is there, and nothing is read to name
+    it. The pass's listing answers only for what was named, so a watermark, a
+    period file or a quiet day that is absent reads as absent rather than being
+    refused.
+    """
+    paths: set[Path] = set(month_directories(ledger.raw_root(state_dir, which), months))
+    paths.update(
+        month_directories(
+            ledger.compact_path(state_dir, which, Period.DAILY, f"{months[0]}-01").parents[2],
+            months,
+        )
+    )
     for month in sorted(set(months)):
         for period, covers in ((Period.MONTHLY, month), (Period.YEARLY, month[:4])):
             for fmt in Format:
-                path = ledger.compact_path(state_dir, which, period, covers, fmt=fmt)
-                if path.is_file():
-                    paths.add(path)
+                paths.add(ledger.compact_path(state_dir, which, period, covers, fmt=fmt))
     for period in Period:
-        for path in (
-            ledger.compact_index_path(state_dir, which, period),
-            ledger.watermark_path(state_dir, which, period),
-        ):
-            if path.is_file():
-                paths.add(path)
+        paths.add(ledger.compact_index_path(state_dir, which, period))
+        paths.add(ledger.watermark_path(state_dir, which, period))
     return sorted(paths)

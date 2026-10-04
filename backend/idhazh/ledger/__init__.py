@@ -11,6 +11,7 @@ would be a second home for something a module below already owns, and the two
 would drift.
 """
 
+from idhazh.contracts.ledger_fault import LedgerFault
 from idhazh.ledger import paths
 from idhazh.ledger.csv_file import (
     CsvContract,
@@ -21,7 +22,6 @@ from idhazh.ledger.csv_file import (
     require_matching_header,
 )
 from idhazh.ledger.day_removal import HeldFile, find_holding_files, rebuild_without
-from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.filenames import (
     BEFORE_PARTITION_NAME,
     PRE_IDENTITY_TRACE,
@@ -189,7 +189,7 @@ __all__ = [  # noqa: RUF022
     "HeldFile",
     "find_holding_files",
     "rebuild_without",
-    # faults.py: the four ways a packed ledger can be missing a file, by name.
+    # contracts/ledger_fault.py: the four ways a packed ledger can be missing a file, by name.
     "LedgerFault",
     # lifecycle.py: whether a ledger takes new rows now.
     "accepts_new_rows",
