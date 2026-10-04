@@ -4,6 +4,12 @@
 
 How evaluation membership stays exact without reading the full history of recorded IDs.
 
+**Nothing in the pipeline writes or reads this lookup since 2026-10-04.** The
+evaluation writer files each job's rows directly and every reader removes
+repeats; the [evaluation design rationale](../../concepts/evaluation.md#design-rationale)
+says why. This page describes the files that remain under
+`state/summary-quality-evals-index/`.
+
 ## Measurement identity
 
 One observation is the canonical JSON encoding of

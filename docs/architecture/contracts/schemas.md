@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -19,6 +19,10 @@ backend/idhazh/contracts/*.py <- Pydantic models. HAND-WRITTEN. The source of tr
 To change a persisted shape you edit the Pydantic model. Where the frontend copies something, you edit the copy in the same change, and the two tests below fail if you do not.
 
 **A contract produces its own schema.** `Contract.json_schema()` is `model_json_schema()` plus this project's canonicalisation - the `$id`, the `$schema` dialect, the version stamp and the changelog. A reader outside Python is handed one when it asks.
+
+## Recursive ledger types
+
+The ledger layer reads a field annotation as a recursive tree: scalar (`string`, `int64`, `float64`, `bool`), list (`list[T]` and `tuple[T, ...]`), or struct (nested Pydantic model). A closed set of unions and wrapped aliases is reduced before the conversion, and unsupported shapes fail with the full nested field path. `backend/idhazh/ledger/arrow_schema.py` is the single entry point; `backend/idhazh/ledger/parquet.py` renders that tree to Arrow; `backend/idhazh/ledger/json_lines.py` stays format-generic and never adds contract-specific branches.
 
 ## What the frontend carries
 
@@ -59,7 +63,7 @@ Four tests in `backend/tests/contracts/`, each named for what it proves.
 | `test_frontend_field_set.py` | the hand-written `HostFingerprintRow` names exactly the columns the Pydantic one declares, in the same order, with the same TypeScript type for each. Types are computed from `json_schema()` by a narrow mapper that refuses a node kind it has not met, so a field with an unfamiliar shape fails rather than passes |
 | `test_frontend_vocabularies.py` | `SERVER_JOB` and `WATCHED_FLAG` hold exactly their Python enums' members, in order |
 | `test_frontend_console_lists.py` | eight console lists still name what their contracts declare - the eval panel's column map, the census row's and the feed record's column lists in `ledger-rows.ts`, the settings vocabulary, the doubt reasons, the bandwidth margin, the prompt-reuse column grammar, and the routes the strip draws: `RouteId` and `ROUTE_IDS` in `band.ts` name `RouteId`'s members in the order the band producer's `ROUTES` writes them |
-| `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; every ledger the door may query is a `LedgerName`; and the cell it filters days on is the ledger's own date cell |
+| `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; every ledger the door may query is a `LedgerName`; the `RawDayIndex` copy in `raw-day-index.ts` names the contract's fields, requires `bytes`, and carries `RawDayIndex.schema_version()` as `RAW_DAY_INDEX_STAMP`; the cell it filters days on is the ledger's own date cell; and `LEDGER_FAULTS` in `slice-shapes.ts` names `LedgerFault`'s members in order |
 
 A fourth, `test_no_generated_layer.py`, refuses the generated trees coming back one file at a time.
 
@@ -217,7 +221,7 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| `state/summary-quality-evals-index/` | `lookup/root.json`, bounded JSON routing nodes and SQLite leaves; named JSON batches under `incoming/` | which supplied measurement IDs are already recorded? | no time window; exact keys select bounded leaves ([observation-lookup.md](observation-lookup.md)) |
+| `state/summary-quality-evals-index/` | `lookup/root.json`, bounded JSON routing nodes and SQLite leaves | none: nothing in the pipeline reads it ([evaluation.md](../../concepts/evaluation.md#design-rationale)) | no time window ([observation-lookup.md](observation-lookup.md)) |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |

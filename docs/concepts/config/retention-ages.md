@@ -299,9 +299,7 @@ and a chart that wants a monthly figure computes it from the rows when it draws
 ([../evaluation.md](../evaluation.md#design-rationale)). The `monthly_window` of
 `config/gardener/compact-summary-quality-evals.json` is `forever`, so its compaction may pack a
 month and never drops one, and its `monthly_keep_days` packs a finished year's
-months into one year file. The [observation lookup](../../architecture/contracts/observation-lookup.md)
-keeps every measurement ID independently of these periods. It has no retention
-task, time window or day/month fold.
+months into one year file.
 
 **Feed health is deleted and never summarised.** Its rows are per-feed-per-run
 evidence, the quarantine reads 31 days, and the console reaches at most 366 - so

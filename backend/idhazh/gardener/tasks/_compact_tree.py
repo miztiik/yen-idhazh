@@ -23,12 +23,8 @@ that lands the pass refuses a path on both lists, so one pass that did either
 would stall every later wake. `write` and `delete` refuse it at the moment it
 would happen, naming the path, and the pass then fails before anything lands.
 
-A watermark or index this build cannot read stops the pass rather than being
-read as absent: a compaction that guessed where it had got to would rewrite, or
-delete, a period it had already finished. So does an index that is not there
-while its period's watermark says the period was packed - the `index-missing`
-fault - because a pass that read it as empty would write a list that forgets
-every period packed before.
+The watermarks and the indexes are read by `ledger_marks`, which stops the pass
+on one this build cannot trust, rather than read it as absent, and says why.
 
 **A ledger's three indexes exist together.** Whatever writes one writes each of
 the others the ledger has none of yet, and those are empty: a period with no
@@ -51,7 +47,7 @@ from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import named_trees
+from idhazh.gardener import ledger_marks, named_trees
 from idhazh.gardener.file_listing import FileListing
 from idhazh.ledger import StoredRow
 
@@ -77,16 +73,6 @@ class Stop:
     because: StopReason
     #: The day, month or year the next pass takes first.
     resume_from: str
-
-
-def _read[M: Contract](model: type[M], path: Path, ledger_name: LedgerName, period: Period) -> M:
-    """One small file of this ledger's, or a refusal naming it."""
-    held = model.read(path)
-    if (getattr(held, "ledger", None), getattr(held, "period", None)) != (ledger_name, period):
-        raise ValueError(
-            f"{path.name} does not describe the {ledger_name.value} {period.value} period"
-        )
-    return held
 
 
 @dataclass(slots=True)
@@ -131,56 +117,23 @@ class CompactTree:
         *,
         months: frozenset[str] | None = None,
     ) -> CompactTree:
-        """The three watermarks, the three indexes and the raw day folder names, read once.
-
-        The indexes' folder and each watermark's own folder are fetched first,
-        and a watermark is fetched without the day, month or year folders beside it.
-        """
-        marks = {period: ledger.watermark_path(state_dir, ledger_name, period) for period in Period}
-        indexes = {
-            period: ledger.compact_index_path(state_dir, ledger_name, period) for period in Period
-        }
-        listing.fetch(
-            {index.parent for index in indexes.values()},
-            beside=[mark for mark in marks.values() if listing.holds(mark)],
-        )
-        through: dict[Period, str | None] = {}
-        entries: dict[Period, dict[str, CompactEntry]] = {}
-        indexed: set[Period] = set()
-        for period in Period:
-            mark = marks[period]
-            through[period] = (
-                _read(Watermark, mark, ledger_name, period).through if listing.holds(mark) else None
-            )
-            index = indexes[period]
-            present = listing.holds(index)
-            if not present and through[period] is not None:
-                shown = f"{ledger.STATE_DIRNAME}/{index.relative_to(state_dir).as_posix()}"
-                raise ValueError(
-                    f"{ledger.LedgerFault.INDEX_MISSING}: {shown} is not there, and "
-                    f"{mark.name} says the {period.value} period is packed through "
-                    f"{through[period]}. Restore {index.name} from git history before the next "
-                    "wake; an empty one would forget every period packed before"
-                )
-            if present:
-                indexed.add(period)
-            held = _read(CompactIndex, index, ledger_name, period) if present else None
-            entries[period] = {entry.covers: entry for entry in held.entries} if held else {}
+        """The three watermarks, the three indexes and the raw day folder names, read once."""
+        marks = ledger_marks.read_marks(state_dir, ledger_name, listing)
         raw_days = named_trees.raw_days(listing, state_dir, ledger_name)
         return cls(
             state_dir=state_dir,
             ledger=ledger_name,
             listing=listing,
             months=months,
-            daily_through=through[Period.DAILY],
-            monthly_through=through[Period.MONTHLY],
-            yearly_through=through[Period.YEARLY],
-            daily=entries[Period.DAILY],
-            monthly=entries[Period.MONTHLY],
-            yearly=entries[Period.YEARLY],
+            daily_through=marks.through[Period.DAILY],
+            monthly_through=marks.through[Period.MONTHLY],
+            yearly_through=marks.through[Period.YEARLY],
+            daily=dict(marks.entries[Period.DAILY]),
+            monthly=dict(marks.entries[Period.MONTHLY]),
+            yearly=dict(marks.entries[Period.YEARLY]),
             raw_days=raw_days,
             listed=len(raw_days),
-            indexed=frozenset(indexed),
+            indexed=marks.indexed,
         )
 
     def raw_day_folder(self, day: str) -> Path:
@@ -238,8 +191,8 @@ class CompactTree:
         Each other period's index is written with it when the ledger has none yet
         so a ledger never holds one index
         without the others. A period with no index has no watermark either -
-        `read` refuses that pair - so what the pass holds for it is nothing, and
-        the index says so.
+        `read_marks` refuses that pair - so what the pass holds for it is nothing,
+        and the index says so.
         """
         self.pending_indexes.add(period)
         self.pending_indexes.update(set(Period) - self.indexed)
