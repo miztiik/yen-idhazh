@@ -2,189 +2,224 @@
 
 **Last Updated**: 2026-10-04
 
-This document develops a design for joining Document Units into Event Clusters and connecting distinct events through a Story DAG.
+Group reports of the same occurrence, connect distinct developments, and publish a short explanation without losing the underlying reports.
 
-**Status:** Working architecture. Periodic batches, LanceDB, the operating scale, and the glossary and identity strategy below are selected for this design. The remaining choices are proposals; this document does not change deployed code or existing published IDs.
+**Status:** Consolidated architecture, not implemented behavior. LanceDB, periodic batches, summary-based features, and Fastino GLiNER are selected. New Topic Domains are discovered automatically but require review before public promotion. Verified copies count as distribution, not new reporting. Ordinary active search uses a **configurable 15-day window**; activity decay does not declare an occurrence permanently dead.
 
-Open alternatives are numbered within their section. Performance claims remain unverified unless stated otherwise.
+All tunable behavior belongs in configuration. The remaining thresholds require independent evidence, not copied values from a proposal. Runtime, throughput, memory estimates, and GLiNER model pins are omitted.
 
 ## Contents
 
-- [Glossary and identity contracts](#glossary-and-identity-contracts)
-- [Why similarity alone is not enough](#why-similarity-alone-is-not-enough)
-- [Scale and processing model](#scale-and-processing-model)
-- [End-to-end flow and responsibilities](#end-to-end-flow-and-responsibilities)
-- [Event Cluster representation](#event-cluster-representation)
-- [Finding candidate Event Clusters](#finding-candidate-event-clusters)
-- [Event Deduplication and Joining](#event-deduplication-and-joining)
-- [Time-aware matching](#time-aware-matching)
-- [Event Cluster lifecycle](#event-cluster-lifecycle)
-- [Event Cluster mergers and Event Threading](#event-cluster-mergers-and-event-threading)
-- [Choosing what the reader sees](#choosing-what-the-reader-sees)
-- [Persisted data and retention](#persisted-data-and-retention)
-- [Storage choice and runner performance](#storage-choice-and-runner-performance)
-- [Metrics, thresholds, and tuning authority](#metrics-thresholds-and-tuning-authority)
+- [Glossary and identities](#glossary-and-identities)
+- [Evidence production](#evidence-production)
+- [Logical records and counting populations](#logical-records-and-counting-populations)
+- [Batch flow](#batch-flow)
+- [Candidate retrieval and decisions](#candidate-retrieval-and-decisions)
+- [Corrections, activity, and cold recovery](#corrections-activity-and-cold-recovery)
+- [Snapshots and historical state](#snapshots-and-historical-state)
+- [Reader views](#reader-views)
+- [Evaluation and control registry](#evaluation-and-control-registry)
+- [Design rationale and rejected alternatives](#design-rationale-and-rejected-alternatives)
 - [See also](#see-also)
 
-## Glossary and identity contracts
+## Glossary and identities
 
-### Architectural glossary
+### Architectural terms
 
-- **Raw Feed Item:** The unstructured external news payload: HTML or plaintext, an RSS enclosure, or a scraper artifact. It remains untrusted input.
-- **Document Unit ($d$):** The canonical, immutable semantic representation of one article revision: an LLM summary, a dense embedding, a sparse token bag, and extracted semantic frames. The token bag stores tokens with counts or weights; frames describe participants, actions, places, and times.
-- **Event Cluster ($C$):** An adaptive, stochastic state representing one distinct real-world occurrence, bounded by an entity core, a spatial coordinate, and a temporal envelope. These capture the central participants, where it happened, and when. Probabilistic or uncertain membership does not permit invented places or times; missing evidence stays explicit.
-- **Story DAG:** A directed acyclic graph of dependencies across distinct Event Clusters. A Story Edge states whether a dependency is causal, chronological, or thematic. Direction and causality require supporting evidence; similarity or creation order alone establishes neither.
-- **Topic Domain:** A persistent, broad categorical subspace, such as Macroeconomics or Geopolitics, that routes Document Units to active Event Cluster pools. It is not an Event Cluster or proof that two reports concern the same event.
-- **Event Deduplication / Joining:** Admitting an incoming Document Unit into an existing Event Cluster because it reports the identical event.
-- **Event Threading:** Recognizing a distinct subsequent event and connecting its Event Cluster to an earlier one with a Story Edge, $C_{\text{prev}} \to C_{\text{new}}$. It does not add the new Document Unit to the earlier Event Cluster.
-- **Anchor Vector ($\vec{a}_C$):** The immutable semantic vector of the founding Document Unit of $C$, used as a permanent anti-drift constraint.
-- **Active Centroid ($\vec{c}_C$):** The dynamically recalculated, normalized center of mass representing the current semantic state of $C$. Its contributing Document Units belong to that Event Cluster, not to linked distinct events.
-- **Story Edge:** A typed, directed relationship between two distinct Event Clusters, with supporting evidence and its own identity.
+- **Raw Feed Item:** Untrusted external news content and its metadata, before extraction and sanitization.
+- **Document Unit ($d$):** One frozen semantic representation of a source revision: a three-sentence summary, dense vector, sparse token counts, typed entities, predicate-linked frames, and time evidence.
+- **Event Cluster ($C$):** State representing one real-world occurrence. Membership can evolve or be corrected; participants, place, and occurrence time remain evidence, not facts invented from proximity.
+- **Topic Domain:** A persistent broad category that routes documents and organizes events. A candidate domain is not a public category until reviewed.
+- **Event Joining:** Assigning a Document Unit to an Event Cluster because it describes the same occurrence.
+- **Event Threading:** Connecting distinct events through a supported, directed Story Edge. It does not merge their reports into one occurrence.
+- **Story DAG:** A directed acyclic graph of distinct events. It can branch and converge; a linear reading path is only a selected view.
+- **Story Edge:** A typed, directed, evidence-backed relationship. Chronological, follow-up, thematic, and reported causal relationships have different meanings.
+- **Anchor Vector:** The founding Document Unit's immutable vector within its named representation. A changed display representative does not move it.
+- **Active Centroid:** The normalized mean of the declared semantic contributors to one Event Cluster, not of all events linked in its Story DAG.
+- **Verified copy:** A retained report established as substantially the same reporting contribution as another, through copy/origin evidence. Similar wording alone is only a candidate signal.
+- **Reporting contribution:** One distinct contribution of reporting. Verified copies share a contribution; their separate publication and distribution records remain available.
 
-A representative Document Unit is the member selected for display; changing it does not move the Anchor Vector. Merging duplicate Event Clusters consolidates two representations of the same event. Event Threading connects different events. A corrective split of a mixed Event Cluster is a separate operation.
+Merging duplicate Event Clusters consolidates representations of the same event. A corrective split repairs mixed membership. Branching means one event has several subsequent developments; convergence means a later event has several supported predecessors.
 
-### Identity generation
+### Identity and replay
 
-**Table A - Identity contracts for the proposed records**
+**Table A - Stable record identities**
 
-| ID | Record | Identifier | Derivation or creation rule |
-| --- | --- | --- | --- |
-| A1 | Document Unit | `document_id`: UUIDv5 | `uuid5(NAMESPACE_ARTICLE, encode(canonical_url, text_sha))` |
-| A2 | Event Cluster | `cluster_id`: ULID | UTC creation time in milliseconds plus 80 bits of entropy; allocated once per creation decision |
-| A3 | Story DAG | `story_dag_id`: ULID | Root-event initialization time plus entropy; retained as the DAG evolves |
-| A4 | Topic Domain | `topic_domain_id`: string slug | Normalized categorical slug, such as `tech.ai.chips` |
-| A5 | Story Edge | `edge_id`: UUIDv5 | `uuid5(NAMESPACE_EDGE, encode(src_ulid, dst_ulid, type))` |
+| ID | Record | Identity rule |
+| --- | --- | --- |
+| A1 | Document Unit | UUIDv5 from a fixed namespace and unambiguous encoding of `canonical_url`, source `text_sha`, and `representation_revision` |
+| A2 | Event Cluster | ULID allocated once with its creation decision and reused on replay |
+| A3 | Story DAG | ULID allocated at initialization; preserve aliases if stories converge |
+| A4 | Topic Domain | Validated stable slug, such as `tech.ai.chips`; naming changes preserve references |
+| A5 | Story Edge | UUIDv5 from a fixed namespace and encoded source Event Cluster ID, target ID, and relation type |
 
-UUIDv5 is the standard namespace-and-name identifier using SHA-1 internally, not a raw SHA-1 digest. The namespaces are fixed UUIDs. `encode(...)` means one unambiguous, versioned encoding of the listed parts, rather than ambiguous raw concatenation.
+UUIDv5 uses SHA-1 internally; use the standard namespace/name algorithm, not a raw digest. ULID ordering reflects identifier creation, not event chronology, and does not establish a global order across independent writers.
 
-ULIDs contain a 48-bit millisecond timestamp and 80-bit entropy field. They are sortable by identifier creation time; a monotonic generator can order its own same-millisecond allocations. Independent shards and clock skew do not provide one global monotonic order. Store the event's actual temporal envelope separately: ULID order is not event chronology.
+`text_sha` identifies canonical sanitized source text. `representation_revision` identifies one frozen materialization, not merely a model name: fresh generations can differ under the same model. Replay reuses the stored materialization. Changed summary, frames, vectors, entities, or tokenization create a new representation revision. Reweighting BM25 from new corpus statistics does not.
 
-### Replay, immutability, and evolution
+An upsert with an existing Document Unit ID must not silently replace different semantic content. Active membership selects one representation per source revision; replacing it transfers its contribution instead of adding another vote or arrival. Public `item_id` values and report addresses remain separate and unchanged.
 
-**Take inexpensive determinism, not determinism at any cost.** UUIDv5 gives the same ID for the same namespace and canonical input. The design does not require model output or adaptive clustering to reproduce itself from scratch.
+Changing an edge's endpoints or type creates a new edge identity with a recorded correction. All creation, copy, assignment, and correction decisions must be retry-safe. This requires idempotent effects, not deterministic fresh LLM output.
 
-- **Document Units:** Repeated input keys can use `UPSERT` to avoid duplicate records. Equal IDs must have equal immutable semantic payloads; an upsert must not silently replace a summary, embedding, token bag, or frame set. Define exactly which text `text_sha` hashes and how a changed representation becomes a new revision before implementing the writer.
-- **Event Clusters and Story DAGs:** Persist allocated ULIDs with the creation decision and reuse them on replay. Generating a fresh ULID on every retry would create duplicates. Splits allocate new Event Cluster IDs; mergers retain a survivor and preserve references to absorbed IDs.
-- **Story Edges:** Repeating the same endpoints and relation type yields the same edge ID. A changed endpoint or type creates a new edge identity; retain the correction rather than overwrite the meaning of the old edge. Duplicate edge writes must not duplicate evidence or activity contributions.
+## Evidence production
 
-These IDs are internal to this design. Keep the mapping from `document_id` to the repository's existing `item_id` and source identity. No existing article address or committed digest ID changes merely because this glossary is adopted. The current encoder behavior in **G3-G4** is a recorded baseline, not a new requirement that every future model decision be deterministic.
+### One summary and one owner of event meaning
 
-## Why similarity alone is not enough
+The operator-controlled LLM produces the standardized three-sentence summary, primary predicate frame, and supported time evidence in one response. Preserve the participants, action, negation, place, time, and material figures needed to distinguish the occurrence.
 
-Event Joining identifies one occurrence; Event Threading connects distinct developments. Similarity retrieves candidates, but does not prove event identity, continuity, or source independence.
+The same frozen summary feeds every matching feature. Source metadata and bounded evidence references support validation, copy provenance, time resolution, and numerical checks; they are not a second raw-text semantic retrieval path.
 
-**Table B - Problems, examples, and candidate responses**
+Three sentences do not guarantee adequate evidence or a valid encoder input. Check tokenizer length and the preservation of distinguishing facts without silent truncation. A missing summary or unresolved primary occurrence remains pending or insufficient for automatic Joining. A raw lead paragraph is not an equivalent fallback.
 
-| ID | Term / problem | Definition and example | Proposed response and limits |
-| --- | --- | --- | --- |
-| B1 | Temporal ambiguity | Similar reporting can concern different occurrences: an old Anthropic funding round and today's IPO coverage may be close in vector space. | Compare event evidence and distinguish `t_event` from `t_pub`. Do not let a high score erase the time distinction. |
-| B2 | Dense-only collisions / semantic bleed | Shared vocabulary can hide different places or actors: pension strikes in Paris versus transit strikes in London. This is not a defect proved by the embedding having 384 dimensions. | Consider an exact normalized place or ORG match before **final admission scoring**, F40. HNSW retrieval already uses vector distances. Resolve LOC/GPE labels and aliases; missing entities can reject a valid match, while a generic shared ORG can admit a false one. |
-| B3 | Semantic drift | Incremental joins can move an Event Cluster from an IPO filing to AI-risk hearings and then election regulations. Related topics become one false "super-event." | Keep the founding Anchor Vector, verify event membership, and use Story Edges for distinct developments. An Active Centroid is a search/score representation, not the identity of the event. |
-| B4 | Narrative shattering at seven-day eviction | Coverage pauses during a court recess or negotiation. If eviction loses the earlier event's identity and links, a report on day eight becomes an isolated root. Inactivity alone does not mean the story has ended. | Consider a bounded **Cold-Anchor Cache**, F41: retrieve inactive Anchor Vectors, rescore retained vectors, verify the event or relation, then restore asynchronously. The supplied 0.90 cosine floor is provisional, not an exact match. IVF-PQ is approximate, not an exact flat index. Preserve the old node and record pending recovery rather than invent a completed link. |
-| B5 | Fixed centroid/anchor balance | The proposed 70/30 blend may fit some reporting better than others: rapidly changing earthquake coverage versus a ruling followed by commentary. Neither case justifies merging a genuinely different event. | Test volatility-aware `alpha`, F42, through the existing judge. An inverse relationship to drift **reduces centroid weight and strengthens the anchor**; it does not loosen fast-moving coverage. A PID controller, which reacts to current, accumulated, and changing error, is not yet defined in this design. |
-| B6 | Coordinated centroid poisoning | Correlated, slowly shifting reports from apparently diverse outlets can pull an unweighted mean toward an unrelated narrative. Hostname diversity or Shannon entropy does not prove independent reporting or authenticity. | Compare an online geometric median or trimmed Active Centroid with source-provenance checks, F43. Robust geometry alone cannot authenticate content or reject coordinated inliers; trimming can also remove legitimate developments. The supplied dispersion value $R_c=0.28$ and spectral split are undeclared proposals, not existing protection. |
+### Dense, entity, and sparse features
 
-## Scale and processing model
+- **Dense meaning:** Sentence-Transformers `all-MiniLM-L6-v2`, producing 384-dimensional FP32 working vectors normalized to unit L2 length. Compatible normalized vectors can use a dot product for cosine similarity. Validate nonzero, finite vectors.
+- **Typed entities:** Fastino GLiNER extracts PERSON, ORG, GPE, LOC, FACILITY, and REGULATION. It does not compete with the LLM for Action/Agents/Targets ownership. Deployment details are not specified here.
+- **Lexical evidence:** spaCy tokenization and lemmatization, including the language components needed for correct lemmas, but not a second NER or predicate-extraction pipeline. Preserve negation, figures, units, proper names, and entity phrases.
+- **Sparse retrieval:** Store unigram and bigram counts; derive BM25 scores from an inverted index with a shared analyzer, alias rules, vocabulary, document frequencies, and average document length. Its statistical population is one selected representation per distinct reporting contribution in the named corpus. Final entity-preserving counts wait for both lexical and entity results.
 
-### Operating scale
+Do not lemmatize the text sent to MiniLM or Fastino GLiNER. There is no free-form LLM keyword step. Lexical output is repeatable for fixed summary bytes and versions; corpus statistics and representations can still change.
 
-**Scale:** 20,000-30,000 Document Units.
+DATE, TIME, PERCENT, MONEY, QUANTITY, and CARDINAL are excluded from identity-entity selection only. Their values remain available for time, figure, and sparse evidence. Shared generic entities cannot justify Joining alone, but a universal exact place/ORG gate can wrongly exclude a real match. Resolve aliases rather than reward name length.
 
-**Runner:** 4 vCPU, 16 GB RAM, no GPU.
+Each frame binds its predicate to its participants, assertion status, time, place, and evidence. Preserve active/passive equivalents, role reversal, denial, plans, reported speech, and background context. Independent lists of verbs and names cannot preserve those bindings.
 
-### Periodic batches and compaction
+### Three clocks
 
-Process each scheduled content-refresh batch through parallel worker shards, then reconcile the finished work before Assemble. Assignment does not require a continuously running service. The batch follows the digest workflow's schedule; a separate clustering schedule has not been selected.
+- **`t_event`:** Supported occurrence point or interval, with precision, evidence, and resolved/unknown/ambiguous status.
+- **`t_pub`:** Supported publication timestamp and provenance, normalized to UTC. It describes coverage freshness.
+- **Coverage observation time:** The recorded observation of new reporting. It controls activity and ordinary active-search eligibility.
 
-The batch has two kinds of work:
+Identifier creation, processing time, and these clocks are not interchangeable. A representation refresh, verified copy, compaction, or new Story Edge does not become a new-reporting observation.
 
-- **Story reconciliation:** Perform Event Joining, merge duplicate Event Clusters, perform Event Threading, expire active Event Clusters, and emit consistent assignments and Story Edges for Assemble.
-- **LanceDB compaction and index maintenance:** Combine storage fragments, maintain indexes, and reclaim obsolete versions under a retention policy. These operations maintain the chosen store; they do not decide that two reports describe the same event.
+The temporal instruction is:
 
-Story reconciliation is repository Python code, not a running web service. LanceDB compaction maintains its files and indexes; see [table versioning][r10].
+> Extract the time expression attached to the primary occurrence. Resolve relative dates against publication time only when that reference and the source calendar basis are supported. Return UTC points or bounds with precision and uncertainty. Do not invent a precise instant from a date-only expression. If event time is unresolved, retain that state and keep publication time separately as a labelled proxy.
 
-The stage order is `work -> topic-event-cluster-reconcile -> assemble`. The new stage owns cluster admission, Story DAG consolidation, activity decay, trending metrics, and the consistent state handed to Assemble. This is the proposed architecture, not an existing workflow change; successful worker output must remain publishable when a sibling fails.
+An author may use a local calendar or quote an earlier statement. A UTC publication timestamp alone does not settle what "yesterday" meant. Day-level bounds express uncertainty within a day, not an occurrence at midnight.
 
-## End-to-end flow and responsibilities
+A publication proxy may support labelled freshness estimates or candidate ordering. It cannot establish occurrence-time agreement, a temporal veto, Story Edge direction, or causation. Unknown time is neither a match nor a contradiction.
 
-### Batch control flow and feedback
+## Logical records and counting populations
 
-Each shard processes Raw Feed Items sequentially. The feature branches show independent outputs scheduled within a shared four-thread CPU budget, not three four-thread processes running together. Runtime choices are proposed; the current deployed encoder remains documented in **G3-G4**.
+### Keep the populations separate
+
+- **Stored Document Units:** Every retained representation, including superseded records and copied reports.
+- **Current membership:** Assigned source revisions, each pointing to its selected Document Unit.
+- **Semantic contributors:** One selected representation per distinct reporting contribution after verified-copy suppression.
+- **Activity observations:** New-reporting observations counted once under their recorded identities and times.
+- **Distribution:** Where reporting appeared, including copies. Outlets, websites, and independent newsrooms are not interchangeable counts.
+- **Retrieval, verification, and views:** Candidate events, required member comparisons, and displayed reports each have a separate population.
+
+**Verified copies add distribution and provenance, but no extra centroid contribution and no reset of the 15-day clock.** Keep their articles and outlet references. A copy classification that is uncertain must not silently suppress a potentially distinct report or label it as proven independent.
+
+A source revision containing genuinely new reporting can create a new reporting observation. A changed hash, model output, or formatting alone cannot. Keep copy decisions and their evidence so corrections can recalculate contributions and observation attribution.
+
+Verified copies and superseded representations do not add independent BM25 or entity-frequency counts. Retain them for report access and provenance, not repeated statistical votes. Each comparison uses a named statistics snapshot; contribution corrections rebuild the affected statistics and derived search view under a new version.
+
+### Record responsibilities
+
+These are logical contracts, not promises that Arrow or LanceDB automatically enforces SQL keys or foreign keys.
+
+**Table B - Records and their invariants**
+
+| ID | Record | Required content and invariant |
+| --- | --- | --- |
+| B1 | Document Units | Identity, source revision, frozen summary/language, dense vector, token counts, typed entities, primary frames, time evidence, provenance, and processing versions |
+| B2 | Assignments | Source revision, selected Document Unit, Event Cluster, status, decision evidence, and version; unresolved membership is explicit |
+| B3 | Reporting contributions and copies | Contribution identity, member source reports, selected semantic representative, copy status/evidence, and revision; stored-report count is not contributor count |
+| B4 | Observations and distribution | Unique observation identity, original observation time, publication time, contribution classification, and outlet/origin references; retries do not create arrivals |
+| B5 | Event Clusters | Stable ID, founding Document Unit, compatible anchor/sum/centroid, contributor count, activity state, occurrence evidence, representatives, and observation/evaluation times |
+| B6 | Topic Domains | Stable slug, proposed name, supporting events, candidate/reviewed/public status, routing version, and aliases; discovery does not publish a category |
+| B7 | Story DAGs | Stable ID, roots and event membership, aliases, and version; a story ID references this record, not the edge table |
+| B8 | Story Edges | Endpoints, relation type, evidence, status, verifier version, and correction references; validate direction, self-links, cycles, and missing endpoints |
+| B9 | Decisions and snapshots | Input/base identity, participating shards, copy/membership/graph corrections, completeness, and affected record versions; publish a consistent result |
+| B10 | View projections | Snapshot and scoring identity, selection window/budget, topic/event references, selected path/branches, diagnostics, and reachable report links |
+
+Preserve predicate-linked evidence instead of accumulating unrelated actor, action, and target lists. Keep occurrence-time intervals separate from `first_seen_at` and `last_seen_at`, which refer to eligible new-reporting observations.
+
+If two Story DAGs become connected, retain a canonical story identity with aliases and the valid roots from both. Use a stable recorded survivor rule; identifier order may break a storage tie, but cannot establish causation or event chronology. Individual events do not merge merely because their stories converge.
+
+## Batch flow
+
+The stage order is **`work -> topic-event-cluster-reconcile -> assemble`**. Shards produce immutable evidence; reconciliation settles shared identity and graph decisions. No box requires a separate CI job.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TB
-  WAKE["01 GitHub Actions batch<br/>Every N hours from config"]
-  SYNC["02 Sync seven-day active state<br/>S3 / R2 copy pinned to Git<br/>Validate; recover from Git if needed"]
+  PLAN["01 Plan a periodic batch"]
+  BASE[("02 Pin committed state<br/>Feature and statistics versions")]
 
-  subgraph WORK["03 work - N independent shards"]
+  subgraph WORK["03 work - independent shards"]
     direction TB
-    RAW["Raw Feed Item<br/>Extract and sanitize"]
-    LLM["Operator-controlled LLM<br/>Standardized summary<br/>t_event versus t_pub<br/>Frame: Action, Agents, Targets"]
-    DENSE["MiniLM-L6-v2 on CPU<br/>Sentence-Transformers<br/>384-d FP32; L2-normalized"]
-    ENTITIES["GLiNER-Base INT8<br/>ONNX entity extraction"]
-    LABELS["Entity-label filter only<br/>Keep PERSON, ORG, GPE, FACILITY<br/>Drop DATE, MONEY, CARDINAL"]
-    SPARSE["BM25 engine<br/>Sparse unigrams and bigrams<br/>Bounded vocabulary"]
-    UNIT[("Canonical Document Unit d<br/>Summary, event time, frame<br/>Dense, entity and sparse evidence")]
+    RAW["Extract and sanitize<br/>Raw Feed Items"]
+    LLM["LLM<br/>Three-sentence summary<br/>Bound frames and time evidence"]
+    DENSE["MiniLM<br/>Dense summary vector"]
+    ENTITIES["Fastino GLiNER<br/>Typed entity spans"]
+    TOKENS["spaCy<br/>Tokens and lemmas"]
+    SPARSE["Entity-preserving token counts<br/>Shared BM25 statistics"]
+    UNIT[("Frozen Document Units<br/>Source and observation references")]
   end
 
   subgraph RECONCILE["04 topic-event-cluster-reconcile"]
     direction TB
-    GATHER["Gather completed shard outputs<br/>Record missing work<br/>Combine new-item candidates"]
-    RETRIEVE["LanceDB candidate retrieval<br/>Active state plus this batch<br/>Dense and sparse evidence"]
-    VETO{"Passes hard vetoes<br/>with sufficient evidence?"}
-    SEPARATE["No Joining<br/>Keep separate or unresolved"]
-    SCORE["Score and verify<br/>Record Joining or Threading"]
-    GRAPH["Consolidate Story DAG<br/>Split, merge, decay, delete"]
-    TREND["Compute trending<br/>Topic Domains and events"]
-    SNAPSHOT[("Complete LanceDB snapshot<br/>Assignments and Story Edges")]
+    GATHER["Gather completed outputs<br/>Record missing work"]
+    CANDIDATES["Hybrid retrieval and copy candidates<br/>Across shards and prior state"]
+    VERIFY["Verify membership and relations<br/>Use the decision table"]
+    SETTLE["Settle assignments and corrections<br/>Rebuild affected graph and counts"]
+    TOPICS["Record candidate Topic Domains<br/>Public promotion requires review"]
+    MEASURE["Measure activity, distribution and trends<br/>Prepare bounded reading views"]
+    RESULT[("Complete logical result<br/>Versioned LanceDB snapshot")]
   end
 
-  ASSEMBLE["05 assemble<br/>Digest and coverage projection"]
-  COMMIT["06 Commit complete state to Git<br/>LanceDB snapshot, logical records<br/>and publishable digest"]
-  REPLICA["07 Refresh S3 / R2 replica<br/>Only the committed snapshot"]
+  ASSEMBLE["05 assemble<br/>Static digest and view projections"]
+  PUBLISH["06 Commit complete state to Git<br/>Publish; refresh S3 / R2 replica"]
 
   subgraph COUNCIL["LLM-COUNCIL - content-similarity judge"]
     direction TB
-    JUDGE["08 Nightly independent evaluation<br/>Evidence and producer metrics<br/>Fit permitted changes or hold"]
-    SETTINGS[("09 Compatible approved settings<br/>For subsequent batches")]
+    AUDIT["07 Evaluate independent cases<br/>Reuse judge records at their grain"]
+    GATE{"08 Evidence supports<br/>a permitted change?"}
+    FIT["09 Fit a bounded change"]
+    HOLD["09 Hold and record why"]
+    SETTINGS[("10 Versioned settings<br/>For later batches")]
   end
 
-  NEXT["Next periodic batch<br/>Use latest compatible settings<br/>Do not wait for the nightly judge"]
-
+  NEXT["Next batch<br/>Do not wait for the nightly judge"]
   subgraph METRICS["Metrics"]
     subgraph AUTO["Autotuned Metric"]
-      FLOOR["Joining floor (score)<br/>Applied only when enabled<br/>Owner: G1 and G6-G14"]
+      FLOOR["Joining floor (score)<br/>D6 and D24 govern adjustment"]
     end
   end
 
-  WAKE --> SYNC
-  SYNC --> RAW
+  PLAN --> BASE
+  BASE --> RAW
   RAW --> LLM
-  LLM --> DENSE
-  LLM --> ENTITIES
-  LLM --> SPARSE
-  ENTITIES --> LABELS
+  LLM -->|"Same summary"| DENSE
+  LLM -->|"Same summary"| ENTITIES
+  LLM -->|"Same summary"| TOKENS
+  ENTITIES --> SPARSE
+  TOKENS --> SPARSE
   DENSE --> UNIT
-  LABELS --> UNIT
   SPARSE --> UNIT
+  LLM -->|"Frames and time evidence"| UNIT
   UNIT --> GATHER
-  GATHER --> RETRIEVE
-  RETRIEVE --> VETO
-  VETO -->|"Yes"| SCORE
-  VETO -->|"No"| SEPARATE
-  SCORE --> GRAPH
-  SEPARATE --> GRAPH
-  GRAPH --> TREND
-  TREND --> SNAPSHOT
-  SNAPSHOT --> ASSEMBLE
-  ASSEMBLE --> COMMIT
-  COMMIT --> REPLICA
-  COMMIT -->|"Evidence for the separate nightly run"| JUDGE
-  JUDGE --> SETTINGS
-  REPLICA --> NEXT
-  SETTINGS -. "Apply approved updates next batch" .-> NEXT
-  SCORE --- METRICS
+  GATHER --> CANDIDATES
+  CANDIDATES --> VERIFY
+  VERIFY --> SETTLE
+  SETTLE --> TOPICS
+  TOPICS --> MEASURE
+  MEASURE --> RESULT
+  RESULT --> ASSEMBLE
+  ASSEMBLE --> PUBLISH
+  PUBLISH --> NEXT
+  PUBLISH -->|"Evidence for a separate evaluation run"| AUDIT
+  AUDIT --> GATE
+  GATE -->|"Yes"| FIT
+  GATE -->|"No"| HOLD
+  FIT --> SETTINGS
+  HOLD --> SETTINGS
+  SETTINGS -. "Apply compatible approved settings later" .-> NEXT
+  VERIFY --- METRICS
 
   classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
   classDef decision fill:#ecfeff,stroke:#0e7490,stroke-width:1.5px,color:#164e63;
@@ -192,927 +227,293 @@ flowchart TB
   classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a;
   classDef ext fill:#faf5ff,stroke:#7e22ce,stroke-width:1.5px,stroke-dasharray:5 3,color:#581c87;
   classDef autotuned fill:#faf5ff,stroke:#8b5cf6,stroke-width:1.5px,color:#6b21a8;
-  class WAKE,SYNC,LLM,DENSE,ENTITIES,LABELS,SPARSE,GATHER,RETRIEVE,SCORE,GRAPH,TREND,ASSEMBLE,COMMIT,JUDGE,NEXT stage;
-  class RAW,REPLICA ext;
-  class VETO decision;
-  class SEPARATE warn;
-  class UNIT,SNAPSHOT,SETTINGS ledger;
+  class PLAN,LLM,DENSE,ENTITIES,TOKENS,SPARSE,GATHER,CANDIDATES,VERIFY,SETTLE,TOPICS,MEASURE,ASSEMBLE,PUBLISH,AUDIT,FIT,NEXT stage;
+  class RAW ext;
+  class BASE,UNIT,RESULT,SETTINGS ledger;
+  class GATE decision;
+  class HOLD warn;
   class FLOOR autotuned;
-  linkStyle 13 stroke:#15803d,stroke-width:1.5px;
-  linkStyle 14 stroke:#dc2626,stroke-width:1.5px;
+  linkStyle 23 stroke:#15803d,stroke-width:1.5px;
+  linkStyle 24 stroke:#dc2626,stroke-width:1.5px;
 ```
 
-### What the existing autotune loop contributes
+Feature production can overlap within a configured executor. Sparse finalization waits for lexical and entity evidence. Reconciliation joins completed shard outputs, not separately mutated database copies.
 
-`LLM-COUNCIL` currently hosts the **content-similarity judge**: it asks whether two summaries describe one event, not whether a summary is well written. It judges both orders, counts compatible evidence, and fits or holds the same-story threshold. The application flag remains off.
+Required summaries or verification evidence may remain pending without blocking unrelated work. Record missing shards and incomplete decisions. Assemble can publish successfully processed reports without inventing group membership or graph edges. Infrastructure or contract failures are reported explicitly, not relabelled as successful empty results.
 
-The [Metrics, thresholds, and tuning authority](#metrics-thresholds-and-tuning-authority) section extends that judge's existing metrics and feedback loop. Keep the current figure veto, whole-group checks, item addresses, and cross-day link behavior until their stated alternatives are selected. The full current rule remains in [autotune-content-similarity.md][repo-autotune].
+## Candidate retrieval and decisions
 
-## Event Cluster representation
+### Search effort is not the number of clusters
 
-### Anchor Vector, Active Centroid, and representative
+The system does **not** choose a fixed number of Event Clusters. New occurrences form clusters when evidence warrants them.
 
-The [glossary](#architectural-glossary) fixes the roles. The Anchor Vector remains the founding Document Unit's vector. The Active Centroid changes with admitted coverage. The representative Document Unit may change for display without redefining either event identity or the Anchor Vector.
+`candidate_k` controls how much nearby evidence one retrieval asks for; it does not cap the number of events that can exist. The value is configurable and evaluated through candidate recall. If a bounded search cannot settle a case, record the limitation instead of claiming that no match exists.
 
-### Updating the Active Centroid
+Search eligible Document Units through dense and BM25 channels, combine rank positions through reciprocal rank fusion, then map assigned hits to distinct Event Clusters. Retain supporting member IDs and unassigned new-item candidates. Do not add raw BM25 and cosine scores, or let a dense-channel cutoff eliminate every sparse-only hit.
 
-The first source describes a running average of all Document Units. The second proposes storing an unnormalized sum and deriving a unit-length Active Centroid for cosine comparison.
+For established copy families, use the selected contribution representative in clustering retrieval. Copies remain reachable by their stored report references. Deduplicating Event Cluster hits after search is not a substitute for excluding repeated copies from the statistics used during search.
 
-For Event Cluster $C$ containing $k$ Document Units:
+Include the combined current batch: two shards reporting a new event cannot discover each other in yesterday's snapshot. Topic Domain routing narrows candidate pools but must allow cross-domain matches. Local Document Unit-to-entity/term graphs can assist diagnostics; they are not a global keyword-retrieval layer or the Story DAG.
 
-```math
-\vec{S}_C = \sum_{i=1}^{k} \vec{v}_i,
-\qquad n_C = k
-```
+### Verify the occurrence, not merely the score
 
-Derive the Active Centroid:
+Compare compatible vectors, specific normalized entities, and predicate-linked event evidence. The composite content score may blend those components with configured, calibrated weights. It cannot overturn a supported contradiction.
+
+Apply the same safeguards to Joining and duplicate-cluster mergers:
+
+- Preserve participants' roles within each action, assertion status, negation, and reported speech.
+- Compare supported primary-event time and place. Missing or coarse evidence is not an automatic conflict.
+- Compare figures only when they describe the same quantity, units, observation time, and event stage. Updated figures need not mean a new occurrence.
+- Keep the founding Anchor Vector and required member-to-member comparisons. Representative similarity cannot waive whole-group incompatibility.
+- Use rarity-weighted, alias-resolved entities. Shared generic names are insufficient; a missing exact ORG/place overlap is not a universal rejection.
+
+For example, the two different MIT stories must not join merely because Sports and Crime reports were separated correctly. Likewise, "police in New York arrested a robbery suspect" and "police in New York attended a protest" share entities but describe different occurrences.
+
+### Operational decisions
+
+**Table C - Evidence-led outcomes**
+
+| ID | Outcome | Required evidence | State change |
+| --- | --- | --- | --- |
+| C1 | Verified copied reporting | Copy/origin evidence and compatible occurrence facts; SimHash or high cosine only proposes the check | Retain the report and its outlet links. Associate its reporting contribution; add distribution, not semantic weight or activity |
+| C2 | Same-event Joining | Sufficient primary-event evidence, no applicable veto, calibrated acceptance, and required member compatibility | Assign the report; update its distinct contribution and eligible observation once |
+| C3 | Distinct related event | Evidence of a different occurrence and a supported typed/directed relationship | Create the new event and Story Edge. A failed Join or intermediate score does not prove the edge |
+| C4 | Branch or convergence | Separately supported edges from/to distinct events | Keep multiple developments or predecessors. Do not disguise identity consolidation as a causal edge |
+| C5 | Distinct unlinked event | Sufficient evidence of a new occurrence, with no supported relation found | Create an event/root without forcing it onto the nearest story. Route to an approved or candidate Topic Domain |
+| C6 | Candidate Topic Domain | Evidence of a coherent emerging subject beyond existing routing, not one low-similarity outlier | Record a candidate and supporting events. Review naming, overlap, and promotion before public navigation changes |
+| C7 | Insufficient evidence | Missing primary occurrence, unresolved essential facts, incomplete verification, or uncertain relationship | Keep pending/unresolved status and its reason. Do not turn it into a negative label, forced edge, or raw-text shortcut |
+| C8 | Correction or consolidation | Re-evaluation establishes mistaken membership, duplicate identity, or unsupported edges | Write a versioned correction, recompute affected state, and preserve resolvable old references |
+
+Candidate generation, verification, and final settlement are separate. Required all-member verification pairs are not dropped by `candidate_k`. Copy detection must not bypass figure or role contradictions.
+
+## Corrections, activity, and cold recovery
+
+### Centroid and dispersion
+
+Maintain `S_C`, the sum of compatible unit vectors from the declared semantic contributors, and `n_C`, the count of that same set. Copied reports and superseded representations do not add contributors.
 
 ```math
 \vec{c}_C = \frac{\vec{S}_C}{\|\vec{S}_C\|_2}
 ```
 
-When Document Unit $d$, with vector $\vec{v}_d$, is admitted:
+For this unweighted unit-vector mean, current mean cosine dispersion can be computed as:
 
 ```math
-\vec{S}_C \leftarrow \vec{S}_C + \vec{v}_d,
-\qquad n_C \leftarrow n_C + 1
+\text{dispersion}_C = 1 - \frac{\|\vec{S}_C\|_2}{n_C}
 ```
 
-A stored sum avoids re-reading every vector for each addition. Floating-point addition is not lossless or independent of accumulation order, and the sum alone does not prevent drift. Replay reuses recorded membership and counts; it must not add the same Document Unit twice.
+This is mean dissimilarity to the current centroid, not variance or a maximum radius. An empty contributor set or zero-length sum has no valid normalized centroid. Record that condition instead of fabricating a vector.
 
-There is also a difference between the prose and the formula:
+The attachment's running distances to previous centroids measure something different and depend on insertion order. Do not put those readings in the same field. A geometric median, medoid, or trimmed estimator would also need its own definition and compatible diagnostics.
 
-**Option 1 - All admitted coverage.** Follow the supplied cumulative sum. Every admitted Document Unit continues to contribute. This preserves the full Event Cluster history but is not specifically a measure of recent developments.
+Dispersion and centroid movement can flag an affected group for investigation. They cannot prove that it contains multiple real events. A local Leiden or spectral partition may propose groups; verify their event evidence rather than force a two-way cut or split at an unvalidated radius.
 
-**Option 2 - Recent developments.** Follow the prose describing a "recent Active Centroid." This requires a recent window or a weighting rule that the sources have not supplied. It would give less influence to older coverage.
+### Order, late arrivals, and correction
 
-### Keeping the founding Anchor Vector
+Supported event-time ordering can make a batch easier to process, but it does not restore causality or eliminate leader-selection bias. Use stable tie-breaking for processing, never as evidence of event order.
 
-Record the founding `document_id` when the Event Cluster's ULID is allocated, and freeze its normalized vector as $\vec{a}_C$. A later higher-ranked representative does not replace it. A corrected split creates new Event Clusters with their own founding Document Units rather than silently moving the old Anchor Vector.
+A founding Document Unit must identify a defensible occurrence. A word-count threshold or a requirement that every kind of event have both an agent and target is not a substitute for that check. Keep inadequate founding evidence provisional.
 
-## Finding candidate Event Clusters
+After the batch settles, revisit affected or borderline assignments within a configurable correction scope. Newly available member evidence can repair fragmentation. Do not scan the whole archive or relabel a valid group solely because a geometric metric crossed a line.
 
-### Eligibility for search
+Every merge, split, reassignment, or copy correction updates together:
 
-Topic Domains route a Document Unit to relevant active pools. They narrow candidate retrieval, not the definition of event identity. Use a shared routing version across shards and allow cross-domain candidates where the event evidence requires them. A domain such as `tech.ai.chips` must not isolate reports of the same event on another desk.
+- Membership, selected representations, and reporting contributions.
+- Contributor sums/counts, representatives, and attributed observations.
+- Affected Story Edge endpoints, evidence, identities, and aliases.
+- The derived view or explicit correction needed for published references.
 
-The first source searches **only active Event Clusters within a time window, Delta t**. The second searches lifecycle states `HOT` and `WARM`.
+Preserve the surviving event's founding reference. A split creates justified new event identities and maps old references explicitly. Revalidate incident edges instead of copying every old link to every child. Recompute activity using the observations' original times; a correction is not fresh reporting.
 
-**Option 1 - Lifecycle filter alone.** Search `HOT` and `WARM`, relying on lifecycle maintenance to remove ineligible stories. This is the supplied query shape but depends on lifecycle state being current.
+### Natural decay and the active-search window
 
-**Option 2 - Lifecycle filter plus an explicit time predicate.** Also apply the first source's search window. This directly bounds eligible time but needs a timestamp and window that have not been selected.
-
-The initial lifespan question includes a **sliding seven-day window**, alongside inactivity-based alternatives. A search window, an inactivity limit, and a maximum Event Cluster age are different controls.
-
-### Candidate retrieval and a useful cosine threshold
-
-Use **F1** for candidate count and **F2** for the provisional retrieval floor. These are retrieval controls, not proof of event identity. The original larger candidate set and the new smaller set remain alternatives in the registry.
-
-Illustrative LanceDB query, not implemented repository code:
-
-```python
-candidates = (
-    tbl.search(new_vector)
-    .distance_type("cosine")
-    .where("status IN ('HOT', 'WARM')")
-    .limit(retrieval_k)
-    .to_pandas()
-)
-```
-
-The index and query must use the same metric. For a cosine-distance result, calculate:
+Use exponential decay over eligible new-reporting observations as the activity baseline:
 
 ```math
-\text{Cosine Similarity}
-= 1 - \text{\_distance}
-\ge \text{candidate floor}
+A_C(T) = \sum_{o \in O_C}
+  \exp\left(-\frac{T - t_{\text{observed}}(o)}{\tau}\right)
 ```
 
-Smaller distance means closer; larger similarity means closer. Do not apply this conversion to an L2 result. Exact cosine verification should use the retained vectors rather than assume a compressed approximate-index distance is the final admission score. See [LanceDB index metrics and refinement][r12].
+`O_C` contains deduplicated eligible observations no later than UTC evaluation time `T`. `tau` is a positive configured time constant, not a half-life. This defines the quantity; implementation can maintain a compatible accumulator rather than rescan historical observations.
 
-**Research comment: There is no universal good cosine threshold.** The value depends on the encoder, text representation, quantization, dataset, and the question being judged. Sentence Transformers' evaluator chooses thresholds from labeled pairs. It finds different thresholds for overall accuracy and for balancing correct accepted matches against missed true matches. Its example is question duplication, not news-event identity. Those example values are not transferable news defaults. See [the evaluator implementation][r15].
+A new reporting contribution adds an observation. A verified copy, retry, representation refresh, merge, or Story Edge does not. A no-arrival evaluation only decays activity. Keep the activity evaluation time separate from the last real observation.
 
-**Repository-specific advice.** Keep the current pairwise same-story line **G1** as the comparison baseline, not as the automatic threshold for a new Active Centroid, entity, or recency score. The owning document already reports different-story examples above that line and same-story examples below it. Raising or lowering cosine alone cannot separate overlapping populations.
+**HOT and WARM are activity labels in the active store.** They use the same event-identity policy. Low activity can move a label toward WARM without changing which occurrence the cluster represents.
 
-For the new retriever, retain **F2** only as an unvalidated starting candidate, never a merge rule. Compare the candidate counts in **F1**, including an exact-search reference, and measure **H1**: how often a known same-event candidate survives retrieval. Choose the smallest set that retains the required coverage; a good verifier cannot recover a candidate the retriever never returned. No target recall percentage is invented here.
+**`active_search_days` defaults to 15 and is configurable, including longer windows.** It defines ordinary active-search eligibility since the last new-reporting observation. It is not a deletion deadline or a maximum duration for an event, Topic Domain, or Story DAG. The physical timing of archive packing is a separate configured maintenance policy.
 
-Use independently labeled news pairs, including the MIT and police examples in the [Event Deduplication and Joining](#event-deduplication-and-joining) section. Report false merges and missed matches separately through **H2**. Do not optimize headline accuracy on a skewed sample or treat the current council's narrow sampling band as evidence for a much lower retrieval cutoff.
+Records outside normal active search remain discoverable through bounded cold lookup. An event can fade naturally, and a Topic Domain can lose prominence, without either being declared permanently dead. Reviewed Topic Domains do not vanish because one event becomes inactive.
 
-### Document Units or Event Cluster representatives
+### Cold recovery
 
-**Option 1 - Search Event Cluster representatives.** Query the Active Centroid index, then verify the Anchor Vector and admitted Document Unit evidence. This avoids returning several members of one Event Cluster as if they were distinct candidate events.
+Use a bounded cold-anchor index as a candidate path, not as the verification record. Retrieve the retained original vectors, frames, time precision, provenance, and referenced identities before deciding.
 
-**Option 2 - Search Document Units, then map to Event Clusters.** This preserves the new retrieve-then-verify proposal and may find a specific development that an Active Centroid hides. It costs more indexed rows, needs unique Event Cluster candidates after lookup, and can leave fewer distinct Event Clusters than the requested Document Unit count.
+While a cold fetch or verification is pending, keep the new report pending for that decision and continue unrelated work. Do not publish an invented relationship, treat an approximate index hit as exact identity, or reset the old event's clock because a fetch occurred.
 
-Candidate count must state which object it counts. Changing that unit changes the meaning of retrieval recall and the cost of each verification.
+If it is the same occurrence, reuse the Event Cluster identity and record genuine new reporting once. If it is a distinct development, create an event and a supported Story Edge. Otherwise leave it unrelated or unresolved.
 
-## Event Deduplication and Joining
+**Example:** a court case receives no new reporting during a recess and leaves ordinary search after the configured quiet period. A later resumed-hearing report can recover the relevant historical identity or thread a new hearing event to it. A website copying the earlier report adds distribution but does not restart the clock.
 
-### Joining strategy
+## Snapshots and historical state
 
-**Option 1 - Separate Anchor Vector and Active Centroid checks.** A Document Unit must be close to both. The Active Centroid represents admitted coverage; the Anchor Vector constrains drift from the founding event. Separate thresholds are not supplied.
+### Active and cold are storage roles
 
-**Option 2 - Three-stage composite Joining.** Apply candidate retrieval, hard vetoes, and a final weighted score. Its semantic component blends the Active Centroid and Anchor Vector:
+The active working database holds eligible HOT/WARM events, their searchable Document Units, topic routing, contributions, assignments, and graph records. Cold storage holds versioned historical records and evidence. WARM is not a second physical database.
 
-```math
-S_{\text{semantic}}(d,C)
-= \alpha \cdot (\vec{v}_d \cdot \vec{c}_C)
-+ (1-\alpha) \cdot (\vec{v}_d \cdot \vec{a}_C)
-```
+Keep database directories, table directories, and logical record names distinct. Arrow types describe fields; application validation enforces unique identities, references, compatible vectors, complete frames, and graph invariants.
 
-The proposed Active Centroid/Anchor Vector balance is **F4**. Its value came from the supplied source, not a repository calibration. Normalize the Document Unit vector when using its dot product as cosine similarity.
+A manifest names the snapshot, table versions, feature/statistics versions, input shards, and exact date/ID slices. Cold storage can be packed into UTC monthly partitions based on recorded archival time; unknown occurrence time must not force a fabricated partition date. Temporal indexes can still support occurrence-based lookup.
 
-These rules are not interchangeable. After retrieval and Anchor Vector floors pass, a blended score lets a stronger component offset a weaker one. Option 1 instead requires independent closeness conditions.
+### Immutable versions, correctable history
 
-### Hard vetoes in the composite proposal
+A sealed snapshot version is immutable, not a prohibition on learning new facts. Late reports and corrections create new records and a new referenced version. Do not append into an old file while calling that file immutable.
 
-Reject a candidate and consider another match or create an Event Cluster when:
+This draft introduces **no deletion policy for archived logical history**. Archival packing and cold lookup are configurable; deleting historical identities or verification evidence is a separate decision. Cleanup of superseded physical versions must preserve the logical records, evidence, and references needed for recovery and retained views.
 
-1. **Locations conflict.** The Document Unit and Event Cluster contain mutually exclusive, non-empty locations. The supplied example is `GPE: ["Lebanon"]` versus `GPE: ["Gaza"]`. GPE means a geopolitical entity, such as a country or city.
-2. **Actor roles conflict.** Entity overlap is strong, but subject/object roles are reversed. The example is `Apple sues Epic` versus `Epic sues Apple`.
-3. **Anchor Vector mismatch:** The Document Unit's similarity to the Anchor Vector is below **F3**:
+Pack archival data and validate its manifest before removing the active copy. Compaction may reorganize files and update indexes, but it changes no event identity, edge meaning, observation time, or published address. Protect snapshots still used by live runs and retained views.
 
-```math
-\vec{v}_d \cdot \vec{a}_C < \text{Anchor Vector floor}
-```
+Unindexed new records must remain searchable, either in the combined new-item pool or a supported search path. Choosing indexed-only retrieval to hide maintenance cost would lose the newest evidence.
 
-The location rule requires a definition of "mutually exclusive"; different location names alone do not define that test in the supplied material.
+### Complete publication and overlapping runs
 
-Rejection from Event Joining does not end classification. The [Event Threading detection and execution](#event-threading-detection-and-execution) section considers a distinct subsequent Event Cluster and its supported Story Edge.
+Typed committed logical state is authoritative. Git records the complete logical result and its versioned LanceDB snapshot; S3/R2 replicas identify that committed version. Validate a restored replica and recover from the committed state when possible. A missing replica is not permission to start from an empty history.
 
-### What makes entity evidence specific
+Each shard and run writes its own evidence and decisions. Reconciliation uses one identified base, considers cross-shard candidates, and emits a consistent result before Assemble. LanceDB table transactions do not establish atomicity across membership, copies, edges, aliases, and published projections.
 
-The first source asks whether this is a limitation:
+If another run advances the base, replay affected decisions against it without repeating completed summaries. Never merge independently edited LanceDB directories as text. Publish only a validated complete snapshot; keep the previous complete one available during recovery.
 
-> Specific entities (high IDF) count; generic entities (low IDF) cannot be the sole reason to merge.
+Search, corrections, archival access, and view generation take explicit bounded manifests or slices. No routine operation discovers its inputs by walking accumulated history. Replica and maintenance failures remain visible even when logical publication succeeded.
 
-The architecture mentions IDF, but its actual overlap formula supplies weights by entity type. These are different measures.
+## Reader views
 
-**Option 1 - Rarity-based weighting.** Weight an entity by how uncommon it is across documents. This retains the high-IDF proposal but requires a document population, counting window, and formula that are not supplied.
+### Topic prominence and event trendiness
 
-**Option 2 - Entity-type weighting.** Use the supplied weights in **F6**. This is a concrete formula, but entity type alone does not distinguish a rare organization from one mentioned everywhere.
+Use the same records to answer different questions:
 
-```math
-S_{\text{entity}}
-= \frac{
-    \sum_{e \in E_d \cap E_C} \text{Weight}(e)
-  }{
-    \sum_{e \in E_d \cup E_C} \text{Weight}(e)
-  }
-```
+- **Topic prominence:** which reviewed categories have relevant recent reporting, multiple active events, and broad coverage?
+- **Event trendiness:** which occurrences are receiving genuinely new reporting or increasing attention?
+- **Distribution:** where has the same reporting spread, including copies?
 
-**Option 3 - Combine rarity and entity type.** This is a reconciliation option, not a supplied complete formula. It retains both ideas but adds a weighting decision rather than resolving it by omission.
+Keep reporting volume, copied distribution, event breadth, publication freshness, activity change, and source distribution separate before combining them. Deduplicate contributions and event membership within the selected window, including topics with overlapping routes.
 
-### Whether an entity match is mandatory
+Publisher entropy is a distribution descriptor, not evidence of truth or independent reporting. It must not multiply an important single-source event to zero. Nor should the number of extracted entities automatically determine importance.
 
-The original question refers to an existing `entities` array, with examples `["anthropic", "tesla"]`. That is a supplied premise, not a verified repository fact.
+Changing-activity readings need a declared time unit and normalization before combination with other scores. The ranking policy is configured and judged against relevance and freshness labels. It is not the event Joining score and must not make identity thresholds more permissive.
 
-**Option 1 - Vector similarity only.** The original question explicitly offers this alternative. It avoids entity-extraction dependence but gives up entity evidence in admission.
+Topic discovery creates internal candidates with evidence. Review determines whether to promote, rename, consolidate, or retire a public category. The batch can publish under established categories or explicit unclassified status while review is pending.
 
-**Option 2 - Require at least one shared primary entity.** This preserves the other alternative in that question. It adds a hard condition but needs a definition of "primary" and a policy for missing entities.
+### Main paths and parallel developments
 
-**Option 3 - Score entity overlap without a universal shared-entity gate.** This follows the composite formula. It uses entity evidence alongside meaning and event structure, but it does not by itself enforce the high-IDF rule.
+The Story DAG retains supported relationships; the reader sees a bounded projection. Select a coherent main path and meaningful parallel developments under the reading budget, not simply the longest or most popular sequence.
 
-These are admission-policy choices. They are separate from how an entity's weight is calculated.
+Check the actual consecutive transitions. A high average score must not hide one unsupported step. Relation confidence and importance are separate from same-event similarity, so edges do not inherit `S_final` as a truth probability.
 
-### Event-frame agreement
+Reduce visual clutter only in the projection. A direct evidenced edge may mean more than an indirect route through other events; reachability alone does not make it safe to delete. Keep quiet but important branches reachable, with an expandable list or alternate route rather than an arbitrary percentage cutoff.
 
-The LLM emits a syntactic predicate frame alongside the standardized summary: **Action, Agents, Targets**. GLiNER extracts entity spans that can be aligned with that frame; entity recognition alone does not assign the Agent or Target role.
+A path is not automatically causal. Use the edge's supported relation type, direction, and uncertainty. Return disconnected fragments when no supported bridge exists instead of inventing a continuous story.
 
-The existing draft's `actions`, `actors`, and `objects` fields correspond to Action, Agents, and Targets respectively. Their normalization and evidence rules still need a declared shape. The earlier spaCy dependency-parser option is not part of the combined flow.
+### Static projection contracts
 
-The proposed action/object balance is **F7**:
+Publish named static JSON resources, not an implied runtime API. Each view identifies its source snapshot, generation reference, selection window, and scoring/selection version.
 
-```math
-S_{\text{event}}
-= \beta \cdot \mathbb{I}(\text{Action}_d \cap \text{Action}_C \neq \emptyset)
-+ (1-\beta) \cdot \text{Jaccard}(\text{Objects}_d,\text{Objects}_C)
-```
+- **Topic projection:** reviewed topic IDs/names, reporting and distribution counts, active-event breadth, trend components, supported lead entities, and story references.
+- **Event/story projection:** canonical story identity and aliases, selected event IDs, representative report references, occurrence-time precision, supported frame summaries, typed edges, main-path/branch membership, and retained report links.
+- **Empty or partial projection:** explicit availability and missing-evidence state, not fabricated zero coverage or a successful empty graph after a processing failure.
 
-The indicator $\mathbb{I}$ is 1 when the action sets overlap and 0 otherwise. Jaccard agreement is the size of the intersection divided by the size of the union. The source gives the two terms equal weight.
+The reader window, active-search window, and historical-context window are separate configuration choices. Preserve every published report address and the distinction between same-day outlet counts and earlier-day coverage links.
 
-### Final composite score
+Representative selection and any correction of previously published display remain explicit publishing policies. These projections do not authorize generating unreviewed rolling summaries, changing `also_covered_by` from a count into an array, or removing non-representative reports.
 
-After the vetoes pass:
+## Evaluation and control registry
 
-```math
-S_{\text{final}}
-= w_1 S_{\text{semantic}}
-+ w_2 S_{\text{entity}}
-+ w_3 S_{\text{event}}
-- P_{\text{temporal}}
-```
+### Extend the existing content-similarity judge
 
-The supplied weights are in **F5**. Time subtracts from the combined score.
+LLM-COUNCIL hosts the existing judge's prepare, shard, and settle work. Keep its same-event question blind to tested scores and algorithmic outcomes. Relation, extraction-fidelity, and reader-view assessments are distinct, versioned questions within that judge, not reinterpretations of the same YES/NO answer.
 
-The [Time-aware matching](#time-aware-matching) and [Event Cluster lifecycle](#event-cluster-lifecycle) sections define the proposed temporal penalty and state-dependent admission thresholds. Those values must be considered together, not as independent defaults.
+Assessments use the evidence needed for their question. Source-supported fidelity checks can detect a fact both summaries omitted. A relation assessment needs supported references and time evidence, not the algorithm's proposed edge as a hint. Algorithm-derived entities and publisher agreement are not independent truth labels.
 
-### Retrieve, then verify the event
+Sample joined, copied, threaded, rejected, unresolved, and missed-candidate cases. Separate fitting stories from held-out assessment stories. Split by whole story rather than place near-duplicate pairs on opposite sides of the comparison.
 
-The supplied retrieve-then-verify pattern fits between stages 03 and 04:
+Reuse existing judge-shard counts, disagreement, uncertainty, and decode records at their present grain. Keep line holdouts as line measurements, and add event-partition, relation, graph, and view records where their populations differ. Missing required judging evidence holds fitting without preventing publication of successful content.
 
-1. Retrieve candidate Document Units or Event Clusters using the dense and sparse evidence. BM25 uses a shared vocabulary and corpus-statistics version; its score is not implicitly another term in the composite formula.
-2. Apply hard vetoes, then compare LLM predicate frames and the GLiNER entity evidence. Retrieval latency remains **H6**, not an "instant" guarantee.
-3. If the evidence identifies the same event, propose Event Joining.
-4. Otherwise, consider the remaining candidates. A distinct event creates a new Event Cluster; supported subsequent-event evidence permits Event Threading in the Story DAG.
+New feature or score versions need compatible distributions and labels. A reference cosine floor or old sampling band is not automatically valid for summary/frame scores or relation assessments. The application flag is not enabled by this document.
 
-**Option 1 - Use entity agreement as the decision.** The source's short rule is "entities match -> join; entities do not match -> new Event Cluster." It is cheap, but shared entities need not mean the same event, and missing extraction is not proof of a different event.
+### One registry for settings and readings
 
-**Option 2 - Verify a coherent event frame.** Combine specific entity evidence, actor roles, actions, relevant places and times, and the applicable vetoes. This is the reconciliation option. It costs extraction and comparison work but addresses the generic-entity failure below.
+**Table D - Controls, populations, and adjustment authority**
 
-[Retrieve and re-rank][r16] supports the general two-stage pattern: cheap candidate search followed by more expensive comparison. It does not establish that the proposed entity gate or candidate count is sufficient for news-event identity.
-
-**Extraction boundary.** The proposed GLiNER-Base INT8 ONNX path keeps PERSON, ORG, GPE, and FACILITY spans and drops DATE, MONEY, and CARDINAL spans from entity evidence. This does not erase time resolution or the numerical facts needed by hard vetoes. Exact model/export compatibility and confidence handling remain **F30**; the name alone does not establish an available validated artifact. See [GLiNER][r17].
-
-### The generic-entity trap and the proposed specific-entity gate
-
-The supplied counterexample is:
-
-- **Document Unit A, yesterday:** "Police in New York arrested a suspect in a subway robbery."
-- **Document Unit B, today:** "Police in New York responded to a protest outside City Hall."
-
-The supplied extracted overlap is `["police"]` for people and `["new york"]` for location. A simple set matcher reports **1.0, or a complete match**, although arresting a robbery suspect and responding to a protest are different events. These labels are illustrative inputs, not verified output from either proposed extractor.
-
-Term frequency-inverse document frequency, or TF-IDF, motivates rewarding distinctive evidence rather than common words. The new "Smart Entity Gate" proposes three changes:
-
-1. **Stop-entity qualification filter, F27.** `police`, `court`, `hospital`, and country names such as `United States` must not be the sole qualifying entity. Keep useful place information for context and conflict checks; disqualifying it as the sole event-identity signal does not delete it from all evidence.
-2. **Combine vector and entity evidence.** Use the semantic score alongside specific-entity agreement, rather than let either generic overlap or a close vector force a merge. This fits **F5-F6** and the policy choice in the [Whether an entity match is mandatory](#whether-an-entity-match-is-mandatory) section.
-3. **Multi-token bonus, F28.** Give a full name such as `Walter Torous` more weight than `Torous`. Preserve this proposal, but first resolve aliases so two spellings of one person do not count twice. A multi-word name is not automatically specific: `United States` is also multi-token.
-
-IDF still needs a declared population and time window, **F29**. All shards must use the same version of those counts; shard-local frequency estimates would assign different weights to the same entity. Stop lists, IDF weighting, and a name-length bonus are proposed evidence rules, not independent permissions for automatic merging.
-
-### Where the supplied entity matrix fits
-
-Use it as a small **false-Joining counterexample**, not as proof that separation by Topic Domain identifies events:
-
-```text
-Pairwise Entity Similarity Matrix:
-[[1.    0.418 0.    0.   ]
- [0.418 1.    0.    0.   ]
- [0.    0.    1.    0.   ]
- [0.    0.    0.    1.   ]]
-
-Supplied Event Cluster assignments: [0, 0, 1, 2]
-```
-
-The supplied explanation puts the two different MIT stories, Document Units 0 and 1, in Event Cluster 0; Sports goes to Event Cluster 1 and Crime to Event Cluster 2. Broad Topic Domain separation does not validate Joining the MIT reports. If they describe different events, the desired partition is `[0, 1, 2, 3]`. These numbers are diagnostic labels, not production Event Cluster ULIDs.
-
-The off-diagonal value **0.418** is supplied as entity similarity, not cosine similarity and not an acceptance threshold. The entity sets, weighting formula, Document Unit text, and clustering rule are not supplied, so this matrix cannot choose a production threshold. Retain the case in the independent evidence behind **H1-H2** once those inputs are available.
-
-### Whole-group coherence versus representative checks
-
-The repository currently requires every pair within a same-day group to pass, not only each Document Unit against its leader. This is the existing protection against A matching B and B matching C while A and C are different stories.
-
-**Option 1 - Preserve that whole-group rule.** Use retrieval to reduce candidates, but keep the required member comparisons before a final merge. This preserves the reader-facing invariant and costs more work for large groups.
-
-**Option 2 - Replace it with Active Centroid, Anchor Vector, and semantic-frame checks.** This is not an equivalent optimization. It can reduce comparisons but needs evidence that incompatible Document Units do not enter the same Event Cluster. The change must be explicit in the owning contract and measured through **H2** and **H10**.
-
-## Time-aware matching
-
-### Two proposed matching penalties
-
-A Document Unit arriving three days later should, in the first source's proposal, need a closer match than one arriving two hours later.
-
-**Option 1 - Linear penalty on cosine distance.**
-
-```math
-\text{Effective Distance}
-= \text{Cosine Distance}
-+ \lambda \times \Delta t_{\text{hours}}
-```
-
-The proposed $\lambda$ range is **F8**. The supplied worked example says each 24 hours adds roughly **0.12** to distance. That matches the lower endpoint; the upper endpoint adds **0.24**. These are examples, not separate settings.
-
-**Option 2 - Gaussian penalty on the composite score.**
-
-The second source calls its decay function both $D$ and $G$. They have the same supplied form:
-
-```math
-D(\Delta t) = G(\Delta t)
-= \exp\left(-\frac{\Delta t^2}{2\sigma^2}\right)
-```
-
-```math
-P_{\text{temporal}}(\Delta t) = 1.0 - G(\Delta t)
-```
-
-The proposed $\sigma$ is **F9**. These options act on different scores. The document does not assume they should both be applied.
-
-### Why Gaussian decay was proposed
-
-The second source argues that Gaussian decay is mathematically and behaviorally better for news than exponential decay, $e^{-\lambda t}$. It gives a Reuters Document Unit at hour 0 and a Bloomberg follow-up at hour 6 as an example of early coverage that should receive little penalty.
-
-Its sketch describes a flat early plateau over **12-24 hours**, then a sharper decline, compared with exponential decay falling from the start. This is the source's characterization, not a measured comparison or a claim that the Gaussian curve is exactly flat.
-
-For the supplied $\sigma$ in **F9**, the worked readings are:
-
-- **6 hours:** $D(6) = \exp(-36 / 2592) = 0.986$, described as virtually no breaking-news penalty.
-- **24 hours:** $D(24) = \exp(-576 / 2592) = 0.800$, described as a gentle decline.
-- **72 hours, or three days:** $D(72) = \exp(-5184 / 2592) = 0.135$, described as an aggressive drop.
-- **More than 96 hours:** $D \to 0$, described as a "dead zone."
-
-The supplied penalty bands are:
-
-- **0-12 hours:** `[0.00, 0.05]`, described as no barrier to breaking-news syndication.
-- **24-48 hours:** `[0.20, 0.58]`, described as requiring stronger entity and event matches.
-- **More than 72 hours:** Greater than 0.86, described as making admission virtually impossible and forcing a fresh Event Cluster.
-
-These rounded source figures are preserved, not silently replaced.
-
-### Which elapsed time is measured
-
-The composite proposal defines elapsed hours as:
-
-```math
-\Delta t = t_d - t_{\text{last\_updated}}
-```
-
-The Document Unit keeps **`t_pub`**, the supported publication timestamp, separate from **`t_event`**, the event time resolved by the LLM with its evidence and uncertainty. The LLM must not replace missing publication metadata with an invented instant. Ingestion and identifier-creation times remain separate.
-
-The time used for a particular admission, Threading, ranking, or expiry calculation must be named under **F38**. Event time is not automatically the right clock for source freshness, and publication delay is not proof of a new event. Missing or ambiguous event time remains explicit.
-
-### Conflict between the penalty and acceptance thresholds
-
-The supplied interpretation says stronger matches can overcome the penalty at 24-48 hours. But the supplied positive weights total 1.0. A penalty of **0.58** leaves a maximum final score of **0.42**, even with perfect positive components. That cannot pass either the HOT threshold **F12** or the WARM threshold **F13**.
-
-**Option 1 - Keep the numeric rules.** Accept that some gaps prevent a merge regardless of match strength. This favors separation but splits follow-ups before the stated inactivity limit.
-
-**Option 2 - Keep the intended follow-up behavior.** Revisit the penalty strength, scale, or acceptance thresholds. This preserves the possibility of later direct follow-ups but requires new values and evidence. No replacement values are selected here.
-
-This is a conflict to resolve, not a reason to delete either the formula or the stated intent.
-
-### Semantic similarity plus recency for ranking
-
-The new input calls this **Pattern C: a soft moving window**. It fits as a ranking proposal for already-eligible results, not automatically as a test that two Document Units describe the same event.
-
-```math
-S_{\text{rank}}(q,d)
-= \text{CosineSimilarity}(\vec{q},\vec{v}_d)
-\times e^{-\lambda_{\text{rank}}(t_{\text{now}}-t_{\text{published},d})}
-```
-
-Here $q$ is the search query or other declared ranking reference, $d$ is a Document Unit, and Document Unit age is measured in UTC using the unit declared with **F11**. The source writes this as "Final Score"; it is named $S_{\text{rank}}$ here to distinguish it from the additive Event Cluster-admission score.
-
-A highly relevant Document Unit from three days ago can outrank a marginally relevant Document Unit from two hours ago, depending on the chosen decay rate. Older Document Units gradually lose ranking weight rather than disappear at one cutoff. A Gaussian factor is also proposed; its width is a separate ranking choice, not automatically the Event Cluster-gap width **F9**.
-
-**Option 1 - Apply recency to ranking only.** Use it to order relevant search results or candidates after event verification. This preserves the distinction between "same event" and "worth showing now," but ranking quality needs its own evidence, **H11**.
-
-**Option 2 - Use multiplicative decay for admission too.** Retain the formula as an alternative to the additive penalties. This changes the score scale and time reference, so it requires a newly calibrated admission threshold and scoring version. Do not apply it on top of another time penalty by accident.
-
-Document Unit age relative to now is different from the gap between a Document Unit and an Event Cluster's last update. A soft ranking window also does not bound storage or search work: retain an explicit active-history policy. Declare handling for future or missing publication times and for negative cosine scores; multiplying a negative score toward zero can improve its numeric rank instead of penalizing it.
-
-If used for the published digest, compute the ranking at a declared build-time reference shared by every reader. It does not authorize reader-specific ordering or silent revisions to already-published items. The existing `rank_score` and representative choice remain unchanged until that separate design is selected.
-
-## Event Cluster lifecycle
-
-### Activity is separate from match quality
-
-The first source tracks `last_updated_at`, the timestamp of the latest Document Unit added, and `velocity`, a decaying activity score. The proposed arrival contribution is **F18**.
-
-**Option 1 - Exponential activity decay.**
-
-```math
-\text{Score}_t
-= \text{Score}_{t-1} \times e^{-\frac{\Delta t}{\tau}} + 1
-```
-
-The source says activity tends toward zero with no Document Units and gives **F10** as an example for $\tau$.
-
-**Option 2 - Gaussian activity decay.**
-
-```math
-V_t = V_{t-1} \cdot G(\Delta t) + 1.0
-```
-
-Here $G$ is the Gaussian function from the [Time-aware matching](#time-aware-matching) section. The source says inactivity automatically lowers velocity toward zero and triggers eviction.
-
-**Unresolved:** Neither proposal supplies the full no-arrival update procedure. The +1 in these recurrences belongs to a Document Unit arrival, not a periodic check. Repeated Gaussian decay also requires a clear time reference: multiplying decay factors over separate intervals does not equal applying one Gaussian factor over the total interval.
-
-The proposed merger and Event Threading boosts count more than Document Unit arrivals. The [Activity meaning after reconciliation](#activity-meaning-after-reconciliation) section keeps those activity meanings separate.
-
-### Conflict in the meaning of half-life
-
-The first source calls $\tau$ a **half-life**. In its written equation, $\tau$ instead sets the interval over which the old score falls to $1/e$ of its value.
-
-**Option 1 - Keep the equation.** Describe $\tau$ as the decay time constant. This preserves the supplied recurrence but changes the supplied terminology.
-
-**Option 2 - Keep the half-life meaning.** Use a factor such as $e^{-\ln(2)\Delta t/\tau}$. This is a reconciliation option: it preserves the intended meaning of half-life but changes the written recurrence.
-
-Neither interpretation has been selected.
-
-### Two lifecycle structures
-
-**Option 1 - Active and closed.** The first source periodically closes or removes an Event Cluster from active search when inactivity, maximum lifespan, or low activity qualifies it.
-
-- **Inactivity:** `now - last_updated_at > X_days`, using the alternatives retained in **F16**.
-- **Maximum lifespan:** `now - created_at > MAX_LIFESPAN`, using **F15**. Long-running stories would start fresh sub-chapters.
-- **Low activity:** `Score_t < MIN_THRESHOLD` while other stories continue to receive Document Units; see **F17**.
-
-The original reaper diagram uses the related expressions `now - last_article_time > X days` and `arrival_velocity < min_rate`. Their naming differences are retained for reconciliation in the [Persisted data and retention](#persisted-data-and-retention) section.
-
-This structure has fewer states, but it does not provide the second proposal's progressively stricter admission policy.
-
-**Option 2 - HOT, WARM, and DEAD.** The second source proposes the following progression:
-
-```text
-INCEPTION
-  A Document Unit founds an Event Cluster
-        |
-        v
-HOT
-  Age boundary: F14
-  Admission: S_final >= HOT floor (F12)
-  Joins same-event reporting
-        |
-        | Age exceeds F14 OR velocity falls below F17
-        v
-WARM
-  Age: after F14, before maximum lifespan F15
-  Admission: S_final >= WARM floor (F13)
-  Joins later reports of the same occurrence
-        |
-        | Age exceeds F15 OR inactivity exceeds F16
-        v
-DEAD
-  Evicted from the LanceDB active table
-  Published item addresses remain available
-  Referenced Story DAG identities remain resolvable
-```
-
-This structure supplies explicit state-dependent thresholds but adds transitions whose precedence and startup behavior must be defined.
-
-Neither HOT nor WARM permits Joining a different occurrence. A distinct subsequent event uses Event Threading regardless of how active the earlier Event Cluster is.
-
-### Conflict at Event Cluster startup
-
-If a new Event Cluster starts from zero activity and receives one Document Unit, **F18** gives it a score of **1**. That is already below the proposed HOT-to-WARM threshold **F17**.
-
-**Option 1 - Apply the velocity transition immediately.** A single-Document Unit Event Cluster can become WARM before the age boundary **F14**. This follows the transition expression but does not match the age-only description of HOT and WARM.
-
-**Option 2 - Protect an initial HOT period.** Define a startup or transition rule before velocity may demote a new Event Cluster. This is a reconciliation option, not a supplied complete policy; it adds a rule that still needs a duration or condition.
-
-The initial activity value and evaluation timing remain unspecified, so the document does not assume either behavior. The same question applies to the independently HOT child Event Clusters proposed in the [Event Cluster mergers and Event Threading](#event-cluster-mergers-and-event-threading) section.
-
-## Event Cluster mergers and Event Threading
-
-### Same-event merger or distinct-event thread
-
-The third source proposes a reconciliation pass at the end of every compaction cycle for two cases:
-
-- **Late convergence:** Two worker shards, meaning independently processed portions of the input, create separate Event Clusters before enough details show that both cover the same event.
-- **Topic forking:** A related but distinct event develops. The supplied example is "Anthropic IPO Filing" followed by "US Regulators Open Antitrust Inquiry into Anthropic IPO."
-
-An Event Cluster merger consolidates duplicate representations of one occurrence. Event Threading creates a Story Edge to a distinct subsequent Event Cluster; it never adds that new event's Document Unit to the earlier Active Centroid.
-
-The earlier "fork" proposal is an Event Threading case. A corrective split reassigns Document Units that were wrongly joined; it remains a separate procedure to define.
-
-### Matching Event Clusters for a merger
-
-After ingesting all new Document Units, the proposal compares all Active Centroids:
-
-```math
-\mathbf{S}_{\text{inter}}
-= \mathbf{C}_{\text{active}} \times \mathbf{C}_{\text{active}}^T
-```
-
-Each row of $\mathbf{C}_{\text{active}}$ is a normalized Active Centroid. The source describes an **$O(M^2)$ pairwise scan for at most 1,500 active Event Clusters**, with an unverified claim of **about 5 milliseconds on CPU**. The [Pairwise comparison](#pairwise-comparison) section compares the search strategies.
-
-Merge Event Clusters $C_A$ and $C_B$ **if and only if all four supplied conditions hold**:
-
-1. **Active Centroid proximity:** Cosine between $\vec{c}_A$ and $\vec{c}_B$ is at least **F21**.
-2. **Anchor Vector proximity:** Cosine between $\vec{a}_A$ and $\vec{a}_B$ is at least **F22**.
-3. **Temporal overlap:** $|C_A.\text{first\_seen\_at} - C_B.\text{first\_seen\_at}|$ is at most **F23**.
-4. **Entity agreement:** Jaccard agreement between the entity sets is at least **F24**.
-
-The phrase "temporal overlap" here means proximity of the first-seen timestamps. The written condition does not test overlap of the Event Clusters' full activity intervals.
-
-### Supplied merge execution
-
-**Survivor selection.** Keep the Event Cluster with the earlier `first_seen_at`. If the timestamps are equal, keep the one whose Document Units have the higher maximum `rank_score`.
-
-**State synthesis.** Combine sums and counts, normalize the resulting Active Centroid, and update velocity:
-
-```math
-\vec{S}_{\text{survivor}} \leftarrow \vec{S}_A + \vec{S}_B
-```
-
-```math
-n_{\text{survivor}} \leftarrow n_A + n_B
-```
-
-```math
-\vec{c}_{\text{survivor}}
-\leftarrow \frac{\vec{S}_{\text{survivor}}}{\|\vec{S}_{\text{survivor}}\|_2}
-```
-
-```math
-\text{Velocity}_{\text{survivor}}
-\leftarrow \max(\text{Velocity}_A,\text{Velocity}_B) + 1.0
-```
-
-**Metadata fusion.** Union the entity, actor, action, and object sets.
-
-The additive merger activity term is **F19**. The formula is retained from the source; its meaning is still a choice in the [Activity meaning after reconciliation](#activity-meaning-after-reconciliation) section.
-
-**Assignment migration.** Update `document_assignments` so every admitted `document_id` assigned to $C_{\text{absorbed}}$ points to the surviving Event Cluster ULID.
-
-**Story DAG update.** Resolve affected Story Edge endpoints to the survivor, regenerate edge UUIDv5 values when their endpoint tuple changes, and retain the correction from the old identity. Consolidate duplicate evidence and reject self-links or cycles.
-
-**Purge.** Remove the absorbed Event Cluster from active search while preserving its identity mapping and referenced Document Units. Keep the survivor's founding Anchor Vector unchanged.
-
-**Details still needed.** Equal timestamps and maximum scores leave survivor selection tied. Pair-processing order, rechecking after an Active Centroid changes, temporal-envelope reconciliation, lifecycle status, and representative updates still need declared rules.
-
-Adding sums and counts assumes the Document Unit sets are disjoint. A retry must not add an absorbed Event Cluster twice. Updating one assignment table atomically does not make this entire multi-table sequence atomic; the [Multi-table changes and recovery](#multi-table-changes-and-recovery) section records that distinction and recovery options.
-
-### Event Threading detection and execution
-
-A Document Unit $d$ is an Event Threading candidate relative to active Event Cluster $C$ when **all three supplied conditions hold**:
-
-1. **Active Centroid match:** Cosine between $\vec{v}_d$ and $\vec{c}_C$ is at least **F25**.
-2. **Anchor Vector deviation:** Cosine between $\vec{v}_d$ and $\vec{a}_C$ is below **F26**.
-3. **Action-frame conflict:** The Document Unit introduces an adversarial or divergent root action not present in the Event Cluster.
-
-The supplied action example contrasts `C.actions = {"file", "prepare", "value"}` with `d.actions = {"sue", "block", "investigate"}`.
-
-Do **not** join $d$ to $C$. For a confirmed distinct event, create $C_{\text{new}}$ with:
-
-- `cluster_id`: a newly allocated ULID, recorded for replay.
-- `founding_document_id`: `d.document_id`.
-- `anchor_vector`: $\vec{v}_d$.
-- An independent `HOT` lifecycle.
-
-If evidence supports a subsequent-event relationship, add a typed Story Edge from $C$ to $C_{\text{new}}$ using **A5**. Reuse the relevant Story DAG identity; initialize a new Story DAG ULID when a new root begins one. Multiple predecessors are represented by separate Story Edges, not a single `parent_cluster_id`.
-
-The vector and action thresholds do not themselves prove chronological, thematic, or causal dependency. Unsupported relations stay unresolved, and the new Event Cluster may remain unlinked. Accepted edges must keep the Story DAG acyclic.
-
-The proposed predecessor activity boost is **F20**, applied once to a recorded Threading decision. The Document Unit belongs only to $C_{\text{new}}$; it does not change the predecessor's Active Centroid. The action examples still need a complete divergence rule.
-
-### Conflicts with the admission rules
-
-#### Event Cluster merging versus Document Unit vetoes
-
-The four merger conditions use unweighted entity Jaccard agreement and no explicit action-role or location veto. They can therefore permit a merge that the Document Unit-level rules would reject.
-
-**Option 1 - Keep a separate four-condition merger.** Preserve the supplied "if and only if" rule. This needs less additional checking but can bypass the event-specific safeguards in the [Event Deduplication and Joining](#event-deduplication-and-joining) section.
-
-**Option 2 - Apply the relevant admission safeguards to mergers too.** This is a reconciliation option. It protects the same event distinctions but adds checks and can leave more duplicate Event Clusters unmerged.
-
-#### The two Anchor Vector thresholds
-
-Event Joining rejects similarity below **F3**, while the Event Threading candidate rule requires similarity below **F26**.
-
-**Option 1 - Keep the gap.** Similarities at least **F26** but below **F3** fail Joining without meeting this Threading condition. They may match another candidate or found an unlinked Event Cluster.
-
-**Option 2 - Align the thresholds.** This removes the gap but broadens Event Joining or Threading candidacy, depending on which threshold moves. No replacement threshold is selected.
-
-### Activity meaning after reconciliation
-
-The merger's `max(V_A, V_B)` plus **F19**, and the predecessor's Threading boost **F20**, add activity without admitting a new Document Unit to that Event Cluster.
-
-**Option 1 - Use activity to mean Document Unit arrivals.** Keep the [Event Cluster lifecycle](#event-cluster-lifecycle) section's meaning and derive merged activity from the chosen arrival-decay model. This needs a merge rule not yet supplied and gives up the proposed reconciliation boosts.
-
-**Option 2 - Include reconciliation and related-story activity.** Keep the new formulas, but describe velocity as a broader activity score. This preserves the boosts but can keep a story active without direct new coverage, so lifecycle thresholds need to use that meaning.
-
-Evaluate both scores at a common time before comparing them. Neither a merger nor a Story Edge may silently turn its activity boost into a fictitious Document Unit arrival in `last_seen_at`.
-
-### When Event Threading happens
-
-Event Threading may be proposed as a Document Unit arrives or completed after the batch joins.
-
-**Option 1 - Propose Event Threading during Joining evaluation.** Keep the predecessor's Active Centroid untouched and make the new Event Cluster available locally. Reconciliation still resolves cross-shard duplicate creations and Story Edge conflicts.
-
-**Option 2 - Complete Event Threading in reconciliation.** Keep the Document Unit and proposed predecessor as pending evidence until batch completion. This needs a pending result, not premature membership in the predecessor.
-
-The material does not choose how to rank multiple potential predecessor Event Clusters, whether an accepted same-event match elsewhere takes priority, or how to prevent supported distinct developments from later being merged as duplicates.
-
-## Choosing what the reader sees
-
-### Representative title and summary
-
-The original material leaves three alternatives open:
-
-**Option 1 - Highest-ranked Document Unit.** Use the Document Unit with the highest `rank_score`. This is the second source's detailed proposal. It can improve the representative as coverage arrives, but the visible leader can change.
-
-**Option 2 - Earliest Document Unit.** Keep the breaking-news Document Unit as the representative. This preserves a stable original account but may omit later improvements from the primary title or summary.
-
-**Option 3 - Generated rolling title and summary.** Use a large language model (LLM) to summarize the Event Cluster as it develops. This can represent several reports, but requires a generation and quality-control design not yet supplied.
-
-None of these display choices replaces the founding Anchor Vector.
-
-### Supplied rank-based promotion
-
-Under the highest-ranked option:
-
-1. After Event Joining, compare the ranking metadata for $d$ with the current representative.
-2. If the new score is higher, set `representative_document_id` to `d.document_id`.
-3. Keep the former representative as an admitted Document Unit. Neither semantic payload changes, and the founding Anchor Vector stays fixed.
-
-The material does not define tie-breaking or what happens to a representative already published on an earlier day.
-
-### Primary cards and related coverage
-
-The supplied representative-only proposal would draw primary cards only for assignments with `is_representative == True`. Secondary Document Units populate an array called `also_covered_by`. This is **not the current repository contract**; its `item_id` values are published addresses, not the new `document_id` values.
-
-The supplied JSON fragment is:
-
-```json
-"also_covered_by": [
-  {"item_id": "world-qtb9nctm4j986nf8", "source_url": "https://euronews.com/..."},
-  {"item_id": "ai-rbgxj4jcqjdthpdv", "source_url": "https://theguardian.com/..."}
-]
-```
-
-The lifecycle proposal keeps published representatives and secondary links after an Event Cluster leaves active search. It still needs a policy for frozen daily records versus later display corrections.
-
-Event Cluster mergers must preserve published references. A Story DAG with valid Story Edges also needs a separate reader-facing view; storing a relationship does not decide how it is displayed.
-
-**Current contract.** `also_covered_by` is a count of other outlets on the same day. `covered_by` holds derived outlet links, `same_story_as` names a same-day representative, and `also_ran_earlier` holds earlier-day links. Grouped items remain published and addressable. See [the similarity owner][repo-autotune].
-
-**Option 1 - Preserve those published meanings.** Map new internal assignments to the existing count and link fields. Keep all item addresses and cross-day references. This avoids breaking old days but requires separating long-lived internal Event Clusters from daily card grouping.
-
-**Option 2 - Adopt the supplied array and representative-only publication.** This changes a persisted field's type and can change item reachability. It requires an explicit schema migration and reader-access design; internal Document Unit, Event Cluster, and Story DAG identities do not authorize it.
-
-## Persisted data and retention
-
-### Document Unit record
-
-`document_units` stores the immutable representation defined in the glossary. Its record needs `document_id`, `canonical_url`, `text_sha`, the summary, dense embedding, sparse token bag, semantic frames, and their representation-version stamp. The source URL follows the existing trusted URL-identity path, never model-generated text.
-
-Keep the source-to-published `item_id` mapping separate from this new semantic identity. Exact tokenization, frame shapes, hash input, namespace values, and incomplete-extraction handling must be declared before a writer is implemented. A replay may reuse a complete Document Unit; it must not replace it silently under the same UUID.
-
-### Proposed active Event Cluster schema
-
-The supplied local storage path is `./lancedb_storage/active_clusters.lance`. The vector dimensions and types below are proposals, not approved contracts.
-
-**Table C - Proposed active-Event Cluster fields**
-
-| ID | Column | Type | Description |
+| ID | Quantity or control | Population and time basis | Status and use |
 | --- | --- | --- | --- |
-| C1 | `cluster_id` | `ULID string` | Event Cluster identity allocated under A2 |
-| C2 | `status` | `string` | `HOT` or `WARM` |
-| C3 | `representative_document_id` | `UUIDv5 string` | Admitted Document Unit chosen for display |
-| C4 | `first_seen_at` | `timestamp` | Birth timestamp, UTC |
-| C5 | `last_seen_at` | `timestamp` | Timestamp of the latest admitted Document Unit, UTC |
-| C6 | `document_count` | `int32` | Count of distinct admitted `document_id` values |
-| C7 | `velocity` | `float32` | Decayed activity score |
-| C8 | `anchor_vector` | `vector[384, float32]` | Immutable Anchor Vector of the founding Document Unit |
-| C9 | `vector` | `vector[384, float32]` | Active Centroid used for candidate retrieval |
-| C10 | `embedding_sum` | `list<float32>[384]` | Unnormalized sum vector |
-| C11 | `entities` | `list<string>` | Accumulated recognized entities |
-| C12 | `actors` | `list<string>` | Accumulated subject lemmas |
-| C13 | `actions` | `list<string>` | Accumulated verb lemmas |
-| C14 | `objects` | `list<string>` | Accumulated object lemmas |
-| C15 | `locations` | `list<string>` | Accumulated location lemmas |
-| C16 | `founding_document_id` | `UUIDv5 string` | Document Unit that established the Anchor Vector |
-| C17 | `entity_core` | Not yet declared | Identity-bearing participants, distinct from every entity ever mentioned |
-| C18 | `spatial_coordinate` | Not yet declared | Supported occurrence location and explicit uncertainty or absence |
-| C19 | `temporal_envelope` | Not yet declared | Supported UTC event-time bounds, not ULID creation time |
-
-Topic Domain routing records determine active-pool membership. Their cardinality and reassignment rules remain open. Story DAG membership and predecessor relationships are represented separately, not inferred from `cluster_id` ordering.
-
-### Proposed Document Unit assignments
-
-The proposed local storage path is `./lancedb_storage/document_assignments.lance`.
-
-**Table D - Proposed Document Unit-assignment fields**
-
-| ID | Column | Type | Description |
-| --- | --- | --- | --- |
-| D1 | `document_id` | `UUIDv5 string` | Immutable Document Unit identity from A1 |
-| D2 | `cluster_id` | `ULID string` | Target Event Cluster identity from A2 |
-| D3 | `assigned_at` | `timestamp` | Timestamp of Event Joining, UTC |
-| D4 | `composite_score` | `float32` | Admission score |
-| D5 | `is_representative` | `boolean` | True if selected as the representative Document Unit |
-| D6 | `item_id` | `string` | Existing published item reference; not regenerated as a UUID or ULID |
-
-UTC is explicit throughout these descriptions to follow the project's time convention. The supplied schema explicitly marked only `first_seen_at` as UTC.
-
-### Story DAG and Story Edge records
-
-The Story DAG record carries its ULID, root initialization, and member Event Cluster identities. The Story Edge record carries its UUIDv5, source and destination Event Cluster ULIDs, relation type, supporting Document Unit references, decision status, and evidence/scoring version.
-
-The allowed relation vocabulary and direction rules must distinguish causal, chronological, and thematic dependencies. A thematic connection is not automatically a causal claim. Validate the combined edges for cycles after concurrent proposals join; individually valid edges can form a cycle together.
-
-When an Event Cluster merges or splits, update affected edge identities through recorded corrections. Expiry removes active search eligibility, not the identity of a node still referenced by a Story DAG or published item.
-
-### Field meanings still to reconcile
-
-**Option 1 - Keep the mechanics' names.** Use `created_at` and `last_updated_at`, with the first diagram's `last_article_time` reconciled to a declared meaning. This preserves the early formulas' vocabulary but changes the later schema.
-
-**Option 2 - Keep the proposed schema's names.** Use `first_seen_at` and `last_seen_at`, then map all age and inactivity formulas to those meanings. This preserves the schema vocabulary but requires deciding which Document Unit times the fields contain.
-
-Similarly, `arrival_velocity`, `Score_t`, and `velocity` are not yet declared to be one measure: the text refers both to a minimum arrival rate and to decaying activity scores.
-
-Other undeclared details include how entity types are encoded in `list<string>`, how actor/action/object relationships survive accumulation, and how scores handle empty entity or object sets. These are open details, not implicit defaults.
-
-Merger survivor selection also needs ranking metadata, which is not part of the immutable semantic definition alone. Keep its lookup explicit. Absorbed Event Cluster IDs and Story Edge corrections need resolvable mappings across later runs.
-
-### What removing an Event Cluster means
-
-**Option 1 - Delete it entirely from LanceDB.** This preserves the first source's explicit deletion alternative. It releases stored state but gives up database-backed historical Event Cluster search.
-
-**Option 2 - Retain an inactive archive.** Mark the Event Cluster `is_active = False`, exclude it from new matching, and retain it for historical search and digests. This preserves the first source's archive alternative, but its flag and inactive rows are not present in the proposed HOT/WARM-only schema.
-
-**Option 3 - Evict active state but keep published coverage.** Remove the Event Cluster from the active table while retaining published representatives and coverage links. This bounds active search but still needs retention rules for Document Unit assignments, Story Edges, and referenced historical Event Clusters.
-
-Closing, archiving, and deleting therefore remain different operations.
-
-### Conflict in the deletion example
-
-The source's row-deletion example is:
-
-```python
-tbl.delete("status = 'DEAD'")
-```
-
-The active table is also described as containing **only HOT and WARM**.
-
-**Option 1 - Permit a transient DEAD row.** Mark the row DEAD before deleting it. This gives the supplied predicate something to match but requires that transitional state to be allowed.
-
-**Option 2 - Delete selected active rows directly.** Select expired Event Cluster identifiers and remove those rows without storing DEAD. This reconciliation option preserves the two-state table but changes the deletion procedure.
-
-Neither storage sequence is specified by the supplied diagram alone.
-
-### Multi-table changes and recovery
-
-The merger changes Event Cluster state, Document Unit assignments, Story Edges, and possibly published references. **Atomic** means readers see the change completely or not at all.
-
-**Research comment (2026-09-30 UTC): Do not infer whole-merge atomicity from table operations.** LanceDB documents versions and snapshot restoration for individual tables. An atomic update inside `document_assignments` is narrower than an atomic update of Event Clusters, assignments, and Story DAG records together. See [LanceDB versioning][r10].
-
-**Option 1 - Publish a complete run snapshot.** Work on an isolated local copy, finish and check the related records, then publish one complete snapshot through a declared commit mechanism. Readers retain the preceding complete snapshot until the new one is ready. This needs snapshot storage and publication rules but avoids exposing intermediate cross-table state.
-
-**Option 2 - Record and resume each merge.** Add a persisted operation record and retry-safe updates, with readers protected from incomplete changes. This reconciliation option retains finer-grained progress but adds a contract, recovery steps, and read-side complexity.
-
-Neither option is implemented or selected. Cache upload is not the missing transaction.
-
-The [combined batch flow](#batch-control-flow-and-feedback) pins each shard to a committed state version. Shards write their own Document Units; `topic-event-cluster-reconcile` settles all completed outputs before Assemble. It must compare new Document Units across shards as well as against the restored pools.
-
-Git retains the complete versioned LanceDB snapshot and declared logical records. S3 or R2 holds a replica of that committed snapshot for the next run; it is not a competing latest-state authority. Validate the replica's identity and format before use. Recover a missing replica from the Git snapshot, or report a state failure rather than substitute empty state. Record mirror failures even when the Git commit succeeded.
-
-Each run owns its snapshot path and logical records. If another run commits first, replay affected decisions against the advanced base without repeating summaries. Never text-merge independently edited LanceDB directories. Keep database snapshots out of the published site and account for their retained bytes and transfer cost.
-
-## Storage choice and runner performance
-
-### Selected store
-
-LanceDB is selected. Measure retrieval, maintenance, and snapshot distribution through **H6-H8** rather than reopen the storage choice with unverified timings.
-
-### Supplied capacity and timing figures
-
-The following figures came from the earlier supplied draft. They are not measurements taken in this session, current scale limits, or predictions for the revised 30,000-Document Unit envelope.
-
-**Table E - Earlier supplied scale and runtime figures**
-
-| ID | Metric | 5,000 Document Units | 20,000 Document Units | Claimed impact on a 4 vCPU, 16 GB RAM runner |
-| --- | --- | --- | --- | --- |
-| E1 | Active Event Clusters in a seven-day window | About 400-800 | About 1,500-3,500 | Less than 25 MB RAM; described as negligible |
-| E2 | Embedding computation with MiniLM | About 15 seconds per batch | About 45 seconds per batch | Bound by PyTorch CPU threads; example: `torch.set_num_threads(4)` |
-| E3 | LanceDB disk footprint | About 12 MB | About 48 MB | Described as trivial against a stated typical runner disk limit of 14 GB |
-| E4 | Candidate vector search | Less than 1 millisecond | Less than 4 milliseconds | Flat scan or a small IVF index through `mmap` |
-| E5 | Compaction run duration | About 25 seconds | About 75 seconds | Described as within typical GitHub Actions step timeouts |
-
-### Pairwise comparison
-
-#### Comparison strategy
-
-**Option 1 - Compare every active pair.** Complete coverage, with quadratic work. Measure the real active set rather than silently cut it at 1,500.
-
-**Option 2 - Retrieve candidates, then verify.** Fewer comparisons, but possibly missed duplicate Event Clusters. Measure that loss through **H1-H2**.
-
-## Metrics, thresholds, and tuning authority
-
-Extend the existing **content-similarity judge** with these controls and measurements. They belong to its evaluation and future feedback loop, not a new judge or a parallel metrics system. Other sections refer to these row IDs.
-
-**F:** proposed controls. **G:** current baseline. **H:** existing measurements to reuse and new ones to add. This is the design of that extension, not its implementation.
-
-### Proposed retrieval, scoring, and lifecycle settings
-
-**Table F - Proposed controls and unresolved alternatives**
-
-| ID | Setting | Supplied value or alternatives | Meaning and evidence still needed |
-| --- | --- | --- | --- |
-| F1 | Retrieval candidate count, `retrieval_k` | Earlier: 10. New input: 3-5. Initial comparison: 3, 5, and 10. | Count Document Units or distinct Event Clusters explicitly. Choose with candidate recall H1 and cost H6, not by assuming nearest neighbors are true matches. |
-| F2 | Candidate cosine floor | 0.55 | Unvalidated retrieval starting point, never an admission guarantee. Recalibrate for the actual encoder and index. |
-| F3 | Document Unit-to-Anchor Vector Joining floor | 0.50 | Hard rejection in the supplied composite proposal. Distinct from current repository line G1. |
-| F4 | Active Centroid share, `alpha` | 0.70; Anchor Vector share 0.30 | Weights the two semantic comparisons. Not a substitute for independent floors. |
-| F5 | Composite semantic/entity/event weights | 0.45 / 0.30 / 0.25 | Positive weights total 1.0 before the temporal penalty. Requires a new scoring version and labels. |
-| F6 | Entity-type weights | PERSON 1.0; ORG 1.0; GPE/LOC 0.3; PRODUCT 0.7 | Type is not rarity. Entity encoding and the relationship to IDF remain open. |
-| F7 | Event action share, `beta` | 0.50; object share 0.50 | Action-overlap indicator plus object Jaccard agreement. Empty evidence needs a declared policy. |
-| F8 | Linear distance penalty, `lambda` | 0.005-0.01 per elapsed hour | Adds distance, rather than multiplying rank relevance. Time reference must be fixed. |
-| F9 | Gaussian Event Cluster-gap width, `sigma` | 36 hours | Used by the supplied admission/activity proposals; not automatically a ranking-decay width. |
-| F10 | Exponential activity interval, `tau` | 24 hours as supplied | Source calls it half-life, but its equation uses a time constant. Resolve the [Conflict in the meaning of half-life](#conflict-in-the-meaning-of-half-life) section first. |
-| F11 | Ranking recency rate, `lambda_rank` | Not selected; inverse units of the declared Document Unit age | Multiplies ranking similarity. Exponential versus Gaussian ranking decay is also unselected. |
-| F12 | HOT composite admission floor | 0.65 | Proposed value after the chosen temporal penalty. Check the unreachable-score conflict in the [Conflict between the penalty and acceptance thresholds](#conflict-between-the-penalty-and-acceptance-thresholds) section. |
-| F13 | WARM composite admission floor | 0.82 | Stricter proposed admission, not a second cosine cutoff. |
-| F14 | HOT age boundary | 72 hours | Proposed HOT-to-WARM age transition, separate from activity-based demotion. |
-| F15 | Maximum Event Cluster lifespan | Detailed proposal: 168 hours, or 7 days. Earlier alternative: 7-14 days. | Forces a new chapter; policy is not selected. |
-| F16 | Inactivity closure | Detailed proposal: more than 48 hours. Earlier alternatives: 24 or 72 hours. | Measures absence of admitted Document Units, not total Event Cluster age or a cron interval. |
-| F17 | Low-activity transition | HOT-to-WARM below 1.5. Earlier generic `MIN_THRESHOLD`/`min_rate` unspecified. | Arrival rate and decaying score must not be conflated. Startup behavior remains open. |
-| F18 | New-Document Unit activity contribution | +1.0 | Added once per newly admitted Document Unit, not once per periodic check or retry. |
-| F19 | Merger activity contribution | +1.0 after `max(V_A, V_B)` | Broader activity interpretation; not yet reconciled with an arrival-derived score. |
-| F20 | Predecessor activity after Event Threading | +0.2 | Does not imply that the predecessor admitted the new event's Document Unit. Apply once per recorded Threading decision. |
-| F21 | Event Cluster-merger Active Centroid floor | 0.85 | One of four supplied merger conditions, not proof of whole-group coherence. |
-| F22 | Event Cluster-merger Anchor Vector floor | 0.75 | Compare the immutable founding references. |
-| F23 | Event Cluster-merger first-seen gap | At most 72 hours | First-seen proximity, not overlap of complete activity intervals. |
-| F24 | Event Cluster-merger entity Jaccard floor | 0.50 | Unweighted in the supplied merger rule; conflicts with a specificity-aware Document Unit gate. |
-| F25 | Event Threading Active Centroid floor | 0.60 | Candidate evidence only; distinct-event and Story Edge evidence are still required. |
-| F26 | Event Threading Anchor Vector ceiling | Strictly below 0.45 | Leaves a gap below F3; keep or align it explicitly. |
-| F27 | Stop entities for sole qualification | Examples: police, court, hospital, United States | Complete list and rule are not supplied. Preserve location context while preventing generic-only qualification. |
-| F28 | Multi-token entity bonus | No magnitude supplied | Full names versus shortened aliases. Normalize identity before counting or adding a bonus. |
-| F29 | IDF population, window, and formula | Not supplied | One versioned document-frequency basis shared by every shard. |
-| F30 | Summary, event time, frame, and entity extraction | LLM: summary, `t_event`/`t_pub`, Action/Agents/Targets. GLiNER-Base INT8 ONNX: PERSON, ORG, GPE, FACILITY; omit DATE, MONEY, CARDINAL entity labels. | LLM frames supply roles; GLiNER supplies entity evidence. Pin validated model/export artifacts and confidence handling. Preserve time and figure evidence outside the entity filter. |
-| F31 | Approximate-index search effort | `ef`, `nprobes`, refinement: not selected | Backend-specific controls. Compare against exact retrieval through H1 and H6. |
-| F32 | Active retrieval history | Seven-day working snapshot proposed | Define the cutoff clock under F38. Preserve referenced historical identities outside active search; this is not the lifetime of every Story DAG node. |
-| F33 | Storage compaction/version retention | Not selected | Reclaim obsolete storage without deleting a snapshot a run still needs. Not an event-decay threshold. |
-| F34 | Topic Domain routing and cross-domain search | Pool membership and fanout not selected | Shared routing decisions narrow candidates without making category agreement an Event Joining rule. |
-| F35 | BM25 sparse representation | Tokenized unigrams and bigrams; bounded vocabulary | Document Units retain token counts. Retrieval derives BM25 weights from a shared corpus-statistics version. Vocabulary size and retrieval combination remain configurable and unselected. |
-| F36 | CPU allocation within a shard | Four-thread budget; sequential Raw Feed Items | Schedule LLM and feature stages within the runner's shared CPU/memory budget. Independent data branches do not authorize three simultaneous four-thread engines. |
-| F37 | Proposed dense embedding path | Sentence-Transformers MiniLM-L6-v2, CPU; 384-dimensional L2-normalized FP32 working vectors | G3-G4 record the existing ONNX/int8 path. A runtime or precision change needs a new representation stamp and compatibility evidence; the chart does not install it. |
-| F38 | Event and publication time policy | Separate `t_event`, `t_pub`, ingestion time, and identifier creation time | Preserve provenance and uncertainty. Name which clock each temporal rule uses rather than silently substituting one for another. |
-| F39 | Batch cadence and shard count | Configured interval in hours and independent shard-count setting | More shards increase total snapshot transfer and model loading. These are separate controls, not one shared N value. |
-| F40 | Place/organization pre-filter | Proposed: at least one exact normalized LOC/GPE or ORG overlap | Apply before final Joining scoring, not before all HNSW distance calculations. Label mapping, aliases, missing entities, and generic organizations need independent recall/error checks. |
-| F41 | Cold-Anchor Cache and recovery | Provisional cold-candidate cosine floor: 0.90. History, capacity, and storage policy unselected. | A bounded inactive-anchor index proposes candidates; IVF-PQ results need exact rescoring and event/relation verification. Restore the existing identity asynchronously, recording pending work. Distinguish Joining the old event from Threading a new event to it. |
-| F42 | Volatility-aware centroid/anchor balance | Drift-rate mapping or PID alternative proposed; neither is selected | Define drift per time unit, the target error, bounds, and update cadence. Lower alpha increases Anchor Vector weight. The existing fixed blend remains the comparison baseline, not proof that one policy fits every event. |
-| F43 | Robust Active Centroid and origin evidence | Online geometric median or trimmed centroid proposed; estimator/window unselected | A geometric median minimizes total distance; a trimmed centroid omits declared outliers. Preserve Document Units and count excluded contributions. Origin attestation requires a named trust source; geometry and hostname entropy do not establish authenticity. |
-
-None of F1-F43 is automatically adjustable by the current nightly fitter. An extension needs a declared objective, stable evidence population, scoring-version handling, bounds, and a rollback path. Identity algorithms and namespace values in Table A are contracts, not tunable similarity thresholds.
-
-### Existing judge and tuning controls
-
-The configured council registers `content-similarity-judge`. It decides **same event or different event**, not summary-writing quality. `LLM-COUNCIL` hosts that judge's prepare, shard, and settle work; it does not define the verdict itself. See [the council][repo-council].
-
-Reuse its existing pair records, judge metrics, holdout comparisons, and fitted-threshold records. Table G is the current baseline from [configuration][repo-config] and [the encoder][repo-embed], read on **2026-09-30 UTC**.
-
-**Table G - Current settings, not new design defaults**
-
-| ID | Existing setting or contract | Current value | Meaning and change authority |
-| --- | --- | --- | --- |
-| G1 | `assemble.same_story.floor_min` | 0.94 | Current pairwise score baseline. The existing fitter may supply a replacement only when enabled and eligible. |
-| G2 | `assemble.same_story.cosine_weight` | 1.0 | Current score is cosine alone; the contract permits only this weight. The proposed composite is a contract change. |
-| G3 | Published encoder and vector representation | `all-minilm-l6-v2-quantized/2026-08-22`; ONNX; 384 dimensions; stored int8; title plus summary input | Currently generated in [Assemble][repo-assemble], with shared runner/browser weights. F37 is a proposed change; do not mix its readings with the old fitted counts. |
-| G4 | Encoder execution | One intra-operation thread, one inter-operation thread, sequential execution, one unpadded sequence per forward pass | Reproducibility contract, not an autotune speed knob. Parallelize independent work without silently changing vector arithmetic. |
-| G5 | `assemble.same_story_window_hours` | 36 hours | Existing cross-day coverage lookup. Same-day grouping and earlier-day link display are distinct. |
-| G6 | `adaptive_dedup_threshold.enabled` | false | Fitted lines are not applied by the current committed configuration. This document does not enable them. |
-| G7 | Fitter score band and slot width | `band_low=0.88`, `band_high=1.00`, `bin_width=0.001` | Fixed sampling/counting range. It does not follow the currently applied line. A new score needs compatible evidence and a declared band. |
-| G8 | Nightly pair budget | `pair_budget=200` | Bounded selected pairs, read in both summary orders. Not the number of all possible day pairs. |
-| G9 | Minimum evidence | 200 agreed-NO readings; 30 above-line readings; 10 days | `minimum_negatives`, `minimum_above_line`, and `minimum_days`; insufficient evidence holds the line. |
-| G10 | Judge-health limits | `disagreement_max=0.15`; `unclear_max=0.35` | Excess order disagreement or uncertainty holds the fit. Always report their actual denominators. |
-| G11 | Agreed-NO readings set aside | `discard_share=0.03` | A share of agreed-NO readings, not all judged pairs and not a false-merge allowance. |
-| G12 | Directional movement | Fall: weight 0.50, at most 10 slots/day. Rise: weight 0.15, at most 3 slots/day. | Existing down-fast/up-slow policy; both directions are damped and capped. |
-| G13 | Dead zone | `dead_zone_bins=1` | A sub-slot proposal is held rather than treated as useful movement. |
-| G14 | Applied-line lookback | `applied_lookback_days=7` | Select an eligible fitted row within the configured lookback, otherwise use the committed line. |
-| G15 | Step-change diagnostic | Guard enforcement false; 14-row comparison; multiple 5.0 | Report the unusual shift; the additional guard is not currently enforced. |
-| G16 | Settled-evidence diagnostic | `settled_delta=0.001`; `settled_window_days=7` | Compare fitted proposals over time, not merely a damped output that was designed to move slowly. |
-
-The judge sees summaries as untrusted data in an operator-controlled model process. The dotted loop does not permit Document Unit text to change instructions, destinations, or execution.
-
-### Extend the judge's existing metrics
-
-The judge already records its per-shard pair counts, disagreement, uncertainty, and decode costs in [ContentSimilarityJudgeMetrics][repo-judge-metrics]. [Holdout comparisons][repo-holdout] measure decision errors; [fitted-threshold records][repo-fit] explain changes and holds. Extend these where the meaning and unit match. Keep batch-, Event Cluster-, and pair-level readings distinct.
-
-**Table H - Integration into the content-similarity judge**
-
-| ID | Measurement | Reuse or extension | Use in the feedback loop |
-| --- | --- | --- | --- |
-| H1 | Same-event candidate recall at K | Add labeled-case retrieval checks and an exact-search comparison. | Fit F1, F2, and F31 without hiding candidates the current retriever misses. |
-| H2 | False and missed Event Joining | Extend the existing holdout's four decision counts for the new scoring path. Preserve labels and denominators. | Compare Document Unit membership and same-event merger errors; the current holdout measures the line, not the model judge. |
-| H3 | Reachability and coverage correctness | Feed publication checks into the judge's evaluation: missing addresses, wrong outlet counts, invalid cross-day folds. | Prevent a quality improvement from breaking reader access. |
-| H4 | Order disagreement and uncertainty | Reuse `disagreement_rate`, `unclear_rate`, and their pair counts. Keep current per-shard and per-day meanings distinct. | Preserve the existing judge-health gates G10. |
-| H5 | Evidence completeness | Reuse `pairs_dealt`, `pairs_read`, `pairs_refused`, `pairs_unreadable`, and `pairs_abandoned`; link work-shard completeness separately. | Hold a fit on missing required judging evidence without preventing partial content publication. |
-| H6 | Retrieval and verification latency | Add timed query/pair measurements, including median and 95th percentile. | Compare candidate and verification policies at a named workload. |
-| H7 | Cost per refresh | Reuse decode totals/maxima; link producer timings for loading, extraction, reconciliation, compaction, and transfer. | Determine affordable Document Units per run without confusing model time with whole-run time. |
-| H8 | Active-state replication cost | Add snapshot bytes, active rows, peak shard memory, and total transferred bytes. | Evaluate the cost of distributing the active state as shard count grows. |
-| H9 | Missing Document Unit and event evidence | Preserve grammar/unreadable counters; distinguish missing embeddings, token bags, frames, aliases, and event-time/place evidence. | Keep unknown evidence separate from a different-event verdict. |
-| H10 | Event Cluster and Story DAG coherence | Evaluate membership separately from Story Edge type, direction, support, and acyclicity. | Detect incompatible members and false or missed Event Threading. Same-event NO is not evidence for a causal or thematic edge. |
-| H11 | Recency-ranking quality | Add relevance/freshness evaluation owned by this judge's pipeline. | Evaluate F11 separately; existing same-event YES/NO labels do not grade ranking or prose. |
-| H12 | Fit audit and scoring compatibility | Reuse `previous`, `proposed`, `applied`, `held_reason`, `clamp_kind`, and scoring stamps. | Explain each move or hold and reject mixed scoring versions. |
-| H13 | Identity and replay integrity | Count conflicting immutable Document Units, duplicate Joining effects, regenerated creation IDs, duplicate Story Edges, and unresolved corrected references. | Verify idempotent effects without demanding identical fresh model output. Identity errors are not a threshold to tune away. |
-| H14 | Trending Topic Domains and events | Producer measurements of new admitted Document Units, distinct outlets, and activity change over a declared UTC window. | Reconciliation emits trend indicators for Assemble and judge evaluation. The ranking formula and thresholds still need definition; popularity does not establish same-event identity. |
-| H15 | Drift and robust-estimator effects | Measure Active Centroid movement per declared time interval, excluded vector contributions, source concentration, and independent false/missed Joining outcomes. | Compare F42-F43 without treating low dispersion or high source entropy as proof of trustworthy content. |
-
-The council will collect these measurements for the existing judge. That does **not** mean placing the measurements in the LLM prompt: the event verdict must remain blind to the score it helps calibrate. No-observation rates remain absent, and replay inputs remain bounded.
+| D1 | Feature and statistics compatibility | Frozen summaries, processing versions, aliases, and statistics over one selected representation per distinct reporting contribution | Selected invariant. Copies and superseded representations add no independent word/entity-frequency or document-length counts |
+| D2 | Ordinary active-search window | Last eligible new-reporting observation against a declared batch UTC reference | **15 days by default, configurable.** Search eligibility only; no automatic identity or Topic Domain deletion |
+| D3 | Activity decay | Eligible observations counted once at evaluation time T | Exponential baseline; positive time constant configured and calibrated |
+| D4 | HOT/WARM classification | Observation-derived activity, not occurrence age or similarity | Operational thresholds to calibrate; no separate identity rules by state |
+| D5 | Candidate retrieval effort | Distinct Event Clusters after dense/sparse rank fusion, plus unassigned current-batch candidates | Configurable K and index effort, not a cap on the number of clusters; evaluate D13 |
+| D6 | Joining score and acceptance | Compatible dense, specific-entity, and predicate-frame evidence after vetoes | Weights, anchor/centroid balance, and acceptance threshold require calibration; no publication-age subtraction |
+| D7 | Copy classification | Source-report pairs and their content/origin evidence | Hash/SimHash/vector signals propose checks. Only verified copies suppress a reporting contribution |
+| D8 | Correction scope and triggers | Affected membership and incident edges in a configured window/slice | Dispersion, drift, and borderline decisions trigger review, not automatic truth or a forced two-way split |
+| D9 | Cold lookup and archival packing | Explicit manifests, inactive identities, and compatible verification evidence | Lookup and packing are configurable. No archive-deletion policy is selected; physical cleanup preserves logically required records and references |
+| D10 | Topic discovery and promotion | Candidate subject evidence across related events | Automatic discovery, reviewed public promotion. No new category from one low-similarity score alone |
+| D11 | Prominence and trend policy | Reporting, distribution, event breadth, publication freshness, and activity change in named windows | Weights/normalization to calibrate; source entropy and entity count cannot independently establish importance |
+| D12 | Reading-view selection | Supported graph slice, query/seed, eligible time range, and reading budget | Configurable path/branch selection; preserve access to omitted reports and meaningful quiet branches |
+| D13 | Candidate recall | Independently labeled same-event and related-event cases, separately; exact-search reference for index loss | Compare dense, sparse, combined, new-item, and cold routes. Exact neighbors are not truth labels |
+| D14 | Event-group quality | Bounded independently labeled article partition and same-event pairs | Keep false/missed Joining counts; use B-Cubed precision and recall as partition summaries, with ARI or AMI as distinct secondary readings |
+| D15 | Relation quality | Independently assessed typed/directed event pairs | Count supported accepted, unsupported accepted, and missed valid edges; distinguish never-retrieved from rejected |
+| D16 | Assignment churn | Distinct source revisions whose semantic membership changed, over eligible assignments in the same correction scope | Exclude alias-only renames and representation refreshes. Report split/merge operation counts separately |
+| D17 | Largest-cluster share | Largest semantic-contributor set divided by all contributors in the declared active population | Diagnostic, not proof of blobbing; a real major event can legitimately dominate |
+| D18 | Singleton persistence | Clusters with one reporting contribution in an age-qualified cohort | Cohort age and denominator configured. Copies do not make a singleton multi-source reporting |
+| D19 | Graph growth and structure | Nodes, typed edges, degree, cycles, and missing endpoints over consistent graph slices | Growth fits are descriptive, not a universal healthy exponent. Cycles and dangling references are explicit validity failures |
+| D20 | Source distribution and provenance | Reporting origins, outlets, website distribution, copy families, and provenance status | Keep counts distinct. Signatures or entropy do not prove factual truth or newsroom independence |
+| D21 | Cohesion and drift | Current contributor centroid/dispersion and comparable prior snapshots | Diagnose changes within one representation; independent event evidence determines any split |
+| D22 | View usefulness | Important developments reached, weakest transitions, repetition, branch omissions, and reader tasks at a fixed reading budget | Judge explanations, not just the score used to construct them |
+| D23 | Judge health and completeness | Pair/shard accounting, reversed-order agreement, uncertainty, and exact denominators | Reuse declared metrics. Missing evidence or incompatible scoring stamps holds fitting; an empty population is not a zero error rate |
+| D24 | Fit audit and authority | Previous/proposed/applied settings, evidence/version identity, hold/clamp reasons | Only individually authorized controls may move within declared bounds. No implicit PID driven by unlabeled graph size |
+| D25 | Complete processing cost | Producer/evaluation stages, load and transfer, maintenance, and peak resource use for a named input | Measure with hardware and execution conditions. No numerical performance promise is adopted |
+| D26 | Replay and identity integrity | Retried, replaced, copied, merged, split, and corrected records | Check duplicate contributions, fabricated arrivals, lost aliases, and unresolved public references |
+| D27 | Detection cost | A specifically defined event-detection task with labeled misses/false alarms, prior, and error costs | Optional TDT comparison. State the normalization reference; the raw weighted error expression is not already normalized |
+| D28 | Cold continuity | Late reports, recovered events, related new events, and unavailable historical evidence | Measure lost roots, false recovery, missing relationships, and unresolved work separately |
+
+Fragmenting one true event lowers completeness; combining unrelated events lowers homogeneity. V-measure combines those readings but does not replace separate error counts. B-Cubed requires a labeled partition and reports per-item grouping precision/recall. ARI and AMI are different chance-adjusted comparisons, not interchangeable names.
+
+Unlabeled stability metrics can reveal a problem, but cannot certify correctness. A large event, a burst of corrections, or a quiet topic may be legitimate. Multi-outlet agreement and shared entities must not automatically become high-confidence "silver truth."
+
+## Design rationale and rejected alternatives
+
+The design separates event evidence from search approximations, reporting from distribution, and immutable versions from permanent closure. These distinctions let the system adapt without disguising uncertainty or losing reports.
+
+**Table E - Rejected or deferred alternatives**
+
+| ID | Alternative and benefit sought | Why it is not selected |
+| --- | --- | --- |
+| E1 | High cosine or SimHash distance alone proves a copied report | Useful candidate signals, but can collapse different occurrences or factual contradictions; verify copy evidence first |
+| E2 | Gaussian stepwise activity and time penalties on identity | Attractive early decay shape, but the supplied recurrence changes with update intervals and confuses event time with observation time; use exponential activity and explicit occurrence evidence |
+| E3 | Stricter WARM Joining or age-damped member weights | Intended to limit drift, but changes event identity and contributor semantics because reporting is old; retain one policy |
+| E4 | Universal exact place/ORG gate or a name-length bonus | Can narrow candidates, but aliases, missing extraction, and generic entities make it an unreliable admission rule |
+| E5 | Raw-lead/BM25-only fast path when summarization is busy | Reduces waiting but changes the canonical representation and calibration; queue or record incomplete work rather than pretend equivalence |
+| E6 | Fixed dispersion, degree shape, or a two-class spectral cut proves a split | Cheap diagnostics do not establish distinct real events; validate proposed partitions and keep the number of groups evidence-led |
+| E7 | PID changes identity thresholds from large-cluster share | No demonstrated error/response relationship; even the proposed sign and anti-windup behavior are unsettled. Graph health alone is not an identity label |
+| E8 | Source entropy or cryptographic credentials establish truth | Describe distribution or signed provenance, not editorial independence or factual accuracy. Keep provenance checks as supporting evidence |
+| E9 | Robust centroid automatically defeats coordinated poisoning | Median/medoid/trimmed estimators may help, but can reject legitimate coverage and cannot authenticate coordinated inliers; compare as bounded experiments |
+| E10 | Delete transitive edges or weak branches from the authoritative graph | Simplifies a picture but can erase typed evidence or important quiet developments; simplify only the bounded view |
+| E11 | Permanent cold closure, or appending into an allegedly immutable file | Loses late evidence or contradicts immutability; preserve old versions and publish explicit updates/corrections |
+| E12 | Automatic public Topic Domains from isolated low-similarity documents | Finds novelty but can destabilize categories; discover candidates automatically and review public promotion |
 
 ## See also
 
-Research sources are linked beside their claims. Repository owners:
+- [Content-similarity evaluation and fitting][similarity].
+- [LLM-COUNCIL ownership][council].
+- [Existing judge metric record][judge-metrics], [line holdout record][holdout], and [fitted-setting audit][fit].
+- [LanceDB hybrid retrieval][hybrid] and [table versioning][versioning].
+- [Fastino GLiNER][fastino] and [spaCy lemmatization][spacy].
+- [Native Mermaid conventions][diagrams].
 
-- [Content-similarity rules and autotuning][repo-autotune].
-- [LLM-COUNCIL and its registered judges][repo-council].
-- [Concurrent publication][repo-committing].
-- [Project diagram conventions][repo-diagrams].
-
-[r10]: https://docs.lancedb.com/tables/versioning
-[r12]: https://docs.lancedb.com/indexing/vector-index
-[r15]: https://raw.githubusercontent.com/huggingface/sentence-transformers/main/sentence_transformers/sentence_transformer/evaluation/binary_classification.py
-[r16]: https://sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html
-[r17]: https://raw.githubusercontent.com/urchade/GLiNER/main/README.md
-[repo-autotune]: ../docs/architecture/publishing/autotune-content-similarity.md
-[repo-committing]: ../docs/architecture/publishing/committing.md
-[repo-assemble]: ../backend/idhazh/stages/assemble.py
-[repo-embed]: ../backend/idhazh/embed.py
-[repo-config]: ../config/idhazh.json
-[repo-council]: ../docs/architecture/publishing/llm-council.md
-[repo-judge-metrics]: ../backend/idhazh/contracts/content_similarity_judge_metrics.py
-[repo-holdout]: ../backend/idhazh/contracts/merge_line_holdout_score.py
-[repo-fit]: ../backend/idhazh/contracts/fitted_similarity_threshold.py
-[repo-diagrams]: ../docs/reference/mermaid-diagrams.md
+[similarity]: ../docs/architecture/publishing/autotune-content-similarity.md
+[council]: ../docs/architecture/publishing/llm-council.md
+[judge-metrics]: ../backend/idhazh/contracts/content_similarity_judge_metrics.py
+[holdout]: ../backend/idhazh/contracts/merge_line_holdout_score.py
+[fit]: ../backend/idhazh/contracts/fitted_similarity_threshold.py
+[hybrid]: https://docs.lancedb.com/search/hybrid-search
+[versioning]: https://docs.lancedb.com/tables/versioning
+[fastino]: https://fastino.ai/
+[spacy]: https://spacy.io/api/lemmatizer
+[diagrams]: ../docs/reference/mermaid-diagrams.md
