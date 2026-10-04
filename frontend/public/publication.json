@@ -27,6 +27,7 @@
     }
   ],
   "dates": [
+    "2026-10-04",
     "2026-10-03",
     "2026-10-02",
     "2026-10-01",
@@ -97,19 +98,19 @@
       "root": "public"
     },
     {
-      "bytes": 309888,
+      "bytes": 365184,
       "items": 0,
       "path": "assist/index/2026-10.bin",
       "root": "public"
     },
     {
-      "bytes": 136468,
+      "bytes": 160942,
       "items": 0,
       "path": "assist/index/2026-10.json",
       "root": "public"
     },
     {
-      "bytes": 2981,
+      "bytes": 2817,
       "items": 0,
       "path": "console/band.json",
       "root": "public"
@@ -127,7 +128,7 @@
       "root": "public"
     },
     {
-      "bytes": 45272,
+      "bytes": 39127,
       "items": 0,
       "path": "day-metrics/2026-10.json",
       "root": "public"
@@ -637,15 +638,27 @@
       "root": "public"
     },
     {
-      "bytes": 465751,
-      "items": 215,
+      "bytes": 547081,
+      "items": 286,
       "path": "digest/2026/10/03/digest.json",
       "root": "public"
     },
     {
-      "bytes": 19141,
+      "bytes": 22772,
       "items": 0,
       "path": "digest/2026/10/03/run.json",
+      "root": "public"
+    },
+    {
+      "bytes": 139131,
+      "items": 73,
+      "path": "digest/2026/10/04/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 5741,
+      "items": 0,
+      "path": "digest/2026/10/04/run.json",
       "root": "public"
     },
     {
@@ -661,7 +674,7 @@
       "root": "public"
     },
     {
-      "bytes": 10279,
+      "bytes": 11674,
       "items": 0,
       "path": "machine/2026-10.csv",
       "root": "public"
@@ -679,7 +692,7 @@
       "root": "public"
     },
     {
-      "bytes": 5699,
+      "bytes": 6701,
       "items": 0,
       "path": "run-days/2026-10.json",
       "root": "public"
@@ -691,13 +704,13 @@
       "root": "public"
     },
     {
-      "bytes": 123176,
+      "bytes": 144309,
       "items": 0,
       "path": "run-timeline/2026-10.csv",
       "root": "public"
     },
     {
-      "bytes": 384265,
+      "bytes": 384241,
       "items": 0,
       "path": "source-health.json",
       "root": "public"
@@ -715,7 +728,7 @@
       "root": "public"
     },
     {
-      "bytes": 336644,
+      "bytes": 394620,
       "items": 0,
       "path": "telemetry/2026-10.csv",
       "root": "public"
@@ -839,9 +852,21 @@
       "items": 0,
       "path": "raw/feed-health/2026/10/03/01a103aa-6077-836d-b040-43b852028ff1.parquet",
       "root": "state"
+    },
+    {
+      "bytes": 21219,
+      "items": 0,
+      "path": "raw/feed-health/2026/10/04/01a1060a-e39e-8dfd-b022-34d657a82471.parquet",
+      "root": "state"
+    },
+    {
+      "bytes": 21202,
+      "items": 0,
+      "path": "raw/feed-health/2026/10/04/01a106e3-5a66-8741-9867-c329a04e0d09.parquet",
+      "root": "state"
     }
   ],
-  "total_bytes": 51857528,
-  "total_items": 14654,
+  "total_bytes": 52242304,
+  "total_items": 14798,
   "version": "2026-10-03T13:33"
 }

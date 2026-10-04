@@ -1,21 +1,15 @@
 import { expect, test, type Page } from './support/browser';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import {
-	compressionView,
-	grouped,
-	placeRow,
-	type TelemetryRow
-} from '../src/lib/charts/series';
-import { axisLabels, centreOffset, spanLabel } from '../src/lib/charts/run-history';
+import { grouped } from '../src/lib/charts/series';
 import { dayKey, monthsInWindow, panWindow, toDay, windowOfDays } from '../src/lib/charts/viewport';
 import { shortDate } from '../src/lib/format';
-import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
+import { CUT_FLAG_MEANS_A_CUT_FROM } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 import { feedHealthRows } from '../src/lib/server/ledger-rows';
 import { failing, preserves, reliability, type FeedRecord } from '../src/lib/feed-health';
 import { canaryArticleRows, canaryScoreRows, heldRows } from './support/canary-records';
-import { telemetryRow } from './support/telemetry-row';
+import { days } from './support/consecutive-days';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
@@ -58,11 +52,6 @@ function scoreRows(): Record<string, string>[] {
 function healthRows(): Record<string, string>[] {
 	return articleHeld.rows();
 }
-
-/** A run strip at the pitch `cellFor` settles on for a page-wide frame: a 16px
- * cell and a 4px gap. The axis is thinned against that room, so a test about it
- * has to state it. `density` is `chart.tick_density`. */
-const STRIP = { density: 6, pitch: 20 };
 
 function dirs(at: string): string[] {
 	return readdirSync(at, { withFileTypes: true })
@@ -174,14 +163,6 @@ function manifestDays(): { date: string; runs: number }[] {
 	return found.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** A run of consecutive ISO days, read in UTC so the suite cannot drift west. */
-function days(start: string, count: number): string[] {
-	const first = new Date(`${start}T00:00:00Z`).getTime();
-	return Array.from({ length: count }, (_, index) =>
-		new Date(first + index * 86_400_000).toISOString().slice(0, 10)
-	);
-}
-
 /** The narrowest preset that reaches back past the canary's first recorded run.
  *
  * The console opens on fourteen days since 2026-10-02, and the canary records
@@ -290,66 +271,6 @@ function watchFor404s(page: Page): string[] {
 	});
 	return missing;
 }
-
-test('one day gets a full date, and a short run gets one span', () => {
-	expect(axisLabels([], STRIP)).toEqual([]);
-	expect(axisLabels(['2026-08-20'], STRIP)).toEqual([
-		{ column: 1, text: '20 Aug 2026', align: 'end' }
-	]);
-
-	// Two to six days cannot carry a cadence, so the whole span is said once.
-	expect(spanLabel('2026-08-18', '2026-08-20')).toBe('18-20 Aug 2026');
-	expect(spanLabel('2026-07-30', '2026-08-02')).toBe('30 Jul - 2 Aug 2026');
-	expect(spanLabel('2025-12-30', '2026-01-02')).toBe('30 Dec 2025 - 2 Jan 2026');
-	expect(axisLabels(days('2026-08-15', 4), STRIP)).toEqual([
-		{ column: 4, text: '15-18 Aug 2026', align: 'end' }
-	]);
-});
-
-test('a longer run carries both ends and as many between them as fit', () => {
-	const twenty = axisLabels(days('2026-08-01', 20), STRIP);
-
-	// The ceiling offers six columns over twenty days. At a 20px pitch the strip
-	// is 380px wide, and a date is about 64px, so six of them cannot be drawn.
-	// The rule drops to three rather than letting two of them touch.
-	expect(twenty.map((label) => label.column)).toEqual([1, 12, 20]);
-	expect(twenty.map((label) => label.text)).toEqual(['1 Aug 2026', '12 Aug', '20 Aug']);
-	expect(twenty.map((label) => label.align)).toEqual(['start', 'centre', 'end']);
-
-	// A strip with three times the room carries every column the ceiling allows.
-	const wide = axisLabels(days('2026-08-01', 20), { density: STRIP.density, pitch: 60 });
-	expect(wide.map((label) => label.column)).toEqual([1, 5, 9, 12, 16, 20]);
-});
-
-test('the year is stated on the first label that changes it, and not again', () => {
-	const across = axisLabels(days('2025-12-20', 30), { density: STRIP.density, pitch: 60 });
-
-	expect(across.map((label) => label.text)).toEqual([
-		'20 Dec 2025',
-		'26 Dec',
-		'1 Jan 2026',
-		'6 Jan',
-		'12 Jan',
-		'18 Jan'
-	]);
-});
-
-test('a strip shares its spare room, and a strip with none keeps its first column', () => {
-	// Half the difference, rounded, so the two margins differ by at most a pixel.
-	expect(centreOffset(1326, 300)).toBe(513);
-	expect(centreOffset(1326, 1290)).toBe(18);
-
-	// An overflowing strip has no spare room to divide, and an offset there
-	// would push its first column out of reach of the scroll.
-	expect(centreOffset(360, 1290)).toBe(0);
-	expect(centreOffset(300, 300)).toBe(0);
-
-	// Nothing has measured the frame yet - the server, or the first frame - so
-	// there is no room to share and the strip starts where it always did.
-	expect(centreOffset(null, 300)).toBe(0);
-	expect(centreOffset(0, 300)).toBe(0);
-	expect(centreOffset(1326, 0)).toBe(0);
-});
 
 test('the strip reads oldest to newest, left to right', async ({ page }) => {
 	await page.goto('/console/');
@@ -1349,67 +1270,6 @@ test('the failed-item list is capped, states its scope, and offers the rest', as
 	await expect(page.locator('[data-failure-scope]')).toContainText('in this window.');
 });
 
-test('an unplaceable row is counted and never silently dropped', () => {
-	// The browser case above cannot reach this state on the committed fixture, so
-	// the decision is driven here instead of left to a sentence that never
-	// prints. Three rows, one of each outcome, and the two outputs come out of
-	// one pass - a plot and a sentence that disagree about the same row is the
-	// failure this shape exists to prevent.
-	const row = (over: Partial<TelemetryRow>): TelemetryRow =>
-		telemetryRow({
-			date: '2026-08-28',
-			run_id: '2026-08-28-1',
-			source_words: 1923,
-			summary_words: 205,
-			source_words_before_cap: 4200,
-			...over
-		});
-
-	const view = compressionView([
-		row({ item_id: 'ai-cut' }),
-		row({ item_id: 'ai-whole', source_words: 880, source_words_before_cap: null }),
-		row({ item_id: 'ai-nolength', source_words: 0, source_words_before_cap: null }),
-		row({ item_id: 'ai-nosummary', summary_words: null }),
-		// A failure never had an article, so it is neither a point nor a row the
-		// sentence should count. Without the predicate it lands in the sentence and
-		// tells the operator articles went missing that never existed.
-		row({ item_id: 'ai-failed', stage: 'fetch', outcome: 'failed', code: 'http_error' }),
-		row({
-			item_id: 'ai-dropped',
-			stage: 'extract',
-			source_words: 0,
-			summary_words: null,
-			source_words_before_cap: null
-		}),
-		// The same article, written again by a second run of the same day. One
-		// article is one mark: drawing it twice draws one measurement twice, and
-		// the run that read the most of it is the one that counts.
-		row({ item_id: 'ai-whole', run_id: '2026-08-28-2', source_words: 300, source_words_before_cap: null })
-	]);
-
-	expect(view.points.map((point) => point.item_id)).toEqual(['ai-cut', 'ai-whole']);
-	expect(view.points.find((point) => point.item_id === 'ai-whole')?.source_words).toBe(880);
-	expect(view.unplotted).toEqual([{ date: '2026-08-28', n: 1 }]);
-
-	// The cut is the two lengths and nothing else, and the second one is carried
-	// only where it says something the first does not.
-	const [cut, whole] = view.points;
-	expect(cut.source_words).toBe(4200);
-	expect(cut.source_seen_words).toBe(1923);
-	expect(cut.truncation_flagged).toBe(true);
-	expect(whole.source_words).toBe(880);
-	expect('source_seen_words' in whole).toBe(false);
-	expect(whole.truncation_flagged).toBe(false);
-
-	// The three outcomes, asserted on the one decision the view folds.
-	expect(placeRow(row({ source_words: 0, source_words_before_cap: null }))).toEqual({
-		kind: 'no-length',
-		date: '2026-08-28'
-	});
-	expect(placeRow(row({ summary_words: null })).kind).toBe('no-summary');
-	expect(placeRow(row({})).kind).toBe('point');
-});
-
 test('the candle reads out its day and every series at that column', async ({ page }) => {
 	await page.goto('/console/model/');
 
@@ -1448,36 +1308,6 @@ test('the candle reads out its day and every series at that column', async ({ pa
 	await expect(page.locator('[data-readout-hint="throughput"]')).toHaveText(
 		'Point at a day to read it. Left and Right step through the days, Escape returns to the newest.'
 	);
-});
-
-test('the reading path and the console carry no chart library', () => {
-	const manifest = JSON.parse(
-		readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')
-	) as { dependencies?: Record<string, string> };
-
-	// Guardrail #8: a dependency names a beneficiary feature. The pan this one was
-	// bought for is implemented in `Viewport.svelte`, and the window it pans is
-	// set by the control on the page above it.
-	expect(Object.keys(manifest.dependencies ?? {})).toEqual([]);
-});
-
-test('the old evals route moves bookmarks to the console', async ({ page }) => {
-	await page.goto('/evals/');
-
-	await expect(page).toHaveURL(/\/console\/$/);
-	await expect(page.getByRole('heading', { name: 'Console' })).toBeVisible();
-});
-
-test('the evals entry point keeps a no-JS link to the console', () => {
-	const page = readFileSync(resolve(process.cwd(), 'src', 'routes', 'evals', '+page.svelte'), 'utf8');
-
-	expect(page).toContain('http-equiv="refresh"');
-	expect(page).toContain('<link rel="canonical" href={consoleHref} />');
-	expect(page).toContain('<a href={consoleHref}');
-	expect(page).not.toContain('evalRows');
-	// The stub is a redirect, not a second dashboard. Two surfaces counting one
-	// ledger disagree the moment one count changes.
-	expect(page).not.toContain('$lib/bands');
 });
 
 test('keyboard alone pans the viewport and steps its window through the presets', async ({
@@ -2041,263 +1871,4 @@ test('the candle stays first inside the section, above the table', async ({ page
 	await expect(
 		page.getByRole('heading', { level: 3, name: 'Model tokens per second' })
 	).toBeVisible();
-});
-
-test('a model change is one divider row, under the days that ran on it', () => {
-	// The fixture ran one model, so the swap is asserted over the function that
-	// places it. A divider drawn from a fixture that cannot change models would
-	// only prove the fixture.
-	const scored = (date: string, model: string) => ({
-		date,
-		model_id: model,
-		band: 'high',
-		extractiveness: '0.2',
-		verbatim_run: '0.1',
-		unsupported_numbers: '0',
-		hedge_dropped: 'False',
-		truncation_flagged: 'False'
-	});
-
-	const rows = modelWork(
-		[scored('2026-08-26', 'new'), scored('2026-08-25', 'new'), scored('2026-08-24', 'old')],
-		[]
-	);
-
-	expect(
-		rows.map((row) => (row.kind === 'swap' ? `swap ${row.date} ${row.model}` : row.day.date))
-	).toEqual(['2026-08-26', '2026-08-25', 'swap 2026-08-25 new', '2026-08-24']);
-
-	// One model over every day is no divider at all.
-	expect(
-		modelWork([scored('2026-08-26', 'one'), scored('2026-08-25', 'one')], []).filter(
-			(row) => row.kind === 'swap'
-		)
-	).toEqual([]);
-});
-
-test('a day with no summaries gets no row, and a day with no health row gets no failure count', () => {
-	const health = (date: string, ms: string, outcome: string) => ({
-		date,
-		summarize_ms: ms,
-		outcome
-	});
-
-	const rows = modelWork(
-		[{ date: '2026-08-26', model_id: 'one', band: 'low' }],
-		[
-			health('2026-08-26', '2000', 'failed'),
-			health('2026-08-25', '1500', 'ok'),
-			// Fetched and thrown away before the model saw it. No summary, no row.
-			health('2026-08-24', '', 'failed')
-		]
-	);
-
-	const days = rows.filter((row) => row.kind === 'day').map((row) => row.day);
-	expect(days.map((day) => day.date)).toEqual(['2026-08-26', '2026-08-25']);
-	expect(days[0].failed).toBe(1);
-	expect(days[0].notSure).toBe(1);
-	// Model work, no score row: every quality figure is unknown, not zero.
-	expect(days[1].summaries).toBeNull();
-	expect(days[1].notSure).toBeNull();
-	expect(days[1].copiedPct).toBeNull();
-	expect(days[1].totalMs).toBe(1500);
-
-	// A day with score rows and no health row cannot count failures.
-	const scoredOnly = modelWork([{ date: '2026-08-26', model_id: 'one', band: 'high' }], []);
-	expect(scoredOnly).toHaveLength(1);
-	expect(scoredOnly[0].kind === 'day' && scoredOnly[0].day.failed).toBeNull();
-	expect(scoredOnly[0].kind === 'day' && scoredOnly[0].day.perItemMs).toBeNull();
-});
-
-test('the cut flag is counted only over rows that carry the meaning it has now', () => {
-	// `truncation_flagged` changed meaning at `CUT_FLAG_MEANS_A_CUT_FROM`. Before
-	// that stamp the cell held the gap between two faithfulness scores; from it,
-	// the cell says extract cut the article body. Two rows on one day, one either
-	// side of the stamp, are what tell a reader of the new meaning apart from a
-	// reader that just counts the column.
-	const row = (version: string, flagged: string) => ({
-		date: '2026-08-28',
-		version,
-		model_id: 'one',
-		band: 'high',
-		truncation_flagged: flagged
-	});
-
-	// `2026-08-27T20:30` is the newest stamp the committed ledger actually
-	// carries. The date-stamp format is ASCII-sortable on purpose, so a stamp
-	// carrying a time orders before the bare date that follows it - which is the
-	// whole reason a plain string compare is enough here.
-	const before = '2026-08-27T20:30';
-	const after = CUT_FLAG_MEANS_A_CUT_FROM;
-	expect(before < after, 'a stamp carrying a time must order before the bare date').toBe(true);
-
-	const readInPart = (rows: Record<string, string>[]): number | null => {
-		const days = modelWork(rows, []).filter((entry) => entry.kind === 'day');
-		expect(days).toHaveLength(1);
-		// Throws rather than falling back to a number: a silent 0 here would be
-		// indistinguishable from the answer one of the assertions below expects.
-		if (days[0].kind !== 'day') throw new Error('the filter above kept a divider row');
-		return days[0].day.readInPart;
-	};
-
-	// One direction: the older row is flagged, the newer one is not. A reader that
-	// counted the whole column would print 1. Only the newer row carries the
-	// meaning, so the answer is 0 - a real number, and not the flagged row's.
-	expect(readInPart([row(before, 'True'), row(after, 'False')])).toBe(0);
-
-	// The other direction, the same pair with the flags swapped. The answer is 1,
-	// which is what stops this passing on a reader that always returns null.
-	expect(readInPart([row(before, 'False'), row(after, 'True')])).toBe(1);
-
-	// A day made only of older rows holds no answer at all. Zero would say the
-	// pipeline cut nothing, which those rows never measured.
-	expect(readInPart([row(before, 'True'), row(before, 'True')])).toBeNull();
-
-	// A stamp carrying a time on the boundary day is on the new side of it.
-	expect(readInPart([row('2026-08-28T09:00', 'True')])).toBe(1);
-
-	// An unstamped row reads as older. Unknown is the safe direction.
-	expect(
-		readInPart([{ date: '2026-08-28', model_id: 'one', truncation_flagged: 'True' }])
-	).toBeNull();
-
-	// The gate is on the one column whose meaning moved. Every other figure still
-	// counts every row the day holds.
-	const mixed = modelWork([row(before, 'True'), row(after, 'False')], [])[0];
-	expect(mixed.kind === 'day' && mixed.day.summaries).toBe(2);
-});
-
-test('the cut share divides by the rows its own flag answers for', () => {
-	const score = (version: string, flagged: string) => ({
-		date: '2026-08-28',
-		version,
-		model_id: 'one',
-		band: 'high',
-		truncation_flagged: flagged
-	});
-
-	const only = (rows: Record<string, string>[]) => {
-		const day = modelWork(rows, [])[0];
-		if (day.kind !== 'day') throw new Error('the fixture is one day');
-		return day.day;
-	};
-
-	// Four rows, one cut, and all four carry the flag's current meaning: 25
-	// percent. A share over the day's whole ledger would print the same here,
-	// which is why the row below is the one that separates them.
-	const clean = only([
-		score(CUT_FLAG_MEANS_A_CUT_FROM, 'True'),
-		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
-		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
-		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False')
-	]);
-	expect(clean.readInPart).toBe(1);
-	expect(clean.readInPartPct).toBe(25);
-
-	// The same four, plus four older rows the flag no longer answers for. The
-	// count is still 1 and the share is still 25 percent: dividing by eight
-	// would print 13, and that 13 is a fact about the migration rather than
-	// about the articles.
-	const mixed = only([
-		score(CUT_FLAG_MEANS_A_CUT_FROM, 'True'),
-		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
-		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
-		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
-		score('2026-08-27T20:30', 'True'),
-		score('2026-08-27T20:30', 'True'),
-		score('2026-08-27T20:30', 'False'),
-		score('2026-08-27T20:30', 'False')
-	]);
-	expect(mixed.summaries).toBe(8);
-	expect(mixed.readInPart).toBe(1);
-	expect(mixed.readInPartPct).toBe(25);
-
-	// A day with nothing the flag answers for holds no share either. Zero
-	// percent would say the cap took nothing, which those rows never measured.
-	expect(only([score('2026-08-27T20:30', 'True')]).readInPartPct).toBeNull();
-});
-
-test('the day splits its writing time by the articles it read only the start of', () => {
-	const health = (ms: string, before: string, after: string, code = '') => ({
-		date: '2026-08-28',
-		summarize_ms: ms,
-		outcome: 'ok',
-		code,
-		source_words: after,
-		source_words_before_cap: before
-	});
-
-	const only = (rows: Record<string, string>[]) => {
-		const day = modelWork([], rows)[0];
-		if (day.kind !== 'day') throw new Error('the fixture is one day');
-		return day.day;
-	};
-
-	// Two whole articles and two the cap cut. The day's median is over all four
-	// and the split is over the two, so a split that quietly reported the day
-	// again would print 1500 twice.
-	const split = only([
-		health('1000', '400', '400'),
-		health('1200', '', '380'),
-		health('4000', '2612', '1923'),
-		health('6000', '9000', '1923')
-	]);
-	expect(split.perItemMs).toBe(2600);
-	expect(split.perItemCutMs).toBe(5000);
-
-	// A day that cut nothing has no second figure. Zero would say the machine
-	// wrote those summaries for free.
-	expect(only([health('1000', '400', '400'), health('1200', '', '380')]).perItemCutMs).toBeNull();
-
-	// An empty cell is not a zero: a row that recorded no length before the cut
-	// is not an article cut from nothing to 380 words.
-	expect(only([health('1200', '', '380')]).perItemCutMs).toBeNull();
-
-	// Refused for length is a count of the day's own rows, and zero is a real
-	// answer. Null is kept for a day with no health row at all.
-	expect(
-		only([health('1000', '400', '400'), health('', '', '', 'context_exceeded')]).refusedForLength
-	).toBe(1);
-	expect(only([health('1000', '400', '400')]).refusedForLength).toBe(0);
-	const scoredOnly = modelWork([{ date: '2026-08-28', model_id: 'one', band: 'high' }], [])[0];
-	expect(scoredOnly.kind === 'day' && scoredOnly.day.refusedForLength).toBeNull();
-});
-
-test('the plot reads the cut off two lengths, so no ledger stamp can change what it means', () => {
-	// This used to assert a gate on the score ledger's `truncation_flagged`,
-	// which changed meaning at `CUT_FLAG_MEANS_A_CUT_FROM`: the plot read the
-	// column raw while the day's count in the table read it only over the rows
-	// stamped with its current meaning, so one page made two claims about one
-	// column. The projection ends the argument. A pre-cap length standing above
-	// a post-cap one has meant exactly one thing on every row ever written, so
-	// there is no stamp to read and no second meaning to gate.
-	const row = (before: number | null, after: number | null): TelemetryRow =>
-		telemetryRow({
-			date: '2026-08-28',
-			run_id: '2026-08-28-1',
-			source_words: after,
-			summary_words: 205,
-			source_words_before_cap: before
-		});
-
-	const marked = (before: number | null, after: number | null): boolean => {
-		const placed = placeRow(row(before, after));
-		if (placed.kind !== 'point') throw new Error('the fixture row is placeable');
-		return placed.point.truncation_flagged;
-	};
-
-	// Cut, and drawn at the length the article actually was.
-	expect(marked(4200, 1923)).toBe(true);
-	// Nothing was cut, on the two shapes a run can write: the cap did not fire,
-	// and the run predates the column that records what it did.
-	expect(marked(2000, 2000)).toBe(false);
-	expect(marked(null, 880)).toBe(false);
-
-	// A row written before 2026-08-28 records no pre-cap length, so it is drawn
-	// at the length that survived. That is the honest reading: the ledger holds
-	// no answer to what the article was, and inventing a diamond on it would
-	// claim a cut nobody measured.
-	const older = placeRow(row(null, 880));
-	expect(older.kind === 'point' && older.point.source_words).toBe(880);
-	expect(older.kind === 'point' && 'source_seen_words' in older.point).toBe(false);
 });

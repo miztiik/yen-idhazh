@@ -181,7 +181,7 @@
       "qwen3-5-9b-q4-k-m"
     ],
     "published_charts": 0,
-    "published_items": 215,
+    "published_items": 286,
     "runs": [
       {
         "charts_drafted": 14,
@@ -227,10 +227,53 @@
         "started_at": "2026-10-03T14:44:14Z",
         "status": "partial",
         "succeeded": 73
+      },
+      {
+        "charts_drafted": 18,
+        "decided": 71,
+        "decision_ms": 0,
+        "failed": 9,
+        "n": 4,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-10-03-37155055686",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-10-03T21:26:00Z",
+        "status": "partial",
+        "succeeded": 71
       }
     ],
-    "site_bytes": 37661563,
+    "site_bytes": 37749244,
     "site_files": 86,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-10-04",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 0,
+    "published_items": 73,
+    "runs": [
+      {
+        "charts_drafted": 13,
+        "decided": 73,
+        "decision_ms": 4,
+        "failed": 7,
+        "n": 1,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-10-04-37189127792",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-10-04T08:30:45Z",
+        "status": "partial",
+        "succeeded": 73
+      }
+    ],
+    "site_bytes": 37892006,
+    "site_files": 87,
     "version": "2026-09-09"
   }
 ]

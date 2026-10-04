@@ -112,9 +112,79 @@
     "completeness_grace_days": 2,
     "context_cut_off_reason": "max_tokens",
     "context_high_percentile": 95.0,
-    "data_explorer_tab": true,
     "default_window_days": 21,
     "doubt_rows": 6,
+    "explorer_bar_spread_share": 0.6,
+    "explorer_cell_max_ch": 41,
+    "explorer_chart_min_rows": 4,
+    "explorer_counter_from_share": 1.0,
+    "explorer_editor_lines": [
+      8,
+      20
+    ],
+    "explorer_examples": [
+      {
+        "days": 14,
+        "id": "published-counts",
+        "ledgers": [
+          "published"
+        ],
+        "sql": "SELECT date, count(*) AS rows FROM \"published\" GROUP BY date ORDER BY date DESC",
+        "title": "Count published rows by day"
+      },
+      {
+        "days": 14,
+        "id": "health-by-state",
+        "ledgers": [
+          "item-health"
+        ],
+        "sql": "SELECT status, count(*) AS rows FROM \"item-health\" GROUP BY status ORDER BY rows DESC",
+        "title": "Count item health states"
+      },
+      {
+        "days": 14,
+        "id": "summary-scores",
+        "ledgers": [
+          "summary-quality-evals"
+        ],
+        "sql": "SELECT date, count(*) AS rows FROM \"summary-quality-evals\" GROUP BY date ORDER BY date DESC",
+        "title": "Average summary scores"
+      },
+      {
+        "days": 14,
+        "id": "host-runs",
+        "ledgers": [
+          "host-fingerprint"
+        ],
+        "sql": "SELECT cpu_model, count(*) AS runs FROM \"host-fingerprint\" GROUP BY cpu_model ORDER BY runs DESC",
+        "title": "Runs by machine"
+      },
+      {
+        "days": 14,
+        "id": "all-published",
+        "ledgers": [
+          "published",
+          "item-health"
+        ],
+        "sql": "SELECT 'published' AS ledger, count(*) AS rows FROM \"published\" UNION ALL SELECT 'item-health' AS ledger, count(*) AS rows FROM \"item-health\"",
+        "title": "Rows in each published ledger"
+      }
+    ],
+    "explorer_history_max": 11,
+    "explorer_max_fetch_bytes": 67108865,
+    "explorer_max_rows": 1001,
+    "explorer_query_max_chars": 5783,
+    "explorer_rail_rem": 15.0,
+    "explorer_rank_max": 31,
+    "explorer_row_page": 51,
+    "explorer_save_name_max_chars": 41,
+    "explorer_saved_max": 21,
+    "explorer_series_floor_share": 0.1,
+    "explorer_strip_shown": [
+      3,
+      6
+    ],
+    "explorer_table_max_vh": 71,
     "failure_list_max": 10,
     "faithfulness_axis_floor_max": 60,
     "faithfulness_axis_step": 10,
@@ -135,6 +205,17 @@
     "model_disk_reads_named": 9,
     "pan_days": 3,
     "panel_groups": {
+      "data-explorer": [
+        {
+          "id": "data-explorer",
+          "panels": [
+            "data-explorer-ask",
+            "data-explorer-rows",
+            "data-explorer-shape"
+          ],
+          "title": ""
+        }
+      ],
       "machine": [
         {
           "id": "tuned-machine",
@@ -326,8 +407,7 @@
     "ceilings_bytes": {
       "/404": 2048,
       "/archive/": 1500000,
-      "/console/": 150000,
-      "/evals/": 4096
+      "/console/": 150000
     },
     "cold_console_load_bytes": 900000,
     "payload_ceilings_bytes": {

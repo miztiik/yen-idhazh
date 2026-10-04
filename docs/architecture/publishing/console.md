@@ -47,7 +47,7 @@ and the individual responsible within one subsystem. Its heading and content
 must answer the same question.
 
 Every route starts with its own status summary before the detail it qualifies.
-Declare the question in `data-panel-question`. The standing band covers all five
+Declare the question in `data-panel-question`. The standing band covers all six
 routes, but does not replace their own summaries.
 
 | Surface | Role |
@@ -64,7 +64,7 @@ Keep the first useful chart visible without making an operator scroll through
 diagnostics before reaching the status that explains them. Figures must be
 legible, tables must fit their container, and titles must use plain words.
 
-## The console is five routes, and a sixth is declared
+## The console is six routes
 
 | Path | Label | What it answers |
 | --- | --- | --- |
@@ -75,20 +75,11 @@ legible, tables must fit their container, and titles must use plain words.
 | `/console/voices/` | **Voices** | Who supplied the day, and how are feeds discounted? |
 | `/console/data-explorer/` | **Records** | What do the ledgers hold, and what does a question of my own return? |
 
-**Records is declared and not drawn yet.** The band carries it, so a band
-written today names six routes, and the strip draws its tab only while
-`console.data_explorer_tab` is on. That flag stays off until the page at
-`/console/data-explorer/` exists, because a tab pointing at a page that is not
-there is worse than no tab; the change that ships the page deletes the flag.
+**Records is live.** It is the one console route that prerenders no document of its own: GitHub Pages serves the fallback document, then the browser fetches the registry, indexes and files after the operator chooses a question. The old `console.data_explorer_tab` flag is gone because a tab no longer points at a missing page.
 
 Feed and source panels belong to Voices, not Pipelines. Keep `/console/` as the
 Pipelines address; renaming a label is not a reason to break an existing bookmark.
 Shared navigation and window behavior follow their owning pages above.
-
-Preserve `/evals/` as a legacy entry to `/console/`. Its current prerendered
-redirect belongs to the known migration work, not a requirement for new designs.
-Keep the old link usable through a GitHub Pages-compatible entry point; do not
-assume the host can execute a SvelteKit server redirect.
 
 ### A label is not an address
 

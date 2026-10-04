@@ -36,6 +36,7 @@ from ._harness import (
     _commit_call,
     _digest_origin,
     _drop_command,
+    _fast_push_retry,
     _git,
     _isolated_env,
     _load_workflows,
@@ -156,8 +157,7 @@ def test_invalid_or_missing_job_deadlines_are_refused_by_name(
 def test_the_retry_config_accepts_fractional_seconds_and_refuses_a_falling_step(
     tmp_path: Path,
 ) -> None:
-    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
-    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
+    config = _fast_push_retry()
     config["deadline_seconds"]["default"] = 0.05
     path = tmp_path / "retry.json"
     _write(path, json.dumps(config) + "\n")
@@ -1116,8 +1116,7 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     """
     staged_paths, settings = _commit_call("plan")
     retry_file = tmp_path / "deadline-retry.json"
-    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
-    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
+    config = _fast_push_retry()
     config["deadline_seconds"]["default"] = 0.05
     _write(retry_file, json.dumps(config) + "\n")
     settings = {**settings, "PUSH_RETRY_CONFIG": str(retry_file)}

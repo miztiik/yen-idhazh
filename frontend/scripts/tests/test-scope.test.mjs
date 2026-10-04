@@ -14,7 +14,8 @@ const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 test('named frontend specs map to their declared groups', () => {
 	assert.equal(groupForSpec('console-machine-data.spec.ts'), 'console');
 	for (const name of [
-		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine', 'tokens'
+		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine', 'tokens',
+		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data'
 	]) {
 		assert.equal(groupForSpec(`${name}.spec.ts`), 'logic', name);
 		assert.deepEqual(selectPaths([`frontend/tests/${name}.spec.ts`]).groups, ['logic'], name);
@@ -24,6 +25,20 @@ test('named frontend specs map to their declared groups', () => {
 	assert.equal(groupForSpec('panel-captures.spec.ts'), 'panels');
 	assert.equal(groupForSpec('panel-sufficiency.spec.ts'), 'panels');
 	assert.equal(groupForSpec('new-feature.spec.ts'), undefined);
+});
+
+test('extracted console logic keeps source changes covered with browser consumers', () => {
+	for (const path of [
+		'frontend/src/lib/charts/run-history.ts', 'frontend/src/lib/charts/series.ts',
+		'frontend/src/lib/server/model-work.ts', 'frontend/src/lib/charts/readout.ts',
+		'frontend/src/lib/charts/machine.ts', 'frontend/src/lib/charts/stacked.ts'
+	]) {
+		assert.deepEqual(selectPaths([path]).groups, [...FRONTEND_GROUPS], path);
+		assert.equal(ciAnswer([path], true).browser, true, path);
+	}
+	assert.equal(groupForSpec('console.spec.ts'), 'console');
+	assert.equal(groupForSpec('console-readout.spec.ts'), 'console');
+	assert.equal(groupForSpec('console-new-question.spec.ts'), 'console');
 });
 
 test('grouped specs follow only the explicit inventory', () => {

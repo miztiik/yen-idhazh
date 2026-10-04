@@ -12,6 +12,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console', 'console-article-cost', 'console-axis', 'console-band',
 		'console-chart-lifetime', 'console-chart-pending', 'console-charts-rule',
 		'console-chrome', 'console-cold-load', 'console-compression', 'console-coverage',
+		'console-data-explorer', 'console-data-explorer-cells',
 		'console-disk-reads', 'console-doubt', 'console-extraction', 'console-failure',
 		'console-failures', 'console-flow', 'console-frame',
 		'console-item-cost', 'console-judgement-agreement', 'console-judgement-holdout',
@@ -31,7 +32,9 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	],
 	logic: [
 		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
+		'console-data-explorer-address', 'console-data-explorer-keep', 'console-data-explorer-shape',
 		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
+		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data',
 		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',

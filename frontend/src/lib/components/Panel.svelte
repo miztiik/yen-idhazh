@@ -20,6 +20,7 @@
 		wide = false,
 		heading = 'h2',
 		verdict = false,
+		actions = null,
 		children
 	}: {
 		title: string;
@@ -40,6 +41,8 @@
 		 * first, so an operator reads whether to trust the readings before he
 		 * reads ten of them. */
 		verdict?: boolean;
+		/** Optional controls that act on the panel as a whole. */
+		actions?: Snippet | null;
 		children: Snippet;
 	} = $props();
 </script>
@@ -58,6 +61,11 @@
 			<h3 class="panel-title">{title}</h3>
 		{:else}
 			<h2 class="panel-title">{title}</h2>
+		{/if}
+		{#if actions}
+			<div class="panel-actions">
+				{@render actions()}
+			</div>
 		{/if}
 		{#if note}<p class="panel-note">{note}</p>{/if}
 	</header>
@@ -90,6 +98,10 @@
 	}
 
 	.panel-head {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: start;
+		gap: var(--space-2) var(--space-3);
 		margin-bottom: var(--space-3);
 	}
 
@@ -105,6 +117,24 @@
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-tertiary);
+		grid-column: 1 / -1;
+	}
+
+	.panel-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: var(--space-2);
+	}
+
+	@media (max-width: 1023px) {
+		.panel-head {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.panel-actions {
+			justify-content: flex-start;
+		}
 	}
 
 	/* A wide panel still has an edge; it just does not pad its content away from
