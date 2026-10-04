@@ -1,0 +1,148 @@
+import type { LedgerName } from '../../data/slice-shapes';
+
+export const UNKNOWN_LEDGER_NOTICE = (name: string): string => `The link named "${name}", which this site does not have, so it was left out.`;
+export const DAYS_NOTICE = (value: string, fallback: number): string => `The link asked for ${value} days, which this page does not offer, so it reads ${fallback} days.`;
+export const UNREADABLE_QUESTION_NOTICE = 'The question in this link could not be read, so the editor is empty.';
+export const LINK_TOO_LONG_NOTICE = 'This question is too long for a link, so the link carries the ledgers and the days only.';
+
+export type ExplorerAddressInput = {
+	basePath: string;
+	ledgers: readonly LedgerName[];
+	days: number;
+	statement: string;
+	maxBytes?: number;
+};
+
+export type ExplorerAddress = {
+	href: string;
+	query: string;
+	linkedStatement: boolean;
+	notices: readonly string[];
+};
+
+export type ParsedExplorerAddress = {
+	ledgers: readonly LedgerName[];
+	days: number;
+	statement: string;
+	notices: readonly string[];
+};
+
+export type ParseExplorerAddressOptions = {
+	ledgerNames: readonly LedgerName[];
+	windowPresets: readonly number[];
+	defaultDays: number;
+};
+
+function bytesOf(value: string): number {
+	return new TextEncoder().encode(value).length;
+}
+
+function bytesToBinary(bytes: Uint8Array): string {
+	let output = '';
+	const chunk = 0x8000;
+	for (let index = 0; index < bytes.length; index += chunk) {
+		output += String.fromCharCode(...bytes.slice(index, index + chunk));
+	}
+	return output;
+}
+
+function binaryToBytes(value: string): Uint8Array {
+	return Uint8Array.from(value, (char) => char.charCodeAt(0));
+}
+
+function blobPart(bytes: Uint8Array): ArrayBuffer {
+	return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+async function readStream(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+	const reader = stream.getReader();
+	const chunks: Uint8Array[] = [];
+	let length = 0;
+	while (true) {
+		const { value, done } = await reader.read();
+		if (done) break;
+		chunks.push(value);
+		length += value.length;
+	}
+	const out = new Uint8Array(length);
+	let offset = 0;
+	for (const chunk of chunks) {
+		out.set(chunk, offset);
+		offset += chunk.length;
+	}
+	return out;
+}
+
+function base64Url(bytes: Uint8Array): string {
+	return btoa(bytesToBinary(bytes)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(value: string): Uint8Array {
+	if (!/^[A-Za-z0-9_-]*$/.test(value)) throw new Error('not base64url');
+	const padded = value.replaceAll('-', '+').replaceAll('_', '/') + '='.repeat((4 - (value.length % 4)) % 4);
+	return binaryToBytes(atob(padded));
+}
+
+export async function encodeQuestion(statement: string): Promise<string> {
+	const stream = new Blob([blobPart(new TextEncoder().encode(statement))]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+	return base64Url(await readStream(stream));
+}
+
+export async function decodeQuestion(q: string): Promise<string> {
+	const stream = new Blob([blobPart(fromBase64Url(q))]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+	return new TextDecoder().decode(await readStream(stream));
+}
+
+function queryFor(ledgers: readonly LedgerName[], days: number, encodedQuestion: string | null): string {
+	const params = new URLSearchParams();
+	if (ledgers.length > 0) params.set('ledgers', ledgers.join(','));
+	params.set('days', String(days));
+	if (encodedQuestion !== null) params.set('q', encodedQuestion);
+	return params.toString();
+}
+
+export async function explorerAddress(input: ExplorerAddressInput): Promise<ExplorerAddress> {
+	const q = await encodeQuestion(input.statement);
+	let query = queryFor(input.ledgers, input.days, q);
+	let href = `${input.basePath}?${query}`;
+	if (input.maxBytes !== undefined && bytesOf(href) > input.maxBytes) {
+		query = queryFor(input.ledgers, input.days, null);
+		href = `${input.basePath}?${query}`;
+		return { href, query, linkedStatement: false, notices: [LINK_TOO_LONG_NOTICE] };
+	}
+	return { href, query, linkedStatement: true, notices: [] };
+}
+
+export async function parseExplorerAddress(search: string, options: ParseExplorerAddressOptions): Promise<ParsedExplorerAddress> {
+	const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+	const ledgerSet = new Set<string>(options.ledgerNames);
+	const notices: string[] = [];
+	const ledgers: LedgerName[] = [];
+	for (const name of (params.get('ledgers') ?? '').split(',').filter(Boolean)) {
+		if (ledgerSet.has(name)) ledgers.push(name as LedgerName);
+		else notices.push(UNKNOWN_LEDGER_NOTICE(name));
+	}
+
+	let days = options.defaultDays;
+	const rawDays = params.get('days');
+	if (rawDays !== null) {
+		const parsed = Number(rawDays);
+		if (Number.isInteger(parsed) && options.windowPresets.includes(parsed)) days = parsed;
+		else notices.push(DAYS_NOTICE(rawDays, options.defaultDays));
+	}
+
+	let statement = '';
+	const q = params.get('q');
+	if (q !== null && q !== '') {
+		try {
+			statement = await decodeQuestion(q);
+		} catch {
+			notices.push(UNREADABLE_QUESTION_NOTICE);
+		}
+	}
+	return { ledgers, days, statement, notices };
+}
+
+export function requestTargetBytes(pathAndQuery: string): number {
+	return bytesOf(pathAndQuery);
+}

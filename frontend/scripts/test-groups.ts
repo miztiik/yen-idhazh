@@ -31,6 +31,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	],
 	logic: [
 		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
+		'console-data-explorer-address', 'console-data-explorer-keep', 'console-data-explorer-shape',
 		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
 		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
