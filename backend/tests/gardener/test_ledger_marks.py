@@ -1,4 +1,4 @@
-"""Does a ledger's marks name the six files a pass reads, read them once, and refuse one it cannot trust?
+"""Where do a ledger's marks sit, what does a pass read from them, and which ones stop it?
 
 A ledger's marks are its three compact indexes and its three watermarks.
 `name_marks` is the one place their paths come from, so the listing a task is
@@ -10,17 +10,21 @@ under `tmp_path` as a compaction writes them and reads them through a real
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 from pathlib import Path
 from typing import Final
 
 import pytest
+from conftest import CONFIG_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.file_listing import FileListing, FileNotFetchedError, TreeEntry
 from idhazh.gardener.ledger_marks import name_marks, read_marks
+from idhazh.gardener.period_inputs import paths_for_task
 
 pytestmark = pytest.mark.contract
 
@@ -124,6 +128,26 @@ def test_the_marks_say_how_far_each_period_is_packed_and_what_each_index_lists(
     assert marks.indexed == frozenset(Period)
 
 
+def test_the_listing_a_compaction_task_is_given_names_every_mark_its_pass_reads(
+    tmp_path: Path,
+) -> None:
+    """A listing refuses a path no step named, so an unnamed mark would stop the pass."""
+    policy = CompactionPolicy.model_validate_json(
+        read_text(CONFIG_DIR / "gardener" / "compact-visual-prunes.json")
+    )
+    an_index(tmp_path, Period.DAILY, ["2026-09-02"])
+    a_watermark(tmp_path, Period.DAILY)
+    named = paths_for_task(
+        tmp_path, "compact-visual-prunes", policy, ("2026-08", "2026-08"), today=date(2026, 9, 27)
+    )
+    listing = FileListing.from_disk(tmp_path, policy.claims(), paths=named)
+
+    marks = read_marks(state(tmp_path), WHICH, listing)
+
+    assert marks.through == {**THROUGH, Period.MONTHLY: None, Period.YEARLY: None}
+    assert marks.indexed == frozenset({Period.DAILY})
+
+
 @pytest.mark.parametrize("period", list(Period))
 def test_an_index_its_watermark_says_was_packed_that_is_not_there_is_refused_as_index_missing(
     tmp_path: Path, period: Period
@@ -184,6 +208,7 @@ def test_the_marks_are_fetched_in_one_widening_and_no_packed_file_comes_with_the
             for number, path in enumerate(held, start=1)
         ],
         {},
+        paths=held,
         widen=asked.append,
     )
 
