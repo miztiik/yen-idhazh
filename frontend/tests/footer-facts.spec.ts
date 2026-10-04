@@ -54,10 +54,10 @@ function occurrences(haystack: string, pattern: RegExp): number {
 }
 
 /** The routes named by the row, minus the one that has no footer to check. */
-const FOOTER_ROUTES = ['/', '/archive/', '/evals/'];
+const FOOTER_ROUTES = ['/', '/archive/'];
 
 /** The routes with a footer and no day on them. */
-const NO_DAY = ['/archive/', '/evals/'];
+const NO_DAY = ['/archive/'];
 
 /** What every page with a footer still states. */
 const FOOTER_FACTS: Array<[string, RegExp]> = [
