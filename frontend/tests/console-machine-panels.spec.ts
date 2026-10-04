@@ -270,140 +270,134 @@ test.describe('the colour a machine takes', () => {
 });
 
 test.describe('the machines this run drew', () => {
-	test('a card draws every watched flag, and absence is drawn rather than omitted', async ({
-		page
-	}) => {
+	test('unchanged machine cards preserve flags, copy speed, clocks, disclosure and L3 ratios', async ({ page }) => {
 		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel-id="machine-cards"]');
-		await expect(panel).toBeVisible();
-		const cards = panel.locator('[data-machine-card]');
-		const count = await cards.count();
-		expect(count).toBeGreaterThan(0);
+		await test.step('a card draws every watched flag, and absence is drawn rather than omitted', async () => {
+			const panel = page.locator('[data-console-panel-id="machine-cards"]');
+			await expect(panel).toBeVisible();
+			const cards = panel.locator('[data-machine-card]');
+			const count = await cards.count();
+			expect(count).toBeGreaterThan(0);
 
-		let sawAnAbsence = false;
-		for (let index = 0; index < count; index += 1) {
-			const card = cards.nth(index);
-			const chips = card.locator('[data-machine-flag]');
-			const drawn = await chips.count();
-			if (drawn === 0) {
-				// A card off the counters alone says so instead of drawing twelve
-				// outlines, which would read as a machine with no flags at all.
-				await expect(card.locator('[data-machine-flags="none"]')).toBeVisible();
-				continue;
+			let sawAnAbsence = false;
+			for (let index = 0; index < count; index += 1) {
+				const card = cards.nth(index);
+				const chips = card.locator('[data-machine-flag]');
+				const drawn = await chips.count();
+				if (drawn === 0) {
+					// A card off the counters alone says so instead of drawing twelve
+					// outlines, which would read as a machine with no flags at all.
+					await expect(card.locator('[data-machine-flags="none"]')).toBeVisible();
+					continue;
+				}
+				expect(drawn, 'a card drew some of the watched flags').toBe(WATCHED.length);
+				expect(
+					await chips.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-machine-flag')))
+				).toEqual(WATCHED);
+				const absent = await card.locator('[data-machine-flag-present="no"]').count();
+				if (absent > 0) sawAnAbsence = true;
 			}
-			expect(drawn, 'a card drew some of the watched flags').toBe(WATCHED.length);
-			expect(
-				await chips.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-machine-flag')))
-			).toEqual(WATCHED);
-			const absent = await card.locator('[data-machine-flag-present="no"]').count();
-			if (absent > 0) sawAnAbsence = true;
-		}
-		expect(sawAnAbsence, 'no card drew an absent flag - the fixture is wrong').toBe(true);
-	});
+			expect(sawAnAbsence, 'no card drew an absent flag - the fixture is wrong').toBe(true);
+		});
 
-	test('a graded copy speed carries its buffer, and an ungraded one is withheld', async ({
-		page
-	}) => {
-		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel-id="machine-cards"]');
-		const readings = panel.locator('[data-machine-copy-speed]');
-		const count = await readings.count();
-		expect(count).toBeGreaterThan(0);
-		let sawWithheld = false;
-		for (let index = 0; index < count; index += 1) {
-			const text = (await readings.nth(index).innerText()).trim();
-			if (text.startsWith('Copy speed was not measured')) continue;
-			if (text.startsWith('No copy speed')) {
-				// The refused figure is not on the page at all, in any form.
-				expect(text, 'a withheld reading still printed a rate').not.toContain('GiB/s');
-				expect(text, 'a withheld reading did not say what it fell short of').toMatch(
-					/times it, and a reading has to clear \d+ times/
+		await test.step('a graded copy speed carries its buffer, and an ungraded one is withheld', async () => {
+			const panel = page.locator('[data-console-panel-id="machine-cards"]');
+			const readings = panel.locator('[data-machine-copy-speed]');
+			const count = await readings.count();
+			expect(count).toBeGreaterThan(0);
+			let sawWithheld = false;
+			for (let index = 0; index < count; index += 1) {
+				const text = (await readings.nth(index).innerText()).trim();
+				if (text.startsWith('Copy speed was not measured')) continue;
+				if (text.startsWith('No copy speed')) {
+					// The refused figure is not on the page at all, in any form.
+					expect(text, 'a withheld reading still printed a rate').not.toContain('GiB/s');
+					expect(text, 'a withheld reading did not say what it fell short of').toMatch(
+						/times it, and a reading has to clear \d+ times/
+					);
+					sawWithheld = true;
+					continue;
+				}
+				expect(text, 'the rate and its buffer are not in one element').toMatch(
+					/GiB\/s.*MiB buffer/
 				);
-				sawWithheld = true;
-				continue;
 			}
-			expect(text, 'the rate and its buffer are not in one element').toMatch(
-				/GiB\/s.*MiB buffer/
+			expect(sawWithheld, 'no card withheld a copy speed the probe could not grade').toBe(true);
+		});
+
+		await test.step('each card says what clock it ran at and how long it had been up', async () => {
+			const panel = page.locator('[data-console-panel-id="machine-cards"]');
+			const clocks = panel.locator('[data-machine-clock]');
+			const uptimes = panel.locator('[data-machine-uptime]');
+			const count = await clocks.count();
+			expect(count, 'no card carried a clock reading').toBeGreaterThan(0);
+			expect(await uptimes.count(), 'a card carried a clock and no uptime').toBe(count);
+
+			// The ledger's own cells, so the assertion is the fixture's rather than the
+			// page agreeing with itself.
+			const recorded = canaryRows('host-fingerprint').filter((row) => row.mhz_at_probe !== '');
+			expect(recorded.length, 'the canary recorded no clock at all').toBeGreaterThan(0);
+			const clockValues = new Set(recorded.map((row) => String(Math.round(Number(row.mhz_at_probe)))));
+
+			for (let index = 0; index < count; index += 1) {
+				const said = (await clocks.nth(index).innerText()).trim();
+				// A ceiling nothing writes is a column the page may not divide by.
+				expect(said, 'a clock was drawn as a share of something').not.toContain('%');
+				if (said.startsWith('Clock speed was not recorded')) continue;
+				const mhz = said.split(' ')[0];
+				expect(clockValues.has(mhz), `${mhz} MHz is not a clock the ledger holds`).toBe(true);
+			}
+			for (let index = 0; index < count; index += 1) {
+				const said = (await uptimes.nth(index).innerText()).trim();
+				expect(said).toMatch(/^(Up .+ when we measured it\.|Uptime was not recorded on this job\.)$/);
+			}
+		});
+
+		await test.step('the disclosure is a native details and is closed at rest', async () => {
+			const where = page.locator('[data-machine-where]').first();
+			if ((await where.count()) === 0) return;
+			expect(await where.evaluate((node) => node.tagName)).toBe('DETAILS');
+			expect(await where.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
+			await expect(where.locator('summary')).toHaveText('Where the platform put this');
+		});
+
+		await test.step('two cards with different L3 draw bars in the ratio of their bytes', async () => {
+			const panel = page.locator('[data-console-panel-id="machine-cards"]');
+			const bars = panel.locator('[data-machine-bar="l3"]');
+			const count = await bars.count();
+			expect(count, 'the fixture drew fewer than two machines').toBeGreaterThan(1);
+
+			const drawn: { bytes: number; fraction: number }[] = [];
+			for (let index = 0; index < count; index += 1) {
+				const bar = bars.nth(index);
+				if ((await bar.getAttribute('data-machine-bar-state')) !== 'drawn') continue;
+				const bytes = Number(
+					await bar.locator('[data-machine-cache]').getAttribute('data-machine-cache')
+				);
+				const fraction = Number(
+					await bar
+						.locator('[data-machine-bar-cell="track"]')
+						.getAttribute('data-machine-bar-fraction')
+				);
+				drawn.push({ bytes, fraction });
+			}
+			expect(drawn.length, 'fewer than two L3 bars were drawn').toBeGreaterThan(1);
+
+			// The bytes the page drew are the ledger's, so the ratio below is the
+			// fixture's rather than the panel's own arithmetic restated.
+			const ledger = new Set(
+				canaryRows('host-fingerprint')
+					.map((row) => Number(row.l3_cache_bytes))
+					.filter((bytes) => Number.isFinite(bytes) && bytes > 0)
 			);
-		}
-		expect(sawWithheld, 'no card withheld a copy speed the probe could not grade').toBe(true);
-	});
+			for (const { bytes } of drawn) expect(ledger.has(bytes)).toBe(true);
 
-	test('each card says what clock it ran at and how long it had been up', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel-id="machine-cards"]');
-		const clocks = panel.locator('[data-machine-clock]');
-		const uptimes = panel.locator('[data-machine-uptime]');
-		const count = await clocks.count();
-		expect(count, 'no card carried a clock reading').toBeGreaterThan(0);
-		expect(await uptimes.count(), 'a card carried a clock and no uptime').toBe(count);
-
-		// The ledger's own cells, so the assertion is the fixture's rather than the
-		// page agreeing with itself.
-		const recorded = canaryRows('host-fingerprint').filter((row) => row.mhz_at_probe !== '');
-		expect(recorded.length, 'the canary recorded no clock at all').toBeGreaterThan(0);
-		const clockValues = new Set(recorded.map((row) => String(Math.round(Number(row.mhz_at_probe)))));
-
-		for (let index = 0; index < count; index += 1) {
-			const said = (await clocks.nth(index).innerText()).trim();
-			// A ceiling nothing writes is a column the page may not divide by.
-			expect(said, 'a clock was drawn as a share of something').not.toContain('%');
-			if (said.startsWith('Clock speed was not recorded')) continue;
-			const mhz = said.split(' ')[0];
-			expect(clockValues.has(mhz), `${mhz} MHz is not a clock the ledger holds`).toBe(true);
-		}
-		for (let index = 0; index < count; index += 1) {
-			const said = (await uptimes.nth(index).innerText()).trim();
-			expect(said).toMatch(/^(Up .+ when we measured it\.|Uptime was not recorded on this job\.)$/);
-		}
-	});
-
-	test('the disclosure is a native details and is closed at rest', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const where = page.locator('[data-machine-where]').first();
-		if ((await where.count()) === 0) return;
-		expect(await where.evaluate((node) => node.tagName)).toBe('DETAILS');
-		expect(await where.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
-		await expect(where.locator('summary')).toHaveText('Where the platform put this');
-	});
-
-	test('two cards with different L3 draw bars in the ratio of their bytes', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel-id="machine-cards"]');
-		const bars = panel.locator('[data-machine-bar="l3"]');
-		const count = await bars.count();
-		expect(count, 'the fixture drew fewer than two machines').toBeGreaterThan(1);
-
-		const drawn: { bytes: number; fraction: number }[] = [];
-		for (let index = 0; index < count; index += 1) {
-			const bar = bars.nth(index);
-			if ((await bar.getAttribute('data-machine-bar-state')) !== 'drawn') continue;
-			const bytes = Number(
-				await bar.locator('[data-machine-cache]').getAttribute('data-machine-cache')
-			);
-			const fraction = Number(
-				await bar
-					.locator('[data-machine-bar-cell="track"]')
-					.getAttribute('data-machine-bar-fraction')
-			);
-			drawn.push({ bytes, fraction });
-		}
-		expect(drawn.length, 'fewer than two L3 bars were drawn').toBeGreaterThan(1);
-
-		// The bytes the page drew are the ledger's, so the ratio below is the
-		// fixture's rather than the panel's own arithmetic restated.
-		const ledger = new Set(
-			canaryRows('host-fingerprint')
-				.map((row) => Number(row.l3_cache_bytes))
-				.filter((bytes) => Number.isFinite(bytes) && bytes > 0)
-		);
-		for (const { bytes } of drawn) expect(ledger.has(bytes)).toBe(true);
-
-		const [low, high] = [...drawn].sort((a, b) => a.bytes - b.bytes);
-		expect(high.bytes, 'both machines report the same L3').toBeGreaterThan(low.bytes);
-		// One zero-anchored domain over both cards, so two lengths are two
-		// readings. Whatever the track runs to divides out of this.
-		expect(high.fraction / low.fraction).toBeCloseTo(high.bytes / low.bytes, 4);
+			const [low, high] = [...drawn].sort((a, b) => a.bytes - b.bytes);
+			expect(high.bytes, 'both machines report the same L3').toBeGreaterThan(low.bytes);
+			// One zero-anchored domain over both cards, so two lengths are two
+			// readings. Whatever the track runs to divides out of this.
+			expect(high.fraction / low.fraction).toBeCloseTo(high.bytes / low.bytes, 4);
+		});
 	});
 
 	test('a reading with nothing to draw names its state and draws no track', async ({ page }) => {
