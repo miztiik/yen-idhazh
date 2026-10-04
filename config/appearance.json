@@ -136,6 +136,7 @@
     ],
     "zoom_factor": 1.5,
     "explorer_bar_spread_share": 0.5,
+    "explorer_chrome": "workbench",
     "explorer_cell_max_ch": 40,
     "explorer_counter_from_share": 0.9,
     "explorer_editor_lines": [

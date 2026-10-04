@@ -1,11 +1,13 @@
 # What sits above every console route
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
-Three surfaces stand on every console route: the strip - the route tabs and the
+Three surfaces stand on a full console route: the strip - the route tabs and the
 days control on one row - the sentence under it that says how complete the
-record is, and the standing band. A route whose panels sit under named headings
-adds a row of jump links. Which surfaces follow the days control has its own page
+record is, and the standing band. A route may instead ask for workbench chrome:
+the compact route strip only, with the page's own toolbar holding the days and
+Run controls. A route whose panels sit under named headings adds a row of jump
+links. Which surfaces follow the days control has its own page
 ([which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md)),
 because that is asked far more often than how the control is drawn.
 
@@ -14,6 +16,14 @@ sentence about the span, the jump links, content. Chrome above content is the on
 ordering a reader never has to learn, and the band's worst fact names a tab in
 the strip - which on a phone would otherwise sit 337px BELOW it, where a reader
 has already scrolled past. `console-band.spec.ts` holds the order.
+
+The Data explorer is the exception. Its `+page.ts` returns `chrome:
+"workbench"`, read from `console.explorer_chrome`, and the layout resolves that
+through `frontend/src/lib/console/chrome.ts`. Workbench chrome keeps `#console-top`
+as a screen-reader heading and draws only the compact, non-sticky strip. It does
+not draw the completeness sentence, band, no-script note, span sentence, jump
+links or route carry line. The route must then draw its own span and Run controls
+inside its workbench toolbar.
 
 Which panel sits on which route is [console.md](console.md); how any figure is
 allowed to read is
@@ -67,11 +77,11 @@ Stuck, the strip is 70px at every width measured from 1024 to 1920. On
 a price; the shorter control took 81px off it there and 16px off every route at
 1440.
 
-**What the sixth tab does to the strip**, measured after Records became live. It adds a row of tabs only from 731 to
-871px, where five tabs fit one row and six do not, so Records stands alone on a
+**What the sixth tab does to the strip**, measured after Data explorer became live. It adds a row of tabs only from 731 to
+871px, where five tabs fit one row and six do not, so Data explorer stands alone on a
 second row. Below 435px six tabs stand two to a row in the same three rows five
 did, and from 435 to 730px in the same two - **but the strip still grows**, by
-56px at 390, because Voices then shares its row with Records and its worst state
+56px at 390, because Voices then shares its row with Data explorer and its worst state
 wraps inside the narrower tab. From 1024px the row scrolls, and every route opens
 with its own tab whole. The old flag is gone, so this is now the normal strip on every console route.
 
@@ -392,6 +402,13 @@ figure that moved when a control on one route moved would read as three differen
 sites. The runway is taken over every published day on record.
 
 ## Design rationale
+
+**The Data explorer may ask for workbench chrome.** It is a tool for writing and
+running a ledger question, so the full console band and span sentence push the
+work below the first screen without adding a fact this route judges. The route
+declares the chrome as data from `console.explorer_chrome`; the layout does not
+infer it from the route name. What this removes is the global verdict while the
+operator is on the Data explorer; one tab press shows it on the other routes.
 
 **The days control rides the strip at every width, not only where the strip
 sticks.** One control in one place keeps the keyboard order, the screen-reader

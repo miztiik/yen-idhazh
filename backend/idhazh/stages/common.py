@@ -748,8 +748,18 @@ def published_days(root: Path) -> list[Path]:
     ]
 
 
-def _load_plan(date: str) -> RunPlan:
+def _load_plan(date: str, run_id: str | None = None) -> RunPlan:
+    """One run's plan for one UTC day, read from the run-plan ledger.
+
+    `run_id` names the run, and every job of a workflow run passes its own: two
+    runs of one day can overlap, so the newest plan of the day can be the other
+    run's. Left out, the newest plan of the day is read, which is right only
+    where one process plans and then works alone, as `idhazh run` does.
+    """
     plans = ledger.load_days(STATE_ROOT, LedgerName.RUN_PLAN, [date], model=RunPlan)
+    if run_id is not None:
+        plans = [plan for plan in plans if plan.run_id == run_id]
     if not plans:
-        raise FileNotFoundError(f"no run plan is recorded for UTC day {date}")
+        whose = f"run {run_id}" if run_id is not None else "any run"
+        raise FileNotFoundError(f"no run plan is recorded for {whose} on UTC day {date}")
     return max(plans, key=lambda plan: (plan.generated_at, plan.run_id))

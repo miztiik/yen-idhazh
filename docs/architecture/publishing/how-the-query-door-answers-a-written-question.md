@@ -43,11 +43,11 @@ listing that is absent inside the listed range is a file gap, not an empty day.
 
 ## Archive tier
 
-For dates before the site's oldest named packed day, Records can read packed files from the committed repository. The prefix is `ledger.archive_base_url` in `config/idhazh.json`; the shipped value is `https://raw.githubusercontent.com/miztiik/yen-idhazh/main`.
+For dates before the site's oldest named packed day, Data explorer can read packed files from the committed repository. The prefix is `ledger.archive_base_url` in `config/idhazh.json`; the shipped value is `https://raw.githubusercontent.com/miztiik/yen-idhazh/main`.
 
 The archive uses its own page keeper and its own three compact indexes. It chooses files with the same `filesFor()` rule as the site, but it fetches every archive data file whole. It never hands the archive address to DuckDB. The engine sees only buffers under engine-minted names.
 
-When `ledger.archive_base_url` is empty, Records reads the site only. A span that starts before the site's oldest named packed day is clamped to that day, and the answer says `Days before {day} are not on this site.` Nothing failed in that case.
+When `ledger.archive_base_url` is empty, Data explorer reads the site only. A span that starts before the site's oldest named packed day is clamped to that day, and the answer says `Days before {day} are not on this site.` Nothing failed in that case.
 
 `FetchCost` sums both keepers. A file the site already holds and a file the archive already holds both count as already held.
 
@@ -55,7 +55,7 @@ When `ledger.archive_base_url` is empty, Records reads the site only. A span tha
 
 `through` is the newest UTC day any selected tier can answer. A daily entry counts as that day. A month counts through its last UTC day. A year counts through 31 December. A staged writer listing can move `through` later than the packed indexes.
 
-`FetchCost` is the keeper's reading for this call. A whole file counts at the bytes that arrived. A file read by byte range counts at the whole indexed length, because the page cannot see which ranges the engine read and that length is the most the read can cost. `alreadyHeld` counts files the keeper already had registered before this call. The Records page action line prints the whole-file bytes the page keeper still holds in the engine; byte-range files are opened for one call and dropped, so they do not inflate the reload total.
+`FetchCost` is the keeper's reading for this call. A whole file counts at the bytes that arrived. A file read by byte range counts at the whole indexed length, because the page cannot see which ranges the engine read and that length is the most the read can cost. `alreadyHeld` counts files the keeper already had registered before this call. The Data explorer page action line prints the whole-file bytes the page keeper still holds in the engine; byte-range files are opened for one call and dropped, so they do not inflate the reload total.
 
 ## Unreachable fields
 
@@ -71,11 +71,11 @@ When no selected ledger holds a file in the span, `ask()` answers `quiet` and st
 
 `ok` and `quiet` carry `gaps`: each selected ledger that is missing something inside the span, in the order the ledgers were chosen, with the days its indexes record lost and the files its periods set aside unread (`lostDays` and `setAside`, as a [slice answers them](how-the-query-door-answers-a-panel.md#what-a-panel-asks-for-and-the-four-answers)). A ledger missing nothing is not named. A span of nothing but lost days is `quiet` and still names them.
 
-The Records page prints one line a ledger and a state under the span line, in the plain note type, lost days first: a lost day has no record, so nothing from it is in the answer, and a set-aside file may hold rows the answer lacks. The set-aside line counts files, never days, because a month counts every file it set aside, and it names the folder a person reads them in, `state/raw/<ledger>/set-aside/`. The quiet answer carries the same lines. The chart panel repeats none of them.
+The Data explorer page prints one line a ledger and a state under the span line, in the plain note type, lost days first: a lost day has no record, so nothing from it is in the answer, and a set-aside file may hold rows the answer lacks. The set-aside line counts files, never days, because a month counts every file it set aside, and it names the folder a person reads them in, `state/raw/<ledger>/set-aside/`. The quiet answer carries the same lines. The chart panel repeats none of them.
 
 ## Date range and address
 
-The Records page uses two native date inputs, `From (UTC)` and `To (UTC)`. By default they accept the reader's UTC day and the 364 UTC days before it. The bound is `console.explorer_reach_days`, so an operator can widen or narrow it with a config edit rather than a source edit.
+The Data explorer page uses two native date inputs, `From (UTC)` and `To (UTC)`. By default they accept the reader's UTC day and the 364 UTC days before it. The bound is `console.explorer_reach_days`, so an operator can widen or narrow it with a config edit rather than a source edit.
 
 Preset tiles remain shortcuts. Pressing one sets `To (UTC)` to the reader's UTC day and `From (UTC)` to the preset's span ending on that day.
 

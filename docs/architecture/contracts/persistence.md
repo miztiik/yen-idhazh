@@ -204,7 +204,7 @@ Ten ledgers have moved, producer and reader together. Two moved on 2026-09-28: `
 | seen addresses | `ledger.append_seen`, called by the plan stage | `ledger.load_seen` | the day the plan stage ran for, because the row has no `date` field |
 | published items | `ledger.append_published`, called by the assemble stage | `ledger.load_published`, one month at a time when it reads every published day | the digest day it is given, because the row has no `date` field |
 | feed health | `stages.plan`, through `ledger.persist` | `ledger.load_health`, and the Voices page through `feedHealthRows` in `frontend/src/lib/server/ledger-rows.ts` | the day its `date` names |
-| run plans | `stages.plan`, through `ledger.persist` | `stages.common._load_plan`, through `ledger.load_days` for one named UTC day | the day its `date` names |
+| run plans | `stages.plan`, through `ledger.persist` | `stages.common._load_plan`, through `ledger.load_days` for one named UTC day, keeping the plan of the run `--execution` names | the day its `date` names |
 
 Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. `backend/tests/workflows/test_ledger_door_jobs.py` holds that for every step that runs an `idhazh` command. No job has to ask for the parquet engine to reach these ledgers, because pyarrow is part of the base install ([What it costs to install](#what-it-costs-to-install)).
 
