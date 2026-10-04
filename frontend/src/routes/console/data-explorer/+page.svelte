@@ -197,10 +197,10 @@
 </Panel>
 
 <Panel id="data-explorer-rows" title="The answer" wide>
-	{#if result === null}
-		<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
-	{:else if running}
+	{#if running}
 		<div class="answer-state shimmer" data-state="loading"></div>
+	{:else if result === null}
+		<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
 	{:else if result.state === 'ok'}
 		<div class="answer-note">{#if runSpan}Read from {windowDays} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}</div>
 		<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} tableMaxVh={config.table_max_vh} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} />

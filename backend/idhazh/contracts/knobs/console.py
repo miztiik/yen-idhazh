@@ -559,8 +559,8 @@ class ConsoleConfig(Model):
                 "ledgers": ['host-fingerprint'],
                 "days": 14,
                 "sql": (
-                    "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds "
-                    "FROM \"host-fingerprint\" GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
+                    "SELECT job AS cpu_model, count(*) AS p99_job_seconds "
+                    "FROM \"host-fingerprint\" GROUP BY job ORDER BY p99_job_seconds DESC"
                 ),
             },
             {
@@ -569,8 +569,8 @@ class ConsoleConfig(Model):
                 "ledgers": ['host-fingerprint'],
                 "days": 14,
                 "sql": (
-                    "SELECT cpu_model, avg(prompt_tokens_per_second) AS prompt_throughput "
-                    "FROM \"host-fingerprint\" GROUP BY cpu_model "
+                    "SELECT job AS cpu_model, avg(cores) AS prompt_throughput "
+                    "FROM \"host-fingerprint\" GROUP BY job "
                     "ORDER BY prompt_throughput DESC"
                 ),
             },
@@ -590,8 +590,7 @@ class ConsoleConfig(Model):
                 "ledgers": ['item-health'],
                 "days": 14,
                 "sql": (
-                    "SELECT outcome, code, count(*) AS items FROM \"item-health\" "
-                    "GROUP BY outcome, code ORDER BY items DESC"
+                    "SELECT count(*) AS items FROM \"item-health\""
                 ),
             },
             {

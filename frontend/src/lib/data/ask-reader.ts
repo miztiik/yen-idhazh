@@ -358,7 +358,8 @@ export async function readAsk(keeper: PageKeeper, opts: AskOptions, rawListed: R
 		}
 		if ('failed' in held) {
 			const meta = metas[held.failed];
-			return { state: 'unreachable', ledger: meta?.ledger ?? null, at: meta?.day ?? null, fault: null };
+			const fault = held.shortfall.reason === 'absent' ? 'file-missing' : null;
+			return { state: 'unreachable', ledger: meta?.ledger ?? null, at: meta?.day ?? null, fault };
 		}
 
 		try {

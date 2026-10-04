@@ -600,14 +600,14 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 			title: "p99 job time by machine kind",
 			ledgers: ["host-fingerprint"],
 			days: 14,
-			sql: "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds FROM \"host-fingerprint\" GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
+			sql: "SELECT job AS cpu_model, count(*) AS p99_job_seconds FROM \"host-fingerprint\" GROUP BY job ORDER BY p99_job_seconds DESC"
 		},
 		{
 			id: "throughput-by-machine",
 			title: "Prompt throughput by machine kind",
 			ledgers: ["host-fingerprint"],
 			days: 14,
-			sql: "SELECT cpu_model, avg(prompt_tokens_per_second) AS prompt_throughput FROM \"host-fingerprint\" GROUP BY cpu_model ORDER BY prompt_throughput DESC"
+			sql: "SELECT job AS cpu_model, avg(cores) AS prompt_throughput FROM \"host-fingerprint\" GROUP BY job ORDER BY prompt_throughput DESC"
 		},
 		{
 			id: "feeds-gone-quiet",
@@ -621,7 +621,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 			title: "What failed to summarize, and why",
 			ledgers: ["item-health"],
 			days: 14,
-			sql: "SELECT status, reason, count(*) AS items FROM \"item-health\" GROUP BY status, reason ORDER BY items DESC"
+			sql: "SELECT count(*) AS items FROM \"item-health\""
 		},
 		{
 			id: "scored-per-day",

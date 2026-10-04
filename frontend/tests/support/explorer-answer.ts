@@ -1,22 +1,22 @@
 import { expect, type Page } from '@playwright/test';
 import { createRequire } from 'node:module';
-import { readAsk } from '../../src/lib/data/ask-reader';
+import { readAsk, readAskCost } from '../../src/lib/data/ask-reader';
 import { nodeEngine } from '../../src/lib/data/engine';
 import { fetchedBytes } from '../../src/lib/data/fetched-bytes';
 import { pageKeeper } from '../../src/lib/data/page-keeper';
 import { engineExtensionRepository } from '../../src/lib/server/config';
-import type { AskOptions, AskResult, LedgerName } from '../../src/lib/data/ledger';
+import type { AskOptions, AskResult, DateStamp, LedgerName, SpanCost } from '../../src/lib/data/ledger';
 
 export const EXPLORER_CANARY_DAY = '2026-08-20';
 const resolver = createRequire(import.meta.url);
 const locate = (specifier: string): string => resolver.resolve(specifier);
 
-export async function openExplorer(page: Page) {
+export async function openExplorer(page: Page, waitReady = true) {
 	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
 	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toBeVisible();
 	await expect(page.locator('[data-ledger-name]').first()).toBeVisible();
-	await expect(page.locator('[data-explorer-action-line] button')).toBeEnabled({ timeout: 60_000 });
+	if (waitReady) await expect(page.locator('[data-explorer-action-line] button')).toBeEnabled({ timeout: 60_000 });
 }
 
 export async function runExplorer(page: Page) {
@@ -55,6 +55,19 @@ export async function expectedAsk(page: Page, options: AskOptions): Promise<AskR
 	);
 	try {
 		return await readAsk(keeper, options, {});
+	} finally {
+		await keeper.release();
+	}
+}
+
+export async function expectedAskCost(page: Page, ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> {
+	const origin = new URL(page.url()).origin;
+	const keeper = pageKeeper(
+		fetchedBytes(origin, (url, init) => fetch(url, init)),
+		() => nodeEngine(locate, engineExtensionRepository())
+	);
+	try {
+		return await readAskCost(keeper, ledgers, from, to, {});
 	} finally {
 		await keeper.release();
 	}
