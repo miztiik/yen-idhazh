@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -160,10 +161,10 @@ def _score(day: str, number: int, **changed: Any) -> EvalRow:
 
 
 def _under_old_headings(row: EvalRow) -> Cells:
-    """An eval row as a file written before the renames spelled it, a dropped column still in."""
+    """An eval row under old names, with unused retired columns left empty."""
     retired = {current: old for old, current in RENAMED_CELLS.items()}
     cells = {retired.get(name, name): value for name, value in row.csv_row().items()}
-    return cells | dict.fromkeys(sorted(DROPPED_EVAL_CELLS), "0.5")
+    return cells | dict.fromkeys(sorted(DROPPED_EVAL_CELLS), "")
 
 
 def _filled(row: HostFingerprintRow) -> Cells:
@@ -678,7 +679,7 @@ def test_a_ledger_still_on_csv_is_refused(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("change", "refusal"),
     [
-        (None, "compact-summary-quality-evals.json does not declare a compaction"),
+        (None, "task_names does not list compact-summary-quality-evals"),
         (
             {"monthly_window": {"unit": "months", "value": 13}, "monthly_keep_days": None},
             "does not reach the window of forever that kept summary-quality-evals on CSV",
@@ -739,7 +740,7 @@ def test_check_reads_moved_ledgers_unless_named(
 
     assert command.main([*MONTH_ARGS, *argv]) == command.EXIT_NOT_PROVEN
     assert capsys.readouterr().out.splitlines() == [
-        f"{csv_ledgers.root_label(feed)} is still a CSV",
+        f"{csv_ledgers.label_path(feed)} is still a CSV",
         "1 CSV file(s) left",
     ]
 
@@ -759,8 +760,8 @@ def test_check_reads_moved_ledgers_unless_named(
 
     assert command.main([*MONTH_ARGS, *named]) == command.EXIT_NOT_PROVEN
     assert capsys.readouterr().out.splitlines() == [
-        f"{csv_ledgers.root_label(item)} is still a CSV",
-        f"{csv_ledgers.root_label(feed)} is still a CSV",
+        f"{csv_ledgers.label_path(item)} is still a CSV",
+        f"{csv_ledgers.label_path(feed)} is still a CSV",
         "2 CSV file(s) left",
     ]
 
@@ -1004,6 +1005,146 @@ def _phase_plan(roots: Sequence[Path], *which: LedgerName) -> list[migration.Roo
     )
 
 
+@pytest.mark.parametrize("operation", ["plan", "migrate", "retire"])
+@pytest.mark.parametrize("fault", ["unknown", "ragged", "conflicting rename"])
+def test_no_undeclared_csv_cell_can_be_retired(
+    tmp_path: Path, operation: str, fault: str
+) -> None:
+    root = tmp_path / "trial"
+    row = _item(OLD, "ai-01", machine=True).csv_row()
+    heading = "undeclared_reading"
+    if fault == "unknown":
+        row[heading] = "7"
+    elif fault == "conflicting rename":
+        heading = "job"
+        row[heading] = ServerJob.PLAN.value
+    source = _csv(root, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [row])
+    if fault == "ragged":
+        heading = "no heading"
+        lines = source.read_text(encoding="utf-8").splitlines()
+        source.write_text("\n".join([lines[0], lines[1] + ",7"]) + "\n", encoding="utf-8")
+    inputs = migration.MigrationInputs(
+        state_dirs=[root], which=[ITEM], run_id=RUN, git_sha=SEED_COMMIT,
+        today=TODAY, months=MONTHS,
+    )
+    before = _hashes(tmp_path)
+    action = {
+        "plan": migration.plan_roots,
+        "migrate": migration.migrate_roots,
+        "retire": migration.retire_roots,
+    }[operation]
+    with pytest.raises(csv_ledgers.NotProvenError, match=heading) as refused:
+        action(inputs)
+    message = str(refused.value)
+    assert all(part in message for part in (root.name, ITEM.value, OLD, source.name))
+    assert _hashes(tmp_path) == before
+    assert source.exists()
+
+
+@pytest.mark.parametrize("fault", ["unknown", "ragged", "empty unknown"])
+def test_shared_csv_uses_the_same_heading_checks(tmp_path: Path, fault: str) -> None:
+    root = tmp_path / "trial"
+    row = _seen(OLD).csv_row()
+    if fault != "ragged":
+        row["undeclared_reading"] = "" if fault == "empty unknown" else "7"
+    source = _shared_csv(root, LedgerName.SEEN, OLD, [row])
+    if fault == "ragged":
+        lines = source.read_text(encoding="utf-8").splitlines()
+        source.write_text("\n".join([lines[0], lines[1] + ",7"]) + "\n", encoding="utf-8")
+    before = _hashes(tmp_path)
+    if fault == "empty unknown":
+        plans = _phase_plan([root], LedgerName.SEEN)
+        migration.write_roots(plans)
+        migration.verify_roots(_phase_plan([root], LedgerName.SEEN))
+        assert _read_back(root, LedgerName.SEEN, OLD) == _by_key(
+            LedgerName.SEEN, [_seen(OLD).csv_row()]
+        )
+    else:
+        heading = "no heading" if fault == "ragged" else "undeclared_reading"
+        with pytest.raises(csv_ledgers.NotProvenError, match=heading) as refused:
+            _phase_plan([root], LedgerName.SEEN)
+        assert source.name in str(refused.value)
+        assert _hashes(tmp_path) == before
+    assert source.exists()
+
+
+def test_newer_host_stamp_does_not_require_rewriting_an_unchanged_row(tmp_path: Path) -> None:
+    root = tmp_path / "trial"
+    row = _probe(OLD).model_copy(update={"version": "2026-09-20"})
+    ledger.persist(
+        root, [row], ledger=HOST, covers=OLD, identity=migration._identity(RUN, SEED_COMMIT)
+    )
+    source = _csv(
+        root, HOST, OLD, _writer(OLD, 1, ServerJob.WORK),
+        [row.csv_row() | {"version": "2026-09-19"}],
+    )
+    (plan,) = _phase_plan([root], HOST)
+    assert not plan.planned[HOST][OLD].changed
+    before = _hashes(tmp_path)
+    migration.verify_roots([plan])
+    assert _hashes(tmp_path) == before
+    migration.retire_roots(plan.inputs)
+    assert not source.exists()
+    assert _read_back(root, HOST, OLD) == _by_key(HOST, [row.csv_row()])
+
+
+@pytest.mark.skipif(os.name != "nt", reason="separate Windows drives are required")
+def test_label_path_falls_back_to_the_folder_name_on_another_drive() -> None:
+    drive = "Z:" if REPO_ROOT.drive.upper() != "Z:" else "Y:"
+    assert csv_ledgers.label_path(Path(drive + "\\outside-checkout")) == "outside-checkout"
+
+
+def test_filesystem_errors_use_relative_posix_labels(tmp_path: Path) -> None:
+    folder = tmp_path / "unreadable.csv"
+    folder.mkdir()
+    with pytest.raises(OSError) as failed:
+        folder.open("r", encoding="utf-8")
+    message = csv_ledgers.describe_error(failed.value)
+    assert folder.name in message
+    assert str(tmp_path) not in message
+    assert tmp_path.as_posix() not in message
+    assert "\\" not in message
+    if tmp_path.drive:
+        assert tmp_path.drive not in message
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows mandatory file locks are required")
+def test_an_unreadable_csv_refusal_does_not_print_an_absolute_path(tmp_path: Path) -> None:
+    import msvcrt
+
+    root = tmp_path / "trial"
+    source = _csv(root, HOST, OLD, _writer(OLD, 1, ServerJob.WORK), [_probe(OLD).csv_row()])
+    before = _hashes(tmp_path)
+    with source.open("r+b") as handle:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        try:
+            with pytest.raises(csv_ledgers.NotProvenError) as refused:
+                _phase_plan([root], HOST)
+        finally:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+    message = str(refused.value)
+    assert HOST.value in message and OLD in message
+    assert str(tmp_path) not in message and tmp_path.as_posix() not in message
+    assert "\\" not in message
+    assert _hashes(tmp_path) == before
+
+
+@pytest.mark.parametrize("mode", ["--check", "--plan", "--write", "--verify", "--retire", None])
+def test_every_mode_refuses_a_missing_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], mode: str | None
+) -> None:
+    root = tmp_path / "mistyped-root"
+    args = [
+        *MONTH_ARGS, "--state-dir", str(root), "--ledger", HOST.value,
+        "--run-id", RUN, "--git-sha", SEED_COMMIT,
+    ]
+    assert command.main(args + ([mode] if mode else [])) == 1
+    message = capsys.readouterr().err
+    assert f"{csv_ledgers.label_path(root)}: not an existing directory" in message
+    assert not root.exists()
+
+
 def test_old_raw_listing_does_not_block_a_late_csv_key_in_a_packed_root(tmp_path: Path) -> None:
     state = tmp_path / "state"
     config_dir = _beside(state)
@@ -1157,11 +1298,11 @@ def test_a_two_root_verify_refusal_names_the_bad_root_once(
         args.extend(["--state-dir", str(root)])
     assert command.main(args) == command.EXIT_NOT_PROVEN
     output = capsys.readouterr()
-    label = csv_ledgers.root_label(roots[-1])
+    label = csv_ledgers.label_path(roots[-1])
     assert f"{label}: {ITEM.value} {OLD}: migrated output is missing" in output.err
     assert output.err.count(f"{ITEM.value} {OLD}") == 1
     for root in roots:
-        assert output.out.count(f"{csv_ledgers.root_label(root)}: raw only") == 1
+        assert output.out.count(f"{csv_ledgers.label_path(root)}: raw only") == 1
     assert "\\" not in output.out + output.err
 
 
@@ -1600,7 +1741,10 @@ def test_legacy_full_chain_still_retires_an_empty_trial_csv_day(tmp_path: Path) 
     ]
     assert command.main([*args, "--write"]) == 0
     assert source.exists()
-    assert command.main([*args, "--verify"]) == 1
+    assert command.main([*args, "--verify"]) == 0
+    assert command.main([*args, "--retire"]) == 0
+    assert not source.exists()
+    _shared_csv(root, LedgerName.SEEN, OLD, [])
     assert command.main(args) == 0
     assert not source.exists()
 
@@ -1870,7 +2014,20 @@ def test_an_item_health_file_under_the_old_headings_reads_back_under_the_new_one
     dropped = dict.fromkeys(sorted(DROPPED_CELLS), "7")
     _csv(state, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [cells | dropped])
 
-    _run(state, ITEM)
+    _beside(state)
+    before = _hashes(tmp_path)
+    with pytest.raises(csv_ledgers.NotProvenError, match="not declared"):
+        _run(state, ITEM)
+    assert _hashes(tmp_path) == before
+    declarations = csv_ledgers.CSV_LEDGERS
+    entry = declarations[ITEM]._replace(
+        old_headings={**declarations[ITEM].old_headings, **dict.fromkeys(DROPPED_CELLS)}
+    )
+    csv_ledgers.CSV_LEDGERS = {**declarations, ITEM: entry}
+    try:
+        _run(state, ITEM)
+    finally:
+        csv_ledgers.CSV_LEDGERS = declarations
 
     assert ledger.load_days(state, ITEM, [OLD], model=ItemHealthRow) == [row]
     found = ledger.compact_file(state, ITEM, Period.DAILY, OLD)
@@ -1958,7 +2115,7 @@ def test_a_row_that_will_not_parse_is_refused_before_anything_is_written(
 
     assert code == command.EXIT_NOT_PROVEN
     assert (
-        f"nothing deleted: {csv_ledgers.root_label(state)}: {HOST.value} {OLD}: {name} row 2 "
+        f"nothing deleted: {csv_ledgers.label_path(state)}: {HOST.value} {OLD}: {name} row 2 "
         in capsys.readouterr().err
     )
     assert _hashes(tmp_path) == before

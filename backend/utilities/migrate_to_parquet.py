@@ -108,7 +108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"a CSV tree cannot be read: {refusal}", file=sys.stderr)
             return EXIT_NOT_PROVEN
         for _, path in remaining:
-            print(f"{csv_ledgers.root_label(path)} is still a CSV")
+            print(f"{csv_ledgers.label_path(path)} is still a CSV")
         print(f"{len(remaining)} CSV file(s) left")
         return EXIT_NOT_PROVEN if remaining else EXIT_MIGRATED
 
@@ -122,7 +122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     for root in inputs.state_dirs:
         mode = "packs" if migration_phases.packs_here(root, inputs.config_dir) else "raw only"
-        print(f"{csv_ledgers.root_label(root)}: {mode}")
+        print(f"{csv_ledgers.label_path(root)}: {mode}")
     try:
         if args.plan or args.write or args.verify:
             plans = migration_phases.plan_roots(inputs)
@@ -136,12 +136,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     for name, days in plan.planned.items():
                         if not days:
                             print(
-                                f"{csv_ledgers.root_label(plan.state_dir)}: {name.value}: "
+                                f"{csv_ledgers.label_path(plan.state_dir)}: {name.value}: "
                                 f"no CSV inputs in {', '.join(plan.inputs.months)}"
                             )
                         for day, held in days.items():
                             print(
-                                f"{csv_ledgers.root_label(plan.state_dir)}: {name.value} {day}: "
+                                f"{csv_ledgers.label_path(plan.state_dir)}: {name.value} {day}: "
                                 f"{'write needed' if held.changed else 'rows already held'}; "
                                 f"{len(held.files)} CSV file(s), {len(held.rows)} row(s)"
                             )
@@ -157,7 +157,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"not proven, nothing deleted: {refusal}", file=sys.stderr)
         return EXIT_NOT_PROVEN
     for root, each in moved:
-        label = csv_ledgers.root_label(root)
+        label = csv_ledgers.label_path(root)
         print(
             f"{label}: {each.which.value}: {each.csv_files} CSV file(s), "
             f"{each.csv_bytes} bytes, over "

@@ -125,9 +125,9 @@ def raw_days(state_dir: Path, ledger: LedgerName) -> list[str]:
 def listed_days(state_dir: Path, ledger: LedgerName) -> list[str]:
     """Every UTC day a raw listing of this ledger sits under `index/` for, oldest first.
 
-    No reader opens a listing in state/, and the compaction no longer writes one.
-    An older listing records which raw files a day held before packing. A
-    name that is not a `<YYYY-MM-DD>.json` listing is left out with a warning.
+    The compaction no longer writes a listing. An older one can name files it
+    packed and deleted, so the migration never treats a listing as proof.
+    A name that is not a `<YYYY-MM-DD>.json` listing is left out with a warning.
     """
     folder = paths.raw_root(state_dir, ledger) / paths.INDEX_DIRNAME
     if not folder.is_dir():

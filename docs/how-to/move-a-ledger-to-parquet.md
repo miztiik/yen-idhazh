@@ -16,7 +16,7 @@ A move is complete only when every applicable part below holds.
 | --- | --- | --- |
 | Registry | The ledger has the intended entry in `config/ledgers.json`. | `backend/tests/contracts/test_ledger_registry.py` |
 | Door table | `backend/idhazh/ledger/keys.py` declares the ledger, and neither legacy tree table names it. | The registry and door-shape tests in `backend/tests/ledger/` |
-| CSV layout | To add another ledger, give its contract `csv_row()` and, for a day tree, `from_csv_row()`; declare its door key in `backend/idhazh/ledger/keys.py`, registry grain `raw-and-compact`, and `compact-<ledger>` declaration. Add one `CsvLedger` entry to `CSV_LEDGERS` in `backend/utilities/csv_ledgers.py` naming its old day-tree or shared-day-file layout and retention window. Family-nested prefixes, month files and all other layouts are refused by name for now. | `backend/tests/ledger/test_migrate_to_parquet.py` |
+| CSV layout | To add another ledger, give its contract `csv_row()` and, for a day tree, `from_csv_row()`; declare its door key in `backend/idhazh/ledger/keys.py`, registry grain `raw-and-compact`, and `compact-<ledger>` declaration listed in `task_names` of `config/idhazh_gardener.json`. Add one `CsvLedger` entry to `CSV_LEDGERS` in `backend/utilities/csv_ledgers.py` naming its old day-tree or shared-day-file layout, retention window and `old_headings` map from old headings to current columns. Reuse the contract's rename map. Family-nested prefixes, month files and all other layouts are refused by name for now. | `backend/tests/ledger/test_migrate_to_parquet.py` |
 | Writers | Every writer uses `ledger.persist` with its writer identity. Each workflow command that writes passes `--commit`. | `backend/tests/workflows/test_ledger_door_jobs.py` |
 | Backend readers | Each reader uses the door and keeps its existing answer. | The ledger's row tests |
 | Console readers | Every declared ledger is already in `LEDGER_NAMES`; a page may read one once `ledger.published` names it. | `backend/tests/contracts/test_frontend_index_shapes.py` |
@@ -53,7 +53,7 @@ months, run id and code SHA the same between phases.
    never deletes CSV. Compaction can replace or delete raw and compact files
    it absorbs; keeping CSV does not make this phase read-only.
 3. `--verify` reads the CSV again and proves the rows the ledger reader serves.
-   It writes nothing. It refuses missing output, unreadable relevant raw files,
+   It writes nothing. It refuses missing output for nonempty days, unreadable relevant raw files,
    missing or invalid compact entries and indexes, and incorrect compact row
    counts or sizes. It checks raw files even when a compact file serves the day.
 4. `--retire` re-plans and re-verifies every named root and day in the same
@@ -70,6 +70,7 @@ CSV inputs remain. Plan, write, verify, retire and the default full command
 exit one on a refusal or failed proof. Check exits one if CSV remains or a
 named CSV tree cannot be read. Invalid arguments and combined modes exit two
 before any phase runs.
+Every mode refuses a named root that is not an existing directory, with exit one.
 
 Only the eight layouts in `CSV_LEDGERS` are supported: `item-health`,
 `summary-quality-evals` (old CSV folder `scores`), `host-fingerprint`,
@@ -78,6 +79,15 @@ Only the eight layouts in `CSV_LEDGERS` are supported: `item-health`,
 layout. Moving another shape requires its own contract and reader design first.
 Family-nested prefixes such as `content-similarity-judge/scored-pairs` and
 month files such as `item-health-summary` are not supported yet.
+
+Both CSV layouts refuse a filled cell under an unknown heading, a value with
+no heading, and conflicting filled values under an old heading and its current
+column. Empty cells under unknown headings are allowed. A dropped heading
+requires an explicit `old_headings` entry mapped to `None`, added by a person
+in a reviewed commit. There are no such declarations for `runner_name`,
+`cgroup_peak_bytes`, `max_output_tokens`, `coverage` or `new_fact_rate`.
+Their filled CSV cells are refused, even if the contract's legacy reader
+would otherwise ignore them.
 
 Verification uses CSV rows as independent evidence for filled cells on the
 same record key. A joined row uses the newest contributing row's schema stamp;
@@ -109,9 +119,9 @@ The migrator reads each layout it declares: a day tree, `YYYY/MM/DD/*.csv`, or a
 Keep writers stopped throughout retirement. The proof does not lock a tree
 against another process, and filesystem deletion is not a transaction. A
 deletion error can stop cleanup after earlier proven files have been removed.
-An empty CSV day with no raw or indexed compact output is not proof of a
-migrated day; separate verification refuses it. The legacy full command keeps
-its existing empty-day behavior.
+A header-only CSV day needs no stored output when both the CSV and the door
+hold zero rows. Verification passes that same empty-day proof in every mode,
+and retirement or the default full command can delete the header-only file.
 
 Run the same roots, months and ledger list with `--check` after migration. It must print `0 CSV file(s) left` and exit 0. Run a dry compaction pass for each ledger moved in `state/`; it must have no period left to pack. Stage only the intended CSV deletions and new `state/raw/` and `state/compact/` files. Do not add trial-root compact files. Push the data commit and wait for its selected CI checks to pass.
 

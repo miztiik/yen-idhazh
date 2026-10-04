@@ -27,9 +27,11 @@ from utilities.csv_ledgers import (
     RefusedError,
     csv_days,
     csv_root,
+    describe_error,
+    label_path,
     read_csv_cells,
     read_csv_rows,
-    root_label,
+    require_root,
     row_contract,
 )
 from utilities.named_inputs import month_directories
@@ -53,6 +55,8 @@ def folded(
     it: the door's rows stand where the settled file stood, and the CSV's rows
     arrive after them, so a cell only one side filled is joined and a cell both
     filled goes to the later side unless the key declares a preference.
+    Unlike the reader's fold, this keeps the newest schema stamp so verification
+    after writing does not refuse a row whose contract advanced its version.
     """
     prefers = ledger.preference_for(key)
     records: dict[tuple[str, ...], day_shards.Held] = {}
@@ -134,17 +138,17 @@ def _plan(state_dir: Path, which: LedgerName, months: Sequence[str]) -> dict[str
     """
     model, key = row_contract(which), ledger.door_key(which)
     planned: dict[str, PlannedDay] = {}
-    label = f"{root_label(state_dir)}: {which.value}"
+    label = f"{label_path(state_dir)}: {which.value}"
     try:
         days = csv_days(state_dir, which, months=months)
     except (ValueError, OSError) as refusal:
-        raise NotProvenError(f"{label}: {refusal}") from refusal
+        raise NotProvenError(f"{label}: {describe_error(refusal)}") from refusal
     for day, files in days.items():
         context = f"{label} {day}"
         try:
             arriving = read_csv_rows(state_dir, which, day, files, key, model)
         except (ValueError, OSError) as refusal:
-            raise NotProvenError(f"{context}: {refusal}") from refusal
+            raise NotProvenError(f"{context}: {describe_error(refusal)}") from refusal
         stray = sorted({cells["date"] for cells in arriving if cells.get("date")} - {day})
         if stray:
             raise NotProvenError(
@@ -155,7 +159,7 @@ def _plan(state_dir: Path, which: LedgerName, months: Sequence[str]) -> dict[str
             _check_output(state_dir, which, day, required=False)
             held = _door_rows(state_dir, which, day)
         except (ValueError, OSError) as refusal:
-            raise NotProvenError(f"{context}: {refusal}") from refusal
+            raise NotProvenError(f"{context}: {describe_error(refusal)}") from refusal
         rows = folded(held, arriving, key)
         changed = rows != held
         try:
@@ -188,8 +192,6 @@ def _declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName,
     tasks = config.load_gardener(config_dir).tasks
     declared: dict[LedgerName, CompactionPolicy] = {}
     for name in which:
-        if name not in CSV_LEDGERS:
-            raise RefusedError(f"{name.value}: no supported CSV layout in CSV_LEDGERS")
         row_contract(name)
         grain = entries[name].grain
         if grain is not Grain.RAW_AND_COMPACT:
@@ -202,7 +204,7 @@ def _declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName,
         policy = tasks.get(task)
         if not isinstance(policy, CompactionPolicy):
             raise RefusedError(
-                f"config/gardener/{task}.json does not declare a compaction, so nothing can "
+                f"config/idhazh_gardener.json task_names does not list {task}, so nothing can "
                 "say which days the packing rule admits"
             )
         kept = CSV_LEDGERS[name].old_window
@@ -240,7 +242,7 @@ def _pack(
 ) -> tuple[list[str], list[str], list[str]]:
     """Pack only the named months until a pass writes and deletes no selected period."""
     repo_root = state_dir.parent
-    context = f"{root_label(state_dir)}: {which.value}"
+    context = f"{label_path(state_dir)}: {which.value}"
     folders = tuple(policy.owns or ())
     written: list[str] = []
     deleted: list[str] = []
@@ -347,16 +349,15 @@ def prove(
     day: str,
     rows: Sequence[dict[str, str]],
     *,
-    output_required: bool = False,
     source_rows: Sequence[dict[str, str]] = (),
 ) -> None:
     """The day reads back through the door as exactly these rows, cell for cell, or a refusal."""
-    context = f"{root_label(state_dir)}: {which.value} {day}"
+    context = f"{label_path(state_dir)}: {which.value} {day}"
     try:
-        _check_output(state_dir, which, day, required=output_required or bool(rows))
+        _check_output(state_dir, which, day, required=bool(rows))
         readback = _door_rows(state_dir, which, day)
     except (ValueError, OSError) as refusal:
-        raise NotProvenError(f"{context}: {refusal}") from refusal
+        raise NotProvenError(f"{context}: {describe_error(refusal)}") from refusal
     key = ledger.door_key(which)
     back = {_key_of(cells, key): cells for cells in readback}
     wanted = {_key_of(cells, key): cells for cells in rows}
@@ -466,6 +467,8 @@ class RootPlan:
 
 def plan_roots(inputs: MigrationInputs) -> list[RootPlan]:
     """Validate and preview every named input without writing or deleting files."""
+    for root in inputs.state_dirs:
+        require_root(root)
     identity = _identity(inputs.run_id, inputs.git_sha)
     month_directories(Path(), inputs.months)
     policies = _declared(inputs.which, inputs.config_dir)
@@ -514,11 +517,11 @@ def write_roots(plans: Sequence[RootPlan]) -> list[tuple[Path, Moved]]:
 
 def verify_roots(plans: Sequence[RootPlan]) -> list[tuple[Path, Moved]]:
     """Prove every planned day, with the CSV's filled cells as independent evidence."""
-    _prove_roots(plans, output_required=True)
+    _prove_roots(plans)
     return collect_reports(plans)
 
 
-def _prove_roots(plans: Sequence[RootPlan], *, output_required: bool) -> None:
+def _prove_roots(plans: Sequence[RootPlan]) -> None:
     """Prove planned equality first, then independently check each filled source cell."""
     for plan in plans:
         for name, days in plan.planned.items():
@@ -528,7 +531,6 @@ def _prove_roots(plans: Sequence[RootPlan], *, output_required: bool) -> None:
                     name,
                     day,
                     held.rows,
-                    output_required=output_required,
                     source_rows=held.source_rows,
                 )
 
@@ -558,6 +560,6 @@ def migrate_roots(inputs: MigrationInputs) -> list[tuple[Path, Moved]]:
     """Keep the full migration API: plan, file, pack, prove all roots, then delete."""
     plans = plan_roots(inputs)
     reports = write_roots(plans)
-    _prove_roots(plans, output_required=False)
+    _prove_roots(plans)
     _delete_sources(plans)
     return reports
