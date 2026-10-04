@@ -49,7 +49,7 @@ from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import ledger_files
 from idhazh.telemetry import silicon
 from idhazh.telemetry.source_health import feed_reliability, reliability
-from utilities import migrate_to_parquet
+from utilities import csv_ledgers
 from utilities.reconcile_prefill import TOLERANCE, reconcile
 
 pytestmark = pytest.mark.contract
@@ -682,7 +682,7 @@ def an_archived_day(state: Path, day: str, name: str, text: str) -> None:
     door - but the migration that moves the archive onto the door reads it, so
     a test that wants one on disk builds it where the migration looks.
     """
-    root = migrate_to_parquet.csv_root(state, LedgerName.ITEM_HEALTH)
+    root = csv_ledgers.csv_root(state, LedgerName.ITEM_HEALTH)
     folder = root / day[:4] / day[5:7] / day[8:10]
     folder.mkdir(parents=True, exist_ok=True)
     (folder / name).write_text(text, encoding="utf-8", newline="")
@@ -691,7 +691,7 @@ def an_archived_day(state: Path, day: str, name: str, text: str) -> None:
 def migrated_reading(state: Path, day: str) -> list[dict[str, str]]:
     """One archived census day, settled, the way the migration reads it before filing it."""
     key = ledger.door_key(LedgerName.ITEM_HEALTH)
-    root = migrate_to_parquet.csv_root(state, LedgerName.ITEM_HEALTH)
+    root = csv_ledgers.csv_root(state, LedgerName.ITEM_HEALTH)
     return day_shards.settled_day(root, day, key, ItemHealthRow)
 
 

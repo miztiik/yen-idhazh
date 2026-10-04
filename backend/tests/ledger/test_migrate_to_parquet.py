@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import FrozenInstanceError, dataclass
 from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import Any, Final, cast
@@ -41,7 +43,7 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import DROPPED_CELLS, MACHINE_CELLS_RENAMED, ItemHealthRow
 from idhazh.contracts.knobs.gardener import CompactionPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerEntry
 from idhazh.contracts.seen import PublishedRow, SeenRow
@@ -50,7 +52,9 @@ from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
 from idhazh.ledger import json_lines, parquet, paths, render_file
-from utilities import migrate_to_parquet as migration
+from utilities import csv_ledgers
+from utilities import migrate_to_parquet as command
+from utilities import migration_phases as migration
 
 pytestmark = pytest.mark.contract
 
@@ -210,7 +214,7 @@ def _csv(
     columns: tuple[str, ...] | None = None,
 ) -> Path:
     """One CSV file of one day, in the layout the retired writers used."""
-    folder = migration.csv_root(state, which) / day[:4] / day[5:7] / day[8:10]
+    folder = csv_ledgers.csv_root(state, which) / day[:4] / day[5:7] / day[8:10]
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / name
     path.write_text(render_file(columns or tuple(rows[0]), rows), encoding="utf-8", newline="")
@@ -218,7 +222,7 @@ def _csv(
 
 
 def _shared_csv(state: Path, which: LedgerName, day: str, rows: Sequence[Cells]) -> Path:
-    folder = migration.csv_root(state, which) / day[:4] / day[5:7]
+    folder = csv_ledgers.csv_root(state, which) / day[:4] / day[5:7]
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{day[8:10]}.csv"
     columns = tuple(rows[0]) if rows else ROWS[which].csv_columns()
@@ -233,7 +237,7 @@ def _by_key(which: LedgerName, rows: Sequence[Cells]) -> ByKey:
 
 def _todays_reader(state: Path, which: LedgerName) -> dict[str, ByKey]:
     """Every CSV day of a ledger, as today's CSV reader returns it."""
-    root = migration.csv_root(state, which)
+    root = csv_ledgers.csv_root(state, which)
     return {
         day: _by_key(
             which,
@@ -244,7 +248,7 @@ def _todays_reader(state: Path, which: LedgerName) -> dict[str, ByKey]:
                 cast("type[ledger.CsvContract]", ROWS[which]),
             ),
         )
-        for day in migration.csv_days(state, which, months=MONTHS)
+        for day in csv_ledgers.csv_days(state, which, months=MONTHS)
     }
 
 
@@ -495,7 +499,7 @@ def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path:
     lines = {
         which: sum(
             1
-            for path in migration.left(state, [which], months=MONTHS)
+            for path in csv_ledgers.left(state, [which], months=MONTHS)
             for _ in day_shards.rows_of(path)
         )
         for which in MOVED
@@ -509,10 +513,10 @@ def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path:
             assert _read_back(state, which, day) == rows, f"{which.value} {day}"
         assert moved[which].packed == [FIRST, OLD]
         assert ledger.raw_days(state, which) == [NEW]
-        assert not migration.csv_root(state, which).exists(), (
+        assert not csv_ledgers.csv_root(state, which).exists(), (
             "every CSV file and emptied folder goes"
         )
-    assert not migration.left(state, list(MOVED), months=MONTHS)
+    assert not csv_ledgers.left(state, list(MOVED), months=MONTHS)
     item_key = (OLD, f"{OLD}-100", "ai-01")
     assert _read_back(state, ITEM, OLD)[item_key]["machine_job"] == ServerJob.WORK.value
     assert {cells["score_ms"] for cells in _read_back(state, EVALS, OLD).values()} == {"0", "200"}
@@ -547,7 +551,7 @@ def test_a_second_run_changes_no_byte(tmp_path: Path) -> None:
     argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT]
 
     assert [(each.days, each.filed, each.packed) for each in again] == [(0, 0, [])] * 3
-    assert migration.main([*MONTH_ARGS, *argv]) == migration.EXIT_MIGRATED
+    assert command.main([*MONTH_ARGS, *argv]) == command.EXIT_MIGRATED
     assert _hashes(tmp_path) == before
     assert waiting == [[NEW]] * 3, "the day the second run could have packed is still raw"
 
@@ -564,13 +568,11 @@ def test_check_says_whether_a_csv_is_left_and_writes_nothing(tmp_path: Path) -> 
     argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT, "--check"]
     before = _hashes(tmp_path)
 
-    assert migration.main([*MONTH_ARGS, *argv]) == migration.EXIT_NOT_PROVEN
-    assert (
-        migration.main([*MONTH_ARGS, *[*argv, "--ledger", EVALS.value]]) == migration.EXIT_MIGRATED
-    )
+    assert command.main([*MONTH_ARGS, *argv]) == command.EXIT_NOT_PROVEN
+    assert command.main([*MONTH_ARGS, *[*argv, "--ledger", EVALS.value]]) == command.EXIT_MIGRATED
     assert _hashes(tmp_path) == before, "a check writes nothing"
     _run(state, ITEM)
-    assert migration.main([*MONTH_ARGS, *argv]) == migration.EXIT_MIGRATED
+    assert command.main([*MONTH_ARGS, *argv]) == command.EXIT_MIGRATED
 
 
 def test_the_eval_ledgers_csv_tree_is_read_where_its_old_name_filed_it(tmp_path: Path) -> None:
@@ -580,7 +582,7 @@ def test_the_eval_ledgers_csv_tree_is_read_where_its_old_name_filed_it(tmp_path:
     called now, so a late CSV file still reaches the door under the new name.
     """
     state = tmp_path / "state"
-    assert migration.csv_root(state, EVALS) == state / "scores"
+    assert csv_ledgers.csv_root(state, EVALS) == state / "scores"
     _csv(state, EVALS, NEW, _writer(NEW, 1, ServerJob.WORK), [_score(NEW, 1).csv_row()])
 
     (moved,) = _run(state, EVALS)
@@ -596,10 +598,10 @@ def test_every_unmoved_table_entry_is_the_registry_entry() -> None:
     Read off the committed `config/ledgers.json`: a change that files a ledger's
     CSV somewhere else, and leaves its table entry behind, fails here.
     """
-    door = set(migration.door_ledgers())
-    unmoved = [name for name in migration.CSV_LEDGERS if name not in door]
+    door = set(csv_ledgers.door_ledgers())
+    unmoved = [name for name in csv_ledgers.CSV_LEDGERS if name not in door]
 
-    assert {name: migration.CSV_LEDGERS[name].old_entry for name in unmoved} == {
+    assert {name: csv_ledgers.CSV_LEDGERS[name].old_entry for name in unmoved} == {
         name: ledger.entry(name) for name in unmoved
     }
 
@@ -611,12 +613,12 @@ def test_every_moved_ledger_keeps_its_old_window() -> None:
     here rather than at the first live pass that deletes those days.
     """
     tasks = task_declarations()
-    moved = migration.door_ledgers()
+    moved = csv_ledgers.door_ledgers()
     short: list[str] = []
     for name in moved:
         policy = tasks[f"compact-{name.value}"]
         assert isinstance(policy, CompactionPolicy), name
-        if not config.compaction_reaches(policy, migration.CSV_LEDGERS[name].old_window):
+        if not config.compaction_reaches(policy, csv_ledgers.CSV_LEDGERS[name].old_window):
             short.append(name.value)
 
     assert moved, "no ledger in the table has moved, so nothing is checked"
@@ -657,7 +659,7 @@ def test_a_ledger_still_on_csv_is_refused(tmp_path: Path) -> None:
     before = _hashes(tmp_path)
 
     with pytest.raises(
-        migration.RefusedError,
+        csv_ledgers.RefusedError,
         match=f"config/ledgers.json files {ON_CSV.value} as {Grain.DAY_TREE.value},",
     ):
         migration.migrate(
@@ -707,7 +709,7 @@ def test_a_door_ledger_whose_compaction_cannot_hold_its_csv_is_refused(
         declaration.write_text(json.dumps(declared | change), encoding="ascii")
     before = _hashes(tmp_path)
 
-    with pytest.raises(migration.RefusedError, match=refusal):
+    with pytest.raises(csv_ledgers.RefusedError, match=refusal):
         migration.migrate(
             state,
             [EVALS],
@@ -735,15 +737,15 @@ def test_check_reads_moved_ledgers_unless_named(
     feed = _csv(state, ON_CSV, OLD, _writer(OLD, 1, ServerJob.PLAN), [_feed(OLD).csv_row()])
     argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT, "--check"]
 
-    assert migration.main([*MONTH_ARGS, *argv]) == migration.EXIT_NOT_PROVEN
+    assert command.main([*MONTH_ARGS, *argv]) == command.EXIT_NOT_PROVEN
     assert capsys.readouterr().out.splitlines() == [
-        f"{migration._shown(state, feed)} is still a CSV",
+        f"{csv_ledgers.root_label(feed)} is still a CSV",
         "1 CSV file(s) left",
     ]
 
     with monkeypatch.context() as patched:
         patched.setitem(paths._REGISTRY, ON_CSV, LedgerEntry.model_validate(_back_on_csv(ON_CSV)))
-        assert migration.main([*MONTH_ARGS, *argv]) == migration.EXIT_MIGRATED
+        assert command.main([*MONTH_ARGS, *argv]) == command.EXIT_MIGRATED
     assert capsys.readouterr().out.splitlines() == ["0 CSV file(s) left"]
 
     item = _csv(
@@ -755,10 +757,10 @@ def test_check_reads_moved_ledgers_unless_named(
     )
     named = [*argv, "--ledger", ITEM.value, "--ledger", ON_CSV.value]
 
-    assert migration.main([*MONTH_ARGS, *named]) == migration.EXIT_NOT_PROVEN
+    assert command.main([*MONTH_ARGS, *named]) == command.EXIT_NOT_PROVEN
     assert capsys.readouterr().out.splitlines() == [
-        f"{migration._shown(state, item)} is still a CSV",
-        f"{migration._shown(state, feed)} is still a CSV",
+        f"{csv_ledgers.root_label(item)} is still a CSV",
+        f"{csv_ledgers.root_label(feed)} is still a CSV",
         "2 CSV file(s) left",
     ]
 
@@ -771,14 +773,14 @@ def test_a_layout_this_does_not_read_is_refused_by_name(
     A check that read nothing there would pass over every file it holds.
     """
     state = tmp_path / "state"
-    malformed = migration.csv_root(state, LedgerName.SEEN) / "2026" / "09" / "not-a-day.csv"
+    malformed = csv_ledgers.csv_root(state, LedgerName.SEEN) / "2026" / "09" / "not-a-day.csv"
     malformed.parent.mkdir(parents=True)
     malformed.write_text("version,url_key,first_seen_at,first_seen_run\n", encoding="ascii")
     argv = ["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT]
 
-    code = migration.main([*MONTH_ARGS, *[*argv, "--check", "--ledger", LedgerName.SEEN.value]])
+    code = command.main([*MONTH_ARGS, *[*argv, "--check", "--ledger", LedgerName.SEEN.value]])
 
-    assert code == migration.EXIT_NOT_PROVEN
+    assert code == command.EXIT_NOT_PROVEN
     assert "not-a-day.csv is not a YYYY/MM/DD.csv file" in capsys.readouterr().err
 
 
@@ -800,13 +802,15 @@ def test_a_shared_day_file_moves_cell_for_cell(tmp_path: Path) -> None:
     moved = {
         each.which: each
         for _, each in migration.migrate_roots(
-            [state],
-            [LedgerName.SEEN, LedgerName.PUBLISHED],
-            run_id=RUN,
-            git_sha=SEED_COMMIT,
-            today=TODAY,
-            config_dir=config_dir,
-            months=MONTHS,
+            migration.MigrationInputs(
+                state_dirs=[state],
+                which=[LedgerName.SEEN, LedgerName.PUBLISHED],
+                run_id=RUN,
+                git_sha=SEED_COMMIT,
+                today=TODAY,
+                config_dir=config_dir,
+                months=MONTHS,
+            )
         )
     }
 
@@ -815,8 +819,8 @@ def test_a_shared_day_file_moves_cell_for_cell(tmp_path: Path) -> None:
         for day, rows in days.items():
             assert _read_back(state, which, day) == _by_key(which, rows)
             assert not source_files[which, day].exists()
-        assert not migration.csv_root(state, which).exists()
-        assert not migration.left(state, [which], months=MONTHS)
+        assert not csv_ledgers.csv_root(state, which).exists()
+        assert not csv_ledgers.left(state, [which], months=MONTHS)
 
 
 def test_a_shared_day_file_with_a_refused_layout_preserves_every_csv(
@@ -824,12 +828,12 @@ def test_a_shared_day_file_with_a_refused_layout_preserves_every_csv(
 ) -> None:
     state = tmp_path / "state"
     valid = _shared_csv(state, LedgerName.SEEN, OLD, [_seen(OLD).csv_row()])
-    refused = migration.csv_root(state, LedgerName.SEEN) / "2026/09/not-a-day.csv"
+    refused = csv_ledgers.csv_root(state, LedgerName.SEEN) / "2026/09/not-a-day.csv"
     refused.write_text("version,url_key,first_seen_at,first_seen_run\n", encoding="ascii")
     before = {valid: valid.read_bytes(), refused: refused.read_bytes()}
     config_dir = _day_file_config(state, (LedgerName.SEEN,))
 
-    with pytest.raises(migration.NotProvenError, match=r"not a YYYY/MM/DD\.csv file"):
+    with pytest.raises(csv_ledgers.NotProvenError, match=r"not a YYYY/MM/DD\.csv file"):
         migration.migrate(
             state,
             [LedgerName.SEEN],
@@ -875,7 +879,7 @@ def test_a_root_beside_no_config_is_filed_raw_and_never_packed(tmp_path: Path) -
     assert ledger.raw_days(trial, ITEM) == [OLD], "a day the rule admits stays raw here"
     assert not ledger.compact_index_path(trial, ITEM, Period.DAILY).exists()
     assert _read_back(trial, ITEM, OLD) == wanted[OLD]
-    assert not migration.left(trial, [ITEM], months=MONTHS)
+    assert not csv_ledgers.left(trial, [ITEM], months=MONTHS)
     assert migration.packs_here(REPO_ROOT / ledger.STATE_DIRNAME, CONFIG_DIR)
     assert not migration.packs_here(REPO_ROOT / ledger.STATE_DIRNAME / "pipeline-tests", CONFIG_DIR)
 
@@ -914,15 +918,15 @@ def test_cli_migrates_each_repeated_trial_root_raw_only(
         ]
     )
 
-    assert migration.main([*MONTH_ARGS, *args]) == migration.EXIT_MIGRATED
+    assert command.main([*MONTH_ARGS, *args]) == command.EXIT_MIGRATED
     output = capsys.readouterr().out
-    assert "every day is filed raw" in output
+    assert output.count(": raw only") == len(trials)
     for path, (trial, which, day) in source_files.items():
         assert not path.exists()
         assert _read_back(trial, which, day) == wanted[trial, which][day]
         assert not ledger.compact_index_path(trial, which, Period.DAILY).exists()
     check = [*args, "--check"]
-    assert migration.main([*MONTH_ARGS, *check]) == migration.EXIT_MIGRATED
+    assert command.main([*MONTH_ARGS, *check]) == command.EXIT_MIGRATED
 
 
 def test_repeated_roots_prove_every_day_before_deleting_any_csv(tmp_path: Path) -> None:
@@ -960,29 +964,645 @@ def test_repeated_roots_prove_every_day_before_deleting_any_csv(tmp_path: Path) 
         path: path.read_bytes()
         for trial in trials
         for which in (ITEM, HOST)
-        for path in migration.left(trial, [which], months=MONTHS)
+        for path in csv_ledgers.left(trial, [which], months=MONTHS)
     }
 
-    with pytest.raises(migration.NotProvenError, match="cores='64'"):
+    with pytest.raises(csv_ledgers.NotProvenError, match="cores='64'"):
         migration.migrate_roots(
-            trials,
-            [ITEM, HOST],
-            run_id=RUN,
-            git_sha=SEED_COMMIT,
-            today=TODAY,
-            months=MONTHS,
+            migration.MigrationInputs(
+                state_dirs=trials,
+                which=[ITEM, HOST],
+                run_id=RUN,
+                git_sha=SEED_COMMIT,
+                today=TODAY,
+                months=MONTHS,
+            )
         )
 
     assert {
         path: path.read_bytes()
         for trial in trials
         for which in (ITEM, HOST)
-        for path in migration.left(trial, [which], months=MONTHS)
+        for path in csv_ledgers.left(trial, [which], months=MONTHS)
     } == csv_before
     assert source.exists()
     assert not ledger.compact_index_path(trials[0], ITEM, Period.DAILY).exists()
     assert not ledger.compact_index_path(trials[1], ITEM, Period.DAILY).exists()
     assert not ledger.compact_index_path(trials[2], HOST, Period.DAILY).exists()
+
+
+def _phase_plan(roots: Sequence[Path], *which: LedgerName) -> list[migration.RootPlan]:
+    return migration.plan_roots(
+        migration.MigrationInputs(
+            state_dirs=roots,
+            which=which,
+            run_id=RUN,
+            git_sha=SEED_COMMIT,
+            today=TODAY,
+            months=MONTHS,
+        )
+    )
+
+
+def test_old_raw_listing_does_not_block_a_late_csv_key_in_a_packed_root(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    config_dir = _beside(state)
+    first = _item(OLD, "ai-01", machine=True)
+    _csv(state, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [first.csv_row()])
+    inputs = {
+        "run_id": RUN,
+        "git_sha": SEED_COMMIT,
+        "today": TODAY,
+        "config_dir": config_dir,
+        "months": MONTHS,
+    }
+    migration.write_roots(
+        migration.plan_roots(migration.MigrationInputs(state_dirs=[state], which=[ITEM], **inputs))
+    )
+    missing = "019f75f0-4bb0-835b-8c7e-824db9007c61.parquet"
+    listing = ledger.raw_index_path(state, ITEM, OLD)
+    listing.parent.mkdir(parents=True, exist_ok=True)
+    listing.write_text(
+        RawDayIndex(
+            version=RawDayIndex.schema_version(),
+            ledger=ITEM,
+            date=OLD,
+            files=[missing],
+            content_sha256=hashlib.sha256(missing.encode()).hexdigest(),
+            listed_at=f"{OLD}T12:00:00Z",
+        ).to_json(),
+        encoding="ascii",
+        newline="\n",
+    )
+    late = _item(OLD, "ai-02", machine=True)
+    source = _csv(state, ITEM, OLD, _writer(OLD, 2, ServerJob.WORK), [late.csv_row()])
+    migration.write_roots(
+        migration.plan_roots(migration.MigrationInputs(state_dirs=[state], which=[ITEM], **inputs))
+    )
+    migration.verify_roots(
+        migration.plan_roots(migration.MigrationInputs(state_dirs=[state], which=[ITEM], **inputs))
+    )
+    migration.retire_roots(migration.MigrationInputs(state_dirs=[state], which=[ITEM], **inputs))
+    assert not source.exists()
+    assert _read_back(state, ITEM, OLD) == _by_key(ITEM, [first.csv_row(), late.csv_row()])
+
+
+def test_an_unreadable_old_compact_index_refuses_as_not_proven(tmp_path: Path) -> None:
+    root = tmp_path / "trial"
+    _csv(
+        root,
+        ITEM,
+        OLD,
+        _writer(OLD, 1, ServerJob.WORK),
+        [_item(OLD, "ai-01", machine=True).csv_row()],
+    )
+    path = ledger.compact_index_path(root, ITEM, Period.DAILY)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        '{"version":"2026-09-01","ledger":"item-health","period":"daily","entries":"broken"}',
+        encoding="ascii",
+        newline="\n",
+    )
+    before = _hashes(tmp_path)
+    with pytest.raises(csv_ledgers.NotProvenError, match=r"daily.json:"):
+        _phase_plan([root], ITEM)
+    assert _hashes(tmp_path) == before
+
+
+def test_a_ledger_with_no_declared_csv_layout_is_refused_by_name(tmp_path: Path) -> None:
+    which = LedgerName.VISUAL_PRUNES
+    assert which not in csv_ledgers.CSV_LEDGERS
+    before = _hashes(tmp_path)
+    with pytest.raises(csv_ledgers.RefusedError, match=rf"{which.value}: no supported CSV layout"):
+        _phase_plan([tmp_path], which)
+    with pytest.raises(csv_ledgers.RefusedError, match=which.value):
+        csv_ledgers.csv_root(tmp_path, which)
+    assert _hashes(tmp_path) == before
+
+
+def test_migration_inputs_are_frozen_and_do_not_share_mutable_selections(tmp_path: Path) -> None:
+    roots, names, months = [tmp_path], [ITEM], list(MONTHS)
+    inputs = migration.MigrationInputs(
+        state_dirs=roots,
+        which=names,
+        run_id=RUN,
+        git_sha=SEED_COMMIT,
+        today=TODAY,
+        months=months,
+    )
+    roots.clear()
+    names.clear()
+    months.clear()
+    assert inputs.state_dirs == (tmp_path.resolve(),)
+    assert inputs.which == (ITEM,)
+    assert inputs.months == MONTHS
+    with pytest.raises(FrozenInstanceError):
+        inputs.today = date(2026, 9, 5)  # type: ignore[misc]
+    (plan,) = migration.plan_roots(inputs)
+    assert plan.inputs is inputs
+
+
+def test_script_execution_catches_the_same_phase_refusal_class(tmp_path: Path) -> None:
+    root = tmp_path / "trial"
+    row = _item(OLD, "ai-01", machine=True)
+    _csv(root, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [row.csv_row()])
+    assert command.NotProvenError is csv_ledgers.NotProvenError
+    assert migration.NotProvenError is csv_ledgers.NotProvenError
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "backend" / "utilities" / "migrate_to_parquet.py"),
+            *MONTH_ARGS,
+            "--state-dir",
+            str(root),
+            "--ledger",
+            ITEM.value,
+            "--run-id",
+            RUN,
+            "--git-sha",
+            SEED_COMMIT,
+            "--verify",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == command.EXIT_NOT_PROVEN
+    assert "not proven, nothing deleted" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_a_two_root_verify_refusal_names_the_bad_root_once(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    roots = [tmp_path / "good", tmp_path / "bad"]
+    row = _item(OLD, "ai-01", machine=True)
+    for root in roots:
+        _csv(root, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [row.csv_row()])
+    migration.write_roots(_phase_plan(roots, ITEM))
+    (file,) = ledger.read_day_files(roots[-1], ITEM, OLD)
+    file.path.unlink()
+    args = [
+        *MONTH_ARGS,
+        "--ledger",
+        ITEM.value,
+        "--run-id",
+        RUN,
+        "--git-sha",
+        SEED_COMMIT,
+        "--verify",
+    ]
+    for root in roots:
+        args.extend(["--state-dir", str(root)])
+    assert command.main(args) == command.EXIT_NOT_PROVEN
+    output = capsys.readouterr()
+    label = csv_ledgers.root_label(roots[-1])
+    assert f"{label}: {ITEM.value} {OLD}: migrated output is missing" in output.err
+    assert output.err.count(f"{ITEM.value} {OLD}") == 1
+    for root in roots:
+        assert output.out.count(f"{csv_ledgers.root_label(root)}: raw only") == 1
+    assert "\\" not in output.out + output.err
+
+
+def test_proof_checks_duplicate_source_keys_and_names_a_missing_source_key(tmp_path: Path) -> None:
+    row = _item(OLD, "ai-01", machine=True)
+    ledger.persist(
+        tmp_path, [row], ledger=ITEM, covers=OLD, identity=migration._identity(RUN, SEED_COMMIT)
+    )
+    cells = row.csv_row()
+    migration.prove(tmp_path, ITEM, OLD, [cells], source_rows=[cells, cells])
+    absent = _item(OLD, "ai-02", machine=True).csv_row()
+    with pytest.raises(csv_ledgers.NotProvenError, match="missing CSV source key"):
+        migration.prove(tmp_path, ITEM, OLD, [cells], source_rows=[absent, absent])
+
+
+def test_separate_phases_are_read_only_until_write_and_keep_csv_until_retire(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "trial"
+    row = _item(OLD, "ai-01", machine=True)
+    csv = _csv(root, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [row.csv_row()])
+    csv_bytes = csv.read_bytes()
+    before = _hashes(tmp_path)
+
+    plans = _phase_plan([root], ITEM)
+    assert _hashes(tmp_path) == before
+    assert plans[0].planned[ITEM][OLD].changed
+    migration.write_roots(plans)
+    assert csv.read_bytes() == csv_bytes
+    written = _hashes(tmp_path)
+    fresh = _phase_plan([root], ITEM)
+    assert not fresh[0].planned[ITEM][OLD].changed
+    assert migration.verify_roots(fresh)[0][1].days == 1
+    migration.write_roots(fresh)
+    assert _hashes(tmp_path) == written
+    (file,) = ledger.read_day_files(root, ITEM, OLD)
+    identity = file.envelope.identity
+    assert identity == migration._identity(RUN, SEED_COMMIT)
+    assert _read_back(root, ITEM, OLD) == _by_key(ITEM, [row.csv_row()])
+    migration.retire_roots(
+        migration.MigrationInputs(
+            state_dirs=[root],
+            which=[ITEM],
+            run_id=RUN,
+            git_sha=SEED_COMMIT,
+            today=TODAY,
+            months=MONTHS,
+        )
+    )
+    assert not csv.exists()
+
+
+@pytest.mark.parametrize("damage", ["missing", "changed", "unreadable"])
+def test_verify_and_retire_refuse_output_without_deleting_any_root(
+    tmp_path: Path, damage: str
+) -> None:
+    roots = [tmp_path / "trial-a", tmp_path / "trial-b"]
+    row = _item(OLD, "ai-01", machine=True)
+    sources = [
+        _csv(root, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [row.csv_row()]) for root in roots
+    ]
+    migration.write_roots(_phase_plan(roots, ITEM))
+    (file,) = ledger.read_day_files(roots[-1], ITEM, OLD)
+    if damage == "missing":
+        file.path.unlink()
+    elif damage == "unreadable":
+        file.path.write_bytes(b"not a ledger")
+    else:
+        ledger.persist(
+            roots[-1],
+            [row.model_copy(update={"source_words": row.source_words + 1})],
+            ledger=ITEM,
+            covers=OLD,
+            identity=migration._identity(RUN, SEED_COMMIT),
+        )
+    before = _hashes(tmp_path)
+    with pytest.raises(csv_ledgers.NotProvenError, match=rf"{ITEM.value} {OLD}"):
+        migration.verify_roots(_phase_plan(roots, ITEM))
+    with pytest.raises(csv_ledgers.NotProvenError, match=rf"{ITEM.value} {OLD}"):
+        migration.retire_roots(
+            migration.MigrationInputs(
+                state_dirs=roots,
+                which=[ITEM],
+                run_id=RUN,
+                git_sha=SEED_COMMIT,
+                today=TODAY,
+                months=MONTHS,
+            )
+        )
+    assert _hashes(tmp_path) == before
+    assert all(path.exists() for path in sources)
+
+
+def test_verify_does_not_use_a_preferred_tampered_source_key_as_its_expectation(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "trial"
+    row = _item(OLD, "ai-01", machine=False)
+    _csv(root, ITEM, OLD, _writer(OLD, 1, ServerJob.ASSEMBLE), [row.csv_row()])
+    migration.write_roots(_phase_plan([root], ITEM))
+    ledger.persist(
+        root,
+        [_item(OLD, "ai-01", machine=True, words=row.source_words + 1)],
+        ledger=ITEM,
+        covers=OLD,
+        identity=migration._identity(RUN, SEED_COMMIT).model_copy(update={"attempt": 2}),
+    )
+    plans = _phase_plan([root], ITEM)
+    assert not plans[0].planned[ITEM][OLD].changed, "preference hides the changed source cell"
+    before = _hashes(tmp_path)
+    with pytest.raises(csv_ledgers.NotProvenError, match="CSV supplies"):
+        migration.verify_roots(plans)
+    assert _hashes(tmp_path) == before
+
+
+def test_full_chain_refuses_a_preferred_source_conflict_before_deleting_any_root(
+    tmp_path: Path,
+) -> None:
+    roots = [tmp_path / "trial-a", tmp_path / "trial-b"]
+    row = _item(OLD, "ai-01", machine=False)
+    sources = [
+        _csv(root, ITEM, OLD, _writer(OLD, 1, ServerJob.ASSEMBLE), [row.csv_row()])
+        for root in roots
+    ]
+    ledger.persist(
+        roots[-1],
+        [_item(OLD, "ai-01", machine=True, words=row.source_words + 1)],
+        ledger=ITEM,
+        covers=OLD,
+        identity=migration._identity(RUN, SEED_COMMIT).model_copy(update={"attempt": 2}),
+    )
+    assert not _phase_plan(roots, ITEM)[-1].planned[ITEM][OLD].changed
+    before = {path: path.read_bytes() for path in sources}
+    with pytest.raises(csv_ledgers.NotProvenError, match=r"ai-01.*CSV supplies"):
+        migration.migrate_roots(
+            migration.MigrationInputs(
+                state_dirs=roots,
+                which=[ITEM],
+                run_id=RUN,
+                git_sha=SEED_COMMIT,
+                today=TODAY,
+                months=MONTHS,
+            )
+        )
+    assert {path: path.read_bytes() for path in sources} == before
+    assert _read_back(roots[0], ITEM, OLD) == _by_key(ITEM, [row.csv_row()])
+
+
+def test_phase_verification_keeps_retained_keys_and_filled_host_cells(tmp_path: Path) -> None:
+    root = tmp_path / "trial"
+    _csv(root, HOST, OLD, _writer(OLD, 1, ServerJob.WORK), [_clock(OLD).csv_row()])
+    ledger.persist(
+        root,
+        [_probe(OLD), _probe(OLD, ServerJob.ASSEMBLE)],
+        ledger=HOST,
+        covers=OLD,
+        identity=migration._identity(RUN, SEED_COMMIT),
+    )
+    migration.write_roots(_phase_plan([root], HOST))
+    before = _hashes(tmp_path)
+    plans = _phase_plan([root], HOST)
+    assert not plans[0].planned[HOST][OLD].changed
+    migration.verify_roots(plans)
+    migration.write_roots(plans)
+    assert _hashes(tmp_path) == before
+    assert len(_read_back(root, HOST, OLD)) == 2
+
+
+@pytest.mark.parametrize("packed", [False, True], ids=["raw", "compact"])
+def test_distinct_source_keys_and_an_unrelated_retained_key_do_not_hide_bad_output(
+    tmp_path: Path, packed: bool
+) -> None:
+    root = tmp_path / ("state" if packed else "trial")
+    config_dir = _beside(root) if packed else CONFIG_DIR
+    rows = [_item(OLD, name, machine=False) for name in ("ai-01", "ai-02")]
+    source = _csv(
+        root,
+        ITEM,
+        OLD,
+        _writer(OLD, 1, ServerJob.ASSEMBLE),
+        [row.csv_row() for row in rows],
+    )
+    retained = _item(OLD, "ai-03", machine=True)
+    ledger.persist(
+        root,
+        [retained],
+        ledger=ITEM,
+        covers=OLD,
+        identity=migration._identity(RUN, SEED_COMMIT),
+    )
+    inputs = {
+        "run_id": RUN,
+        "git_sha": SEED_COMMIT,
+        "today": TODAY,
+        "config_dir": config_dir,
+        "months": MONTHS,
+    }
+    migration.write_roots(
+        migration.plan_roots(migration.MigrationInputs(state_dirs=[root], which=[ITEM], **inputs))
+    )
+    good = _hashes(tmp_path)
+    migration.verify_roots(
+        migration.plan_roots(migration.MigrationInputs(state_dirs=[root], which=[ITEM], **inputs))
+    )
+    assert _hashes(tmp_path) == good
+    assert _read_back(root, ITEM, OLD) == _by_key(
+        ITEM, [row.csv_row() for row in [*rows, retained]]
+    )
+
+    bad = _item(OLD, "ai-02", machine=True, words=rows[1].source_words + 1)
+    if packed:
+        path = ledger.compact_file(root, ITEM, Period.DAILY, OLD)
+        assert path is not None
+        stored = ledger.load_stored([path], model=ItemHealthRow)
+        replacement = ledger.persist_period(
+            root,
+            [
+                ledger.StoredRow(identity=held.identity, row=bad)
+                if held.row.item_id == bad.item_id
+                else held
+                for held in stored
+            ],
+            model=ItemHealthRow,
+            ledger=ITEM,
+            period=Period.DAILY,
+            covers=OLD,
+            identity=_compaction_identity(),
+            built_from=1,
+        )
+        index_path = ledger.compact_index_path(root, ITEM, Period.DAILY)
+        index = CompactIndex.read(index_path)
+        entries = [
+            entry.model_copy(update={"bytes": replacement.stat().st_size})
+            if entry.covers == OLD
+            else entry
+            for entry in index.entries
+        ]
+        index_path.write_text(
+            index.model_copy(update={"entries": entries}).to_json(),
+            encoding="ascii",
+            newline="\n",
+        )
+    else:
+        ledger.persist(
+            root,
+            [rows[0], bad, retained],
+            ledger=ITEM,
+            covers=OLD,
+            identity=migration._identity(RUN, SEED_COMMIT).model_copy(update={"attempt": 2}),
+        )
+    plans = migration.plan_roots(
+        migration.MigrationInputs(state_dirs=[root], which=[ITEM], **inputs)
+    )
+    assert not plans[0].planned[ITEM][OLD].changed
+    before = _hashes(tmp_path)
+    with pytest.raises(csv_ledgers.NotProvenError, match=r"ai-02.*CSV supplies"):
+        migration.verify_roots(plans)
+    with pytest.raises(csv_ledgers.NotProvenError, match=r"ai-02.*CSV supplies"):
+        migration.retire_roots(migration.MigrationInputs(state_dirs=[root], which=[ITEM], **inputs))
+    assert _hashes(tmp_path) == before
+    assert source.exists()
+
+
+@pytest.mark.parametrize("damage", ["file", "index", "entry", "size", "raw"])
+def test_verify_validates_compact_and_raw_even_when_another_tier_serves_the_day(
+    tmp_path: Path, damage: str
+) -> None:
+    state = tmp_path / "state"
+    config_dir = _beside(state)
+    row = _item(OLD, "ai-01", machine=True)
+    _csv(state, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [row.csv_row()])
+    inputs = {
+        "run_id": RUN,
+        "git_sha": SEED_COMMIT,
+        "today": TODAY,
+        "config_dir": config_dir,
+        "months": MONTHS,
+    }
+    migration.write_roots(
+        migration.plan_roots(migration.MigrationInputs(state_dirs=[state], which=[ITEM], **inputs))
+    )
+    path = ledger.compact_file(state, ITEM, Period.DAILY, OLD)
+    assert path is not None
+    index_path = ledger.compact_index_path(state, ITEM, Period.DAILY)
+    if damage == "file":
+        path.unlink()
+    elif damage == "index":
+        ledger.compact_index_path(state, ITEM, Period.MONTHLY).unlink()
+    elif damage in ("entry", "size"):
+        index = CompactIndex.read(index_path)
+        entries = [
+            entry.model_copy(update={"bytes": entry.bytes + 1})
+            if entry.covers == OLD and damage == "size"
+            else entry
+            for entry in index.entries
+            if entry.covers != OLD or damage != "entry"
+        ]
+        index_path.write_text(
+            index.model_copy(update={"entries": entries}).to_json(), encoding="ascii", newline="\n"
+        )
+    else:
+        (raw,) = ledger.persist(
+            state, [row], ledger=ITEM, covers=OLD, identity=migration._identity(RUN, SEED_COMMIT)
+        )
+        raw.write_bytes(b"broken raw file hidden by the compact index")
+    before = _hashes(tmp_path)
+    with pytest.raises(csv_ledgers.NotProvenError, match=rf"{ITEM.value} {OLD}"):
+        migration.verify_roots(
+            migration.plan_roots(
+                migration.MigrationInputs(state_dirs=[state], which=[ITEM], **inputs)
+            )
+        )
+    assert _hashes(tmp_path) == before
+
+
+@pytest.mark.parametrize("mode", ["--plan", "--write", "--verify", "--retire"])
+def test_phase_modes_are_mutually_exclusive_with_each_other_and_check(
+    tmp_path: Path, mode: str
+) -> None:
+    args = [
+        *MONTH_ARGS,
+        "--state-dir",
+        str(tmp_path),
+        "--ledger",
+        ITEM.value,
+        "--run-id",
+        RUN,
+        "--git-sha",
+        SEED_COMMIT,
+    ]
+    for other in ("--plan", "--write", "--verify", "--retire", "--check"):
+        if other == mode:
+            continue
+        with pytest.raises(SystemExit) as refusal:
+            command.main([*args, mode, other])
+        assert refusal.value.code == 2
+
+
+def test_cli_phases_preview_write_verify_and_retire(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = tmp_path / "trial"
+    row = _item(NEW, "ai-01", machine=True)
+    source = _csv(root, ITEM, NEW, _writer(NEW, 1, ServerJob.WORK), [row.csv_row()])
+    args = [
+        *MONTH_ARGS,
+        "--state-dir",
+        str(root),
+        "--ledger",
+        ITEM.value,
+        "--run-id",
+        RUN,
+        "--git-sha",
+        SEED_COMMIT,
+    ]
+    before = _hashes(tmp_path)
+    assert command.main([*args, "--plan", "--ledger", HOST.value]) == 0
+    preview = capsys.readouterr().out
+    assert "write needed" in preview
+    assert f"{HOST.value}: no CSV inputs" in preview
+    assert _hashes(tmp_path) == before
+    assert command.main([*args, "--verify"]) == 1
+    assert "not proven" in capsys.readouterr().err
+    assert command.main([*args, "--write"]) == 0
+    assert "CSV kept" in capsys.readouterr().out
+    assert source.exists()
+    written = _hashes(tmp_path)
+    assert command.main([*args, "--verify"]) == 0
+    assert _hashes(tmp_path) == written
+    assert command.main([*args, "--retire"]) == 0
+    assert not source.exists()
+
+
+def test_retire_replans_after_a_successful_proof_before_deleting_any_root(tmp_path: Path) -> None:
+    roots = [tmp_path / "trial-a", tmp_path / "trial-b"]
+    row = _item(OLD, "ai-01", machine=True)
+    for root in roots:
+        _csv(root, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [row.csv_row()])
+    migration.write_roots(_phase_plan(roots, ITEM))
+    migration.verify_roots(_phase_plan(roots, ITEM))
+    _csv(
+        roots[-1],
+        ITEM,
+        OLD,
+        _writer(OLD, 2, ServerJob.WORK),
+        [_item(OLD, "ai-02", machine=True).csv_row()],
+    )
+    before = _hashes(tmp_path)
+    with pytest.raises(csv_ledgers.NotProvenError, match="missing"):
+        migration.retire_roots(
+            migration.MigrationInputs(
+                state_dirs=roots,
+                which=[ITEM],
+                run_id=RUN,
+                git_sha=SEED_COMMIT,
+                today=TODAY,
+                months=MONTHS,
+            )
+        )
+    assert _hashes(tmp_path) == before
+
+
+def test_a_late_write_converges_rows_and_work_identity_without_deleting_csv(tmp_path: Path) -> None:
+    root = tmp_path / "trial"
+    row = _item(OLD, "ai-01", machine=True)
+    _csv(root, ITEM, OLD, _writer(OLD, 1, ServerJob.WORK), [row.csv_row()])
+    migration.write_roots(_phase_plan([root], ITEM))
+    (first,) = ledger.read_day_files(root, ITEM, OLD)
+    later = _item(OLD, "ai-02", machine=True)
+    _csv(root, ITEM, OLD, _writer(OLD, 2, ServerJob.WORK), [later.csv_row()])
+    migration.write_roots(_phase_plan([root], ITEM))
+    migration.verify_roots(_phase_plan([root], ITEM))
+    written = _hashes(tmp_path)
+    migration.write_roots(_phase_plan([root], ITEM))
+    assert _hashes(tmp_path) == written
+    assert {file.envelope.unit_id for file in ledger.read_day_files(root, ITEM, OLD)} == {
+        first.envelope.unit_id
+    }
+    assert _read_back(root, ITEM, OLD) == _by_key(ITEM, [row.csv_row(), later.csv_row()])
+    assert len(csv_ledgers.left(root, [ITEM], months=MONTHS)) == 2
+
+
+def test_legacy_full_chain_still_retires_an_empty_trial_csv_day(tmp_path: Path) -> None:
+    root = tmp_path / "trial"
+    source = _shared_csv(root, LedgerName.SEEN, OLD, [])
+    args = [
+        *MONTH_ARGS,
+        "--state-dir",
+        str(root),
+        "--ledger",
+        LedgerName.SEEN.value,
+        "--run-id",
+        RUN,
+        "--git-sha",
+        SEED_COMMIT,
+    ]
+    assert command.main([*args, "--write"]) == 0
+    assert source.exists()
+    assert command.main([*args, "--verify"]) == 1
+    assert command.main(args) == 0
+    assert not source.exists()
 
 
 def test_finite_monthly_window_reports_without_losing_migrated_rows(tmp_path: Path) -> None:
@@ -1153,7 +1773,7 @@ def test_packing_leaves_what_a_live_compaction_leaves_over_the_same_raw_files(
     identity = migration._identity(RUN, SEED_COMMIT)
     for day in days:
         cells = day_shards.settled_day(
-            migration.csv_root(live / "state", ITEM),
+            csv_ledgers.csv_root(live / "state", ITEM),
             day,
             key,
             cast("type[ledger.CsvContract]", model),
@@ -1206,7 +1826,7 @@ def test_a_late_file_for_a_moved_day_is_folded_in_packed_again_and_proven(tmp_pa
     assert {entry.covers: entry.rows for entry in index.entries} == {FIRST: 0, OLD: 2}
     assert ledger.raw_days(state, ITEM) == [], "the day's new raw file was packed in"
     assert Watermark.read(ledger.watermark_path(state, ITEM, Period.DAILY)).through == OLD
-    assert not migration.left(state, [ITEM], months=MONTHS)
+    assert not csv_ledgers.left(state, [ITEM], months=MONTHS)
 
 
 @pytest.mark.parametrize("files", [1, 2], ids=["in one file", "in two files"])
@@ -1277,7 +1897,7 @@ def test_the_proof_refuses_a_day_that_does_not_read_back(tmp_path: Path) -> None
         identity=migration._identity(RUN, SEED_COMMIT),
     )
 
-    with pytest.raises(migration.NotProvenError, match="source_words"):
+    with pytest.raises(csv_ledgers.NotProvenError, match="source_words"):
         migration.prove(state, ITEM, NEW, [row.csv_row() for row in rows])
 
 
@@ -1305,13 +1925,13 @@ def test_a_day_that_does_not_read_back_leaves_every_csv_of_every_ledger_in_place
     ledger.persist(
         state, [probe.model_copy(update={"cores": 64})], ledger=HOST, covers=OLD, identity=later
     )
-    kept = {path: path.read_bytes() for path in migration.left(state, list(MOVED), months=MONTHS)}
+    kept = {path: path.read_bytes() for path in csv_ledgers.left(state, list(MOVED), months=MONTHS)}
 
-    with pytest.raises(migration.NotProvenError, match=rf"host-fingerprint {OLD} .*cores='64'"):
+    with pytest.raises(csv_ledgers.NotProvenError, match=rf"host-fingerprint {OLD} .*cores='64'"):
         _run(state, *MOVED)
 
     assert {
-        path: path.read_bytes() for path in migration.left(state, list(MOVED), months=MONTHS)
+        path: path.read_bytes() for path in csv_ledgers.left(state, list(MOVED), months=MONTHS)
     } == kept
     assert len(kept) == 2
 
@@ -1332,12 +1952,15 @@ def test_a_row_that_will_not_parse_is_refused_before_anything_is_written(
     _csv(state, HOST, OLD, name, [_probe(OLD).csv_row() | {"cores": "four"}])
     before = _hashes(tmp_path)
 
-    code = migration.main(
+    code = command.main(
         [*MONTH_ARGS, *["--state-dir", str(state), "--run-id", RUN, "--git-sha", SEED_COMMIT]]
     )
 
-    assert code == migration.EXIT_NOT_PROVEN
-    assert f"nothing deleted: {HOST.value} {OLD}: {name} row 2 " in capsys.readouterr().err
+    assert code == command.EXIT_NOT_PROVEN
+    assert (
+        f"nothing deleted: {csv_ledgers.root_label(state)}: {HOST.value} {OLD}: {name} row 2 "
+        in capsys.readouterr().err
+    )
     assert _hashes(tmp_path) == before
 
 
@@ -1350,7 +1973,7 @@ def test_named_month_migration_ignores_other_csv_and_raw_months(tmp_path: Path) 
         _writer(OLD, 1, ServerJob.WORK),
         [_item(OLD, "ai-01", machine=True).csv_row()],
     )
-    other_csv = migration.csv_root(state, ITEM) / "2026/10/not-a-day.csv"
+    other_csv = csv_ledgers.csv_root(state, ITEM) / "2026/10/not-a-day.csv"
     other_raw = ledger.raw_root(state, ITEM) / "2026/10/01/invalid.parquet"
     for path in (other_csv, other_raw):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -1358,7 +1981,7 @@ def test_named_month_migration_ignores_other_csv_and_raw_months(tmp_path: Path) 
 
     _run(state, ITEM)
 
-    assert migration.left(state, [ITEM], months=MONTHS) == []
+    assert csv_ledgers.left(state, [ITEM], months=MONTHS) == []
     assert other_csv.read_bytes() == other_raw.read_bytes() == b"\xff"
     assert len(ledger.load_days(state, ITEM, [OLD], model=ItemHealthRow)) == 1
 
@@ -1389,7 +2012,7 @@ def test_scoped_packing_keeps_an_unnamed_indexed_month(tmp_path: Path) -> None:
 @pytest.mark.parametrize("month", ["202609", "2026-13", "0000-01", "../2026-09"])
 def test_migration_cli_refuses_invalid_months(tmp_path: Path, month: str) -> None:
     with pytest.raises(SystemExit) as refused:
-        migration.main(
+        command.main(
             [
                 "--state-dir",
                 str(tmp_path),
@@ -1406,7 +2029,7 @@ def test_migration_cli_refuses_invalid_months(tmp_path: Path, month: str) -> Non
 
 def test_migration_cli_requires_a_month(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as refused:
-        migration.main(["--state-dir", str(tmp_path), "--run-id", RUN, "--git-sha", SEED_COMMIT])
+        command.main(["--state-dir", str(tmp_path), "--run-id", RUN, "--git-sha", SEED_COMMIT])
     assert refused.value.code == 2
 
 
@@ -1424,7 +2047,7 @@ def test_named_months_cannot_skip_the_daily_watermark_gap(tmp_path: Path) -> Non
     day = "2026-10-01"
     _csv(state, EVALS, day, _writer(day, 1, ServerJob.WORK), [_score(day, 2).csv_row()])
 
-    with pytest.raises(migration.NotProvenError, match="named months omit 2026-09"):
+    with pytest.raises(csv_ledgers.NotProvenError, match="named months omit 2026-09"):
         migration.migrate(
             state,
             [EVALS],
@@ -1435,7 +2058,7 @@ def test_named_months_cannot_skip_the_daily_watermark_gap(tmp_path: Path) -> Non
             months=["2026-10"],
         )
 
-    assert len(migration.left(state, [EVALS], months=["2026-10"])) == 1
+    assert len(csv_ledgers.left(state, [EVALS], months=["2026-10"])) == 1
 
 
 def test_scoped_packing_cannot_skip_an_unabsorbed_month(tmp_path: Path) -> None:
@@ -1486,7 +2109,7 @@ def test_scoped_packing_cannot_skip_an_unabsorbed_month(tmp_path: Path) -> None:
         [_score(selected, 3).csv_row()],
     )
 
-    with pytest.raises(migration.NotProvenError, match="compaction refused"):
+    with pytest.raises(csv_ledgers.NotProvenError, match="compaction refused"):
         migration.migrate(
             state,
             [EVALS],
@@ -1499,7 +2122,7 @@ def test_scoped_packing_cannot_skip_an_unabsorbed_month(tmp_path: Path) -> None:
 
     assert daily.read_bytes() == before
     assert Watermark.read(ledger.watermark_path(state, EVALS, Period.MONTHLY)).through == "2026-08"
-    assert len(migration.left(state, [EVALS], months=["2026-10"])) == 1
+    assert len(csv_ledgers.left(state, [EVALS], months=["2026-10"])) == 1
 
 
 def test_scoped_packing_cannot_skip_an_unabsorbed_year(tmp_path: Path) -> None:
@@ -1521,7 +2144,7 @@ def test_scoped_packing_cannot_skip_an_unabsorbed_year(tmp_path: Path) -> None:
     months = tuple(f"2026-{number:02d}" for number in range(1, 13))
     policy = migration._declared([EVALS], _beside(state))[EVALS]
 
-    with pytest.raises(migration.NotProvenError, match="compaction refused"):
+    with pytest.raises(csv_ledgers.NotProvenError, match="compaction refused"):
         migration._pack(
             state,
             EVALS,

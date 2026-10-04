@@ -125,7 +125,8 @@ def raw_days(state_dir: Path, ledger: LedgerName) -> list[str]:
 def listed_days(state_dir: Path, ledger: LedgerName) -> list[str]:
     """Every UTC day a raw listing of this ledger sits under `index/` for, oldest first.
 
-    The listings are the compaction's record of which raw files a day held. A
+    No reader opens a listing in state/, and the compaction no longer writes one.
+    An older listing records which raw files a day held before packing. A
     name that is not a `<YYYY-MM-DD>.json` listing is left out with a warning.
     """
     folder = paths.raw_root(state_dir, ledger) / paths.INDEX_DIRNAME

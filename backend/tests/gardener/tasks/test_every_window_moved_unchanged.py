@@ -33,7 +33,7 @@ from idhazh.contracts.knobs.gardener import (
     Window,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from utilities.migrate_to_parquet import CSV_LEDGERS
+from utilities.csv_ledgers import CSV_LEDGERS
 
 from ._task import declared
 
