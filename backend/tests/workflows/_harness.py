@@ -819,20 +819,16 @@ WORK_LEDGER_STEPS: Final = (RECORD_STEP, SCRAPE_STEP, JOB_CLOCK_STEP, COMMIT_STE
 
 TOLERATED: Final = "true"
 
-# The two artifacts a work shard hands to assemble, spelled the way `with.name`
-# spells them. A step with no `if:` runs on `success()` and a job stopped by
-# `timeout-minutes` is cancelled, so both were skipped on every shard that ran
-# out of time while the `always()` ledger steps above them ran. They travel
-# together or not at all: the decision naming a chart is in the first and the
-# chart's own bytes are in the second.
+# The artifact a work shard hands to assemble, spelled the way `with.name`
+# spells it. A step with no `if:` runs on `success()` and a job stopped by
+# `timeout-minutes` is cancelled, so it was skipped on every shard that ran out
+# of time while the `always()` ledger steps above it ran. A rendered chart's
+# bytes travel inside its decision, so this is the whole hand-off.
 #
 # `evidence-*` is not here. It is the labelling queue's copy of the article
 # text, no job downloads it and nothing on the publish path reads it, so
 # guarding it is a decision of its own rather than part of this hand-off.
-WORK_PAYLOAD_ARTIFACTS: Final = (
-    "items-${{ matrix.shard }}",
-    "shard-visuals-${{ matrix.shard }}",
-)
+WORK_PAYLOAD_ARTIFACTS: Final = ("items-${{ matrix.shard }}",)
 
 COMMIT_IDENTITY: Final = "miztiik <miztiik@users.noreply.github.com>"
 
