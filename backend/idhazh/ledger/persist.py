@@ -335,9 +335,7 @@ def persist(
     if not rows:
         return []
     model = _one_contract(rows)
-    if identity.job not in MAINTENANCE_JOBS and not lifecycle.accepts_new_rows(
-        ledger, len(rows)
-    ):
+    if identity.job not in MAINTENANCE_JOBS and not lifecycle.accepts_new_rows(ledger, len(rows)):
         return []
     knobs = _knobs()
     chosen = knobs.format if fmt is None else fmt

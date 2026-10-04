@@ -18,15 +18,15 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import ClassVar, Final
+from typing import Any, ClassVar, Final
 
 import pyarrow.parquet
 import pytest
 from conftest import FIXTURES_DIR, REPO_ROOT
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from idhazh import ledger
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, ServerJob
+from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, RunId, ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -93,6 +93,82 @@ class EveryColumn(Contract):
     tier: Tier
     maybe_period: Period | None = None
     run_ids: tuple[RunId, ...] = Field(default=())
+
+
+class NestedLedgerItem(Model):
+    """One structured list member in the recursive ledger fixture."""
+
+    name: str
+    tier: Tier
+
+
+class NestedLedgerRow(Contract):
+    """A real contract fixture for generic nested persistence."""
+
+    __schema_stem__: ClassVar[str] = "nested-ledger-row"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-04",
+            change="Initial shape: lists and an optional nested item.",
+            why="Both ledger engines need one generic recursive fixture.",
+        ),
+    )
+
+    labels: list[str]
+    items: list[NestedLedgerItem]
+    optional_item: NestedLedgerItem | None = None
+
+
+class LegacyNestedLedgerItem(Model):
+    """The nested item spelling an earlier build wrote."""
+
+    old_name: str
+
+
+class LegacyNestedLedgerRow(Contract):
+    """The bounded older nested payload used to prove read-side migration."""
+
+    __schema_stem__: ClassVar[str] = "nested-ledger-migration"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-03",
+            change="Initial shape: a nested item uses old_name.",
+            why="The fixture records the earlier spelling the current reader migrates.",
+        ),
+    )
+
+    items: list[LegacyNestedLedgerItem]
+
+
+class MigratedNestedLedgerItem(Model):
+    """The current nested item, including its read-side field migration."""
+
+    name: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _the_old_name_still_reads(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "old_name" in data and "name" not in data:
+            migrated = dict(data)
+            migrated["name"] = migrated.pop("old_name")
+            return migrated
+        return data
+
+
+class MigratedNestedLedgerRow(Contract):
+    """The current shape of the bounded nested migration fixture."""
+
+    __schema_stem__: ClassVar[str] = "nested-ledger-migration"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-04",
+            change="Nested item old_name is renamed to name.",
+            why="A row written by the earlier fixture must still validate on read.",
+        ),
+        *LegacyNestedLedgerRow.__changelog__,
+    )
+
+    items: list[MigratedNestedLedgerItem]
 
 
 def _every_column_rows() -> list[Contract]:
@@ -204,6 +280,63 @@ def test_every_column_type_comes_back_equal_and_in_order(fmt: Format, tmp_path: 
 
     assert len(written) == 1
     assert ledger.load(written, model=EveryColumn) == rows
+
+
+@pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
+def test_nested_contract_comes_back_through_the_public_door(fmt: Format, tmp_path: Path) -> None:
+    rows = [
+        NestedLedgerRow(
+            version=NestedLedgerRow.schema_version(),
+            labels=["first", "second"],
+            items=[NestedLedgerItem(name="one", tier=Tier.RAW)],
+            optional_item=NestedLedgerItem(name="held", tier=Tier.COMPACT),
+        ),
+        NestedLedgerRow(
+            version=NestedLedgerRow.schema_version(),
+            labels=[],
+            items=[],
+            optional_item=None,
+        ),
+    ]
+
+    written = ledger.persist(
+        tmp_path,
+        rows,
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-10-04",
+        identity=_identity(),
+        fmt=fmt,
+    )
+
+    assert ledger.load(written, model=NestedLedgerRow) == rows
+    stored = _stored(written[0])
+    assert stored[0]["items"] == [{"name": "one", "tier": "raw"}]
+    assert stored[1]["labels"] == []
+    assert stored[1]["items"] == []
+    assert stored[1]["optional_item"] is None
+
+
+@pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
+def test_nested_read_side_migration_runs_under_both_engines(fmt: Format, tmp_path: Path) -> None:
+    legacy = LegacyNestedLedgerRow(
+        version=LegacyNestedLedgerRow.schema_version(),
+        items=[LegacyNestedLedgerItem(old_name="kept")],
+    )
+    written = ledger.persist(
+        tmp_path,
+        [legacy],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-10-04",
+        identity=_identity(),
+        fmt=fmt,
+    )
+
+    assert ledger.load(written, model=MigratedNestedLedgerRow) == [
+        MigratedNestedLedgerRow(
+            version=LegacyNestedLedgerRow.schema_version(),
+            items=[MigratedNestedLedgerItem(name="kept")],
+        )
+    ]
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
@@ -347,7 +480,11 @@ def test_pack_v8_packs_the_worked_example() -> None:
 
 def test_a_file_id_sorts_by_its_clock_across_milliseconds() -> None:
     unit = filenames.unit_id(
-        ledger="visual-prunes", covers="2026-09-24", run_id=A_RUN, job="run-tasks", shard=3,
+        ledger="visual-prunes",
+        covers="2026-09-24",
+        run_id=A_RUN,
+        job="run-tasks",
+        shard=3,
         producer="tests.ledger",
     )
     earlier = filenames.file_id(unit=unit, attempt=2, written_at_ms=1_790_200_000_431)
@@ -432,7 +569,9 @@ def test_a_compact_write_covers_its_period_and_keeps_every_rows_own_identity(
     )
     envelope = ledger.read_envelope(written)
 
-    assert written.relative_to(tmp_path).as_posix() == "compact/visual-prunes/monthly/2026/08.parquet"
+    assert (
+        written.relative_to(tmp_path).as_posix() == "compact/visual-prunes/monthly/2026/08.parquet"
+    )
     assert (envelope.tier, envelope.period, envelope.built_from) == (
         Tier.COMPACT,
         Period.MONTHLY,
@@ -587,7 +726,11 @@ def test_one_file_holds_rows_of_one_contract(tmp_path: Path) -> None:
 
     with pytest.raises(TypeError, match="one file holds rows of one contract"):
         ledger.persist(
-            tmp_path, mixed, ledger=LedgerName.VISUAL_PRUNES, covers="2026-09-24", identity=_identity()
+            tmp_path,
+            mixed,
+            ledger=LedgerName.VISUAL_PRUNES,
+            covers="2026-09-24",
+            identity=_identity(),
         )
 
 
