@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import calendar
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -29,9 +28,6 @@ def packing_paths(state_dir: Path, which: LedgerName, months: Sequence[str]) -> 
         )
     )
     for month in sorted(set(months)):
-        year, number = map(int, month.split("-"))
-        for day in range(1, calendar.monthrange(year, number)[1] + 1):
-            paths.add(ledger.raw_index_path(state_dir, which, f"{month}-{day:02d}"))
         for period, covers in ((Period.MONTHLY, month), (Period.YEARLY, month[:4])):
             for fmt in Format:
                 paths.add(ledger.compact_path(state_dir, which, period, covers, fmt=fmt))

@@ -30,7 +30,6 @@ from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.file_listing import FileListing
-from idhazh.ledger.paths import INDEX_DIRNAME
 from idhazh.site_weight import SiteSize
 
 logger = logging.getLogger(__name__)
@@ -235,14 +234,12 @@ def files_named(listing: FileListing, root: Path, suffix: str | None = None) -> 
 def raw_days(listing: FileListing, state_dir: Path, which: LedgerName) -> list[str]:
     """Every UTC day a ledger has a raw folder with something in it for, oldest first.
 
-    The twin of `ledger.raw_days`: the `index/` folder is passed over, and any
-    other name that is not a `YYYY/MM/DD` folder is named in a warning.
+    The twin of `ledger.raw_days`: a name that is not a `YYYY/MM/DD` folder is
+    named in a warning.
     """
     root = ledger.raw_root(state_dir, which)
     days: set[str] = set()
     for parts in _below(listing, root):
-        if parts[0] == INDEX_DIRNAME and len(parts) > 1:
-            continue
         if (
             len(parts) > 3
             and day_partition.is_segment(parts[0], day_partition.YEAR_WIDTH)
@@ -256,34 +253,6 @@ def raw_days(listing: FileListing, state_dir: Path, which: LedgerName) -> list[s
             root.joinpath(*parts).relative_to(listing.repo_root).as_posix(),
         )
     return sorted(days)
-
-
-def listed_days(listing: FileListing, state_dir: Path, which: LedgerName) -> list[str]:
-    """Every UTC day a raw listing of this ledger sits under `index/` for, oldest first.
-
-    The twin of `ledger.listed_days`: a name that is not a `<YYYY-MM-DD>.json`
-    listing is left out with a warning.
-    """
-    folder = ledger.raw_root(state_dir, which) / INDEX_DIRNAME
-    found: list[str] = []
-    for parts in _below(listing, folder):
-        path = folder.joinpath(*parts)
-        try:
-            if (
-                len(parts) != 1
-                or path.suffix != ".json"
-                or ledger.raw_index_path(state_dir, which, path.stem) != path
-            ):
-                raise ValueError("not a day's listing")
-        except ValueError as refusal:
-            logger.warning(
-                "skipped a raw file path=%s reason=%s",
-                path.relative_to(listing.repo_root).as_posix(),
-                refusal,
-            )
-            continue
-        found.append(path.stem)
-    return found
 
 
 def compact_file(
