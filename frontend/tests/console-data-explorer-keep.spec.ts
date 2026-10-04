@@ -31,6 +31,15 @@ test('recent runs stay newest first and keep the history maximum', () => {
 	expect(keepRecentRun([run('one'), run('two')], { ...run('two'), rows: 99 }, 3)).toMatchObject([{ id: 'two', rows: 99 }, { id: 'one' }]);
 });
 
+test('saved questions and recent runs keep custom dates when present', () => {
+	const customSaved = { ...saved('custom'), from: '2026-04-05', end: '2026-04-12' };
+	expect(keepSavedQuestion([], customSaved, 3).items[0]).toMatchObject({ from: '2026-04-05', end: '2026-04-12' });
+	const customRun = { ...run('custom'), from: '2026-04-05', end: '2026-04-12' };
+	expect(keepRecentRun([], customRun, 3)[0]).toMatchObject({ from: '2026-04-05', end: '2026-04-12' });
+	expect(keepSavedQuestion([], saved('old'), 3).items[0]).not.toHaveProperty('from');
+	expect(keepRecentRun([], run('old'), 3)[0]).not.toHaveProperty('from');
+});
+
 test('a save name comes from the first line and the caller supplies the bound', () => {
 	expect(suggestedSaveName('   select * from seen\nwhere day = current_date', 12)).toBe('select * fro');
 	expect(suggestedSaveName('\nsecond line', 40)).toBe('');

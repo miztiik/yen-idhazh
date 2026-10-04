@@ -31,7 +31,9 @@ What the days exercise:
 - `2026-08` is one monthly file: two jobs on 2026-08-30, one on 2026-08-31.
 - `2026-08-31` is also a daily file, holding a different job. A day named by both
   indexes is read from the month, so a reader that opens both files, or the
-  wrong one, returns a row it should not.
+  wrong one, returns a row it should not. A span that starts on 2026-08-31
+  reads the month for that day alone, so a reader that keeps the whole month
+  returns 2026-08-30's two rows as well.
 - `2026-09-01`, `2026-09-02` and `2026-09-05` are daily files. 2026-09-01 holds a
   `plan` job beside two `work` jobs, so a filter has something to narrow.
 - `2026-09-03` is a zero-row day: compacted, empty, and quiet rather than a hole.

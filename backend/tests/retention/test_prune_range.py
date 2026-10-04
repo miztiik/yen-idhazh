@@ -43,7 +43,6 @@ from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health
 from ledger._every_tier import (
     CENSUS,
     FILED_DAYS,
-    QUIET_DAY,
     RAW_DAYS,
     a_census_in_every_tier,
 )
@@ -55,7 +54,7 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.telemetry import door_prune, prune
@@ -606,36 +605,11 @@ def the_range() -> list[str]:
     return [(first + timedelta(days=step)).isoformat() for step in range((last - first).days + 1)]
 
 
-def a_left_listing(state: Path, day: str) -> None:
-    """A raw listing for one packed day, as an older compaction left it."""
-    path = ledger.raw_index_path(state, CENSUS, day)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        RawDayIndex(
-            version=RawDayIndex.schema_version(),
-            ledger=CENSUS,
-            date=day,
-            files=[],
-            content_sha256=hashlib.sha256(b"").hexdigest(),
-            listed_at="2026-03-05T00:00:00Z",
-        ).to_json(),
-        encoding="ascii",
-        newline="\n",
-    )
-
-
 @pytest.fixture(scope="module")
 def every_tier(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """One census in every kind of file, built once for this module and copied by each test.
-
-    Each packed day of the range also keeps the listing an older compaction left,
-    because the prune still deletes the listing of a day it takes.
-    """
+    """One census in every kind of file, built once for this module and copied by each test."""
     root = tmp_path_factory.mktemp("every-tier")
-    state = a_census_in_every_tier(root)
-    for day in the_range():
-        if day not in RAW_DAYS:
-            a_left_listing(state, day)
+    a_census_in_every_tier(root)
     return root
 
 
@@ -704,16 +678,11 @@ def test_a_range_taken_out_of_a_ledger_on_the_door_takes_its_rows_and_no_other(
     day, so each kind of file is rebuilt or deleted, and the year file and the raw
     days each keep a day outside it. Every index and watermark still loads, no
     day reads as a hole, and no watermark moves, because nothing was compacted.
-    A taken day's listing goes with it; a day in the range that held no row
-    keeps its own.
     """
     state = a_copy(every_tier, tmp_path / "checkout")
     before = census_by_day(state)
     marks = watermarks(state)
-    taken_listing = ledger.raw_index_path(state, CENSUS, "2026-02-10")
-    quiet_listing = ledger.raw_index_path(state, CENSUS, QUIET_DAY)
     assert set(before) == set(FILED_DAYS), "the built census is not the one this test reads"
-    assert taken_listing.is_file() and quiet_listing.is_file()
 
     outcome = prune_range(
         state,
@@ -732,8 +701,6 @@ def test_a_range_taken_out_of_a_ledger_on_the_door_takes_its_rows_and_no_other(
     assert watermarks(state) == marks, "a prune moved a watermark"
     assert ledger.list_ledger_files(state, CENSUS).holes == ()
     assert ledger.list_raw_files(state, CENSUS, days=[RAW_DAYS[0]]) == []
-    assert not taken_listing.exists(), "a taken day kept its listing"
-    assert quiet_listing.is_file(), "a day in the range that held no row lost its listing"
     assert outcome.removed and outcome.rewritten and outcome.bytes_freed > 0
 
 
@@ -1085,7 +1052,7 @@ def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_ag
 
     The failure is injected the way the CSV test above injects it: the real
     change runs for every file but the third, so the tree is the one a file
-    system that refused one delete leaves. The record names the first two
+    system that refused one change leaves. The record names the first two
     paths of the dry run's list, and the first day of the range as the place
     the next pass starts, because no day was finished.
     """
@@ -1118,8 +1085,12 @@ def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_ag
     monkeypatch.undo()
 
     so_far = stop.value.so_far
+    first_two = (*planned.removed, *planned.rewritten)[:2]
     assert changes == 3, "the pass kept changing files after a failure"
-    assert (so_far.taken, so_far.written) == (planned.removed[:2], ())
+    assert (so_far.taken, so_far.written) == (
+        tuple(path for path in first_two if path in planned.removed),
+        tuple(path for path in first_two if path in planned.rewritten),
+    )
     assert (so_far.stopped_because, so_far.resume_from) == (StopReason.FAILED, SINCE)
     for state in (stopped, whole):
         prune_range(

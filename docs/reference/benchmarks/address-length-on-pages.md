@@ -4,7 +4,7 @@
 
 How long a Records page address can be before GitHub Pages refuses it, and how long an ASCII question can be while still fitting a shared link.
 
-GitHub Pages answered a request target of 8,192 bytes and refused 8,193 bytes. For this page, that means the largest ASCII statement that fits a worst-case link is 5,782 characters. ASCII means one byte per character; non-ASCII text can still fit, but this number does not promise it.
+GitHub Pages answered a request target of 8,192 bytes and refused 8,193 bytes. For this page, that means the largest ASCII statement that fits a worst-case custom-date link is 5,776 characters. ASCII means one byte per character; non-ASCII text can still fit, but this number does not promise it.
 
 ## Conditions
 
@@ -60,7 +60,7 @@ The origin, `https://miztiik.github.io`, is 25 bytes. Removing it leaves the req
 
 ## Query size in force
 
-The Records page link must leave room for the path, every ledger name, the widest span preset and row 6's future `end=YYYY-MM-DD` field. The address writer uses `URLSearchParams`, so each comma between ledgers is `%2C`, three bytes.
+The Records page link must leave room for the path, every ledger name and a custom span with `from=YYYY-MM-DD` and `end=YYYY-MM-DD`. The address writer uses `URLSearchParams`, so each comma between ledgers is `%2C`, three bytes.
 
 | Part | Bytes |
 | --- | ---: |
@@ -68,23 +68,23 @@ The Records page link must leave room for the path, every ledger name, the wides
 | `?ledgers=` | 9 |
 | All 24 ledger names | 361 |
 | The 23 encoded commas, two extra bytes each over a raw comma | 46 |
-| `&days=90` | 8 |
-| `&end=YYYY-MM-DD` reserved for row 6 | 15 |
+| `&from=YYYY-MM-DD` | 16 |
+| `&end=YYYY-MM-DD` | 15 |
 | `&q=` | 3 |
-| Fixed total before the encoded question | 476 |
-| Space left under 8,192 bytes | 7,716 |
+| Fixed total before the encoded question | 499 |
+| Space left under 8,192 bytes | 7,693 |
 
 A stored `deflate-raw` block for an incompressible ASCII statement costs the statement bytes plus a 5-byte header. Base64url without padding needs at most `ceil(4 * bytes / 3)` characters. The largest `n` that fits is:
 
 ```text
-476 + ceil(4 * (n + 5) / 3) <= 8192
-ceil(4 * (5782 + 5) / 3) = 7716
-476 + 7716 = 8192
-ceil(4 * (5783 + 5) / 3) = 7718
-476 + 7718 = 8194, which is 2 bytes too long
+499 + ceil(4 * (n + 5) / 3) <= 8192
+ceil(4 * (5776 + 5) / 3) = 7693
+499 + 7693 = 8192
+ceil(4 * (5777 + 5) / 3) = 7694
+499 + 7694 = 8193, which is 1 byte too long
 ```
 
-So the current answer is 5,782 ASCII characters. The test `frontend/tests/console-data-explorer-address.spec.ts` binds this number to the real encoder by writing a 5,782-character printable ASCII statement, adding every ledger name, using the 90-day preset and reserving 15 bytes for `end=YYYY-MM-DD`.
+So the current answer is 5,776 ASCII characters. The test `frontend/tests/console-data-explorer-address.spec.ts` binds this number to the real encoder by writing a 5,776-character printable ASCII statement, adding every ledger name and using a custom span with `from` and `end`.
 
 ## What would make this stale
 

@@ -1,8 +1,7 @@
-"""Is a day proven only from stored files that check out, never from a stale listing?"""
+"""Is a day proven only from stored files that check out?"""
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 import pytest
@@ -11,7 +10,7 @@ from conftest import SEED_COMMIT
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period
-from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex
+from idhazh.contracts.ledger_index import CompactIndex
 from utilities.ledger_migration import (
     phases,
     planning,
@@ -39,7 +38,7 @@ from ._fixtures import (
 pytestmark = pytest.mark.contract
 
 
-def test_old_raw_listing_does_not_block_a_late_csv_key_in_a_packed_root(tmp_path: Path) -> None:
+def test_a_late_csv_key_in_a_packed_root_is_written_proven_and_retired(tmp_path: Path) -> None:
     state = tmp_path / "state"
     config_dir = config_beside(state)
     first = item_row(OLD, "ai-01", machine=True)
@@ -54,21 +53,6 @@ def test_old_raw_listing_does_not_block_a_late_csv_key_in_a_packed_root(tmp_path
         months=MONTHS,
     )
     phases.write_roots(planning.plan_roots(inputs))
-    missing = "019f75f0-4bb0-835b-8c7e-824db9007c61.parquet"
-    listing = ledger.raw_index_path(state, ITEM, OLD)
-    listing.parent.mkdir(parents=True, exist_ok=True)
-    listing.write_text(
-        RawDayIndex(
-            version=RawDayIndex.schema_version(),
-            ledger=ITEM,
-            date=OLD,
-            files=[missing],
-            content_sha256=hashlib.sha256(missing.encode()).hexdigest(),
-            listed_at=f"{OLD}T12:00:00Z",
-        ).to_json(),
-        encoding="ascii",
-        newline="\n",
-    )
     late = item_row(OLD, "ai-02", machine=True)
     source = write_csv(state, ITEM, OLD, writer_file_name(OLD, 2, ServerJob.WORK), [late.csv_row()])
     phases.write_roots(planning.plan_roots(inputs))

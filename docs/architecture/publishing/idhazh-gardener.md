@@ -98,7 +98,11 @@ shape, on one line:
 `{"any_active_task":false,"matrix":{"include":[]},"shard_count":0,"shards":[]}`.
 The workflow reads three of those keys - `any_active_task`, `shard_count` and
 `matrix` - and `backend/tests/contracts/test_gardener_plan_matrix.py` fails if
-it reads a key the model does not declare.
+it reads a key the model does not declare. Each leg of `matrix` carries its
+shard's number and task names, and the `run-tasks` job's name lists them, for
+example `shard 0: compact-feed-health, traces`, so a run's page shows what every
+shard ran without opening a job; the workflow holds that format and never a
+list of tasks.
 
 **The job graph.** Three jobs, in order. `plan` prints the shards, one
 `run-tasks` job runs each shard - all of them at once - and `history` runs the
@@ -131,7 +135,6 @@ flowchart TB
 
   subgraph TREE["The committed tree - state/"]
     RAW[("state/raw/ledger/YYYY/MM/DD/file_id.parquet")]
-    RIDX[("state/raw/ledger/index/YYYY-MM-DD.json")]
     COMPACT[("state/compact/ledger/daily, monthly, index")]
     WM[("watermark.json, one for each period")]
   end
@@ -158,8 +161,7 @@ flowchart TB
   LOST --> HIST
   IDLE --> HIST
   REAPPLY -->|"the record, and every live task's files"| RAW
-  RAW -->|"a live compaction lists a due day"| RIDX
-  RIDX -->|"then takes it into its day file"| COMPACT
+  RAW -->|"a live compaction takes a due day into its day file"| COMPACT
   COMPACT -->|"watermark moved last"| WM
   WM -.->|"Next compaction reads the updated watermark"| RUN
 
@@ -177,7 +179,7 @@ flowchart TB
   class OK yes;
   class OUTSIDE,LOST,ALARM no;
   class IDLE warn;
-  class RAW,RIDX,COMPACT,WM ledger;
+  class RAW,COMPACT,WM ledger;
   class OPS sysOps;
   class TREE sysPublish;
 ```

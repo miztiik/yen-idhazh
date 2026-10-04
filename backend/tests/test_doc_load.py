@@ -211,6 +211,46 @@ def test_a_placeholder_in_a_worked_example_names_no_page(tmp_path: Path) -> None
     assert doc_load.faults(tmp_path, ["docs/how-to/distil.md"]) == {}
 
 
+def test_a_web_address_is_not_a_missing_page(tmp_path: Path) -> None:
+    """A page on another site is not ours to judge. The tool never reads the network."""
+    page(
+        tmp_path,
+        "docs/reference/source.md",
+        WELL_FORMED.replace(
+            "- nothing",
+            "- [protocol](https://example.org/a/PROTOCOL.md),"
+            " [spec](https://example.org/b/SPEC.md#versions) and [gone](missing.md)",
+        ),
+    )
+
+    found = doc_load.faults(tmp_path, ["docs/reference/source.md"])["docs/reference/source.md"]
+
+    assert found == ["links to a page that is not there: missing.md"]
+
+
+def test_a_drive_letter_is_read_as_a_path_and_not_as_a_scheme() -> None:
+    """`C:` opens the way `https:` does, but a drive in a link is a path to judge."""
+    assert doc_load.names_a_page_here("C:/docs/page.md")
+
+
+def test_a_web_address_never_lands_on_a_page_here(tmp_path: Path) -> None:
+    """Read as a path, the `..` in an address climbs back into the tree to a named page."""
+    page(tmp_path, "docs/reference/target.md", WELL_FORMED)
+    page(
+        tmp_path,
+        "docs/concepts/source.md",
+        WELL_FORMED.replace(
+            "- nothing", "- [x](https://example.org/../../../reference/target.md#nowhere)"
+        ),
+    )
+    named = ["docs/concepts/source.md", "docs/reference/target.md"]
+
+    inbound = {row[1]: row[4] for row in doc_load.measure(tmp_path, named)}
+
+    assert inbound["docs/reference/target.md"] == 0, "a link from another site is not ours"
+    assert doc_load.faults(tmp_path, named) == {}
+
+
 def test_a_see_also_carrying_no_link_is_the_same_dead_end(tmp_path: Path) -> None:
     """Backticked repo paths look like a way out and cannot be clicked."""
     page(
@@ -225,6 +265,18 @@ def test_a_see_also_carrying_no_link_is_the_same_dead_end(tmp_path: Path) -> Non
     ]
 
     assert any("carries no link" in f for f in found)
+
+
+def test_a_see_also_whose_only_link_is_a_web_address_is_a_way_out(tmp_path: Path) -> None:
+    """A link to another site can be clicked, so it is not the dead end."""
+    page(
+        tmp_path,
+        "docs/concepts/elsewhere.md",
+        "# Elsewhere\n\n**Last Updated**: 2026-09-20\n\nOne answer.\n\n"
+        "## See also\n\n- [the protocol](https://example.org/a/PROTOCOL.md)\n",
+    )
+
+    assert doc_load.faults(tmp_path, ["docs/concepts/elsewhere.md"]) == {}
 
 
 def test_a_link_whose_capitals_are_wrong_is_found(tmp_path: Path) -> None:
