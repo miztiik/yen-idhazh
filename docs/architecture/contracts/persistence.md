@@ -95,6 +95,22 @@ The paths come back ascending by the day each file covers, never by path string.
 
 **A file this build cannot read is skipped, with one warning that names it**: a newer row shape, a row today's model refuses, a file that is not a ledger file, or one whose envelope names another ledger or another day than the folder it sits in. Only `ValueError` is caught. A missing parquet engine raises `ImportError`, and that stops the run, because skipping every file for it would read as a ledger with no history. For the retirements the direction is the safe one: a skipped file costs one request to an address that is probably still gone, and the next run files it again. **The compaction never skips**: `read_day_files` stops that day, because a file it could not read would be deleted unread.
 
+## What an index entry says
+
+`state/compact/<ledger>/index/<period>.json` is a `CompactIndex`, declared in `backend/idhazh/contracts/ledger_index.py`: the ledger, the period, and one entry for each period the packing recorded, ascending by what it covers. One entry carries six fields.
+
+| Field | What it says |
+| --- | --- |
+| `covers` | The UTC day, month or year the entry is for, at the index's own period |
+| `rows`, `bytes` | How many rows the period's file holds and its size, so a reader can check a file before it reads it. Both are 0 for an entry with no file |
+| `state` | `packed`: the period's rows are in its file. `empty`: the period held no row, so no file was written. `lost`: the day's rows could not be recovered, so it has no file and no record. Only a daily entry is `lost`; a month or a year lists the days it lost in `lost_days` |
+| `lost_days` | The UTC days inside a monthly or yearly entry whose rows were recorded lost, ascending. Always empty on a daily entry, where a lost day is a `lost` entry of its own |
+| `set_aside` | How many files were moved aside unread while the period was packed. The period's file holds every other row |
+
+**An empty or a lost period is an entry with no file, never a missing entry.** So a reader tells three things apart without opening a file: a quiet day (`empty`, or `rows: 0`), a day with no record (`lost`, or listed in its month's or year's `lost_days`), and a hole - a day between packed days that no entry names, which is a fault ([ledger-compaction.md](../publishing/ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)). A lost day reaches a panel as a day with no record, never as a day with no rows ([how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#which-files-a-span-reads)).
+
+**An index written before entries had a state reads as all `packed`.** The three later fields default to `packed`, no lost day and nothing set aside, so no committed index is rewritten, and a zero-row file written earlier stays a valid `packed` entry. The contract refuses an `empty` or `lost` entry that counts rows or bytes, a `lost` month or year, `lost_days` on a daily entry, and a lost day outside its entry's period, out of order or named twice.
+
 ## Reading a whole ledger
 
 **A ledger the compaction tends is read from up to four kinds of file, and each date from exactly one.** `backend/idhazh/ledger/ledger_files.py` asks the compact indexes what exists: a date whose year `index/yearly.json` names is read from that year's file; else a date whose month `index/monthly.json` names is read from that month's file; else a date `index/daily.json` names is read from that day's file; else it is read from that day's raw files. The raw files of a day an index already names are a re-run's, waiting for the next compaction, and are not read. A date two indexes name is read from the coarser, with a warning, so a pass that stopped between writing a period and deleting what it absorbed cannot count a row twice.
@@ -110,6 +126,8 @@ The paths come back ascending by the day each file covers, never by path string.
 **`load_days` settles each day on its own**, as the CSV reader settled a day. So a key that carries no date - the eval ledger's - is settled within a day and never across days. The writer is what keeps one measurement off two days: it files a measurement only once.
 
 **A hole is served and reported.** From the first day the compact periods cover to the newest day they reach, every day must be named. A day that is not is a hole: its rows went somewhere no reader finds them. It is logged by name, and any raw files it still has are read. An index this build cannot read is read as absent, with a warning, so the reader serves the raw files it can still find rather than nothing.
+
+**An entry with no file serves its days with no rows.** The reader looks for no file for an `empty` period or a `lost` day, so neither is `file-missing`, and neither is a hole, because an index names it. A day an index records lost is one warning a read, naming the days, because nothing is missing that a re-pack could restore. `CompactEntry.names_file` is the one reading of whether an entry has a file, and `backend/idhazh/evals/observation_migration.py` takes it too.
 
 `ledger.load_retirements` and `ledger.load_visual_prunes` read this way and keep their signatures. Both ask about their ledger's whole history, which violates the fixed-size input rule in [CLAUDE.md](../../../CLAUDE.md) Guardrail #12. A reader of item-health, summary-quality-evals or host-fingerprint names its days and calls `load_days`; one that calls `load_ledger_rows` is asking about the whole history and must use a fixed-size input.
 

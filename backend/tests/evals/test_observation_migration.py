@@ -197,6 +197,59 @@ def test_every_compact_row_and_late_raw_row_contributes_its_current_id(
     assert packed.exists() and all(path.exists() for path in late)
 
 
+@pytest.mark.parametrize("name", ["an-empty-day", "a-lost-day"])
+def test_a_day_whose_entry_names_no_file_is_not_a_missing_evaluation_file(
+    tmp_path: Path, name: str
+) -> None:
+    """A reader that treats every entry as a file refuses this tree as missing a file.
+
+    The committed sample names packed days around an `empty` or a `lost` one, which
+    has no file. Only the packed days are written, and only their rows are read.
+    """
+    state = tmp_path / "state"
+    sample = CompactIndex.from_json(
+        (CONTRACT_FIXTURES_DIR / "compact-index" / f"{name}.json").read_text("utf-8")
+    )
+    packed_rows = [
+        a_row(entry.covers, number=number)
+        for number, entry in enumerate(sample.entries)
+        if entry.names_file
+    ]
+    for row in packed_rows:
+        original = file_rows(state, [row])
+        ledger.persist_period(
+            state,
+            ledger.load_stored(original, model=EvalRow),
+            model=EvalRow,
+            ledger=LedgerName.SUMMARY_QUALITY_EVALS,
+            period=Period.DAILY,
+            covers=row.date,
+            identity=writer_identity("2026-09-28-1", producer="tests.observation-compaction"),
+            built_from=len(original),
+        )
+        for path in original:
+            path.unlink()
+    for which in Period:
+        index = (
+            sample.model_copy(update={"ledger": LedgerName.SUMMARY_QUALITY_EVALS})
+            if which is sample.period
+            else CompactIndex.model_validate(
+                {"ledger": LedgerName.SUMMARY_QUALITY_EVALS, "period": which, "entries": []}
+            )
+        )
+        path = ledger.compact_index_path(state, LedgerName.SUMMARY_QUALITY_EVALS, which)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(index.to_json().encode("ascii"))
+    historical = "a" * 64
+    legacy_file(state, "2026/07/settled.csv", [historical])
+
+    result = migrate(state, load_observation_lookup())
+
+    wanted = {historical} | {row_digest(row) for row in packed_rows}
+    assert recorded(state, wanted) == wanted
+    assert result.evaluation_rows_read == len(packed_rows) == 2
+
+
 def test_existing_lookup_requires_explicit_verification_and_keeps_extra_history(tmp_path: Path) -> None:
     state = tmp_path / "state"
     needed, earlier = "a" * 64, "b" * 64
