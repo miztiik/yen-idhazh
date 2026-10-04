@@ -311,6 +311,21 @@
           "suffix": null
         }
       ]
+    },
+    {
+      "name": "run-plan",
+      "lifecycle_status": "active",
+      "description": "The ranked plan that a UTC day hands to its later pipeline stages.",
+      "onboarded": "2026-10-05",
+      "ledgers": [
+        {
+          "name": "run-plan",
+          "grain": "raw-and-compact",
+          "prefix": ["run-plan"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
     }
   ]
 }
