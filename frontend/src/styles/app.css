@@ -27,6 +27,12 @@
 	--color-accent-strong: var(--color-accent-strong);
 	--color-on-accent: var(--color-on-accent);
 	--color-mark: var(--color-mark);
+	--color-code-ground: var(--code-ground);
+	--color-code-text: var(--code-text);
+	--color-code-keyword: var(--code-keyword);
+	--color-code-string: var(--code-string);
+	--color-code-number: var(--code-number);
+	--color-code-comment: var(--code-comment);
 	--color-band-high: var(--band-high);
 	--color-band-medium: var(--band-medium);
 	--color-band-low: var(--band-low);

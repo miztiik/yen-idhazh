@@ -91,7 +91,18 @@ The console knobs are:
 - `console.source_rows`
 - `console.feed_rows`
 - `console.completeness_grace_days`
-- `console.data_explorer_tab`
+- `console.explorer_row_page`
+- `console.explorer_max_rows`
+- `console.explorer_max_fetch_bytes`
+- `console.explorer_query_max_chars`
+- `console.explorer_rail_rem`
+- `console.explorer_editor_lines`
+- `console.explorer_strip_shown`
+- `console.explorer_table_max_vh`
+- `console.explorer_cell_max_ch`
+- `console.explorer_bar_spread_share`
+- `console.explorer_counter_from_share`
+- `console.explorer_examples`
 - `console.judged_panel_ids`
 - `console.plot_min_fill_share`
 - `console.machine_colour_stops`
@@ -111,12 +122,7 @@ failures cost the most articles, and the feeds that failed at least once. Both
 state their tail in one sentence rather than offering more rows, because a
 ranking is read from the top and a tail is a number, not a page.
 
-`data_explorer_tab` (false) decides whether the strip draws its sixth tab,
-Records, which opens `/console/data-explorer/`. The band carries that route
-either way. The flag stays off until the page exists, because a tab pointing at
-a page that is not there is worse than no tab, and the change that ships the
-page deletes it
-([../../architecture/publishing/console.md](../../architecture/publishing/console.md#the-console-is-five-routes-and-a-sixth-is-declared)).
+The Records route reads the `console.explorer_*` knobs. They bound the SQL editor, the row cap, the fetch ceiling, the answer table and the example questions. `console.explorer_max_fetch_bytes` is 64 MiB: re-summed 2026-10-03 from the seven packed published ledgers at 15,782,599 bytes, or 15.0 MiB, so it refuses no span possible today. A local Chromium reading on Windows with the CPU slowed 4x ran the widest 90-day count query three times without stalling; the pull request records the three timings and long-task list. The action line prints the bytes the page keeper still holds, not the sum of every call's possible fetch cost, so a byte-range year file does not inflate the reload total.
 
 `window_presets` is the list of spans the console's window control offers, and
 one control sets the span for every section that follows it. Five presets rather

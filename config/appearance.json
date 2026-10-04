@@ -26,7 +26,6 @@
     "completeness_grace_days": 1,
     "context_cut_off_reason": "length",
     "context_high_percentile": 99.0,
-    "data_explorer_tab": false,
     "default_window_days": 14,
     "doubt_rows": 10,
     "failure_list_max": 25,
@@ -36,7 +35,9 @@
     "fleet_dot_max_px": 8,
     "fleet_min_rows": 160,
     "fleet_top_kinds": 4,
-    "judged_panel_ids": ["platform-mix"],
+    "judged_panel_ids": [
+      "platform-mix"
+    ],
     "machine_colour_floor_share": 0.4,
     "machine_colour_stops": 5,
     "max_window_days": 366,
@@ -61,17 +62,29 @@
         },
         {
           "id": "where-the-time-went",
-          "panels": ["shard-board", "tail-trend"],
+          "panels": [
+            "shard-board",
+            "tail-trend"
+          ],
           "title": "Where the time went"
         },
         {
           "id": "how-close-to-the-limits",
-          "panels": ["memory-board", "memory-held", "context-headroom"],
+          "panels": [
+            "memory-board",
+            "memory-held",
+            "context-headroom"
+          ],
           "title": "How close we are to the limits"
         },
         {
           "id": "what-the-model-spends",
-          "panels": ["article-cost", "prompt-reuse", "read-against-written", "counterfactual-cost"],
+          "panels": [
+            "article-cost",
+            "prompt-reuse",
+            "read-against-written",
+            "counterfactual-cost"
+          ],
           "title": "What the model spends"
         }
       ],
@@ -93,6 +106,16 @@
           ],
           "title": ""
         }
+      ],
+      "data-explorer": [
+        {
+          "id": "data-explorer",
+          "panels": [
+            "data-explorer-ask",
+            "data-explorer-rows"
+          ],
+          "title": ""
+        }
       ]
     },
     "plot_min_fill_share": 0.85,
@@ -110,7 +133,71 @@
       30,
       90
     ],
-    "zoom_factor": 1.5
+    "zoom_factor": 1.5,
+    "explorer_bar_spread_share": 0.5,
+    "explorer_cell_max_ch": 40,
+    "explorer_counter_from_share": 0.9,
+    "explorer_editor_lines": [
+      8,
+      20
+    ],
+    "explorer_examples": [
+      {
+        "id": "p99-by-machine",
+        "title": "p99 job time by machine kind",
+        "ledgers": [
+          "host-fingerprint"
+        ],
+        "days": 14,
+        "sql": "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds FROM \"host-fingerprint\" GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
+      },
+      {
+        "id": "throughput-by-machine",
+        "title": "Prompt throughput by machine kind",
+        "ledgers": [
+          "host-fingerprint"
+        ],
+        "days": 14,
+        "sql": "SELECT cpu_model, avg(prompt_tokens_per_second) AS prompt_throughput FROM \"host-fingerprint\" GROUP BY cpu_model ORDER BY prompt_throughput DESC"
+      },
+      {
+        "id": "feeds-gone-quiet",
+        "title": "Feeds with no good fetch in the span",
+        "ledgers": [
+          "feed-health"
+        ],
+        "days": 14,
+        "sql": "SELECT feed_url, count(*) AS checks FROM \"feed-health\" GROUP BY feed_url ORDER BY checks DESC"
+      },
+      {
+        "id": "why-items-failed",
+        "title": "What failed to summarize, and why",
+        "ledgers": [
+          "item-health"
+        ],
+        "days": 14,
+        "sql": "SELECT status, reason, count(*) AS items FROM \"item-health\" GROUP BY status, reason ORDER BY items DESC"
+      },
+      {
+        "id": "scored-per-day",
+        "title": "Summaries scored, day by day",
+        "ledgers": [
+          "summary-quality-evals"
+        ],
+        "days": 14,
+        "sql": "SELECT date, count(*) AS scored FROM \"summary-quality-evals\" GROUP BY date ORDER BY date DESC"
+      }
+    ],
+    "explorer_max_fetch_bytes": 67108864,
+    "explorer_max_rows": 1000,
+    "explorer_query_max_chars": 4000,
+    "explorer_rail_rem": 14,
+    "explorer_row_page": 50,
+    "explorer_strip_shown": [
+      3,
+      6
+    ],
+    "explorer_table_max_vh": 70
   },
   "digest": {
     "archive_page_size": 25,

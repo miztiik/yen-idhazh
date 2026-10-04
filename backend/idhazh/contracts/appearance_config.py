@@ -491,9 +491,9 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-02",
-            change="console.default_window_days 30 to 14; console.data_explorer_tab added.",
-            why="One opening span on every route, and the sixth tab waits for its page.",
+            version="2026-10-03",
+            change="console.data_explorer_tab removed; Records knobs and panel group added.",
+            why="The Records page is live and draws its own controls.",
         ),
         ChangelogEntry(
             version="2026-09-30",
