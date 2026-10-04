@@ -67,8 +67,23 @@ A ledger that goes through the ledger door files under two roots rather than one
 
 - **The nested folder name.** These ledgers sit one folder below their family, as in `content-similarity-judge/scored-pairs`. The door files a ledger under its own name, `raw/<ledger>/`, and the registry refuses any other prefix for the `raw-and-compact` grain, so it needs a rule for a nested name first.
 - **A fixed-choice field** is a field declared as `Literal[...]`, such as the judge's model name. The parquet column mapper, `ledger/arrow_schema.py`, refuses one until it learns a mapping for it.
-- **`run_id` and `shard`.** Every door file already records the `run_id` and `shard` of the job that wrote it. A row field with either name must mean the same thing, or be renamed, and a rename changes a persisted contract, which is a person's ruling (CLAUDE.md section 6, Level 5).
+- **`run_id` and `shard`.** Every door file already records the `run_id` and `shard` of the job that wrote it, and a row field with either name takes the place of the door's cell. [The rule below](#the-rule-a-judge-ledger-follows-when-it-moves) settles both for the judge ledgers: `run_id` stays and means the council run, and `shard` is renamed in the change that moves its ledger.
 - **A whole-month file.** One writer rewrites `item-health-summary`'s month file on every run, and the migrator reads only the two day layouts. It needs a month layout, or a ruling that the ledger stays CSV.
+
+### The rule a judge ledger follows when it moves
+
+A judge ledger is one the council or the similarity judge's code writes: the council's own record of each step of its night, and four of the `content-similarity-judge` ledgers above - `scored-pairs`, `fitted-thresholds`, `metrics` and `merge-line-holdout-scores`. Each follows the rule below when it moves to the door, so a reader who joins two of them meets one vocabulary.
+
+The council's own record has its door row contract already: `CouncilRunRecord` in `backend/idhazh/contracts/council_run_record.py`. It names a step and a part where the CSV row filed one `shard` number, and its `from_csv_row` reads every row the CSV filed. Nothing writes it yet.
+
+| Rule | What it requires |
+| --- | --- |
+| The row declares none of the door's names, and `run_id` only as the council run | The door writes `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id` on every row it files ([persistence.md](persistence.md#the-door)), and a row field with one of those names takes that cell's place. The council run is also the run that files a judge row, so the two agree on `run_id`. `merge-line-holdout-scores` is the one exception: a person files it with their own `score-merge-line-holdout --run-id` run, so its `run_id` is that run, which is also the door's column. |
+| A row about one part of the split names the part `work_part_index` | A row that needs the count names it `work_part_count`. `metrics` and `scored-pairs` rename their `shard` field this way when each moves; `fitted-thresholds` and `merge-line-holdout-scores` have no `shard` field. |
+| The key includes `run_id`, and `work_part_index` on a row about one part | Two runs, or two parts of one run, never settle into one record. |
+| The job that saves the council's results files the rows, through `ledger.persist` | When the first of the four judge ledgers moves, `Tenant.settle` takes the council's writer identity. A person files `merge-line-holdout-scores`, so this rule does not reach it. |
+| Rows are filed under the judged date | The `date` cell decides the file, never the day the council ran. |
+| A field is renamed in the change that moves its ledger, never earlier | An append to a CSV file under a changed header is refused (`require_matching_header` in `backend/idhazh/ledger/csv_file.py`), so a rename made while the ledger is still CSV stops the next council night. |
 
 ### The shared CSV code, and when each piece goes
 
@@ -263,6 +278,7 @@ CLAUDE.md section 11 does not apply to this file. It is a config file this proje
 - [persistence.md](persistence.md) - the ledger door: parquet and JSON lines under `state/raw/` and `state/compact/`, and how the engine is swapped.
 - [schemas.md](schemas.md) - the shape of a row, and the rule that decides whether a ledger partitions.
 - [../publishing/retention.md](../publishing/retention.md) - the passes that age old rows out, whatever a family's lifecycle status.
+- [../publishing/llm-council.md](../publishing/llm-council.md) - the council's night, its steps, and the record it keeps of each.
 - [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) - the one pattern every tree under `state/` is moving to, and why `Grain` is transitional.
 - [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input, so no walk over `state/` decides which ledgers exist.
 - [../../concepts/glossary.md](../../concepts/glossary.md) - family and ledger, each in one line.

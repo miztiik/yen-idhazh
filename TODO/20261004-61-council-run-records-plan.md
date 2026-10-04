@@ -52,7 +52,7 @@ Table C - when to stop and ask
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The council's run record has its own contract, and it reads every old row | - | A | PENDING | - | - | - |
+| 1 | The council's run record has its own contract, and it reads every old row | - | A | DONE #1294 | cautious-adventure | #1294 | Plan 61 row 1: council run record contra |
 | 2 | The council saves its run records through the ledger door | 1, plan 60 row #12 | B | PENDING | - | - | - |
 | 3 | The committed council rows move onto the door, and the old family goes | 2 | C | PENDING | - | - | - |
 | 4 | The old-row reader and the migrator's council entry are deleted | 3 | D | PENDING | - | - | - |
