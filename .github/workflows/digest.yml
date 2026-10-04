@@ -1022,22 +1022,22 @@ jobs:
             --commit "${{ github.sha }}" \
             --runner ubuntu-latest
 
-      # The training window, built here because here is the only place the text
-      # exists. `backend/var/run/<date>/items/` is gitignored and travels as a
-      # one-day artifact, so a scheduled workflow of its own would check out a
-      # fresh tree, find an empty directory and harvest nothing - silently, every
-      # week, until somebody went looking.
-      #
-      # It is still a stage that runs alone with a file in and a file out
-      # (CLAUDE.md section 4): what moved is the workflow it is invoked from, not
-      # the command. The cadence is `finetune.harvest_every_days` and the step
-      # decides for itself, because `on.schedule` is parsed before any step runs
-      # and no config value can reach a cron line.
-      #
-      # `continue-on-error`, for the reason the two worker ledger steps carry it:
-      # what this job owes a reader is the published day, and a corpus that will
-      # not build must never be what stops one.
       - name: Harvest the training corpus
+        # The training window, built here because here is the only place the text
+        # exists. `backend/var/run/<date>/items/` is gitignored and travels as a
+        # one-day artifact, so a scheduled workflow of its own would check out a
+        # fresh tree, find an empty directory and harvest nothing - silently, every
+        # week, until somebody went looking.
+        #
+        # It is still a stage that runs alone with a file in and a file out
+        # (CLAUDE.md section 4): what moved is the workflow it is invoked from, not
+        # the command. The cadence is `finetune.harvest_every_days` and the step
+        # decides for itself, because `on.schedule` is parsed before any step runs
+        # and no config value can reach a cron line.
+        #
+        # `continue-on-error`, for the reason the two worker ledger steps carry it:
+        # what this job owes a reader is the published day, and a corpus that will
+        # not build must never be what stops one.
         continue-on-error: true
         run: python -m idhazh harvest --date "${{ needs.plan.outputs.date }}"
 
