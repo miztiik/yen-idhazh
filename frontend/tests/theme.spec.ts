@@ -65,10 +65,6 @@ function dirs(at: string): string[] {
  * Discovered rather than listed: a route added later is covered without
  * anybody remembering to add it here, and a list that went stale would report
  * a pass over routes nobody loaded.
- *
- * `/evals/` is deliberately absent. It navigates to `/console/` rather than
- * rendering, so there is no settled document to read a background off - and
- * the page it lands on is in the list.
  */
 function routes(): string[] {
 	const year = dirs(CANARY).at(-1) as string;

@@ -9,8 +9,7 @@ import { join, relative, resolve, sep } from 'node:path';
  * The root layout used to return the whole latest day, and whatever a layout
  * load returns is inlined into every prerendered page beneath it. A reader
  * opening the console downloaded a day of article summaries to look at a chart:
- * 406.3 KB gzipped where 93.0 KB is the chart, and 315.6 KB against 2.4 KB on
- * `/evals/`, which draws no data at all. Measured 2026-08-26 over five
+ * 406.3 KB gzipped where 93.0 KB is the chart. Measured 2026-08-26 over five
  * published days.
  *
  * **The second rule is the one this file exists for now.** A reading document

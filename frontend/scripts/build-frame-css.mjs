@@ -3,7 +3,7 @@
  * The frame has to be right on the FIRST painted frame, so it cannot be
  * fetched. The obvious alternative - inject a style block from the layout -
  * was measured on 2026-08-29 and costs 397 to 700 gzipped bytes of JavaScript
- * on every route, including `/404` and `/evals/`, which render nothing. That is
+ * on every route, including `/404`, which renders nothing. That is
  * head-management machinery shipped to seven routes so that one config value
  * can reach CSS. The motion durations and the movement pair ride the same file
  * for the same reason.

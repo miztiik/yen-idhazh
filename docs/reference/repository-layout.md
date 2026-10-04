@@ -137,8 +137,7 @@ interface between the two halves.
 
 ## What is deliberately not a directory
 
-- **`evals/`** - folded into `state/`. The published dashboard keeps its
- `/evals/` route, because a reader's URL is a promise and a folder name is not.
+- **`evals/`** - folded into `state/`.
 - **`.github/scripts/`** - removed 2026-09-23. A program is written in Python
  under `backend/utilities/` and a workflow step calls one. Shell there needed
  its own linter in CI, a bash-on-the-host skip in every test that drove it, and
@@ -159,8 +158,7 @@ conflict on work nobody asked it to touch.
 
 `evals/` was folded into `state/` because two top-level directories were
 answering the same question: what does a run leave behind for a later reader?
-One answer, one place. The `/evals/` route survived the fold because the folder
-was an implementation detail and the URL was a promise to a reader.
+One answer, one place.
 
 **`backend/idhazh/stages/` exists because the router had eaten the work.**
 `backend/idhazh/cli.py` held the argument parser, the verb table, and the body of
@@ -219,7 +217,6 @@ filename and you know what the code inside answers, whoever calls it.
 | Ledgers under `frontend/public/` | Published to a reader, and counted against the 1 GB site cap, for data no reader wants. |
 | A top-level `schemas/` of generated JSON Schemas | Deleted 2026-09-23. It held 66 files, 61 of which were read by nothing but the gate that checked they had been generated, and it put a regenerated diff in front of about one reviewer in ten. |
 | Keeping `evals/` as its own top-level directory | A second answer to a question `state/` already answered. |
-| Renaming the `/evals/` route when the folder was folded | A reader's bookmark is a promise. A directory name is not. |
 | A shared workflow step under `backend/utilities/` | `backend/` is the producer, and a step only GitHub Actions runs is not producer code. Filing it there puts a runner detail inside the installable package and hides it from the workflow that calls it. |
 | Leaving the step duplicated in both jobs | Two copies of a retry loop, neither executable by a test. The copies had already drifted in two log strings. |
 | A `decisions/` directory of ADR files | A decision filed away from the thing it governs is a decision the next reader does not find. |

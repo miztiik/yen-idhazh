@@ -79,9 +79,8 @@ the pin had not taken and every page would throw on hydration.
 ## The oracle, and it passed on case A
 
 `npm run bundle-gate` on case A printed `/404` at **2,165 B** against the 4,400 B
-in `config/idhazh.json`, and `/evals/` at **3,238 B** against 6,600 B, and
-exited 0. Both ceilings hold with room, so the worktree is the tree these
-numbers claim to be about. Had either fired, no figure here would have been
+in `config/idhazh.json`, and exited 0. The ceiling holds with room, so the worktree is the tree these
+numbers claim to be about. Had it fired, no figure here would have been
 usable.
 
 ## The cases
@@ -97,9 +96,7 @@ usable.
 | `frontend/build/index.html` | **present** | **absent** | - |
 | `404.html` | present | present | - |
 | `/404`, `gzip -5` | 2,165 B | 2,166 B | +1 B |
-| `/evals/`, `gzip -5` | 3,238 B | **no document to weigh** | - |
 | `npm run build` exit | 0 | **1** | - |
-| `npm run bundle-gate` exit | 0 | **1** | - |
 
 **The file count difference is exactly the documents.** Eight `index.html`
 files and five `__data.json` twins come to 13, and 13 is exactly what the two
@@ -120,19 +117,17 @@ prerendered. No per-file raw diff was taken, so the 1,635,702 is not claimed to
 be the documents alone; it is the tree total, and the documents are what is in
 it that the other case has none of.
 
-## The load-bearing observation: case B has no root document, and two source comments said so first
+## The load-bearing observation: case B has no root document
 
 **`frontend/build/index.html` does not exist on case B.** `404.html` is the only
 HTML file in the tree. On GitHub Pages that means every address on the site,
 including `/`, is answered by the fallback at **HTTP 404**.
 
-Two comments in the tree predicted this before it was measured, and both were
-right to the sentence.
+A comment in the tree predicted this before it was measured.
 
 | Where | What it predicted | What case B did |
 | --- | --- | --- |
 | `frontend/src/routes/+page.server.ts` | "Without this line the site root emits no `index.html` at all and GitHub Pages answers `/` with the fallback, at HTTP 404" | No `index.html` at the site root |
-| `frontend/src/routes/evals/+page.ts` | "Without this the page is not written, `config/idhazh.json` names a `/evals/` ceiling that matches no route in the build, and `scripts/bundle-gate.mjs` fails" | `bundle gate FAILED - a guardrail in config/idhazh.json names nothing in the build: /evals/ is capped at 6.6 KB, and no page in the build is that route` |
 
 **`npm run build` itself exits 1 on case B, and that was not predicted
 anywhere.** The Vite build succeeds and `adapter-static` writes the site - the
@@ -174,8 +169,7 @@ quantity on both cases.**
 | 3 | 629 | 106,316,899 | 616 | 104,681,197 |
 
 The gate figures repeat too: `/404` at 2,165 B on all three case A builds and
-2,166 B on all three case B builds, `/evals/` at 3,238 B on all three case A
-builds and absent on all three case B builds, and `site-weight` printing 101.4 MB
+2,166 B on all three case B builds, and `site-weight` printing 101.4 MB
 in 629 files against 99.8 MB in 616 on every pass.
 
 **A zero spread is the expected result at a pinned version and is reported
@@ -197,12 +191,9 @@ Plan 26's ruling was taken on the belief that the remaining documents are a
 rounding error; at 1.54 percent that belief holds, and the ESCALATE trigger set
 at 2 percent does not fire.
 
-**Two gates fail on case B, and one of them is the project's own build record.**
-`npm run bundle-gate` fails because `/evals/` has a ceiling and no document, and
+**The project's own build record fails on case B.**
 `npm run build` fails because `build-state.ts` cannot certify a tree with no
-root document. Section 6 of plan 26 lists "re-price two page ceilings" as one
-step of a reversal; this run says the build certification is a second one it
-does not list.
+root document.
 
 ## What it does not settle
 
@@ -217,8 +208,7 @@ does not list.
   2026-09-09 - but the denominator does, so the 1.54 percent falls as the
   archive grows and this reading is its high-water mark rather than a level.
 - **Nothing about the individual routes.** Both cases treat the seven
-  declarations as one switch. Whether `/evals/` earns a document of its own is a
-  question about `/evals/`, and plan 26 section 8 already records it as a gap.
+  declarations as one switch.
 
 ## See also
 

@@ -44,7 +44,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 **As scoped: none, and the reason is that there is nothing to affect.** Checked 2026-09-11 across the tracked tree:
 
 - **No `robots.txt` is published and no sitemap is published.** `frontend/static/` holds `favicon.svg`, `manifest.webmanifest`, `service-worker-kill.json`, the fonts, the icons and the on-device encoder, and nothing else. The only `robots.txt` files in this repository are fixtures under `tests/fixtures/robots/`, which are other sites' permissions read by our fetcher.
-- **No CI job reads prerendered HTML for a crawler.** One does read it for a byte ceiling: `npm run bundle-gate` measures each named route's prerendered HTML at `gzip -5` against `page_weight.ceilings_bytes`, which names two routes - `/404` at 4,400 B and `/evals/` at 6,600 B. That is a weight gate, not a crawl surface, and no row here changes a document it measures.
+- **No CI job reads prerendered HTML for a crawler.** One does read it for a byte ceiling: `npm run bundle-gate` measures each named route's prerendered HTML at `gzip -5` against `page_weight.ceilings_bytes`, which names `/404` at 4,400 B. That is a weight gate, not a crawl surface, and no row here changes a document it measures.
 - **`.github/workflows/ci.yml` names prerender once, in a comment**, at line 101, heading the `validate-days` step. It describes what prerendering used to prove before the reading routes were split and asserts nothing about the output.
 
 **If section 6 were taken, the consequence is total and it is the strongest single argument against it.** Every address would be answered by `404.html` at HTTP 404. A crawler that obeys status codes indexes nothing, and this site's one route with any external reach is `/`. That cost is already partly paid and already written down: `docs/architecture/publishing/frontend.md` records that a crawler which does not run scripts has read a dated page down to its seed and no further since 2026-09-01, and calls it a third cost paid at the same time that no reader can see. Section 6 would extend that from the dated pages to every page.
@@ -124,7 +124,7 @@ Read 2026-09-11 from `main` at `b0e0411a`, in an isolated worktree. Every figure
 
 | Figure | Value | Read from |
 | --- | --- | --- |
-| Files declaring `export const prerender = true` | **7**, over **6** routes - `/`, `/archive/`, `/evals/`, `/console/`, `/console/machine/`, `/console/model/`. The console's layout and its three pages each declare it | `git grep -n 'export const prerender' -- frontend/src` |
+| Files declaring `export const prerender = true` | **6**, over **5** routes - `/`, `/archive/`, `/console/`, `/console/machine/`, `/console/model/`. The console's layout and its three pages each declare it | `git grep -n 'export const prerender' -- frontend/src` |
 | Routes that do not prerender | **2** - `/[date]/` and `/[date]/[vertical]/`, both `export const ssr = false` and neither declaring `prerender` | `git grep -n 'export const ssr' -- frontend/src` |
 | Documents a published day adds | **0**. Twelve until 2026-09-09 | `frontend/src/routes/[date]/+page.ts`, `docs/architecture/publishing/frontend.md` |
 | What the dated routes cost when they were prerendered | **50,598,258 bytes, 39.5 percent of the published site**, measured 2026-08-27 over six committed days and 2,237 items | `docs/architecture/publishing/retention.md` |
@@ -137,7 +137,7 @@ Read 2026-09-11 from `main` at `b0e0411a`, in an isolated worktree. Every figure
 | Files under `frontend/src` naming it | **47** | `git grep -iln prerender -- frontend/src` |
 | Mentions in `.github/workflows/ci.yml` | **1**, a comment at line 101 about what prerendering used to prove. The brief's claim, and it is correct | `git grep -in prerender -- .github/workflows/ci.yml` |
 | CI gate reading prerendered HTML | **`npm run bundle-gate`**, `ci.yml:214` | `frontend/scripts/bundle-gate.mjs:110`, `:217`, `:393` |
-| Page ceilings it holds | **2 routes** - `/404` at 4,400 B and `/evals/` at 6,600 B, `gzip -5` | `config/idhazh.json`, `page_weight.ceilings_bytes` |
+| Page ceilings it holds | **1 route** - `/404` at 4,400 B, `gzip -5` | `config/idhazh.json`, `page_weight.ceilings_bytes` |
 | `robots.txt` published | **none**. Sitemap: **none** | `git ls-files -- frontend/static` |
 | Anything asserting prerender output is byte-identical | **nothing**. Two docs record byte-identical build pairs and both pinned `BUILD_VERSION` to get them; unpinned, two builds of one unchanged tree disagree on about **20 percent of `build/` by filename** | `docs/architecture/publishing/layout.md`, `docs/architecture/publishing/retention.md`, `docs/reference/agent-notes/gates-and-builds.md` |
 | Records under `docs/reference/benchmarks/` | **0** on 2026-09-11; **3** when row #1 ran on 2026-09-12. Row #1 writes a fourth, and the directory was created by [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) row #1 (#609). Corrected by row #1, which read "Row #1 writes the first one" | `git ls-files -- docs/reference/benchmarks` |
@@ -187,7 +187,7 @@ Build the site twice from one tree - once as it stands, once with the seven `pre
 | Setup B | The same tree with the seven `export const prerender = true` lines deleted and nothing else changed. `npm run build` |
 | Document count | `(Get-ChildItem frontend/build -Recurse -Filter index.html).Count`, and the same for `__data.json` |
 | Site total | `python -m idhazh site-weight --site-tree build` on each setup - the number the 1 GB Pages cap is measured against |
-| Page ceilings | `npm run bundle-gate` on each setup, capturing the `/404` and `/evals/` figures it prints at `gzip -5` |
+| Page ceilings | `npm run bundle-gate` on each setup, capturing the `/404` figure it prints at `gzip -5` |
 | First-byte content | On setup B, whether `frontend/build/index.html` exists at all. **This is the load-bearing observation**, not a byte count: `adapter-static` has one fallback and the route comment predicts there is no root document on that setup |
 | Spread | Three builds per setup at the same pin, reporting the range. A build is deterministic at a pinned version, so a non-zero spread is itself the finding |
 
@@ -209,7 +209,7 @@ git status --porcelain frontend/src
 
 **The fixture is the tree at the commit the row runs on, and it is named in the record.** There is no smaller one: the quantity under measurement is what the whole site weighs, and a canary day cannot answer it. This is `CLAUDE.md` Guardrail #12's escape hatch used deliberately - the read is over a growing collection, it happens once, by hand, off the daily path, and its cost is written down here rather than discovered later.
 
-**The oracle for the row's own correctness is the ceiling file.** `npm run bundle-gate` on setup A must print `/404` and `/evals/` inside the 4,400 B and 6,600 B written in `config/idhazh.json`. If it does not, the worktree is not clean and no number from it is usable.
+**The oracle for the row's own correctness is the ceiling file.** `npm run bundle-gate` on setup A must print `/404` inside the 4,400 B written in `config/idhazh.json`. If it does not, the worktree is not clean and no number from it is usable.
 
 ### Decisions
 
@@ -267,7 +267,7 @@ npm run test:browser
 
 1. **No file under `frontend/` and no page under `docs/` names `handleUnseenRoutes` or imports `prerender-guard.js`.** That is a gate on the behaviour - the guard is gone from the code and from the living documentation - and it is what `git grep -l -e 'prerender-guard' -e 'handleUnseenRoutes' -- frontend docs` proves. **`TODO/` is out of scope.** A plan-doc records a reading of its own day, and five of the twelve files that name the guard today are plan-docs including this one, which no row of this plan edits. **An earlier draft of this gate asked for the name to appear nowhere outside three exempted files, and it could not pass**: the guard is named in twelve files, this row deletes two and edits three, and four of the remaining seven are plan-docs the row never opens.
 2. **`npm run build:canary` still emits six `index.html` files outside `404.html`.** Deleting a handler must not un-prerender a route, and nothing else in the suite would notice if it did.
-3. **`npm run bundle-gate` prints `/404` and `/evals/` at the same byte counts as before the change.** No document content moved, so a moved byte is a defect. Capture the before figures first.
+3. **`npm run bundle-gate` prints `/404` at the same byte count as before the change.** No document content moved, so a moved byte is a defect. Capture the before figures first.
 4. **The `publishing` browser group still runs, with one fewer spec.** A removed name that breaks the group selector fails silently and takes the other ten specs with it.
 
 ### Oracle
@@ -430,10 +430,9 @@ It removes no declaration, changes no build, and edits no other page. It does no
 
 | Step | What it touches |
 | --- | --- |
-| Delete the seven declarations | `frontend/src/routes/+page.server.ts`, `archive/+page.server.ts`, `evals/+page.ts`, `console/+layout.ts`, `console/+page.server.ts`, `console/machine/+page.server.ts`, `console/model/+page.server.ts` |
+| Delete the named declarations | `frontend/src/routes/+page.server.ts`, `archive/+page.server.ts`, `console/+layout.ts`, `console/+page.server.ts`, `console/machine/+page.server.ts`, `console/model/+page.server.ts` |
 | Answer the fallback problem | `adapter-static` has one fallback and GitHub Pages serves it at HTTP 404. Either the site accepts a 404 status on every address, or something publishes a copy of `404.html` at each address - which is prerendering with extra steps |
 | Re-home five server loads | The three console pages and `/`, `/archive/` run universal or server loads that SvelteKit executes at build time today. Each becomes a runtime fetch, with a loading state, a request budget and an error class - the three things `frontend.md` records prerendering as deleting, two of which came back on 2026-09-01 and had to be solved again |
-| Re-price two page ceilings | `page_weight.ceilings_bytes` measures prerendered HTML. With nothing prerendered, `/evals/` has no document to weigh and the gate holds one route |
 | Re-home the build certification | `frontend/scripts/build-state.ts` refuses to certify a build whose `frontend/build/index.html` is missing, so `npm run build` exits 1 with nothing prerendered even though the adapter wrote the site. Every browser spec runs against a certified build, so the whole suite stops collecting. **Found by row #1 on 2026-09-12**, which measured the exit code rather than assuming it |
 | Rewrite or delete parts of 34 browser specs | Several assert against the prerendered document by name - `console-published.spec.ts` and `console-readout.spec.ts` check that a figure is in it, `console-window.spec.ts` checks a control is disabled in it, `console-machine-page.spec.ts` checks the prerendered page prices at the configured rate, `charts.spec.ts` has a describe block for the prerendered chart, and `footer-facts.spec.ts` reads it as raw text |
 | Re-draw the console's charts in the browser | They are server-drawn SVG at a fixed `chart.width_px` because a prerendered chart has no element to measure. Moving them to the client re-opens a decision `console-charts.md` settled and costs a drawing library |
@@ -464,10 +463,9 @@ Named here so they are not mistaken for work this plan is doing.
 
 | Gap | What it is | Why it is not a row here |
 | --- | --- | --- |
-| `docs/architecture/publishing/frontend.md:9` and `:11` | A heading reading "Six documents" and a sentence reading "Six routes are generated at build time - `/`, `/archive/`, `/evals/` and the three console routes". **Both are false since 2026-09-12**: `/console/judgement/` and `/console/voices/` arrived with plan 25 row #11 (#616) and inherit prerendering from `console/+layout.ts`, so the build writes **eight** documents. The declaration count is still 7 | **Row #4 already opens this file** and is the row that should carry it, so it is named here rather than given a row of its own. Found by row #1 on 2026-09-12, which counted the documents in the build instead of the declarations in the grep. A worker taking row #4 corrects the heading, the sentence and the "123 documents become 7" figure in the paragraph under it, and says what it was corrected from |
+| `docs/architecture/publishing/frontend.md:9` and `:11` | A heading reading "Six documents" and a sentence reading "Six routes are generated at build time - `/`, `/archive/` and the three console routes". **Both are false since 2026-09-12**: `/console/judgement/` and `/console/voices/` arrived with plan 25 row #11 (#616) and inherit prerendering from `console/+layout.ts`, so the build writes **eight** documents. The declaration count is still 7 | **Row #4 already opens this file** and is the row that should carry it, so it is named here rather than given a row of its own. Found by row #1 on 2026-09-12, which counted the documents in the build instead of the declarations in the grep. A worker taking row #4 corrects the heading, the sentence and the "123 documents become 7" figure in the paragraph under it, and says what it was corrected from |
 | `TODO/20260910-25-placement-plan.md` row #6 decision 5 | A decision reading "every page here is prerendered", which is false for the two dated routes | **Corrected on 2026-09-11 by the plan that owns it**, in the same pull request that fixed this line. It is named here because a plan-doc records a reading of the day it was written, and correcting another plan's decision text from a passing sweep is how a decision loses its author - so the correction was made in plan 25 and this row records that it was |
 | `docs/how-to/run-the-gates.md:831` | Reported speech quoting a deleted gate's false docstring | Row #3 examined it and left it, with the reason. A worker who disagrees may correct the tense and say so |
-| Whether `/evals/` earns a prerendered document | It is one of the six and nobody has asked what it is for since the dashboard was built. Its ceiling is 6,600 B, the smallest on the site | This plan rules on prerendering as one decision. Whether a single route deserves its document is a question about that route |
 | A published `robots.txt` or sitemap | Neither exists. The site has no crawl instructions of any kind | It is a decision about the whole site and nothing in this plan creates a need for one. Section 0's ESCALATE trigger 6 keeps a row from adding one quietly |
 | `handleHttpError: 'warn'` | The other prerender knob in `svelte.config.js`. Nothing in this plan examined what it currently swallows | Row #2 leaves it untouched on purpose. It is a different failure and deserves its own reading |
 

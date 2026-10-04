@@ -562,8 +562,7 @@ telemetry month, then the next, because fourteen days touch at most two months -
 and each extra telemetry month is one more.
 
 **A route takes a number only if its weight does not move when a run publishes.**
-Two routes qualify - `/404` and `/evals/`, which move only when a person edits
-source.
+`/404` qualifies: it moves only when a person edits source.
 
 `/archive/` and the three `/console/` routes take none. They grow whenever the
 pipeline appends a day, so **the only way past a firing is to type a bigger

@@ -101,7 +101,7 @@ They now split by what they are a claim about.
 | `/<date>/` | 22,683 B | 22,678 B | -5 |
 | `/<date>/<topic>/` | 19,478 B | 19,437 B | -41 |
 | `/archive/` | 4,604 B | 4,599 B | -5 |
-| `/404`, `/console/`, `/console/machine/`, `/console/model/`, `/evals/` | - | - | -1 to +1 |
+| `/404`, `/console/`, `/console/machine/`, `/console/model/` | - | - | -1 to +1 |
 
 **The last row is the spread rather than a result.** Those five routes render no item and the change cannot reach them, so what they moved is what one build differs from another by: at most one byte either way. Every reading route moved further than that and all four moved down, so the split is a small saving and not a cost - the divider's markup and the eyebrow's bullet together weigh a little more than the desk chip that replaced them.
 

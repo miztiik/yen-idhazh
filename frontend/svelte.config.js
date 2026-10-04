@@ -48,8 +48,8 @@ function inlineScriptHashes() {
 // id without editing this file - see docs/reference/agent-notes.md.
 const version = process.env.BUILD_VERSION ? { name: process.env.BUILD_VERSION } : undefined;
 
-// Six routes ship a prerendered document: `/`, `/archive/`, `/evals/` and the
-// three `/console/` pages. The two dated routes ship none - they declare
+// Seven routes ship a prerendered document: `/`, `/archive/` and the
+// five `/console/` pages. The two dated routes ship none - they declare
 // `ssr = false`, so the `404.html` fallback set below answers every dated
 // address and the browser renders it. What a page fetches after that is a
 // reading-path decision and is written down once, in

@@ -94,7 +94,7 @@ const LEADS = leadingStories(FACTS.leads ?? [], orderByTime(FACTS.items)).length
  * it 404s and hydration throws. That is a preview artefact and not a fact about
  * the page, so it is driven by hand in the section 12 smoke instead.
  */
-const ROUTES = ['/', `/${DAY}/`, `/${DAY}/${TOPIC}/`, '/archive/', '/evals/'];
+const ROUTES = ['/', `/${DAY}/`, `/${DAY}/${TOPIC}/`, '/archive/'];
 
 /** A phone, the gap between two breakpoints, and a wide desktop.
  * `frame.breakpoints_px` is [640, 1024, 1400]; 801 is where a layout that was
@@ -111,7 +111,7 @@ const THEMES = ['dark', 'light'] as const;
 const DAY_PATH = `/digest/${DAY.split('-').join('/')}/digest.json`;
 
 /** Everything a visit did wrong, collected on the page rather than asserted per
- * navigation, so one walk of five routes reports every fault it found. */
+ * navigation, so one walk reports every fault it found. */
 interface Faults {
 	errors: string[];
 	failed: string[];
@@ -132,14 +132,7 @@ function watch(page: Page): Faults {
 	});
 	page.on('pageerror', (error) => found.errors.push(String(error)));
 	page.on('requestfailed', (request) => {
-		// A DOCUMENT request the browser abandoned is one navigation superseded by
-		// another, never a file the page could not get. `/evals/` is a signpost
-		// rather than a page - it carries a `meta refresh` to the console - so
-		// walking away from it always leaves one abandoned navigation behind.
-		// Everything else is on the list, and a page whose own navigation aborted
-		// fails the theme assertion in `open` before this line is read.
 		const reason = request.failure()?.errorText ?? 'no reason given';
-		if (request.resourceType() === 'document' && reason === 'net::ERR_ABORTED') return;
 		found.failed.push(`${request.url()} (${reason})`);
 	});
 	page.on('response', (response) => {
@@ -340,35 +333,6 @@ test.describe('where two rows meet', () => {
 		await expect(line, 'a thin desk does not say why it is thin').toHaveCount(1);
 		await expect(line).toContainText(String(thin!.offered));
 		await expect(line).toContainText(String(thin!.tooOld));
-	});
-
-	test('the scores address sends a reader to the console', async ({ page }) => {
-		// `/evals/` is the address the scores used to live at. It is a signpost
-		// now, and a signpost that stopped pointing anywhere is a dead reader
-		// address - which is also why every walk above leaves one abandoned
-		// navigation behind it.
-		//
-		// The landing is asserted rather than the markup: the refresh fires before
-		// a locator can read the document it fired from, so a spec that looked for
-		// the tag would be racing the very thing it is checking. It races the
-		// arrival too - the refresh aborts the navigation that delivered it, which
-		// is what `commit` and the catch below are for. The fallback link under it
-		// is read off the built file, which does not move.
-		await page.goto('/evals/', { waitUntil: 'commit' }).catch(() => {
-			// The document retired its own navigation. That is the redirect working.
-		});
-		await expect
-			.poll(() => page.url(), {
-				message: 'the scores address did not send the reader to the console',
-				timeout: 15_000
-			})
-			.toMatch(/\/console\/$/);
-
-		const document = readFileSync(join(BUILD, 'evals', 'index.html'), 'utf8');
-		expect(
-			document,
-			'a reader whose browser ignores the refresh has nothing to click'
-		).toContain('Open the console');
 	});
 });
 

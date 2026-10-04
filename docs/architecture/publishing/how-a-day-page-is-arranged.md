@@ -155,7 +155,7 @@ Links only, because they are the only thing in a footer anyone came to use.
 **It printed six blocks until 2026-08-31 and three until 2026-09-09.** Two of the
 six stated today's run - which run produced the day and at what time, and how
 many stories did not finish. The footer is on every page that has one, so both
-were printed under `/archive/`, `/console/` and `/evals/`, which render no day at
+were printed under `/archive/` and `/console/`, which render no day at
 all, and printed a second time under `/`, where
 [the day notice](#the-day-header-states-each-publication-fact-once)
 was already saying them. Both live beside the day now.
@@ -184,7 +184,7 @@ its own page. The knobs travel as `__UI_CONFIG__` instead, which
 reader owns - a knob a surface needs is imported into the bundle at build time
 and never fetched
 ([../../concepts/config.md](../../concepts/config.md#build-time-config-versus-shipped-config)). Page options went with the
-file, so `/`, `/archive/` and `/evals/` each declare `prerender = true`
+file, so `/` and `/archive/` each declare `prerender = true`
 themselves. It takes about 230 gzipped bytes off every prerendered document,
 because the config no longer rides in each one as a server-load payload.
 
