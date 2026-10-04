@@ -108,9 +108,7 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     logging.getLogger(__name__).info(
         "periods chosen %s", chosen.model_dump_json(exclude_none=True)
     )
-    first_kept = _monthly_period.first_kept_month(
-        now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
-    )
+    first_kept = chosen.keep_line
     # A window that only reports keeps what it would drop, so packing reads it as forever.
     reports = policy.month_deletes_dry_run
     stops = (

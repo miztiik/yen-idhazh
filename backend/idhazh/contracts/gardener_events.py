@@ -103,6 +103,12 @@ class PeriodsChosen(Model):
             "00:00 UTC on the wake's day."
         )
     )
+    keep_line: MonthStamp | None = Field(
+        description=(
+            "The oldest UTC month the monthly window keeps at 00:00 UTC on the wake's day, "
+            "or None when it keeps every month."
+        )
+    )
     cap: int = Field(
         ge=1, description="`max_periods_per_run`: the most periods one step takes on this wake."
     )

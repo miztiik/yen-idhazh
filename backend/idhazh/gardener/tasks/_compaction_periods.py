@@ -34,7 +34,7 @@ from idhazh.contracts.gardener_events import PeriodsChosen, StartReason, StepCho
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.gardener import schedule
 from idhazh.gardener.tasks._compact_tree import CompactTree
-from idhazh.gardener.tasks._monthly_period import days_of, shift
+from idhazh.gardener.tasks._monthly_period import days_of, first_kept_month, shift
 
 
 def choose(
@@ -52,6 +52,9 @@ def choose(
         yearly_mark=tree.yearly_through,
         newest_closable_month=schedule.newest_eligible_month(
             now=now, after_days=policy.daily_keep_days
+        ),
+        keep_line=first_kept_month(
+            now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
         ),
         cap=policy.max_periods_per_run,
         operator_range=operator_range,
