@@ -11,15 +11,20 @@
 		busy = false,
 		disabled = false,
 		notice = '',
+		from,
+		to,
+		minDay,
+		maxDay,
 		saveName = '',
 		saveNameMaxChars,
 		canSave = true,
 		canCopyQuestion = false,
 		onRun,
 		onSave,
-		onCopyQuestion
+		onCopyQuestion,
+		onDates
 	}: {
-		files?: number; bytes?: number; heldBytes?: number; read?: FetchCost | null; busy?: boolean; disabled?: boolean; notice?: string; saveName?: string; saveNameMaxChars: number; canSave?: boolean; canCopyQuestion?: boolean; onRun: () => void; onSave?: (name: string) => void; onCopyQuestion?: () => void;
+		files?: number; bytes?: number; heldBytes?: number; read?: FetchCost | null; busy?: boolean; disabled?: boolean; notice?: string; from: string; to: string; minDay: string; maxDay: string; saveName?: string; saveNameMaxChars: number; canSave?: boolean; canCopyQuestion?: boolean; onRun: () => void; onSave?: (name: string) => void; onCopyQuestion?: () => void; onDates?: (from: string, to: string) => void;
 	} = $props();
 	let saving = $state(false);
 	let draftName = $state('');
@@ -31,11 +36,19 @@
 	);
 	const lineFiles = $derived(read?.files ?? files);
 	const lineBytes = $derived(read?.bytes ?? bytes);
+	function changeFrom(value: string) {
+		onDates?.(value > to ? to : value, to);
+	}
+	function changeTo(value: string) {
+		onDates?.(from, value < from ? from : value);
+	}
 </script>
 
 <div class="action-line" data-explorer-action-line data-files={lineFiles} data-bytes={lineBytes} data-held-bytes={heldBytes}>
 	<p>{line} This page holds {megabytes(heldBytes)} MB of fetched files; a reload empties it.</p>
 	<div class="actions">
+		<label>From (UTC)<input type="date" value={from} min={minDay} max={to < maxDay ? to : maxDay} onchange={(event) => changeFrom(event.currentTarget.value)} /></label>
+		<label>To (UTC)<input type="date" value={to} min={from > minDay ? from : minDay} max={maxDay} onchange={(event) => changeTo(event.currentTarget.value)} /></label>
 		{#if saving}
 			<label>Name <input bind:value={draftName} maxlength={saveNameMaxChars} /></label>
 			<button type="button" class="secondary" onclick={() => { onSave?.(draftName); saving = false; }} disabled={!draftName.trim()}>

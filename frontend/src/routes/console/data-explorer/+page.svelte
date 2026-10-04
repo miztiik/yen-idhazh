@@ -32,6 +32,8 @@
 	const presets = $derived(data.console.window_presets);
 	// svelte-ignore state_referenced_locally
 	let windowDays = $state(data.console.default_window_days);
+	let fromDay = $state('');
+	let toDay = $state('');
 	let ready = $state(false);
 	let registry = $state<LedgerRegistry>({ families: [] });
 	let registryError = $state<string | null>(null);
@@ -41,7 +43,7 @@
 	let costing = $state(false);
 	let running = $state(false);
 	let refreshing = $state(false);
-	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], through: {} });
+	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], siteFrom: null, through: {} });
 	let heldBytes = $state(0);
 	let lastMs = $state<number | null>(null);
 	let lastRead = $state<FetchCost | null>(null);
@@ -66,7 +68,7 @@
 	const answerRows = $derived(result !== null && result.state === 'ok' ? (result.rows as Row[]) : []);
 	const answerColumns = $derived(result !== null && result.state === 'ok' ? result.columns : []);
 	const statusLine = $derived(
-		`The next question will read ${windowDays} UTC ${windowDays === 1 ? 'day' : 'days'} ending today.`
+		`The next question will read ${spanDays()} UTC ${spanDays() === 1 ? 'day' : 'days'}, ${dayMonth(fromDay)} to ${shortDate(toDay)}.`
 	);
 	const actionNotice = $derived([...linkNotices, keepNotice, copiedLink].filter(Boolean).join(' '));
 	const shapeBounds = $derived({
@@ -94,9 +96,25 @@
 		d.setUTCDate(d.getUTCDate() + delta);
 		return d.toISOString().slice(0, 10);
 	}
+	function minReachDay(): DateStamp {
+		return addDays(todayUtc(), 1 - config.reach_days);
+	}
+	function setSpan(from: DateStamp, to: DateStamp) {
+		const min = minReachDay();
+		const max = todayUtc();
+		const clampedTo = to > max ? max : to < min ? min : to;
+		const clampedFrom = from < min ? min : from > clampedTo ? clampedTo : from;
+		fromDay = clampedFrom;
+		toDay = clampedTo;
+		windowDays = spanDays();
+		void updateCostAndColumns();
+	}
+	function spanDays(): number {
+		if (!fromDay || !toDay) return windowDays;
+		return Math.round((Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86_400_000) + 1;
+	}
 	function span(): { from: DateStamp; to: DateStamp } {
-		const to = todayUtc();
-		return { to, from: addDays(to, 1 - windowDays) };
+		return { from: fromDay, to: toDay };
 	}
 	function quoteLedger(name: LedgerName): string {
 		return `"${name.replace(/"/g, '""')}"`;
@@ -108,27 +126,34 @@
 	}
 	function pick(example: ExplorerExample) {
 		selected = example.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
-		windowDays = presets.includes(example.days) ? example.days : windowDays;
+		const days = presets.includes(example.days) ? example.days : windowDays;
+		windowDays = days;
+		toDay = todayUtc();
+		fromDay = addDays(toDay, 1 - days);
 		sql = example.sql;
 		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function pickSaved(question: KeptQuestion) {
 		selected = question.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
-		windowDays = presets.includes(question.days) ? question.days : windowDays;
+		if (question.from !== undefined && question.end !== undefined) setSpan(question.from, question.end);
+		else setWindow(presets.includes(question.days) ? question.days : windowDays);
 		sql = question.statement;
 		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function pickRun(run: RecentRun) {
 		selected = run.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
-		windowDays = presets.includes(run.days) ? run.days : windowDays;
+		if (run.from !== undefined && run.end !== undefined) setSpan(run.from, run.end);
+		else setWindow(presets.includes(run.days) ? run.days : windowDays);
 		sql = run.statement;
 		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function setWindow(days: number) {
 		windowDays = days;
+		toDay = todayUtc();
+		fromDay = addDays(toDay, 1 - days);
 		void updateCostAndColumns();
 	}
 	function monthsFor(): number {
@@ -161,7 +186,7 @@
 				const first = config.examples.find((example) => example.ledgers.every((ledger) => published.includes(ledger)));
 				if (first !== undefined) {
 					selected = first.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
-					windowDays = presets.includes(first.days) ? first.days : windowDays;
+					setWindow(presets.includes(first.days) ? first.days : windowDays);
 					sql = first.sql;
 				}
 			}
@@ -192,6 +217,13 @@
 		return typeof value === 'number' && Number.isInteger(value) && presets.includes(value) ? value : null;
 	}
 
+	function validStoredDay(value: unknown): DateStamp | null {
+		if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+		const min = minReachDay();
+		const max = todayUtc();
+		return value >= min && value <= max ? value : null;
+	}
+
 	function validName(value: unknown): string | null {
 		return typeof value === 'string' && value.length > 0 && value.length <= config.save_name_max_chars ? value : null;
 	}
@@ -204,7 +236,10 @@
 		const statement = validStatement(raw.statement);
 		const name = validName(raw.name);
 		if (ledgers === null || days === null || statement === null || name === null || typeof raw.id !== 'string' || typeof raw.updatedAt !== 'string') return null;
-		return { id: raw.id, name, statement, ledgers, days, updatedAt: raw.updatedAt };
+		const from = validStoredDay(raw.from);
+		const end = validStoredDay(raw.end);
+		if ((raw.from !== undefined || raw.end !== undefined) && (from === null || end === null || from > end)) return null;
+		return { id: raw.id, name, statement, ledgers, days, ...(from !== null && end !== null ? { from, end } : {}), updatedAt: raw.updatedAt };
 	}
 
 	function validStoredRun(value: unknown): RecentRun | null {
@@ -214,7 +249,10 @@
 		const days = validDays(raw.days);
 		const statement = validStatement(raw.statement);
 		if (ledgers === null || days === null || statement === null || typeof raw.id !== 'string' || typeof raw.askedAt !== 'string' || typeof raw.rows !== 'number' || typeof raw.ms !== 'number') return null;
-		return { id: raw.id, statement, ledgers, days, rows: raw.rows, ms: raw.ms, askedAt: raw.askedAt };
+		const from = validStoredDay(raw.from);
+		const end = validStoredDay(raw.end);
+		if ((raw.from !== undefined || raw.end !== undefined) && (from === null || end === null || from > end)) return null;
+		return { id: raw.id, statement, ledgers, days, ...(from !== null && end !== null ? { from, end } : {}), rows: raw.rows, ms: raw.ms, askedAt: raw.askedAt };
 	}
 
 	function readStored<T>(key: string, keep: (value: unknown) => T | null): T[] {
@@ -254,7 +292,9 @@
 			ledgers: selected,
 			days: windowDays,
 			statement: sql,
-			maxBytes: 8192
+			maxBytes: 8192,
+			from: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : fromDay,
+			end: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : toDay
 		});
 		history.replaceState(history.state, '', `${address.href}${location.hash}`);
 		linkNotices = [...address.notices];
@@ -287,6 +327,8 @@
 			statement: sql,
 			ledgers: selected,
 			days: windowDays,
+			from: fromDay,
+			end: toDay,
 			updatedAt: new Date(Date.now()).toISOString()
 		};
 		const kept = keepSavedQuestion(savedQuestions, next, config.saved_max);
@@ -305,7 +347,7 @@
 		if (!ready) return;
 		const picked = selectedPublished;
 		if (picked.length === 0) {
-			cost = { files: 0, bytes: 0, unpackedDays: [], through: {} };
+			cost = { files: 0, bytes: 0, unpackedDays: [], siteFrom: null, through: {} };
 			ledgerColumns = [];
 			return;
 		}
@@ -352,6 +394,8 @@
 				statement: sql,
 				ledgers: selected,
 				days: windowDays,
+				from: fromDay,
+				end: toDay,
 				rows,
 				ms: lastMs ?? Math.round(performance.now() - started),
 				askedAt: new Date(Date.now()).toISOString()
@@ -365,6 +409,7 @@
 
 	onMount(() => {
 		ready = true;
+		setWindow(data.console.default_window_days);
 		const query = matchMedia(`(min-width: ${data.frame.breakpoints_px[1]}px)`);
 		const sync = () => (wide = query.matches);
 		sync();
@@ -373,14 +418,16 @@
 			savedQuestions = readStored<KeptQuestion>(SAVED_KEY, validStoredSaved);
 			recentRuns = readStored<RecentRun>(HISTORY_KEY, validStoredRun);
 			if (location.search) {
-				const parsed = await parseExplorerAddress(location.search, { ledgerNames: LEDGER_NAMES, windowPresets: presets, defaultDays: data.console.default_window_days });
+				const parsed = await parseExplorerAddress(location.search, { ledgerNames: LEDGER_NAMES, windowPresets: presets, defaultDays: data.console.default_window_days, today: todayUtc(), reachDays: config.reach_days });
 				if (parsed.ledgers.length > 0) selected = [...parsed.ledgers];
-				windowDays = parsed.days;
+				if (parsed.from !== null && parsed.end !== null) setSpan(parsed.from, parsed.end);
+				else setWindow(parsed.days);
 				sql = parsed.statement;
 				linkNotices = [...parsed.notices, ...(parsed.statement ? ['This question came from a link. Read it before you press Run.'] : [])];
 			} else if (recentRuns[0] !== undefined) {
 				selected = [...recentRuns[0].ledgers];
-				windowDays = recentRuns[0].days;
+				if (recentRuns[0].from !== undefined && recentRuns[0].end !== undefined) setSpan(recentRuns[0].from, recentRuns[0].end);
+				else setWindow(recentRuns[0].days);
 				sql = recentRuns[0].statement;
 			}
 			await refreshRegistry();
@@ -397,6 +444,7 @@
 
 <Panel id="data-explorer-ask" title="Your question" note={`One read-only DuckDB statement at a time, up to ${config.query_max_chars} characters.`} actions={questionActions}>
 	<div class="question-panel" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px`}>
+		<p class="state">Need help with the syntax? <a href={`${data.docsBase}/blob/main/docs/how-to/query-a-ledger-from-the-console.md`}><Icon id="docs" /> Read the Records how-to.</a></p>
 		<QuestionStrip examples={config.examples} {published} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
 		{#if keepNotice}<p class="state">{keepNotice}</p>{/if}
 		{#if !storageWorks}<p class="state warn">This browser is not letting the page keep anything, so Save and the history are off.</p>{/if}
@@ -405,7 +453,7 @@
 			<div class="editor-stack">
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}
 				<QueryEditor value={sql} maxChars={config.query_max_chars} minLines={config.editor_lines[0]} maxLines={config.editor_lines[1]} counterFromShare={config.counter_from_share} onInput={(value) => (sql = value)} onRun={run} />
-				<ActionLine files={cost.files} bytes={cost.bytes} {heldBytes} read={lastRead} busy={running || costing} disabled={selected.length === 0 || sql.trim() === ''} notice={actionNotice} saveName={suggestedSaveName(sql, config.save_name_max_chars)} saveNameMaxChars={config.save_name_max_chars} canSave={storageWorks && sql.trim() !== ''} canCopyQuestion={linkNotices.includes(LINK_TOO_LONG_NOTICE)} onRun={run} onSave={saveQuestion} onCopyQuestion={copyQuestion} />
+				<ActionLine files={cost.files} bytes={cost.bytes} {heldBytes} read={lastRead} busy={running || costing} disabled={selected.length === 0 || sql.trim() === ''} notice={actionNotice} from={fromDay} to={toDay} minDay={minReachDay()} maxDay={todayUtc()} saveName={suggestedSaveName(sql, config.save_name_max_chars)} saveNameMaxChars={config.save_name_max_chars} canSave={storageWorks && sql.trim() !== ''} canCopyQuestion={linkNotices.includes(LINK_TOO_LONG_NOTICE)} onRun={run} onSave={saveQuestion} onCopyQuestion={copyQuestion} onDates={setSpan} />
 				<HistoryList runs={recentRuns} onPick={pickRun} />
 			</div>
 			<ColumnList columns={columns} label={columnLabel} />
@@ -440,10 +488,13 @@
 	{:else if result === null}
 		<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
 	{:else if result.state === 'ok'}
-		<div class="answer-note">{#if runSpan}Read from {windowDays} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}</div>
+			<div class="answer-note">
+				{#if runSpan}Read from {spanDays()} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}
+				{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}
+			</div>
 		<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} tableMaxVh={config.table_max_vh} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} onOrderChange={(rows) => (orderedRows = rows)} />
-	{:else if result.state === 'quiet'}
-		<div class="answer-state" data-state="quiet">{explorerQuietSentence()}</div>
+		{:else if result.state === 'quiet'}
+			<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}</div>
 	{:else if result.state === 'missing'}
 		<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
 	{:else if result.state === 'unreachable'}

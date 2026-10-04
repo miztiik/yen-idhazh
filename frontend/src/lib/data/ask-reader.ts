@@ -33,17 +33,17 @@ export type RawListedThrough = Readonly<Partial<Record<LedgerName, DateStamp>>>;
 
 type Indexes = { daily: CompactEntry[]; monthly: CompactEntry[]; yearly: CompactEntry[] };
 type FileMeta = { ledger: LedgerName; day: DateStamp | null };
+type PlannedFile = { file: WantedFile; meta: FileMeta; keeper: 'site' | 'archive' };
 type LedgerPlan = {
 	ledger: LedgerName;
 	through: DateStamp | null;
-	files: WantedFile[];
-	metas: FileMeta[];
-	emptySource: WantedFile[];
-	emptyMetas: FileMeta[];
+	files: PlannedFile[];
+	emptySource: PlannedFile[];
 	unpackedDays: DateStamp[];
+	siteFrom: DateStamp | null;
 	unreachable: AskResult | null;
 };
-type Plan = { ledgers: LedgerPlan[]; cost: SpanCost; files: WantedFile[]; metas: FileMeta[] };
+type Plan = { ledgers: LedgerPlan[]; cost: SpanCost; files: PlannedFile[] };
 
 let queue: Promise<void> = Promise.resolve();
 
@@ -61,18 +61,34 @@ async function serial<T>(work: () => Promise<T>): Promise<T> {
 	}
 }
 
+function previousDay(day: DateStamp): DateStamp {
+	const at = new Date(`${day}T00:00:00Z`);
+	at.setUTCDate(at.getUTCDate() - 1);
+	return at.toISOString().slice(0, 10);
+}
+
+function addPlanned(files: WantedFile[], metas: FileMeta[], keeper: 'site' | 'archive'): PlannedFile[] {
+	return files.map((file, at) => ({ file, meta: metas[at] ?? { ledger: 'seen', day: null }, keeper }));
+}
+
+function compactFirst(indexes: Indexes): DateStamp | null {
+	return newestNamed(indexes.daily, indexes.monthly, indexes.yearly) === null
+		? null
+		: firstNamed(indexes.daily, indexes.monthly, indexes.yearly);
+}
+
 function later(a: DateStamp | null, b: DateStamp | null): DateStamp | null {
 	if (a === null) return b;
 	if (b === null) return a;
 	return a > b ? a : b;
 }
 
-function wanted(period: Period, ledger: LedgerName, file: ChosenFile): WantedFile {
+function wanted(period: Period, ledger: LedgerName, file: ChosenFile, byRange = RANGED_PERIODS.has(period)): WantedFile {
 	return {
 		path: dataPath(ledger, period, file.entry.covers),
 		version: dataVersion(file.entry),
 		bytes: file.entry.bytes,
-		byRange: RANGED_PERIODS.has(period)
+		byRange
 	};
 }
 
@@ -142,7 +158,8 @@ function compactSelection(
 	ledger: LedgerName,
 	from: DateStamp,
 	until: DateStamp,
-	indexes: Indexes
+	indexes: Indexes,
+	byRange = true
 ): { files: WantedFile[]; metas: FileMeta[] } | AskResult {
 	const first = newestNamed(indexes.daily, indexes.monthly, indexes.yearly) === null
 		? null
@@ -154,7 +171,7 @@ function compactSelection(
 	const selection = filesFor(from, until, indexes.daily, indexes.monthly, indexes.yearly);
 	if ('hole' in selection) return { state: 'unreachable', ledger, at: selection.hole, fault: 'day-missing' };
 	return {
-		files: selection.files.filter((file) => file.entry.rows > 0).map((file) => wanted(file.period, ledger, file)),
+		files: selection.files.filter((file) => file.entry.rows > 0).map((file) => wanted(file.period, ledger, file, byRange)),
 		metas: selection.files
 			.filter((file) => file.entry.rows > 0)
 			.map((file) => ({ ledger, day: file.firstDay }))
@@ -188,6 +205,8 @@ async function viewSource(
 
 async function planLedger(
 	keeper: PageKeeper,
+	archiveKeeper: PageKeeper | null,
+	clampWithoutArchive: boolean,
 	ledger: LedgerName,
 	from: DateStamp,
 	to: DateStamp,
@@ -195,34 +214,54 @@ async function planLedger(
 ): Promise<LedgerPlan> {
 	const indexed = await compactIndexes(keeper, ledger, from, to);
 	if ('state' in indexed) {
-		return { ledger, through: null, files: [], metas: [], emptySource: [], emptyMetas: [], unpackedDays: [], unreachable: indexed };
+		return { ledger, through: null, files: [], emptySource: [], unpackedDays: [], siteFrom: null, unreachable: indexed };
 	}
 
 	const newestPacked = newestNamed(indexed.daily, indexed.monthly, indexed.yearly);
+	const siteFirst = compactFirst(indexed);
 	const through = later(newestPacked, rawListed[ledger] ?? null);
-	const files: WantedFile[] = [];
-	const metas: FileMeta[] = [];
+	const files: PlannedFile[] = [];
 	let unreachable: AskResult | null = null;
+	let siteFrom: DateStamp | null = null;
+	let siteStart = from;
 
-	if (newestPacked !== null && from <= newestPacked) {
-		const until = to < newestPacked ? to : newestPacked;
-		const compact = compactSelection(ledger, from, until, indexed);
-		if ('state' in compact) unreachable = compact;
-		else {
-			files.push(...compact.files);
-			metas.push(...compact.metas);
+	if (siteFirst !== null && from < siteFirst) {
+		if (archiveKeeper === null && clampWithoutArchive) {
+			siteFrom = siteFirst;
+			siteStart = siteFirst;
+		} else if (archiveKeeper === null) {
+			const compact = compactSelection(ledger, from, to < siteFirst ? to : previousDay(siteFirst), indexed);
+			unreachable = 'state' in compact ? compact : { state: 'unreachable', ledger, at: from, fault: null };
+		} else {
+			const archiveTo = to < siteFirst ? to : previousDay(siteFirst);
+			const archiveIndexed = await compactIndexes(archiveKeeper, ledger, from, archiveTo);
+			if ('state' in archiveIndexed) unreachable = archiveIndexed;
+			else {
+				const archive = compactSelection(ledger, from, archiveTo, archiveIndexed, false);
+				if ('state' in archive) unreachable = archive;
+				else files.push(...addPlanned(archive.files, archive.metas, 'archive'));
+			}
+			siteStart = siteFirst;
 		}
 	}
 
-	const rawDays = writerDaysFor(from, to, newestPacked, rawListed[ledger] ?? null);
+	if (newestPacked !== null && siteStart <= newestPacked && siteStart <= to) {
+		const until = to < newestPacked ? to : newestPacked;
+		const compact = compactSelection(ledger, siteStart, until, indexed);
+		if ('state' in compact) unreachable = compact;
+		else {
+			files.push(...addPlanned(compact.files, compact.metas, 'site'));
+		}
+	}
+
+	const rawDays = siteStart <= to ? writerDaysFor(siteStart, to, newestPacked, rawListed[ledger] ?? null) : [];
 	for (const day of rawDays) {
 		const listed = await rawListing(keeper, ledger, day);
 		if ('state' in listed) {
 			unreachable ??= listed;
 			continue;
 		}
-		files.push(...listed.files);
-		metas.push(...listed.metas);
+		files.push(...addPlanned(listed.files, listed.metas, 'site'));
 	}
 
 	// A ledger with no file in the span is read through an empty view over its newest day's
@@ -233,16 +272,17 @@ async function planLedger(
 		ledger,
 		through,
 		files,
-		metas,
-		emptySource: empty.files,
-		emptyMetas: empty.metas,
+		emptySource: addPlanned(empty.files, empty.metas, 'site'),
 		unpackedDays: rawDays,
+		siteFrom,
 		unreachable
 	};
 }
 
 async function plan(
 	keeper: PageKeeper,
+	archiveKeeper: PageKeeper | null,
+	clampWithoutArchive: boolean,
 	ledgers: readonly LedgerName[],
 	from: DateStamp,
 	to: DateStamp,
@@ -250,27 +290,26 @@ async function plan(
 ): Promise<Plan | AskResult> {
 	const chosen = [...new Set(ledgers)];
 	if (chosen.length === 0) {
-		return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: 0 } };
+		return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: 0 }, siteFrom: null };
 	}
 	for (const ledger of chosen) {
 		if (!(LEDGER_NAMES as readonly string[]).includes(ledger)) return { state: 'missing', ledger };
 	}
 
-	const ledgersPlanned = await Promise.all(chosen.map((ledger) => planLedger(keeper, ledger, from, to, rawListed)));
+	const ledgersPlanned = await Promise.all(chosen.map((ledger) => planLedger(keeper, archiveKeeper, clampWithoutArchive, ledger, from, to, rawListed)));
 	const failed = ledgersPlanned.find((one) => one.unreachable !== null);
 	if (failed?.unreachable) return failed.unreachable;
 	const noDays = ledgersPlanned.find((one) => one.through === null);
 	if (noDays) return { state: 'missing', ledger: noDays.ledger };
 	const files = ledgersPlanned.flatMap((one) => one.files);
-	const metas = ledgersPlanned.flatMap((one) => one.metas);
 	return {
 		ledgers: ledgersPlanned,
 		files,
-		metas,
 		cost: {
 			files: files.length,
-			bytes: files.reduce((sum, file) => sum + file.bytes, 0),
+			bytes: files.reduce((sum, plannedFile) => sum + plannedFile.file.bytes, 0),
 			unpackedDays: [...new Set(ledgersPlanned.flatMap((one) => one.unpackedDays))],
+			siteFrom: ledgersPlanned.map((one) => one.siteFrom).filter((day): day is DateStamp => day !== null).sort()[0] ?? null,
 			through: Object.fromEntries(ledgersPlanned.flatMap((one) => (one.through === null ? [] : [[one.ledger, one.through]])))
 		}
 	};
@@ -332,68 +371,129 @@ function readCost(files: readonly WantedFile[], fetched: readonly boolean[], sta
 	};
 }
 
-export async function readAskCost(
+function sumCost(parts: readonly FetchCost[], started: number): FetchCost {
+	return {
+		files: parts.reduce((sum, part) => sum + part.files, 0),
+		bytes: parts.reduce((sum, part) => sum + part.bytes, 0),
+		alreadyHeld: parts.reduce((sum, part) => sum + part.alreadyHeld, 0),
+		ms: Date.now() - started
+	};
+}
+
+export function readAskCost(
 	keeper: PageKeeper,
 	ledgers: readonly LedgerName[],
 	from: DateStamp,
 	to: DateStamp,
 	rawListed: RawListedThrough
+): Promise<SpanCost>;
+export function readAskCost(
+	keeper: PageKeeper,
+	archiveKeeper: PageKeeper | null,
+	ledgers: readonly LedgerName[],
+	from: DateStamp,
+	to: DateStamp,
+	rawListed: RawListedThrough
+): Promise<SpanCost>;
+export async function readAskCost(
+	keeper: PageKeeper,
+	archiveOrLedgers: PageKeeper | null | readonly LedgerName[],
+	ledgersOrFrom: readonly LedgerName[] | DateStamp,
+	fromOrTo: DateStamp,
+	toOrRaw: DateStamp | RawListedThrough,
+	maybeRaw?: RawListedThrough
 ): Promise<SpanCost> {
-	const planned = await plan(keeper, ledgers, from, to, rawListed);
-	return 'state' in planned ? { files: 0, bytes: 0, unpackedDays: [], through: {} } : planned.cost;
+	const archiveKeeper = maybeRaw === undefined ? null : (archiveOrLedgers as PageKeeper | null);
+	const clampWithoutArchive = maybeRaw !== undefined;
+	const ledgers = maybeRaw === undefined ? (archiveOrLedgers as readonly LedgerName[]) : (ledgersOrFrom as readonly LedgerName[]);
+	const from = maybeRaw === undefined ? (ledgersOrFrom as DateStamp) : fromOrTo;
+	const to = maybeRaw === undefined ? (fromOrTo as DateStamp) : (toOrRaw as DateStamp);
+	const rawListed = maybeRaw === undefined ? (toOrRaw as RawListedThrough) : maybeRaw;
+	const planned = await plan(keeper, archiveKeeper, clampWithoutArchive, ledgers, from, to, rawListed);
+	return 'state' in planned ? { files: 0, bytes: 0, unpackedDays: [], siteFrom: 'siteFrom' in planned ? planned.siteFrom : null, through: {} } : planned.cost;
 }
 
-export async function readAsk(keeper: PageKeeper, opts: AskOptions, rawListed: RawListedThrough): Promise<AskResult> {
+export function readAsk(keeper: PageKeeper, opts: AskOptions, rawListed: RawListedThrough): Promise<AskResult>;
+export function readAsk(keeper: PageKeeper, archiveKeeper: PageKeeper | null, opts: AskOptions, rawListed: RawListedThrough): Promise<AskResult>;
+export async function readAsk(
+	keeper: PageKeeper,
+	archiveOrOpts: PageKeeper | null | AskOptions,
+	optsOrRaw: AskOptions | RawListedThrough,
+	maybeRaw?: RawListedThrough
+): Promise<AskResult> {
+	const archiveKeeper = maybeRaw === undefined ? null : (archiveOrOpts as PageKeeper | null);
+	const clampWithoutArchive = maybeRaw !== undefined;
+	const opts = maybeRaw === undefined ? (archiveOrOpts as AskOptions) : (optsOrRaw as AskOptions);
+	const rawListed = maybeRaw === undefined ? (optsOrRaw as RawListedThrough) : maybeRaw;
 	const checked = checkStatement(opts.sql, opts.maxChars);
 	if (checked.refusal !== null) return { state: 'refused', because: checked.refusal };
 	return serial(async () => {
 		const started = Date.now();
-		const planned = await plan(keeper, opts.ledgers, opts.from, opts.to, rawListed);
+		const planned = await plan(keeper, archiveKeeper, clampWithoutArchive, opts.ledgers, opts.from, opts.to, rawListed);
 		if ('state' in planned) return planned;
 		if (planned.cost.bytes > opts.maxFetchBytes) {
 			return { state: 'refused', because: { kind: 'over-ceiling', bytes: planned.cost.bytes, files: planned.cost.files, max: opts.maxFetchBytes } };
 		}
 		const noFilesInSpan = planned.ledgers.every((one) => one.files.length === 0);
 		if (noFilesInSpan) {
-			return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: Date.now() - started } };
+			return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: Date.now() - started }, siteFrom: planned.cost.siteFrom };
 		}
 		// An empty view over no file would reach the engine as `read_parquet([])`, which it refuses.
 		const sourceless = planned.ledgers.find((one) => one.files.length === 0 && one.emptySource.length === 0);
 		if (sourceless) return { state: 'missing', ledger: sourceless.ledger };
 
-		const files = planned.ledgers.flatMap((one) => (one.files.length > 0 ? one.files : one.emptySource));
-		const metas = planned.ledgers.flatMap((one) => (one.files.length > 0 ? one.metas : one.emptyMetas));
-		let held: Awaited<ReturnType<PageKeeper['hold']>>;
+		const plannedFiles = planned.ledgers.flatMap((one) => (one.files.length > 0 ? one.files : one.emptySource));
+		const siteFiles = plannedFiles.filter((one) => one.keeper === 'site');
+		const archiveFiles = plannedFiles.filter((one) => one.keeper === 'archive');
+		let siteHeld: Awaited<ReturnType<PageKeeper['hold']>> | null = null;
+		let archiveHeld: Awaited<ReturnType<PageKeeper['hold']>> | null = null;
 		try {
-			held = await keeper.hold(files);
+			siteHeld = siteFiles.length > 0 ? await keeper.hold(siteFiles.map((one) => one.file)) : { engine: await keeper.hold([]).then((holding) => 'engine' in holding ? holding.engine : Promise.reject(new Error('empty hold failed'))), names: [], fetched: [], done: async () => {} };
+			if (archiveFiles.length > 0) {
+				if (archiveKeeper === null) throw new Error('archive files planned without an archive keeper');
+				archiveHeld = await archiveKeeper.hold(archiveFiles.map((one) => one.file));
+			}
 		} catch {
 			return { state: 'unreachable', ledger: null, at: null, fault: 'engine' };
 		}
-		if ('failed' in held) {
-			const meta = metas[held.failed];
-			const fault = held.shortfall.reason === 'absent' ? 'file-missing' : null;
+		if ('failed' in siteHeld) {
+			const meta = siteFiles[siteHeld.failed]?.meta;
+			const fault = siteHeld.shortfall.reason === 'absent' ? 'file-missing' : null;
+			return { state: 'unreachable', ledger: meta?.ledger ?? null, at: meta?.day ?? null, fault };
+		}
+		if (archiveHeld !== null && 'failed' in archiveHeld) {
+			const meta = archiveFiles[archiveHeld.failed]?.meta;
+			const fault = archiveHeld.shortfall.reason === 'absent' ? 'file-missing' : null;
 			return { state: 'unreachable', ledger: meta?.ledger ?? null, at: meta?.day ?? null, fault };
 		}
 
 		try {
 			const namesByLedger: string[][] = [];
-			let offset = 0;
 			for (const one of planned.ledgers) {
-				const count = one.files.length > 0 ? one.files.length : one.emptySource.length;
-				namesByLedger.push(held.names.slice(offset, offset + count));
-				offset += count;
+				const files = one.files.length > 0 ? one.files : one.emptySource;
+				namesByLedger.push(files.map((plannedFile) => {
+					const group = plannedFile.keeper === 'site' ? siteFiles : archiveFiles;
+					const held = plannedFile.keeper === 'site' ? siteHeld : archiveHeld;
+					if (held === null || 'failed' in held) throw new Error('planned file was not held');
+					const at = group.indexOf(plannedFile);
+					return held.names[at] ?? '';
+				}));
 			}
-			await prepareViews(held.engine, planned.ledgers, namesByLedger);
-			const columns = await describe(held.engine, checked.sql);
-			const answer = await runRows(held.engine, checked.sql, opts.maxRows, columns);
-			const read = readCost(files, held.fetched, started);
+			await prepareViews(siteHeld.engine, planned.ledgers, namesByLedger);
+			const columns = await describe(siteHeld.engine, checked.sql);
+			const answer = await runRows(siteHeld.engine, checked.sql, opts.maxRows, columns);
+			const read = sumCost([
+				readCost(siteFiles.map((one) => one.file), siteHeld.fetched, started),
+				archiveHeld === null ? { files: 0, bytes: 0, alreadyHeld: 0, ms: 0 } : readCost(archiveFiles.map((one) => one.file), archiveHeld.fetched, started)
+			], started);
 			return answer.rows.length === 0
-				? { state: 'quiet', columns, read }
-				: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, unpackedDays: planned.cost.unpackedDays };
+				? { state: 'quiet', columns, read, siteFrom: planned.cost.siteFrom }
+				: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, unpackedDays: planned.cost.unpackedDays, siteFrom: planned.cost.siteFrom };
 		} catch (error) {
 			return { state: 'refused', because: { kind: 'engine-error', message: error instanceof Error ? error.message : String(error) } };
 		} finally {
-			await held.done();
+			if (siteHeld !== null && !('failed' in siteHeld)) await siteHeld.done();
+			if (archiveHeld !== null && !('failed' in archiveHeld)) await archiveHeld.done();
 		}
 	});
 }

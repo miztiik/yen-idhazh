@@ -1325,6 +1325,50 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		expect(missing).toMatchObject({ state: 'unreachable', at: '2026-07-30' });
 	});
 
+	test('the archive tier answers days before the site starts, and empty archive clamps to the site', async () => {
+		const fullDaily = decoded(readFileSync(path.join(STATE, ...DAILY_INDEX.split('/'))));
+		const siteDaily = {
+			...fullDaily,
+			entries: (fullDaily.entries as CompactEntry[]).filter((entry) => entry.covers >= '2026-09-01')
+		};
+		const emptyMonthly = { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'monthly', entries: [] };
+		const site = recorded({
+			[DAILY_INDEX]: { status: 200, body: encoded(siteDaily) },
+			[MONTHLY_INDEX]: { status: 200, body: encoded(emptyMonthly) }
+		});
+		const archive = recorded();
+		const sitePage = freshPage(site.fetcher);
+		const archivePage = freshPage(archive.fetcher);
+		const query = {
+			...opts,
+			ledgers: [LEDGER],
+			from: '2026-08-30',
+			to: '2026-09-01',
+			sql: 'SELECT date, run_id, job, shard FROM "host-fingerprint" ORDER BY date, run_id, shard',
+			maxRows: 20
+		};
+		const answer = await readAsk(sitePage, archivePage, query, {});
+		expect(answer).toMatchObject({ state: 'ok', siteFrom: null });
+		if (answer.state !== 'ok') return;
+		expect(answer.rows).toEqual([
+			{ date: '2026-08-30', run_id: '2026-08-30-17800000001', job: 'work', shard: '0' },
+			{ date: '2026-08-30', run_id: '2026-08-30-17800000001', job: 'work', shard: '1' },
+			{ date: '2026-08-31', run_id: '2026-08-31-17810000001', job: 'work', shard: '0' },
+			{ date: '2026-09-01', run_id: '2026-09-01-17820000001', job: 'plan', shard: '0' },
+			{ date: '2026-09-01', run_id: '2026-09-01-17820000001', job: 'work', shard: '0' },
+			{ date: '2026-09-01', run_id: '2026-09-01-17820000001', job: 'work', shard: '1' }
+		]);
+		expect(dataAsked(archive.asked)).toEqual([dataPath(LEDGER, 'monthly', '2026-08')]);
+		expect(dataAsked(site.asked)).toEqual([dataPath(LEDGER, 'daily', '2026-09-01')]);
+		expect(archive.asked.filter((one) => one.path.endsWith('.parquet')).every((one) => one.version !== null)).toBe(true);
+
+		const clamped = await readAskCost(freshPage(recorded({
+			[DAILY_INDEX]: { status: 200, body: encoded(siteDaily) },
+			[MONTHLY_INDEX]: { status: 200, body: encoded(emptyMonthly) }
+		}).fetcher), null, [LEDGER], '2026-08-30', '2026-09-01', {});
+		expect(clamped).toMatchObject({ siteFrom: '2026-09-01', files: 1, bytes: bytesOf(dayFile('2026-09-01')).byteLength });
+	});
+
 	test('two calls made at once over different ledgers run one after the other', async () => {
 		const page = freshPage(recorded().fetcher);
 		const count = (ledger: 'host-fingerprint' | 'item-health') =>
