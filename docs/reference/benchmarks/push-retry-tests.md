@@ -1,6 +1,6 @@
 # What the push retry tests cost
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 What changing the retry wait settings removes from the real-Git tests, and
 what one local duration run can establish.
@@ -26,7 +26,9 @@ python backend/utilities/gate_lock.py --require-lock --retry-every 0.25 --timeou
 Use an environment with the project's development dependencies installed.
 The harness reads the committed retry config, writes a private copy with a
 3 ms base step and a 24 ms ceiling, and passes it through `PUSH_RETRY_CONFIG`.
-Git commands, producers and sleeps are real. The deadline-exhaustion case uses
+The seeded test origin commits the same copy as `config/push-retry.json`, so a
+caller that resolves the checkout's own file, such as `publish_inputs`, waits
+the same milliseconds. Git commands, producers and sleeps are real. The deadline-exhaustion case uses
 50 ms in `deadline_seconds.default`; successful retry cases retain the
 production deadline. Deadlines are selected by workflow job id from the
 `deadline_seconds` map, with its `default` entry used for other jobs.
