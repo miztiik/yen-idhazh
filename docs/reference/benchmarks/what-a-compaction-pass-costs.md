@@ -1,6 +1,6 @@
 # What a Compaction Pass Costs
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 How much time and repeated index work the every-tier ledger fixture costs.
 This measures local file work, not the production runner's six-hour limit.
@@ -143,6 +143,6 @@ tables to the job log and the step summary.
 
 ## See also
 
-- [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md) - the compaction order and restart behavior.
+- [../../architecture/publishing/ledger-compaction.md](../../architecture/publishing/ledger-compaction.md) - the compaction order and restart behavior.
 - [../../architecture/contracts/persistence.md](../../architecture/contracts/persistence.md) - root checks and ledger file writes.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the local gate lock and focused tests.

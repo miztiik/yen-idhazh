@@ -1,6 +1,6 @@
 # What a parquet file costs
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-04
 
 How much of a parquet file is a charge every file pays whatever its row count,
 and so how many rows must share one file before it is smaller than the same
@@ -77,5 +77,5 @@ dictionary and statistics overhead around 370 bytes of data.
 ## See also
 
 - [../../architecture/contracts/persistence.md](../../architecture/contracts/persistence.md) - the door that writes these files, and its compression knobs.
-- [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#the-compaction) - the compaction that packs a ledger's raw files into one file a day and a month.
+- [../../architecture/publishing/ledger-compaction.md](../../architecture/publishing/ledger-compaction.md) - the compaction that packs a ledger's raw files into one file a day and a month.
 - [../documentation-structure.md](../documentation-structure.md) - what a benchmark record carries, and why a re-run replaces it.

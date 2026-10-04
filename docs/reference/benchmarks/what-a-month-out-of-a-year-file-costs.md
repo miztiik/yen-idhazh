@@ -1,6 +1,6 @@
 # What a month out of a year file costs
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-04
 
 What a browser pays to read one month out of a packed year file by byte range,
 against the same month's own file read whole and read by byte range, what a
@@ -142,5 +142,5 @@ deploy is answered with the whole year file.
 ## See also
 
 - [../../architecture/publishing/how-the-query-door-answers-a-panel.md](../../architecture/publishing/how-the-query-door-answers-a-panel.md#how-a-year-file-is-read-by-byte-range) - how the door reads a year file by byte range, at an address of its own for each read.
-- [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#a-year) - how a year file is packed, one row group a month.
+- [../../architecture/publishing/ledger-compaction.md](../../architecture/publishing/ledger-compaction.md#a-year) - how a year file is packed, one row group a month.
 - [../documentation-structure.md](../documentation-structure.md) - what a benchmark record carries, and why a re-run replaces it.

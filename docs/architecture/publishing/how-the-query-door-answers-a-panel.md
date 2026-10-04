@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -182,7 +182,7 @@ own reader, so the two never disagree about what an index says.
 A packed ledger lists its own files in its three indexes, so a file it should
 hold and does not is a named fault, never an empty answer. The rule, the four
 names and what the gardener does about each are on the compaction's page
-([idhazh-gardener.md](idhazh-gardener.md#the-three-indexes-and-a-file-that-is-missing)).
+([ledger-compaction.md](ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)).
 `LEDGER_FAULTS` in `frontend/src/lib/data/slice-shapes.ts` declares the names,
 and this is what each one draws:
 
