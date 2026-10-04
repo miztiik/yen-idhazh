@@ -93,10 +93,12 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const OPERATORS: ReadonlySet<string> = new Set(['=', '!=', '<', '<=', '>', '>=', 'in']);
 
-/** Whether `stamp` is a real UTC day, `YYYY-MM-DD`, and not merely the shape of one. */
+/** Whether `stamp` is a real UTC day, `YYYY-MM-DD`, and not merely the shape of one.
+ *  A day past 31 has no time at all, so it is answered before it is printed. */
 export function isDay(stamp: unknown): stamp is DateStamp {
 	if (typeof stamp !== 'string' || !DAY.test(stamp)) return false;
-	return new Date(`${stamp}T00:00:00Z`).toISOString().slice(0, 10) === stamp;
+	const at = new Date(`${stamp}T00:00:00Z`);
+	return !Number.isNaN(at.getTime()) && at.toISOString().slice(0, 10) === stamp;
 }
 
 function checkedColumn(column: unknown, where: string): string {

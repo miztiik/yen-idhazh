@@ -608,6 +608,7 @@ test.describe('a request the door refuses before it fetches anything', () => {
 		['"from" after "to"', ask('2026-09-02', '2026-09-01')],
 		['a day that is not a day', ask('2026-9-1', '2026-09-02')],
 		['a day that does not exist', ask('2026-02-30', '2026-03-01')],
+		['a day past the 31st', ask('2026-08-32', '2026-09-01')],
 		['an empty "in" list', { ...ask('2026-09-01', '2026-09-02'), where: [{ column: 'job', op: 'in', value: [] }] }]
 	];
 	for (const [what, options] of refused) {
