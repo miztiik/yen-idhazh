@@ -84,6 +84,12 @@ function lastDayOfMonth(month: string): DateStamp {
 	return new Date(Date.UTC(year ?? 0, oneBased ?? 0, 0)).toISOString().slice(0, 10);
 }
 
+/** The first and the last UTC day one entry covers: a day, a month or a year. */
+export function coveredDays(period: Period, covers: string): { first: DateStamp; last: DateStamp } {
+	if (period === 'daily') return { first: covers, last: covers };
+	return { first: FIRST_DAY[period](covers), last: period === 'monthly' ? lastDayOfMonth(covers) : `${covers}-12-31` };
+}
+
 /** The newest day any index names; a month counts through its last UTC day and a year through 31 December. */
 export function newestNamed(
 	daily: readonly CompactEntry[],

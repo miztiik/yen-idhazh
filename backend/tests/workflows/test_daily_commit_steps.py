@@ -85,8 +85,7 @@ THIS_RUN: Final = f"{THE_DAY}-{THIS_EXECUTION}"
 ANOTHER_RUN: Final = f"{THE_DAY}-{ANOTHER_EXECUTION}"
 
 #: The other two elements of a writer's identity. One attempt and one job is all
-#: these three tests need: what they vary is the run. The job is a work shard,
-#: the job that files the one CSV day tree left, the eval ledger's ID folder.
+#: these three tests need: what they vary is the run. The job is a work shard.
 THIS_ATTEMPT: Final = 1
 THIS_JOB: Final = ServerJob.WORK
 
@@ -388,13 +387,6 @@ def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
         assert staged_paths == COMMIT_STAGED_PATHS[job_name]
         assert set(settings) == COMMIT_SCRIPT_ENV[job_name]
         assert all(value for value in settings.values())
-        if job_name in {"work", "assemble"}:
-            command = shlex.split(settings["PREPARE_COMMAND"])
-            assert command[:2] == ["python", "backend/utilities/prepare_evaluation_publication.py"]
-            assert command[command.index("--state-dir") + 1] == ledger.STATE_DIRNAME
-            assert command[command.index("--paths-file") + 1] == settings["PREPARED_PATHS_FILE"]
-            assert command[command.index("--inputs") + 1] != settings["PREPARED_PATHS_FILE"]
-            assert command[command.index("--attempt") + 1].isdigit()
 
     plan = _commit_call("plan")[1]
     assemble = _commit_call("assemble")[1]

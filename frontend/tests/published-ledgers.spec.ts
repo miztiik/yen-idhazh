@@ -244,6 +244,7 @@ test('the query door reads the canary raw day through the staged listing', async
 	try {
 		const answer = await readAsk(
 			keeper,
+			null,
 			{
 				ledgers: ['item-health'],
 				from: '2026-08-21',
