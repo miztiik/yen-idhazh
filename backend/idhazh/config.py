@@ -763,7 +763,7 @@ def _old_tree_floor(
     A task that summarises a ledger's months reads them for as long as the series
     that covers the ledger lasts, whether or not it still owns the tree they sat
     in. How long a retention task kept a moved ledger's CSV is not read here:
-    `CSV_LEDGERS` in `backend/utilities/migrate_to_parquet.py` records it, and
+    `CSV_LEDGERS` in `backend/utilities/ledger_migration/csv_layouts.py` records it, and
     that table's test holds every moved ledger's compaction to it.
     """
     for name, policy in tasks.items():

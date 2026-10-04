@@ -44,7 +44,7 @@ export type Row = Record<string, string | number | boolean | null>;
 /** The four ways a packed ledger can be missing a file, declared once. The door
  *  carries them on its answers, the console's readers and notes take them from
  *  here, and the gardener's logs use the same words (`LedgerFault` in
- *  `backend/idhazh/ledger/faults.py`, held to this list by a backend test).
+ *  `backend/idhazh/contracts/ledger_fault.py`, held to this list by a backend test).
  *
  *  - `not-packed`: there is no `daily.json`, so no day of the ledger is packed.
  *  - `index-missing`: `daily.json` is there and `monthly.json` or `yearly.json`

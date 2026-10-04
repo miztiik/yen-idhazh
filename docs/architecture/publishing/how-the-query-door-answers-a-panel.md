@@ -182,7 +182,7 @@ own reader, so the two never disagree about what an index says.
 A packed ledger lists its own files in its three indexes, so a file it should
 hold and does not is a named fault, never an empty answer. The rule, the four
 names and what the gardener does about each are on the compaction's page
-([idhazh-gardener.md](idhazh-gardener.md#the-three-indexes-and-a-file-that-is-missing)).
+([ledger-compaction.md](ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)).
 `LEDGER_FAULTS` in `frontend/src/lib/data/slice-shapes.ts` declares the names,
 and this is what each one draws:
 
