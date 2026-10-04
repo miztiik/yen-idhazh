@@ -306,7 +306,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 - **Scope:** `monthly_window_dry_run` becomes `month_deletes_dry_run: bool` everywhere in one change, and a declaration that still carries the old key is refused by name. Level 2.
 - **Files touched** - corrected during execution (Fowler review 2026-10-04), from a search for `monthly_window_dry_run` at dispatch:
-  - the 12 files `config/gardener/compact-*.json`, including `compact-run-plan.json`, which main added while this row ran
+  - every compaction declaration, `config/gardener/compact-*.json`, `compact-run-plan.json` included
   - `backend/idhazh/contracts/knobs/gardener.py`
   - `backend/idhazh/gardener/tasks/compaction.py`
   - `backend/utilities/ledger_migration/packing.py`
