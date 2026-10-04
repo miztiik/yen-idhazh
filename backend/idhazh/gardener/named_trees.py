@@ -13,6 +13,13 @@ refuses.** The twin is named in each docstring, and
 `backend/tests/gardener/test_named_trees.py` holds each pair equal over one
 tree, strays included. A name git cannot hold - an empty folder - is the one
 thing only the disk can show, and no task decides anything from one.
+
+**A walk covers the periods the listing names under its root.** A wake names
+the day and month folders each task reads, so a walk over a tree's root answers
+for those periods and says nothing of the rest of the tree. It reads through
+`FileListing.named_files`, which says so by its name, never through
+`files_under`, which refuses a folder no step named. Over a listing that names
+the whole root, as the twin tests build, the walk is the disk walk.
 """
 
 from __future__ import annotations
@@ -35,10 +42,20 @@ from idhazh.site_weight import SiteSize
 logger = logging.getLogger(__name__)
 
 
-def _below(listing: FileListing, root: Path) -> list[tuple[str, ...]]:
-    """Every listed file under `root`, as its path segments below `root`, in path order."""
+def _below(
+    listing: FileListing, root: Path, folders: Iterable[Path] | None = None
+) -> list[tuple[str, ...]]:
+    """Every listed file inside the periods named under `root`, as segments below it, in order.
+
+    With `folders`, every file under those named folders of `root` alone.
+    """
     base = len(root.relative_to(listing.repo_root).as_posix()) + 1
-    return sorted(tuple(path[base:].split("/")) for path in listing.files_under(root))
+    files = (
+        listing.named_files(root)
+        if folders is None
+        else [path for folder in folders for path in listing.files_under(folder)]
+    )
+    return sorted(tuple(path[base:].split("/")) for path in files)
 
 
 def _real_day(year: str, month: str, day: str) -> bool:
@@ -231,15 +248,27 @@ def files_named(listing: FileListing, root: Path, suffix: str | None = None) -> 
     ]
 
 
-def raw_days(listing: FileListing, state_dir: Path, which: LedgerName) -> list[str]:
+def raw_days(
+    listing: FileListing,
+    state_dir: Path,
+    which: LedgerName,
+    *,
+    months: Iterable[str] | None = None,
+) -> list[str]:
     """Every UTC day a ledger has a raw folder with something in it for, oldest first.
 
-    The twin of `ledger.raw_days`: a name that is not a `YYYY/MM/DD` folder is
-    named in a warning.
+    The twin of `ledger.raw_days`, over the periods the listing names under the
+    raw root, or over these months' folders alone, each one a step named: a
+    name that is not a `YYYY/MM/DD` folder is named in a warning.
     """
     root = ledger.raw_root(state_dir, which)
+    folders = (
+        None
+        if months is None
+        else [root.joinpath(month[:4], month[5:7]) for month in sorted(set(months))]
+    )
     days: set[str] = set()
-    for parts in _below(listing, root):
+    for parts in _below(listing, root, folders):
         if (
             len(parts) > 3
             and day_partition.is_segment(parts[0], day_partition.YEAR_WIDTH)

@@ -19,6 +19,15 @@ that describes another ledger or period, is refused by name. So is an index
 that is not there while its period's watermark says the period was packed -
 the `index-missing` fault - because a pass that read it as empty would write a
 list that forgets every period packed before.
+
+**A packed file no entry names is adopted, never recorded lost.** An index
+restored from an older commit can lose an entry while the period's own file is
+still at its named path. Before a pass records a period `empty` or `lost`, it
+asks `adopt` for that path: a file there becomes the period's `packed` entry,
+its bytes from the listing and its rows and envelope from its footer. A file
+whose envelope names another ledger, period or day is refused by name and
+never adopted, because adopting it would put another period's rows under this
+one.
 """
 
 from __future__ import annotations
@@ -29,9 +38,10 @@ from pathlib import Path
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract
-from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.file_envelope import Period, Tier
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.gardener import named_trees
 from idhazh.gardener.file_listing import FileListing
 
 
@@ -58,6 +68,14 @@ class LedgerMarks:
     entries: Mapping[Period, Mapping[str, CompactEntry]]
     #: The periods whose index the listing holds.
     indexed: frozenset[Period]
+
+
+@dataclass(frozen=True, slots=True)
+class Adopted:
+    """A period's own packed file that no index entry named, and the entry it earns."""
+
+    path: Path
+    entry: CompactEntry
 
 
 def name_marks(state_dir: Path, ledger_name: LedgerName) -> MarkPaths:
@@ -119,3 +137,35 @@ def read_marks(state_dir: Path, ledger_name: LedgerName, listing: FileListing) -
         held = _read_one(CompactIndex, index, ledger_name, period) if present else None
         entries[period] = {entry.covers: entry for entry in held.entries} if held else {}
     return LedgerMarks(through=through, entries=entries, indexed=frozenset(indexed))
+
+
+def adopt(
+    listing: FileListing, state_dir: Path, ledger_name: LedgerName, period: Period, covers: str
+) -> Adopted | None:
+    """A period's own file, when no entry names it, and the `packed` entry it earns; else None.
+
+    The file is fetched with the files beside it, then read from its footer
+    alone. A file whose envelope names another ledger, period or day is refused
+    by name.
+    """
+    found = named_trees.compact_file(listing, state_dir, ledger_name, period, covers)
+    if found is None:
+        return None
+    listing.fetch(beside=[found])
+    footer = ledger.read_footer(found)
+    said = footer.envelope
+    if (said.tier, said.ledger, said.period, said.covers) != (
+        Tier.COMPACT,
+        ledger_name,
+        period,
+        covers,
+    ):
+        raise ValueError(
+            f"{found.name} sits where the {ledger_name.value} {period.value} file for {covers} "
+            f"goes, and its envelope says {said.tier.value} {said.ledger.value} "
+            f"{said.period.value if said.period else 'raw'} {said.covers}, so it is not adopted"
+        )
+    return Adopted(
+        path=found,
+        entry=CompactEntry(covers=covers, rows=footer.rows, bytes=listing.size_of(found)),
+    )

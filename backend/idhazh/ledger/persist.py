@@ -105,6 +105,15 @@ class PeriodFile:
     rows: int
 
 
+@dataclass(frozen=True, slots=True)
+class FileFooter:
+    """What one ledger file says of itself with no row read: its envelope and its row count."""
+
+    envelope: FileEnvelope
+    #: How many rows the file holds.
+    rows: int
+
+
 @cache
 def _knobs() -> LedgerConfig:
     """The committed `ledger` block: the default format and the two compressions."""
@@ -657,13 +666,25 @@ def _opened(path: Path) -> tuple[FileEnvelope, list[dict[str, Any]]]:
 
 def read_envelope(path: Path) -> FileEnvelope:
     """One file's envelope. A parquet file's comes from its footer, without touching a row."""
+    return read_footer(path).envelope
+
+
+def read_footer(path: Path) -> FileFooter:
+    """One file's envelope and how many rows it holds.
+
+    A parquet file answers both from its footer, without touching a row. A
+    JSON-lines file has no footer, so it is read whole. The container is told
+    from the file's first bytes, as `_opened` tells it.
+    """
     with path.open("rb") as handle:
         head = handle.read(len(_PARQUET_MAGIC))
     if head == _PARQUET_MAGIC:
         from idhazh.ledger import parquet
 
-        return FileEnvelope.from_metadata(parquet.read_envelope(path))
-    return _opened(path)[0]
+        metadata, rows = parquet.read_footer(path)
+        return FileFooter(envelope=FileEnvelope.from_metadata(metadata), rows=rows)
+    envelope, stored = _opened(path)
+    return FileFooter(envelope=envelope, rows=len(stored))
 
 
 def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[StoredRow[C]]:

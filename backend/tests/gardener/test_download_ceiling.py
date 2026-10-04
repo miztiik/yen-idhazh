@@ -131,28 +131,24 @@ def test_a_shard_at_under_and_over_its_ceiling(
     )
 
 
-def test_the_weight_is_read_off_the_commit_and_not_the_checkout(
+def test_the_listing_is_read_off_the_commit_and_not_the_checkout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A file nobody committed weighs nothing, and a folder the commit lacks weighs 0."""
+    """A file nobody committed is not listed, even inside a named day, and each file has git's size."""
     quiet_git(tmp_path, monkeypatch)
     _, checkout = an_origin(tmp_path, {AGED_DAY: "a" * 10, KEEP: "k" * 3})
-    (checkout / "state" / "old-days" / "never-committed.bin").write_bytes(b"x" * 5000)
-    folders = ["state/compact/gardener", "state/old-days", "state/rehearsal"]
+    named_day = AGED_DAY.rsplit("/", 1)[0]
+    (checkout / named_day / "never-committed.bin").write_bytes(b"x" * 5000)
 
     listing = gardener_publish.read_the_listing(
         gardener_publish.Checkout(checkout),
         checkout,
-        folders,
-        [AGED_DAY, KEEP],
+        ["state/compact/gardener", "state/old-days", "state/rehearsal"],
+        [named_day, KEEP],
         None,
     )
 
-    assert gardener_publish.folder_weights(listing, folders) == {
-        "state/compact/gardener": 3,
-        "state/old-days": 10,
-        "state/rehearsal": 0,
-    }
+    assert dict(listing.sizes) == {KEEP: 3, AGED_DAY: 10}
 
 
 def test_a_hand_run_reads_no_commit_and_records_no_weight(
