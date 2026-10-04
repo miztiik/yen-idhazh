@@ -214,31 +214,6 @@ first reader of it (CLAUDE.md section 11). Run 37130643074 failed because a
 reader that refused unmigrated evaluation history reached `main` before its
 migration did.
 
-## Preparation names this attempt's derived files
-
-`PREPARE_COMMAND` and `PREPARED_PATHS_FILE` must be supplied together. They are
-independent of the existing `REFRESH_PATHS` and `REGENERATE_COMMAND` pair.
-Preparation runs before initial staging and again after a rejected push has
-restored the named outputs and rebased. When regeneration is configured, it
-runs before preparation on that retry. Command arguments are space-split and
-cannot contain spaces.
-
-The prepared-path file must be untracked, ignored and inside the checkout.
-Before each call the helper deletes the previous file. The command must write
-a fresh JSON array of literal repository-relative POSIX file paths, including
-deletions and files skipped by preparation. Missing or invalid output stops
-the commit; the helper never reuses a stale list. It rejects directories,
-linked paths, paths outside the checkout and Git metadata paths.
-
-On a rejected push, the helper restores the previous attempt's prepared paths
-alongside any refresh paths before rebasing. It then replaces that list with
-the new preparation result and stages the named files and deletions. A file
-that is both absent and untracked needs no staging. The same rule stages the
-job's own path list, so prepared and named paths go through one `git add`.
-
-No workflow sets these two values: no job has a derived file that only
-preparation can name.
-
 ## A conflicted path is settled by who wrote it, never by which side it came from
 
 Git's own names for the two sides of a conflict invert between a rebase and a

@@ -76,21 +76,6 @@
       ]
     },
     {
-      "name": "summary-quality-evals-index",
-      "lifecycle_status": "active",
-      "description": "Which measurements the summary-quality evals already hold, so one summary is not counted twice.",
-      "onboarded": "2026-09-08",
-      "ledgers": [
-        {
-          "name": "summary-quality-evals-index",
-          "grain": "lookup",
-          "prefix": ["summary-quality-evals-index"],
-          "stem": null,
-          "suffix": null
-        }
-      ]
-    },
-    {
       "name": "candidate-models",
       "lifecycle_status": "active",
       "description": "The verdict on each candidate model, filed on the day it was measured.",

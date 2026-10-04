@@ -44,12 +44,12 @@ Table A - what is out
 | 4 | The ledger fault words live in contracts | 1 | A | DONE | special-sniffle | #1276 | Plan 60 row 4: fault words in contracts |
 | 5 | A ledger's marks are read in one place | - | A | DONE | silver-dollop | #1279 | Plan 60 row 5: marks in one place |
 | 6 | One run id per workflow run | 1 | B | DONE | automatic-adventure | #1278 | Plan 60 row 6: one run id |
-| 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
+| 7 | The month-delete switch is named for what it does | 1 | B | DONE | ubiquitous-journey | - | Plan 60 row 7: rename month switch |
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | - | Plan 60 row 8: site reads lost periods |
 | 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | #1282 | Plan 60 row 9: job names |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
-| 12 | Which months may close | 3, 5, 7, 8, 27 | D | PENDING | - | - | - |
+| 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | PENDING | - | - | - |
 | 13 | Which days may be packed | 12 | D | PENDING | - | - | - |
 | 14 | Which years may be packed | 13 | D | PENDING | - | - | - |
 | 15 | Each old month is dropped once | 14 | D | PENDING | - | - | - |
@@ -67,6 +67,7 @@ Table A - what is out
 | 27 | A shard lands nothing stale, and says why when it cannot land | 3, 9 | C | DONE | urban-spoon | - | Plan 60 row 27: no stale landing |
 | 28 | The console can read the gardener ledger | 23 | F | PENDING | - | - | - |
 | 29 | doc_load.py measures every named Markdown page | 26 | A | DONE | effective-carnival | - | Plan 60 row 29: doc_load every page |
+| 30 | Every reader and rewriter of a compact index keeps an entry's state | 8 | D | DONE | psychic-guide | - | Plan 60 row 30: index readers keep state |
 
 ## 2. Shared declarations
 
@@ -305,23 +306,26 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #7 - The month-delete switch is named for what it does
 
 - **Scope:** `monthly_window_dry_run` becomes `month_deletes_dry_run: bool` everywhere in one change, and a declaration that still carries the old key is refused by name. Level 2.
-- **Files touched** (from a search for `monthly_window_dry_run`, 2026-10-04; search again at dispatch):
-  - the 11 files `config/gardener/compact-*.json`
+- **Files touched** - corrected during execution (Fowler review 2026-10-04), from a search for `monthly_window_dry_run` at dispatch:
+  - every compaction declaration, `config/gardener/compact-*.json`, `compact-run-plan.json` included
   - `backend/idhazh/contracts/knobs/gardener.py`
   - `backend/idhazh/gardener/tasks/compaction.py`
-  - `backend/utilities/migrate_to_parquet.py`
+  - `backend/utilities/ledger_migration/packing.py`
   - `tests/fixtures/gardener/runner/compact-gardener.json`
   - `tests/fixtures/gardener/garden/compact-gardener.json`
   - `tests/fixtures/gardener/garden/compact-feed-health.json`
   - `backend/tests/gardener/tasks/test_compaction.py`
   - `backend/tests/gardener/tasks/test_compaction_years.py`
   - `backend/tests/contracts/test_gardener_config.py`
+  - `backend/tests/ledger_migration/test_packing_governance.py`
   - `docs/concepts/config/idhazh-gardener.md`
   - `docs/concepts/config/retention-ages.md`
   - `docs/architecture/sources/health.md`
   - `docs/architecture/publishing/ledger-compaction.md`
   - `TODO/20260928-55-one-page-queries-every-ledger-plan.md`
-- **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/contracts/test_gardener_config.py backend/tests/gardener/tasks/test_compaction.py backend/tests/gardener/tasks/test_compaction_years.py backend/tests/ledger/test_migrate_to_parquet.py`; ruff; mypy; `doc_load.py` on the changed docs. CI: the full suite.
+  - `TODO/20261004-pipeline-tests-migration-plan.md`
+  - attempts description: carried from row 27 (#1291), owner 2026-10-04
+- **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/contracts/test_gardener_config.py backend/tests/gardener/tasks/test_compaction.py backend/tests/gardener/tasks/test_compaction_years.py backend/tests/ledger_migration/` (the migration tests' path corrected during execution (Fowler review 2026-10-04)); ruff; mypy; `doc_load.py` on the changed docs. CI: the full suite.
 - **Oracle:** a declaration that carries the old key fails to load, and the error names the key (`extra="forbid"`). A search for the old name finds only git history. It cannot settle a copy of the name outside the repository.
 
 | # | Decision | Authority |
@@ -707,7 +711,6 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/gardener/period_inputs.py`
   - `backend/idhazh/gardener/named_trees.py`
   - `backend/idhazh/telemetry/door_prune.py`
-  - `backend/idhazh/evals/observation_migration.py`
   - `backend/utilities/ledger_migration/packing_files.py` (its docstring names a watermark; it names the marks through `ledger_marks.name_marks` since #1281)
   - `backend/utilities/benchmark_compaction.py` (it times `write_watermark`)
   - `frontend/scripts/published-ledgers.mjs` (its comment on keeping `daily/watermark.json` off the site)
@@ -726,7 +729,6 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/ledger_migration/test_packing_parity.py` (its watermark reads)
   - `backend/tests/ledger_migration/test_packing_scope.py` (its watermark writes and checks)
   - `backend/tests/retention/test_prune_range.py`
-  - `backend/tests/evals/test_observation_migration.py`
   - `backend/tests/test_canary_packing.py`
   - `frontend/tests/ledger-copy.spec.ts`
   - `frontend/tests/published-ledgers.spec.ts`
@@ -1028,3 +1030,35 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- | --- | --- |
 | 1 | Print one line naming each skipped path | A plan still gets no row, and AGENTS.md step 3 asks for one row for each named page | A few lines | Fowler review, 2026-10-04 |
 | 2 | Leave it | Every plan check prints nothing, and AGENTS.md keeps a wrong sentence | Nothing | Fowler review, 2026-10-04 |
+
+### Row #30 - Every reader and rewriter of a compact index keeps an entry's state
+
+- **Scope:** Two code paths outside the compaction misread the fields row 8 added to `CompactEntry` (Table D, D1); found by row 8, owner 2026-10-04. `check_compact_period` in `backend/idhazh/ledger/stored_output.py`, which the ledger migration's readback runs, refused an `empty` or `lost` entry as having 0 files where it expected one. It now passes such an entry while no file is at its path, and refuses a file there. The named prune in `backend/idhazh/telemetry/door_prune.py` rebuilt a pruned file's entry from what it covers, its rows and its bytes alone, so a prune dropped `state`, `lost_days` and `set_aside` and erased the record of a gap. It now changes only `rows` and `bytes`. A search of `backend/` outside the tests for every `CompactEntry(` and every read of a compact index's entries found no other reader or rewriter outside the compaction that loses a field or looks for a file an entry does not name. Reader before writer: this row lands before row 12 writes these shapes. Level 2.
+- **Files touched:**
+  - `backend/idhazh/ledger/stored_output.py` (`check_compact_period`)
+  - `backend/idhazh/telemetry/door_prune.py` (`_changes`)
+  - `backend/tests/ledger/test_stored_output.py`
+  - `backend/tests/retention/test_prune_range.py`
+  - `docs/architecture/contracts/persistence.md`
+  - `backend/utilities/ledger_migration/readback.py` (read, no change: it reads the check's answer, and a recorded period with no file is not missing output)
+  - `backend/idhazh/ledger/day_removal.py` (read, no change: it names a file only for an entry that counts a row, and an entry with no file counts none)
+  - `backend/idhazh/ledger/ledger_files.py` (read, no change: row 8 taught it `names_file`)
+  - `backend/idhazh/gardener/ledger_marks.py` and `backend/idhazh/gardener/tasks/_compact_tree.py` (read, no change: each carries every entry whole)
+  - `backend/idhazh/gardener/tasks/_daily_period.py`, `_monthly_period.py` and `_yearly_period.py` (read, no change: decision 3)
+- **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/ledger/test_stored_output.py backend/tests/retention/test_prune_range.py backend/tests/ledger_migration/test_readback.py`; ruff; mypy; `npm --prefix frontend run test:changed -- --list` and the checks it selects; `python backend/utilities/doc_load.py docs/architecture/contracts/persistence.md`. CI: the full suite.
+- **Oracle:**
+  - Contract: `check_compact_period` over row 8's samples `an-empty-day`, `a-lost-day` and `a-month-with-lost-days`. The entry with no file passes while no file is at its path, and a real compact file there is refused. On the base tree all three fail with "0 files, expected one". Deleting the branch that reads `names_file` makes the test fail again, and deleting only the refusal makes its second half fail with "DID NOT RAISE".
+  - Contract: the named prune over `a-month-with-lost-days`, its packed month built from census rows filed through the door. Taking one day rebuilds the month file, and the month's entry keeps its two lost days and its one set-aside file, with the new row count and size. The empty month beside it is carried as it was. On the base tree the rebuilt entry has no lost day and nothing set aside. Building the entry from `CompactEntry(covers=..., rows=..., bytes=...)` again makes the test fail.
+  - It cannot settle what a compaction step does with an entry that has no file. That is the writer rows' work (decision 3).
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | An entry with no file passes the check while no file is at its path, and a file at its path is refused | The owner, 2026-10-04 (row 30 brief) |
+| 2 | A rewrite copies the entry and changes only `rows` and `bytes`, so a field added to `CompactEntry` later is carried too | The owner, 2026-10-04 (row 30 brief) |
+| 3 | The compaction steps are not changed here: they write these shapes, and rows 12 to 18 change them. Each place a step opens a period's file meets an entry with no file once a writer row lands, and that row handles it. `_daily_period._take` refuses a re-run on an `empty` or `lost` day as `file-missing` (rows 12 and 13), and a re-take builds a fresh entry that drops `set_aside` (row 18). `_monthly_period.absorb` and `_finish` refuse an `empty` or `lost` day and an `empty` month as `file-missing` (rows 12 and 13). `_yearly_period._pack` and `_finish` refuse an `empty` month and an `empty` year the same way (row 14). Row 15 decision 3 already covers `_monthly_period.drop` | The owner, 2026-10-04 (row 30 brief) |
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Count an entry with no file as absent in the check | The readback would call a period the index records "migrated output is missing", where a zero-row file counted as present before | Nothing to build | Row 30 worker, 2026-10-04 |
+| 2 | Name the three new fields in the prune's rewrite | A field added to `CompactEntry` later would be dropped again, and no test would say so | One line a field | Row 30 worker, 2026-10-04 |
+| 3 | Teach the compaction steps `names_file` in this row | Some of those reads cannot change apart from a write. A month that closes over a lost day has to list it in `lost_days`, or the close erases the record, and row 12 writes `lost_days` | Edits in three step modules that rows 12 to 18 rewrite | The owner, 2026-10-04 (row 30 brief) |

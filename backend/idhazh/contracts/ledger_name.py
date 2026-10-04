@@ -47,7 +47,6 @@ class LedgerName(StrEnum):
     ITEM_HEALTH = "item-health"
     HOST_FINGERPRINT = "host-fingerprint"
     SUMMARY_QUALITY_EVALS = "summary-quality-evals"
-    SUMMARY_QUALITY_EVALS_INDEX = "summary-quality-evals-index"
     CANDIDATE_MODELS = "candidate-models"
     ITEM_HEALTH_SUMMARY = "item-health-summary"
     PUBLISHED = "published"

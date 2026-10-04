@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-03",
+  "evaluation_step": "combine_judge_results",
+  "judge_id": "content-similarity-judge",
+  "model_calls": null,
+  "model_seconds": null,
+  "outcome": "nothing_to_do",
+  "run_id": "2026-10-04-37164837568",
+  "seconds_spent": 0.0108935409999944,
+  "started_at": "2026-10-04T00:25:29Z",
+  "tokens_in": null,
+  "tokens_out": null,
+  "version": "2026-09-21T12:00",
+  "work_part_count": 4,
+  "work_part_index": null
+}
