@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -47,23 +48,27 @@ def test_filesystem_errors_use_relative_posix_labels(tmp_path: Path) -> None:
         assert tmp_path.drive not in message
 
 
-@pytest.mark.skipif(os.name != "nt", reason="Windows mandatory file locks are required")
 def test_an_unreadable_csv_refusal_does_not_print_an_absolute_path(tmp_path: Path) -> None:
-    import msvcrt
+    if sys.platform != "win32":
+        pytest.skip("Windows mandatory file locks are required")
+    else:
+        import msvcrt
 
-    root = tmp_path / "trial"
-    source = write_csv(root, HOST, OLD, writer_file_name(OLD, 1, ServerJob.WORK), [probe_row(OLD).csv_row()])
-    before = file_hashes(tmp_path)
-    with source.open("r+b") as handle:
-        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-        try:
-            with pytest.raises(refusals.NotProvenError) as refused:
-                plan_named_roots([root], HOST)
-        finally:
-            handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-    message = str(refused.value)
-    assert HOST.value in message and OLD in message
-    assert str(tmp_path) not in message and tmp_path.as_posix() not in message
-    assert "\\" not in message
-    assert file_hashes(tmp_path) == before
+        root = tmp_path / "trial"
+        source = write_csv(
+            root, HOST, OLD, writer_file_name(OLD, 1, ServerJob.WORK), [probe_row(OLD).csv_row()]
+        )
+        before = file_hashes(tmp_path)
+        with source.open("r+b") as handle:
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            try:
+                with pytest.raises(refusals.NotProvenError) as refused:
+                    plan_named_roots([root], HOST)
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        message = str(refused.value)
+        assert HOST.value in message and OLD in message
+        assert str(tmp_path) not in message and tmp_path.as_posix() not in message
+        assert "\\" not in message
+        assert file_hashes(tmp_path) == before
