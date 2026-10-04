@@ -38,7 +38,7 @@
 		<tbody>
 			{#each visible as row, index (index)}
 				<tr>
-					<th class="row-number">{ordered.indexOf(row) + 1}</th>
+					<th class="row-number">{index + 1}</th>
 					{#each columns as column (column.name)}
 						{@const printed = printCell(column, row[column.name])}
 						<td data-kind={printed.kind}>

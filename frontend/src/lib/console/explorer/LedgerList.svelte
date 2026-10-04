@@ -24,7 +24,7 @@
 	<label class="filter">Filter <input value={filter} oninput={(event) => onFilter(event.currentTarget.value)} /></label>
 	<div class="ledger-options">
 		{#each shown as ledger (ledger.name)}
-			<label class="ledger" data-published={published.includes(ledger.name) ? 'yes' : 'no'}>
+			<label class="ledger" data-ledger-name={ledger.name} data-published={published.includes(ledger.name) ? 'yes' : 'no'}>
 				<input type="checkbox" checked={selected.includes(ledger.name)} onchange={() => onToggle(ledger.name)} />
 				<span>{ledger.name}</span>
 				<small>{published.includes(ledger.name) ? ledger.grain : `not on this site - ${ledger.grain}`}</small>

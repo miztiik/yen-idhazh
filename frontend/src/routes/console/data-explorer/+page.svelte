@@ -1,10 +1,10 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type LedgerName, type Row, type SpanCost } from '$lib/data/ledger';
+	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import { fillWindowSlot } from '$lib/console/window-slot';
-	import { refusedSentence } from '$lib/console/waiting';
+	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
 	import { shortDate, dayMonth } from '$lib/format';
 	import QuestionStrip from '$lib/console/explorer/QuestionStrip.svelte';
 	import LedgerList from '$lib/console/explorer/LedgerList.svelte';
@@ -34,10 +34,12 @@
 	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], through: {} });
 	let heldBytes = $state(0);
 	let lastMs = $state<number | null>(null);
+	let lastRead = $state<FetchCost | null>(null);
 	let result = $state<AskResult | null>(null);
 	let ledgerColumns = $state<Column[]>([]);
 	let showAnswerColumns = $state(false);
 	let runSpan = $state<{ from: DateStamp; to: DateStamp } | null>(null);
+	let wide = $state(false);
 
 	const ledgers = $derived<RegistryLedger[]>(flattenRegistry(registry));
 	const selectedPublished = $derived(selected.filter((name) => published.includes(name)));
@@ -81,6 +83,10 @@
 	}
 	function monthsFor(): number { return 0; }
 
+	function carrySentence(): string {
+		return data.carries?.['data-explorer'] ?? 'Every published ledger the other routes draw from, open to a question of your own.';
+	}
+
 	fillWindowSlot({
 		get days() { return windowDays; },
 		get presets() { return presets; },
@@ -98,6 +104,14 @@
 			await startAfresh();
 			heldBytes = 0;
 			registry = await fetchRegistry();
+			if (selected.length === 0) {
+				const first = config.examples.find((example) => example.ledgers.every((ledger) => published.includes(ledger)));
+				if (first !== undefined) {
+					selected = first.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
+					windowDays = presets.includes(first.days) ? first.days : windowDays;
+					sql = first.sql;
+				}
+			}
 			await updateCostAndColumns();
 		} catch (error) {
 			registryError = error instanceof Error ? error.message : String(error);
@@ -137,6 +151,7 @@
 		running = true;
 		const nextSpan = span();
 		runSpan = nextSpan;
+		lastRead = null;
 		const started = performance.now();
 		try {
 			const answer = await ask({ ledgers: selected, from: nextSpan.from, to: nextSpan.to, sql, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
@@ -146,6 +161,7 @@
 			if ((answer.state === 'ok' || answer.state === 'quiet') && 'read' in answer) {
 				heldBytes = pageHeldBytes();
 				lastMs = answer.read.ms;
+				lastRead = answer.read;
 			}
 		} finally {
 			running = false;
@@ -154,21 +170,26 @@
 
 	onMount(() => {
 		ready = true;
+		const query = matchMedia(`(min-width: ${data.frame.breakpoints_px[1]}px)`);
+		const sync = () => (wide = query.matches);
+		sync();
+		query.addEventListener('change', sync);
 		void refreshRegistry();
+		return () => query.removeEventListener('change', sync);
 	});
 </script>
 
-<p class="cross-link"><a href="/console/">Back to the pipeline console.</a> Records reads the ledgers directly, after you choose the days and press Run.</p>
+<p class="cross-link" data-console-carry>{carrySentence()} <a href="/console/">Open Pipelines.</a></p>
 
-<Panel id="data-explorer-ask" title="Ask the records" note="Pick ledgers, write one read-only DuckDB SQL statement, and run it in this browser.">
-	<div class="question-panel" style={`--rail:${config.rail_rem}rem`}>
-		<QuestionStrip examples={config.examples} onPick={pick} />
-		<div class="question-grid">
+<Panel id="data-explorer-ask" title="Your question" note={`One read-only DuckDB statement at a time, up to ${config.query_max_chars} characters.`}>
+	<div class="question-panel" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px`}>
+		<QuestionStrip examples={config.examples} {published} shown={config.strip_shown} onPick={pick} />
+		<div class="question-grid" class:wide>
 			<LedgerList ledgers={ledgers} selected={selected} {published} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
 			<div class="editor-stack">
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}
-				<QueryEditor value={sql} maxChars={config.query_max_chars} minLines={config.editor_lines[0]} maxLines={config.editor_lines[1]} onInput={(value) => (sql = value)} />
-				<ActionLine files={cost.files} bytes={cost.bytes} {heldBytes} ms={lastMs} busy={running || costing} disabled={selected.length === 0 || sql.trim() === ''} onRun={run} />
+				<QueryEditor value={sql} maxChars={config.query_max_chars} minLines={config.editor_lines[0]} maxLines={config.editor_lines[1]} counterFromShare={config.counter_from_share} onInput={(value) => (sql = value)} onRun={run} />
+				<ActionLine files={cost.files} bytes={cost.bytes} {heldBytes} read={lastRead} busy={running || costing} disabled={selected.length === 0 || sql.trim() === ''} onRun={run} />
 			</div>
 			<ColumnList columns={columns} label={columnLabel} />
 		</div>
@@ -177,18 +198,18 @@
 
 <Panel id="data-explorer-rows" title="The answer" wide>
 	{#if result === null}
-		<div class="answer-state" data-explorer-idle>Press Run and the answer appears here, as a table.</div>
+		<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
 	{:else if running}
 		<div class="answer-state shimmer" data-state="loading"></div>
 	{:else if result.state === 'ok'}
 		<div class="answer-note">{#if runSpan}Read from {windowDays} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}</div>
 		<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} tableMaxVh={config.table_max_vh} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} />
 	{:else if result.state === 'quiet'}
-		<div class="answer-state" data-state="quiet">Your question ran and matched no rows.</div>
+		<div class="answer-state" data-state="quiet">{explorerQuietSentence()}</div>
 	{:else if result.state === 'missing'}
-		<div class="answer-state" data-state="missing">{published.includes(result.ledger) ? `${result.ledger} has no days on this site yet.` : `${result.ledger} is not on this site yet, so nothing was asked of it.`}</div>
+		<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
 	{:else if result.state === 'unreachable'}
-		<div class="answer-state warn" data-state="unreachable">{result.fault === 'engine' ? 'The query engine did not start in this browser. A current version of Chrome, Edge, Firefox or Safari runs it.' : result.fault === null ? `${result.ledger ?? 'The ledger'} for ${result.at ?? 'that day'} did not arrive, so the question did not run.` : `No file on this site holds ${result.ledger ?? 'the ledger'} for ${result.at ?? 'that day'}.`}</div>
+		<div class="answer-state warn" data-state="unreachable">{explorerUnreachableSentence(result.ledger, result.at, result.fault)}</div>
 	{:else if result.state === 'refused'}
 		<div class="answer-state" data-state="refused">{refusedSentence(result.because)}{#if result.because.kind === 'engine-error'}<pre>{result.because.message}</pre>{/if}</div>
 	{/if}
@@ -202,8 +223,8 @@
 	.editor-stack { display: grid; gap: var(--space-4); align-content: start; }
 	.state, .answer-note { margin: 0; color: var(--color-text-secondary); }
 	.warn { color: var(--band-low); }
-	.answer-state { min-block-size: var(--chart-height, 220px); display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); border: 1px solid var(--color-rule); border-radius: var(--radius-md); }
+	.answer-state { min-block-size: var(--idle-height); display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); border: 1px solid var(--color-rule); border-radius: var(--radius-md); }
 	.answer-state pre { max-inline-size: 100%; overflow-x: auto; white-space: pre; font-family: var(--font-data); color: var(--code-string); }
 	.shimmer { background: linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-raised) 50%, var(--color-surface) 100%); }
-	@media (min-width: 1024px) { .question-grid { grid-template-columns: minmax(12rem, var(--rail)) minmax(0, 1fr) minmax(12rem, var(--rail)); } }
+	.question-grid.wide { grid-template-columns: minmax(12rem, var(--rail)) minmax(0, 1fr) minmax(12rem, var(--rail)); }
 </style>

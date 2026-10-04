@@ -37,6 +37,9 @@ declare global {
 	/** Records route knobs, injected by `vite.config.ts`. */
 	const __EXPLORER_CONFIG__: import('$lib/server/config').ExplorerConfig;
 
+	/** Frame knobs, injected by `vite.config.ts`. */
+	const __FRAME_CONFIG__: import('$lib/server/config').FrameConfig;
+
 	/** Ledgers published on this site, injected by `vite.config.ts`. */
 	const __PUBLISHED_LEDGERS__: string[];
 

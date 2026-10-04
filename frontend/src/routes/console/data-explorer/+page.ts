@@ -7,6 +7,7 @@ export function load() {
 		console: __CONSOLE_CONFIG__,
 		explorer: __EXPLORER_CONFIG__,
 		publishedLedgers: __PUBLISHED_LEDGERS__,
+		frame: __FRAME_CONFIG__,
 		panelGroups: [{ id: 'data-explorer', title: '', panels: ['data-explorer-ask', 'data-explorer-rows'] }]
 	};
 }

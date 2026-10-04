@@ -239,10 +239,6 @@ a contract. Data hygiene belongs there and not in pytest (`CLAUDE.md`
 section 13): it is the producer's own gate on what it just wrote, running where
 the payload is.
 
-## Records route
-
-The Records route fetches the ledger registry at `config/ledgers.json`, then uses the query door to fetch only the indexes and data files its chosen ledgers and days require. Its two panels are `data-explorer-ask` and `data-explorer-rows`; the chart panel is later work.
-
 ## Retention
 
 The retained monthly copies have a configured age. A payload a run appends to with no age is

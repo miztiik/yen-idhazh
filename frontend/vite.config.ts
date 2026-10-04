@@ -2,7 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { assetBaseUrl, encoderSource } from './asset-base.js';
-import { assistConfig, consoleConfig, engineExtensionRepository, explorerConfig, uiConfig } from './src/lib/server/config';
+import { assistConfig, consoleConfig, engineExtensionRepository, explorerConfig, frameConfig, uiConfig } from './src/lib/server/config';
 import { queryEngineAssetModule } from './scripts/query-engine-assets';
 import { rawListedThrough } from './scripts/raw-listed-through.mjs';
 import { publishedLedgers } from './scripts/published-ledgers.mjs';
@@ -62,6 +62,7 @@ export default defineConfig({
 		__ENGINE_EXTENSION_REPOSITORY__: JSON.stringify(engineExtensionRepository()),
 		__CONSOLE_CONFIG__: JSON.stringify(consoleConfig()),
 		__EXPLORER_CONFIG__: JSON.stringify(explorerConfig()),
+		__FRAME_CONFIG__: JSON.stringify(frameConfig()),
 		__PUBLISHED_LEDGERS__: JSON.stringify(publishedLedgers()),
 		__RAW_LISTED_THROUGH__: JSON.stringify(rawListedThrough())
 	}

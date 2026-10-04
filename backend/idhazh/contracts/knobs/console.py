@@ -554,59 +554,60 @@ class ConsoleConfig(Model):
     explorer_examples: list[dict[str, object]] = Field(
         default_factory=lambda: [
             {
-                "id": "published-counts",
-                "title": "Count published rows by day",
-                "ledgers": ["published"],
+                "id": "p99-by-machine",
+                "title": "p99 job time by machine kind",
+                "ledgers": ['host-fingerprint'],
                 "days": 14,
                 "sql": (
-                    "SELECT date, count(*) AS rows FROM \"published\" "
+                    "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds "
+                    "FROM \"host-fingerprint\" GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
+                ),
+            },
+            {
+                "id": "throughput-by-machine",
+                "title": "Prompt throughput by machine kind",
+                "ledgers": ['host-fingerprint'],
+                "days": 14,
+                "sql": (
+                    "SELECT cpu_model, avg(prompt_tokens_per_second) AS prompt_throughput "
+                    "FROM \"host-fingerprint\" GROUP BY cpu_model "
+                    "ORDER BY prompt_throughput DESC"
+                ),
+            },
+            {
+                "id": "feeds-gone-quiet",
+                "title": "Feeds with no good fetch in the span",
+                "ledgers": ['feed-health'],
+                "days": 14,
+                "sql": (
+                    "SELECT feed_url, count(*) AS checks FROM \"feed-health\" "
+                    "GROUP BY feed_url ORDER BY checks DESC"
+                ),
+            },
+            {
+                "id": "why-items-failed",
+                "title": "What failed to summarize, and why",
+                "ledgers": ['item-health'],
+                "days": 14,
+                "sql": (
+                    "SELECT outcome, code, count(*) AS items FROM \"item-health\" "
+                    "GROUP BY outcome, code ORDER BY items DESC"
+                ),
+            },
+            {
+                "id": "scored-per-day",
+                "title": "Summaries scored, day by day",
+                "ledgers": ['summary-quality-evals'],
+                "days": 14,
+                "sql": (
+                    "SELECT date, count(*) AS scored FROM \"summary-quality-evals\" "
                     "GROUP BY date ORDER BY date DESC"
                 ),
-            },
-            {
-                "id": "health-by-state",
-                "title": "Count item health states",
-                "ledgers": ["item-health"],
-                "days": 14,
-                "sql": (
-                    "SELECT status, count(*) AS rows FROM \"item-health\" "
-                    "GROUP BY status ORDER BY rows DESC"
-                ),
-            },
-            {
-                "id": "summary-scores",
-                "title": "Average summary scores",
-                "ledgers": ["summary-quality-evals"],
-                "days": 14,
-                "sql": (
-                    "SELECT date, count(*) AS rows FROM \"summary-quality-evals\" "
-                    "GROUP BY date ORDER BY date DESC"
-                ),
-            },
-            {
-                "id": "host-runs",
-                "title": "Runs by machine",
-                "ledgers": ["host-fingerprint"],
-                "days": 14,
-                "sql": (
-                    "SELECT cpu_model, count(*) AS runs FROM \"host-fingerprint\" "
-                    "GROUP BY cpu_model ORDER BY runs DESC"
-                ),
-            },
-            {
-                "id": "all-published",
-                "title": "Rows in each published ledger",
-                "ledgers": ["published", "item-health"],
-                "days": 14,
-                "sql": (
-                    "SELECT 'published' AS ledger, count(*) AS rows FROM \"published\" "
-                    "UNION ALL SELECT 'item-health' AS ledger, count(*) AS rows "
-                    "FROM \"item-health\""
-                ),
-            },
+            }
         ],
         description="Example questions shown on the Records page.",
     )
+
     panel_groups: dict[str, list[ConsolePanelGroup]] = Field(
         default_factory=lambda: {
             "pipelines": [
