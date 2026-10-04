@@ -13,7 +13,7 @@
     "unit": "months",
     "value": 15
   },
-  "monthly_window_dry_run": false,
+  "month_deletes_dry_run": false,
   "owns": [
     "state/raw/item-health",
     "state/compact/item-health"

@@ -153,6 +153,26 @@ def test_a_door_ledger_whose_compaction_cannot_hold_its_csv_is_refused(
     assert file_hashes(tmp_path) == before
 
 
+def test_the_migration_packs_live_and_only_reports_month_deletes_whatever_the_declaration_says(
+    tmp_path: Path,
+) -> None:
+    """A move deletes no month file its window would drop, even under a live declaration.
+
+    The declaration here turns its month deletes live and its packing off, so only
+    the migration's own override can give its copy the opposite two values.
+    """
+    config_dir = config_beside(tmp_path / "state")
+    declaration = config_dir / "gardener" / f"compact-{ITEM.value}.json"
+    declared = json.loads(declaration.read_text(encoding="utf-8"))
+    declaration.write_text(
+        json.dumps(declared | {"dry_run": True, "month_deletes_dry_run": False}), encoding="ascii"
+    )
+
+    policy = packing.declared([ITEM], config_dir)[ITEM]
+
+    assert (policy.dry_run, policy.month_deletes_dry_run) == (False, True)
+
+
 def test_a_root_beside_no_config_is_filed_raw_and_never_packed(tmp_path: Path) -> None:
     """Only the state tree beside `config/` is packed; a trial run's tree inside it is filed raw.
 

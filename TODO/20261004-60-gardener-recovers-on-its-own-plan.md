@@ -44,7 +44,7 @@ Table A - what is out
 | 4 | The ledger fault words live in contracts | 1 | A | DONE | special-sniffle | #1276 | Plan 60 row 4: fault words in contracts |
 | 5 | A ledger's marks are read in one place | - | A | DONE | silver-dollop | #1279 | Plan 60 row 5: marks in one place |
 | 6 | One run id per workflow run | 1 | B | DONE | automatic-adventure | #1278 | Plan 60 row 6: one run id |
-| 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
+| 7 | The month-delete switch is named for what it does | 1 | B | DONE | ubiquitous-journey | - | Plan 60 row 7: rename month switch |
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | - | Plan 60 row 8: site reads lost periods |
 | 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | #1282 | Plan 60 row 9: job names |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
@@ -305,23 +305,26 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #7 - The month-delete switch is named for what it does
 
 - **Scope:** `monthly_window_dry_run` becomes `month_deletes_dry_run: bool` everywhere in one change, and a declaration that still carries the old key is refused by name. Level 2.
-- **Files touched** (from a search for `monthly_window_dry_run`, 2026-10-04; search again at dispatch):
-  - the 11 files `config/gardener/compact-*.json`
+- **Files touched** - corrected during execution (Fowler review 2026-10-04), from a search for `monthly_window_dry_run` at dispatch:
+  - every compaction declaration, `config/gardener/compact-*.json`, `compact-run-plan.json` included
   - `backend/idhazh/contracts/knobs/gardener.py`
   - `backend/idhazh/gardener/tasks/compaction.py`
-  - `backend/utilities/migrate_to_parquet.py`
+  - `backend/utilities/ledger_migration/packing.py`
   - `tests/fixtures/gardener/runner/compact-gardener.json`
   - `tests/fixtures/gardener/garden/compact-gardener.json`
   - `tests/fixtures/gardener/garden/compact-feed-health.json`
   - `backend/tests/gardener/tasks/test_compaction.py`
   - `backend/tests/gardener/tasks/test_compaction_years.py`
   - `backend/tests/contracts/test_gardener_config.py`
+  - `backend/tests/ledger_migration/test_packing_governance.py`
   - `docs/concepts/config/idhazh-gardener.md`
   - `docs/concepts/config/retention-ages.md`
   - `docs/architecture/sources/health.md`
   - `docs/architecture/publishing/ledger-compaction.md`
   - `TODO/20260928-55-one-page-queries-every-ledger-plan.md`
-- **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/contracts/test_gardener_config.py backend/tests/gardener/tasks/test_compaction.py backend/tests/gardener/tasks/test_compaction_years.py backend/tests/ledger/test_migrate_to_parquet.py`; ruff; mypy; `doc_load.py` on the changed docs. CI: the full suite.
+  - `TODO/20261004-pipeline-tests-migration-plan.md`
+  - attempts description: carried from row 27 (#1291), owner 2026-10-04
+- **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/contracts/test_gardener_config.py backend/tests/gardener/tasks/test_compaction.py backend/tests/gardener/tasks/test_compaction_years.py backend/tests/ledger_migration/` (the migration tests' path corrected during execution (Fowler review 2026-10-04)); ruff; mypy; `doc_load.py` on the changed docs. CI: the full suite.
 - **Oracle:** a declaration that carries the old key fails to load, and the error names the key (`extra="forbid"`). A search for the old name finds only git history. It cannot settle a copy of the name outside the repository.
 
 | # | Decision | Authority |

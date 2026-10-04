@@ -738,7 +738,7 @@ def window_pass(root: Path, today: date, *, reports: bool) -> Pass:
         today,
         max_periods_per_run=200,
         monthly_window=ONE_MONTH,
-        monthly_window_dry_run=reports,
+        month_deletes_dry_run=reports,
     )
 
 
@@ -846,7 +846,7 @@ def test_a_dry_run_whose_window_only_reports_names_what_that_live_pass_does(
         today=NOVEMBER_WAKE,
         max_periods_per_run=200,
         monthly_window=ONE_MONTH,
-        monthly_window_dry_run=True,
+        month_deletes_dry_run=True,
     )
     live = window_pass(trees[1], NOVEMBER_WAKE, reports=True)
 

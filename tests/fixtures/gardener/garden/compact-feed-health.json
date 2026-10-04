@@ -13,7 +13,7 @@
     "unit": "months",
     "value": 14
   },
-  "monthly_window_dry_run": true,
+  "month_deletes_dry_run": true,
   "owns": [
     "state/raw/feed-health",
     "state/compact/feed-health"

@@ -64,8 +64,10 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
                 f"the window of {_spelled(kept)} that kept {name.value} on CSV, so its first "
                 "live pass would delete days the CSV still held"
             )
-        declared[name] = policy.model_copy(
-            update={"dry_run": False, "monthly_window_dry_run": True}
+        # Validated, because model_copy(update=...) is not: a misspelt key there would be
+        # kept beside the real one, and the declaration's own month deletes would run.
+        declared[name] = CompactionPolicy.model_validate(
+            {**policy.model_dump(), "dry_run": False, "month_deletes_dry_run": True}
         )
     return declared
 
