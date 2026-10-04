@@ -21,7 +21,8 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
  */
 export const CONSOLE_ROUTE_PATHS: Readonly<Record<string, string>> = {
 	pipelines: '/console/',
-	machine: '/console/machine/'
+	machine: '/console/machine/',
+	'data-explorer': '/console/data-explorer/'
 };
 
 export interface ConsoleRoute {

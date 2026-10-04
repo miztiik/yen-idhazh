@@ -118,8 +118,12 @@ async function startInBrowser(repository: string): Promise<QueryEngine> {
 		new Blob([`importScripts(${JSON.stringify(workerUrl)});`], { type: 'text/javascript' })
 	);
 	try {
-		const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(bootstrap));
-		await db.instantiate(new URL(wasm.default, location.href).href);
+		const workerInstance = new Worker(bootstrap);
+		const workerStarted = new Promise<never>((_, reject) => {
+			workerInstance.addEventListener('error', () => reject(new Error('the query engine worker did not start')), { once: true });
+		});
+		const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), workerInstance);
+		await Promise.race([db.instantiate(new URL(wasm.default, location.href).href), workerStarted]);
 		await db.open({ filesystem: { forceFullHTTPReads: false } });
 		const connection = await db.connect();
 		for (const statement of repositorySetting(repository)) await connection.query(statement);

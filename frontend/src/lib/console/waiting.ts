@@ -206,3 +206,30 @@ export function refusedSentence(because: AskRefusal): string {
 	if (because.kind === 'over-ceiling') return `These days would fetch ${mb(because.bytes)} from ${because.files} files, and one question may fetch ${mb(because.max)}. Pick fewer days or fewer ledgers.`;
 	return 'The engine could not run this:';
 }
+
+
+export function explorerIdleSentence(): string {
+	return 'Press Run and the answer appears here, as a table.';
+}
+
+export function explorerQuietSentence(): string {
+	return 'Your question ran and matched no rows.';
+}
+
+export function explorerMissingSentence(ledger: string, published: boolean): string {
+	return published
+		? `${ledger} has no days on this site yet.`
+		: `${ledger} is not on this site yet, so nothing was asked of it.`;
+}
+
+export function explorerUnreachableSentence(ledger: string | null, day: string | null, fault: string | null): string {
+	if (fault === 'engine') {
+		return 'The query engine did not start in this browser. A current version of Chrome, Edge, Firefox or Safari runs it.';
+	}
+	if (fault === null) return `${ledger ?? 'The ledger'} for ${day ?? 'that day'} did not arrive, so the question did not run.`;
+	return `No file on this site holds ${ledger ?? 'the ledger'} for ${day ?? 'that day'}.`;
+}
+
+export function explorerChartIdleSentence(): string {
+	return 'If the answer holds a number, it is drawn here.';
+}

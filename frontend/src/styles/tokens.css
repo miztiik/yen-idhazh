@@ -37,6 +37,12 @@
 	   ground is dark and the light theme's is white, so the same share reads as a
 	   whisper on one and a block on the other. --color-text stays the ink on top. */
 	--color-mark: #2e3250;
+	--code-ground: #0f131b;
+	--code-text: #e6edf5;
+	--code-keyword: #a5a5ff;
+	--code-string: #4fc7dd;
+	--code-number: #f08cc4;
+	--code-comment: #78859a;
 
 	--band-high: #4bbd84;
 	--band-medium: #d6a743;
@@ -198,6 +204,12 @@
 	/* A smaller share than the dark theme's, because this ground is white: the
 	   same fifth that reads as a whisper on #141922 reads as a block here. */
 	--color-mark: #dfdefa;
+	--code-ground: #ffffff;
+	--code-text: #101828;
+	--code-keyword: #3f37c9;
+	--code-string: #0e7c8e;
+	--code-number: #b03a86;
+	--code-comment: #667085;
 
 	--band-high: #1a7f4b;
 	--band-medium: #8a6300;

@@ -12,6 +12,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console', 'console-article-cost', 'console-axis', 'console-band',
 		'console-chart-lifetime', 'console-chart-pending', 'console-charts-rule',
 		'console-chrome', 'console-cold-load', 'console-compression', 'console-coverage',
+		'console-data-explorer', 'console-data-explorer-cells',
 		'console-disk-reads', 'console-doubt', 'console-extraction', 'console-failure',
 		'console-failures', 'console-flow', 'console-frame',
 		'console-item-cost', 'console-judgement-agreement', 'console-judgement-holdout',

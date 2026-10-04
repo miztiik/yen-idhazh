@@ -6,8 +6,8 @@
  * enters the engine twice, and no line reaches the console twice.
  *
  * A keeper lives as long as whoever made it. In a browser, `ledger.ts` makes one
- * on first use and keeps it until the page is reloaded, so every panel the page
- * draws asks through it. At build time `sliceFromDisk()` makes one for each call
+ * on first use and keeps it until the page is reloaded, except the Records page
+ * calls `startAfresh()` on Refresh; every panel the page draws asks through it. At build time `sliceFromDisk()` makes one for each call
  * and releases it when the call ends.
  *
  * **An index is fetched once and kept.** What the fetch returned - the bytes, or
@@ -102,8 +102,10 @@ export interface PageKeeper {
 	 *  range for this call alone. Rejects when the engine cannot start or cannot
 	 *  take a file. */
 	hold(files: readonly WantedFile[]): Promise<Holding>;
-	/** Drops every file this keeper keeps registered. A build-time call does this when it ends; a page never does. */
+	/** Drops every file this keeper keeps registered. A build-time call does this when it ends; the Records page also does it when Refresh starts afresh. */
 	release(): Promise<void>;
+	/** Whole-file bytes this keeper currently holds in the engine. Byte-range files are not kept. */
+	heldBytes(): number;
 	/** Prints `line` as a console warning the first time this keeper meets it, and never again. */
 	warn(line: string): void;
 }
@@ -125,6 +127,8 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 	const arrivals = new Map<string, Promise<Arrival>>();
 	/** The name the engine holds each registered file under, and each registration in flight. */
 	const names = new Map<string, Promise<Registration>>();
+	/** Whole files the engine keeps for this page, by key. */
+	const heldLengths = new Map<string, number>();
 	/** Every line this keeper has printed. */
 	const told = new Set<string>();
 	let registeredWith: QueryEngine | null = null;
@@ -171,6 +175,7 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 
 	/** Hands fetched bytes to the engine, unless another call already has. */
 	function handOver(engine: QueryEngine, key: string, bytes: Uint8Array): Promise<Registration> {
+		heldLengths.set(key, bytes.byteLength);
 		return names.get(key) ?? keep(key, engine.register(bytes).then((name) => ({ name })));
 	}
 
@@ -285,8 +290,15 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 	async function release(): Promise<void> {
 		const settled = await Promise.allSettled([...names.values()]);
 		names.clear();
+		heldLengths.clear();
 		const held = settled.flatMap((one) => (one.status === 'fulfilled' && 'name' in one.value ? [one.value.name] : []));
 		if (registeredWith !== null && held.length > 0) await registeredWith.drop(held);
+	}
+
+	function heldBytes(): number {
+		let total = 0;
+		for (const bytes of heldLengths.values()) total += bytes;
+		return total;
 	}
 
 	function warn(line: string): void {
@@ -295,5 +307,5 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 		console.warn(line);
 	}
 
-	return { index, hold, release, warn };
+	return { index, hold, release, heldBytes, warn };
 }

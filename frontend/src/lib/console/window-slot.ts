@@ -26,6 +26,8 @@ export interface WindowSource {
 	readonly busy: boolean;
 	/** False until a browser has run the route. */
 	readonly ready: boolean;
+	/** Sentence this route wants under the band instead of the default window sentence. */
+	readonly statusLine?: string | null;
 	/** Month files a preset would fetch that the route does not hold yet. */
 	monthsFor(days: number): number;
 	onChange(days: number): void;

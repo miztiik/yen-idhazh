@@ -29,9 +29,8 @@
 	 * away. Where they do not both fit, the band under the strip still names the
 	 * worst route.
 	 *
-	 * **The sixth route, Records, is drawn only while
-	 * `console.data_explorer_tab` is on.** The layout hands this strip
-	 * `stripRoutes()` of the band's routes, so the flag is decided in one place.
+	 * **The sixth route, Records, is live.** The layout hands this strip
+	 * `stripRoutes()` of the band's routes; the old flag was removed with the page.
 	 */
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';

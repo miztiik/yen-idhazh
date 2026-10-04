@@ -208,8 +208,8 @@ test('THE ORACLE: the labels moved and the addresses did not', async ({ page }) 
 	// The labels changed.
 	expect(
 		drawn.map((tab) => tab.label),
-		'the strip does not carry the five labels'
-	).toEqual(['Pipelines', 'Summaries', 'Hardware', 'Judgement', 'Voices']);
+		'the strip does not carry the six labels'
+	).toEqual(['Pipelines', 'Summaries', 'Hardware', 'Judgement', 'Voices', 'Records']);
 
 	// The ids did not, and neither did what they point at. Typed out in strip
 	// order rather than read off `ROUTES`: that map is keyed for the grammar
@@ -217,13 +217,14 @@ test('THE ORACLE: the labels moved and the addresses did not', async ({ page }) 
 	expect(
 		drawn.map((tab) => tab.id),
 		'a tab id moved with a label, which is an address and not a label'
-	).toEqual(['pipelines', 'model', 'machine', 'judgement', 'voices']);
+	).toEqual(['pipelines', 'model', 'machine', 'judgement', 'voices', 'data-explorer']);
 	const IN_STRIP_ORDER = [
 		'/console/',
 		'/console/model/',
 		'/console/machine/',
 		'/console/judgement/',
-		'/console/voices/'
+		'/console/voices/',
+	'/console/data-explorer/'
 	];
 	for (const [index, path] of IN_STRIP_ORDER.entries()) {
 		expect(drawn[index].href, `${drawn[index].id} stopped pointing at ${path}`).toContain(path);

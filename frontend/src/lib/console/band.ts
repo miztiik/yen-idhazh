@@ -300,14 +300,7 @@ export function readBand(payload: unknown): ConsoleShell {
 	};
 }
 
-/** The routes the strip draws: every route the band carries, less `Records`
- * while `console.data_explorer_tab` is off.
- *
- * The band carries that route whatever the flag says, so a payload written
- * before the page exists and one written after it read the same way. The flag
- * decides only whether a tab points at the route, because a tab pointing at a
- * page that is not there yet is worse than no tab.
- */
-export function stripRoutes(routes: readonly ConsoleRoute[], dataExplorerTab: boolean): ConsoleRoute[] {
-	return routes.filter((route) => dataExplorerTab || route.id !== 'data-explorer');
+/** The routes the strip draws, in the producer's order. */
+export function stripRoutes(routes: readonly ConsoleRoute[]): ConsoleRoute[] {
+	return [...routes];
 }

@@ -43,7 +43,7 @@ listing that is absent inside the listed range is a file gap, not an empty day.
 
 `through` is the newest UTC day any selected tier can answer. A daily entry counts as that day. A month counts through its last UTC day. A year counts through 31 December. A staged writer listing can move `through` later than the packed indexes.
 
-`FetchCost` is the keeper's reading for this call. A whole file counts at the bytes that arrived. A file read by byte range counts at the whole indexed length, because the page cannot see which ranges the engine read and that length is the most the read can cost. `alreadyHeld` counts files the keeper already had registered before this call.
+`FetchCost` is the keeper's reading for this call. A whole file counts at the bytes that arrived. A file read by byte range counts at the whole indexed length, because the page cannot see which ranges the engine read and that length is the most the read can cost. `alreadyHeld` counts files the keeper already had registered before this call. The Records page action line prints the whole-file bytes the page keeper still holds in the engine; byte-range files are opened for one call and dropped, so they do not inflate the reload total.
 
 ## Unreachable fields
 

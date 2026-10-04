@@ -169,7 +169,7 @@ for (const { name, grow, mustScroll } of CASES) {
 
 		expect(at.position, 'the strip does not stick at 1440').toBe('sticky');
 		expect(at.top, 'the stuck strip is not at the top of the screen').toBe(0);
-		expect(at.tabs).toHaveLength(5 + extra);
+		expect(at.tabs).toHaveLength(6 + extra);
 		// One row: every tab starts at one height, the control sits inside the
 		// strip's own band, and the strip is shorter than two tabs stacked.
 		expect(new Set(at.tabs.map((tab) => tab.top)).size, 'the tabs stand on more than one row').toBe(1);
@@ -238,7 +238,7 @@ test('THE ORACLE: at 1024 every console route opens with its own tab whole', asy
 	// not say which route it is. The band's worst route is brought into view only
 	// where the reader's own tab stays whole beside it.
 	await page.setViewportSize({ width: 1024, height: 900 });
-	for (const path of ['/console/', '/console/model/', '/console/machine/', '/console/judgement/', '/console/voices/']) {
+	for (const path of ['/console/', '/console/model/', '/console/machine/', '/console/judgement/', '/console/voices/', '/console/data-explorer/']) {
 		await page.goto(path);
 		await hydrated(page);
 		const at = await page.evaluate(() => {

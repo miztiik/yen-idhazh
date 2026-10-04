@@ -64,3 +64,15 @@ export function ask(options: AskOptions): Promise<AskResult> {
 export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> {
 	return readAskCost(keeper(), ledgers, from, to, rawListedThrough);
 }
+
+/** Drop this page's query-door cache, so Refresh reads the registry and indexes anew. */
+export async function startAfresh(): Promise<void> {
+	const current = kept;
+	kept = null;
+	if (current !== null) await current.release();
+}
+
+/** Whole-file bytes the current page keeper holds in the engine. */
+export function pageHeldBytes(): number {
+	return kept?.heldBytes() ?? 0;
+}
