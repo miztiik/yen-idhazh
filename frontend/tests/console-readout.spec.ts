@@ -276,7 +276,7 @@ test.describe('the readout is the default', () => {
 		await runExplorer(page);
 		const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
 		await expect(panel.locator('[data-chart-type="dateSeries"]')).toHaveCount(1);
-		await expect(panel.locator('[data-readout-records], [data-readout-none]')).toHaveCount(1);
+		await expect(panel.locator('[data-readout-columns], [data-readout-records], [data-readout-none]')).toHaveCount(1);
 		await expect(panel.locator('[title], title')).toHaveCount(0);
 	});
 

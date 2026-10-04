@@ -2,6 +2,17 @@
 	/** Draws a Records answer with the chart type its columns can honestly support. */
 	import type { Column, Row } from '$lib/data/ledger';
 	import { tooFewSentence } from '$lib/console/waiting';
+	import { frame } from '$lib/charts/frame';
+	import { dateSeries } from '$lib/charts/d3/dateSeries';
+	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
+	import { distribution } from '$lib/charts/d3/distribution';
+	import Distribution from '$lib/charts/d3/Distribution.svelte';
+	import { pairedScatter } from '$lib/charts/d3/pairedScatter';
+	import PairedScatter from '$lib/charts/d3/PairedScatter.svelte';
+	import { readoutOf } from '$lib/charts/readout';
+	import { emptyState } from '$lib/charts/d3/empty';
+	import { rank } from '$lib/charts/rank';
+	import RankedList from '$lib/components/RankedList.svelte';
 	import { chooseExplorerShapes, type ExplorerShape, type ExplorerShapeBounds, type ExplorerChartType } from './shape';
 	import { printCell } from './answer';
 
@@ -11,14 +22,11 @@
 	const choices = $derived(shapes.filter((shape) => shape.kind === 'chart'));
 	const active = $derived(choices.find((shape) => shape.type === selectedType) ?? shapes[0]);
 	const note = $derived(noteFor(active));
+	const chartTokens = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
 
 	function value(row: Row, column: string): number | null {
 		const parsed = Number(row[column]);
 		return Number.isFinite(parsed) ? parsed : null;
-	}
-
-	function valueOrZero(row: Row, column: string): number {
-		return value(row, column) ?? 0;
 	}
 
 	function text(row: Row, column: string): string {
@@ -61,7 +69,7 @@
 			return { subject: text(row, next.dateColumn), facts: next.seriesColumns.map((column) => ({ label: column, value: text(row, column) })) };
 		}
 		if (next.type === 'rankedList') {
-			const row = [...rows].sort((left, right) => valueOrZero(right, next.valueColumn) - valueOrZero(left, next.valueColumn))[0];
+			const row = [...rows].filter((candidate) => value(candidate, next.valueColumn) !== null).sort((left, right) => (value(right, next.valueColumn) ?? 0) - (value(left, next.valueColumn) ?? 0))[0];
 			return row ? { subject: text(row, next.labelColumn), facts: [{ label: next.valueColumn, value: text(row, next.valueColumn) }] } : null;
 		}
 		if (next.type === 'pairedScatter') {
@@ -91,65 +99,28 @@
 		<p class="shape-lede" data-lede>{lede(active)}</p>
 		{@const readout = readoutFor(active)}
 		{#if active.type === 'dateSeries'}
-			<div
-				class="date-shape"
-				data-chart="data-explorer-shape"
-				data-chart-type="dateSeries"
-				data-readout-records={rows.length}
-				data-model-rule="no"
-				data-model-rule-none="this page does not know which settings changed inside your span"
-				aria-label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`}
-			>
-				{#each active.seriesColumns as column, at (column)}
-					{@const numericRows = rows.filter((row) => value(row, column) !== null)}
-					{@const max = Math.max(1, ...numericRows.map((row) => valueOrZero(row, column)))}
-					<div class="series-row" style={`--series:${at + 1}`}>
-						<span>{column}</span>
-						<ol>
-							{#each numericRows as row (String(row[active.dateColumn]))}
-								<li style={`block-size:${Math.max(3, (valueOrZero(row, column) / max) * 100)}%`} aria-label={`${text(row, active.dateColumn)}: ${text(row, column)} ${column}`}></li>
-							{/each}
-						</ol>
-					</div>
-				{/each}
+			{@const box = frame(760, height)}
+			{@const seriesColumns = active.seriesColumns}
+			{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: chartTokens[index] ?? '--chart-1', points: rows.map((row) => ({ date: text(row, active.dateColumn), value: value(row, column) })) })), { frame: box, density: 6, valueTicks: 4, padding: 0.25 })}
+			{@const dateReadout = readoutOf({ type: 'dateSeries', columns: dateGeometry?.dates ?? [], series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(--chart-${index + 1})`, values: (dateGeometry?.dates ?? []).map((day) => rows.find((row) => text(row, active.dateColumn) === day)).map((row) => row ? value(row, column) : null), format: (n) => text({ [column]: n }, column) })), notMeasured: 'Not a number', resting: 'last' })}
+			<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
+				<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={760} {height} readout={dateReadout} />
 			</div>
-			{#if readout}<dl class="shape-readout" data-readout="data-explorer-shape" data-readout-shape="record"><dt data-readout-subject>{readout.subject}</dt>{#each readout.facts as fact}<div data-readout-row={fact.label}><dd>{fact.label}</dd><dd>{fact.value}</dd></div>{/each}</dl>{/if}
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else if active.type === 'rankedList'}
-			{@const ordered = [...rows].filter((row) => value(row, active.valueColumn) !== null).sort((left, right) => valueOrZero(right, active.valueColumn) - valueOrZero(left, active.valueColumn)).slice(0, active.rowsDrawn)}
-			{@const max = Math.max(1, ...ordered.map((row) => valueOrZero(row, active.valueColumn)))}
-			<div class="ranked-shape" data-chart="data-explorer-shape" data-chart-type="rankedList" data-readout-none="every row prints its own value beside its bar; agreed with Susan">
-				{#each ordered as row (String(row[active.labelColumn]))}
-					<div class="rank-row">
-						<span>{text(row, active.labelColumn)}</span>
-						<strong>{text(row, active.valueColumn)}</strong>
-						<i style={`inline-size:${(valueOrZero(row, active.valueColumn) / max) * 100}%`}></i>
-					</div>
-				{/each}
-				{#if active.moreRows > 0}<p>{active.moreRows} more rows are in the table.</p>{/if}
-			</div>
+			{@const ranked = rank(rows.map((row) => ({ key: text(row, active.labelColumn), value: value(row, active.valueColumn) ?? Number.NaN, row: { label: text(row, active.labelColumn), value: text(row, active.valueColumn) } })), active.rowsDrawn)}
+			<RankedList caption={`Ranked by ${active.valueColumn}`} {ranked} maxText={`${text({ [active.valueColumn]: ranked.max }, active.valueColumn)} ${active.valueColumn}`} unmeasuredNote="No rows carried a number to rank." emptyNote="No rows carried a number to rank." tail={active.moreRows > 0 ? `${active.moreRows} more rows are in the table.` : null} />
 			{#if readout}<dl class="shape-readout" data-readout="data-explorer-shape" data-readout-shape="record"><dt data-readout-subject>{readout.subject}</dt>{#each readout.facts as fact}<div data-readout-row={fact.label}><dd>{fact.label}</dd><dd>{fact.value}</dd></div>{/each}</dl>{/if}
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else if active.type === 'pairedScatter'}
-			<div class="scatter-shape" data-chart="data-explorer-shape" data-chart-type="pairedScatter" data-readout-records={rows.length} aria-label={`Paired: ${active.yColumn} against ${active.xColumn}`}>
-				{#each rows.filter((row) => value(row, active.xColumn) !== null && value(row, active.yColumn) !== null) as row, index (index)}
-					<span
-						style={`inset-inline-start:${Math.min(96, Math.max(4, valueOrZero(row, active.xColumn)))}%;inset-block-end:${Math.min(96, Math.max(4, valueOrZero(row, active.yColumn)))}%`}
-						aria-label={`${active.subjectColumn === null ? `row ${index + 1}` : text(row, active.subjectColumn)}: ${active.xColumn} ${text(row, active.xColumn)}, ${active.yColumn} ${text(row, active.yColumn)}`}
-					></span>
-				{/each}
-			</div>
-			{#if readout}<dl class="shape-readout" data-readout="data-explorer-shape" data-readout-shape="record"><dt data-readout-subject>{readout.subject}</dt>{#each readout.facts as fact}<div data-readout-row={fact.label}><dd>{fact.label}</dd><dd>{fact.value}</dd></div>{/each}</dl>{/if}
+			{@const box = frame(760, height)}
+			{@const points = rows.flatMap((row, index) => value(row, active.xColumn) === null || value(row, active.yColumn) === null ? [] : [{ label: active.subjectColumn === null ? `row ${index + 1}` : text(row, active.subjectColumn), x: value(row, active.xColumn) as number, y: value(row, active.yColumn) as number }])}
+			<PairedScatter geometry={pairedScatter(points, { frame: box, minRows: bounds.fleetMinRows, minSubjects: bounds.bandwidthMinKinds, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Paired: ${active.yColumn} against ${active.xColumn}`} width={760} {height} />
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else}
-			{@const values = rows.map((row) => value(row, active.valueColumn)).filter((one): one is number => one !== null).sort((a, b) => a - b)}
-			{@const max = Math.max(1, ...values)}
-			<div class="spread-shape" data-chart="data-explorer-shape" data-chart-type="distribution" data-readout-records={values.length} aria-label={`Spread: ${active.valueColumn}`}>
-				{#each values as one, index (index)}
-					<i style={`block-size:${Math.max(3, (one / max) * 100)}%`} aria-label={`${active.valueColumn} ${one}`}></i>
-				{/each}
-			</div>
-			{#if readout}<dl class="shape-readout" data-readout="data-explorer-shape" data-readout-shape="record"><dt data-readout-subject>{readout.subject}</dt>{#each readout.facts as fact}<div data-readout-row={fact.label}><dd>{fact.label}</dd><dd>{fact.value}</dd></div>{/each}</dl>{/if}
+			{@const box = frame(760, height)}
+			{@const values = rows.map((row) => value(row, active.valueColumn)).filter((one): one is number => one !== null)}
+			<Distribution geometry={distribution(values, { frame: box, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={760} {height} />
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{/if}
 	{/if}
@@ -174,10 +145,10 @@
 	}
 
 	.shape-none,
-	.date-shape,
-	.ranked-shape,
-	.scatter-shape,
-	.spread-shape {
+	:global(.date-series),
+	:global(.distribution),
+	:global(.paired-scatter),
+	:global(.ranked) {
 		min-block-size: var(--shape-height);
 		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-md);
@@ -189,75 +160,6 @@
 		place-items: center;
 		padding: var(--space-6);
 		color: var(--color-text-secondary);
-	}
-
-	.date-shape,
-	.spread-shape {
-		display: flex;
-		align-items: end;
-		gap: var(--space-3);
-		padding: var(--space-5);
-	}
-
-	.series-row {
-		flex: 1;
-		display: grid;
-		gap: var(--space-2);
-	}
-
-	.series-row span {
-		color: var(--color-text-secondary);
-		font-size: var(--text-xs);
-	}
-
-	.series-row ol {
-		display: flex;
-		align-items: end;
-		gap: 2px;
-		block-size: calc(var(--shape-height) - 4rem);
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.series-row li,
-	.spread-shape i {
-		flex: 1;
-		border-radius: var(--radius-full) var(--radius-full) 0 0;
-		background: var(--chart-1);
-	}
-
-	.ranked-shape {
-		display: grid;
-		align-content: start;
-		gap: var(--space-2);
-		padding: var(--space-5);
-	}
-
-	.rank-row {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		gap: var(--space-2);
-	}
-
-	.rank-row i {
-		grid-column: 1 / -1;
-		block-size: 0.5rem;
-		border-radius: var(--radius-full);
-		background: var(--chart-1);
-	}
-
-	.scatter-shape {
-		position: relative;
-	}
-
-	.scatter-shape span {
-		position: absolute;
-		inline-size: 0.5rem;
-		block-size: 0.5rem;
-		border: 2px solid var(--chart-1);
-		border-radius: var(--radius-full);
-		transform: translate(-50%, 50%);
 	}
 
 	.shape-readout {
