@@ -66,7 +66,7 @@ Table A - what is out
 | 26 | doc_load.py reads a web address as a web address | - | A | DONE | stunning-garbanzo | - | Plan 60 row 26: doc_load web links |
 | 27 | A shard lands nothing stale, and says why when it cannot land | 3, 9 | C | PENDING | - | - | - |
 | 28 | The console can read the gardener ledger | 23 | F | PENDING | - | - | - |
-| 29 | doc_load.py measures every named Markdown page | 26 | A | PENDING | - | - | - |
+| 29 | doc_load.py measures every named Markdown page | 26 | A | DONE | effective-carnival | - | Plan 60 row 29: doc_load every page |
 
 ## 2. Shared declarations
 
@@ -1003,6 +1003,10 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/utilities/doc_load.py` (`pages_under`)
   - `backend/tests/test_doc_load.py`
   - `AGENTS.md` (step 3)
+  - `docs/reference/documentation-structure.md` (widened by the owner, 2026-10-04)
+  - `frontend/scripts/test-scope.ts` (widened by the owner, 2026-10-04)
+  - `frontend/scripts/tests/test-scope.test.mjs` (widened by the owner, 2026-10-04)
+  - `docs/reference/test-selection.md` (the page that owns the selector's mappings, changed with the owner's widening)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_doc_load.py`; ruff; mypy; `python backend/utilities/doc_load.py TODO/20261004-60-gardener-recovers-on-its-own-plan.md` prints one row. CI: the full suite.
 - **Oracle:** a test builds a page under `tmp_path/TODO/` and expects one row from `measure` and no fault from `faults`. It fails if the `docs/`-only filter comes back. The existing test that a deleted page is skipped still holds. It cannot settle whether `top h2` means anything for a plan, whose rows sit in one section by design.
 
