@@ -80,8 +80,8 @@ SHARD_TREES: Final = {
 @pytest.mark.parametrize("shape", sorted(SHARD_TREES))
 def test_the_writer_files_of_a_day_tree_are_the_disk_walks(tmp_path: Path, shape: str) -> None:
     """A closed month's own settled file is a member of both walks, beside its days."""
-    root = plant(tmp_path / "state" / "summary-quality-evals-index", SHARD_TREES[shape])
-    listing = listing_of(tmp_path, "state/summary-quality-evals-index")
+    root = plant(tmp_path / "state" / "a-day-tree", SHARD_TREES[shape])
+    listing = listing_of(tmp_path, "state/a-day-tree")
 
     on_disk = walked(lambda: day_shards.shard_files(root, days=UNBOUNDED_WINDOW))
     by_name = walked(lambda: named_trees.shard_files(listing, root))
@@ -214,7 +214,7 @@ def test_every_file_under_a_tree_is_the_disk_walks(tmp_path: Path) -> None:
     )
 
 
-def test_a_ledgers_raw_days_and_listings_are_the_disk_walks(tmp_path: Path) -> None:
+def test_a_ledgers_raw_days_are_the_disk_walks(tmp_path: Path) -> None:
     state = tmp_path / ledger.STATE_DIRNAME
     raw = ledger.raw_root(state, RAW)
     plant(
@@ -224,10 +224,6 @@ def test_a_ledgers_raw_days_and_listings_are_the_disk_walks(tmp_path: Path) -> N
             "2026/09/29/b.parquet",
             "2026/09/30/c.parquet",
             "2026/10/01/deeper/d.parquet",
-            "index/2026-09-27.json",
-            "index/2026-09-28.json",
-            "index/notes.txt",
-            "index/2026-13-01.json",
             "junk.txt",
             "2026/09/stray.parquet",
         ],
@@ -235,7 +231,6 @@ def test_a_ledgers_raw_days_and_listings_are_the_disk_walks(tmp_path: Path) -> N
     listing = listing_of(tmp_path, raw.relative_to(tmp_path).as_posix())
 
     assert named_trees.raw_days(listing, state, RAW) == ledger.raw_days(state, RAW)
-    assert named_trees.listed_days(listing, state, RAW) == ledger.listed_days(state, RAW)
 
 
 def test_a_compact_file_is_found_by_the_name_the_disk_finds(tmp_path: Path) -> None:
@@ -271,7 +266,7 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
     files, one only in raw days.
 
     The door reads the three indexes; the names give the same months from the
-    files those indexes list, and a raw `index/` folder of listings names no month.
+    files those indexes list.
     """
     state = tmp_path / ledger.STATE_DIRNAME
     compact = {
@@ -288,7 +283,6 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
         [
             *(path.relative_to(tmp_path).as_posix() for path in compact),
             (raw / "2026/09/29/a.parquet").relative_to(tmp_path).as_posix(),
-            (raw / "index/2025-12-31.json").relative_to(tmp_path).as_posix(),
         ],
     )
     an_index(state, Period.YEARLY, ["2025"])

@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
-**Twenty-seven defects are open.** Three of them need evidence or a ruling before any code
+**Twenty-eight defects are open.** Three of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -28,7 +28,8 @@ its workers found outside their own rows. Defect 50 was already fixed that day;
 defect 51 is the third that needs evidence, because one abort is not enough to
 find its cause. Defects 53 and 54 were filed the same day from two findings plan
 50's rows wrote down and never filed, and 54 has a date: the first squash that
-rewrites history is due on 2026-10-29.
+rewrites history is due on 2026-10-29. Defect 55 was filed on 2026-10-04 from
+Fowler's review of plan 60: a page names a test that two pull requests deleted.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -91,6 +92,37 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 52 | Reading one month of a packed ledger downloads every month file of its year | 3 | **OPEN - costs nothing until a compaction runs live** |
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
+| 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
+
+## 55 - The query-door page names a deleted test, so nothing may hold the rule it states (OPEN)
+
+**The page that says how the query door answers a panel names a test that is
+gone.**
+[how-the-query-door-answers-a-panel.md](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)
+says that `backend/tests/contracts/test_published_ledgers_cover_the_panels.py`
+holds the two sides together: every ledger a panel names in a `slice()` or
+`ledgerReach()` call is in `ledger.published` in `config/idhazh.json`. #1228
+deleted that file on 2026-10-03, when the contract tests stopped reading trees
+that grow with the repository; it took out the scan of the frontend source and
+its parser. Its description names
+`test_every_ledger_the_door_can_be_asked_for_is_published` as the check that
+stays, but #1201 had deleted that check three hours before. Neither test is on
+`main`, and no test there names `cover_the_panels` or calls `ledgerReach(`.
+
+**Doing nothing costs a broken panel that no check catches.** A panel that asks
+the door for a ledger the site does not hold gets a 404 on that ledger's index,
+and that 404 is the only sign that the ledger was left out. The tests that read
+`ledger.published` today, such as `backend/tests/contracts/test_page_ceilings.py`
+and `frontend/tests/published-ledgers.spec.ts`, check other things: each
+published ledger's page-weight key, and what the build copies.
+
+**The next move is a worker's.** Find which test, if any, holds the rule now.
+If one does, the page names it instead, Level 0. If none does, restore a
+bounded test that reads only named config and never scans the frontend tree,
+Level 2.
+
+Found by Fowler's review of plan 60 on 2026-10-04 (item 17), and filed the same
+day.
 
 ## 54 - The first squash that rewrites history may not fit in its 30-minute job (OPEN)
 

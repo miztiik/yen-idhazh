@@ -1,19 +1,18 @@
-"""Do stored-output checks refuse broken named files without relying on obsolete raw listings?"""
+"""Do stored-output checks refuse broken named files?"""
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, SEED_COMMIT
+from conftest import CONTRACT_FIXTURES_DIR, SEED_COMMIT, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.stored_output import check_compact_period, check_raw_day
 
@@ -22,17 +21,17 @@ DAY: Final = "2026-09-02"
 WHICH: Final = LedgerName.ITEM_HEALTH
 
 
-def _raw(root: Path) -> Path:
+def _raw(root: Path, day: str = DAY) -> Path:
     row = ItemHealthRow.model_validate_json(
         (CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json").read_text(encoding="ascii")
-    ).model_copy(update={"date": DAY})
+    ).model_copy(update={"date": day})
     (path,) = ledger.persist(
         root,
         [row],
         ledger=WHICH,
-        covers=DAY,
+        covers=day,
         identity=WriterIdentity(
-            run_id=f"{DAY}-1",
+            run_id=f"{day}-1",
             attempt=1,
             job=ServerJob.MIGRATE,
             shard=0,
@@ -43,18 +42,23 @@ def _raw(root: Path) -> Path:
     return path
 
 
-def _compact(root: Path) -> tuple[Path, Path]:
-    raw = _raw(root)
-    path = ledger.persist_period(
+def _packed(root: Path, period: Period, covers: str) -> Path:
+    """One compact file for a period, packed from a raw row filed on a day inside it."""
+    raw = _raw(root, covers if period is Period.DAILY else f"{covers}-02")
+    return ledger.persist_period(
         root,
         ledger.load_stored([raw], model=ItemHealthRow),
         model=ItemHealthRow,
         ledger=WHICH,
-        period=Period.DAILY,
-        covers=DAY,
+        period=period,
+        covers=covers,
         identity=ledger.read_envelope(raw).identity,
         built_from=1,
     )
+
+
+def _compact(root: Path) -> tuple[Path, Path]:
+    path = _packed(root, Period.DAILY, DAY)
     index_path = ledger.compact_index_path(root, WHICH, Period.DAILY)
     index_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.write_text(
@@ -70,27 +74,10 @@ def _compact(root: Path) -> tuple[Path, Path]:
     return path, index_path
 
 
-def test_raw_check_reads_real_files_and_ignores_an_obsolete_listing(tmp_path: Path) -> None:
+def test_raw_check_reads_real_files_and_reports_presence(tmp_path: Path) -> None:
     path = _raw(tmp_path)
-    missing = "019f75f0-4bb0-835b-8c7e-824db9007c61.parquet"
-    listing = ledger.raw_index_path(tmp_path, WHICH, DAY)
-    listing.parent.mkdir(parents=True, exist_ok=True)
-    listing.write_text(
-        RawDayIndex(
-            version=RawDayIndex.schema_version(),
-            ledger=WHICH,
-            date=DAY,
-            files=[missing],
-            content_sha256=hashlib.sha256(missing.encode()).hexdigest(),
-            listed_at=f"{DAY}T12:00:00Z",
-        ).to_json(),
-        encoding="ascii",
-        newline="\n",
-    )
     assert check_raw_day(tmp_path, WHICH, DAY)
     path.unlink()
-    assert not check_raw_day(tmp_path, WHICH, DAY)
-    listing.write_bytes(b"an unreadable obsolete listing")
     assert not check_raw_day(tmp_path, WHICH, DAY)
 
 
@@ -122,6 +109,28 @@ def test_compact_check_checks_the_named_period_and_entry(tmp_path: Path, damage:
         index.unlink()
     with pytest.raises(ValueError):
         check_compact_period(tmp_path, WHICH, Period.DAILY, DAY)
+
+
+@pytest.mark.parametrize("sample", ["an-empty-day", "a-lost-day", "a-month-with-lost-days"])
+def test_an_entry_with_no_file_is_indexed_until_a_file_holds_it(
+    tmp_path: Path, sample: str
+) -> None:
+    """A check that treats every entry as a file fails this: it refuses an empty period or a
+    lost day as holding 0 files where it expects one. A file the index says is not there is
+    refused."""
+    index = CompactIndex.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "compact-index" / f"{sample}.json")
+    )
+    index_path = ledger.compact_index_path(tmp_path, WHICH, index.period)
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(index.to_json(), encoding="ascii", newline="\n")
+    (covers,) = [entry.covers for entry in index.entries if not entry.names_file]
+
+    assert check_compact_period(tmp_path, WHICH, index.period, covers)
+
+    _packed(tmp_path, index.period, covers)
+    with pytest.raises(ValueError, match="an entry with no file"):
+        check_compact_period(tmp_path, WHICH, index.period, covers)
 
 
 def test_an_unreadable_old_index_is_a_named_value_error(tmp_path: Path) -> None:

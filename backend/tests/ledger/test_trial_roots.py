@@ -3,7 +3,7 @@
 The gardener's `trials` task empties every child of `state/` that no other task
 owns and the registry does not claim, so an unclaimed `raw/` or `compact/` would
 be read as a trial run's tree and the gardener would delete its own records. And
-the five root builders refuse any path whose first folder under the state root
+the four root builders refuse any path whose first folder under the state root
 is neither, so a third root is a `ValueError` rather than a convention.
 """
 
@@ -57,7 +57,6 @@ def test_each_builder_answers_its_one_shape(tmp_path: Path) -> None:
     below = {
         "raw": ledger.raw_path(state, WHICH, A_DAY, A_FILE),
         "raw json": ledger.raw_path(state, WHICH, A_DAY, A_FILE, fmt=Format.JSON),
-        "raw index": ledger.raw_index_path(state, WHICH, A_DAY),
         "daily": ledger.compact_path(state, WHICH, Period.DAILY, A_DAY),
         "monthly": ledger.compact_path(state, WHICH, Period.MONTHLY, A_MONTH),
         "yearly": ledger.compact_path(state, WHICH, Period.YEARLY, A_DAY[:4]),
@@ -68,7 +67,6 @@ def test_each_builder_answers_its_one_shape(tmp_path: Path) -> None:
     assert {what: built.relative_to(state).as_posix() for what, built in below.items()} == {
         "raw": f"raw/visual-prunes/2026/09/24/{A_FILE}.parquet",
         "raw json": f"raw/visual-prunes/2026/09/24/{A_FILE}.json",
-        "raw index": "raw/visual-prunes/index/2026-09-24.json",
         "daily": "compact/visual-prunes/daily/2026/09/24.parquet",
         "monthly": "compact/visual-prunes/monthly/2026/08.parquet",
         "yearly": "compact/visual-prunes/yearly/2026/2026.parquet",
@@ -98,12 +96,11 @@ def test_no_compact_file_sits_beside_its_periods_watermark(
     ("root", "build"),
     [
         ("RAW_DIRNAME", lambda state: ledger.raw_path(state, WHICH, A_DAY, A_FILE)),
-        ("RAW_DIRNAME", lambda state: ledger.raw_index_path(state, WHICH, A_DAY)),
         ("COMPACT_DIRNAME", lambda state: ledger.compact_path(state, WHICH, Period.DAILY, A_DAY)),
         ("COMPACT_DIRNAME", lambda state: ledger.compact_index_path(state, WHICH, Period.DAILY)),
         ("COMPACT_DIRNAME", lambda state: ledger.watermark_path(state, WHICH, Period.DAILY)),
     ],
-    ids=["raw_path", "raw_index_path", "compact_path", "compact_index_path", "watermark_path"],
+    ids=["raw_path", "compact_path", "compact_index_path", "watermark_path"],
 )
 def test_a_builder_whose_root_is_neither_raw_nor_compact_is_refused_by_name(
     root: str, build: Callable[[Path], Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -128,7 +125,7 @@ def test_a_path_that_walks_back_out_of_a_root_is_refused(tmp_path: Path) -> None
 def test_a_root_is_resolved_once_but_each_candidate_is_still_checked(tmp_path: Path) -> None:
     state = tmp_path / "state"
     before = paths._resolved_root.cache_info()
-    ledger.raw_index_path(state, WHICH, A_DAY)
+    ledger.raw_path(state, WHICH, A_DAY, A_FILE)
     ledger.compact_index_path(state, WHICH, Period.DAILY)
     after = paths._resolved_root.cache_info()
     assert after.misses - before.misses == 1

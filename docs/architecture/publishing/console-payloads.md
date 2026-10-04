@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -511,11 +511,9 @@ packed file or a packed day is missing says which, because each has its own fix
 
 **Packing settles rows per day, not over the whole requested window.** This
 scope preserves historical rows; it does not define measurement identity.
-The [observation key](../contracts/observation-lookup.md#measurement-identity)
-has no date, so the same key on two days is the same measurement. New
-publication admits it only once across jobs and days. The lookup migration
-does not rewrite evaluation bytes or change the console's per-day settlement
-of existing history.
+The [observation key](../../concepts/evaluation.md#the-ledger) has no date, so
+the same measurement filed on two days is kept under each, and a window that
+spans both shows it once per day.
 
 **A key with no preference keeps the first row it saw.** That is what the
 backend does with a key `ledger.preference_for` has no rule for, and the ledger

@@ -14,7 +14,7 @@ from idhazh.ledger.raw_files import read_day_files
 
 
 def check_raw_day(state_dir: Path, which: LedgerName, day: str) -> bool:
-    """Validate actual raw files, not the obsolete listing in state/, and report presence."""
+    """Validate actual raw files and report presence."""
     raw = read_day_files(state_dir, which, day)
     for held in raw:
         stored = load_stored([held.path], model=keys.door_contract(which))
@@ -30,7 +30,11 @@ def check_raw_day(state_dir: Path, which: LedgerName, day: str) -> bool:
 
 
 def check_compact_period(state_dir: Path, which: LedgerName, period: Period, covers: str) -> bool:
-    """Validate a named compact period and its index entry, and report indexed presence."""
+    """Validate a named compact period and its index entry, and report indexed presence.
+
+    An entry with no file, an `empty` period or a `lost` day, is present while no
+    file holds it, and a file where it stands is refused.
+    """
     index_path = paths.compact_index_path(state_dir, which, period)
     entry = None
     if index_path.exists():
@@ -50,6 +54,13 @@ def check_compact_period(state_dir: Path, which: LedgerName, period: Period, cov
         raise ValueError(f"{files[0].name} has no compact index entry")
     if entry is None:
         return False
+    if not entry.names_file:
+        if files:
+            raise ValueError(
+                f"{files[0].name} is there, and the {period.value} index marks {covers} "
+                f"{entry.state.value}, an entry with no file"
+            )
+        return True
     if len(files) != 1:
         raise ValueError(f"compact {period.value} {covers} has {len(files)} files, expected one")
     path = files[0]

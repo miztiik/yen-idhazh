@@ -103,14 +103,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol="idhazh.evals.writer.file_measurements",
         job_labels=frozenset({"work", "assemble"}),
     ),
-    LedgerName.SUMMARY_QUALITY_EVALS_INDEX: LedgerStaging(
-        writer=(
-            "nothing in the pipeline; only backend/utilities/migrate_observation_lookup.py, "
-            "a person's own run, writes it"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
     LedgerName.CANDIDATE_MODELS: LedgerStaging(
         writer=(
             "idhazh.stages.decide.stage_decide and idhazh.stages.qualify_decide."
@@ -151,6 +143,11 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         job_labels=frozenset(),
     ),
     LedgerName.COUNTERFACTUAL_SCORES: LedgerStaging(
+        writer="idhazh.stages.plan.stage_plan, through the ledger door",
+        symbol="idhazh.stages.plan.stage_plan",
+        job_labels=frozenset({"plan"}),
+    ),
+    LedgerName.RUN_PLAN: LedgerStaging(
         writer="idhazh.stages.plan.stage_plan, through the ledger door",
         symbol="idhazh.stages.plan.stage_plan",
         job_labels=frozenset({"plan"}),

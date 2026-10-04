@@ -50,7 +50,7 @@ The union alone cannot be tested against at run time, and a reader that has to n
 
 **An optional field is copied optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the copied type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
 
-**The query door carries a copy of the compact index, and the stamp it reads.** `frontend/src/lib/data/compact-index.ts` declares `CompactEntry` and `CompactIndex` by hand, because the door runs in a browser that fetches `state/compact/<ledger>/index/<period>.json` and cannot import the Pydantic model. Beside them sit `COMPACT_INDEX_STAMP`, the `CompactIndex` stamp this build reads, and `COMPACT_PERIODS`. **The stamp rule is the backend's own**: an index stamped at that stamp or older is read when the fields the door acts on pass its guard, and a newer one is refused with both stamps in the console, because only a build at least that new knows what the shape means. The door's rules are [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md).
+**The query door carries a copy of the compact index, and the stamp it reads.** `frontend/src/lib/data/compact-index.ts` declares `CompactEntry` and `CompactIndex` by hand, because the door runs in a browser that fetches `state/compact/<ledger>/index/<period>.json` and cannot import the Pydantic model. Beside them sit `COMPACT_INDEX_STAMP`, the `CompactIndex` stamp this build reads, `COMPACT_PERIODS`, and `ENTRY_STATES`, the closed set an entry's `state` is drawn from. **The stamp rule is the backend's own**: an index stamped at that stamp or older is read when the fields the door acts on pass its guard, and a newer one is refused with both stamps in the console, because only a build at least that new knows what the shape means. The door's rules are [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md).
 
 **The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. `FEED_HEALTH_COLUMNS` beside it names only the `FeedHealthRow` columns the Voices page reads, in the contract's order, and the same test fails when the contract renames or drops one of them. The two other records a console route reads keep no second list. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`, and `HOST_FINGERPRINT_COLUMNS` is keyed by the `HostFingerprintRow` copy above, so the compiler refuses a column that copy does not name.
 
@@ -63,7 +63,7 @@ Four tests in `backend/tests/contracts/`, each named for what it proves.
 | `test_frontend_field_set.py` | the hand-written `HostFingerprintRow` names exactly the columns the Pydantic one declares, in the same order, with the same TypeScript type for each. Types are computed from `json_schema()` by a narrow mapper that refuses a node kind it has not met, so a field with an unfamiliar shape fails rather than passes |
 | `test_frontend_vocabularies.py` | `SERVER_JOB` and `WATCHED_FLAG` hold exactly their Python enums' members, in order |
 | `test_frontend_console_lists.py` | eight console lists still name what their contracts declare - the eval panel's column map, the census row's and the feed record's column lists in `ledger-rows.ts`, the settings vocabulary, the doubt reasons, the bandwidth margin, the prompt-reuse column grammar, and the routes the strip draws: `RouteId` and `ROUTE_IDS` in `band.ts` name `RouteId`'s members in the order the band producer's `ROUTES` writes them |
-| `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; every ledger the door may query is a `LedgerName`; and the cell it filters days on is the ledger's own date cell |
+| `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; `ENTRY_STATES` is `EntryState`; every ledger the door may query is a `LedgerName`; the `RawDayIndex` copy in `raw-day-index.ts` names the contract's fields, requires `bytes`, and carries `RawDayIndex.schema_version()` as `RAW_DAY_INDEX_STAMP`; the cell it filters days on is the ledger's own date cell; and `LEDGER_FAULTS` in `slice-shapes.ts` names `LedgerFault`'s members in order |
 
 A fourth, `test_no_generated_layer.py`, refuses the generated trees coming back one file at a time.
 
@@ -95,7 +95,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `frontend/src/lib/server/host-fingerprint.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`. |
 | `frontend/src/lib/server/ledger-rows.ts` | `ITEM_HEALTH_COLUMNS` and `FEED_HEALTH_COLUMNS`, the column names of `ItemHealthRow` and `FeedHealthRow` a console route asks the door for. |
 | `frontend/src/lib/server/config.ts` | The hand copy of `ConsolePanelGroup`. |
-| `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, and the stamp the query door reads. |
+| `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, the entry states, and the stamp the query door reads. |
 | `frontend/src/lib/console/band.ts` | The hand copy of `RouteId` and `ROUTE_IDS`, the routes the console strip draws, in the order the band producer writes them. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `DigestDay`. Hand-written, and bound by nothing. |
 
@@ -115,13 +115,6 @@ The shapes, and where each one lives once written:
 | `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one row of `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/summary-quality-evals/` |
-| `ObservationIndexRow` | `observation-index-row` | legacy CSV ID row, read only by the [explicit lookup migration](../../how-to/migrate-observation-lookup.md) |
-| `ObservationLookupRoot` | `observation-lookup-root` | `state/summary-quality-evals-index/lookup/root.json` |
-| `ObservationLookupPage` | `observation-lookup-page` | content-addressed JSON routing node under the lookup root |
-| `ObservationLookupReceipt` | `observation-lookup-receipt` | a batch entry inside a SQLite lookup leaf, not a standalone receipt file |
-| `ObservationLookupTransaction` | `observation-lookup-transaction` | ignored `lookup/.transaction.json` for local recovery |
-| `ObservationBatch` | `observation-batch` | committed `incoming/<batch-id>.json` and the original ignored job-local input |
-| `ObservationPreparation` | `observation-preparation` | an ignored per-job or named-recovery manifest under `backend/var/evaluation-inputs/` |
 | `SeenRow` | `seen-row` | one row of `state/raw/seen/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/seen/` |
 | `PublishedRow` | `published-row` | one row of `state/raw/published/<YYYY>/<MM>/<DD>/`, in the raw file the assemble job files through the ledger door, packed later under `state/compact/published/` |
 | `FeedHealthRow` | `feed-health-row` | one row of `state/raw/feed-health/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/feed-health/` |
@@ -144,7 +137,7 @@ The shapes, and where each one lives once written:
 | `CorpusRow` | `corpus-row` | one line of `corpus/corpus.jsonl` |
 | `CorpusMeta` | `corpus-meta` | `corpus/corpus.meta.json` |
 
-`state/` holds row-ledger contracts and whole-document contracts. The six lookup envelopes above are registered in `CONTRACTS` and have golden fixtures under `tests/fixtures/contracts/`. Their layout, identity and recovery rules live in [observation-lookup.md](observation-lookup.md). Which ledgers a later run reads back, and what each answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
+`state/` holds row-ledger contracts and whole-document contracts. Which ledgers a later run reads back, and what each answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
 `ItemHealthSummaryRow` describes a derived row: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored. What decides when a month is folded is the `full-grain` series of `config/gardener/telemetry-aggregate.json`, and its deletion safeguards are in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
@@ -221,7 +214,6 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| `state/summary-quality-evals-index/` | `lookup/root.json`, bounded JSON routing nodes and SQLite leaves | none: nothing in the pipeline reads it ([evaluation.md](../../concepts/evaluation.md#design-rationale)) | no time window ([observation-lookup.md](observation-lookup.md)) |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
@@ -254,10 +246,6 @@ The scan has to read every row, so every shard gets opened anyway - the same
 bytes through more file handles, plus a directory listing and a stem loop that a
 single `open` does not need. Splitting a file you always read whole makes it
 slower, not faster.
-
-An exact-key lookup is not a whole-history scan. Its incoming keys select
-[bounded digest-prefix leaves](observation-lookup.md#physical-layout), with no
-time window and no historical ID scan.
 
 Two consequences worth stating so nobody re-derives them:
 

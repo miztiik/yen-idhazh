@@ -1,11 +1,11 @@
 """Where each ledger's file lives under `state/`, and never guessed.
 
-Two kinds of address, and ten builders in all. A ledger that files the way the
+Two kinds of address, and nine builders in all. A ledger that files the way the
 CSV trees do is read from `config/ledgers.json`, which is loaded and validated
 once, when this module loads, so a config that does not describe every ledger
 stops the build rather than a run four hundred seconds in. A ledger that goes
 through the door in `ledger/persist.py` files under `state/raw/` or
-`state/compact/`, and those two roots have one fixed grammar, so their six
+`state/compact/`, and those two roots have one fixed grammar, so their five
 builders need no registry entry to answer.
 
 The registry's four builders come in two pairs. `path` and `relpath` are the
@@ -15,14 +15,14 @@ are built from one segment list so they cannot disagree. `tree_root` and
 `tree_relpath` are the same pair for the folder a reader walks: the one that
 holds every file of a ledger and nothing else.
 
-**Nothing the door writes is born outside the two roots.** Each of the six
+**Nothing the door writes is born outside the two roots.** Each of the five
 root builders refuses, by name, a path whose first folder under `state/` is
 neither `raw` nor `compact`, so a third root is a `ValueError` rather than a
 convention somebody forgot.
 
 **A ledger the registry lists as `raw-and-compact` has no registry address.**
 Its files sit under the two roots and are named by their grammar, so the four
-registry builders refuse it by name and point at the five that can build it,
+registry builders refuse it by name and point at the four that can build it,
 rather than hand back a CSV address nothing writes.
 
 Nothing here globs `state/`. A walk would cost more every day, and it cannot tell
@@ -60,7 +60,7 @@ COMPACT_DIRNAME: Final = Tier.COMPACT.value
 #: The two roots, and the whole of them. A third is refused, never created.
 _THE_TWO_ROOTS: Final = frozenset(tier.value for tier in Tier)
 
-#: Where a raw day's listing and a compact period's listing sit inside a ledger.
+#: Where a compact period's listing sits inside a ledger.
 INDEX_DIRNAME: Final = "index"
 
 #: What each compact period's resume mark is called, inside that period's folder.
@@ -127,7 +127,7 @@ def _no_registry_address(held: LedgerEntry) -> ValueError:
         f"{held.name} files by {held.grain.value}: its files sit under "
         f"{STATE_DIRNAME}/{RAW_DIRNAME}/ and {STATE_DIRNAME}/{COMPACT_DIRNAME}/ and are "
         "named by their own grammar, so the registry holds no single address for it. "
-        "Ask raw_path, raw_index_path, compact_path, compact_index_path or watermark_path"
+        "Ask raw_path, compact_path, compact_index_path or watermark_path"
     )
 
 
@@ -142,10 +142,6 @@ def _segments(held: LedgerEntry, covers: str | None) -> tuple[str, ...]:
                 "addresses nothing. Drop the argument"
             )
         return (*held.prefix, f"{held.stem}{held.suffix}")
-    if held.grain is Grain.LOOKUP:
-        if covers is not None:
-            raise ValueError(f"{held.name} is an exact lookup, not a dated partition")
-        return held.prefix
     if covers is None:
         raise ValueError(
             f"{held.name} files by {held.grain.value} and needs {_PERIOD[held.grain]}. "
@@ -261,9 +257,9 @@ def _day_segments(date: str) -> tuple[str, str, str]:
 def raw_root(state_dir: Path, ledger: LedgerName) -> Path:
     """The folder that holds every raw file of one ledger: `raw/<ledger>/`.
 
-    What a reader walks to find the days a ledger has files for. `raw_path` and
-    `raw_index_path` are built from it, so the folder a reader walks and the
-    files a writer puts in it cannot disagree about where the ledger sits.
+    What a reader walks to find the days a ledger has files for. `raw_path` is
+    built from it, so the folder a reader walks and the files a writer puts in
+    it cannot disagree about where the ledger sits.
     """
     return _under_the_two_roots(state_dir, state_dir.joinpath(RAW_DIRNAME, ledger.value))
 
@@ -284,13 +280,6 @@ def raw_path(
     """
     year, month, day = _day_segments(date)
     built = raw_root(state_dir, ledger).joinpath(year, month, day, f"{file_id}.{fmt.value}")
-    return _under_the_two_roots(state_dir, built)
-
-
-def raw_index_path(state_dir: Path, ledger: LedgerName, date: str) -> Path:
-    """Where the listing of one raw day sits: `raw/<ledger>/index/<YYYY-MM-DD>.json`."""
-    _day_segments(date)
-    built = raw_root(state_dir, ledger).joinpath(INDEX_DIRNAME, f"{date}{_JSON_SUFFIX}")
     return _under_the_two_roots(state_dir, built)
 
 

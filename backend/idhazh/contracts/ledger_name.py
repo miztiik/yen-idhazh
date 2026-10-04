@@ -47,7 +47,6 @@ class LedgerName(StrEnum):
     ITEM_HEALTH = "item-health"
     HOST_FINGERPRINT = "host-fingerprint"
     SUMMARY_QUALITY_EVALS = "summary-quality-evals"
-    SUMMARY_QUALITY_EVALS_INDEX = "summary-quality-evals-index"
     CANDIDATE_MODELS = "candidate-models"
     ITEM_HEALTH_SUMMARY = "item-health-summary"
     PUBLISHED = "published"
@@ -66,6 +65,7 @@ class LedgerName(StrEnum):
     DAY_METRICS = "day-metrics"
     DIGEST_FRAGMENTS = "digest-fragments"
     GARDENER = "gardener"
+    RUN_PLAN = "run-plan"
 
 
 #: Ledgers whose writers still file one CSV segment per run under a day directory.

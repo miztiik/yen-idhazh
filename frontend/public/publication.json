@@ -98,19 +98,19 @@
       "root": "public"
     },
     {
-      "bytes": 365184,
+      "bytes": 386304,
       "items": 0,
       "path": "assist/index/2026-10.bin",
       "root": "public"
     },
     {
-      "bytes": 160942,
+      "bytes": 170302,
       "items": 0,
       "path": "assist/index/2026-10.json",
       "root": "public"
     },
     {
-      "bytes": 2817,
+      "bytes": 2893,
       "items": 0,
       "path": "console/band.json",
       "root": "public"
@@ -128,7 +128,7 @@
       "root": "public"
     },
     {
-      "bytes": 39127,
+      "bytes": 39601,
       "items": 0,
       "path": "day-metrics/2026-10.json",
       "root": "public"
@@ -650,13 +650,13 @@
       "root": "public"
     },
     {
-      "bytes": 139131,
-      "items": 73,
+      "bytes": 245664,
+      "items": 128,
       "path": "digest/2026/10/04/digest.json",
       "root": "public"
     },
     {
-      "bytes": 5741,
+      "bytes": 11412,
       "items": 0,
       "path": "digest/2026/10/04/run.json",
       "root": "public"
@@ -674,7 +674,7 @@
       "root": "public"
     },
     {
-      "bytes": 11674,
+      "bytes": 12222,
       "items": 0,
       "path": "machine/2026-10.csv",
       "root": "public"
@@ -692,7 +692,7 @@
       "root": "public"
     },
     {
-      "bytes": 6701,
+      "bytes": 7085,
       "items": 0,
       "path": "run-days/2026-10.json",
       "root": "public"
@@ -704,13 +704,13 @@
       "root": "public"
     },
     {
-      "bytes": 144309,
+      "bytes": 153799,
       "items": 0,
       "path": "run-timeline/2026-10.csv",
       "root": "public"
     },
     {
-      "bytes": 384241,
+      "bytes": 384273,
       "items": 0,
       "path": "source-health.json",
       "root": "public"
@@ -728,7 +728,7 @@
       "root": "public"
     },
     {
-      "bytes": 394620,
+      "bytes": 420515,
       "items": 0,
       "path": "telemetry/2026-10.csv",
       "root": "public"
@@ -870,9 +870,21 @@
       "items": 0,
       "path": "raw/feed-health/2026/10/04/01a10784-75ce-8652-b0bc-48e9534c9f37.parquet",
       "root": "state"
+    },
+    {
+      "bytes": 21222,
+      "items": 0,
+      "path": "raw/feed-health/2026/10/04/01a10820-1cf9-89cc-99ea-dba703526253.parquet",
+      "root": "state"
+    },
+    {
+      "bytes": 21219,
+      "items": 0,
+      "path": "raw/feed-health/2026/10/04/01a10860-0d18-8cd3-83d4-c0698367818a.parquet",
+      "root": "state"
     }
   ],
-  "total_bytes": 52242304,
-  "total_items": 14798,
+  "total_bytes": 52421887,
+  "total_items": 14853,
   "version": "2026-10-03T13:33"
 }

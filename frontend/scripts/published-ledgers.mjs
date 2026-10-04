@@ -9,6 +9,8 @@
  *
  * **The indexes are the compact list, and raw days have one bounded exception.** A reader asks only
  * for compact files an index names, so a compact file no index names is bytes nobody fetches.
+ * An entry `empty` or `lost` stays in its index and names no file, so it is never copied or
+ * reported missing.
  * The copy is capped from each ledger's newest packed period rather than the
  * build clock, so a canary build keeps publishing the same fixture files next month.
  * Reading the list rather than the tree also keeps `daily/watermark.json`, the
@@ -35,7 +37,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { daysBetween, newestNamed } from '../src/lib/data/slice.ts';
+import { daysBetween, namesFile, newestNamed } from '../src/lib/data/slice.ts';
 
 /** The tunable knobs, the same file `backend/idhazh/contracts/app_config.py` validates. */
 const CONFIG_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'config', 'idhazh.json');
@@ -200,7 +202,7 @@ function filesNamedIn(text, ledger, period, firstDay, lastDay) {
 		if (range === null) return `names ${JSON.stringify(covers)}, which is not a UTC period`;
 		if (range.last < firstDay || range.first > lastDay) continue;
 		entries.push(entry);
-		files.push(`compact/${ledger}/${file}`);
+		if (namesFile(entry)) files.push(`compact/${ledger}/${file}`);
 	}
 	return { files, text: `${JSON.stringify({ ...held, entries }, null, 2)}\n` };
 }

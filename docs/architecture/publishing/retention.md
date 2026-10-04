@@ -100,9 +100,8 @@ idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-D
 - Dry run is the default and reports the selected paths. `--no-dry-run` permits deletion.
 - `--max-deletes` bounds a pass and reports where to resume. Without it, the supplied range sets the default bound.
 - `published` and `seen` are refused because forgetting their records permits repeat publication or discovery.
-- A ledger the door files (`raw-and-compact` in `config/ledgers.json`) is a target unless its compaction declaration's `prune_refusal` gives a reason, which the command prints as its refusal. A pass deletes the days' raw files and listings and rebuilds each daily, monthly or yearly file that holds them without their rows; a file left with no row stays as an empty file. A live pass also takes `--run-id` and `--commit`, which each rebuilt file names as its writer.
+- A ledger the door files (`raw-and-compact` in `config/ledgers.json`) is a target unless its compaction declaration's `prune_refusal` gives a reason, which the command prints as its refusal. A pass deletes the days' raw files and rebuilds each daily, monthly or yearly file that holds them without their rows; a file left with no row stays as an empty file. A live pass also takes `--run-id` and `--commit`, which each rebuilt file names as its writer.
 - `summary-quality-evals` is refused by its declaration: every eval row is kept for ever.
-- `summary-quality-evals-index` is not a prune target: its lookup has no day or month partition to prune.
 - Do not point the command at unsupported raw trees or file layouts. Their owning tasks decide retention.
 
 The procedure and failure handling are in

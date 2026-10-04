@@ -522,11 +522,11 @@ class ConsoleConfig(Model):
         ),
     )
     explorer_query_max_chars: int = Field(
-        default=5776,
+        default=5790,
         ge=1,
         description=(
             "Most characters one Data explorer SQL statement may hold. The value comes "
-            "from docs/reference/benchmarks/address-length-on-pages.md: 5,776 "
+            "from docs/reference/benchmarks/address-length-on-pages.md: 5,790 "
             "ASCII characters is the longest worst-case question that fits the "
             "measured GitHub Pages request target with every ledger selected."
         ),

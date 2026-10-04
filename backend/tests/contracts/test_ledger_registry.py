@@ -45,12 +45,10 @@ STATE: Final = Path("state")
 #: Computed from `5a9c6f32f:backend/idhazh/ledger/__init__.py` by calling those
 #: functions, so a row here is the old answer rather than a reading of it.
 #:
-#: Three rows are not the old answer, and the difference is only their first
+#: Two rows are not the old answer, and the difference is only their first
 #: segment. `candidate-models` was `validation` and `item-health-summary` was
 #: `telemetry-aggregate`, renamed to say what they hold while neither had a
 #: single committed file - so the old addresses held nothing to move.
-#: `summary-quality-evals-index` was `score-index`, renamed with the eval ledger,
-#: and a migration moved every committed file it held.
 #:
 #: Two folders are not the old module's answer either, because it built no
 #: folder for a ledger filed by month or by stamp. Each is the folder its callers
@@ -78,11 +76,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/scores/2026/09/18",
         "state/scores/2026/09/18",
         "state/scores",
-    ),
-    "SUMMARY_QUALITY_EVALS_INDEX": (
-        "state/summary-quality-evals-index/2026/09/18",
-        "state/summary-quality-evals-index/2026/09/18",
-        "state/summary-quality-evals-index",
     ),
     "CANDIDATE_MODELS": (
         "state/candidate-models/2026/09/18",
@@ -214,11 +207,7 @@ THROUGH_THE_DOOR: Final = frozenset(
     member for member in LedgerName if paths.entry(member).grain is Grain.RAW_AND_COMPACT
 )
 #: Every ledger the registry still builds a CSV address for.
-CSV_LEDGERS: Final = [
-    member
-    for member in LedgerName
-    if member not in THROUGH_THE_DOOR and paths.entry(member).grain is not Grain.LOOKUP
-]
+CSV_LEDGERS: Final = [member for member in LedgerName if member not in THROUGH_THE_DOOR]
 
 
 def a_registry(families: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -457,19 +446,6 @@ def test_the_two_forms_of_one_address_agree() -> None:
         assert paths.relpath(member, covers) == f"{paths.STATE_DIRNAME}/{under}"
 
 
-def test_an_exact_lookup_has_an_undated_root_and_refuses_a_period() -> None:
-    member = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
-    assert paths.entry(member).grain is Grain.LOOKUP
-    assert paths.path(STATE, member) == paths.tree_root(STATE, member) == STATE / member.value
-    assert paths.relpath(member) == paths.tree_relpath(member) == (
-        f"{paths.STATE_DIRNAME}/{member.value}"
-    )
-    with pytest.raises(ValueError, match="exact lookup, not a dated partition"):
-        paths.path(STATE, member, A_DAY)
-    with pytest.raises(ValueError, match="exact lookup, not a dated partition"):
-        paths.relpath(member, A_DAY)
-
-
 @pytest.mark.parametrize("member", sorted(DAY_TREES), ids=lambda m: m.value)
 def test_a_dated_ledger_handed_no_period_refuses(member: LedgerName) -> None:
     """`path` never guesses a day, because a guessed day files a row out of reach."""
@@ -489,26 +465,26 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     A claim is a family name now, so every folder claimed before is still
     claimed under the name it has today. One addition is a file's stem, which
     the sweep never meets because it only looks at directories. Two are the
-    renamed empty ledgers, which leave their old names behind, and two more are
-    the eval ledger and its ID folder, renamed after their files were moved.
-    Three are the folders other modules used to own, protected before by a list
-    typed into the sweep itself and now by the registry. One is the gardener's
-    own ledger, which files under the two roots and is claimed like every
-    family. The last two are not families at all: they are the roots the ledger
-    door files under, claimed so the sweep never reads them as a trial run's
-    trees.
+    renamed empty ledgers, which leave their old names behind, and one more is
+    the eval ledger, renamed after its files were moved; the ID folder it had
+    is gone. Three are the folders other modules used to own, protected before
+    by a list typed into the sweep itself and now by the registry. One is the
+    gardener's own ledger, which files under the two roots and is claimed like
+    every family. The last two are not families at all: they are the roots the
+    ledger door files under, claimed so the sweep never reads them as a trial
+    run's trees.
     """
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-retirements",
         "candidate-models",
         "item-health-summary",
         "summary-quality-evals",
-        "summary-quality-evals-index",
         "traces",
         "day-metrics",
         "digest-fragments",
         "gardener",
         "raw",
+        "run-plan",
         "compact",
     }
     assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {
@@ -547,7 +523,7 @@ def test_the_three_owners_build_the_paths_they_built_before() -> None:
 
 def test_every_entry_carries_the_fields_its_grain_needs() -> None:
     """Directory-backed ledgers have no extension; only a flat file needs a stem."""
-    unsuffixed = {Grain.DAY_TREE, Grain.RAW_AND_COMPACT, Grain.LOOKUP}
+    unsuffixed = {Grain.DAY_TREE, Grain.RAW_AND_COMPACT}
     for member in LedgerName:
         held = paths.entry(member)
         assert (held.stem is not None) == (held.grain is Grain.FLAT)

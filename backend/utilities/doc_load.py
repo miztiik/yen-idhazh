@@ -5,14 +5,14 @@ split, merge, delete - are judgement, so this tool hands them numbers and no
 verdict: no column here is a threshold, and the standard deliberately gives no
 page a maximum length, because a line limit is met by starting a second file.
 Its required elements have one correct answer each, so those are reported as
-faults rather than as measurements.
+faults rather than as measurements, and only for pages under `docs/`.
 
 **Nothing here fails a build.** The standard has no doc gate, for the same
 reason it has no length limit, and a fault printed beside the page that carries
 it is what the rule was ever going to get.
 
-Name the pages a change touched, which is what CI does, so the numbers reach
-the person reviewing the change rather than only the person who went looking:
+Name every Markdown page a change touched, a plan included. No CI job runs this
+tool, so run it before and after the change:
 
     python backend/utilities/doc_load.py docs/concepts/config.md
 """
@@ -27,9 +27,6 @@ from pathlib import Path
 
 STANDARD = "docs/reference/documentation-structure.md"
 
-#: Held before a line of code is read, because the harness injects them.
-ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md")
-
 #: A section a later one corrects reads like one of these. A hit is a candidate.
 SUPERSEDED = re.compile(
     r"\b(superseded|retracted|withdrawn|corrected 20|was wrong"
@@ -42,6 +39,11 @@ LINK = re.compile(r"\]\(([^)\s]+\.md)[)#]")
 #: A link that names a section. The fragment is half the link: a file that still
 #: exists proves nothing about the heading somebody meant to land on.
 ANCHORED = re.compile(r"\]\(([^)\s#]+\.md)#([^)\s]+)\)")
+
+#: A target that opens with a scheme, such as `https:`, is an address on another
+#: site. The tool never reads the network, so it does not judge one. A scheme is
+#: two characters at least, so a drive such as `C:` is still judged as a path.
+SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]+:")
 
 #: What GitHub does to a heading to make its anchor: lowercase it, drop anything
 #: that is not a word character, a space or a hyphen, then hyphenate the spaces.
@@ -70,6 +72,15 @@ def prose(text: str) -> list[str]:
         elif not fence:
             out.append(line)
     return out
+
+
+def names_a_page_here(href: str) -> bool:
+    """Does this link target name a page in this repository?
+
+    A placeholder in a worked example, such as `<slug>.md`, names no page. An
+    address on another site names a page this tool cannot see.
+    """
+    return "<" not in href and not SCHEME.match(href)
 
 
 def is_there(target: Path) -> bool:
@@ -123,15 +134,16 @@ HEADINGS = f"  {'page':<52} {'~tok':>6} {'h2':>4} {'top h2':>7} {'from':>5} {'su
 
 
 def pages_under(root: Path, named: Sequence[str]) -> list[Path]:
-    """Existing named Markdown pages. Deleted paths and code inputs are skipped."""
+    """Existing named Markdown pages inside the repository.
+
+    A deleted path, a code input and a path outside the repository are skipped.
+    """
+    root = root.resolve()
     paths: list[Path] = []
     for name in sorted(set(named)):
-        path = root / name
-        if path.suffix != ".md" or not path.is_file():
-            continue
-        relative = path.resolve().relative_to(root.resolve()).as_posix()
-        if relative.startswith("docs/") or relative in (*ALWAYS_LOADED, "README.md"):
-            paths.append(path.resolve())
+        path = (root / name).resolve()
+        if path.suffix == ".md" and path.is_file() and path.is_relative_to(root):
+            paths.append(path)
     return paths
 
 
@@ -145,6 +157,8 @@ def measure(root: Path, named: Sequence[str]) -> list[Row]:
     inbound: dict[Path, set[Path]] = {p: set() for p in pages}
     for src, body in text.items():
         for href in LINK.findall(body):
+            if not names_a_page_here(href):
+                continue
             target = (src.parent / href).resolve()
             if target in inbound and target != src:
                 inbound[target].add(src)
@@ -182,9 +196,10 @@ def legend() -> None:
 def faults(root: Path, named: Sequence[str]) -> dict[str, list[str]]:
     """Named pages under `docs/` that lack something the standard requires.
 
-    Only `docs/` is held to this. `CLAUDE.md` and `README.md` are the contract
-    and the front door rather than pages the placement rules route to, and the
-    standard's required-elements list is written for the tree it organises.
+    Only `docs/` is held to this, because the standard's required-elements list
+    is written for the tree it organises. `CLAUDE.md` and `README.md` are the
+    contract and the front door, and a plan under `TODO/` answers to the
+    plan-doc rule instead.
 
     A fault here is not an opinion about the page. Each one names a thing the
     standard says every page carries, so a reader who does not find it is left
@@ -222,12 +237,12 @@ def faults(root: Path, named: Sequence[str]) -> dict[str, list[str]]:
             shown = " ".join(f"U+{ord(ch):04X}" for ch in odd[:4])
             found.append(f"{len(odd)} non-ASCII characters, first: {shown}")
         for href in sorted(set(LINK.findall(body))):
-            if "<" in href:
-                continue  # a placeholder in a worked example names no page
+            if not names_a_page_here(href):
+                continue
             if not is_there(page.parent / href):
                 found.append(f"links to a page that is not there: {href}")
         for href, fragment in sorted(set(ANCHORED.findall(body))):
-            if "<" in href:
+            if not names_a_page_here(href):
                 continue
             target = (page.parent / href).resolve()
             if target not in here and is_there(page.parent / href):
@@ -267,7 +282,7 @@ def changed(root: Path, named: list[str]) -> None:
     for tok, name, h2, share, from_n, sup in mine:
         print(f"  {name:<52} {tok:>6,} {h2:>4} {str(share) + '%':>7} {from_n:>5} {sup:>6}")
     legend()
-    report_faults(faults(root, named), "Every page you touched")
+    report_faults(faults(root, named), "Every page you touched under docs/")
     print("\nThe page you add to pays first. Apply the SPLIT TEST to any page above")
     print("that already answers two questions; one addition buys at most one cut.")
 
