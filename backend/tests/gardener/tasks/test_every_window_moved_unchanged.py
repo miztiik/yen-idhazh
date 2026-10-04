@@ -9,7 +9,7 @@ purpose after it moved is named below with its reason.
 
 A window whose declaration went when its ledger moved to the ledger door is read
 from the migrator's table of how long each moved ledger's CSV was kept, which
-`backend/tests/ledger/test_migrate_to_parquet.py` holds the ledger's compaction
+`backend/tests/ledger_migration/test_csv_layouts.py` holds the ledger's compaction
 to.
 """
 
@@ -33,7 +33,7 @@ from idhazh.contracts.knobs.gardener import (
     Window,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from utilities.csv_ledgers import CSV_LEDGERS
+from utilities.ledger_migration.csv_layouts import CSV_LEDGERS
 
 from ._task import declared
 

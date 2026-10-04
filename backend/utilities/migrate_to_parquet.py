@@ -12,8 +12,13 @@ from typing import Final
 
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN
 from idhazh.contracts.ledger_name import LedgerName
-from utilities import csv_ledgers, migration_phases
-from utilities.csv_ledgers import NotProvenError, RefusedError
+from utilities.ledger_migration import phases, report_lines
+from utilities.ledger_migration.csv_files import left
+from utilities.ledger_migration.csv_layouts import CSV_LEDGERS, door_ledgers
+from utilities.ledger_migration.inputs import MigrationInputs
+from utilities.ledger_migration.packing import packs_here
+from utilities.ledger_migration.planning import collect_reports, plan_roots
+from utilities.ledger_migration.refusals import NotProvenError, RefusedError
 from utilities.named_inputs import month_directories
 
 EXIT_MIGRATED: Final = 0
@@ -39,7 +44,8 @@ def _month_argument(value: str) -> str:
     return value
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
+    """Named roots, months, run and commit, and at most one mode; no mode runs the full chain."""
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n", 1)[0])
     parser.add_argument(
         "--state-dir",
@@ -70,7 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--ledger",
         action="append",
-        choices=[name.value for name in csv_ledgers.CSV_LEDGERS],
+        choices=[name.value for name in CSV_LEDGERS],
         default=None,
         help=(
             "A ledger to migrate or check; repeat it for more. Without it, every ledger "
@@ -89,30 +95,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     modes.add_argument(
         "--retire", action="store_true", help="Re-plan and prove all, then delete CSV."
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
     state_dirs: list[Path] = list(dict.fromkeys(path.resolve() for path in args.state_dir))
     which = (
         list(dict.fromkeys(LedgerName(value) for value in args.ledger))
         if args.ledger
-        else csv_ledgers.door_ledgers()
+        else door_ledgers()
     )
 
     if args.check:
         try:
             remaining = [
-                (root, path)
+                path
                 for root in state_dirs
-                for path in csv_ledgers.left(root, which, months=args.month)
+                for path in left(root, which, months=args.month)
             ]
         except (NotProvenError, RefusedError) as refusal:
             print(f"a CSV tree cannot be read: {refusal}", file=sys.stderr)
             return EXIT_NOT_PROVEN
-        for _, path in remaining:
-            print(f"{csv_ledgers.label_path(path)} is still a CSV")
-        print(f"{len(remaining)} CSV file(s) left")
+        for line in report_lines.left_lines(remaining):
+            print(line)
         return EXIT_NOT_PROVEN if remaining else EXIT_MIGRATED
 
-    inputs = migration_phases.MigrationInputs(
+    inputs = MigrationInputs(
         state_dirs=state_dirs,
         which=which,
         run_id=args.run_id,
@@ -121,34 +130,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         months=args.month,
     )
     for root in inputs.state_dirs:
-        mode = "packs" if migration_phases.packs_here(root, inputs.config_dir) else "raw only"
-        print(f"{csv_ledgers.label_path(root)}: {mode}")
+        print(report_lines.root_line(root, packs=packs_here(root, inputs.config_dir)))
     try:
         if args.plan or args.write or args.verify:
-            plans = migration_phases.plan_roots(inputs)
+            plans = plan_roots(inputs)
             if args.write:
-                moved = migration_phases.write_roots(plans)
+                moved = phases.write_roots(plans)
             elif args.verify:
-                moved = migration_phases.verify_roots(plans)
+                moved = phases.verify_roots(plans)
             else:
-                moved = migration_phases.collect_reports(plans)
-                for plan in plans:
-                    for name, days in plan.planned.items():
-                        if not days:
-                            print(
-                                f"{csv_ledgers.label_path(plan.state_dir)}: {name.value}: "
-                                f"no CSV inputs in {', '.join(plan.inputs.months)}"
-                            )
-                        for day, held in days.items():
-                            print(
-                                f"{csv_ledgers.label_path(plan.state_dir)}: {name.value} {day}: "
-                                f"{'write needed' if held.changed else 'rows already held'}; "
-                                f"{len(held.files)} CSV file(s), {len(held.rows)} row(s)"
-                            )
+                moved = collect_reports(plans)
+                for line in report_lines.preview_lines(plans):
+                    print(line)
         else:
-            action = (
-                migration_phases.retire_roots if args.retire else migration_phases.migrate_roots
-            )
+            action = phases.retire_roots if args.retire else phases.migrate_roots
             moved = action(inputs)
     except RefusedError as refusal:
         print(f"refused, nothing written: {refusal}", file=sys.stderr)
@@ -156,19 +151,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except NotProvenError as refusal:
         print(f"not proven, nothing deleted: {refusal}", file=sys.stderr)
         return EXIT_NOT_PROVEN
+    csv_kept = args.plan or args.write or args.verify
     for root, each in moved:
-        label = csv_ledgers.label_path(root)
-        print(
-            f"{label}: {each.which.value}: {each.csv_files} CSV file(s), "
-            f"{each.csv_bytes} bytes, over "
-            f"{each.days} day(s) -> {each.rows} row(s); {each.filed} day(s) filed, "
-            f"{len(each.packed)} day(s) packed ({each.packed[0] if each.packed else '-'} to "
-            f"{each.packed[-1] if each.packed else '-'}); "
-            f"{len(each.compaction_written)} compaction file(s) written, "
-            f"{len(each.compaction_deleted)} deleted; "
-            f"{'CSV kept' if args.plan or args.write or args.verify else 'every CSV file deleted'}"
-            f"{'; parity proven' if args.verify else ''}"
-        )
+        print(report_lines.moved_line(root, each, csv_kept=csv_kept, proven=args.verify))
     return EXIT_MIGRATED
 
 

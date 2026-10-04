@@ -912,7 +912,7 @@ def test_a_retention_task_that_kept_an_old_tree_sets_no_floor_on_its_compaction(
     """A task that owned a moved ledger's CSV tree runs nothing, so it bounds nothing.
 
     How long the CSV was kept is `CSV_LEDGERS` in
-    `backend/utilities/csv_ledgers.py`, whose own test holds every moved
+    `backend/utilities/ledger_migration/csv_layouts.py`, whose own test holds every moved
     ledger's committed compaction to it.
     """
     config_dir = a_garden(
