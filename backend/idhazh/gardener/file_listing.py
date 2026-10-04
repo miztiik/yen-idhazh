@@ -328,10 +328,6 @@ class FileListing:
         self._refuse_outside(relative)
         return [path for path in self.sizes if path.startswith(f"{relative}/")]
 
-    def paths_under(self, folder: str | Path) -> list[Path]:
-        """Every listed file under this folder, as paths in the checkout, in path order."""
-        return [self.repo_root / path for path in self.files_under(folder)]
-
     def holds(self, path: str | Path) -> bool:
         """Whether the commit holds this file. A path no step named is refused."""
         relative = self._relative(path)

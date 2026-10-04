@@ -62,8 +62,8 @@ def test_a_listing_read_off_the_disk_names_every_file_with_its_size(tmp_path: Pa
         "state/days/2026/09/01.csv",
         "state/days/2026/09/02.csv",
     ]
-    assert listing.paths_under(tmp_path / "state" / "traces") == [
-        tmp_path / "state/traces/2026/09/01/0001-0.jsonl"
+    assert listing.files_under(tmp_path / "state" / "traces") == [
+        "state/traces/2026/09/01/0001-0.jsonl"
     ]
     assert listing.size_of(tmp_path / "state/days/2026/09/02.csv") == 2
     assert listing.downloaded() is None, "nothing was downloaded to read the disk"
@@ -74,7 +74,7 @@ def test_named_paths_ignore_unlisted_neighbours(tmp_path: Path) -> None:
     named = root / "state/days/2026/09/01.csv"
     listing = FileListing.from_paths(root, [named], folders=["state/days"])
     assert dict(listing.sizes) == {"state/days/2026/09/01.csv": 1}
-    assert listing.paths_under(root / "state/days") == [named]
+    assert listing.files_under(root / "state/days") == ["state/days/2026/09/01.csv"]
     with pytest.raises(ValueError, match="outside"):
         FileListing.from_paths(root, [root / "state/other/x.csv"], folders=["state/days"])
 

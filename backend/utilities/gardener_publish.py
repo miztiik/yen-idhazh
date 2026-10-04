@@ -568,14 +568,6 @@ def declared_folders(
     return owned, read
 
 
-def folder_weights(listing: FileListing, folders: Sequence[str]) -> dict[str, int]:
-    """What each folder weighs at the commit, in bytes. A folder the commit lacks weighs 0."""
-    return {
-        folder: sum(listing.size_of(path) for path in listing.files_under(folder))
-        for folder in folders
-    }
-
-
 def run_and_land(
     names: Sequence[str],
     *,
