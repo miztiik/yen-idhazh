@@ -153,6 +153,7 @@ def read(data: bytes) -> tuple[dict[bytes, bytes], list[dict[str, Any]]]:
         return _envelope_of(opened.metadata.metadata), list(opened.read().to_pylist())
 
 
-def read_envelope(path: Path) -> dict[bytes, bytes]:
-    """The envelope alone, read from the footer without touching a row."""
-    return _envelope_of(pyarrow.parquet.read_metadata(path).metadata)
+def read_footer(path: Path) -> tuple[dict[bytes, bytes], int]:
+    """The envelope and how many rows the file holds, both read from its footer, not a row."""
+    footer = pyarrow.parquet.read_metadata(path)
+    return _envelope_of(footer.metadata), int(footer.num_rows)

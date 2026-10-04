@@ -49,7 +49,7 @@ Table A - what is out
 | 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | #1282 | Plan 60 row 9: job names |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
-| 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | PENDING | - | - | - |
+| 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | - | Plan 60 row 12: which months may close |
 | 13 | Which days may be packed | 12 | D | PENDING | - | - | - |
 | 14 | Which years may be packed | 13 | D | PENDING | - | - | - |
 | 15 | Each old month is dropped once | 14 | D | PENDING | - | - | - |
@@ -501,6 +501,13 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/test_named_trees.py`
   - `docs/architecture/publishing/ledger-compaction.md`
   - `docs/architecture/publishing/idhazh-gardener.md` (its sentence that a folder a task neither owns nor reads "is refused rather than answered empty" gains the named-path rule)
+  - `backend/idhazh/contracts/gardener_fault.py` (new; the recovery-note words, persisted from row 20; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/context.py` (`operator_range`, so the month step tells a person's range from the scheduled window; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/schedule.py` (`newest_eligible_month`; found during execution)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`name_months`; found during execution)
+  - `backend/idhazh/ledger/persist.py`, `backend/idhazh/ledger/parquet.py` and `backend/idhazh/ledger/__init__.py` (`read_footer`, Rule R's rows and envelope from the footer; found during execution)
+  - `tests/fixtures/gardener/task_packages/fixture_day_files.py` (it walked a whole folder; found during execution)
+  - `backend/tests/gardener/tasks/test_compaction_batch.py` (`absorb` takes its choice; found during execution)
 - **Acceptance gates:** local: pytest on the test files above; ruff; mypy; `doc_load.py` on both pages. CI: the full suite.
 - **Oracle:**
   - Unit: the daily spans of the seven ledgers that failed on 2026-10-04, written into the test as literals, with today 2026-10-04: no chosen month is older than the oldest indexed month, and no pass ends `failed`.

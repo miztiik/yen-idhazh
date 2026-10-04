@@ -42,10 +42,20 @@ from idhazh.site_weight import SiteSize
 logger = logging.getLogger(__name__)
 
 
-def _below(listing: FileListing, root: Path) -> list[tuple[str, ...]]:
-    """Every listed file inside the periods named under `root`, as segments below it, in order."""
+def _below(
+    listing: FileListing, root: Path, folders: Iterable[Path] | None = None
+) -> list[tuple[str, ...]]:
+    """Every listed file inside the periods named under `root`, as segments below it, in order.
+
+    With `folders`, every file under those named folders of `root` alone.
+    """
     base = len(root.relative_to(listing.repo_root).as_posix()) + 1
-    return sorted(tuple(path[base:].split("/")) for path in listing.named_files(root))
+    files = (
+        listing.named_files(root)
+        if folders is None
+        else [path for folder in folders for path in listing.files_under(folder)]
+    )
+    return sorted(tuple(path[base:].split("/")) for path in files)
 
 
 def _real_day(year: str, month: str, day: str) -> bool:
@@ -238,15 +248,27 @@ def files_named(listing: FileListing, root: Path, suffix: str | None = None) -> 
     ]
 
 
-def raw_days(listing: FileListing, state_dir: Path, which: LedgerName) -> list[str]:
+def raw_days(
+    listing: FileListing,
+    state_dir: Path,
+    which: LedgerName,
+    *,
+    months: Iterable[str] | None = None,
+) -> list[str]:
     """Every UTC day a ledger has a raw folder with something in it for, oldest first.
 
-    The twin of `ledger.raw_days`: a name that is not a `YYYY/MM/DD` folder is
-    named in a warning.
+    The twin of `ledger.raw_days`, over the periods the listing names under the
+    raw root, or over these months' folders alone, each one a step named: a
+    name that is not a `YYYY/MM/DD` folder is named in a warning.
     """
     root = ledger.raw_root(state_dir, which)
+    folders = (
+        None
+        if months is None
+        else [root.joinpath(month[:4], month[5:7]) for month in sorted(set(months))]
+    )
     days: set[str] = set()
-    for parts in _below(listing, root):
+    for parts in _below(listing, root, folders):
         if (
             len(parts) > 3
             and day_partition.is_segment(parts[0], day_partition.YEAR_WIDTH)
