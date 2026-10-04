@@ -1,0 +1,70 @@
+{
+  "children": {
+    "0": {
+      "kind": "leaf",
+      "sha256": "0f1fcbc727763395c04f7fecce6e98a9b505744b5e0eb64a6ccbd515550f8d77"
+    },
+    "1": {
+      "kind": "leaf",
+      "sha256": "64249839e44d400a977e7ddc3afa26506eb6b8a83ca1e1368b6d4a332d0cda46"
+    },
+    "2": {
+      "kind": "leaf",
+      "sha256": "d250c07229cc574a1cc50f559a148564f64523a2088d14e28ab5a3dd289810eb"
+    },
+    "3": {
+      "kind": "leaf",
+      "sha256": "7e15c2ee86ea42779df39f5cc896a3d1d97a7e7cebd311d13a4978bc627a7d7f"
+    },
+    "4": {
+      "kind": "leaf",
+      "sha256": "69d83b5574f39dbbca638cae43d27f017993c2412028558e6dedf534f513e7ff"
+    },
+    "5": {
+      "kind": "leaf",
+      "sha256": "bc2d4f6de5df96b567cf98df3efe6c15eaa3859187cb3b1ad7c062540e423a27"
+    },
+    "6": {
+      "kind": "leaf",
+      "sha256": "563e83342a7ddec1319b57f5e053f67000295b44ccc3cbaf92e4c88a4ccd99e3"
+    },
+    "7": {
+      "kind": "leaf",
+      "sha256": "8c72a97bf774a52c09f46473257c1c48ad79775b9cc68ba7731ffb804d49c079"
+    },
+    "8": {
+      "kind": "leaf",
+      "sha256": "12d4b6fc3fe03e2ebb19da430e9b105150e7235cb7d597ffb123ce1f688ea2e2"
+    },
+    "9": {
+      "kind": "leaf",
+      "sha256": "50863873cc4caa62b89ae09bcb7a5958096c106389478570b60ae013a6e83766"
+    },
+    "a": {
+      "kind": "leaf",
+      "sha256": "6dff51ed9d06698fb143dc3bb4010454018d1eca1c637036aed11da37dc3602f"
+    },
+    "b": {
+      "kind": "leaf",
+      "sha256": "f20462f08d6d5bbc24bf5d309f88c7188940fd7fc600e085fb98d74f15c24112"
+    },
+    "c": {
+      "kind": "leaf",
+      "sha256": "cf80ab56bcb92b85d9e947afeafab4b1f8b7cd12c8b419eed462561f5e23e0e2"
+    },
+    "d": {
+      "kind": "leaf",
+      "sha256": "47c0ff08d7e8b6677f0447fdf9c5536e2381cf59891a3f624738adcca595d312"
+    },
+    "e": {
+      "kind": "leaf",
+      "sha256": "b33dacf797f6d4582400dd40131e4f14743ca34ad985ab8c1df837bc5cc64616"
+    },
+    "f": {
+      "kind": "leaf",
+      "sha256": "4751273963912387d8faa2b72c6094c5ad4d32e43640069e8e669f335c361e52"
+    }
+  },
+  "prefix": "",
+  "version": "2026-10-02"
+}

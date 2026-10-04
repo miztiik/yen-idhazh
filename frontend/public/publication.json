@@ -27,6 +27,7 @@
     }
   ],
   "dates": [
+    "2026-10-04",
     "2026-10-03",
     "2026-10-02",
     "2026-10-01",
@@ -97,19 +98,19 @@
       "root": "public"
     },
     {
-      "bytes": 337152,
+      "bytes": 365184,
       "items": 0,
       "path": "assist/index/2026-10.bin",
       "root": "public"
     },
     {
-      "bytes": 148486,
+      "bytes": 160942,
       "items": 0,
       "path": "assist/index/2026-10.json",
       "root": "public"
     },
     {
-      "bytes": 3064,
+      "bytes": 2817,
       "items": 0,
       "path": "console/band.json",
       "root": "public"
@@ -127,7 +128,7 @@
       "root": "public"
     },
     {
-      "bytes": 31148,
+      "bytes": 39127,
       "items": 0,
       "path": "day-metrics/2026-10.json",
       "root": "public"
@@ -649,6 +650,18 @@
       "root": "public"
     },
     {
+      "bytes": 139131,
+      "items": 73,
+      "path": "digest/2026/10/04/digest.json",
+      "root": "public"
+    },
+    {
+      "bytes": 5741,
+      "items": 0,
+      "path": "digest/2026/10/04/run.json",
+      "root": "public"
+    },
+    {
       "bytes": 4162,
       "items": 0,
       "path": "machine/2026-08.csv",
@@ -661,7 +674,7 @@
       "root": "public"
     },
     {
-      "bytes": 11072,
+      "bytes": 11674,
       "items": 0,
       "path": "machine/2026-10.csv",
       "root": "public"
@@ -679,7 +692,7 @@
       "root": "public"
     },
     {
-      "bytes": 6082,
+      "bytes": 6701,
       "items": 0,
       "path": "run-days/2026-10.json",
       "root": "public"
@@ -691,13 +704,13 @@
       "root": "public"
     },
     {
-      "bytes": 134918,
+      "bytes": 144309,
       "items": 0,
       "path": "run-timeline/2026-10.csv",
       "root": "public"
     },
     {
-      "bytes": 384262,
+      "bytes": 384241,
       "items": 0,
       "path": "source-health.json",
       "root": "public"
@@ -715,7 +728,7 @@
       "root": "public"
     },
     {
-      "bytes": 368834,
+      "bytes": 394620,
       "items": 0,
       "path": "telemetry/2026-10.csv",
       "root": "public"
@@ -853,7 +866,7 @@
       "root": "state"
     }
   ],
-  "total_bytes": 52012835,
-  "total_items": 14725,
+  "total_bytes": 52242304,
+  "total_items": 14798,
   "version": "2026-10-03T13:33"
 }
