@@ -1,6 +1,6 @@
 # Agent Bootstrap
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-10-04
 
 What to read before answering. Not a ritual - a routing table. Read the page
 that owns what you are about to change, and stop.
@@ -28,6 +28,7 @@ Then read the one page that owns the thing you are changing.
 | Swapping the summarizer, or putting the old one back | [`../how-to/evaluate-new-summarizer-model.md`](../how-to/evaluate-new-summarizer-model.md) - the swap is one line in `config/idhazh.json` and the revert is the same line back |
 | A workflow, a gate, or what CI runs | [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) |
 | What refuses a day before it is committed, or adding a rule that does | [`../architecture/publishing/what-stops-a-broken-day-being-published.md`](../architecture/publishing/what-stops-a-broken-day-being-published.md) |
+| The gardener, or how a ledger's daily, monthly and yearly files are packed and dropped | [`../architecture/publishing/idhazh-gardener.md`](../architecture/publishing/idhazh-gardener.md) for how a wake runs its tasks and lands their commit, [`../architecture/publishing/ledger-compaction.md`](../architecture/publishing/ledger-compaction.md) for the compaction |
 | A read whose input may grow with the repository | [`../../CLAUDE.md`](../../CLAUDE.md), Guardrail #12 |
 | A rough item on a to-do list that is not a plan yet | [`../how-to/take-an-item-to-plan.md`](../how-to/take-an-item-to-plan.md) - intent, then the way, then the contracts, then the sequence |
 | A word you do not recognise | [`../concepts/glossary.md`](../concepts/glossary.md) for a machinery word, [`../concepts/taxonomy.md`](../concepts/taxonomy.md) for a word put on a story |
