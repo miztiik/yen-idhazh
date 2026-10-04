@@ -212,15 +212,3 @@ def runs(api: Api) -> Collection[dict[str, Any]]:
         delete=lambda raw: api.remove(f"actions/runs/{raw['id']}"),
     )
 
-
-#: Which builder answers for which word. The one place the mapping is made, so
-#: adding a collection is a route, a builder and a row here.
-BUILDERS: Final = {
-    PrunableCollection.WORKFLOW_ARTIFACTS: artifacts,
-    PrunableCollection.WORKFLOW_RUNS: runs,
-}
-
-
-def collection_named(name: str, api: Api) -> Collection[dict[str, Any]]:
-    """The collection this word names, already wired to a transport."""
-    return BUILDERS[PrunableCollection(name)](api)

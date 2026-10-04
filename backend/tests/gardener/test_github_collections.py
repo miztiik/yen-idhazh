@@ -20,7 +20,6 @@ import pytest
 from conftest import FIXTURES_DIR
 
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.knobs.gardener import PrunableCollection
 from idhazh.gardener import github_collections, one_at_a_time
 from idhazh.gardener.one_at_a_time import Window
 
@@ -180,11 +179,6 @@ def test_a_short_page_ends_the_walk() -> None:
     list(github_collections.artifacts(api).listing())
 
     assert api.read_paths == ["actions/artifacts?per_page=100&page=1"]
-
-
-def test_every_collection_in_the_vocabulary_has_a_driver() -> None:
-    """A word with no builder would be a command that reports success and does nothing."""
-    assert set(github_collections.BUILDERS) == set(PrunableCollection)
 
 
 @pytest.mark.parametrize("repo", ["not-a-slug", "owner/name/extra", "../../etc", "owner/"])

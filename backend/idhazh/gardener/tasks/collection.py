@@ -20,7 +20,7 @@ module in every shard.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from idhazh.contracts.knobs.gardener import TaskKind
 from idhazh.gardener.context import TaskContext
@@ -34,7 +34,7 @@ KIND = TaskKind.COLLECTION
 
 def run(context: TaskContext, *, api: Api | None = None) -> Pass:
     """Take up to the ceiling of members older than the window, in the order GitHub lists them."""
-    from idhazh.contracts.knobs.gardener import CollectionTaskPolicy
+    from idhazh.contracts.knobs.gardener import CollectionTaskPolicy, PrunableCollection
     from idhazh.gardener import github_collections
     from idhazh.gardener.one_at_a_time import Window, take
 
@@ -42,8 +42,15 @@ def run(context: TaskContext, *, api: Api | None = None) -> Pass:
     if not isinstance(policy, CollectionTaskPolicy):
         raise ValueError(f"the collection task was handed a {policy.kind} declaration")
     transport = api if api is not None else github_collections.api_of_this_repository()
+    match policy.collection:
+        case PrunableCollection.WORKFLOW_ARTIFACTS:
+            collection = github_collections.artifacts(transport)
+        case PrunableCollection.WORKFLOW_RUNS:
+            collection = github_collections.runs(transport)
+        case _:
+            assert_never(policy.collection)
     return take(
-        github_collections.collection_named(policy.collection.value, transport),
+        collection,
         window=Window.older_than(today=context.today.isoformat(), days=policy.window.value),
         ceiling=policy.max_deletes_per_run,
         dry_run=policy.dry_run,

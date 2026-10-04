@@ -16,7 +16,7 @@ import pytest
 from conftest import FIXTURES_DIR
 
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.knobs.gardener import CollectionTaskPolicy
+from idhazh.contracts.knobs.gardener import CollectionTaskPolicy, PrunableCollection
 from idhazh.gardener import github_collections, registry
 from idhazh.gardener.tasks import collection
 
@@ -31,6 +31,12 @@ WAKE = date(2026, 9, 18)
 
 PAGES = FIXTURES_DIR / "github-collections"
 
+#: A recorded page for each collection, so the task can be run over every word.
+SERVED = {
+    PrunableCollection.WORKFLOW_ARTIFACTS: "artifacts-page-1.json",
+    PrunableCollection.WORKFLOW_RUNS: "runs-page-1.json",
+}
+
 
 def test_both_collections_ship_as_tasks_the_one_module_serves() -> None:
     """Each collection is a declaration named for it, and neither has a module of its own."""
@@ -42,6 +48,19 @@ def test_both_collections_ship_as_tasks_the_one_module_serves() -> None:
         assert policy.collection.value == name
         assert (policy.dry_run, policy.owns) == (True, [])
         assert registry.bind(name, policy.kind, shipped).stem == "collection"
+
+
+@pytest.mark.parametrize("word", list(PrunableCollection), ids=lambda word: word.value)
+def test_every_collection_in_the_vocabulary_is_served_by_the_task(
+    word: PrunableCollection, tmp_path: Path
+) -> None:
+    """A word the task served with nothing would report success and do nothing."""
+    api = RecordedApi(PAGES / SERVED[word])
+
+    outcome = collection.run(context_for(word.value, tmp_path, today=WAKE), api=api)
+
+    assert outcome.collection == word.value
+    assert api.read_paths, "the task listed nothing for its collection"
 
 
 def test_a_dry_run_names_what_the_window_holds_and_deletes_nothing(tmp_path: Path) -> None:
