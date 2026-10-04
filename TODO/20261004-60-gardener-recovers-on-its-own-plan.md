@@ -60,7 +60,7 @@ Table A - what is out
 | 23 | The gardener ledger is packed live | 16, 22 | F | PENDING | - | - | - |
 | 24 | Months close 16 days after they end | 7, 17, 23 | F | PENDING | - | - | - |
 | 25 | The retired raw listings code goes | 15 | F | PENDING | - | - | - |
-| 26 | doc_load.py reads a web address as a web address | - | A | PENDING | - | - | - |
+| 26 | doc_load.py reads a web address as a web address | - | A | DONE | stunning-garbanzo | - | Plan 60 row 26: doc_load web links |
 
 ## 2. Shared declarations
 
