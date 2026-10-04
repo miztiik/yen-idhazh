@@ -22,7 +22,7 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import schedule
+from idhazh.gardener import ledger_marks, schedule
 
 _TRIAL_ROOT_PREFIX = "state/pipeline-tests-"
 
@@ -245,9 +245,7 @@ def _ledger_paths(
     for year in sorted({month[:4] for month in months}):
         for fmt in Format:
             paths.add(ledger.compact_path(state_dir, which, Period.YEARLY, year, fmt=fmt))
-    for period in Period:
-        paths.add(ledger.compact_index_path(state_dir, which, period))
-        paths.add(ledger.watermark_path(state_dir, which, period))
+    paths.update(ledger_marks.name_marks(state_dir, which))
     return paths
 
 
