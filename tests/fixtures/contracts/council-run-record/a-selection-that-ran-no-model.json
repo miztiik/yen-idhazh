@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-20",
+  "evaluation_step": "select_judge_work",
+  "judge_id": "paper-judge",
+  "model_calls": null,
+  "model_seconds": null,
+  "outcome": "completed",
+  "run_id": "2026-09-21-35550002",
+  "seconds_spent": 2.25,
+  "started_at": "2026-09-21T00:40:13Z",
+  "tokens_in": null,
+  "tokens_out": null,
+  "version": "2026-10-04",
+  "work_part_count": 1,
+  "work_part_index": null
+}

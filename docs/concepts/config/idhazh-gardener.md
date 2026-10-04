@@ -14,7 +14,7 @@ what a knob is at all is [../config.md](../config.md).
 | Knob | Committed | What it decides |
 | --- | --- | --- |
 | `version` | `2026-10-03` | The UTC day this file's shape last changed |
-| `attempts` | `6` | How many times one shard may try to push before it gives up with exit 3 |
+| `attempts` | `6` | How many times one shard may try to push. If every try fails and main did not move, main refused the push, and the shard exits 3. If main moved, other writers are landing, and the shard warns and exits 0 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
 | `task_names` | Named list in the file | The declarations to read under `config/gardener/`. Empty means no tasks. Missing named files and repeated names are refused. |
 | `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate. Its first reset is to about twice the largest `downloaded_bytes` the first thirty scheduled wakes record ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
@@ -98,7 +98,7 @@ Seven pack live - `compact-item-health`, `compact-host-fingerprint`,
 `dry_run: true`. Each owns its
 ledger's two folders,
 `state/raw/<ledger>` and `state/compact/<ledger>`. Six set
-`monthly_window_dry_run` to `false`, so `compact-item-health` and
+`month_deletes_dry_run` to `false`, so `compact-item-health` and
 `compact-host-fingerprint` delete what their monthly windows drop, and a
 `dry_run` turned `false` later turns a window live with it.
 `compact-counterfactual-scores`, `compact-candidate-models`, `compact-seen`,
@@ -137,7 +137,7 @@ person reads holds every number a pass runs with.
 | # | Key | What it sets |
 | --- | --- | --- |
 | 1 | `dry_run` | Whether a pass changes any file. `true` reports every path a live pass would write and delete, and changes nothing |
-| 2 | `monthly_window_dry_run` | Whether a live pass only reports what `monthly_window` would delete. `true` keeps every month file past the window and every raw day in a month past it, and packs those days and months like the rest; the pass's record counts the kept files in `selected` and not in `deleted`. `false` lets the window delete them |
+| 2 | `month_deletes_dry_run` | Whether a live pass only reports what `monthly_window` would delete. `true` keeps every month file past the window and every raw day in a month past it, and packs those days and months like the rest; the pass's record counts the kept files in `selected` and not in `deleted`. `false` lets the window delete them |
 | 3 | `daily_keep_days` | How many days after a UTC month ends it is absorbed into its month file. At least 31 |
 | 4 | `monthly_window` | How long a month file survives once its month is absorbed: `{unit: months, value}`, `{unit: days, value}` or `{unit: forever}` |
 | 5 | `monthly_keep_days` | How many whole days after a UTC year ends its month files are packed into one year file, kept for ever. `null` packs no year. Set, it needs a `monthly_window` of forever and at least `daily_keep_days` plus 32 |
@@ -150,7 +150,7 @@ person reads holds every number a pass runs with.
 pass packs a raw day into a day file, a month of day files into a month file
 and a year of month files into a year file, and deletes only files whose rows it
 has just written into the coarser one. The monthly window deletes rows. So
-`dry_run` decides whether a pass changes anything, and `monthly_window_dry_run`
+`dry_run` decides whether a pass changes anything, and `month_deletes_dry_run`
 whether the window's deletions are among the changes: a ledger can pack live
 while its window only reports, and a person turns the window live after reading
 what it would take. With `dry_run` `true` a pass changes nothing either way.
@@ -207,10 +207,10 @@ refused push. The person's ruling of 2026-09-29 added the two keys.
 **Every other switch ships `dry_run: true`**, and a contract test holds the
 committed tree to that. It finds every `dry_run` a declaration carries, a
 fold's as well as the task's own, and every compaction's
-`monthly_window_dry_run`, which is live only while its task's own `dry_run` is
+`month_deletes_dry_run`, which is live only while its task's own `dry_run` is
 `false` too. It names the live ones as its exceptions, each with the decision
 beside it: `corpus-squash`'s `dry_run`, the `dry_run` and the
-`monthly_window_dry_run` of `compact-item-health` and
+`month_deletes_dry_run` of `compact-item-health` and
 `compact-host-fingerprint`, the `dry_run` of `compact-counterfactual-scores`,
 `compact-candidate-models`, `compact-seen`, `compact-published` and
 `compact-feed-health`. A task
@@ -240,6 +240,7 @@ names the file an operator edits and the rule it broke.
 | `fold.settles_months` beside a `window` of days | A settled month's file names no day, so a window of days would take it whole once the month's first day aged out, and with it the rows of every later day the window still keeps |
 | A compaction not called `compact-<ledger>` | One compaction a ledger, found by name |
 | A compaction that leaves out any key in [the table above](#the-keys-of-a-compaction) | Nothing fills a setting in from code, so a missing one is named rather than guessed |
+| A key that a declaration's kind does not have, such as a misspelt or renamed key | Nothing would read it. The loader names it, so a person sees which line to change |
 | A collection task not called `<collection>.json`, or whose `window` is not whole days | One task a collection, found by name; a pass counts a member's age in days |
 | A compaction whose `window` is not `{unit: forever}`, or whose `max_deletes_per_run` is not `null` | Its two periods are how far back it keeps and `max_periods_per_run` is its budget. A second window would be a number nothing reads, and a ceiling could stop a month half absorbed |
 | `daily_keep_days` below 31 | GitHub lets a failed run be re-run for 30 days, into the day it first wrote, so a month absorbed sooner could still be reached by one |
