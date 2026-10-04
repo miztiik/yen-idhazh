@@ -1,6 +1,6 @@
 # Test Selection
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 Why a pull request runs only some of the tests, what that choice gives up, and
 what was rejected on the way to it. The commands, the groups and the current
@@ -116,6 +116,12 @@ Build-independent machine arithmetic and token checks are assigned to `logic`
 by the named inventory, not by a `console-` filename prefix. This retains every
 assertion while removing browser preparation from edits confined to those specs.
 Tests that inspect built documents or packed canary ledgers still need their build.
+Date-axis spacing, compression-row placement, model-day counts and readout-data
+checks have focused logic specs with their original assertions. They share the
+existing telemetry-row fixture builder and a consecutive-UTC-days helper with
+the browser checks. A change confined to one of these specs needs no build or
+browser. Changes to their chart and server modules still select logic and
+browser consumers through the shared-frontend mapping.
 Machine-ledger tests compare a populated fixture root with an empty root, then
 read the populated root again. This checks that a reader neither falls back to
 the archive nor reuses another root's rows. They do not require a function call
