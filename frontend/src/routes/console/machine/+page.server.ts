@@ -540,8 +540,9 @@ export async function load() {
 		clocksTolerancePct: CLOCKS_AGREE_WITHIN_PCT,
 		panelGroups: panelGroupsFor('machine', DRAWN_PANELS),
 		// What the page says about the two records every panel here is built on,
-		// before any of them draws: one not packed yet, one that did not load, or
-		// one packed some days short of the newest published day.
+		// before any of them draws: one not packed yet, one that did not load, one
+		// packed some days short of the newest published day, or one with a day it
+		// has no record for or files it set aside unread.
 		recordNotes: recordNotes(
 			[
 				{ record: 'machine', read: machine.read },

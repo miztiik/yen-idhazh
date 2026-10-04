@@ -1082,6 +1082,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/src/routes/console/data-explorer/+page.svelte`
   - `frontend/src/routes/console/machine/+page.server.ts`
   - `frontend/src/routes/console/model/+page.server.ts` (found during execution: the Summaries note dated its start the same way)
+  - `frontend/src/routes/console/+page.server.ts` and `frontend/src/routes/console/voices/+page.server.ts` (comment only: what their record notes say)
   - `frontend/scripts/test-groups.ts`
   - `frontend/tests/ledger-door.spec.ts`
   - `frontend/tests/ledger-rows.spec.ts`
