@@ -424,7 +424,7 @@ class CompactionPolicy(_Declared):
     `max_deletes_per_run` is null. A declaration that sets `monthly_keep_days`
     also packs each finished year's month files into one yearly file, kept for
     ever. It has two switches, because packing loses no row and its monthly
-    window does: `dry_run` for the whole pass, and `monthly_window_dry_run` for
+    window does: `dry_run` for the whole pass, and `month_deletes_dry_run` for
     what the window deletes, so a ledger can pack live while its window only
     reports.
     """
@@ -473,7 +473,7 @@ class CompactionPolicy(_Declared):
             "packed into its year."
         ),
     )
-    monthly_window_dry_run: bool = Field(
+    month_deletes_dry_run: bool = Field(
         description=(
             "True keeps every file monthly_window would delete - each month file past "
             "it and each raw day in a month past it - and packs those days and months "

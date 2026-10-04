@@ -40,7 +40,7 @@ flowchart TB
   RAWF[("state/raw/ledger/YYYY/MM/DD/file_id.parquet<br/>written once, many writers")]
 
   subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
-    DROP["1 and 2. drop the listings, and the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while monthly_window_dry_run is true"]
+    DROP["1 and 2. drop the listings, and the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while month_deletes_dry_run is true"]
     YDONE{"a year done?<br/>monthly_keep_days since it ended,<br/>its next January absorbed, every month named"}
     YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
     YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
@@ -308,7 +308,7 @@ settles the rows, builds every file in memory, and reports every path a live
 pass would write and delete. So the list a person reads before turning a
 compaction live is the list the live pass carries out.
 
-**The monthly window has a switch of its own, `monthly_window_dry_run`.** With
+**The monthly window has a switch of its own, `month_deletes_dry_run`.** With
 it `true`, steps 1 and 2 name every month file past the window and every raw
 file of a day in a month past it, and keep them; steps 3 to 5 then pack those
 days and months like any other, as if the window kept every month, so a first
@@ -373,7 +373,7 @@ declarations set 31, and the four that only report set 45.
 **A compaction's monthly window has a switch of its own.** Packing deletes only
 files whose rows it has just written into a coarser file; the monthly window
 deletes rows. With one `dry_run` for both, a ledger could not pack live while its
-window only reported, so `monthly_window_dry_run` reports the window's drops
+window only reported, so `month_deletes_dry_run` reports the window's drops
 while the rest of the pass runs live. A window of forever where the window
 should only report would have taken the retention number out of the file a
 person reads. A second task for the window's drops would have had two tasks

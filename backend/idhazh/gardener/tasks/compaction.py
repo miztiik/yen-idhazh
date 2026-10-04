@@ -15,7 +15,7 @@ shard lands all of them in one commit:
 
 **The monthly window has a switch of its own.** Steps 3 to 5 delete only files
 whose rows they have just written into a coarser file; the window's drops in
-steps 1 and 2 delete rows. So while `monthly_window_dry_run` is true, steps 1 and
+steps 1 and 2 delete rows. So while `month_deletes_dry_run` is true, steps 1 and
 2 name the month files and raw days the window would drop and keep them, and
 the packing steps take those periods like any other, as if the window kept
 every month. The raw listings of step 2 still go: they hold no row.
@@ -93,7 +93,7 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
         now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
     )
     # A window that only reports keeps what it would drop, so packing reads it as forever.
-    reports = policy.monthly_window_dry_run
+    reports = policy.month_deletes_dry_run
     stops = (
         *(_monthly_period.spare if reports else _monthly_period.drop)(tree, first_kept=first_kept),
         *_daily_period.drop_listings(tree),

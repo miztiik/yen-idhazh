@@ -122,9 +122,9 @@ LIVE_BY_DECISION: Final = {
     ("compact-counterfactual-scores", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-feed-health", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-host-fingerprint", "dry_run"): PACKED_FOR_THE_CONSOLE,
-    ("compact-host-fingerprint", "monthly_window_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
+    ("compact-host-fingerprint", "month_deletes_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
     ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
-    ("compact-item-health", "monthly_window_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
+    ("compact-item-health", "month_deletes_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
     ("compact-published", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-seen", "dry_run"): PACKED_ON_THE_MOVE,
     ("corpus-squash", "dry_run"): (
@@ -140,7 +140,7 @@ UNFOLDED_BY_DECISION: Final[dict[LedgerName, str]] = {}
 
 #: The switch a compaction's monthly window has of its own. It acts only through
 #: the declaration's own `dry_run`, so it is live only while both are false.
-WINDOW_SWITCHES: Final = frozenset({"monthly_window_dry_run"})
+WINDOW_SWITCHES: Final = frozenset({"month_deletes_dry_run"})
 
 
 def _switches(declared: Mapping[str, Any], prefix: str = "") -> dict[str, bool]:
@@ -208,7 +208,7 @@ def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None
     Held over the committed tree rather than over one change, because a test
     cannot see which change added a file. Every `dry_run` a declaration carries
     is found by walking the declaration, a fold's as well as the task's own, and
-    so is a compaction's `monthly_window_dry_run`, live only while the task's
+    so is a compaction's `month_deletes_dry_run`, live only while the task's
     own `dry_run` is false too. The switches that are live must be exactly the
     ones named above. So turning one live is an edit to that list - a line a
     reviewer reads, with its reason beside it - and a decision left behind after
@@ -315,6 +315,17 @@ def test_a_compaction_that_leaves_out_any_one_key_is_refused_naming_it(
     declared = {name: value for name, value in fixture("compact-gardener").items() if name != key}
     message = refused(a_garden(tmp_path, compact_gardener=declared))
     assert "config/gardener/compact-gardener.json is refused" in message and key in message
+
+
+def test_a_compaction_that_carries_the_old_name_of_its_month_delete_switch_is_refused_naming_it(
+    tmp_path: Path,
+) -> None:
+    """`month_deletes_dry_run` has no alias, so its old name is named as a key nothing reads."""
+    declared = fixture("compact-gardener")
+    declared["monthly_window_dry_run"] = declared.pop("month_deletes_dry_run")
+    message = refused(a_garden(tmp_path, compact_gardener=declared))
+    assert "config/gardener/compact-gardener.json is refused" in message
+    assert "monthly_window_dry_run\n  Extra inputs are not permitted" in message
 
 
 def test_a_fold_settles_a_month_only_where_its_own_declaration_asks() -> None:
