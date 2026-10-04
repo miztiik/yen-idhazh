@@ -7,6 +7,7 @@ import type { Manifest } from 'vite';
 import { readoutOf } from '../src/lib/charts/readout';
 import { serverCompiler } from './support/server-render';
 import { chartsReady } from './support/charts-ready';
+import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
 
 /**
  * Every console chart says whether it has a column to hover, and says it in
@@ -267,6 +268,16 @@ function dayOf(owner: Locator): Locator {
 }
 
 test.describe('the readout is the default', () => {
+	test('THE ORACLE: the Records shape panel declares its readout and has no native tooltip', async ({ page }) => {
+		await openExplorer(page);
+		await chooseExplorerQuestion(page, ['summary-quality-evals'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
+		await runExplorer(page);
+		const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+		await expect(panel.locator('[data-chart-type="dateSeries"]')).toHaveCount(1);
+		await expect(panel.locator('[data-readout-columns], [data-readout-records], [data-readout-none]')).toHaveCount(1);
+		await expect(panel.locator('[title], title')).toHaveCount(0);
+	});
+
 	for (const route of ALL_ROUTES) {
 		// One load per route: the five checks below read the same settled page,
 		// so opening it once for each was five loads where one answers them all.

@@ -53,7 +53,7 @@
 	} = $props();
 </script>
 
-<div class="ranked" data-ranked-list={caption}>
+<div class="ranked" data-ranked-list={caption} data-chart-type="rankedList">
 	{#if !measured}
 		<p class="ranked-note" data-ranked="unmeasured">{unmeasuredNote}</p>
 	{:else if ranked.rows.length === 0}

@@ -2,10 +2,11 @@ import { expect, test } from '@playwright/test';
 
 import { decodeQuestion, encodeQuestion, explorerAddress, parseExplorerAddress, requestTargetBytes } from '../src/lib/console/explorer/address';
 import { LEDGER_NAMES, type LedgerName } from '../src/lib/data/slice-shapes';
+import { explorerConfig } from '../src/lib/server/config';
 
 const BASE_PATH = '/yen-idhazh/console/data-explorer/';
 const REQUEST_TARGET_LIMIT = 8192; // docs/reference/benchmarks/address-length-on-pages.md
-const QUERY_MAX_CHARS = 5782;
+const QUERY_MAX_CHARS = explorerConfig().query_max_chars;
 /** The most base64url characters `q` takes for an `n`-character statement that does not
  *  compress: deflate-raw stores it in one block with a 5-byte header. */
 const worstCaseQuestionChars = (chars: number): number => Math.ceil((4 * (chars + 5)) / 3);

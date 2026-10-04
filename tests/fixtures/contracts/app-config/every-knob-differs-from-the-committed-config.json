@@ -116,6 +116,7 @@
     "doubt_rows": 6,
     "explorer_bar_spread_share": 0.6,
     "explorer_cell_max_ch": 41,
+    "explorer_chart_min_rows": 4,
     "explorer_counter_from_share": 1.0,
     "explorer_editor_lines": [
       8,
@@ -169,11 +170,16 @@
         "title": "Rows in each published ledger"
       }
     ],
+    "explorer_history_max": 11,
     "explorer_max_fetch_bytes": 67108865,
     "explorer_max_rows": 1001,
-    "explorer_query_max_chars": 4001,
+    "explorer_query_max_chars": 5783,
     "explorer_rail_rem": 15.0,
+    "explorer_rank_max": 31,
     "explorer_row_page": 51,
+    "explorer_save_name_max_chars": 41,
+    "explorer_saved_max": 21,
+    "explorer_series_floor_share": 0.1,
     "explorer_strip_shown": [
       3,
       6
@@ -204,7 +210,8 @@
           "id": "data-explorer",
           "panels": [
             "data-explorer-ask",
-            "data-explorer-rows"
+            "data-explorer-rows",
+            "data-explorer-shape"
           ],
           "title": ""
         }

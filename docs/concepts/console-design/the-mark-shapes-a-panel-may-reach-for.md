@@ -68,6 +68,28 @@ Five rules hold every type.
  one: radio buttons between types over the same query result, never a drop-down,
  and a switch that redraws and fetches nothing.
 
+## When nobody wrote the panel, the columns choose the shape
+
+The Records page draws an answer whose question was typed by the operator, so no
+panel author can name the right chart in advance. It chooses from the columns,
+in this order, and lets the operator switch only among shapes that still tell a
+true story about those columns.
+
+| Order | Columns in the answer | Shape |
+| --- | --- | --- |
+| 1 | one UTC date or timestamp, at least one number, and at most one row a day | `dateSeries` |
+| 2 | one text column and one non-negative number | `rankedList` |
+| 3 | two number columns and at most one text column | `pairedScatter` |
+| 4 | one number column | `distribution` |
+| 5 | anything else | no chart, one neutral sentence |
+
+The rule is strict because a generic query page can only know column types, not
+whether a number is good or bad. It never colours a cell as a verdict, never
+draws a trend through unordered rows, and never invents a chart type outside the
+vocabulary above. The no-chart sentence is part of the answer, not an alarm:
+text-only answers are normal, and a chartless result still keeps the chart
+panel's height so the page does not jump.
+
 ## The house style every chart type draws with
 
 | # | Module | What it owns | Drawn by |

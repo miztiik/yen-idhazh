@@ -335,6 +335,12 @@ export interface ExplorerConfig {
 	max_rows: number;
 	max_fetch_bytes: number;
 	query_max_chars: number;
+	chart_min_rows: number;
+	rank_max: number;
+	saved_max: number;
+	history_max: number;
+	save_name_max_chars: number;
+	series_floor_share: number;
 	rail_rem: number;
 	editor_lines: [number, number];
 	strip_shown: [number, number];
@@ -587,7 +593,13 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	row_page: 50,
 	max_rows: 1000,
 	max_fetch_bytes: 67108864,
-	query_max_chars: 4000,
+	query_max_chars: 5782,
+	chart_min_rows: 3,
+	rank_max: 30,
+	saved_max: 20,
+	history_max: 10,
+	save_name_max_chars: 40,
+	series_floor_share: 0.05,
 	rail_rem: 14,
 	editor_lines: [8, 20],
 	strip_shown: [3, 6],
@@ -694,7 +706,7 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 		{
 			id: 'data-explorer',
 			title: '',
-			panels: ['data-explorer-ask', 'data-explorer-rows']
+			panels: ['data-explorer-ask', 'data-explorer-rows', 'data-explorer-shape']
 		}
 	]
 };
@@ -1129,6 +1141,12 @@ export function explorerConfig(): ExplorerConfig {
 		max_rows: consoleBlock.explorer_max_rows ?? EXPLORER_DEFAULTS.max_rows,
 		max_fetch_bytes: consoleBlock.explorer_max_fetch_bytes ?? EXPLORER_DEFAULTS.max_fetch_bytes,
 		query_max_chars: consoleBlock.explorer_query_max_chars ?? EXPLORER_DEFAULTS.query_max_chars,
+		chart_min_rows: consoleBlock.explorer_chart_min_rows ?? EXPLORER_DEFAULTS.chart_min_rows,
+		rank_max: consoleBlock.explorer_rank_max ?? EXPLORER_DEFAULTS.rank_max,
+		saved_max: consoleBlock.explorer_saved_max ?? EXPLORER_DEFAULTS.saved_max,
+		history_max: consoleBlock.explorer_history_max ?? EXPLORER_DEFAULTS.history_max,
+		save_name_max_chars: consoleBlock.explorer_save_name_max_chars ?? EXPLORER_DEFAULTS.save_name_max_chars,
+		series_floor_share: consoleBlock.explorer_series_floor_share ?? EXPLORER_DEFAULTS.series_floor_share,
 		rail_rem: consoleBlock.explorer_rail_rem ?? EXPLORER_DEFAULTS.rail_rem,
 		editor_lines: (consoleBlock.explorer_editor_lines ?? EXPLORER_DEFAULTS.editor_lines) as [number, number],
 		strip_shown: (consoleBlock.explorer_strip_shown ?? EXPLORER_DEFAULTS.strip_shown) as [number, number],

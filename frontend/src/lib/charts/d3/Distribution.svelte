@@ -49,6 +49,7 @@
 		aria-label={label}
 		data-chart-type="distribution"
 		data-chart-name={name}
+		data-readout-records={geometry.bins.length}
 	>
 		{#each geometry.y.ticks as tick (tick.value)}
 			<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />
@@ -77,9 +78,7 @@
 		{/each}
 
 		{#each geometry.bins as bin (bin.x0)}
-			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-1)">
-				<title>{bin.count} between {bin.x0} and {bin.x1}</title>
-			</rect>
+			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-1)" aria-label={`${bin.x0} to ${bin.x1}: ${bin.count} rows, ${bin.share.toFixed(1)}% at or below`} />
 		{/each}
 		<path d={geometry.cumulative} fill="none" stroke="var(--color-text)" stroke-width={CURVE} />
 
@@ -116,4 +115,37 @@
 			>
 		{/each}
 	</svg>
+	{@const resting = geometry.bins.reduce((best, bin) => (bin.count > best.count ? bin : best), geometry.bins[0])}
+	{#if resting}
+		<dl class="record-readout" data-readout={name} data-readout-shape="record">
+			<dt data-readout-subject>{resting.x0} to {resting.x1}</dt>
+			<div data-readout-row="rows"><dd>Rows</dd><dd>{resting.count}</dd></div>
+			<div data-readout-row="share"><dd>At or below</dd><dd>{resting.share.toFixed(1)}%</dd></div>
+		</dl>
+	{/if}
 {/if}
+
+<style>
+	.record-readout {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+		margin: var(--space-3) 0 0;
+		color: var(--color-text-secondary);
+		font-size: var(--text-xs);
+	}
+
+	.record-readout dt {
+		flex-basis: 100%;
+		font-weight: 600;
+	}
+
+	.record-readout div {
+		display: flex;
+		gap: var(--space-1);
+	}
+
+	.record-readout dd {
+		margin: 0;
+	}
+</style>

@@ -511,9 +511,48 @@ class ConsoleConfig(Model):
         ),
     )
     explorer_query_max_chars: int = Field(
-        default=4000,
+        default=5782,
         ge=1,
-        description="Most characters one Records SQL statement may hold.",
+        description=(
+            "Most characters one Records SQL statement may hold. The value comes "
+            "from docs/reference/benchmarks/address-length-on-pages.md: 5,782 "
+            "ASCII characters is the longest worst-case question that fits the "
+            "measured GitHub Pages request target with every ledger selected."
+        ),
+    )
+    explorer_chart_min_rows: int = Field(
+        default=3,
+        ge=1,
+        description="Fewest UTC days the Records chart panel needs before it draws a date chart.",
+    )
+    explorer_rank_max: int = Field(
+        default=30,
+        ge=1,
+        description="Most rows the Records chart panel draws in a ranked list.",
+    )
+    explorer_saved_max: int = Field(
+        default=20,
+        ge=1,
+        description="Saved Records questions this browser keeps before dropping the oldest.",
+    )
+    explorer_history_max: int = Field(
+        default=10,
+        ge=1,
+        description="Recent Records runs this browser keeps.",
+    )
+    explorer_save_name_max_chars: int = Field(
+        default=40,
+        ge=1,
+        description="Longest name the Records Save field fills from the statement's first line.",
+    )
+    explorer_series_floor_share: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Smallest largest-value share a Records date-chart series must have "
+            "against the largest series before it is drawn."
+        ),
     )
     explorer_rail_rem: float = Field(
         default=14.0,
@@ -680,7 +719,11 @@ class ConsoleConfig(Model):
                 ConsolePanelGroup(
                     id="data-explorer",
                     title="",
-                    panels=["data-explorer-ask", "data-explorer-rows"],
+                    panels=[
+                        "data-explorer-ask",
+                        "data-explorer-rows",
+                        "data-explorer-shape",
+                    ],
                 )
             ],
         },
