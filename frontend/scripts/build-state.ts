@@ -149,10 +149,15 @@ export function recordBuild(root: string, mode: BuildRecord['mode'], env: NodeJS
 
 export function beginBuild(root: string, mode: BuildRecord['mode'], env: NodeJS.ProcessEnv = process.env): void {
 	rmSync(join(root, 'backend/var/checks/build.json'), { force: true });
+	rmSync(join(root, 'frontend/build.publication.json'), { force: true });
+	// This is generated adapter output, never a source or committed data root.
+	rmSync(join(root, 'frontend/build'), { recursive: true, force: true });
 	writeRecord(join(root, 'backend/var/checks/build-start.json'), { mode, inputs: buildInputs(root, mode, env) });
 }
 
-export function completeBuild(root: string, mode: BuildRecord['mode'], env: NodeJS.ProcessEnv = process.env): BuildRecord {
+export function completeBuild(
+	root: string, mode: BuildRecord['mode'], env: NodeJS.ProcessEnv = process.env
+): BuildRecord {
 	const started = join(root, 'backend/var/checks/build-start.json');
 	if (!existsSync(started)) throw new Error('The build has no start record. Run npm run build.');
 	const previous = JSON.parse(readFileSync(started, 'utf8')) as Pick<BuildRecord, 'mode' | 'inputs'>;

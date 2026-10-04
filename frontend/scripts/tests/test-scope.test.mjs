@@ -13,10 +13,32 @@ const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 test('named frontend specs map to their declared groups', () => {
 	assert.equal(groupForSpec('console-machine-data.spec.ts'), 'console');
+	for (const name of [
+		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine', 'tokens',
+		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data'
+	]) {
+		assert.equal(groupForSpec(`${name}.spec.ts`), 'logic', name);
+		assert.deepEqual(selectPaths([`frontend/tests/${name}.spec.ts`]).groups, ['logic'], name);
+		assert.equal(ciAnswer([`frontend/tests/${name}.spec.ts`], true).browser, false, name);
+	}
 	assert.equal(groupForSpec('frame.spec.ts'), 'logic');
 	assert.equal(groupForSpec('panel-captures.spec.ts'), 'panels');
 	assert.equal(groupForSpec('panel-sufficiency.spec.ts'), 'panels');
 	assert.equal(groupForSpec('new-feature.spec.ts'), undefined);
+});
+
+test('extracted console logic keeps source changes covered with browser consumers', () => {
+	for (const path of [
+		'frontend/src/lib/charts/run-history.ts', 'frontend/src/lib/charts/series.ts',
+		'frontend/src/lib/server/model-work.ts', 'frontend/src/lib/charts/readout.ts',
+		'frontend/src/lib/charts/machine.ts', 'frontend/src/lib/charts/stacked.ts'
+	]) {
+		assert.deepEqual(selectPaths([path]).groups, [...FRONTEND_GROUPS], path);
+		assert.equal(ciAnswer([path], true).browser, true, path);
+	}
+	assert.equal(groupForSpec('console.spec.ts'), 'console');
+	assert.equal(groupForSpec('console-readout.spec.ts'), 'console');
+	assert.equal(groupForSpec('console-new-question.spec.ts'), 'console');
 });
 
 test('grouped specs follow only the explicit inventory', () => {
@@ -66,9 +88,33 @@ test('data helpers select ledger logic and console consumers without unrelated f
 		assert.equal(selection.tooling, false);
 		assert.equal(selection.reasons[0].reason, 'ledger queries and console consumers');
 		assert.deepEqual(ciAnswer([path], true), {
-			browser: true, code: true, console: false, panels: false, robots: false, validateAll: false
+			browser: true, code: true, modelAbsent: false, console: false, panels: false, robots: false, validateAll: false
 		});
 	}
+});
+
+test('the model-absent build runs for asset dependencies, unknown inputs and every code merge', () => {
+	for (const path of [
+		'frontend/src/lib/assist/loader.ts', 'frontend/src/routes/archive/+page.svelte',
+		'frontend/src/lib/server/payload.ts', 'frontend/src/routes/+layout.svelte',
+		'frontend/scripts/copy-visuals.mjs', 'frontend/svelte.config.js',
+		'frontend/static/assist/model.json', 'frontend/package.json', 'config/idhazh.json',
+		'backend/idhazh/contracts/app_config.py', 'unknown-area/module.ts',
+		'unresolved-change-base', 'full-ci-run'
+	]) {
+		assert.equal(ciAnswer([path], true).modelAbsent, true, path);
+	}
+	for (const path of [
+		'docs/a.md', 'backend/idhazh/discover.py', 'backend/tests/test_discover.py',
+		'frontend/tests/console-machine-data.spec.ts', 'frontend/src/routes/console/+page.svelte',
+		'frontend/src/lib/charts/frame.ts', 'frontend/src/styles/tokens.css',
+		'frontend/src/lib/data/ledger.ts'
+	]) {
+		assert.equal(ciAnswer([path], true).modelAbsent, false, path);
+	}
+	assert.equal(ciAnswer(['frontend/src/routes/console/+page.svelte', 'frontend/src/lib/assist/day.ts'], true).modelAbsent, true);
+	assert.equal(ciAnswer(['full-ci-run'], false).modelAbsent, true);
+	assert.equal(ciAnswer(['docs/a.md'], false).modelAbsent, false);
 });
 
 test('the second-interpreter robots job runs only when its tests can have moved', () => {

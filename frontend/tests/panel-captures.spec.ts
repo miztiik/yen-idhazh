@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { KILL_FILE } from '../src/lib/offline';
+import { openExplorer, runExplorer } from './support/explorer-answer';
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT, type ConsoleWidth } from './support/console-widths';
 import { fillShare, readPanel } from './support/panel-gates';
@@ -29,7 +30,8 @@ import { viewsOf } from './support/views';
  * `panel-sufficiency.spec.ts`. This file makes the pictures and proves each one
  * is whole. Files are `<panel-id>--<width>--<theme>--<state>.png` under
  * `frontend/test-results/panels/`, so one panel at one width in one theme from
- * two runs lands side by side in a listing. `ci.yml` uploads the folder.
+ * two runs lands side by side in a listing. An explicit CI design-review run
+ * uploads the folder; routine CI skips this spec.
  *
  * **What makes an image whole.** A chart draws only once it is near the
  * window, so every panel is walked into view and the page is left to finish
@@ -302,6 +304,10 @@ for (const route of PICTURED) {
 
 			const asked = recorded(page);
 			await opened(page, listed.address, width, theme);
+			if (route === 'data-explorer') {
+				await openExplorer(page);
+				await runExplorer(page);
+			}
 			await walked(page, listed.panels);
 			await expect
 				.poll(() => waiting(page, listed.panels), { timeout: 20_000, message: 'these panels never finished drawing' })
@@ -325,7 +331,7 @@ for (const route of PICTURED) {
 				await walked(page, listed.panels);
 				// Every request the first load made has to be made and refused again,
 				// or a picture filed as broken could be the healthy page.
-				await allRefused(first, refused);
+				if (route !== 'data-explorer') await allRefused(first, refused);
 				const deadline = Date.now() + REFUSED_SETTLE_MS;
 				while ((await waiting(page, listed.panels)).length > 0 && Date.now() < deadline) {
 					await page.waitForTimeout(250);

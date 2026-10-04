@@ -110,9 +110,9 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-03",
-            change="assist.recall_min and assist.eval_corpus_through removed.",
-            why="Search quality is measured by an operator tool, never gated by a test.",
+            version="2026-10-03T14:45",
+            change="console.data_explorer_tab removed; Records knobs and panel group added.",
+            why="The Records page is live and draws its own controls.",
         ),
         ChangelogEntry(
             version="2026-10-02",

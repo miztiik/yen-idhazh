@@ -19,6 +19,7 @@ from conftest import (
     REFILL_BODY,
     REFILL_PUBLISHED,
     read_text,
+    record_fixture_day,
     refetched,
     refill_page,
     refill_recorded,
@@ -324,7 +325,7 @@ def a_ledger(tmp_path: Path, rows: Sequence[EvalRow]) -> Path:
 
 
 def a_digest(tmp_path: Path, *, date: str, items: Sequence[DigestItem]) -> Path:
-    """One committed day payload, in the layout `published_days` globs for.
+    """One committed day payload registered in the source inventory.
 
     The run and vertical tallies are derived from the items rather than typed,
     because `DigestDay` cross-checks all three and a hand-typed count only ever
@@ -349,6 +350,7 @@ def a_digest(tmp_path: Path, *, date: str, items: Sequence[DigestItem]) -> Path:
     path = root / date[:4] / date[5:7] / date[8:10] / "digest.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(day.to_json(), encoding="utf-8", newline="")
+    record_fixture_day(root.parent, date, items=len(items))
     return root
 
 

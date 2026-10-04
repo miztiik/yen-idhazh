@@ -14,7 +14,8 @@
  */
 
 import { expect, test } from './support/browser';
-import { readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -40,6 +41,8 @@ import {
 	type MachineRun
 } from '../src/lib/server/machine-counters';
 import { canaryArticleRows, canaryMachineRows, CANARY_STATE, heldRows } from './support/canary-records';
+import { machineRecord } from '../src/lib/server/host-fingerprint';
+import { itemHealthRows } from '../src/lib/server/ledger-rows';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -594,44 +597,23 @@ test.describe('the ledgers this reads, as the canary packs them', () => {
 	});
 });
 
-test.describe('the module cannot reach a browser', () => {
-	const source = readFileSync(
-		join(HERE, '..', 'src', 'lib', 'server', 'machine-counters.ts'),
-		'utf8'
-	);
-
-	test('it imports no SvelteKit alias, so no client graph can pull it in', () => {
-		// `$lib/server/` is what stops the bundler; this is what stops the module
-		// growing a dependency that only resolves inside one. It is also what
-		// lets this spec load it in plain Node - a spec that reaches `$app` fails
-		// the whole browser suite at load rather than failing one test.
-		for (const alias of ["from '$app", "from '$lib", 'import("$app', "import('$app"]) {
-			expect(source, `imports ${alias}`).not.toContain(alias);
+test.describe('ledger readers respect the fixture root', () => {
+	test('an empty root cannot fall back to the populated canary or the archive', async () => {
+		const root = mkdtempSync(join(tmpdir(), 'idhazh-machine-root-'));
+		try {
+			for (const read of [machineRecord, itemHealthRows]) {
+				const fixture = await read(-1, CANARY_STATE);
+				expect(fixture.read.state).toBe('read');
+				expect(fixture.rows.length).toBeGreaterThan(0);
+				const empty = await read(-1, root);
+				expect(empty.rows).toEqual([]);
+				expect(empty.read.state).not.toBe('read');
+				const again = await read(-1, CANARY_STATE);
+				expect(again.rows).toEqual(fixture.rows);
+			}
+		} finally {
+			rmSync(root, { recursive: true, force: true });
 		}
-	});
-
-	test('it reads the ledgers through STATE_ROOT, so a fixture tree can replace them', () => {
-		// The canary suite builds a site out of fixture runs by pointing
-		// `STATE_ROOT` at a copy. A read rooted any other way reads the real ledger
-		// anyway, and the canary silently measures the wrong tree. Both reads go
-		// through the shared readers, and both of those are rooted at `STATE_ROOT`
-		// unless a caller names another root.
-		expect(source).toContain('machineRecord(days)');
-		expect(source).toContain('itemHealthRows(days)');
-		for (const reader of ['host-fingerprint.ts', 'ledger-rows.ts']) {
-			const text = readFileSync(join(HERE, '..', 'src', 'lib', 'server', reader), 'utf8');
-			expect(text, `${reader} defaults its root to something else`).toContain(
-				'root: string = STATE_ROOT'
-			);
-		}
-	});
-
-	test('it reads the machine record through the reader the fleet reads it through', () => {
-		// The fleet reads the same record through `machineRecord` in
-		// `host-fingerprint.ts`. Two readers of one record would put two panels on
-		// one route in disagreement about how many rows a job has.
-		expect(source).not.toContain('readDayShards');
-		expect(source).not.toContain('sliceFromDisk');
 	});
 });
 

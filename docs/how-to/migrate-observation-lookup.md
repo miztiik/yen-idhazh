@@ -1,6 +1,6 @@
 # Migrate the Observation Lookup
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 How to cut existing evaluation history over to the exact lookup and recover a
 named pending batch. This procedure is project-specific because it publishes
@@ -17,9 +17,12 @@ with its original code while this change is merged. Do not pause or cancel it.
 Wait for its work shards and assembly commit to finish, then migrate the latest
 committed state before the next evaluation writer starts. Confirm no compaction
 is active while the migration reads and publishes. The new writer refuses a
-missing lookup instead of scanning history; its sealed input remains recoverable
-from the committed incoming batch. This exception does not permit replay of the
-old run after migration or allow migration to overlap a writer.
+missing lookup instead of scanning history. A local sealed batch is durable
+only after its incoming-batch commit is pushed. An older job without that
+preparation hook may fail during regeneration before making its input durable;
+preserve its item artifacts rather than assuming a pending batch exists. This
+exception does not permit replay of the old run after migration or allow
+migration to overlap a writer.
 
 Use the approved code and a complete state snapshot, including legacy index
 CSVs and all raw and compact evaluation files and metadata. Run from the
@@ -48,6 +51,23 @@ Read the JSON result: it reports rows read, distinct IDs, the generation, and
 `written_paths` and `removed_paths` relative to the named state directory.
 Publish the lookup and legacy CSV removals together. Resume evaluation writers
 only after that commit is on `main`.
+
+## Verify the published cutover
+
+Run `--existing verify` against the migrated state. Require no new writes or
+removals. Compare raw and compact evaluation files with the source commit;
+none may change. Before publishing, fetch `main` and compare its legacy CSV
+index and raw and compact evaluation files with the source snapshot. If another
+writer changed them, stop and
+reconcile that input before merging the migration. After publication, compare
+the committed lookup with the verified candidate.
+
+These checks prove retained membership and unchanged evaluation rows, not a
+successful digest publication. Check the next digest's evaluation recording
+and final day commit separately. A worker can succeed while its measurement
+commit fails, and an assembly can build the day without pushing it. Pending
+batch recovery below files evaluation measurements only; it does not publish
+the digest, its visuals, or the training corpus.
 
 ## Resume interrupted CSV cleanup
 

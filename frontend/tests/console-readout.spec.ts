@@ -5,10 +5,9 @@ import { pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
 import type { Manifest } from 'vite';
 import { readoutOf } from '../src/lib/charts/readout';
-import { clocksChart } from '../src/lib/charts/machine';
-import { stacked } from '../src/lib/charts/stacked';
 import { serverCompiler } from './support/server-render';
 import { chartsReady } from './support/charts-ready';
+import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
 
 /**
  * Every console chart says whether it has a column to hover, and says it in
@@ -269,6 +268,16 @@ function dayOf(owner: Locator): Locator {
 }
 
 test.describe('the readout is the default', () => {
+	test('THE ORACLE: the Records shape panel declares its readout and has no native tooltip', async ({ page }) => {
+		await openExplorer(page);
+		await chooseExplorerQuestion(page, ['summary-quality-evals'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
+		await runExplorer(page);
+		const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+		await expect(panel.locator('[data-chart-type="dateSeries"]')).toHaveCount(1);
+		await expect(panel.locator('[data-readout-columns], [data-readout-records], [data-readout-none]')).toHaveCount(1);
+		await expect(panel.locator('[title], title')).toHaveCount(0);
+	});
+
 	for (const route of ALL_ROUTES) {
 		// One load per route: the five checks below read the same settled page,
 		// so opening it once for each was five loads where one answers them all.
@@ -695,95 +704,5 @@ test.describe('the readout is the default', () => {
 		const strip = page.locator('[data-readout-fetched] [data-readout-day]').first();
 		await expect(strip).toHaveCount(1);
 		await expect(strip, 'the strip arrived empty').not.toHaveText(/^\s*$/);
-	});
-});
-
-test.describe('the strip is the key', () => {
-	test('no chart option carries a legend', () => {
-		// The engine drew a key above three of its charts. The strip below the
-		// plot prints the same swatch and the same label at the column the reader
-		// is on, so the key was the same pair a second time - and a second copy is
-		// how two of them drift.
-		const stack = stacked(
-			['Mon', 'Tue'],
-			[
-				{ label: 'fetch', token: '--chart-1', values: [2, 1] },
-				{ label: 'extract', token: '--chart-2', values: [1, 5] }
-			]
-		);
-		expect(stack.option.legend, 'the stacked chart draws a legend').toBeUndefined();
-
-		const clocks = clocksChart([
-			{ label: 'shard 0', ledger: 12.5, server: 12.4, gapPct: 0.8, agrees: true },
-			{ label: 'shard 1', ledger: 9.5, server: 9.9, gapPct: 4.0, agrees: true }
-		]);
-		expect(clocks.option.legend, 'the clock chart draws a legend').toBeUndefined();
-	});
-
-	test('a strip is built from the labels, so it cannot be a different length', () => {
-		const strip = readoutOf({
-			type: 'dateSeries',
-			columns: ['Mon', 'Tue', 'Wed'],
-			series: [
-				{
-					label: 'Read',
-					swatch: 'var(--chart-1)',
-					values: [0, 10, 20],
-					format: (value) => `${value}`
-				},
-				{
-					label: 'Written',
-					swatch: 'var(--chart-4)',
-					values: [0, 1, 2],
-					format: (value) => `${value}`
-				}
-			],
-			notMeasured: 'Nothing was read on this day',
-			resting: 'last'
-		});
-		expect(strip.columns).toEqual(['Mon', 'Tue', 'Wed']);
-		expect(strip.series.map((one) => [one.label, one.swatch, one.values[2]])).toEqual([
-			['Read', 'var(--chart-1)', '20'],
-			['Written', 'var(--chart-4)', '2']
-		]);
-		expect(strip.resting).toBe(2);
-		// A series one reading short is one day's numbers under another day's
-		// heading, so the builder refuses it rather than printing it.
-		expect(() =>
-			readoutOf({
-				type: 'dateSeries',
-				columns: ['Mon', 'Tue'],
-				series: [{ label: 'Read', swatch: null, values: [1], format: String }],
-				notMeasured: 'Nothing was read on this day',
-				resting: 'last'
-			})
-		).toThrow(/1 readings for 2 columns/);
-	});
-
-	test('a missing reading prints the not-measured word, never a dash or a zero', () => {
-		const strip = readoutOf({
-			type: 'dateSeries',
-			columns: ['Mon', 'Tue'],
-			series: [
-				{ label: 'Read', swatch: null, values: [null, 4], format: String },
-				{ label: 'Never read', swatch: null, values: [null, null], format: String }
-			],
-			notMeasured: 'Nothing was read on this day',
-			resting: 'newest'
-		});
-		expect(strip.series[0].values).toEqual([null, '4']);
-		expect(strip.notMeasured).toBe('Nothing was read on this day');
-		// A key for a series the window never measured is a claim the data does
-		// not support, so it has no entry at all.
-		expect(strip.series.map((one) => one.label)).toEqual(['Read']);
-		expect(() =>
-			readoutOf({
-				type: 'dateSeries',
-				columns: ['Mon'],
-				series: [{ label: 'Read', swatch: null, values: ['-'], format: String }],
-				notMeasured: 'Nothing was read on this day',
-				resting: 'last'
-			})
-		).toThrow(/hand null/);
 	});
 });

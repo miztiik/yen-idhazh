@@ -134,6 +134,7 @@ DISPATCH_BOOLEAN: Final = "boolean"
 DISPATCH_READ_BY_NAME: Final = "read by name"
 
 DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
+    ("ci.yml", "panel_captures"): DISPATCH_BOOLEAN,
     ("backfill.yml", "commit"): DISPATCH_BOOLEAN,
     ("backfill.yml", "days"): DISPATCH_READ_BY_NAME,
     # The one that decides a published address. See the two tests that run the
@@ -658,6 +659,10 @@ SQUASH_DUE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "corpus_squash_
 #: The gardener's plan job's one program: it splits the tasks into shards on a
 #: checkout of two folders, before anything of this project is installed.
 GARDENER_PLAN_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
+
+#: The Pages workflow's one program: whether to publish and which commit, run on
+#: a bare checkout before anything is installed.
+PUBLISH_DECISION_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "publish_decision.py"
 
 #: The step the `plan` job exists for. The catch-up above runs ahead of it: a
 #: fold that refuses a row ends the job, and a refusal that lands after the feed
@@ -1964,6 +1969,18 @@ def _seed_ledger(staged: str) -> str:
     return staged if staged.endswith((".csv", ".json")) else f"{staged}/ledger.csv"
 
 
+def _fast_push_retry() -> dict[str, Any]:
+    """The repository's push-retry config with millisecond backoff and its real deadlines.
+
+    Only the two delays shrink, so a rejected push still retries, still meets
+    the real deadline and still reaches the ceiling after the real attempt
+    count - it just waits milliseconds rather than seconds between attempts.
+    """
+    config: dict[str, Any] = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
+    return config
+
+
 def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     """Build the bare origin every commit test starts from, in one template directory."""
     env = _isolated_env(root)
@@ -1979,10 +1996,11 @@ def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     # whether two runs that both appended are in conflict, so a scripted origin
     # without it would test a different repository.
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    for relative in (
-        ".gitignore", "config/push-retry.json", "backend/utilities/prepare_evaluation_publication.py"
-    ):
+    for relative in (".gitignore", "backend/utilities/prepare_evaluation_publication.py"):
         _write(seed / relative, read_text(REPO_ROOT / relative))
+    # A caller that resolves the checkout's own retry config, as
+    # `publish_inputs` does, would otherwise back off at production speed.
+    _write(seed / "config/push-retry.json", json.dumps(_fast_push_retry()) + "\n")
     _git(
         seed, env, "add", ".gitattributes", ".gitignore", "config/push-retry.json",
         "backend/utilities/prepare_evaluation_publication.py", "docs", "runner-noise.txt",
@@ -2192,10 +2210,8 @@ def _run_commit_script(
     program imports nothing from `idhazh`, so either
     one runs the same bytes.
     """
-    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
-    config.update(base_step_seconds=0.003, ceiling_seconds=0.024)
     retry_file = runner.parent / "push-retry.json"
-    _write(retry_file, json.dumps(config) + "\n")
+    _write(retry_file, json.dumps(_fast_push_retry()) + "\n")
     return subprocess.run(
         [sys.executable, COMMIT_PROGRAM.as_posix(), *staged_paths],
         cwd=runner,

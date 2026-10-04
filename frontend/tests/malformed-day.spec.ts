@@ -168,7 +168,7 @@ function python(): string {
 	return 'python';
 }
 
-/** One day on disk, in the layout the command globs for.
+/** One day on disk and in the publication inventory the command reads.
  *
  * The day's pictures come with it. `check-publication` holds a payload against the
  * directory it sits in - two stories on one chart, a chart the payload names
@@ -186,6 +186,21 @@ function treeHolding(day: Day, name: string, payload: string): string {
 	for (const asset of day.assets) {
 		copyFileSync(asset, path.join(where, path.basename(asset)));
 	}
+	execFileSync(python(), ['-c', [
+		'from pathlib import Path',
+		'import sys',
+		'from idhazh.contracts.publication_inventory import PublicationInventory',
+		'from idhazh.publication import initialize_inventory, record_files',
+		'root = Path(sys.argv[1]).parent',
+		'day = sys.argv[2]',
+		'initialize_inventory(root, seed=PublicationInventory(version=PublicationInventory.schema_version(), dates=[]))',
+		'name = "digest/" + day.replace("-", "/") + "/digest.json"',
+		'record_files(root, dates=[day], paths=[name], item_counts={name: 0})'
+	].join('\n'), root, day.date], {
+		cwd: REPO,
+		env: { ...process.env, PYTHONPATH: path.join(REPO, 'backend') },
+		stdio: 'pipe'
+	});
 	return root;
 }
 

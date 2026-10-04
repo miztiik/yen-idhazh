@@ -14,7 +14,13 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import (
+    CONTRACT_FIXTURES_DIR,
+    REPO_ROOT,
+    read_text,
+    record_fixture_day,
+    seed_publication_inventory,
+)
 
 from idhazh.cli import main
 from idhazh.contracts.digest_day import DigestDay, DigestVerticalRef
@@ -97,11 +103,12 @@ def a_day_that_validates() -> dict[str, Any]:
 
 
 def a_tree_holding(tmp_path: Path, day: dict[str, Any], date: str = BUILT_DATE) -> Path:
-    """One committed day on disk, in the layout `published_days` globs for."""
+    """One committed day and its named publication entry."""
     year, month, dom = date.split("-")
     where = tmp_path / "digest" / year / month / dom
     where.mkdir(parents=True)
     (where / "digest.json").write_text(json.dumps(day), encoding="utf-8")
+    record_fixture_day(tmp_path, date, items=len(day["items"]))
     return tmp_path / "digest"
 
 
@@ -138,6 +145,7 @@ def test_a_day_that_is_not_json_at_all_is_named_rather_than_thrown(tmp_path: Pat
     broken = root / "2026" / "08" / "30"
     broken.mkdir(parents=True)
     (broken / "digest.json").write_text("{ not json", encoding="utf-8")
+    record_fixture_day(root.parent, "2026-08-30")
 
     assert run_publication_checks(root, run_id="r") == 1
 
@@ -146,6 +154,7 @@ def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -
     """A run over nothing prints the same line as a run over every day."""
     empty = tmp_path / "digest"
     empty.mkdir()
+    seed_publication_inventory(tmp_path)
     assert run_publication_checks(empty, run_id="r") == 1
 
 

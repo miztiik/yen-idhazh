@@ -20,10 +20,10 @@ Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributor
 
 ## What is committed
 
-Only the icons in use, as unmodified source SVG, under `svg/`. The upstream
+Only the icons in use, as unmodified source SVG, under `svg/`. Records added `query-run` from Lucide `play`, `list-refresh` from `refresh-cw`, `sort-ascending` from `arrow-up`, `sort-descending` from `arrow-down`, `copy` from `copy`, `saved` from `bookmark`, `forget` from `x`, `history` from `history`, `share-link` from `link`, `shape-series` from `chart-line`, `shape-ranked` from `chart-bar`, `shape-distribution` from `chart-column` and `shape-scatter` from `chart-scatter`. The upstream
 package is NOT a dependency: it was installed once to extract these files and
-removed. Measured 2026-08-29: 29 files, 11,980 B, against the 40 KB budget in
-the row that added them.
+removed. Measured 2026-10-04: 21 files, 11,406 B, against the 40 KB budget in
+the rows that added them.
 
 Each file keeps Lucide's own geometry, its 24-unit box and its `currentColor`
 stroke. The filename is a semantic id this project chose - `topic-ai`, not

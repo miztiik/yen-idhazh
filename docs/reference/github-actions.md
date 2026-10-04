@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-04
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -13,7 +13,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `ci.yml` | `CI` | Pull request; push to `main` | Code and site checks |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
-| `pages.yml` | `Pages publication` | Completed `CI` or `Content refresh` run | Static site |
+| `pages.yml` | `Pages publication` | Passing `CI` run on a push to `main`; completed `Content refresh` run | Static site |
 | `drift.yml` | `Drift review` | `0 8 * * 0` | Quality drift review |
 | `validate.yml` | `Model validation` | none | Candidate quality verdict |
 | `measure.yml` | `Measurements` | none | Runtime, corpus and budget measurements |
@@ -38,17 +38,25 @@ publishes nothing. Overlapping runs use distinct writer identities and the
 ## Pages publication
 
 - Build committed data only. Do not run the producer or a model during publication.
-- After successful CI, publish its verified commit only if `frontend/`,
-  `config/idhazh.json` or `state/` changed. Failed CI does not publish.
-- After Content refresh completes, publish the branch tip regardless of the run's
-  overall conclusion. Its producer validated the committed day; a sibling failure
-  does not invalidate it. The run's starting commit does not contain its new day.
-- Manual publication also uses `main`.
+- [`publish_decision.py`](../../backend/utilities/publish_decision.py) holds the
+  rule, one case a trigger, and every publish builds main's tip:
+  - A pull request's CI, a failed CI and a manual CI run never publish. A pull
+    request publishes when it merges.
+  - A push to `main` publishes after its CI passes, when the push changed a path
+    the site build reads. The program lists the paths the build never reads;
+    every other path counts, so a new build input publishes by default. The
+    push's range comes from its check suite, so every commit of the push counts.
+  - Content refresh publishes when it landed a change under `frontend/public/`,
+    whatever the run's conclusion. Its producer validated the committed day; a
+    sibling failure does not invalidate it.
+  - A manual publish from `main` always publishes.
+  - A diff the program cannot read publishes.
+- A push whose CI passes while a newer push has changed site code publishes
+  nothing; the newer push's own CI publishes both. Building the tip means a late
+  verdict cannot take the site back to an older commit, and a day that landed
+  while CI ran stays published.
 - Cancel superseded builds, but let an active deployment finish. Deploy requires
   a successful build and its complete artifact. These are separate job groups.
-
-CI-triggered publication follows verdict arrival, not commit order. An older
-commit whose CI finishes last can still publish last.
 
 ## Candidate runs
 

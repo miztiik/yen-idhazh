@@ -94,10 +94,10 @@ def test_the_robots_job_runs_the_module_the_selector_keys_on() -> None:
 #: panel pictures, one that re-reads the archive because it moved the shape a
 #: day is read through, and one that buys nothing.
 BROWSER_SCOPE_CASES: Final = (
-    ("frontend/src/routes/console/+page.svelte", True, True, True, True, False, False),
-    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, False, False),
-    ("config/idhazh.json", True, True, False, False, True, True),
-    ("docs/reference/pipeline-cost.md", False, False, False, False, False, False),
+    ("frontend/src/routes/console/+page.svelte", True, True, True, True, False, False, False),
+    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, False, False, True),
+    ("config/idhazh.json", True, True, False, False, True, True, True),
+    ("docs/reference/pipeline-cost.md", False, False, False, False, False, False, False),
 )
 
 def test_the_selector_tests_use_the_same_node_as_the_ci_selector() -> None:
@@ -168,7 +168,7 @@ def _browser_scope(
 
 @requires_node
 @pytest.mark.parametrize(
-    ("changed", "browser", "code", "console", "panels", "robots", "validate_all"),
+    ("changed", "browser", "code", "console", "panels", "robots", "validate_all", "model_absent"),
     BROWSER_SCOPE_CASES,
 )
 def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
@@ -179,6 +179,7 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
     panels: bool,
     robots: bool,
     validate_all: bool,
+    model_absent: bool,
     tmp_path: Path,
 ) -> None:
     """The filter is executed, not read.
@@ -196,6 +197,7 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
     assert _browser_scope(tmp_path, [changed]) == {
         "browser": str(browser).lower(),
         "code": str(code).lower(),
+        "model_absent": str(model_absent).lower(),
         "console": str(console).lower(),
         "panels": str(panels).lower(),
         "robots": str(robots).lower(),
@@ -226,6 +228,7 @@ def test_a_push_carrying_code_still_never_consults_the_list(tmp_path: Path) -> N
     ) == {
         "browser": "true",
         "code": "true",
+        "model_absent": "true",
         "console": "true",
         "panels": "true",
         "robots": "true",
@@ -245,6 +248,7 @@ def test_a_push_carrying_no_code_starts_no_code_job(tmp_path: Path) -> None:
     assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == {
         "browser": "false",
         "code": "false",
+        "model_absent": "false",
         "console": "false",
         "panels": "false",
         "robots": "false",
@@ -276,16 +280,8 @@ def test_a_trunk_push_is_never_cancelled_by_the_next_one() -> None:
     )
 
 
-def test_the_panel_pictures_are_taken_and_kept_on_every_run_that_buys_them() -> None:
-    """The `panels` answer is read three times, and all three have to agree.
-
-    `scope` publishes it, the browser step skips the captures on it, and the
-    upload keeps what they drew. An upload that ran only on a red run would be a
-    capture nobody can read on the run that passed, which is the run a reviewer
-    is asked to approve - so it runs on a pass or a fail and skips only a
-    cancelled run. `if-no-files-found: error` is the other half: a run that
-    bought the pictures and wrote none is a broken capture, not an empty folder.
-    """
+def test_panel_pictures_are_explicit_but_sufficiency_checks_still_follow_selection() -> None:
+    """Routine runs keep panel assertions; a manual review asks for pictures."""
     workflow = _load_workflows()["ci.yml"]
     outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
     assert outputs["panels"] == "${{ steps.decide.outputs.panels }}"
@@ -293,10 +289,11 @@ def test_the_panel_pictures_are_taken_and_kept_on_every_run_that_buys_them() -> 
     suite = _step(workflow, "browser", "name", "Browser suite - canaries and retrieval")
     env = _mapping(suite.get("env"), "the browser suite's env")
     assert env["SKIP_PANELS_SUITE"] == "${{ needs.scope.outputs.panels == 'false' }}"
+    assert env["SKIP_PANEL_CAPTURES"] == "${{ inputs.panel_captures != true }}"
 
     upload = _artifact_upload(workflow, "browser", "panel-captures")
     condition = str(upload.get("if", ""))
-    assert "!cancelled()" in condition and "needs.scope.outputs.panels == 'true'" in condition
+    assert "!cancelled()" in condition and "inputs.panel_captures == true" in condition
     settings = _mapping(upload.get("with"), "the panel-captures upload")
     assert settings["path"] == "frontend/test-results/panels/"
     assert settings["if-no-files-found"] == "error"
@@ -310,3 +307,19 @@ def test_the_panel_pictures_are_taken_and_kept_on_every_run_that_buys_them() -> 
     assert "!frontend/test-results/panels/" in str(traces["path"]).split(), (
         "a red run must not upload every panel picture a second time inside the traces"
     )
+
+
+def test_model_absent_build_and_browser_timings_are_wired_to_their_inputs() -> None:
+    workflow = _load_workflows()["ci.yml"]
+    outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
+    assert outputs["model_absent"] == "${{ steps.decide.outputs.model_absent }}"
+    absent = _step(workflow, "site", "name", "Model-absent gate - the digest does not depend on any of it")
+    assert absent["if"] == "needs.scope.outputs.model_absent == 'true'"
+    suite = _step(workflow, "browser", "name", "Browser suite - canaries and retrieval")
+    assert "--reporter=github,json" in str(suite["run"])
+    env = _mapping(suite.get("env"), "browser suite env")
+    report = _artifact_upload(workflow, "browser", "browser-results")
+    settings = _mapping(report.get("with"), "browser results upload")
+    assert settings["path"] == f"frontend/{env['PLAYWRIGHT_JSON_OUTPUT_NAME']}"
+    assert report["if"] == "${{ !cancelled() }}"
+    assert settings["if-no-files-found"] == "error"
