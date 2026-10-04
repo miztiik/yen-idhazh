@@ -1,8 +1,10 @@
-"""How evaluation measurements are filed once and looked up by candidate identity.
+"""How evaluation measurements are filed, and what makes two rows one measurement.
 
-`records` is an explicit whole-ledger read for operator passes. Filing and
-duplicate checks read only the lookup entries for the supplied identities.
-Measurements do not expire: `OBSERVATION_KEY` excludes the day and run.
+Each job files the rows it holds as one raw file per UTC day through the ledger
+door, as item health is filed, and reads nothing first. A work shard and the
+assemble job may file one measurement for the same day; a read of named days
+keeps one row per `OBSERVATION_KEY` each day, and a whole-ledger read keeps one
+across every day. `records` is that whole-ledger read, for operator passes.
 """
 
 from __future__ import annotations
@@ -16,8 +18,6 @@ from idhazh.contracts.base import canonical_json, derive_text_digest
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.evals import observation_batches
-from idhazh.evals.observation_lookup import ObservationLookup
 from idhazh.ledger import read_header as _read_header
 
 #: What makes two rows the same measurement. `idhazh.ledger.OBSERVATION_KEY` is
@@ -53,7 +53,7 @@ def observation(payload: Mapping[str, object]) -> tuple[str, ...]:
 
 
 def observation_digest(payload: Mapping[str, object]) -> str:
-    """The same identity as one hash, which is the form the index keeps.
+    """The same identity as one hash.
 
     A fixed-width record instead of a second copy of the addresses. Digested
     through the project's own canonical serialization rather than joined with a
@@ -64,22 +64,23 @@ def observation_digest(payload: Mapping[str, object]) -> str:
     return derive_text_digest(canonical_json(list(observation(payload))))
 
 
-def recorded_observations(state_dir: Path, candidates: Iterable[str]) -> set[str]:
-    """The supplied observation digests already recorded, without reading eval rows.
-
-    A missing lookup is an error. Existing history requires an explicit migration.
-    """
-    with ObservationLookup(observation_batches.lookup_root(state_dir)) as lookup:
-        return lookup.recorded(candidates)
-
-
 def file_measurements(
     state_dir: Path,
     rows: Iterable[EvalRow],
     *,
     identity: WriterIdentity,
 ) -> int:
-    """File new measurements from an immutable batch and return the accepted count."""
-    from idhazh.config import load_observation_lookup
+    """File this job's rows as one raw file per UTC day and return how many it filed.
 
-    return observation_batches.file_batch(state_dir, rows, identity, load_observation_lookup())
+    Each row is filed under the day its own `date` names. A write into a paused
+    family files nothing and returns 0.
+    """
+    filed = list(rows)
+    written = ledger.persist(
+        state_dir,
+        filed,
+        ledger=LedgerName.SUMMARY_QUALITY_EVALS,
+        covers=identity.run_id[:10],
+        identity=identity,
+    )
+    return len(filed) if written else 0

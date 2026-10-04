@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 What the app may delete, what must survive, and the safeguards before deletion.
 [layout.md](layout.md) owns publication. The [gardener](idhazh-gardener.md)
@@ -70,7 +70,7 @@ that constrain them belong to
 | Published identities | Preserve the information that prevents duplicate publication. The manual prune refuses this ledger. |
 | Item health | Write and validate the required day-and-stage summary before deleting an aged source month and its published copy. |
 | Feed health | Delete expired records when no reader needs them; do not invent an unused aggregate. Feed retirements have a separate policy so cleanup does not revive retired sources. |
-| Summary-quality evals and their lookup | Keep every row and every ID. `compact-summary-quality-evals` may pack rows but never drops a period. The [exact-ID lookup](../contracts/observation-lookup.md) has no day/month fold or age deletion; forgetting an ID would make an old measurement new again. |
+| Summary-quality evals | Keep every row. `compact-summary-quality-evals` may pack rows but never drops a period. |
 | Raw and compact ledgers | Follow the ledger's compaction declaration. A legacy task's retirement must not silently shorten the period retained. |
 | Trial records and other task-owned data | Follow the owning declaration, not a blanket cleanup of `state/`. |
 
@@ -78,16 +78,11 @@ An aggregate must outlive the full-detail data it replaces. A summary can be
 larger than a very small source partition; that alone does not make it invalid.
 Claims about aggregated data must stay within what the aggregate preserves.
 
-### Eval rows and identity
+### Eval rows
 
-Every eval row is kept for ever, and so is every ID in the ID folder, so an
-old measurement is never counted as new because its rows aged out, and a monthly
-figure is computed from the rows when a chart draws it
+Every eval row is kept for ever, and a monthly figure is computed from the rows
+when a chart draws it
 ([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).
-The lookup is independent of the rows' day and month layout. Legacy IDs move
-through the [explicit migration](../../how-to/migrate-observation-lookup.md);
-interrupted publication uses [named batch recovery](../../how-to/migrate-observation-lookup.md#recover-a-named-pending-batch).
-Neither is a retention pass.
 
 ## A named prune: one ledger, one range of days
 
@@ -107,7 +102,7 @@ idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-D
 - `published` and `seen` are refused because forgetting their records permits repeat publication or discovery.
 - A ledger the door files (`raw-and-compact` in `config/ledgers.json`) is a target unless its compaction declaration's `prune_refusal` gives a reason, which the command prints as its refusal. A pass deletes the days' raw files and listings and rebuilds each daily, monthly or yearly file that holds them without their rows; a file left with no row stays as an empty file. A live pass also takes `--run-id` and `--commit`, which each rebuilt file names as its writer.
 - `summary-quality-evals` is refused by its declaration: every eval row is kept for ever.
-- `summary-quality-evals-index` is not a prune target. Its IDs are lifelong, and its digest-routed lookup has no day or month partition to prune.
+- `summary-quality-evals-index` is not a prune target: its lookup has no day or month partition to prune.
 - Do not point the command at unsupported raw trees or file layouts. Their owning tasks decide retention.
 
 The procedure and failure handling are in

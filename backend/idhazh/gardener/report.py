@@ -20,6 +20,11 @@ hands them in.
 its own, so its lines say whether it was live, and a fold that stopped part way
 turns the row's `stopped_because` to `failed` - the task failed, whichever half
 of it did.
+
+**A dry run never says a member is gone.** One that found members says nothing
+was deleted, and names the setting that makes the task live: `dry_run` in the
+task's own declaration. The gardener takes no flag for that, so a line that
+named one would send a person looking for a switch that does not exist.
 """
 
 from __future__ import annotations
@@ -101,8 +106,8 @@ def lines(outcome: Pass) -> list[str]:
     """What happened, as the lines a command prints, one member per line.
 
     The members themselves rather than a count: this is what a person reads
-    before passing `--no-dry-run`, and a count says a deletion happened and
-    nothing about what it took.
+    before setting a task's `dry_run` to false, and a count says a deletion
+    happened and nothing about what it took.
     """
     span = _span(outcome)
     verb = "would delete" if outcome.dry_run else "deleted"
@@ -127,7 +132,7 @@ def _span(outcome: Pass) -> str:
 
 
 def _what_next(outcome: Pass) -> list[str]:
-    """One line saying whether to run this again, and one saying how to make it real."""
+    """Why the pass stopped and what the next one does, and on a dry run how to make it real."""
     said: list[str] = []
     if outcome.stopped_because is StopReason.CEILING:
         said.append(
@@ -136,18 +141,18 @@ def _what_next(outcome: Pass) -> list[str]:
         )
     elif outcome.stopped_because is StopReason.FAILED:
         if outcome.resume_from is None:
-            said.append(
-                f"  the pass failed after {len(outcome.taken)} members, before it could "
-                "name the next one - the members above are gone, and the next pass starts "
-                "again from the oldest member the window holds"
-            )
+            where = f"after {len(outcome.taken)} members, before it could name the next one"
+            then = "the next pass starts again from the oldest member the window holds"
         else:
-            said.append(
-                f"  the pass failed at {outcome.resume_from} - the members above are gone, "
-                "and the next pass retries that one"
-            )
+            where = f"at {outcome.resume_from}"
+            then = "the next pass retries that one"
+        gone = "" if outcome.dry_run else "the members above are gone, and "
+        said.append(f"  the pass failed {where} - {gone}{then}")
     else:
         said.append("  the collection is exhausted: nothing else is inside the window")
     if outcome.dry_run and outcome.taken:
-        said.append("  nothing was deleted - pass --no-dry-run to delete these")
+        said.append(
+            "  nothing was deleted - a live run would delete the members above; set "
+            "dry_run: false in config/gardener/<task>.json to make the task live"
+        )
     return said
