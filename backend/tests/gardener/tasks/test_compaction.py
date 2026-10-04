@@ -165,17 +165,56 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
     assert outcome.stopped_because is StopReason.EXHAUSTED and disjoint(outcome)
 
 
-def test_a_first_pass_starts_on_the_first_of_the_month_and_a_quiet_day_still_gets_a_file(
+def test_a_first_pass_starts_at_its_oldest_raw_day_and_a_quiet_day_has_no_file(
     tmp_path: Path,
 ) -> None:
-    """Every month the daily index holds is whole, and a day with no rows is not a hole."""
+    """No day before the first raw day is recorded, and a day with no row is an entry with no file."""
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-09-20"))
 
     compact(root, date(2026, 9, 23), max_periods_per_run=31)
 
-    assert daily_covers(root) == days("2026-09-01", "2026-09-21")
-    assert compact_rows(root, Period.DAILY, "2026-09-05") == []
+    index = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.DAILY))
+    assert [entry.covers for entry in index.entries] == ["2026-09-20", "2026-09-21"]
+    assert compact_rows(root, Period.DAILY, "2026-09-20") == [a_pass("2026-09-20")]
+    assert index.entries[1] == CompactEntry(
+        covers="2026-09-21", rows=0, bytes=0, state=EntryState.EMPTY
+    )
+    assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-21") is None
+    assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-01") is None
+
+
+def chosen_on(caplog: pytest.LogCaptureFixture) -> dict[str, Any]:
+    """The periods the pass logged that it chose, as the one line says them, None left out."""
+    (said,) = [
+        record.getMessage().removeprefix("periods chosen ")
+        for record in caplog.records
+        if record.getMessage().startswith("periods chosen ")
+    ]
+    chosen: dict[str, Any] = json.loads(said)
+    return chosen
+
+
+@pytest.mark.parametrize("wake", [False, True], ids=["whole-listing", "wake-listing"])
+def test_an_empty_ledger_writes_nothing_and_ends_empty(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, wake: bool
+) -> None:
+    """The gardener's own ledger, live, before any run has filed a row: there is nothing to work on."""
+    root = tmp_path / "checkout"
+    state(root).mkdir(parents=True)
+
+    with caplog.at_level(logging.INFO):
+        outcome = compact(root, date(2026, 10, 4), task="compact-gardener", wake=wake)
+
+    assert files_under(root) == {}
+    assert (outcome.written, outcome.taken, outcome.stopped_because) == (
+        (),
+        (),
+        StopReason.EXHAUSTED,
+    )
+    chosen = chosen_on(caplog)
+    assert (chosen["days"], chosen["months"]) == ({"start": "none"}, {"start": "none"})
+    assert "rerun_span" not in chosen
 
 
 def test_after_every_pass_the_newest_day_the_daily_index_names_is_the_daily_watermark(
@@ -189,7 +228,10 @@ def test_after_every_pass_the_newest_day_the_daily_index_names_is_the_daily_wate
         compact(root, date(2026, 9, 10) + timedelta(days=offset))
         assert daily_covers(root)[-1] == watermark(root, Period.DAILY)
     assert watermark(root, Period.DAILY) == "2026-09-11"
-    assert compact_rows(root, Period.DAILY, "2026-09-11") == []
+    assert daily_covers(root)[0] == "2026-09-03"
+    index = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.DAILY))
+    assert index.entries[-1].state is EntryState.EMPTY
+    assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-11") is None
 
 
 def test_a_pass_on_the_25th_takes_the_days_up_to_the_23rd(tmp_path: Path) -> None:
@@ -211,8 +253,8 @@ def test_a_pass_stops_at_its_budget_and_names_the_day_the_next_one_starts_at(
 
     outcome = compact(root, date(2026, 9, 23), max_periods_per_run=2)
 
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.CEILING, "2026-09-03")
-    assert watermark(root, Period.DAILY) == "2026-09-02"
+    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.CEILING, "2026-09-04")
+    assert watermark(root, Period.DAILY) == "2026-09-03"
 
 
 def test_a_re_run_that_files_fewer_rows_replaces_its_first_attempt_after_the_day_was_compacted(
@@ -296,7 +338,7 @@ def test_a_raw_file_that_cannot_be_read_stops_its_day_and_is_never_deleted(tmp_p
     outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
 
     assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-09-02")
-    assert watermark(root, Period.DAILY) == "2026-09-01"
+    assert watermark(root, Period.DAILY) is None, "the first day was refused, so nothing moved"
     assert written.is_file() and stray.is_file()
 
 
@@ -310,7 +352,7 @@ def test_a_day_holding_more_raw_files_than_one_period_takes_is_refused_and_kept(
 
     assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-09-02")
     assert all(path.is_file() for path in kept)
-    assert watermark(root, Period.DAILY) == "2026-09-01"
+    assert watermark(root, Period.DAILY) is None, "the first day was refused, so nothing moved"
 
 
 def test_a_paused_family_is_compacted_all_the_same(
@@ -396,9 +438,11 @@ def test_a_month_is_absorbed_whole_at_the_wake_after_its_days_and_each_date_is_r
     filed(root, a_pass("2026-08-05"))
     filed(root, a_pass("2026-08-20", run="2"))
     first = compact(root, date(2026, 10, 20), max_periods_per_run=100)
+    assert daily_covers(root)[0] == "2026-08-05", "a first pass starts at its oldest raw day"
     august = [
         row
         for day in days("2026-08-01", "2026-08-31")
+        if ledger.compact_file(state(root), VISUALS, Period.DAILY, day) is not None
         for row in compact_rows(root, Period.DAILY, day)
     ]
     assert watermark(root, Period.MONTHLY) is None, "a month waits for the wake after its days"
@@ -425,6 +469,7 @@ def test_a_day_the_daily_index_lost_with_its_file_is_recorded_lost_and_its_month
     """A hole nothing can rebuild no longer stops the month: the month closes and names the day."""
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-08-05"))
+    filed(root, a_pass("2026-08-10", run="2"))
     compact(root, date(2026, 10, 20), max_periods_per_run=100)
     index_path = ledger.compact_index_path(state(root), VISUALS, Period.DAILY)
     index = CompactIndex.read(index_path)
@@ -638,11 +683,16 @@ def test_a_re_run_into_a_day_whose_packed_file_is_gone_is_refused_as_file_missin
 
 
 def test_a_catch_up_pass_never_writes_a_path_it_deletes(tmp_path: Path) -> None:
-    """Eligible months and many days are due at once, and none may stall the shard."""
+    """Eligible months and many days are due at once, and none may stall the shard.
+
+    A first run looks back five months, to May, from the month of its newest due day.
+    """
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-05-10"))
 
-    passes = [compact(root, date(2026, 10, 20), max_periods_per_run=200) for _ in range(3)]
+    passes = [
+        compact(root, date(2026, 10, 20), max_periods_per_run=200, lookback=5) for _ in range(3)
+    ]
 
     assert all(disjoint(outcome) for outcome in passes)
     assert watermark(root, Period.MONTHLY) == "2026-08"
@@ -747,13 +797,18 @@ def month_file(root: Path, month: str) -> Path:
 
 
 def window_pass(root: Path, today: date, *, reports: bool) -> Pass:
-    """One live pass under a one-month window that deletes, or only reports."""
+    """One live pass under a one-month window that deletes, or only reports.
+
+    A first run looks back four months from the month of its newest due day, so
+    on 20 October it reaches June.
+    """
     return compact(
         root,
         today,
         max_periods_per_run=200,
         monthly_window=ONE_MONTH,
         month_deletes_dry_run=reports,
+        lookback=4,
     )
 
 
@@ -827,7 +882,11 @@ def test_a_window_that_only_reports_packs_every_due_period_and_keeps_every_month
 def test_a_raw_day_past_a_window_that_only_reports_is_packed_and_not_dropped(
     tmp_path: Path,
 ) -> None:
-    """A first pass takes it as if the window kept every month; a live window deletes it unread."""
+    """A first pass takes it as if the window kept every month; a live window deletes it unread.
+
+    With the window's deletes live, a first pass starts at the oldest raw day the
+    window keeps, never before its keep line.
+    """
     trees = [tmp_path / "live", tmp_path / "reports"]
     filed(trees[0], a_pass("2026-06-05"))
     filed(trees[0], a_pass("2026-09-05", run="2"))
@@ -840,7 +899,7 @@ def test_a_raw_day_past_a_window_that_only_reports_is_packed_and_not_dropped(
     kept = ledger.load_days(state(trees[1]), VISUALS, june, model=VisualPruneRow)
     assert kept == [a_pass("2026-06-05")]
     assert ledger.load_days(state(trees[0]), VISUALS, june, model=VisualPruneRow) == []
-    assert (daily_covers(trees[1])[0], daily_covers(trees[0])[0]) == ("2026-06-01", "2026-09-01")
+    assert (daily_covers(trees[1])[0], daily_covers(trees[0])[0]) == ("2026-06-05", "2026-09-05")
     assert ledger.list_raw_files(state(trees[1]), VISUALS) == []
     assert set(reports.taken) == set(live.taken), "its raw files go either way, packed or dropped"
     assert reports.selected == len(reports.taken), "a file this pass packed is not held back"

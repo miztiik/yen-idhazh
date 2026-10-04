@@ -49,9 +49,9 @@ flowchart TB
     MWAIT["not yet, or a raw day still waits in it:<br/>the month waits for a later wake"]
     MREC["each day from the ledger's first:<br/>a day no index names is adopted<br/>from its own file, or listed lost"]
     ABSORB["4. plan month files, or an empty entry:<br/>indexes and deletes wait for the end of the pass"]
-    DDUE{"compact_after_days whole days<br/>since the day ended?"}
-    DHOLD["the day waits: a run may still be writing"]
-    TAKE["5. plan day files:<br/>write all data, each final index once,<br/>delete sources, each watermark once last"]
+    DDUE{"a day chosen for this wake?<br/>after the daily mark, compact_after_days<br/>since it ended, at most max_periods_per_run"}
+    DHOLD["the day waits for a later wake:<br/>a run may still be writing, or the cap is used"]
+    TAKE["5. plan day files, or an empty entry,<br/>after each packed day a re-run wrote into:<br/>indexes and deletes wait for the end of the pass"]
     DRY{"dry_run?"}
     REPORT["report every path, land the record only<br/>four of the six compactions, today"]
     LAND["land every write and delete<br/>in the shard's one commit"]
@@ -121,14 +121,14 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 | 2 | Drops every raw day in a month the window no longer keeps. While the window only reports, names them and keeps them |
 | 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
 | 4 | Closes every month chosen for this wake into its month file, or into an entry with no file |
-| 5 | Takes every raw day that is due into its day file |
+| 5 | Packs every day chosen for this wake into its day file, or into an entry with no file, after each packed day that holds raw files again |
 
-**The month step chooses its own months; the other steps do not yet.** Before
-any step runs, the pass chooses the months step 4 may close from the ledger's
-own marks and the wake's UTC day, and logs the choice once as one
-`periods chosen` line, the JSON of `PeriodsChosen`
-(`backend/idhazh/contracts/gardener_events.py`). Steps 1, 2, 3 and 5 still read
-the fixed window the planner names for each task
+**The month and day steps choose their own periods; the other steps do not
+yet.** Before any step runs, the pass chooses the months step 4 may close and
+the days step 5 may pack from the ledger's own marks and the wake's UTC day,
+and logs the choice once as one `periods chosen` line, the JSON of
+`PeriodsChosen` (`backend/idhazh/contracts/gardener_events.py`). Steps 1, 2 and
+3 still read the fixed window the planner names for each task
 ([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
 
 **Drops first and days last, because no pass may write a path it deletes.** A
@@ -145,11 +145,22 @@ section 2).
 ## A day
 
 **A day is due once `compact_after_days` whole days have passed since it
-ended.** At one, a wake on the 25th takes the days up to the 23rd.
-Days go in order, each on its own, at most `max_periods_per_run` a pass. For each
-one the pass reads every raw file of the day and settles the rows: one file's
-rows per work unit - the last file of its highest attempt - then the first row
-of each key. It writes the day's day file and no raw listing.
+ended.** At one, a wake on the 25th takes the days up to the 23rd, so the 23rd
+is the newest due day.
+
+**The day step chooses which days it packs.** It starts at the day after the
+daily mark and takes the days up to the earlier of the mark plus
+`max_periods_per_run` and the newest due day. With a mark of 16 September, a
+cap of 8 and a wake on 4 October, that is 17 to 24 September, and the next wake
+starts at the 25th. An operator range limits the days the way it limits the
+months ([A month](#a-month)). The step names what it reads of its days - each
+day's raw folder and its day file - and the shard lists them from its commit
+then ([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
+
+Days go in order, each on its own. For each one the pass reads every raw file of
+the day and settles the rows: one file's rows per work unit - the last file of
+its highest attempt - then the first row of each key. It writes the day's day
+file and no raw listing.
 After all stages decide their files, the pass writes each final index once,
 in yearly, monthly, daily order; deletes source files; then writes each changed
 watermark once, last. Monthly absorption and new days share one final daily
@@ -162,13 +173,17 @@ The bounded fixture measurement is
 
 **A watermark records what the data covers, never when a job ran.** It names
 the newest day taken, so a lost watermark write costs repeated work and never a
-skipped day: the next wake finds the mark behind and takes those days again,
-from their indexed day files and any raw files still there.
+skipped day: the next wake finds the mark behind, keeps each day the index
+already names that no raw file holds, moves the mark past it, and takes again a
+day whose raw files are still there.
 
-**A quiet day still gets a file.** A day with no raw files gets a day file with
-no rows and an index entry. So the newest day `index/daily.json` names is always
-the watermark's day, and a reader can tell a quiet day from a missing one
-without opening the watermark.
+**A day with no row is an entry with no file.** A day with no raw files gets an
+`empty` entry in `index/daily.json` and no day file. So the newest day the index
+names is still the watermark's day, and a reader tells a quiet day from a
+missing one without opening anything. Before a day is recorded with no file, its
+own day file at its path is adopted, as a month adopts one
+([A month](#a-month)): an index restored from an older commit can lose a day
+whose file is still there, and recording it empty would lose its rows.
 
 **A day that cannot be read whole is not taken.** A file that is not a ledger
 file, or that this build cannot read, stops its day, and so does a day holding
@@ -178,16 +193,27 @@ exits 1. Every step the pass took before that day still lands.
 
 **A re-run that lands after its day was compacted replaces its first attempt.**
 GitHub lets a failed job run again for 30 days, and the re-run writes into the
-day its run first wrote. A day at or below the watermark that has raw files
-again is taken again, and before the new days: its day file is rebuilt from its
-own rows and the new raw files, settled once. A compact row keeps the identity
-its raw file gave it, which is what lets attempt 2 replace attempt 1 even when it
-filed fewer rows. The watermark does not move back.
+day its run first wrote. So the day step also names the raw folders of each
+packed day from 30 days before the wake to the mark. A packed day that has raw
+files again is taken again, before the new days and against the same cap: its
+day file is rebuilt from its own rows and the new raw files, settled once. A day
+recorded `empty` or `lost` has no file, so it is rebuilt from its raw files
+alone. A compact row keeps the identity its raw file gave it, which is what lets
+attempt 2 replace attempt 1 even when it filed fewer rows. The watermark does
+not move back. **A raw day at or below the mark is taken again however old it
+is**, in any month not yet closed: the month step holds such a month until the
+day is packed ([A month](#a-month)), so leaving it would hold the month for
+ever.
 
-**The first pass starts on the first of a month**: the month of the older of the
-oldest raw day and the newest due day, or the oldest month the monthly window
-keeps if that is later. So every month the daily index holds is whole, and the
-check a month makes for a missing day is exact.
+**A first pass starts at the oldest raw day, never on the 1st of its month.** It
+looks for that day in the raw folders of the month that holds the newest due
+day and the `lookback` months before it, or in an operator range's months.
+While month deletes are live it starts no earlier than the keep line, the
+oldest month the monthly window keeps. With no raw day there, it packs nothing
+and writes nothing. A daily index with no watermark beside it, which a pass cut
+before its watermark landed leaves, starts it at the index's oldest day when
+that is older. A month the ledger began inside is counted from the ledger's
+first day ([A month](#a-month)), so no day before the first is called missing.
 
 ## A month
 
@@ -352,7 +378,7 @@ compaction live is the list the live pass carries out.
 it `true`, steps 1 and 2 name every month file past the window and every raw
 file of a day in a month past it, and keep them; steps 3 to 5 then pack those
 days and months like any other, as if the window kept every month, so a first
-pass does not start at the oldest month the window keeps. `dry_run` still
+pass may start before the keep line. `dry_run` still
 decides whether anything lands, so a dry run with the window reporting names
 what that live pass would do. With it `false`, a pass drops what the window no
 longer keeps, as above.
@@ -450,12 +476,6 @@ ledger that packs no year still carries an empty `yearly.json`. **No
 field in `daily.json` names the other indexes**: it would change a stored shape
 to say what an empty file already says.
 
-**2026-09-28: a first pass starts on the first of a month.** The start asks the
-same function the window drops months by, `first_kept_month`, so a first pass
-never takes a day the same pass would drop; while the window only reports,
-nothing is dropped, and the first pass starts without regard to the window
-(Carmack and Fowler).
-
 **2026-10-04: the month step chooses its own months, and recovers a missing day
 instead of stopping.** Every compaction step used to read one window, built for
 the step that drops old months, so the month step offered months from before
@@ -470,6 +490,29 @@ lost. The person's ruling, 2026-10-04 (recovery theme), on Fowler's design.
 | 1 | Fill a ledger's first month from the 1st with zero-row days | Files that say nothing, which the owner ruled waste | Up to 30 files a ledger, once |
 | 2 | Keep failing with `day-missing` and ask a person to restore the day | A red run and manual work for a gap the gardener can record | Nothing to build; a red run per hole |
 | 3 | The planner reads the marks and names every path a step will read | The step rules in two places, and one ledger's fault fails the whole shard | A second pass over the marks |
+
+**2026-10-04: the day step chooses its own days, a first pass starts at its
+oldest raw day, and a day with no row has no file.** The day step read the same
+window, so on a ledger whose window keeps a year or more it was offered only
+months long past and packed no new day. Now it starts after its own mark, up to
+the cap or the newest due day, and names the raw folders it reads. A first
+pass started on the 1st of its month so that every month the daily index held
+was whole; a month now counts its days from the ledger's first day, so that
+fill bought only files that say nothing. The re-run span is 30 days because
+GitHub allows a re-run for 30 days (`GITHUB_RERUN_DAYS`), and `lookback` now
+means how many months a first pass looks back for its oldest raw day. A first
+pass still starts no earlier than the keep line while month deletes are live,
+asking the same `first_kept_month` the drops ask, so it never takes a day the
+same pass would drop. A daily index with no watermark starts a first pass at
+its oldest day, and an indexed day no raw file holds keeps its entry while the
+mark moves past it: re-packing it would turn a lost day into an empty one, a
+false claim. The person's rulings, 2026-10-04, on Fowler's design.
+
+| # | Option | Why rejected | What it would cost to take |
+| --- | --- | --- | --- |
+| 1 | New days limited to the months of the planner's window | It stopped every compaction from packing new days | Nothing to build; no new day packed |
+| 2 | A zero-row day file for each quiet day | Files that say nothing, which the owner ruled waste | About 5 KB a day |
+| 3 | Take again only the days inside the 30-day re-run span | A month held for an older day's raw files would never close | Nothing to build; a month that waits for ever |
 
 **2026-10-04: a range never makes the month step skip a month, and a month's
 own file is never written over.** An operator range that starts after a month

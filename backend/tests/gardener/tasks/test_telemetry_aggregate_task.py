@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pytest
 from conftest import seed_item_health
@@ -78,6 +78,7 @@ def pruned(
         if aggregate_months is None
         else {"unit": "months", "value": aggregate_months}
     )
+    knobs: dict[str, Any] = {} if lookback is None else {"lookback": lookback}
     outcome = run_task(
         NAME,
         state.parent,
@@ -86,7 +87,7 @@ def pruned(
         window=full,
         series={"full-grain": full, "public-copy": full, "aggregate": aggregate},
         period_range=period_range,
-        **({"lookback": lookback} if lookback is not None else {}),
+        **knobs,
     )
     copies = f"{public_telemetry.DEFAULT_PUBLIC_ROOT.relative_to(config.REPO_ROOT).as_posix()}/"
     summaries = f"{ledger.tree_relpath(LedgerName.ITEM_HEALTH_SUMMARY)}/"

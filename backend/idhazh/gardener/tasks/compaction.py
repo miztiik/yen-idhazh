@@ -10,14 +10,17 @@ shard lands all of them in one commit:
 3. every year that is done is packed into its year file, where the declaration
    sets `monthly_keep_days`;
 4. every month chosen for this wake is closed into its month file;
-5. every raw day that is due is taken into its daily file.
+5. every day chosen for this wake is packed into its day file, after each packed
+   day that holds raw files again.
 
-**Each step chooses its own periods.** The months step 4 closes are chosen
-before any step runs, from the ledger's own marks and the wake's day
-(`_compaction_periods`), and logged once as `PeriodsChosen`; an operator range,
-or the months a migration names, limits that choice, and the window the
-planner named for the other steps does not. Steps 1, 2, 3 and 5 still read the
-window the planner named.
+**Each step chooses its own periods, or is moving to.** The months step 4
+closes and the days step 5 packs are chosen before any step runs, from the
+ledger's own marks and the wake's day (`_compaction_periods`), and logged once
+as `PeriodsChosen`; an operator range, or the months a migration names, limits
+that choice, and the window the planner named for the other steps does not. A
+day step with no mark first has the months it looks back over named, because
+its first day is a raw day. Steps 1, 2 and 3 still read the window the planner
+named.
 
 **The monthly window has a switch of its own.** Steps 3 to 5 delete only files
 whose rows they have just written into a coarser file; the window's drops in
@@ -67,8 +70,9 @@ KIND = TaskKind.COMPACTION
 def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     """Drop, or only name, what the window no longer keeps; pack years and months; take days.
 
-    `months` are the months a migration names. Every step reads only those,
-    and the month step closes nothing outside the first to the last of them.
+    `months` are the months a migration names. The drop steps read only those,
+    and the month and day steps take nothing outside the first to the last of
+    them.
     """
     import logging
     from datetime import UTC, datetime, time
@@ -78,7 +82,6 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     from idhazh.contracts.collection_prune import StopReason
     from idhazh.contracts.file_envelope import WriterIdentity
     from idhazh.contracts.knobs.gardener import CompactionPolicy
-    from idhazh.gardener import schedule
     from idhazh.gardener.tasks import (
         _compaction_periods,
         _daily_period,
@@ -104,6 +107,9 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     if months is None and context.period_range is not None:
         months = frozenset(month_partition.months_between(*context.period_range))
     tree = CompactTree.read(context.state_dir, policy.ledger, context.listing, months=months)
+    tree.name_raw_months(
+        _compaction_periods.first_run_months(tree, policy, now=now, operator_range=operator_range)
+    )
     chosen = _compaction_periods.choose(tree, policy, now=now, operator_range=operator_range)
     logging.getLogger(__name__).info(
         "periods chosen %s", chosen.model_dump_json(exclude_none=True)
@@ -117,12 +123,7 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
         *_yearly_period.absorb(tree, policy, now=now, stamp=stamp, identity=identity),
         *_monthly_period.absorb(tree, chosen.months, stamp=stamp, identity=identity),
         *_daily_period.compact(
-            tree,
-            policy,
-            now=now,
-            stamp=stamp,
-            identity=identity,
-            first_kept=None if reports else first_kept,
+            tree, policy, chosen.days, rerun_span=chosen.rerun_span, stamp=stamp, identity=identity
         ),
     )
     tree.finish()
@@ -139,7 +140,7 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     )
     if context.period_range is None:
         date_range = None
-        until = schedule.newest_eligible(now=now, after_days=policy.compact_after_days).isoformat()
+        until = chosen.newest_eligible_day
     else:
         date_range = month_partition.day_bounds(*context.period_range)
         until = date_range[1]
