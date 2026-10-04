@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-04
 
-The Records page borrowed only the parts of the reference workbench that fit this console's data, trust boundary and visual system.
+The Data explorer page borrowed only the parts of the reference workbench that fit this console's data, trust boundary and visual system.
 
 ## What it kept
 
@@ -21,7 +21,7 @@ The Records page borrowed only the parts of the reference workbench that fit thi
 | Feature | Result | Reason |
 | --- | --- | --- |
 | Separate icon rail and breadcrumb | Refused | The console already owns navigation in the route strip and panel frame. |
-| Decorative query-engine metrics | Refused | A number on Records is a reading from this run or it is not printed. |
+| Decorative query-engine metrics | Refused | A number on Data explorer is a reading from this run or it is not printed. |
 | Green and red value badges | Refused | A verdict needs a rule, and this page does not know which ledger values are good or bad. |
 | Google Material Symbols font | Refused | The repository already has a committed Lucide-derived icon system and a two-way icon test. |
 | File download | Refused | Copy as JSON and Copy as table cover the useful handoff without opening spreadsheet formula risk. |
@@ -35,4 +35,4 @@ The Records page borrowed only the parts of the reference workbench that fit thi
 ## See also
 
 - [Design system](../design-system.md)
-- [Query a ledger from the Records console](../../how-to/query-a-ledger-from-the-console.md)
+- [Query a ledger from the Data explorer console](../../how-to/query-a-ledger-from-the-console.md)

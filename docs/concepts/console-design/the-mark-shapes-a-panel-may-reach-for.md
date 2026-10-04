@@ -70,7 +70,7 @@ Five rules hold every type.
 
 ## When nobody wrote the panel, the columns choose the shape
 
-The Records page draws an answer whose question was typed by the operator, so no
+The Data explorer page draws an answer whose question was typed by the operator, so no
 panel author can name the right chart in advance. It chooses from the columns,
 in this order, and lets the operator switch only among shapes that still tell a
 true story about those columns.

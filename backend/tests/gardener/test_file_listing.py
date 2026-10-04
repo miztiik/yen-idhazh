@@ -1,12 +1,15 @@
 """Does a listing answer only for what it was given, weigh each file, and refuse to read an absent one?
 
 A task learns what its folders hold from a `FileListing`, never from the disk.
-These tests pin the four promises that makes: a folder the task did not declare
-is refused rather than read as empty; a path under a declared folder that no
-step named is refused rather than answered "not held"; a declared folder the
-commit does not hold answers empty; and a file the commit holds is never taken
-for a missing member - after the checkout is widened for it, it is on disk or
-the read fails.
+These tests pin the promises that makes: a folder the task did not declare is
+refused rather than read as empty; a path under a declared folder that no step
+named is refused rather than answered "not held"; `files_under` answers for all
+of a folder a step named or refuses, never for the named part of a folder read
+as the whole; a step that names a period as it runs is answered for it, and
+never handed back a file an earlier task deleted; a declared folder the commit
+does not hold answers empty; and a file the commit holds is never taken for a
+missing member - after the checkout is widened for it, it is on disk or the
+read fails.
 """
 
 from __future__ import annotations
@@ -62,8 +65,8 @@ def test_a_listing_read_off_the_disk_names_every_file_with_its_size(tmp_path: Pa
         "state/days/2026/09/01.csv",
         "state/days/2026/09/02.csv",
     ]
-    assert listing.paths_under(tmp_path / "state" / "traces") == [
-        tmp_path / "state/traces/2026/09/01/0001-0.jsonl"
+    assert listing.files_under(tmp_path / "state" / "traces") == [
+        "state/traces/2026/09/01/0001-0.jsonl"
     ]
     assert listing.size_of(tmp_path / "state/days/2026/09/02.csv") == 2
     assert listing.downloaded() is None, "nothing was downloaded to read the disk"
@@ -74,7 +77,7 @@ def test_named_paths_ignore_unlisted_neighbours(tmp_path: Path) -> None:
     named = root / "state/days/2026/09/01.csv"
     listing = FileListing.from_paths(root, [named], folders=["state/days"])
     assert dict(listing.sizes) == {"state/days/2026/09/01.csv": 1}
-    assert listing.paths_under(root / "state/days") == [named]
+    assert listing.named_files(root / "state/days") == ["state/days/2026/09/01.csv"]
     with pytest.raises(ValueError, match="outside"):
         FileListing.from_paths(root, [root / "state/other/x.csv"], folders=["state/days"])
 
@@ -120,6 +123,95 @@ def test_a_named_period_answers_for_every_file_in_it_and_a_period_beside_it_is_r
         r"The nearest path a step named is state/traces/2026/09/01\. ",
     ):
         listing.fetch(["state/traces/2026/09/02"])
+
+
+def test_files_under_a_folder_no_step_named_is_refused_by_name_as_holds_is(
+    tmp_path: Path,
+) -> None:
+    """The listing saw one named file of the folder, so every file under it would be a guess."""
+    root = a_checkout(tmp_path)
+    listing = FileListing.from_paths(
+        root, [root / "state/days/2026/09/01.csv"], folders=["state/days"]
+    )
+
+    for folder in ("state/days", "state/days/2026/10"):
+        with pytest.raises(PathNotNamedError) as refused:
+            listing.files_under(folder)
+        said = str(refused.value)
+        assert said.startswith(f"{folder} is not a path a step named, nor inside one"), said
+        assert "The nearest path a step named is state/days/2026/09/01.csv" in said, said
+        assert not isinstance(refused.value, ValueError), "a handler of bad data would skip it"
+    with pytest.raises(PathNotNamedError):
+        listing.holds("state/days/2026/09/02.csv")
+
+
+def test_a_named_folder_answers_whole_and_named_files_walks_only_the_named_periods(
+    tmp_path: Path,
+) -> None:
+    root = a_checkout(tmp_path)
+    (root / "state/traces/2026/09/02").mkdir(parents=True)
+    (root / "state/traces/2026/09/02/0002-0.jsonl").write_text("e", encoding="ascii")
+    listing = FileListing.from_disk(
+        root, ["state/traces"], paths=[root / "state/traces/2026/09/01"]
+    )
+
+    assert listing.files_under("state/traces/2026/09/01") == [
+        "state/traces/2026/09/01/0001-0.jsonl"
+    ]
+    assert listing.named_files("state/traces") == ["state/traces/2026/09/01/0001-0.jsonl"], (
+        "the walk covers the named day and says nothing of the day beside it"
+    )
+    with pytest.raises(PathNotNamedError):
+        listing.files_under("state/traces")
+
+
+def test_a_step_names_a_period_as_it_runs_and_is_answered_for_it(tmp_path: Path) -> None:
+    """The listing a task was handed did not name October; the task names it, and only then reads it."""
+    root = a_checkout(tmp_path)
+    (root / "state/days/2026/10").mkdir(parents=True)
+    (root / "state/days/2026/10/01.csv").write_text("eeeee", encoding="ascii")
+    listing = FileListing.from_disk(root, ["state/days"], paths=[root / "state/days/2026/09"])
+
+    named = listing.name(["state/days/2026/10", root / "state/days/2026/09/01.csv"])
+
+    assert named.files_under("state/days/2026/10") == ["state/days/2026/10/01.csv"]
+    assert named.size_of("state/days/2026/10/01.csv") == 5
+    assert named.name(["state/days/2026/10/01.csv"]) is named, "a named path is not listed again"
+    with pytest.raises(PathNotNamedError):
+        listing.holds("state/days/2026/10/01.csv")
+    assert listing.listed() == named.listed() == {
+        "state/days/2026/09/01.csv",
+        "state/days/2026/09/02.csv",
+        "state/days/2026/10/01.csv",
+    }
+    with pytest.raises(ValueError, match="owns or reads"):
+        named.name(["state/other"])
+
+
+def test_a_later_naming_never_hands_back_a_file_an_earlier_task_deleted(tmp_path: Path) -> None:
+    """The file is still on disk, so a second walk of October would list it again."""
+    root = a_checkout(tmp_path)
+    (root / "state/days/2026/10").mkdir(parents=True)
+    (root / "state/days/2026/10/01.csv").write_text("eeeee", encoding="ascii")
+    shard = FileListing.from_disk(root, ["state/days"], paths=[root / "state/days/2026/09"])
+    shard.within(["state/days"]).name(["state/days/2026/10"])
+
+    later = shard.settled(written=[], deleted=["state/days/2026/10/01.csv"])
+
+    assert later.answers_for("state/days/2026/10"), "the earlier task's naming was taken in"
+    assert later.name(["state/days/2026/10"]) is later
+    assert not later.holds("state/days/2026/10/01.csv")
+    assert "state/days/2026/10/01.csv" in shard.listed(), "the shard still listed it, once"
+
+
+def test_a_listing_built_from_named_files_alone_cannot_name_more(tmp_path: Path) -> None:
+    root = a_checkout(tmp_path)
+    listing = FileListing.from_paths(
+        root, [root / "state/days/2026/09/01.csv"], folders=["state/days"]
+    )
+
+    with pytest.raises(ValueError, match=r"^state/days/2026/10 cannot be named now"):
+        listing.name(["state/days/2026/10"])
 
 
 def test_a_commit_listing_answers_for_the_paths_git_was_asked_about(tmp_path: Path) -> None:

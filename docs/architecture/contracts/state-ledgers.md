@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -26,8 +26,19 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this address gone for good? One file per writer, under the day the address was retired | raw and compact | the whole tree |
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
+| `state/raw/run-plan/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What plan did the day hand to its later stages? One row per plan execution | raw and compact | the named UTC day |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
+
+The run-plan ledger is how a plan reaches the stages after it. The plan stage
+files one row per run through the ledger door. In the daily workflow the plan
+job hands that day's folder of plans to the work and assemble jobs as the
+`plan` artifact, because each of them checks out the commit its run started
+from, which is older than the plan. Every later step names its run with
+`--execution` and reads that run's plan: two runs of one day can overlap, so
+the newest plan of the day can be the other run's. Without `--execution` a
+stage reads the newest plan of the day, which is right only where one process
+planned alone, as `idhazh run` does.
 
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
@@ -70,6 +81,10 @@ A cleanup row is written on every run, including the runs where the policy is sw
 No reader fails on a missing file. A fresh clone has no history, and a run with no history is a run where nothing was seen, nothing was published and no feed has a record yet - which is exactly what an empty result says.
 
 Callers pass the state directory and never the file name. The layout is one fact, and it lives in `config/ledgers.json`, which [ledger-registry.md](ledger-registry.md) explains.
+
+## Design rationale
+
+**A plan has one home, and every step after the plan names the run whose plan it reads.** Owner decision, 2026-10-04. Until that day the plan job wrote `backend/var/run/<date>/plan.json` and handed it to the later jobs as the `plan` artifact. The plan then moved into the run-plan ledger, but the workflow still uploaded the old file, so every daily run from 18:12 UTC that day failed in the plan job. Two repairs were weighed. Writing `plan.json` again beside the ledger row was the smaller change, and it kept two copies of every plan. The ledger was made the only copy instead: the artifact carries the ledger's folder for the day, so a plan whose push lost a race still reaches the workers, and `--execution` keeps a step from reading another run's plan out of that folder or out of a newer tip. The bench cuts its plan by filing the cut under the plan stage's own writer, which a read takes as the newer file. The pipeline-tests rig draws its plan in one job and runs it under one trial folder per test case, so the draw travels as a plan file and each runner files it into its own folder before any stage reads it.
 
 ## See also
 

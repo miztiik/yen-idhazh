@@ -1,14 +1,16 @@
-"""Where do a ledger's marks sit, what does a pass read from them, and which ones stop it?
+"""Where do a ledger's marks sit, what does a pass read from them, and what does it adopt?
 
 A ledger's marks are its three compact indexes and its three watermarks.
 `name_marks` is the one place their paths come from, so the listing a task is
-given and the pass that reads it cannot disagree. Each test writes the marks
-under `tmp_path` as a compaction writes them and reads them through a real
-`FileListing`; nothing reads the committed `state/` (CLAUDE.md section 13).
+given and the pass that reads it cannot disagree. `adopt` is the one place a
+packed file no entry names becomes an entry again. Each test writes the marks
+and files under `tmp_path` as a compaction writes them and reads them through a
+real `FileListing`; nothing reads the committed `state/` (CLAUDE.md section 13).
 """
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
@@ -18,12 +20,14 @@ import pytest
 from conftest import CONFIG_DIR, read_text
 
 from idhazh import ledger
-from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener.file_listing import FileListing, FileNotFetchedError, TreeEntry
-from idhazh.gardener.ledger_marks import name_marks, read_marks
+from idhazh.gardener.ledger_marks import adopt, name_marks, read_marks
 from idhazh.gardener.period_inputs import paths_for_task
 
 pytestmark = pytest.mark.contract
@@ -223,3 +227,84 @@ def test_the_marks_are_fetched_in_one_widening_and_no_packed_file_comes_with_the
             f"{COMPACT}/yearly/watermark.json",
         ]
     ]
+
+
+# --- a packed file no entry names ---------------------------------------------------
+
+
+def a_packed_day(root: Path, day: str, *, rows: int) -> Path:
+    """One day's packed file, as a compaction writes it, holding `rows` rows filed through the door."""
+    identity = WriterIdentity(
+        run_id=f"{day}-1",
+        attempt=1,
+        job=ServerJob.RUN_TASKS,
+        shard=0,
+        producer="gardener.tasks.visual_prune",
+        git_sha="a" * 40,
+    )
+    filed = [
+        VisualPruneRow(
+            version=VisualPruneRow.schema_version(),
+            date=day,
+            run_id=f"{day}-{number}",
+            policy_months=-1,
+            max_deletes_per_run=200,
+            dry_run=True,
+            candidates_found=0,
+            deleted=0,
+            skipped_by_fuse=0,
+            fuse_tripped=False,
+            bytes_reclaimed=0,
+            oldest_kept=None,
+            payload_bytes_before=number,
+            payload_bytes_after=number,
+        )
+        for number in range(1, rows + 1)
+    ]
+    raw = ledger.persist(
+        root / "scratch" / ledger.STATE_DIRNAME, filed, ledger=WHICH, covers=day, identity=identity
+    )
+    return ledger.persist_period(
+        state(root),
+        ledger.load_stored(raw, model=VisualPruneRow),
+        model=VisualPruneRow,
+        ledger=WHICH,
+        period=Period.DAILY,
+        covers=day,
+        identity=identity,
+        built_from=len(raw),
+    )
+
+
+def test_a_packed_file_no_entry_names_is_adopted_with_its_footer_s_rows_and_its_listed_size(
+    tmp_path: Path,
+) -> None:
+    written = a_packed_day(tmp_path, "2026-09-25", rows=2)
+
+    held = adopt(listed(tmp_path), state(tmp_path), WHICH, Period.DAILY, "2026-09-25")
+
+    assert held is not None
+    assert held.path == written
+    assert held.entry == CompactEntry(covers="2026-09-25", rows=2, bytes=written.stat().st_size)
+
+
+def test_a_period_with_no_file_at_its_path_adopts_nothing(tmp_path: Path) -> None:
+    a_packed_day(tmp_path, "2026-09-25", rows=1)
+
+    assert adopt(listed(tmp_path), state(tmp_path), WHICH, Period.DAILY, "2026-09-24") is None
+
+
+def test_a_file_whose_envelope_names_another_day_is_refused_and_never_adopted(
+    tmp_path: Path,
+) -> None:
+    """Adopted, it would put the 25th's rows under the 26th."""
+    written = a_packed_day(tmp_path, "2026-09-25", rows=1)
+    shutil.copyfile(written, written.with_name("26.parquet"))
+
+    with pytest.raises(ValueError) as refused:
+        adopt(listed(tmp_path), state(tmp_path), WHICH, Period.DAILY, "2026-09-26")
+
+    assert str(refused.value) == (
+        "26.parquet sits where the visual-prunes daily file for 2026-09-26 goes, and its "
+        "envelope says compact visual-prunes daily 2026-09-25, so it is not adopted"
+    )

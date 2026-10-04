@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** Copies the Records answer as JSON or as a Markdown table. */
+	/** Copies the Data explorer answer as JSON or as a Markdown table. */
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { Column, Row } from '$lib/data/ledger';
 	import { printCell } from './answer';

@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
-import { COMPACT_INDEX_STAMP, type Period } from '../src/lib/data/compact-index';
+import { COMPACT_INDEX_STAMP, type CompactEntry, type Period } from '../src/lib/data/compact-index';
 import { nodeEngine } from '../src/lib/data/engine';
 import { dataPath, indexPath } from '../src/lib/data/slice-reader';
 import type { SliceOptions, SliceResult } from '../src/lib/data/slice-shapes';
@@ -30,7 +30,8 @@ import { addonCache, startRangeHost, type HostRequest, type RangeHost, type Thro
  * before any of it is read; and a year file whose ETag changed while the browser
  * kept some of it is still read by range, because each read asks at an address no
  * earlier read used, so no request names the ETag the browser kept. Day files
- * stay fetched whole.
+ * stay fetched whole, and a day the index records `empty` or `lost` is never
+ * asked of the host at all.
  *
  * The host serves the page, the fixture and the engine's parquet add-on from
  * 127.0.0.1, so the browser reaches no other host. The add-on is the one the
@@ -84,6 +85,25 @@ function copied(from: string, name: string): string {
 	rmSync(to, { recursive: true, force: true });
 	cpSync(from, to, { recursive: true });
 	return to;
+}
+
+/** A copy of the day fixture as the packing now writes it: the zero-row day recorded
+ *  `empty` and the hole recorded `lost`, and neither with a file on the host. */
+function copiedWithNoFile(name: string): string {
+	const root = copied(STATE, name);
+	const daily = path.join(root, ...indexPath(LEDGER, 'daily').split('/'));
+	const index = JSON.parse(readFileSync(daily, 'utf8')) as { entries: CompactEntry[] };
+	const entries = index.entries.flatMap((entry): CompactEntry[] =>
+		entry.covers === '2026-09-03'
+			? [
+					{ covers: '2026-09-03', rows: 0, bytes: 0, state: 'empty' },
+					{ covers: '2026-09-04', rows: 0, bytes: 0, state: 'lost' }
+				]
+			: [entry]
+	);
+	writeFileSync(daily, JSON.stringify({ ...index, version: COMPACT_INDEX_STAMP, entries }));
+	rmSync(path.join(root, ...dataPath(LEDGER, 'daily', '2026-09-03').split('/')));
+	return root;
 }
 
 async function openDoor(page: Page, host: RangeHost): Promise<void> {
@@ -161,6 +181,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 	let servedYear: string;
 	let servedFresh: string;
 	let servedReopened: string;
+	let servedWithNoFile: string;
 
 	test.beforeAll(async ({}, testInfo) => {
 		testInfo.setTimeout(180_000);
@@ -171,6 +192,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 		servedYear = copied(YEAR_STATE, 'year-state');
 		servedFresh = copied(YEAR_STATE, 'fresh-state');
 		servedReopened = copied(YEAR_STATE, 'reopened-state');
+		servedWithNoFile = copiedWithNoFile('no-file-state');
 		const longer = copied(YEAR_STATE, 'longer-entry');
 		const yearly = path.join(longer, ...indexPath(LEDGER, 'yearly').split('/'));
 		const index = JSON.parse(readFileSync(yearly, 'utf8')) as { entries: { bytes: number }[] };
@@ -184,7 +206,8 @@ test.describe('a year file read by byte range, in a browser', () => {
 				fresh: { dir: servedFresh },
 				reopened: { dir: servedReopened },
 				days: { dir: STATE },
-				longer: { dir: longer }
+				longer: { dir: longer },
+				lost: { dir: servedWithNoFile }
 			},
 			maxAge: PAGES_MAX_AGE
 		});
@@ -244,6 +267,22 @@ test.describe('a year file read by byte range, in a browser', () => {
 		expect(files).toEqual([
 			[dataPath(LEDGER, 'daily', '2026-09-01'), 'GET', null, 200],
 			[dataPath(LEDGER, 'daily', '2026-09-02'), 'GET', null, 200]
+		]);
+	});
+
+	test('a span across an empty and a lost day reads the other days, names the lost one, and asks for neither file', async ({ page }) => {
+		const span: SliceOptions = { columns: COLUMNS, from: '2026-09-01', to: '2026-09-05' };
+		const fromDisk = await sliceFromDisk(servedWithNoFile, LEDGER, span);
+		expect(fromDisk).toMatchObject({ state: 'ok', through: '2026-09-05', lostDays: ['2026-09-04'] });
+		await openDoor(page, host);
+		const { timed, asked } = await sliceOn(page, host, 'lost', span);
+		expect(timed.result, timed.warned.join('\n')).toEqual(fromDisk);
+		expect(timed.warned).toEqual([]);
+		expect(asked.filter((one) => one.status === 404)).toEqual([]);
+		expect(asked.filter((one) => one.path.endsWith('.parquet')).map((one) => one.path).sort()).toEqual([
+			dataPath(LEDGER, 'daily', '2026-09-01'),
+			dataPath(LEDGER, 'daily', '2026-09-02'),
+			dataPath(LEDGER, 'daily', '2026-09-05')
 		]);
 	});
 

@@ -13,6 +13,12 @@ of them, so each is a contract with its own stem and changelog:
 Each is written whole, never appended to. `CompactEntry` is one line of a
 `CompactIndex` and has no file of its own, so it is a `Model`.
 
+**An entry says whether its period has a file.** A `packed` period has one. An
+`empty` period held no row and a `lost` day lost its rows, so neither has a
+file, and a lost day inside a closed month or year is listed on that period's
+entry. A reader then tells a quiet day from a lost one, and a lost one from a
+hole, without opening a file.
+
 **A day, a month and a year are told apart by shape, and one function decides
 the shape.** A `PeriodStamp` holds any of them, so without a check a daily index
 could list a month and a daily watermark could stand on one. `covers_fits` in
@@ -27,6 +33,8 @@ Every day, month and year here is a UTC one, and every instant is UTC
 from __future__ import annotations
 
 from collections import Counter
+from datetime import date
+from enum import StrEnum
 from itertools import pairwise
 from typing import ClassVar, Final, Self
 
@@ -66,6 +74,15 @@ def _first_descent(values: list[str]) -> tuple[str, str] | None:
         if before >= after:
             return before, after
     return None
+
+
+def _a_day_of(day: str, covers: str) -> bool:
+    """Whether `day` is a real UTC day inside the month or the year `covers` names."""
+    try:
+        date.fromisoformat(day)
+    except ValueError:
+        return False
+    return day.startswith(f"{covers}-")
 
 
 class RawDayIndex(Contract):
@@ -163,8 +180,20 @@ class RawDayIndex(Contract):
         return self
 
 
+class EntryState(StrEnum):
+    """Whether one period named in a `CompactIndex` has a file, and why not when it has none."""
+
+    #: The period's rows are in its file, which `rows` and `bytes` describe.
+    PACKED = "packed"
+    #: The period was looked at and held no row, so no file was written for it.
+    EMPTY = "empty"
+    #: The day's rows could not be recovered, so it has no file and no record. Only a
+    #: day is lost: a month or a year lists the days it lost in `lost_days`.
+    LOST = "lost"
+
+
 class CompactEntry(Model):
-    """One compact file named in a `CompactIndex`: what it covers, its rows, its size."""
+    """One period of a `CompactIndex`: what it covers, whether it has a file, its rows and size."""
 
     covers: PeriodStamp = Field(
         description=(
@@ -174,15 +203,48 @@ class CompactEntry(Model):
     )
     rows: int = Field(
         ge=0,
-        description="How many rows the file holds after settling: one row per record key.",
+        description=(
+            "How many rows the file holds after settling: one row per record key. 0 for an "
+            "entry with no file."
+        ),
     )
     bytes: int = Field(
         ge=0,
         description=(
             "The file's size in bytes, so a reader can check `Content-Length` before it "
-            "parses anything."
+            "parses anything. 0 for an entry with no file."
         ),
     )
+    state: EntryState = Field(
+        default=EntryState.PACKED,
+        description=(
+            "`packed`: the period's rows are in its file. `empty`: the period held no row, "
+            "and no file was written. `lost`: the day's rows could not be recovered, so it "
+            "has no file and no record; only a daily entry is `lost`. An index written "
+            "before entries had a state reads as all `packed`."
+        ),
+    )
+    lost_days: list[DateStamp] = Field(
+        default_factory=list,
+        description=(
+            "The UTC days inside a month or a year whose rows were recorded lost, ascending "
+            "and none twice. A reader shows each as a day with no record, never as a day with "
+            "no rows. Empty on a daily entry, where a lost day is an entry of its own."
+        ),
+    )
+    set_aside: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "How many files were moved aside unread while this period was packed, because "
+            "they could not be read or were too large. The period holds every other row."
+        ),
+    )
+
+    @property
+    def names_file(self) -> bool:
+        """Whether the period has a file to read: only a `packed` one does."""
+        return self.state is EntryState.PACKED
 
 
 class CompactIndex(Contract):
@@ -190,11 +252,17 @@ class CompactIndex(Contract):
 
     Sufficient on its own: a date is in yearly, or in monthly, or in daily, or it
     is not available. The newest daily entry is the newest day compacted, which
-    is how a browser tells a day not yet compacted from a hole.
+    is how a browser tells a day not yet compacted from a hole. An entry whose
+    state is `empty` or `lost` names a period that has no file.
     """
 
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-04",
+            change="Entries gain state, lost_days and set_aside; absent ones read as packed.",
+            why="An empty or lost period is an entry with no file, and the index says which.",
+        ),
         ChangelogEntry(
             version="2026-10-01T16:50",
             change="Remove the retired aggregate from the ledger vocabulary.",
@@ -212,8 +280,8 @@ class CompactIndex(Contract):
         ),
         ChangelogEntry(
             version="2026-09-27",
-            change="Initial shape: the compact files one period of one ledger holds.",
-            why="A reader has to learn which days and months exist without listing a tree.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -226,8 +294,8 @@ class CompactIndex(Contract):
     )
     entries: list[CompactEntry] = Field(
         description=(
-            "One entry per compact file, ascending by what it covers and none twice. "
-            "Every entry covers one period of the kind `period` names."
+            "One entry per period recorded, with a file or without one, ascending by what it "
+            "covers and none twice. Every entry covers one period of the kind `period` names."
         )
     )
 
@@ -235,7 +303,7 @@ class CompactIndex(Contract):
         """One entry a line - see `records_json`.
 
         A reader checks which days exist by scanning the list, and an entry's
-        three fields mean nothing apart. The layout is not part of the shape, so
+        fields mean nothing apart. The layout is not part of the shape, so
         a file in the older layout is still read and is re-laid-out when written.
         """
         return records_json(self.model_dump(mode="json"))
@@ -260,6 +328,42 @@ class CompactIndex(Contract):
                 f"{where} lists its entries out of order: {descent[0]!r} comes before "
                 f"{descent[1]!r}, and what they cover must ascend"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _an_entry_with_no_file_counts_nothing_and_its_lost_days_are_its_own(self) -> Self:
+        """An entry with no file counts nothing, and a lost day is a day its own entry covers."""
+        where = f"the {self.ledger.value} {self.period.value} index"
+        for entry in self.entries:
+            if entry.state is not EntryState.PACKED and (entry.rows or entry.bytes):
+                raise ValueError(
+                    f"{where} marks {entry.covers!r} {entry.state.value} with rows {entry.rows} "
+                    f"and bytes {entry.bytes}, and an entry with no file counts neither"
+                )
+            if entry.state is EntryState.LOST and self.period is not Period.DAILY:
+                raise ValueError(
+                    f"{where} marks {entry.covers!r} lost, and only a day is lost: a month or a "
+                    "year lists the days it lost in lost_days"
+                )
+            if not entry.lost_days:
+                continue
+            if self.period is Period.DAILY:
+                raise ValueError(
+                    f"{where} lists lost_days on {entry.covers!r}, and a lost day is an entry "
+                    "of its own in a daily index"
+                )
+            outside = [day for day in entry.lost_days if not _a_day_of(day, entry.covers)]
+            if outside:
+                raise ValueError(
+                    f"{where} lists {outside} as lost in {entry.covers!r}, and each lost day is "
+                    f"a UTC day {entry.covers!r} covers"
+                )
+            descent = _first_descent(entry.lost_days)
+            if descent is not None:
+                raise ValueError(
+                    f"{where} lists the lost days of {entry.covers!r} out of order: "
+                    f"{descent[0]!r} comes before {descent[1]!r}, and they must ascend, none twice"
+                )
         return self
 
 

@@ -93,6 +93,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       date: ${{ steps.decide.outputs.date }}
+      plan_dir: ${{ steps.decide.outputs.plan_dir }}
       matrix: ${{ steps.fanout.outputs.matrix }}
       candidate_models_file: ${{ steps.candidate.outputs.models_file }}
       candidate_id: ${{ steps.candidate.outputs.id }}
@@ -111,8 +112,14 @@ jobs:
       - name: Install
         run: pip install -e .
 
+      # The plan is filed under the trial folder the candidate config names
+      # below, so its day's folder there is what the qualify shards are handed.
       - id: decide
-        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%F)
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "plan_dir=state/pipeline-tests/raw/run-plan/${DATE//-//}" >> "$GITHUB_OUTPUT"
 
       # The build every shard is about to install, asked once of the file that
       # decides it. `needs` resolves before a shard's first step and `steps`
@@ -202,13 +209,15 @@ jobs:
           python -m idhazh plan \
             --config backend/var/candidate-config \
             --date "${{ steps.decide.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --commit "${GITHUB_SHA}"
 
       - uses: actions/upload-artifact@v7
         with:
           name: plan
-          path: backend/var/run/${{ steps.decide.outputs.date }}/plan.json
+          path: ${{ steps.decide.outputs.plan_dir }}/
           retention-days: 1
+          if-no-files-found: error
 
   qualify:
     needs: plan
@@ -240,7 +249,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: plan
-          path: backend/var/run/${{ needs.plan.outputs.date }}/
+          path: ${{ needs.plan.outputs.plan_dir }}/
 
       # Why the copy differs in one line and nothing else is written down once,
       # in the action. What it means HERE is the part worth repeating: move that
@@ -354,6 +363,7 @@ jobs:
           python -m idhazh qualify \
             --config backend/var/candidate-config \
             --date "${{ needs.plan.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --shard "${{ matrix.shard }}" \
             --shards "${{ fromJSON(inputs.shards) }}" \
             --corpus-per-shard "${{ fromJSON(inputs.corpus_per_shard) }}" \

@@ -138,6 +138,20 @@ is the conflict resolver; it was being run once against a stale base and then
 thrown at `git merge-file`. A text merge of two digests produces a payload no
 producer would ever write.
 
+**Recovery is bound to a saved run, not only to its UTC day.** `assemble` reads
+the plan of the run `--execution` names, so recovering a saved run names that
+run and leaves any newer plan in the run-plan ledger alone. Without
+`--execution` it reads the newest plan of the day, which may be another run's.
+A run planned before the plan moved into the ledger on 2026-10-04 has no ledger
+row; for it the assembly stage accepts the saved, validated `RunPlan` directly.
+Its item inputs and recorded run ID must belong to that saved plan.
+
+A saved `shard-visuals-*` bundle can also contain `digest.json` and `run.json`
+from the worker's checkout. Those are whole-day output, not chart input. Do not
+restore them over the current day. Restore only the visual data files named by
+validated item decisions; regenerate the day and its run record from the saved
+items and current committed state.
+
 **`DERIVED` names what the rebuild owns, and after 2026-09-22 that is almost
 nothing under `state/`.** It carries the day's `digest.json` and `run.json`, the
 published projections under `frontend/public/`, `state/day-metrics` and the
@@ -213,31 +227,6 @@ state shape an older run can still push, because the rebuild is that code's
 first reader of it (CLAUDE.md section 11). Run 37130643074 failed because a
 reader that refused unmigrated evaluation history reached `main` before its
 migration did.
-
-## Preparation names this attempt's derived files
-
-`PREPARE_COMMAND` and `PREPARED_PATHS_FILE` must be supplied together. They are
-independent of the existing `REFRESH_PATHS` and `REGENERATE_COMMAND` pair.
-Preparation runs before initial staging and again after a rejected push has
-restored the named outputs and rebased. When regeneration is configured, it
-runs before preparation on that retry. Command arguments are space-split and
-cannot contain spaces.
-
-The prepared-path file must be untracked, ignored and inside the checkout.
-Before each call the helper deletes the previous file. The command must write
-a fresh JSON array of literal repository-relative POSIX file paths, including
-deletions and files skipped by preparation. Missing or invalid output stops
-the commit; the helper never reuses a stale list. It rejects directories,
-linked paths, paths outside the checkout and Git metadata paths.
-
-On a rejected push, the helper restores the previous attempt's prepared paths
-alongside any refresh paths before rebasing. It then replaces that list with
-the new preparation result and stages the named files and deletions. A file
-that is both absent and untracked needs no staging. The same rule stages the
-job's own path list, so prepared and named paths go through one `git add`.
-
-No workflow sets these two values: no job has a derived file that only
-preparation can name.
 
 ## A conflicted path is settled by who wrote it, never by which side it came from
 

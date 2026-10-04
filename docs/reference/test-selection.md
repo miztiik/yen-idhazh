@@ -102,6 +102,13 @@ breaks a published page is found on the merge push to `main`, which still runs
 every group. A contract keeps full coverage, because it is the shape both halves
 read.
 
+**A utility that nothing else runs selects only its own test module.** No
+stage, build or workflow imports or runs `backend/utilities/doc_load.py`, so a
+change to it selects `backend/tests/test_doc_load.py` and no browser. The list
+is closed and lives in `UTILITY_TESTS` in `frontend/scripts/test-scope.ts`. A
+utility that something else reaches, such as the canary day's builder, stays
+off it and falls to full coverage.
+
 ## Design rationale
 
 The owner approved removing routine bulk panel captures on 2026-10-03.

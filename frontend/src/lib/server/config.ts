@@ -330,7 +330,10 @@ export interface ExplorerExample {
 	sql: string;
 }
 
+export type ConsoleChrome = 'console' | 'workbench';
+
 export interface ExplorerConfig {
+	chrome: ConsoleChrome;
 	row_page: number;
 	max_rows: number;
 	max_fetch_bytes: number;
@@ -591,10 +594,11 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	context_cut_off_reason: 'length'
 };
 const EXPLORER_DEFAULTS: ExplorerConfig = {
+	chrome: 'workbench',
 	row_page: 50,
 	max_rows: 1000,
 	max_fetch_bytes: 67108864,
-	query_max_chars: 5776,
+	query_max_chars: 5790,
 	reach_days: 365,
 	chart_min_rows: 3,
 	rank_max: 30,
@@ -1092,7 +1096,7 @@ export function engineExtensionRepository(): string {
 	return typeof value === 'string' ? value : '';
 }
 
-/** Where Records reads packed ledgers older than this site carries; empty means site only. */
+/** Where Data explorer reads packed ledgers older than this site carries; empty means site only. */
 export function ledgerArchiveBaseUrl(): string {
 	const value = raw().ledger?.archive_base_url;
 	return typeof value === 'string' ? value : '';
@@ -1160,6 +1164,7 @@ export function explorerConfig(): ExplorerConfig {
 		history_max: consoleBlock.explorer_history_max ?? EXPLORER_DEFAULTS.history_max,
 		save_name_max_chars: consoleBlock.explorer_save_name_max_chars ?? EXPLORER_DEFAULTS.save_name_max_chars,
 		series_floor_share: consoleBlock.explorer_series_floor_share ?? EXPLORER_DEFAULTS.series_floor_share,
+		chrome: consoleBlock.explorer_chrome === 'console' ? 'console' : EXPLORER_DEFAULTS.chrome,
 		rail_rem: consoleBlock.explorer_rail_rem ?? EXPLORER_DEFAULTS.rail_rem,
 		editor_lines: (consoleBlock.explorer_editor_lines ?? EXPLORER_DEFAULTS.editor_lines) as [number, number],
 		strip_shown: (consoleBlock.explorer_strip_shown ?? EXPLORER_DEFAULTS.strip_shown) as [number, number],

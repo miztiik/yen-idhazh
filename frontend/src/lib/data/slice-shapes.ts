@@ -17,7 +17,7 @@
 export type DateStamp = string;
 
 /** The ledgers the console may query. A closed set: a panel names a ledger, never a path. */
-export const LEDGER_NAMES = ['seen', 'feed-health', 'item-health', 'host-fingerprint', 'summary-quality-evals', 'summary-quality-evals-index', 'candidate-models', 'item-health-summary', 'published', 'feed-retirements', 'visual-prunes', 'counterfactual-scores', 'scored-pairs', 'fitted-thresholds', 'holdout-pairs', 'score-distribution', 'archive', 'shard-outcomes', 'metrics', 'merge-line-holdout-scores', 'traces', 'day-metrics', 'digest-fragments', 'gardener'] as const;
+export const LEDGER_NAMES = ['seen', 'feed-health', 'item-health', 'host-fingerprint', 'summary-quality-evals', 'candidate-models', 'item-health-summary', 'published', 'feed-retirements', 'visual-prunes', 'counterfactual-scores', 'scored-pairs', 'fitted-thresholds', 'holdout-pairs', 'score-distribution', 'archive', 'shard-outcomes', 'metrics', 'merge-line-holdout-scores', 'traces', 'day-metrics', 'digest-fragments', 'gardener', 'run-plan'] as const;
 
 export type LedgerName = (typeof LEDGER_NAMES)[number];
 
@@ -54,23 +54,35 @@ export type Row = Record<string, string | number | boolean | null>;
  *  - `day-missing`: a day between the first and the newest packed day that no
  *    index names, so its rows are in no file a reader can find.
  *
- *  Three gaps are expected and are none of these: a day after the newest packed
- *  day, an entry with `rows: 0`, and a `monthly.json` or `yearly.json` with no
- *  entries. */
+ *  Some gaps are expected and are none of these: a day after the newest packed
+ *  day, an entry with `rows: 0`, an entry `empty`, which held no row and has no
+ *  file, a `monthly.json` or `yearly.json` with no entries, and a day an index
+ *  records lost, which an answer names in `lostDays`. */
 export const LEDGER_FAULTS = ['not-packed', 'index-missing', 'file-missing', 'day-missing'] as const;
 
 export type LedgerFault = (typeof LEDGER_FAULTS)[number];
 
+/** How many files the packing set aside unread, by the period it set them aside
+ *  from: an entry's `covers`, a day, a month or a year. Only a period that set at
+ *  least one file aside is named. Keyed by period, so two reads that meet the
+ *  same month count its files once. */
+export type SetAsideFiles = Readonly<Record<string, number>>;
+
 /** What the door hands a panel. `rows` is empty for every state but `ok`.
  *  `through` is the newest day `daily.json` names, or `null` before the first
- *  compaction, so a panel can say how far its data reaches. `fault` names the
+ *  compaction, so a panel can say how far its data reaches. `lostDays` names
+ *  the days in the span an index records lost - a daily entry `lost`, or a day
+ *  in a month's or a year's `lost_days` - ascending: each has no record, so a panel
+ *  says so rather than drawing it as a day with no rows. `setAside` names the
+ *  periods the span is read from whose packing set files aside unread, so a
+ *  panel can say its rows may be short. `fault` names the
  *  missing file behind a `missing` or an `unreachable`, and is `null` for an
  *  `unreachable` with another cause: an index this build will not act on, a file
  *  that did not arrive whole, an engine that could not answer, or a span that
  *  starts before the oldest day any index names. */
 export type SliceResult =
-	| { state: 'ok'; rows: Row[]; through: DateStamp }
-	| { state: 'quiet'; rows: []; through: DateStamp | null }
+	| { state: 'ok'; rows: Row[]; through: DateStamp; lostDays: DateStamp[]; setAside: SetAsideFiles }
+	| { state: 'quiet'; rows: []; through: DateStamp | null; lostDays: DateStamp[]; setAside: SetAsideFiles }
 	| { state: 'missing'; rows: []; fault: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreachable'; rows: []; at: DateStamp; fault: Exclude<LedgerFault, 'not-packed'> | null };
 
@@ -89,10 +101,12 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const OPERATORS: ReadonlySet<string> = new Set(['=', '!=', '<', '<=', '>', '>=', 'in']);
 
-/** Whether `stamp` is a real UTC day, `YYYY-MM-DD`, and not merely the shape of one. */
+/** Whether `stamp` is a real UTC day, `YYYY-MM-DD`, and not merely the shape of one.
+ *  A day past 31 has no time at all, so it is answered before it is printed. */
 export function isDay(stamp: unknown): stamp is DateStamp {
 	if (typeof stamp !== 'string' || !DAY.test(stamp)) return false;
-	return new Date(`${stamp}T00:00:00Z`).toISOString().slice(0, 10) === stamp;
+	const at = new Date(`${stamp}T00:00:00Z`);
+	return !Number.isNaN(at.getTime()) && at.toISOString().slice(0, 10) === stamp;
 }
 
 function checkedColumn(column: unknown, where: string): string {
@@ -184,9 +198,14 @@ export type AskRefusal =
 	| { kind: 'over-ceiling'; bytes: number; files: number; max: number }
 	| { kind: 'engine-error'; message: string };
 
+/** What one selected ledger is missing inside the span a written question read:
+ *  the days its indexes record lost, ascending, and the files its periods set
+ *  aside unread. An answer names only a ledger that is missing either. */
+export type SpanGap = { ledger: LedgerName; lostDays: readonly DateStamp[]; setAside: SetAsideFiles };
+
 export type AskResult =
-	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[]; siteFrom: DateStamp | null }
-	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; siteFrom: DateStamp | null }
+	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[]; siteFrom: DateStamp | null; gaps: readonly SpanGap[] }
+	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; siteFrom: DateStamp | null; gaps: readonly SpanGap[] }
 	| { state: 'missing'; ledger: LedgerName }
 	| { state: 'unreachable'; ledger: LedgerName | null; at: DateStamp | null; fault: AskFault }
 	| { state: 'refused'; because: AskRefusal };

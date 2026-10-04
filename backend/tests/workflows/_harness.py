@@ -850,6 +850,14 @@ SUBSTITUTED_DATE: Final = "2026-08-25"
 
 SUBSTITUTED_DAY_DIR: Final = "frontend/public/digest/2026/08/25"
 
+#: The run-plan ledger's folder for `SUBSTITUTED_DATE`, built by the ledger's own
+#: path code, so the workflow's spelling of it is held to the one the writer uses.
+SUBSTITUTED_PLAN_DIR: Final = (
+    ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.RUN_PLAN)
+    .joinpath(*SUBSTITUTED_DATE.split("-"))
+    .as_posix()
+)
+
 SUBSTITUTED_SHA: Final = "0" * 40
 
 SUBSTITUTED_EXECUTION: Final = "40000000001"
@@ -876,10 +884,12 @@ SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
+    "needs.plan.outputs.plan_dir": SUBSTITUTED_PLAN_DIR,
     "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
     "needs.draw.outputs.date": SUBSTITUTED_DATE,
     "needs.draw.outputs.run_id": SUBSTITUTED_COUNCIL_RUN,
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
+    "steps.decide.outputs.plan_dir": SUBSTITUTED_PLAN_DIR,
     # What the `derived` step prints into `$GITHUB_OUTPUT`, computed rather than
     # written out. A second copy of that list is the thing this expression
     # exists to remove.
@@ -1458,7 +1468,10 @@ def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> 
     lines = [line.strip() for line in script.splitlines()]
     pattern_line = "SHARD_PATTERN='^[1-8]$'"
     input_line = 'SHARDS="${{ inputs.shards }}"'
-    derive_line = 'SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}")'
+    derive_line = (
+        'SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}"'
+        ' --execution "${{ github.run_id }}")'
+    )
     clamp_line = 'while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do'
     guard_block = [
         'if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then',
@@ -1994,14 +2007,13 @@ def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     # whether two runs that both appended are in conflict, so a scripted origin
     # without it would test a different repository.
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    for relative in (".gitignore", "backend/utilities/prepare_evaluation_publication.py"):
-        _write(seed / relative, read_text(REPO_ROOT / relative))
-    # A caller that resolves the checkout's own retry config, as
-    # `publish_inputs` does, would otherwise back off at production speed.
+    _write(seed / ".gitignore", read_text(REPO_ROOT / ".gitignore"))
+    # A caller that resolves the checkout's own retry config would otherwise back
+    # off at production speed.
     _write(seed / "config/push-retry.json", json.dumps(_fast_push_retry()) + "\n")
     _git(
         seed, env, "add", ".gitattributes", ".gitignore", "config/push-retry.json",
-        "backend/utilities/prepare_evaluation_publication.py", "docs", "runner-noise.txt",
+        "docs", "runner-noise.txt",
         *staged_paths,
     )
     _git(seed, env, "commit", "-m", "seed")
@@ -2113,8 +2125,7 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     seed = root / "seed"
     _git(root, env, "clone", str(origin), str(seed))
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    for relative in (".gitignore", "backend/utilities/prepare_evaluation_publication.py"):
-        _write(seed / relative, read_text(REPO_ROOT / relative))
+    _write(seed / ".gitignore", read_text(REPO_ROOT / ".gitignore"))
     _write(seed / "docs" / "unrelated.md", "seed\n")
     # Empty files suffice: the commit loop does not interpret corpus contents.
     for relative in CORPUS_SEED:
@@ -2123,8 +2134,7 @@ def _seed_digest_origin(root: Path, date: str) -> None:
         _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
     _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
     _git(
-        seed, env, "add", ".gitattributes", ".gitignore",
-        "backend/utilities/prepare_evaluation_publication.py", "docs",
+        seed, env, "add", ".gitattributes", ".gitignore", "docs",
         *COMMIT_STAGED_PATHS["assemble"],
     )
     _git(seed, env, "commit", "-m", f"digest: {date}")

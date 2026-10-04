@@ -16,7 +16,9 @@ so the record can count it, and keeps it.
 read.** The raw day folders, which compact files exist and what
 each weighs are all read off the listing. The watermarks and the indexes are
 fetched once, before they are read, and each step fetches the day or month
-folders it opens before it opens one.
+folders it opens before it opens one. The month step chooses its months as it
+runs, so it names what it reads of them first, through `name_months`, and the
+listing then answers for them from the same commit.
 
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
 that lands the pass refuses a path on both lists, so one pass that did either
@@ -36,7 +38,7 @@ there.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import assert_never
@@ -44,7 +46,7 @@ from typing import assert_never
 from idhazh import atomic_write, day_partition, ledger
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import ledger_marks, named_trees
@@ -139,6 +141,43 @@ class CompactTree:
     def raw_day_folder(self, day: str) -> Path:
         """The raw folder one UTC day's writer files sit in."""
         return ledger.raw_root(self.state_dir, self.ledger).joinpath(day[:4], day[5:7], day[8:10])
+
+    def raw_month_folder(self, month: str) -> Path:
+        """The raw folder a `YYYY-MM` month's day folders sit in."""
+        return ledger.raw_root(self.state_dir, self.ledger).joinpath(month[:4], month[5:7])
+
+    def name_months(self, months: Sequence[str]) -> None:
+        """Name what the month step reads of these months, and take in their raw days.
+
+        Each month's daily folder, raw folder and month file, whichever format
+        wrote it, are listed from the commit now: the month step chose them as
+        it ran. Only the raw days of a month newly named are taken in, so a day
+        a drop took earlier in this pass does not come back.
+        """
+        fresh = [
+            month
+            for month in months
+            if not self.listing.answers_for(self.raw_month_folder(month))
+        ]
+        self.listing = self.listing.name(
+            [
+                path
+                for month in months
+                for path in (
+                    self.daily_month_folder(month),
+                    self.raw_month_folder(month),
+                    *(
+                        ledger.compact_path(
+                            self.state_dir, self.ledger, Period.MONTHLY, month, fmt=fmt
+                        )
+                        for fmt in Format
+                    ),
+                )
+            ]
+        )
+        found = named_trees.raw_days(self.listing, self.state_dir, self.ledger, months=fresh)
+        self.raw_days = sorted({*self.raw_days, *found})
+        self.listed += len(found)
 
     def daily_month_folder(self, month: str) -> Path:
         """The folder a `YYYY-MM` month's daily compact files sit in."""

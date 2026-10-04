@@ -132,6 +132,10 @@ function textCells(row: Row): Record<string, string> {
  * The span never starts before the record's first packed day, because a day
  * before it is a day no index names, and the door answers one as a hole.
  *
+ * The read names the days in it the record's index records lost, and the files
+ * its periods set aside unread, from both reads when there are two; keyed by
+ * period, a month the two reads both meet counts its files once.
+ *
  * `ask` makes the door call, so each reader names its own columns where the call
  * is written, which is where `chart-vocabulary.spec.ts` reads them.
  */
@@ -153,10 +157,13 @@ export async function newestRows(
 	const found = await ask(from, reach.through);
 	if (found.state === 'missing') return empty({ state: 'not-packed' });
 	if (found.state === 'unreachable') return empty({ state: 'unreadable', at: found.at, fault: found.fault });
-	const read: RecordRead = { state: 'read', through: found.through ?? reach.through };
-	if (found.state === 'quiet') return empty(read);
+	const through = found.through ?? reach.through;
+	if (found.state === 'quiet') {
+		return empty({ state: 'read', through, lostDays: found.lostDays, setAside: found.setAside });
+	}
 
 	let rows = found.rows;
+	let { lostDays, setAside } = found;
 	const newest = rows.reduce((top, row) => later(top, cellText(row.date)), '');
 	const lag = daysBetween(newest, reach.through) - 1;
 	if (!every && lag > 0 && from > reach.first) {
@@ -164,9 +171,13 @@ export async function newestRows(
 		if (before.state === 'unreachable') {
 			return empty({ state: 'unreadable', at: before.at, fault: before.fault });
 		}
+		if (before.state === 'ok' || before.state === 'quiet') {
+			lostDays = [...before.lostDays, ...lostDays];
+			setAside = { ...before.setAside, ...setAside };
+		}
 		if (before.state === 'ok') rows = [...before.rows, ...rows];
 	}
-	return { rows: rows.map(textCells), columns: [...columns], read };
+	return { rows: rows.map(textCells), columns: [...columns], read: { state: 'read', through, lostDays, setAside } };
 }
 
 /** One row per scored measurement, over the newest `days` days the score record holds.

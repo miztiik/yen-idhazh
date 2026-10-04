@@ -9,6 +9,7 @@ import { encodeQuestion } from '../src/lib/console/explorer/address';
 import { consoleConfig, explorerConfig } from '../src/lib/server/config';
 import { shortDate } from '../src/lib/format';
 import type { LedgerName } from '../src/lib/data/ledger';
+import { CONSOLE_CHROMES, consoleChromeOf } from '../src/lib/console/chrome';
 
 const JOIN_LEDGERS = ['published', 'item-health'] as const satisfies readonly LedgerName[];
 const JOIN_SQL = 'SELECT \'published x item-health\' AS pair, CAST(count(*) AS VARCHAR) AS rows FROM "published" p, "item-health" h';
@@ -65,11 +66,11 @@ async function statePage(parent: Page, drive: (page: Page) => Promise<void>): Pr
 	}
 }
 
-test('THE ORACLE: Records opens as the sixth tab and renders its two panels before a run', async ({ page }) => {
+test('THE ORACLE: Data explorer opens as the sixth tab and renders its two panels before a run', async ({ page }) => {
 	const response = await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
 	expect([200, 404]).toContain(response?.status());
 	await expect(page.locator('[data-console-route="data-explorer"]')).toHaveCount(1);
-	await expect(page.locator('[data-console-tab="data-explorer"]')).toContainText('Records');
+	await expect(page.locator('[data-console-tab="data-explorer"]')).toContainText('Data explorer');
 	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"]')).toHaveCount(1);
@@ -78,7 +79,111 @@ test('THE ORACLE: Records opens as the sixth tab and renders its two panels befo
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('This page holds');
 });
 
-test('THE ORACLE: the Records fallback document carries the shipped content policy', () => {
+test('THE ORACLE: console chrome resolves to console unless the route asks for workbench', () => {
+	expect(CONSOLE_CHROMES).toEqual(['console', 'workbench']);
+	expect(consoleChromeOf(null)).toBe('console');
+	expect(consoleChromeOf({})).toBe('console');
+	expect(consoleChromeOf({ chrome: 'console' })).toBe('console');
+	expect(consoleChromeOf({ chrome: 'workbench' })).toBe('workbench');
+	expect(consoleChromeOf({ chrome: 'something-else' })).toBe('console');
+});
+
+test('THE ORACLE: Data explorer asks for workbench chrome and the other routes keep console chrome', async ({ page }) => {
+	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	await expect(page.locator('[data-surface="operator"]')).toHaveAttribute('data-console-chrome', 'workbench');
+	await expect(page.locator('#console-top')).toHaveText('Console');
+	await expect(page.locator('#console-top')).toHaveClass(/sr-only/);
+	await expect(page.locator('[data-console-band]')).toHaveCount(0);
+	await expect(page.locator('[data-console-completeness]')).toHaveCount(0);
+	await expect(page.locator('[data-window-status]')).toHaveCount(0);
+	await expect(page.locator('[data-console-carry]')).toHaveCount(0);
+	await expect(page.locator('[data-console-noscript]')).toHaveCount(0);
+	await expect(page.locator('[data-console-contents]')).toHaveCount(0);
+
+	for (const route of ['/console/', '/console/model/', '/console/machine/', '/console/judgement/', '/console/voices/']) {
+		await page.goto(route, { waitUntil: 'domcontentloaded' });
+		await expect(page.locator('[data-surface="operator"]'), `${route} kept full chrome`).toHaveAttribute('data-console-chrome', 'console');
+		await expect(page.locator('[data-console-band]'), `${route} kept the band`).toHaveCount(1);
+		await expect(page.locator('[data-window-control]'), `${route} kept the strip span control`).toHaveCount(1);
+	}
+});
+
+for (const view of [
+	{ width: 1440, height: 900 },
+	{ width: 1024, height: 768 },
+	{ width: 768, height: 900 },
+	{ width: 390, height: 844 }
+] as const) {
+	test(`THE ORACLE: the workbench strip is one compact row at ${view.width}`, async ({ page }) => {
+		await page.setViewportSize(view);
+		await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+		const geometry = await page.locator('[data-console-strip]').evaluate((strip) => {
+			const stripBox = strip.getBoundingClientRect();
+			const tabs = [...strip.querySelectorAll('[data-console-tab]')].map((tab) => {
+				const box = tab.getBoundingClientRect();
+				return {
+					id: tab.getAttribute('data-console-tab'),
+					top: Math.round(box.top),
+					bottom: Math.round(box.bottom),
+					left: box.left,
+					right: box.right,
+					height: box.height,
+					position: getComputedStyle(tab).position,
+					text: (tab as HTMLElement).innerText.trim()
+				};
+			});
+			const token = getComputedStyle(document.documentElement).getPropertyValue('--workbench-control').trim();
+			const rootSize = parseFloat(getComputedStyle(document.documentElement).fontSize);
+			const control = token.endsWith('rem') ? parseFloat(token) * rootSize : parseFloat(token);
+			return {
+				height: stripBox.height,
+				left: stripBox.left,
+				right: stripBox.right,
+				position: getComputedStyle(strip).position,
+				control,
+				tabs
+			};
+		});
+		expect(new Set(geometry.tabs.map((tab) => tab.top)).size).toBe(1);
+		expect(geometry.tabs).toHaveLength(6);
+		expect(geometry.height).toBeLessThanOrEqual(geometry.control + 2);
+		expect(geometry.position).not.toBe('sticky');
+		const active = geometry.tabs.find((tab) => tab.id === 'data-explorer');
+		const pipelines = geometry.tabs.find((tab) => tab.id === 'pipelines');
+		expect(active, 'Data explorer tab was not drawn').toBeDefined();
+		expect(active?.text).toContain('Data explorer');
+		expect(active?.text).not.toContain('What the ledgers hold');
+		expect(active?.height).toBeCloseTo(pipelines?.height ?? 0, 0);
+		expect(active?.left ?? 0).toBeGreaterThanOrEqual(geometry.left - 0.5);
+		expect(active?.right ?? 0).toBeLessThanOrEqual(geometry.right + 0.5);
+	});
+}
+
+test('THE ORACLE: Data explorer puts the span and Run in the workbench toolbar', async ({ page }) => {
+	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	const toolbar = page.locator('[data-workbench-region="toolbar"]');
+	await expect(toolbar).toHaveCount(1);
+	await expect(page.locator('[data-window-control]')).toHaveCount(1);
+	await expect(toolbar.locator('[data-window-control]')).toHaveCount(1);
+	await expect(toolbar.getByRole('textbox', { name: 'From (UTC)' })).toHaveCount(1);
+	await expect(toolbar.getByRole('textbox', { name: 'To (UTC)' })).toHaveCount(1);
+	await expect(toolbar.getByRole('button', { name: /^Run$/ })).toHaveCount(1);
+});
+
+test('THE ORACLE: before a run the column rail names the selected ledger\'s own columns', async ({ page }) => {
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint"');
+	const rail = page.locator('[data-explorer-columns] li code');
+	const before = await rail.allTextContents();
+	expect(before.length, 'the rail names no column before a run').toBeGreaterThan(0);
+	expect(before.filter((name) => !name.startsWith('host-fingerprint.')), 'a rail entry not named for its ledger').toEqual([]);
+	await runExplorer(page);
+	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Answer columns');
+	const after = await rail.allTextContents();
+	expect(new Set(before.map((name) => name.slice('host-fingerprint.'.length))), 'the rail before a run is not the ledger\'s columns').toEqual(new Set(after));
+});
+
+test('THE ORACLE: the Data explorer fallback document carries the shipped content policy', () => {
 	const html = readFileSync(resolve(process.cwd(), 'build', '404.html'), 'utf8');
 	expect(html).toContain('content-security-policy');
 	const expected = `connect-src ${connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins(), ...archiveOrigins()]).map((source) => source === 'self' ? "'self'" : source).join(' ')}`;
@@ -151,7 +256,7 @@ test('THE ORACLE: a typed join matches the query door and the run cost matches t
 		from: JOIN_FROM,
 		to: EXPLORER_CANARY_DAY,
 		sql: JOIN_SQL,
-		maxChars: 5776,
+		maxChars: 5790,
 		maxRows: 1000,
 		maxFetchBytes: 64 * 1024 * 1024
 	});
@@ -191,7 +296,7 @@ test('THE ORACLE: choosing ledgers fetches one through day for each chosen ledge
 	}
 });
 
-test('THE ORACLE: every Records answer state renders distinct words, tint and action', async ({ page, browser }) => {
+test('THE ORACLE: every Data explorer answer state renders distinct words, tint and action', async ({ page, browser }) => {
 	const seen = new Map<string, { text: string; tone: string; button: string }>();
 	const remember = (name: string, snap: { text: string; tone: string; button: string }) => {
 		const key = JSON.stringify(snap);
@@ -308,7 +413,7 @@ test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', 
 	await expect.poll(async () => Number(await line.getAttribute('data-held-bytes'))).toBe(held);
 });
 
-test('THE ORACLE: Records does not scroll sideways at phone width', async ({ page }) => {
+test('THE ORACLE: Data explorer does not scroll sideways at phone width', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 900 });
 	await openExplorer(page);
 	const width = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
@@ -366,6 +471,69 @@ test('THE ORACLE: link notices render on the page', async ({ page }) => {
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link named "unknown-ledger"');
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link asked for 365 days');
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The question in this link could not be read');
+});
+
+test('THE ORACLE: a link naming a day that does not exist shows the span notice, and the page still loads its ledgers', async ({ page }) => {
+	const thrown: string[] = [];
+	page.on('pageerror', (error) => thrown.push(error.message));
+	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
+	await page.goto(`/console/data-explorer/?ledgers=published&from=2026-08-32&end=${EXPLORER_CANARY_DAY}`, { waitUntil: 'domcontentloaded' });
+	await expect(page.locator('[data-explorer-action-line]')).toContainText(
+		`The link asked for 2026-08-32 to ${EXPLORER_CANARY_DAY}, which is not a span this page can read, so it ends today.`
+	);
+	await expect(page.locator('[data-ledger-name="published"] input')).toBeChecked({ timeout: 60_000 });
+	expect(thrown).toEqual([]);
+});
+
+test('THE ORACLE: a count by day names the day a ledger lost and the files it set aside, and draws no row for the lost day', async ({ page }) => {
+	// The canary packs every day whole, so the index is served as the packing writes a
+	// period it could not fill: the second-newest day with rows lost, and two files set
+	// aside from the newest. Only the index changes; the door reads the rest as served.
+	const marked: { lost?: string; setAside?: string } = {};
+	await page.route('**/state/compact/item-health/index/daily.json', async (route) => {
+		const response = await route.fetch();
+		const index = (await response.json()) as { entries: { covers: string; rows: number; bytes: number }[] };
+		const held = index.entries.filter((entry) => entry.rows > 0);
+		marked.lost = held.at(-2)?.covers;
+		marked.setAside = held.at(-1)?.covers;
+		await route.fulfill({
+			response,
+			json: {
+				...index,
+				entries: index.entries.map((entry) =>
+					entry.covers === marked.lost
+						? { ...entry, rows: 0, bytes: 0, state: 'lost' }
+						: entry.covers === marked.setAside
+							? { ...entry, set_aside: 2 }
+							: entry
+				)
+			}
+		});
+	});
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['item-health'], 'SELECT "covers" AS day, count(*) AS rows FROM "item-health" GROUP BY 1 ORDER BY 1');
+	await runExplorer(page);
+	const { lost, setAside } = marked;
+	if (lost === undefined || setAside === undefined) throw new Error('the canary packs fewer than two item-health days with rows');
+
+	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
+	await expect(note.locator('[data-explorer-gap="lost"][data-ledger="item-health"]')).toHaveText(
+		`There is no item-health record for ${shortDate(lost)}, so nothing from that day is in this answer. The record for that day was lost and could not be recovered; it was not a quiet day.`
+	);
+	await expect(note.locator('[data-explorer-gap="set-aside"][data-ledger="item-health"]')).toHaveText(
+		'2 item-health files were set aside unread when this data was packed, so this answer may be missing their rows. They wait in state/raw/item-health/set-aside/ for a person to read.'
+	);
+	const days = (await tableRows(page)).map(([day]) => day);
+	expect(days).toContain(setAside);
+	expect(days).not.toContain(lost);
+
+	// A span of nothing but the lost day is quiet, and the quiet answer names the day too.
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill(lost);
+	await page.getByRole('textbox', { name: 'To (UTC)' }).fill(lost);
+	await runExplorer(page);
+	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-state="quiet"] [data-explorer-gap="lost"]')).toHaveText(
+		`There is no item-health record for ${shortDate(lost)}, so nothing from that day is in this answer. The record for that day was lost and could not be recovered; it was not a quiet day.`
+	);
 });
 
 test('THE ORACLE: every chart case draws its type with a populated readout', async ({ page }) => {
@@ -448,7 +616,7 @@ test('THE ORACLE: browser storage is parsed against closed lists and saved overf
 	await expect(page.locator('.saved-chip')).toHaveCount(0);
 	await page.locator('.history-list summary').click();
 	await expect(page.locator('.history-list button')).toHaveCount(0);
-	expect(logs.filter((line) => line.includes('Records storage')).length).toBeGreaterThanOrEqual(3);
+	expect(logs.filter((line) => line.includes('Data explorer storage')).length).toBeGreaterThanOrEqual(3);
 
 	for (let index = 0; index < 21; index += 1) {
 		await page.locator('#explorer-sql').fill(`SELECT ${index}`);

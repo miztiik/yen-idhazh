@@ -268,7 +268,7 @@ function dayOf(owner: Locator): Locator {
 }
 
 test.describe('the readout is the default', () => {
-	test('THE ORACLE: the Records shape panel declares its readout and has no native tooltip', async ({ page }) => {
+	test('THE ORACLE: the Data explorer shape panel declares its readout and has no native tooltip', async ({ page }) => {
 		await openExplorer(page);
 		await chooseExplorerQuestion(page, ['summary-quality-evals'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
 		await runExplorer(page);

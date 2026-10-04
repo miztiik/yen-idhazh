@@ -1,8 +1,8 @@
 {
   "entries": [
-    {"bytes": 14102336,"covers": "2025","rows": 78114}
+    {"bytes": 14102336,"covers": "2025","lost_days": [],"rows": 78114,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "item-health",
   "period": "yearly",
-  "version": "2026-09-30"
+  "version": "2026-10-04"
 }
