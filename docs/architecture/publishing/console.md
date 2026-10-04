@@ -81,11 +81,6 @@ Feed and source panels belong to Voices, not Pipelines. Keep `/console/` as the
 Pipelines address; renaming a label is not a reason to break an existing bookmark.
 Shared navigation and window behavior follow their owning pages above.
 
-Preserve `/evals/` as a legacy entry to `/console/`. Its current prerendered
-redirect belongs to the known migration work, not a requirement for new designs.
-Keep the old link usable through a GitHub Pages-compatible entry point; do not
-assume the host can execute a SvelteKit server redirect.
-
 ### A label is not an address
 
 Use **Summaries** for the output and **Hardware** for the machine. **Judgement**

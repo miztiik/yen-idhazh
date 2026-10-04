@@ -5,6 +5,8 @@ import { connectSources, assetBaseUrl, encoderOrigins, engineOrigins, archiveOri
 import { COMPACT_INDEX_STAMP } from '../src/lib/data/compact-index';
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, expectedAsk, expectedAskCost, EXPLORER_CANARY_DAY, openExplorer, runExplorer, tableRows } from './support/explorer-answer';
+import { encodeQuestion } from '../src/lib/console/explorer/address';
+import { consoleConfig } from '../src/lib/server/config';
 import type { LedgerName } from '../src/lib/data/ledger';
 
 const JOIN_LEDGERS = ['published', 'item-health'] as const satisfies readonly LedgerName[];
@@ -69,7 +71,9 @@ test('THE ORACLE: Records opens as the sixth tab and renders its two panels befo
 	await expect(page.locator('[data-console-tab="data-explorer"]')).toContainText('Records');
 	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"]')).toHaveCount(1);
-	await expect(page.locator('[data-explorer-idle]')).toContainText('Press Run');
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"]')).toHaveCount(1);
+	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('This page holds');
 });
 
@@ -108,7 +112,7 @@ test('THE ORACLE: a typed join matches the query door and the run cost matches t
 		from: JOIN_FROM,
 		to: EXPLORER_CANARY_DAY,
 		sql: JOIN_SQL,
-		maxChars: 4000,
+		maxChars: 5782,
 		maxRows: 1000,
 		maxFetchBytes: 64 * 1024 * 1024
 	});
@@ -164,7 +168,7 @@ test('THE ORACLE: every Records answer state renders distinct words, tint and ac
 		await openExplorer(one, false);
 		await chooseOnly(one, ['published'], 'SELECT count(*) AS rows FROM "published"');
 		await runExplorer(one);
-		await expect(one.locator('[data-state="unreachable"]')).toBeVisible();
+		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toBeVisible();
 		remember('engine did not start', await answerSnapshot(one));
 	} finally {
 		await engineContext.close();
@@ -178,8 +182,8 @@ test('THE ORACLE: every Records answer state renders distinct words, tint and ac
 			await held;
 			await route.continue();
 		}, { times: 1 });
-		await one.locator('[data-explorer-action-line] button').click();
-		await expect(one.locator('.shimmer')).toBeVisible();
+		await one.getByRole('button', { name: /^Run$/ }).click();
+		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] .shimmer')).toBeVisible();
 		release();
 	}));
 
@@ -187,14 +191,14 @@ test('THE ORACLE: every Records answer state renders distinct words, tint and ac
 		await openExplorer(one);
 		await chooseExplorerQuestion(one, ['published'], 'SELECT * FROM "published" WHERE false');
 		await runExplorer(one);
-		await expect(one.locator('[data-state="quiet"]')).toBeVisible();
+		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="quiet"]')).toBeVisible();
 	}));
 
 	remember('missing not published', await statePage(page, async (one) => {
 		await openExplorer(one);
 		await chooseOnly(one, ['feed-health'], 'SELECT count(*) AS rows FROM "feed-health"');
 		await runExplorer(one);
-		await expect(one.locator('[data-state="missing"]')).toBeVisible();
+		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="missing"]')).toBeVisible();
 	}));
 
 	remember('missing no days yet', await statePage(page, async (one) => {
@@ -205,30 +209,30 @@ test('THE ORACLE: every Records answer state renders distinct words, tint and ac
 		await openExplorer(one);
 		await chooseOnly(one, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
 		await runExplorer(one);
-		await expect(one.locator('[data-state="missing"]')).toBeVisible();
+		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="missing"]')).toBeVisible();
 	}));
 
 	remember('unreachable file did not arrive', await statePage(page, async (one) => {
 		await openExplorer(one);
 		await one.route('**/state/**/*.parquet*', (route) => route.abort());
-		await chooseOnly(one, ['candidate-models'], 'SELECT count(*) AS rows FROM "candidate-models"');
+		await chooseOnly(one, ['counterfactual-scores'], 'SELECT count(*) AS rows FROM "counterfactual-scores"');
 		await runExplorer(one);
-		await expect(one.locator('[data-state="unreachable"]')).toBeVisible();
+		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toBeVisible();
 	}));
 
 	remember('unreachable gap', await statePage(page, async (one) => {
 		await openExplorer(one);
 		await one.route('**/state/**/*.parquet*', (route) => route.fulfill({ status: 404, body: '' }));
-		await chooseOnly(one, ['candidate-models'], 'SELECT count(*) AS rows FROM "candidate-models"');
+		await chooseOnly(one, ['seen'], 'SELECT count(*) AS rows FROM "seen"');
 		await runExplorer(one);
-		await expect(one.locator('[data-state="unreachable"]')).toBeVisible();
+		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toBeVisible();
 	}));
 
 	remember('refused', await statePage(page, async (one) => {
 		await openExplorer(one);
 		await chooseExplorerQuestion(one, ['published'], 'SELECT 1; SELECT 2');
 		await runExplorer(one);
-		await expect(one.locator('[data-state="refused"]')).toBeVisible();
+		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"]')).toBeVisible();
 	}));
 
 	expect(seen.size).toBe(9);
@@ -242,10 +246,10 @@ test('THE ORACLE: every published example runs without refusal or unreachable st
 		await statePage(page, async (one) => {
 			await openExplorer(one);
 			await one.getByRole('button', { name: title }).click();
-			await expect(one.locator('[data-explorer-action-line] button')).toBeEnabled({ timeout: 60_000 });
+			await expect(one.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 			await runExplorer(one);
-			await expect(one.locator('[data-state="refused"], [data-state="unreachable"]')).toHaveCount(0);
-			await expect(one.locator('[data-explorer-answer], [data-state="quiet"], [data-state="missing"]')).toHaveCount(1);
+			await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"], [data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toHaveCount(0);
+			await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-answer], [data-console-panel-id="data-explorer-rows"] [data-state="quiet"], [data-console-panel-id="data-explorer-rows"] [data-state="missing"]')).toHaveCount(1);
 		});
 	}
 });
@@ -259,7 +263,7 @@ test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', 
 	const held = Number(await line.getAttribute('data-held-bytes'));
 	await page.locator('#explorer-sql').fill('SELECT 1; SELECT 2');
 	await runExplorer(page);
-	await expect(page.locator('[data-state="refused"]')).toBeVisible();
+	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"]')).toBeVisible();
 	await expect.poll(async () => Number(await line.getAttribute('data-held-bytes'))).toBe(held);
 	await expect(line).not.toContainText('This page holds 0.0 MB');
 });
@@ -288,4 +292,130 @@ test('THE ORACLE: hostile cell text stays plain in the real table', async ({ pag
 	const table = page.locator('[data-explorer-answer]');
 	await expect(table).toContainText('<script>alert(1)</script> https://example.invalid/x');
 	await expect(table.locator('a, script, img')).toHaveCount(0);
+});
+
+test('THE ORACLE: a shared address fills the editor and does not run itself', async ({ page }) => {
+	const sql = 'SELECT attempt, count(*) AS rows FROM "published" GROUP BY attempt ORDER BY attempt';
+	const q = await encodeQuestion(sql);
+	const fetched: string[] = [];
+	page.on('response', (response) => {
+		const pathname = new URL(response.url()).pathname;
+		if (pathname.includes('/state/') && pathname.endsWith('.parquet')) fetched.push(pathname);
+	});
+	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
+	await page.goto(`/console/data-explorer/?ledgers=published&days=14&q=${q}`, { waitUntil: 'domcontentloaded' });
+	await expect(page.locator('#explorer-sql')).toHaveValue(sql);
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('This question came from a link');
+	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
+	await expect(page.locator('[data-explorer-action-line]')).not.toContainText('Answered in');
+	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
+	await expect(page.locator('[data-explorer-columns]')).toContainText('published.');
+	expect(fetched.every((path) => dataLedger(path) === 'published' && dataPathCoversDay(path, EXPLORER_CANARY_DAY)), 'a shared link fetched a span file before Run').toBe(true);
+	const beforeType = page.url();
+	await page.locator('#explorer-sql').fill(`${sql} `);
+	expect(page.url()).toBe(beforeType);
+	await runExplorer(page);
+	await expect(page.locator('[data-explorer-answer]')).toHaveCount(1);
+	expect(page.url()).not.toBe(beforeType);
+});
+
+test('THE ORACLE: link notices render on the page', async ({ page }) => {
+	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
+	await page.goto('/console/data-explorer/?ledgers=published,unknown-ledger&days=365&q=not-valid-***', { waitUntil: 'domcontentloaded' });
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link named "unknown-ledger"');
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link asked for 365 days');
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('The question in this link could not be read');
+});
+
+test('THE ORACLE: every chart case draws its type with a populated readout', async ({ page }) => {
+	await openExplorer(page);
+	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+	// Each main figure is worded by plan section 2.11 rule 7 from the answer's own rows, so a
+	// figure that does not come from the data - a constant, a row count, the wrong column - fails.
+	const cases = [
+		{ type: 'dateSeries', lede: '8 rows on 2026-08-20', sql: "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)" },
+		{ type: 'rankedList', lede: 'a: 9 rows', sql: "SELECT * FROM (VALUES ('a', 9), ('b', 4), ('c', 2)) AS t(name, rows)" },
+		{ type: 'pairedScatter', lede: '170 rows of y against x', sql: "SELECT 'row-' || i::VARCHAR AS name, i AS x, 170 - i AS y FROM range(0, 170) AS t(i)" },
+		{ type: 'distribution', lede: 'Half of rows is at or under 84.5', sql: 'SELECT * FROM range(0, 170) AS t(rows)' }
+	] as const;
+	for (const { type, lede, sql } of cases) {
+		await chooseExplorerQuestion(page, ['published'], sql);
+		await runExplorer(page);
+		if (await page.locator(`[data-shape-choice="${type}"] input`).count()) {
+			await page.locator(`[data-shape-choice="${type}"] input`).check();
+		}
+		await expect(panel.locator(`[data-chart-type="${type}"]`)).toHaveCount(1);
+		await expect(panel.locator('[data-readout] [data-readout-row]').first()).toBeVisible();
+		await expect(panel.locator('[data-lede]'), `${type} main figure`).toHaveText(lede);
+		await expect(panel.locator('[data-comparison]')).toContainText('against');
+		await expect(panel.locator('[title], title')).toHaveCount(0);
+	}
+
+	await chooseExplorerQuestion(page, ['published'], 'SELECT item_id FROM "published" LIMIT 1');
+	await runExplorer(page);
+	const none = panel.locator('[data-shape-none]');
+	await expect(none).toContainText('Nothing here to draw');
+	const height = await none.boundingBox().then((box) => box?.height ?? 0);
+	expect(height, 'the no-chart sentence did not keep the chart room').toBeGreaterThanOrEqual(consoleConfig().chart_height);
+});
+
+test('THE ORACLE: Save, recent runs and Markdown copy preserve text without running a saved question', async ({ page, context }) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	await openExplorer(page);
+	const sql = "SELECT 'header' AS label, '[x](https://example.invalid/a)|pipe\n`tick`' AS hostile FROM \"published\" LIMIT 1";
+	await chooseExplorerQuestion(page, ['published'], sql);
+	const beforeSave = page.url();
+	await page.getByRole('button', { name: /^Save$/ }).click();
+	await page.getByLabel('Name').fill('Hostile copy');
+	await page.getByRole('button', { name: /^Keep$/ }).click();
+	await expect(page.locator('.saved-chip .example').filter({ hasText: 'Hostile copy' })).toHaveCount(1);
+	expect(page.url()).not.toBe(beforeSave);
+	const beforeSavedPick = await page.locator('[data-explorer-action-line]').getAttribute('data-files');
+	await page.locator('.saved-chip .example').filter({ hasText: 'Hostile copy' }).click();
+	await expect(page.locator('#explorer-sql')).toHaveValue(sql);
+	await expect(page.locator('[data-explorer-action-line]')).toHaveAttribute('data-files', beforeSavedPick ?? '');
+
+	await runExplorer(page);
+	await page.getByRole('button', { name: /^Copy as table$/ }).click();
+	await expect(page.locator('.copy-answer')).toContainText('Copied 1 row as a table.');
+	const copied = await page.evaluate(() => navigator.clipboard.readText());
+	expect(copied).toContain('`label`');
+	expect(copied).toContain('``[x](https://example.invalid/a)\\|pipe `tick```');
+	expect(copied.split('\n')).toHaveLength(3);
+	await expect(page.locator('[data-explorer-answer] a, [data-explorer-answer] img')).toHaveCount(0);
+
+	await page.locator('.history-list summary').click();
+	await expect(page.locator('.history-list button')).toContainText('1 row');
+	await page.locator('.history-list button').first().click();
+	await expect(page.locator('#explorer-sql')).toHaveValue(sql);
+	await expect(page.locator('[data-explorer-answer]')).toHaveCount(1);
+});
+
+test('THE ORACLE: browser storage is parsed against closed lists and saved overflow names the drop', async ({ page }) => {
+	const bad = [
+		{ id: 'bad-ledger', name: 'Bad ledger', statement: 'SELECT 1', ledgers: ['unknown-ledger'], days: 14, updatedAt: '2026-10-04T00:00:00Z' },
+		{ id: 'bad-days', name: 'Bad days', statement: 'SELECT 1', ledgers: ['published'], days: 365, updatedAt: '2026-10-04T00:00:00Z' },
+		{ id: 'bad-statement', name: 'Bad statement', statement: 1, ledgers: ['published'], days: 14, updatedAt: '2026-10-04T00:00:00Z' }
+	];
+	await page.addInitScript((entries) => {
+		localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(entries));
+		localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify(entries.map((entry) => ({ ...entry, rows: 1, ms: 1, askedAt: '2026-10-04T00:00:00Z' }))));
+	}, bad);
+	const logs: string[] = [];
+	page.on('console', (message) => logs.push(message.text()));
+	await openExplorer(page);
+	await expect(page.locator('.saved-chip')).toHaveCount(0);
+	await page.locator('.history-list summary').click();
+	await expect(page.locator('.history-list button')).toHaveCount(0);
+	expect(logs.filter((line) => line.includes('Records storage')).length).toBeGreaterThanOrEqual(3);
+
+	for (let index = 0; index < 21; index += 1) {
+		await page.locator('#explorer-sql').fill(`SELECT ${index}`);
+		await page.getByRole('button', { name: /^Save$/ }).click();
+		await page.getByLabel('Name').fill(`Saved ${index}`);
+		await page.getByRole('button', { name: /^Keep$/ }).click();
+	}
+	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toContainText('Saved "Saved 20". "Saved 0" was the oldest of 20 and is no longer kept.');
+	await expect(page.locator('.saved-chip .example')).toHaveCount(20);
 });

@@ -12,6 +12,9 @@
 	 * The group's name belongs to the caller, who draws the fieldset and its
 	 * legend around these tiles and decides whether the legend is seen.
 	 */
+	import Icon from '$lib/icons/Icon.svelte';
+	import type { IconId } from '$lib/icons/generated';
+
 	let {
 		name,
 		items,
@@ -22,7 +25,7 @@
 	}: {
 		/** The radio group's name, shared by every input in it. */
 		name: string;
-		items: readonly { value: T; shown: string; spoken: string }[];
+		items: readonly { value: T; shown: string; spoken: string; icon?: IconId }[];
 		selected: T;
 		disabled?: boolean;
 		/** The data attribute each tile carries its value in, so a page and a test
@@ -48,6 +51,10 @@
 				{disabled}
 				onchange={() => onChange(item.value)}
 			/>
+			{#if item.icon === 'shape-series'}<Icon id="shape-series" />{/if}
+			{#if item.icon === 'shape-ranked'}<Icon id="shape-ranked" />{/if}
+			{#if item.icon === 'shape-scatter'}<Icon id="shape-scatter" />{/if}
+			{#if item.icon === 'shape-distribution'}<Icon id="shape-distribution" />{/if}
 			<span class="choice-shown" aria-hidden="true">{item.shown}</span>
 			<span class="sr-only">{item.spoken}</span>
 		</label>

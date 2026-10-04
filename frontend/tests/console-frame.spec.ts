@@ -402,9 +402,6 @@ function consoleChartWidth(): number {
  * carry `max-w-full` or `w-full` by hand and one shipped without it, which is
  * a convention no gate could see.
  *
- * It is reader-facing despite the console's own scope: `/evals/` is a signpost
- * carrying a `meta refresh` here, so an old link drops a reader on this page.
- *
  * Scripts off rather than a timed sample. The overflow lasts until hydration,
  * so a sample races it and reports a layout fact as a flake - which is exactly
  * how this arrived, as one red `layout-overflow.spec.ts` in a job whose other

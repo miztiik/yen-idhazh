@@ -53,7 +53,6 @@ paths and their publication protocol; they are not reader-facing URLs.
 /<YYYY-MM-DD>/<vertical>/ that day, one vertical - a projection canonical
 /<YYYY-MM-DD>/#<item id> an item anchor
 /archive/ every surviving day moving
-/evals/ a signpost to /console/, where the scores went
 /console/ the run-health dashboard moving
 ```
 

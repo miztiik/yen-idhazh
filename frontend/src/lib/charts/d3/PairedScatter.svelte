@@ -4,7 +4,7 @@
 	 * There is no trend line to draw because the geometry holds none. The dots
 	 * are hollow, so where many fall together the crowd reads as a crowd rather
 	 * than one blot, and each carries its subject and both readings in its
-	 * title. Where there is no geometry it draws the empty state it was handed,
+	 * accessible name and readout. Where there is no geometry it draws the empty state it was handed,
 	 * which for a floor missed names the floor.
 	 */
 	import { AXIS_LABEL_PX } from '$lib/charts/frame';
@@ -47,6 +47,7 @@
 		aria-label={label}
 		data-chart-type="pairedScatter"
 		data-chart-name={name}
+		data-readout-records={geometry.marks.length}
 	>
 		{#each geometry.y.ticks as tick (tick.value)}
 			<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />
@@ -75,9 +76,40 @@
 			{/if}
 		{/each}
 		{#each geometry.marks as mark, index (index)}
-			<circle cx={mark.cx} cy={mark.cy} r={DOT} fill="none" stroke="var(--chart-1)">
-				<title>{mark.label}: {mark.x}, {mark.y}</title>
-			</circle>
+			<circle cx={mark.cx} cy={mark.cy} r={DOT} fill="none" stroke="var(--chart-1)" aria-label={`${mark.label}: ${mark.x}, ${mark.y}`} />
 		{/each}
 	</svg>
+	{@const resting = geometry.marks.reduce((best, mark) => (mark.y > best.y ? mark : best), geometry.marks[0])}
+	{#if resting}
+		<dl class="record-readout" data-readout={name} data-readout-shape="record">
+			<dt data-readout-subject>{resting.label}</dt>
+			<div data-readout-row="x"><dd>X</dd><dd>{resting.x}</dd></div>
+			<div data-readout-row="y"><dd>Y</dd><dd>{resting.y}</dd></div>
+		</dl>
+	{/if}
 {/if}
+
+<style>
+	.record-readout {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+		margin: var(--space-3) 0 0;
+		color: var(--color-text-secondary);
+		font-size: var(--text-xs);
+	}
+
+	.record-readout dt {
+		flex-basis: 100%;
+		font-weight: 600;
+	}
+
+	.record-readout div {
+		display: flex;
+		gap: var(--space-1);
+	}
+
+	.record-readout dd {
+		margin: 0;
+	}
+</style>
