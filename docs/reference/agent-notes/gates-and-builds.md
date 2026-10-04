@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -18,6 +18,9 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Drive migrations and failure states with bounded fixtures. Confirm the fixture reaches the behavior under test; do not skip an assertion because its required control or data is absent.
 - A generic file-format test needs a real fixture of that format, not a ledger chosen only because it currently uses it. After a ledger migrates, keep old-format reader coverage explicit and test its current writer through the native persistence API.
 - Before moving a document or changing a table, check for tests and tools that read it. Repair those inputs as well as Markdown links.
+- Adding a persisted contract or retiring a task changes named test inputs too. Update the explicit fixture-path list, task declaration and module lists, and transitive-import lists beside the implementation. A committed fixture that the named fixture list omits is still untested.
+- Check platform-specific Python APIs with mypy's CI target platform. Guard Windows-only code directly with `sys.platform == "win32"`; an intermediate boolean can prevent the checker from excluding that branch on Linux. Include the shared fixture module when checking a test file in isolation.
+- A passing race test must reproduce the production changes: file additions and deletions, changing content-addressed paths, and competing push timing. A stable-path fixture or a test that retains superseded nodes does not prove a content-addressed replacement retry works.
 - Before and after splitting tests, compare the collected test cases, allowing only the intended module-path changes. A passing remainder does not prove that no tests were lost.
 - For a structural contract move, compare its on-demand schema before and after, then run import and type checks. Preserve class docstrings: Pydantic includes them in schema descriptions.
 - Use the complete project build command. For byte comparisons, use one fixed `BUILD_VERSION` across both builds so generated identifiers do not change. Never measure output from a failed build.
