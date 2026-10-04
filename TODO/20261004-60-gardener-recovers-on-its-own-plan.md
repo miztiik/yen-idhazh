@@ -40,7 +40,7 @@ Table A - what is out
 | 3 | A read nobody named fails loudly | - | A | DONE | curly-parakeet | - | Plan 60 row 3: unnamed reads fail |
 | 4 | The ledger fault words live in contracts | 1 | A | DONE | special-sniffle | - | Plan 60 row 4: fault words in contracts |
 | 5 | A ledger's marks are read in one place | - | A | PENDING | - | - | - |
-| 6 | One run id per workflow run | 1 | B | PENDING | - | - | - |
+| 6 | One run id per workflow run | 1 | B | DONE | automatic-adventure | - | Plan 60 row 6: one run id |
 | 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | PENDING | - | - | - |
 | 9 | Each job's name says what its shard runs | 6 | C | PENDING | - | - | - |

@@ -192,6 +192,10 @@ person's cancel still stops it. The person's ruling, 2026-09-29. It replaced
 under which a task that failed at every wake - a compaction that meets a hole, a
 shard over its ceiling - held off every squash until a person acted.
 
+**The history job writes its record with the plan job's run id**, so every
+record of one run carries one id even when the run crosses 00:00 UTC, and the
+job makes an id from its own UTC day only when a failed `plan` job left none.
+
 **The push carries a lease, and a refused push squashes again.**
 `corpus_history.py` pushes with `--force-with-lease=refs/heads/main:<tip>`,
 naming the tip it read before it rewrote anything, so git refuses the push if
