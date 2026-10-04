@@ -26,7 +26,6 @@ from ._harness import (
     _git,
     _isolated_env,
     _load_workflows,
-    _mapping,
     _race,
     _script,
     _scripted_origin,
@@ -185,8 +184,8 @@ def test_the_history_step_runs_the_shipped_program_and_nothing_else() -> None:
 
     The tip the lease names has to be read before the rewrite, and the program
     reads it itself, so no step hands a commit or a flag to a later one through
-    the job's environment. The day it squashes against is the due step's own
-    reading, so the job reads the clock once.
+    the job's environment. `test_gardener_workflow.py` holds which run and which
+    day the step reads, and that its own environment holds nothing else.
     """
     workflow = _load_workflows()["idhazh-gardener.yml"]
     step = _step(workflow, "history", "name", PRUNE_PUSH_STEP)
@@ -195,11 +194,6 @@ def test_the_history_step_runs_the_shipped_program_and_nothing_else() -> None:
         "the step runs the shipped program and nothing else, or the tests are "
         "driving a second copy of it"
     )
-    assert _mapping(step.get("env"), "history step env") == {
-        "TODAY": "${{ steps.due.outputs.today }}",
-        "RUN_ID": "${{ steps.due.outputs.today }}-${{ github.run_id }}",
-        "ATTEMPT": "${{ github.run_attempt }}",
-    }
     for other in _steps(workflow, "history"):
         script = other.get("run")
         assert not (isinstance(script, str) and "GITHUB_ENV" in script), (

@@ -120,8 +120,9 @@ jobs:
           set -euo pipefail
           python3 backend/utilities/gardener_shards.py | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # One run id for every shard, read once. Re-running a failed shard keeps
-      # this job's outputs, so the shard keeps the run it belongs to.
+      # One run id for every shard and the history job, read once. Re-running a
+      # failed shard keeps this job's outputs, so the shard keeps the run it
+      # belongs to.
       - id: run
         run: |
           set -euo pipefail
@@ -263,11 +264,14 @@ jobs:
       #
       # A program rather than inline shell, so a test can drive it against a real
       # repository and watch it refuse. `today` is the due step's own reading, so
-      # the job reads the clock once.
+      # the job reads the clock once. The run id is the plan job's, so every
+      # record of one run carries one id even when the run crosses 00:00 UTC.
+      # This job makes its own only when the plan job failed and left none. The
+      # owner's ruling, 2026-10-04.
       - name: Squash the history, record the run and push it
         if: steps.due.outputs.due == 'true'
         env:
           TODAY: ${{ steps.due.outputs.today }}
-          RUN_ID: ${{ steps.due.outputs.today }}-${{ github.run_id }}
+          RUN_ID: ${{ needs.plan.outputs.run_id || format('{0}-{1}', steps.due.outputs.today, github.run_id) }}
           ATTEMPT: ${{ github.run_attempt }}
         run: python backend/utilities/corpus_history.py --today "$TODAY" --run-id "$RUN_ID" --attempt "$ATTEMPT"
