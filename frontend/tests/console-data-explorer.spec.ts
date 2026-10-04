@@ -6,6 +6,7 @@ import { COMPACT_INDEX_STAMP } from '../src/lib/data/compact-index';
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, expectedAsk, expectedAskCost, EXPLORER_CANARY_DAY, openExplorer, runExplorer, tableRows } from './support/explorer-answer';
 import { encodeQuestion } from '../src/lib/console/explorer/address';
+import { consoleConfig } from '../src/lib/server/config';
 import type { LedgerName } from '../src/lib/data/ledger';
 
 const JOIN_LEDGERS = ['published', 'item-health'] as const satisfies readonly LedgerName[];
@@ -330,13 +331,15 @@ test('THE ORACLE: link notices render on the page', async ({ page }) => {
 test('THE ORACLE: every chart case draws its type with a populated readout', async ({ page }) => {
 	await openExplorer(page);
 	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+	// Each main figure is worded by plan section 2.11 rule 7 from the answer's own rows, so a
+	// figure that does not come from the data - a constant, a row count, the wrong column - fails.
 	const cases = [
-		['dateSeries', "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)"],
-		['rankedList', "SELECT * FROM (VALUES ('a', 9), ('b', 4), ('c', 2)) AS t(name, rows)"],
-		['pairedScatter', "SELECT 'row-' || i::VARCHAR AS name, i AS x, 170 - i AS y FROM range(0, 170) AS t(i)"],
-		['distribution', 'SELECT * FROM range(0, 170) AS t(rows)']
+		{ type: 'dateSeries', lede: '8 rows on 2026-08-20', sql: "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)" },
+		{ type: 'rankedList', lede: 'a: 9 rows', sql: "SELECT * FROM (VALUES ('a', 9), ('b', 4), ('c', 2)) AS t(name, rows)" },
+		{ type: 'pairedScatter', lede: '170 rows of y against x', sql: "SELECT 'row-' || i::VARCHAR AS name, i AS x, 170 - i AS y FROM range(0, 170) AS t(i)" },
+		{ type: 'distribution', lede: 'Half of rows is at or under 84.5', sql: 'SELECT * FROM range(0, 170) AS t(rows)' }
 	] as const;
-	for (const [type, sql] of cases) {
+	for (const { type, lede, sql } of cases) {
 		await chooseExplorerQuestion(page, ['published'], sql);
 		await runExplorer(page);
 		if (await page.locator(`[data-shape-choice="${type}"] input`).count()) {
@@ -344,16 +347,17 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 		}
 		await expect(panel.locator(`[data-chart-type="${type}"]`)).toHaveCount(1);
 		await expect(panel.locator('[data-readout] [data-readout-row]').first()).toBeVisible();
-		await expect(panel.locator('[data-lede]')).toBeVisible();
+		await expect(panel.locator('[data-lede]'), `${type} main figure`).toHaveText(lede);
 		await expect(panel.locator('[data-comparison]')).toContainText('against');
 		await expect(panel.locator('[title], title')).toHaveCount(0);
 	}
 
 	await chooseExplorerQuestion(page, ['published'], 'SELECT item_id FROM "published" LIMIT 1');
 	await runExplorer(page);
-	const height = await panel.boundingBox().then((box) => box?.height ?? 0);
-	await expect(panel.locator('[data-shape-none]')).toContainText('Nothing here to draw');
-	expect(height, 'the no-chart panel did not keep chart room').toBeGreaterThan(220);
+	const none = panel.locator('[data-shape-none]');
+	await expect(none).toContainText('Nothing here to draw');
+	const height = await none.boundingBox().then((box) => box?.height ?? 0);
+	expect(height, 'the no-chart sentence did not keep the chart room').toBeGreaterThanOrEqual(consoleConfig().chart_height);
 });
 
 test('THE ORACLE: Save, recent runs and Markdown copy preserve text without running a saved question', async ({ page, context }) => {
