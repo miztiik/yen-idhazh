@@ -2,7 +2,7 @@
 
 import { COMPACT_PERIODS, type CompactEntry, type Period } from './compact-index';
 import type { PageKeeper, WantedFile } from './page-keeper';
-import { coveredDays, filesFor, firstNamed, newestNamed, writerDaysFor, type ChosenFile } from './slice';
+import { coveredDays, filesFor, firstNamed, newestFile, newestNamed, writerDaysFor, type ChosenFile } from './slice';
 import { listOf, type QueryEngine } from './slice-query';
 import {
 	dataPath,
@@ -207,9 +207,10 @@ function compactSelection(
 }
 
 /** The files an empty view takes its columns from: the ledger's newest day, from its listing
- *  when the build listed a day after the newest packed one, else from the packed tier.
+ *  when the build listed a day after the newest packed one, else from the newest packed file.
  *  A zero-row packed file is kept, because a view that reads no rows needs only the file's
- *  columns, and a ledger whose packed days all hold zero rows would otherwise have no file. */
+ *  columns, and a ledger whose packed days all hold zero rows would otherwise have no file.
+ *  An `empty` or `lost` entry has no file, so the newest entry that has one is taken. */
 async function viewSource(
 	keeper: PageKeeper,
 	ledger: LedgerName,
@@ -222,13 +223,9 @@ async function viewSource(
 		const raw = await rawListing(keeper, ledger, listedThrough);
 		if (!('state' in raw) && raw.files.length > 0) return raw;
 	}
-	if (newestPacked === null) return { files: [], metas: [] };
-	const selection = filesFor(newestPacked, newestPacked, indexes.daily, indexes.monthly, indexes.yearly);
-	if ('hole' in selection) return { files: [], metas: [] };
-	return {
-		files: selection.files.map((file) => wanted(file.period, ledger, file)),
-		metas: selection.files.map((file) => ({ ledger, day: file.firstDay }))
-	};
+	const newest = newestFile(indexes.daily, indexes.monthly, indexes.yearly);
+	if (newest === null) return { files: [], metas: [] };
+	return { files: [wanted(newest.period, ledger, newest)], metas: [{ ledger, day: newest.firstDay }] };
 }
 
 async function planLedger(

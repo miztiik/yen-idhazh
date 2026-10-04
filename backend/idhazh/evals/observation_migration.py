@@ -149,6 +149,8 @@ def _metadata(path: Path, state: Path) -> bool:
             if (index.ledger, index.period) != (which, period):
                 raise ValueError("a compact evaluation index names another ledger or period")
             for entry in index.entries:
+                if not entry.names_file:
+                    continue
                 if not any(
                     ledger.compact_path(state, which, period, entry.covers, fmt=fmt).is_file()
                     for fmt in Format

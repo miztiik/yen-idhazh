@@ -7,7 +7,7 @@ payload that loads in exactly the one way it is about (CLAUDE.md section 13).
 Nothing here reads a committed ledger.
 
 A refusal comes from one of two places, and each is checked for what it can
-say. The three validators know the ledger and the day or period, so their
+say. The validators know the ledger and the day or period, so their
 message has to name both: that is what tells an operator which file to open. A
 refusal the field types make on their own - a name this project did not mint, a
 stamp with a fraction of a second, a count nobody may write any more, a run id
@@ -32,7 +32,7 @@ from pydantic_core import ErrorDetails
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope
-from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex, Watermark
+from idhazh.contracts.ledger_index import CompactIndex, EntryState, RawDayIndex, Watermark
 
 pytestmark = pytest.mark.contract
 
@@ -219,6 +219,140 @@ def test_a_compact_index_refuses_a_period_it_lists_twice_by_ledger_and_period() 
     error = _refusal(CompactIndex, payload | {"entries": [*payload["entries"], newest]})
 
     _names_the_file(error, payload["ledger"], payload["period"], newest["covers"], "more than once")
+
+
+@pytest.mark.parametrize(
+    ("name", "state"),
+    [("an-empty-day", EntryState.EMPTY), ("a-lost-day", EntryState.LOST)],
+)
+def test_a_daily_index_accepts_a_day_with_no_file_among_packed_days(
+    name: str, state: EntryState
+) -> None:
+    """A day the packing looked at and wrote no file for is an entry, so it is not a hole."""
+    index = CompactIndex.model_validate(_sample("compact-index", name))
+
+    with_no_file = [entry for entry in index.entries if entry.state is not EntryState.PACKED]
+    assert [entry.state for entry in with_no_file] == [state]
+    assert (with_no_file[0].rows, with_no_file[0].bytes, with_no_file[0].lost_days) == (0, 0, [])
+
+
+def test_a_monthly_index_accepts_a_month_that_names_its_lost_days() -> None:
+    index = CompactIndex.model_validate(_sample("compact-index", "a-month-with-lost-days"))
+
+    empty, packed = index.entries
+    assert (empty.state, empty.rows, empty.bytes) == (EntryState.EMPTY, 0, 0)
+    assert (packed.state, packed.lost_days, packed.set_aside) == (
+        EntryState.PACKED,
+        ["2026-08-12", "2026-08-13"],
+        1,
+    )
+
+
+def test_an_index_written_before_entries_had_a_state_reads_as_all_packed() -> None:
+    """Every committed index has this shape, and none is rewritten to gain the new fields."""
+    payload = _sample("compact-index", "an-index-written-before-entries-had-a-state")
+    assert all(set(entry) == {"covers", "rows", "bytes"} for entry in payload["entries"])
+
+    index = CompactIndex.model_validate(payload)
+
+    assert index.version == payload["version"]
+    assert [(entry.state, entry.lost_days, entry.set_aside) for entry in index.entries] == [
+        (EntryState.PACKED, [], 0) for _ in payload["entries"]
+    ]
+    assert [(entry.covers, entry.rows, entry.bytes) for entry in index.entries] == [
+        (entry["covers"], entry["rows"], entry["bytes"]) for entry in payload["entries"]
+    ]
+
+
+@pytest.mark.parametrize(("field", "count"), [("bytes", 7950), ("rows", 3)])
+@pytest.mark.parametrize("name", ["an-empty-day", "a-lost-day"])
+def test_an_entry_with_no_file_that_counts_rows_or_bytes_is_refused_by_ledger_and_period(
+    name: str, field: str, count: int
+) -> None:
+    """An entry says either that a file exists or that none does, never both."""
+    payload = _sample("compact-index", name)
+    target = next(entry for entry in payload["entries"] if entry["state"] != "packed")
+    entries = [entry | {field: count} if entry is target else entry for entry in payload["entries"]]
+
+    error = _refusal(CompactIndex, payload | {"entries": entries})
+
+    _names_the_file(error, payload["ledger"], payload["period"], target["covers"], "no file")
+
+
+def test_a_lost_day_outside_its_month_is_refused_by_ledger_and_period() -> None:
+    payload = _sample("compact-index", "a-month-with-lost-days")
+    month = payload["entries"][-1]
+    stray = month | {"lost_days": [*month["lost_days"], "2026-09-01"]}
+
+    error = _refusal(CompactIndex, payload | {"entries": [*payload["entries"][:-1], stray]})
+
+    _names_the_file(error, payload["ledger"], payload["period"], month["covers"], "2026-09-01")
+
+
+def test_a_lost_day_that_is_no_calendar_day_is_refused_by_ledger_and_period() -> None:
+    """`DateStamp` counts digits only, so the index is what refuses 2026-08-32."""
+    payload = _sample("compact-index", "a-month-with-lost-days")
+    month = payload["entries"][-1]
+    stray = month | {"lost_days": ["2026-08-32"]}
+
+    error = _refusal(CompactIndex, payload | {"entries": [*payload["entries"][:-1], stray]})
+
+    _names_the_file(error, payload["ledger"], payload["period"], month["covers"], "2026-08-32")
+
+
+@pytest.mark.parametrize(
+    "lost_days",
+    [["2026-08-13", "2026-08-12"], ["2026-08-12", "2026-08-12"]],
+    ids=["descending", "twice"],
+)
+def test_lost_days_out_of_order_are_refused_by_ledger_and_period(lost_days: list[str]) -> None:
+    payload = _sample("compact-index", "a-month-with-lost-days")
+    month = payload["entries"][-1] | {"lost_days": lost_days}
+
+    error = _refusal(CompactIndex, payload | {"entries": [*payload["entries"][:-1], month]})
+
+    _names_the_file(error, payload["ledger"], payload["period"], month["covers"], "out of order")
+
+
+def test_a_daily_entry_that_lists_lost_days_is_refused_by_ledger_and_period() -> None:
+    """A lost day of a daily index is an entry of its own, so it is told in one place only."""
+    payload = _sample("compact-index", "a-daily-index")
+    first, *rest = payload["entries"]
+    listed = first | {"lost_days": [first["covers"]]}
+
+    error = _refusal(CompactIndex, payload | {"entries": [listed, *rest]})
+
+    _names_the_file(error, payload["ledger"], payload["period"], first["covers"], "lost_days")
+
+
+@pytest.mark.parametrize("name", ["a-month-with-lost-days", "a-yearly-index"])
+def test_a_month_or_a_year_marked_lost_is_refused_by_ledger_and_period(name: str) -> None:
+    """Only a day is lost, so no reader has to handle a lost month or year."""
+    payload = _sample("compact-index", name)
+    *rest, last = payload["entries"]
+    lost = last | {"state": "lost", "rows": 0, "bytes": 0, "lost_days": []}
+
+    error = _refusal(CompactIndex, payload | {"entries": [*rest, lost]})
+
+    _names_the_file(error, payload["ledger"], payload["period"], last["covers"], "only a day")
+
+
+def test_a_state_the_contract_does_not_declare_is_refused() -> None:
+    payload = _sample("compact-index", "an-empty-day")
+    first, *rest = payload["entries"]
+
+    error = _refusal(CompactIndex, payload | {"entries": [first | {"state": "missing"}, *rest]})
+
+    assert (error["type"], error["loc"]) == ("enum", ("entries", 0, "state"))
+
+
+def test_a_negative_set_aside_count_is_refused() -> None:
+    payload = _sample("compact-index", "a-lost-day")
+    first, *rest = payload["entries"]
+
+    error = _refusal(CompactIndex, payload | {"entries": [first | {"set_aside": -1}, *rest]})
+
+    assert (error["type"], error["loc"]) == ("greater_than_equal", ("entries", 0, "set_aside"))
 
 
 # --- Watermark ---------------------------------------------------------------
