@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-04
 **Level**: 5 for the approved root design; 2 for the first tooling phase.
-**Status**: Row 1, including its split into the package `backend/utilities/ledger_migration/`, is committed on branch `pipeline-tests-migration`; no pull request is open. No committed data has moved. Rows 2 to 5 wait for the user's authorization.
+**Status**: Row 1 is done: the reusable migration tool is the package `backend/utilities/ledger_migration/`, run through `backend/utilities/migrate_to_parquet.py`. No committed data has moved. Rows 2 to 5 wait for the user's authorization.
 
 ## 0. Operating contract
 
@@ -58,7 +58,7 @@ Table D - PR phases
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D1 | 1 | Reusable migration operations ship | - | A | IN-FLIGHT | - | - | phased-migration-tool |
+| D1 | 1 | Reusable migration operations ship | - | A | DONE | - | - | phased-migration-tool |
 | D2 | 2 | Readers understand nested trial roots | 1 | B | PENDING | - | - | - |
 | D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | PENDING | - | - | - |
 | D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | PENDING | - | - | - |
