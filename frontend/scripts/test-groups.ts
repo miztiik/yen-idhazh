@@ -34,6 +34,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'console-data-explorer-address', 'console-data-explorer-keep', 'console-data-explorer-shape',
 		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
+		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data',
 		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
