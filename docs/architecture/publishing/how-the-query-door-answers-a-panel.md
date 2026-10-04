@@ -85,10 +85,10 @@ index for a period never packed names nothing - and declared as `CompactIndex` i
    file.** An entry `empty` held no row and an entry `lost` lost its rows, so
    neither has a file ([../contracts/persistence.md](../contracts/persistence.md#what-an-index-entry-says)).
    A span of quiet days loads no engine at all.
-5. **A day an index records lost is named, never drawn.** It is a day of an
-   entry `lost`, or a day a month or a year lists in its `lost_days`. It is not a
-   hole, because an entry names it; the answer lists it in `lostDays`, and the
-   door reads the rest of the span as usual.
+5. **A day an index records lost is named, never drawn.** It is a daily entry
+   `lost`, or a day a month or a year lists in its `lost_days`; only a day is
+   ever `lost`. It is not a hole, because an entry names it; the answer lists it
+   in `lostDays`, and the door reads the rest of the span as usual.
 6. **A file whose decoded length differs from its entry's `bytes` is refused**, and
    so is one that does not arrive; one the site answers is not there is
    `file-missing`. The decoded length, never `Content-Length`,

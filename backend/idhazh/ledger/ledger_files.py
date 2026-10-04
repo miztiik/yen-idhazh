@@ -27,8 +27,15 @@ hole: its rows went somewhere no reader can find them. It is logged by name,
 and any raw files it still has are read, which is the safe direction for a
 retirement - an address read twice is still retired once.
 
+**An entry with no file serves its days with no rows.** An `empty` period held
+no row and a `lost` day lost its rows, so neither has a file to look for, and
+neither is a hole, because an index names it. A day an index records lost - a
+daily entry `lost`, or a day a month or a year lists in its `lost_days` - is
+reported once as a gap and never as a missing file: nothing is missing that a
+re-pack could restore.
+
 **A missing file is named the way the query door names it** (`LedgerFault`):
-a hole is `day-missing`, a file an index names that is not there is
+a hole is `day-missing`, a file a packed entry names that is not there is
 `file-missing`, and a daily index with no monthly or yearly index beside it is
 `index-missing`, because the compaction writes the three together. Each is a
 warning naming the fault and the path, and the read goes on with what it can
@@ -64,7 +71,7 @@ from typing import Final
 from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.ledger_fault import LedgerFault
-from idhazh.contracts.ledger_index import CompactIndex
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths, raw_files
 from idhazh.ledger.persist import StoredRow, load_stored
@@ -80,7 +87,8 @@ class Source:
     covers: str
     #: `yearly`, `monthly` or `daily` for a compact file, and None for a raw day.
     period: Period | None
-    #: The one compact file, or the raw files of the day, oldest first.
+    #: The one compact file, or the raw files of the day, oldest first. None for an
+    #: entry with no file: an `empty` period or a `lost` day.
     paths: tuple[Path, ...]
 
     def holds(self, day: str) -> bool:
@@ -95,6 +103,8 @@ class LedgerFiles:
     sources: tuple[Source, ...]
     #: Days inside the compact span that no compact file serves, oldest first.
     holes: tuple[str, ...]
+    #: Days an index records lost, oldest first. Each has no row anywhere and no file.
+    lost: tuple[str, ...]
 
     def source_of(self, day: str) -> Source | None:
         """The one source that serves this day, or None when nothing does."""
@@ -104,6 +114,22 @@ class LedgerFiles:
 def _shown(state_dir: Path, path: Path) -> str:
     """A path as it may leave the process: under `state/`, POSIX (CLAUDE.md section 2)."""
     return f"{paths.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
+
+
+def _days_lost(entry: CompactEntry) -> list[str]:
+    """The UTC days an entry records lost: the day itself for a `lost` day, else its `lost_days`."""
+    return [entry.covers] if entry.state is EntryState.LOST else list(entry.lost_days)
+
+
+def _report_lost(ledger: LedgerName, lost: Collection[str]) -> None:
+    """One warning for the days an index records lost: a gap, never a missing file."""
+    if lost:
+        logger.warning(
+            "days an index records lost have no rows, and no file is read for them "
+            "ledger=%s lost=%s",
+            ledger.value,
+            ",".join(sorted(lost)),
+        )
 
 
 def _index(state_dir: Path, ledger: LedgerName, period: Period) -> CompactIndex | None:
@@ -227,17 +253,20 @@ _STRETCH: Final[dict[Period, str]] = {
 def list_ledger_files(state_dir: Path, ledger: LedgerName) -> LedgerFiles:
     """Every source this ledger is read from, oldest first, each date from exactly one."""
     yearly, monthly, daily = _indexes(state_dir, ledger)
-    years = [entry.covers for entry in yearly.entries] if yearly else []
-    months = [entry.covers for entry in monthly.entries] if monthly else []
-    days = [entry.covers for entry in daily.entries] if daily else []
+    named_by: dict[Period, list[CompactEntry]] = {
+        Period.YEARLY: yearly.entries if yearly else [],
+        Period.MONTHLY: monthly.entries if monthly else [],
+        Period.DAILY: daily.entries if daily else [],
+    }
+    years = [entry.covers for entry in named_by[Period.YEARLY]]
+    months = [entry.covers for entry in named_by[Period.MONTHLY]]
+    days = [entry.covers for entry in named_by[Period.DAILY]]
     sources: list[Source] = []
+    lost: list[str] = []
     packed, absorbed = set(years), set(months)
-    for period, covered in (
-        (Period.YEARLY, years),
-        (Period.MONTHLY, months),
-        (Period.DAILY, days),
-    ):
-        for covers in covered:
+    for period, entries in named_by.items():
+        for entry in entries:
+            covers = entry.covers
             coarser = _coarser(period, covers, packed=packed, absorbed=absorbed)
             if coarser is not None:
                 logger.warning(
@@ -248,6 +277,10 @@ def list_ledger_files(state_dir: Path, ledger: LedgerName) -> LedgerFiles:
                     ledger.value,
                     covers,
                 )
+                continue
+            lost.extend(_days_lost(entry))
+            if not entry.names_file:
+                sources.append(Source(covers=covers, period=period, paths=()))
                 continue
             found = compact_file(state_dir, ledger, period, covers)
             if found is None:
@@ -272,7 +305,11 @@ def list_ledger_files(state_dir: Path, ledger: LedgerName) -> LedgerFiles:
         Source(covers=day, period=None, paths=tuple(held)) for day, held in by_day.items()
     )
     sources.sort(key=lambda source: source.covers)
-    return LedgerFiles(sources=tuple(sources), holes=_holes(sources, years, months, days))
+    return LedgerFiles(
+        sources=tuple(sources),
+        holes=_holes(sources, years, months, days),
+        lost=tuple(sorted(lost)),
+    )
 
 
 def load_ledger_rows[C: Contract](
@@ -301,6 +338,7 @@ def load_ledger_rows[C: Contract](
             _shown(state_dir, paths.compact_index_path(state_dir, ledger, Period.DAILY)),
             ",".join(found.holes),
         )
+    _report_lost(ledger, found.lost)
     stored: list[list[StoredRow[C]]] = []
     for source in found.sources:
         for path in source.paths:
@@ -387,7 +425,7 @@ def _stored_or_skipped[C: Contract](
 def _compact_rows[C: Contract](
     state_dir: Path, ledger: LedgerName, period: Period, covers: str, *, model: type[C]
 ) -> list[StoredRow[C]]:
-    """The rows of the compact file an index names, or none with a warning naming the fault."""
+    """The rows of the file a packed entry names, or none with a warning naming the fault."""
     found = compact_file(state_dir, ledger, period, covers)
     if found is None:
         logger.warning(
@@ -425,9 +463,9 @@ def load_days[C: Contract](
         )
     key = keys.door_key(ledger)
     yearly, monthly, daily = _indexes(state_dir, ledger)
-    years = {entry.covers for entry in yearly.entries} if yearly else set()
-    months = {entry.covers for entry in monthly.entries} if monthly else set()
-    compact_days = {entry.covers for entry in daily.entries} if daily else set()
+    years = {entry.covers: entry for entry in yearly.entries} if yearly else {}
+    months = {entry.covers: entry for entry in monthly.entries} if monthly else {}
+    compact_days = {entry.covers: entry for entry in daily.entries} if daily else {}
     wanted = sorted(set(days))
     raw_wanted = {
         day
@@ -439,30 +477,36 @@ def load_days[C: Contract](
         raw_by_day.setdefault(held.envelope.covers, []).append(held.path)
     period_rows: dict[tuple[Period, str], list[StoredRow[C]]] = {}
 
-    def rows_of(period: Period, covers: str) -> list[StoredRow[C]]:
-        """One month or year file's rows, read once however many of its days are asked."""
-        if (period, covers) not in period_rows:
-            period_rows[period, covers] = _compact_rows(
-                state_dir, ledger, period, covers, model=model
+    def rows_of(period: Period, entry: CompactEntry) -> list[StoredRow[C]]:
+        """One period's rows, read once however many of its days are asked; none with no file."""
+        if (period, entry.covers) not in period_rows:
+            period_rows[period, entry.covers] = (
+                _compact_rows(state_dir, ledger, period, entry.covers, model=model)
+                if entry.names_file
+                else []
             )
-        return period_rows[period, covers]
+        return period_rows[period, entry.covers]
 
     rows: list[C] = []
+    lost: list[str] = []
     for day in wanted:
         files: list[list[StoredRow[C]]]
-        coarse: list[StoredRow[C]] | None = None
         if day[:4] in years:
-            coarse = rows_of(Period.YEARLY, day[:4])
+            period, entry = Period.YEARLY, years[day[:4]]
         elif day[:7] in months:
-            coarse = rows_of(Period.MONTHLY, day[:7])
-        if coarse is not None:
-            files = [[held for held in coarse if held.identity.covers == day]]
+            period, entry = Period.MONTHLY, months[day[:7]]
         elif day in compact_days:
-            files = [_compact_rows(state_dir, ledger, Period.DAILY, day, model=model)]
+            period, entry = Period.DAILY, compact_days[day]
         else:
             files = [
                 _stored_or_skipped(state_dir, path, model=model)
                 for path in raw_by_day.get(day, [])
             ]
+            rows.extend(held.row for held in raw_files.settle_rows(files, key))
+            continue
+        if day in _days_lost(entry):
+            lost.append(day)
+        files = [[held for held in rows_of(period, entry) if held.identity.covers == day]]
         rows.extend(held.row for held in raw_files.settle_rows(files, key))
+    _report_lost(ledger, lost)
     return rows

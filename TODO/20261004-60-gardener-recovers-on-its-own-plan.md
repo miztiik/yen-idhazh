@@ -332,14 +332,18 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/src/lib/data/ledger-reach.ts` (read, no change: it counts an entry by its `covers` alone)
   - `frontend/src/lib/data/ask-reader.ts`
   - `frontend/src/lib/console/recording.ts` (read, no change: it never reads an entry)
-  - `frontend/scripts/published-ledgers.mjs` (found during execution: the site build named a file for every entry)
+  - `frontend/scripts/published-ledgers.mjs` (found during execution, and asked for again by the Fowler review 2026-10-04: the site build named a file for every entry)
   - `frontend/tests/ledger-door.spec.ts`
   - `frontend/tests/ledger-ranges.spec.ts`
-  - `frontend/tests/ledger-copy.spec.ts` (found during execution)
+  - `frontend/tests/ledger-copy.spec.ts` (found during execution, and asked for again by the Fowler review 2026-10-04)
   - `frontend/tests/published-ledgers.spec.ts` (found during execution)
   - `docs/architecture/contracts/persistence.md`
   - `docs/architecture/contracts/schemas.md` (the `ENTRY_STATES` binding this row adds)
   - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (found during execution)
+  - `backend/idhazh/ledger/ledger_files.py` (corrected during execution (Fowler review 2026-10-04))
+  - `backend/idhazh/evals/observation_migration.py` (corrected during execution (Fowler review 2026-10-04))
+  - `backend/tests/ledger/test_ledger_files.py` (corrected during execution (Fowler review 2026-10-04))
+  - `backend/tests/evals/test_observation_migration.py` (corrected during execution (Fowler review 2026-10-04))
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 -m contract backend/tests/contracts/test_ledger_index.py backend/tests/contracts/test_frontend_index_shapes.py`; the specs the selector lists; the browser smoke in run-the-gates.md on a ledger page served from a fixture with an `empty` and a `lost` day (CLAUDE.md section 12, including a missing index); `doc_load.py`. CI: the full suite.
 - **Oracle:** contract: an index written before this row reads as all `packed`; an `empty` entry with `bytes` above 0 is refused; a `lost_days` day outside its entry's period is refused; the field-set and vocabulary tests hold the frontend copy in step. Site: a slice across a `lost` day returns the other days' rows and names the lost day, and fetches no file for an `empty` or `lost` period. It cannot settle how a panel words the gap; Jony and Susan rule on that only if two layouts lead to different code.
 

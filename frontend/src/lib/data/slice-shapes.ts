@@ -65,8 +65,8 @@ export type LedgerFault = (typeof LEDGER_FAULTS)[number];
 /** What the door hands a panel. `rows` is empty for every state but `ok`.
  *  `through` is the newest day `daily.json` names, or `null` before the first
  *  compaction, so a panel can say how far its data reaches. `lostDays` names
- *  the days in the span an index records lost - a `lost` entry, or a day in a
- *  month's or a year's `lost_days` - ascending: each has no record, so a panel
+ *  the days in the span an index records lost - a daily entry `lost`, or a day
+ *  in a month's or a year's `lost_days` - ascending: each has no record, so a panel
  *  says so rather than drawing it as a day with no rows. `fault` names the
  *  missing file behind a `missing` or an `unreachable`, and is `null` for an
  *  `unreachable` with another cause: an index this build will not act on, a file

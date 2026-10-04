@@ -11,7 +11,7 @@
  * nobody could see.
  *
  * **An entry may name a period that has no file.** An `empty` one held no row,
- * so its days are quiet and nothing is fetched for them. A `lost` one lost its
+ * so its days are quiet and nothing is fetched for them. A `lost` day lost its
  * rows, and so did each day a month or a year lists in its `lost_days`: those
  * days come back by name, beside the files, because a day with no record is not
  * a day with no rows. `namesFile()` is the one reading of whether an entry has a

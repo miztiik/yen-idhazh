@@ -14,7 +14,7 @@ Each is written whole, never appended to. `CompactEntry` is one line of a
 `CompactIndex` and has no file of its own, so it is a `Model`.
 
 **An entry says whether its period has a file.** A `packed` period has one. An
-`empty` period held no row and a `lost` one lost its rows, so neither has a
+`empty` period held no row and a `lost` day lost its rows, so neither has a
 file, and a lost day inside a closed month or year is listed on that period's
 entry. A reader then tells a quiet day from a lost one, and a lost one from a
 hole, without opening a file.
@@ -187,7 +187,8 @@ class EntryState(StrEnum):
     PACKED = "packed"
     #: The period was looked at and held no row, so no file was written for it.
     EMPTY = "empty"
-    #: The period's rows could not be recovered, so it has no file and no record.
+    #: The day's rows could not be recovered, so it has no file and no record. Only a
+    #: day is lost: a month or a year lists the days it lost in `lost_days`.
     LOST = "lost"
 
 
@@ -218,9 +219,9 @@ class CompactEntry(Model):
         default=EntryState.PACKED,
         description=(
             "`packed`: the period's rows are in its file. `empty`: the period held no row, "
-            "and no file was written. `lost`: the period's rows could not be recovered, so it "
-            "has no file and no record. An index written before entries had a state reads as "
-            "all `packed`."
+            "and no file was written. `lost`: the day's rows could not be recovered, so it "
+            "has no file and no record; only a daily entry is `lost`. An index written "
+            "before entries had a state reads as all `packed`."
         ),
     )
     lost_days: list[DateStamp] = Field(
@@ -239,6 +240,11 @@ class CompactEntry(Model):
             "they could not be read or were too large. The period holds every other row."
         ),
     )
+
+    @property
+    def names_file(self) -> bool:
+        """Whether the period has a file to read: only a `packed` one does."""
+        return self.state is EntryState.PACKED
 
 
 class CompactIndex(Contract):
@@ -333,6 +339,11 @@ class CompactIndex(Contract):
                 raise ValueError(
                     f"{where} marks {entry.covers!r} {entry.state.value} with rows {entry.rows} "
                     f"and bytes {entry.bytes}, and an entry with no file counts neither"
+                )
+            if entry.state is EntryState.LOST and self.period is not Period.DAILY:
+                raise ValueError(
+                    f"{where} marks {entry.covers!r} lost, and only a day is lost: a month or a "
+                    "year lists the days it lost in lost_days"
                 )
             if not entry.lost_days:
                 continue

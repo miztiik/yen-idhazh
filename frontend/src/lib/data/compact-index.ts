@@ -39,7 +39,7 @@ export const COMPACT_PERIODS = ['daily', 'monthly', 'yearly'] as const;
 
 export type Period = (typeof COMPACT_PERIODS)[number];
 
-/** Whether a period named in an index has a file: `packed` has one, `empty` and `lost` have none. */
+/** Whether a period named in an index has a file: `packed` has one, `empty` and `lost` have none. Only a day is `lost`. */
 export const ENTRY_STATES = ['packed', 'empty', 'lost'] as const;
 
 export type EntryState = (typeof ENTRY_STATES)[number];
@@ -124,6 +124,9 @@ function brokenEntry(entries: unknown[], period: Period): string | null {
 		if (state !== undefined && !isState(state)) return `entry ${at} (${covers}) has state ${JSON.stringify(state)}`;
 		if (state !== undefined && state !== 'packed' && (rows > 0 || bytes > 0)) {
 			return `entry ${at} (${covers}) is ${state}, which names no file, and has rows ${rows} and bytes ${bytes}`;
+		}
+		if (state === 'lost' && period !== 'daily') {
+			return `entry ${at} (${covers}) is lost, and only a day is: a ${period} entry lists the days it lost in lost_days`;
 		}
 		const lost = lostDays === undefined ? null : brokenLostDays(lostDays, covers, period);
 		if (lost !== null) return `entry ${at} (${covers}) ${lost}`;

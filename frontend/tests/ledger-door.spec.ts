@@ -1420,6 +1420,17 @@ test.describe('THE ORACLE for a period with no file: an empty day is quiet, a lo
 			expect(warned.join('\n')).toContain('monthly.json cannot be read: entry 0 (2026-08)');
 		});
 	}
+
+	test('a monthly index whose month is marked lost is one this build will not act on: only a day is lost', async () => {
+		const { fetcher } = recorded({
+			[MONTHLY_INDEX]: reshaped({
+				entries: fixtureEntries('monthly').map((entry) => ({ ...entry, rows: 0, bytes: 0, state: 'lost' }))
+			})
+		});
+		const { result, warned } = await warnings(() => readSlice(freshPage(fetcher), LEDGER, ask('2026-08-29', '2026-09-01')));
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-29', fault: null });
+		expect(warned.join('\n')).toContain('entry 0 (2026-08) is lost, and only a day is');
+	});
 });
 
 test.describe('THE ORACLE for ask(): a written question over chosen ledgers', () => {

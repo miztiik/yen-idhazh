@@ -325,6 +325,18 @@ def test_a_daily_entry_that_lists_lost_days_is_refused_by_ledger_and_period() ->
     _names_the_file(error, payload["ledger"], payload["period"], first["covers"], "lost_days")
 
 
+@pytest.mark.parametrize("name", ["a-month-with-lost-days", "a-yearly-index"])
+def test_a_month_or_a_year_marked_lost_is_refused_by_ledger_and_period(name: str) -> None:
+    """Only a day is lost, so no reader has to handle a lost month or year."""
+    payload = _sample("compact-index", name)
+    *rest, last = payload["entries"]
+    lost = last | {"state": "lost", "rows": 0, "bytes": 0, "lost_days": []}
+
+    error = _refusal(CompactIndex, payload | {"entries": [*rest, lost]})
+
+    _names_the_file(error, payload["ledger"], payload["period"], last["covers"], "only a day")
+
+
 def test_a_state_the_contract_does_not_declare_is_refused() -> None:
     payload = _sample("compact-index", "an-empty-day")
     first, *rest = payload["entries"]
