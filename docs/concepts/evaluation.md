@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -857,7 +857,9 @@ Coherence runs in the `work` shard, inside `to_eval_row`, because that is where 
 
 **Where a later plan would start.** [../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md) sketches a judge and names none of these four, which is the useful part - it hands over pieces rather than a design. The venue is [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md), which owns the workflow, the verbs and the tenancy protocol. The night's shape is: draw a sample, ask a model for a verdict on each item, turn the verdicts into one reading. **The label ledger and the review tree are the two that shape fits with nothing added**, because both already draw a sample and seat a person in the verdict chair; swapping the chair is the whole change. The validator and the faithfulness scorer fit it less well - both run on every item rather than on a draw, so a plan for either starts by measuring a model judge against the instrument already there. And where a reading has to move a number, [`../../backend/idhazh/contracts/fitted_similarity_threshold.py`](../../backend/idhazh/contracts/fitted_similarity_threshold.py) is the template that damps it, step-caps it and clamps it. Authority: nobody. This records what section 1a opened; each of the four is an owner decision that has not been asked for.
 
-**Every eval row is kept for ever, and nothing summarises a month.** The rows are the evidence behind every quality claim this project publishes. The month summary they replaced kept totals and distributions, and gave up item-level lookup, a late draw into the label queue, re-banding under new thresholds, an exact percentile and any slice its key did not name - and it existed only so that rows older than fourteen months could be deleted. Keeping the rows keeps all of that, and a chart that wants a monthly figure computes it from the rows when it draws. The cost is bytes, and parquet keeps them small: the eval ledger held 4,893,746 bytes, about 4.9 MB, on 2026-09-30, over 40 days of rows. One estimate put the growth at about 29 MB a year; those first 40 days grew at about 45 MB a year, and the committed size of `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` a year from now settles which is nearer. The `monthly_window` of `config/gardener/compact-summary-quality-evals.json` is `forever`, so the compaction may pack a month and never drops one. The [observation lookup](../architecture/contracts/observation-lookup.md) keeps every measurement ID independently of that packing.
+**Every eval row is kept for ever, and nothing summarises a month.** The rows are the evidence behind every quality claim this project publishes. The month summary they replaced kept totals and distributions, and gave up item-level lookup, a late draw into the label queue, re-banding under new thresholds, an exact percentile and any slice its key did not name - and it existed only so that rows older than fourteen months could be deleted. Keeping the rows keeps all of that, and a chart that wants a monthly figure computes it from the rows when it draws. The cost is bytes, and parquet keeps them small: the eval ledger held 4,893,746 bytes, about 4.9 MB, on 2026-09-30, over 40 days of rows. One estimate put the growth at about 29 MB a year; those first 40 days grew at about 45 MB a year, and the committed size of `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` a year from now settles which is nearer. The `monthly_window` of `config/gardener/compact-summary-quality-evals.json` is `forever`, so the compaction may pack a month and never drops one.
+
+**No index decides which measurements may be filed.** Owner decision, 2026-10-04. A lookup under `state/summary-quality-evals-index/` used to refuse any measurement the ledger already held, from any day. It held a copy of the ledger's own keys and nothing else - 16,120 IDs against 16,120 distinct measurements on 2026-10-04 - and every job that filed rows rewrote its shared root and database files. That shared file is what made two jobs racing to push conflict in Git: the four digest runs from 2026-10-03 14:43 UTC to 2026-10-04 08:30 UTC all failed at the step that commits the day, three on conflicts in lookup files and one on a migration the lookup required, and 2026-10-03 needed a manual recovery. What the lookup alone stopped was the same words filed on two different days, and that barely happens: of the 163 repeats it refused in the batches waiting on 2026-10-04, none came from another day, and an article summarised again got different words in 19 of 19 cases. So each job files its own raw file and reads nothing first, as item health does; a read of named days keeps one row per measurement each day, and a whole-ledger read keeps the first one across every day. What this gives up is a rare second row under a later day.
 
 ## Rejected alternatives
 
@@ -952,12 +954,14 @@ Committing the scores rather than deriving them is what makes a claim about last
 
 The row shape travels with the file. Every file records the version stamp of the shape its rows were written under, and the door refuses a file written under a newer shape than the build reading it, naming the file and both stamps.
 
-**The ledger records measurements, not runs.** The writer files no row whose
-address, output words and scorer version all match a measurement
-the ledger already records. A second row would count the same measurement
-again. The [canonical key](../architecture/contracts/observation-lookup.md#measurement-identity)
-excludes pipeline version, date, run, article-input digest and item slot.
-A changed output or scorer is a new measurement.
+**The ledger records measurements, not runs.** A measurement is its address,
+its output words and its scorer version - `OBSERVATION_KEY` in
+[`../../backend/idhazh/ledger/keys.py`](../../backend/idhazh/ledger/keys.py).
+Pipeline version, date, run, article-input digest and item slot are not part of
+it, so a changed output or scorer is a new measurement. The writer reads
+nothing before it files: a work shard and the assemble job each file what they
+hold, a read of named days keeps one row per measurement each day, and a
+whole-ledger read keeps the first one across every day.
 
 ### Every column is answered for by exactly one console panel
 
@@ -998,23 +1002,11 @@ That title is the **source's** headline, not the one the summarizer wrote ([../a
 
 **Run-level facts are not ledger rows.** How many items a run planned, finished and failed is a property of the run, not of any item, and it lives in the run manifest - which is committed, dated and published alongside the day. Widening the per-item row to carry a second kind of row would leave every item row with columns that are blank for it and would break the dashboard's one honest question: group the rows by band and count them.
 
-**A duplicate measurement writes no second row.** The writer de-duplicates on
-address, output words and scorer version after work has
-run. That is ledger de-duplication, not proof that production skipped inference;
-nothing skips
+**A repeated measurement is removed when the rows are read.** Two files of one
+day may hold the same address, output words and scorer version after work has
+run, and every reader keeps one of them. That is ledger de-duplication, not
+proof that production skipped inference; nothing skips
 ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
-
-### The dedupe is answered by an index, and an index can be wrong
-
-The writer asks the [observation lookup](../architecture/contracts/observation-lookup.md)
-about supplied IDs without reading evaluation history. Its root, bounded
-routing nodes and SQLite leaves replace the per-day CSV index. Reads validate
-the nodes they touch, and a missing root with existing history fails rather
-than treating old measurements as new.
-
-The same page owns local recovery and atomic publication of rows, IDs and batch
-receipts. Operators use the [explicit cutover and named-batch recovery procedure](../how-to/migrate-observation-lookup.md),
-not a routine full-history repair or an implicit writer fallback.
 
 ### Every row is kept, and nothing summarises a month
 
@@ -1028,11 +1020,6 @@ files into one year file
 ([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md#design-rationale)).
 Why the rows are kept rather than summarised, and what that costs in bytes, is
 the [design rationale](#design-rationale) above.
-
-**The index the dedupe reads keeps every ID for the same reason.** An
-observation key carries no date, so an ID dropped would make its measurement
-new again. The lookup has no age-deletion task or day/month fold. Membership
-work is bounded by the supplied IDs.
 
 **Every utility that needs an item-level row reaches every month.**
 `label_queue.py`, `reband_scores.py`, `data_wrangler.py refill` and

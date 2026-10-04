@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -69,7 +69,8 @@ that owns a registered CSV day tree.
 The digest workflow ran that same fold live on every run until the gardener
 took it over, and a fold changes no answer a reader gets. No current task sets
 `fold.settles_months`. The [evaluation ID lookup](../../architecture/contracts/observation-lookup.md)
-has no retention declaration: its IDs never expire, and it has no day/month fold.
+has no retention declaration and no day/month fold, and nothing in the pipeline
+writes or reads it.
 Why each tree gets the age it has is
 [retention-ages.md](retention-ages.md#every-tree-names-its-own-cleanup-age).
 

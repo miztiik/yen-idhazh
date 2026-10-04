@@ -105,11 +105,11 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.SUMMARY_QUALITY_EVALS_INDEX: LedgerStaging(
         writer=(
-            "idhazh.evals.writer.file_measurements, which indexes the measurements it "
-            "files in the same call"
+            "nothing in the pipeline; only backend/utilities/migrate_observation_lookup.py, "
+            "a person's own run, writes it"
         ),
-        symbol="idhazh.evals.writer.file_measurements",
-        job_labels=frozenset({"work", "assemble"}),
+        symbol=None,
+        job_labels=frozenset(),
     ),
     LedgerName.CANDIDATE_MODELS: LedgerStaging(
         writer=(

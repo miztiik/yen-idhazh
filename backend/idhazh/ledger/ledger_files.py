@@ -414,7 +414,8 @@ def load_days[C: Contract](
 
     Each day is settled on its own, as `day_shards.settled_day` settled a CSV
     day: a key that carries no date - the eval ledger's - is one measurement
-    within a day, and the question across days belongs to its writer.
+    within a day, so the same words filed on two days are kept under each.
+    `load_ledger_rows` settles once across every day and keeps the first.
     """
     paired = keys.door_contract(ledger)
     if paired is not model:
