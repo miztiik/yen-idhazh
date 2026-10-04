@@ -40,6 +40,7 @@ from idhazh.contracts.feed_health import (
 )
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.extract import ExtractConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.qualification import (
     CanaryObservation,
 )
@@ -747,9 +748,8 @@ def published_days(root: Path) -> list[Path]:
     ]
 
 
-def _plan_path(date: str) -> Path:
-    return _run_dir(date) / "plan.json"
-
-
 def _load_plan(date: str) -> RunPlan:
-    return RunPlan.read(_plan_path(date))
+    plans = ledger.load_days(STATE_ROOT, LedgerName.RUN_PLAN, [date], model=RunPlan)
+    if not plans:
+        raise FileNotFoundError(f"no run plan is recorded for UTC day {date}")
+    return max(plans, key=lambda plan: (plan.generated_at, plan.run_id))
