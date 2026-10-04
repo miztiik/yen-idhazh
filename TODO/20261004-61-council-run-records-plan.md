@@ -4,9 +4,9 @@
 
 **Level**: 5 (CLAUDE.md section 6): the plan replaces a persisted row contract and moves a committed ledger. The owner approved the shapes and the names on 2026-10-04 and set rows 1, 2 and 3 at Levels 2, 3 and 4; row 4 is Level 2.
 
-**Status**: written 2026-10-04 from Fowler's design of the same day, which the owner approved as option A1, and checked against `main` at 9165a9f75. No row has started. The three conflicts found while writing it (Table C, C1 to C3) are ruled, each as option (a); none changes an approved name or shape.
+**Status**: written 2026-10-04 from Fowler's design of the same day, which the owner approved as option A1, and checked against `main` at 9165a9f75. The three conflicts found while writing it (Table C, C1 to C3) are ruled, each as option (a); none changes an approved name or shape. The owner authorized execution on 2026-10-04: row 1 now; rows 2 to 4 only after Plan 60's row "Which months may close" (`TODO/20261004-60-gardener-recovers-on-its-own-plan.md`) merges, because row 2 adds a compaction that fails, as seven did on 2026-10-04, until that fix lands. Row 2's Depends-on names that row by number so the plan reader holds it; re-check its title at dispatch.
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
 ## 0. Operating contract
 
@@ -53,7 +53,7 @@ Table C - when to stop and ask
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The council's run record has its own contract, and it reads every old row | - | A | PENDING | - | - | - |
-| 2 | The council saves its run records through the ledger door | 1 | B | PENDING | - | - | - |
+| 2 | The council saves its run records through the ledger door | 1, plan 60 row #12 | B | PENDING | - | - | - |
 | 3 | The committed council rows move onto the door, and the old family goes | 2 | C | PENDING | - | - | - |
 | 4 | The old-row reader and the migrator's council entry are deleted | 3 | D | PENDING | - | - | - |
 
