@@ -9,15 +9,17 @@ on:
   # commit is sound - and since `scope` answers from each push's own paths, the
   # run that would have caught it may not even be the next one.
   #
-  # Two workflows can produce that verdict. CI verifies one commit, and this
-  # publishes that same commit. The daily run validates the day it built before
-  # committing it, and its own pushes start no CI at all - GitHub deliberately
-  # does not let one workflow's push trigger another - so it reports here
-  # directly, which is what stops the digest landing every morning and never
-  # reaching a reader.
+  # Two workflows can produce that verdict. CI verifies a push to main. The daily
+  # run validates the day it built before committing it, and its own pushes
+  # start no CI at all - GitHub deliberately does not let one workflow's push
+  # trigger another - so it reports here directly, which is what stops the
+  # digest landing every morning and never reaching a reader. `branches` keeps a
+  # pull request's run out; the decision below still checks the event, because
+  # a fork's branch can be called main.
   workflow_run:
     workflows: [CI, Content refresh]
     types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -32,65 +34,50 @@ permissions:
 # that makes cancelling a live deploy right (Guardrail #6).
 
 jobs:
-  # Which commit to publish, and whether it is worth publishing at all. GitHub
-  # cannot filter a `workflow_run` trigger by conclusion, so the filter lives
-  # here - and it applies to CI only. A failed CI run has judged the commit and
-  # said no. A failed daily run has not: the job that writes a day runs
-  # `check-publication` before its own commit, so the day is verified by its
-  # producer, and a sibling job failing afterwards does not unvalidate it.
-  # Holding it back would leave a good day unpublished for up to four hours.
-  # A pull request's CI judges a commit nobody has merged, so only a push's
-  # verdict publishes; the pull request publishes when it merges.
+  # Whether to publish, and which commit. The rule is one program,
+  # backend/utilities/publish_decision.py, so a test can run it against a real
+  # repository. A pull request never publishes. A push publishes after its CI
+  # passes, and only when it changed something the site is built from. The daily
+  # run publishes when it landed a published change, whatever its conclusion:
+  # the job that writes a day runs `check-publication` before its own commit, so
+  # a sibling job failing afterwards does not unvalidate it. Every publish builds
+  # main's tip, so a verdict that arrives late cannot take the site back to an
+  # older commit.
   decide:
-    if: >-
-      github.event_name != 'workflow_run'
-      || github.event.workflow_run.name != 'CI'
-      || (github.event.workflow_run.conclusion == 'success'
-          && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      # A push's range lives on its check suite; the workflow_run payload has no `before`.
+      checks: read
     outputs:
-      ref: ${{ steps.pick.outputs.ref }}
-      publish: ${{ steps.relevant.outputs.publish }}
+      ref: ${{ steps.rule.outputs.ref }}
+      publish: ${{ steps.rule.outputs.publish }}
     steps:
-      # CI verified one commit, so that commit is what publishes - not whatever
-      # the tip happens to be by the time this runs. The daily run is the other
-      # way round: its `head_sha` is the commit it STARTED from, and the day it
-      # wants published is the commit it made afterwards, so that path takes the
-      # branch tip.
-      - id: pick
-        env:
-          TRIGGER: ${{ github.event.workflow_run.name }}
-          VERIFIED: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          set -euo pipefail
-          if [ "${TRIGGER:-}" = "CI" ]; then
-            echo "ref=$VERIFIED" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=main" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/checkout@v6
         with:
-          ref: ${{ steps.pick.outputs.ref }}
-          fetch-depth: 2
+          ref: ${{ github.sha }}
 
-      # New data is the whole reason the daily path exists, so it always
-      # publishes. A verified commit publishes only when it can move what a
-      # reader is served - the same three paths the push trigger used to filter
-      # on, asked after the verdict now rather than before it.
-      - id: relevant
+      - id: before
+        if: github.event.workflow_run.name == 'CI'
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SUITE: ${{ github.event.workflow_run.check_suite_id }}
+        run: echo "sha=$(gh api "repos/$REPOSITORY/check-suites/$SUITE" --jq .before || true)" >> "$GITHUB_OUTPUT"
+
+      - id: rule
+        env:
+          EVENT_NAME: ${{ github.event_name }}
           TRIGGER: ${{ github.event.workflow_run.name }}
-        run: |
-          set -euo pipefail
-          if [ "${TRIGGER:-}" != "CI" ]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet HEAD^1 HEAD -- frontend config/idhazh.json config/ledgers.json state; then
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          fi
+          TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CHECKED: ${{ github.event.workflow_run.head_sha }}
+          BEFORE: ${{ steps.before.outputs.sha }}
+          TIP: ${{ github.sha }}
+          DISPATCHED_REF: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 backend/utilities/publish_decision.py >> "$GITHUB_OUTPUT"
 
   build:
     needs: decide

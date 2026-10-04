@@ -1,0 +1,26 @@
+{
+  "pull_request": {
+    "id": 37184631490,
+    "name": "CI",
+    "event": "pull_request",
+    "status": "completed",
+    "conclusion": "success",
+    "head_sha": "543d8eebc00c22c4c21da26e87f2a8d5cf5cfd70",
+    "head_branch": "console-nav-test-consolidation",
+    "check_suite_id": 100720715837
+  },
+  "push": {
+    "id": 37172524430,
+    "name": "CI",
+    "event": "push",
+    "status": "completed",
+    "conclusion": "success",
+    "head_sha": "20eeb1a9127f27d7ad624b206ff84501f3af069c",
+    "head_branch": "main",
+    "check_suite_id": 100688395967
+  },
+  "push_check_suite": {
+    "before": "88d91c0b0633af69fd8cb4c6f12ff5b8a74024a0",
+    "after": "20eeb1a9127f27d7ad624b206ff84501f3af069c"
+  }
+}

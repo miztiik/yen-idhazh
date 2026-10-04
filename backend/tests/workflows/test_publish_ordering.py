@@ -353,29 +353,16 @@ def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None
     assert pages["workflow_run"] == {
         "workflows": ["CI", "Content refresh"],
         "types": ["completed"],
-    }
+        "branches": ["main"],
+    }, "a pull request's run is kept out before the decision runs"
 
-    jobs = _mapping(workflows["pages.yml"]["jobs"], "pages.yml jobs")
-    decide = _mapping(jobs["decide"], "pages.yml decide job")
-    condition = str(decide["if"])
-    assert " ".join(condition.split()) == (
-        "github.event_name != 'workflow_run'"
-        " || github.event.workflow_run.name != 'CI'"
-        " || (github.event.workflow_run.conclusion == 'success'"
-        " && github.event.workflow_run.event == 'push')"
-    ), (
-        "only a push's passing CI publishes: a pull request's CI judges a commit "
-        "nobody merged, and deploying it puts unmerged code in front of readers"
+    decide = _job(workflows["pages.yml"], "decide")
+    assert "if" not in decide, (
+        "the decision program is the whole rule; a job condition beside it is a "
+        "second rule no test runs"
     )
-    assert "conclusion == 'success'" in condition, (
-        "a workflow_run trigger cannot be filtered by conclusion, so a CI run "
-        "that failed has to be refused by the job that reads it"
-    )
-    assert "!= 'CI'" in condition, (
-        "the daily path is deliberately not gated on conclusion: the job that "
-        "writes a day validates it before committing, so a sibling job failing "
-        "afterwards must not hold a good day back"
-    )
+    rule = _step(workflows["pages.yml"], "decide", "id", "rule")
+    assert rule["run"] == 'python3 backend/utilities/publish_decision.py >> "$GITHUB_OUTPUT"'
     checkout = next(
         step
         for step in _steps(workflows["pages.yml"], "build")
@@ -383,7 +370,7 @@ def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None
     )
     pinned = str(_mapping(checkout["with"], "pages.yml build checkout").get("ref"))
     assert "needs.decide.outputs.ref" in pinned, (
-        "what deploys is the commit that was verified, not the tip minutes later"
+        "what deploys is the commit the decision named, not a ref resolved again later"
     )
 
 

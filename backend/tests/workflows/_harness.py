@@ -660,6 +660,10 @@ SQUASH_DUE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "corpus_squash_
 #: checkout of two folders, before anything of this project is installed.
 GARDENER_PLAN_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
 
+#: The Pages workflow's one program: whether to publish and which commit, run on
+#: a bare checkout before anything is installed.
+PUBLISH_DECISION_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "publish_decision.py"
+
 #: The step the `plan` job exists for. The catch-up above runs ahead of it: a
 #: fold that refuses a row ends the job, and a refusal that lands after the feed
 #: reads has spent them for nothing.
