@@ -2,9 +2,13 @@
 
 Every test pushes to a real bare repository standing in for origin, from a real
 clone, with no network. A race is staged the way it happens: another clone
-pushes first, or the origin refuses a push through its own hook. The idempotence
-oracle is that running the loop twice leaves the tree running it once left, and
-the moved-tip oracle is that the mover's change and this shard's both survive.
+pushes first, or the origin refuses a push through its own hook, or the hook
+moves main first and then refuses, the way a run of other writers looks. A
+re-run is a clone whose paths main changed after the clone was made. The
+idempotence oracle is that running the loop twice leaves the tree running it
+once left, the moved-tip oracle is that the mover's change and this shard's both
+survive, and the stale oracle is that main's newer file survives and nothing of
+the shard lands.
 
 The loop is `backend/utilities/gardener_publish.py`, because nothing under
 `backend/idhazh/` may start a process.
@@ -21,7 +25,7 @@ from pydantic import ValidationError
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
-    EXIT_PUSH_KEPT_LOSING,
+    EXIT_PUSH_REFUSED,
     EXIT_TASK_FAILED,
     Shard,
     worst,
@@ -35,6 +39,18 @@ AGED = "state/old/2026-01-01.txt"
 KEPT = "state/old/2026-09-26.txt"
 MESSAGE = "gardener: old on 2026-09-27"
 SEEDED = {AGED: "aged\n", KEPT: "kept\n", "state/dir/a.txt": "a\n", ".gitignore": "*.skip\n"}
+
+#: A pre-receive hook that moves `main` to the next prepared commit, `refs/race/<n>`
+#: on the n-th push, and then refuses that push: on every try another writer lands
+#: first. It steps out of the quarantine the pushed objects wait in, because git
+#: refuses a ref update from inside it.
+MOVE_MAIN_THEN_REFUSE = (
+    'race=$(( $(cat "$GIT_DIR/race-count" 2>/dev/null || echo 0) + 1 ))\n'
+    'echo "$race" > "$GIT_DIR/race-count"\n'
+    "unset GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES\n"
+    'git update-ref refs/heads/main "refs/race/$race" || exit 2\n'
+    "exit 1"
+)
 
 
 def a_shard(*, written: set[str] | None = None, deleted: set[str] | None = None) -> Shard:
@@ -95,12 +111,13 @@ def test_running_it_twice_leaves_the_tree_running_it_once_left(
 
     assert code == EXIT_OK
     assert (git(origin, "rev-parse", "main^{tree}"), len(commits_on(origin))) == once
-    assert any("already on main" in line for line in said)
+    assert any(line == "shard 0: already-on-main, try 1" for line in said)
 
 
 def test_a_tip_that_moved_keeps_the_movers_change_and_this_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Main moved on a path this shard does not touch, so the shard's version is not stale."""
     origin, checkout = a_checkout(tmp_path, monkeypatch)
     mover = tmp_path / "mover"
     git(tmp_path, "clone", "--quiet", str(origin), str(mover))
@@ -108,12 +125,14 @@ def test_a_tip_that_moved_keeps_the_movers_change_and_this_one(
     git(mover, "add", "docs/moved.md")
     git(mover, "commit", "--quiet", "-m", "another shard landed first")
     git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    (checkout / AGED).unlink()
 
-    code, _ = landed(a_shard(), checkout)
+    code, _ = landed(a_shard(deleted={AGED}), checkout)
 
     assert code == EXIT_OK
     assert on_origin(origin, "docs/moved.md") == "the other shard\n"
     assert on_origin(origin, RECORD) is not None
+    assert on_origin(origin, AGED) is None
     assert [line.split(": ", 1)[1] for line in commits_on(origin)[:2]] == [
         MESSAGE,
         "another shard landed first",
@@ -129,21 +148,115 @@ def test_a_push_that_lost_is_tried_again_on_the_new_tip(
     code, said = landed(a_shard(), checkout, attempts=2)
 
     assert code == EXIT_OK
-    assert "shard 0: try 1 of 2 lost the push" in said
+    assert said == ["shard 0: try 1 of 2, the push failed", "shard 0: landed on main, try 2 of 2"]
     assert on_origin(origin, RECORD) is not None
 
 
-def test_a_push_that_keeps_losing_is_exit_3_and_lands_nothing(
+def test_a_push_main_refuses_at_every_try_is_exit_3_and_lands_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Main did not move after the last try, so nobody else was landing: main refused the push."""
     origin, checkout = a_checkout(tmp_path, monkeypatch)
     a_hook(origin, "exit 1")
+    tip = git(origin, "rev-parse", "main")
 
     code, said = landed(a_shard(), checkout, attempts=2)
 
-    assert code == EXIT_PUSH_KEPT_LOSING
+    assert code == EXIT_PUSH_REFUSED
+    assert git(origin, "rev-parse", "main") == tip
     assert on_origin(origin, RECORD) is None
-    assert sum("lost the push" in line for line in said) == 2
+    assert said[-1] == (
+        "shard 0: refused - main did not move after try 2 of 2, so main refused the push. "
+        "Nothing landed"
+    )
+    assert sum("the push failed" in line for line in said) == 2
+
+
+def test_a_push_that_loses_to_other_writers_at_every_try_lands_nothing_and_exits_0(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Main moved after the last try, so other writers are landing: a warning, not a red job."""
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    racer = tmp_path / "racer"
+    git(tmp_path, "clone", "--quiet", str(origin), str(racer))
+    for race in (1, 2):
+        write(racer / f"docs/race-{race}.md", f"writer {race}\n")
+        git(racer, "add", f"docs/race-{race}.md")
+        git(racer, "commit", "--quiet", "-m", f"writer {race} landed")
+        git(racer, "push", "--quiet", "origin", f"HEAD:refs/race/{race}")
+    a_hook(origin, MOVE_MAIN_THEN_REFUSE)
+
+    code, said = landed(a_shard(), checkout, attempts=2)
+
+    assert code == EXIT_OK
+    assert git(origin, "rev-parse", "main") == git(origin, "rev-parse", "refs/race/2")
+    assert on_origin(origin, RECORD) is None
+    assert said[-1] == (
+        "::warning::shard 0: lost - main moved after try 2 of 2, so other writers are "
+        "landing. Nothing landed; the next wake does the work again"
+    )
+
+
+def test_a_shard_whose_path_main_changed_after_its_commit_lands_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A re-run checks out its run's old commit, and main's newer file must survive it.
+
+    The shard's other paths, which main left alone, do not land either, and nor
+    does its record: the next wake does the whole of the work again.
+    """
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    mover = tmp_path / "mover"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    write(mover / KEPT, "newer, on main\n")
+    git(mover, "add", KEPT)
+    git(mover, "commit", "--quiet", "-m", "main changed a file the shard also writes")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    tip = git(origin, "rev-parse", "main")
+    write(checkout / KEPT, "older, from the shard\n")
+    (checkout / AGED).unlink()
+
+    code, said = landed(a_shard(written={KEPT}, deleted={AGED}), checkout)
+
+    assert code == EXIT_OK
+    assert git(origin, "rev-parse", "main") == tip, "a stale shard landed a commit"
+    assert on_origin(origin, KEPT) == "newer, on main\n"
+    assert on_origin(origin, AGED) == "aged\n"
+    assert on_origin(origin, RECORD) is None
+    assert said == [
+        f"::warning::shard 0: stale - main changed {KEPT} after the commit this shard ran "
+        "on, so nothing landed. The next wake does the work again on the new main"
+    ]
+
+
+def test_every_group_of_names_is_compared_and_the_warning_counts_the_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The names go to git in groups below Windows' process limit, and every group is read.
+
+    Two hundred long names fill more than one group. Main changes the first of
+    them, which sorts into the first group, and `KEPT`, which sorts into the last.
+    """
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    many = sorted(f"state/old/2026-01-01-{'x' * 60}-{n:03}.txt" for n in range(200))
+    mover = tmp_path / "mover"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    write(mover / many[0], "made on main\n")
+    write(mover / KEPT, "newer, on main\n")
+    git(mover, "add", many[0], KEPT)
+    git(mover, "commit", "--quiet", "-m", "main changed two paths the shard also changes")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    write(checkout / KEPT, "older, from the shard\n")
+
+    code, said = landed(a_shard(written={KEPT}, deleted=set(many)), checkout)
+
+    assert code == EXIT_OK
+    assert on_origin(origin, RECORD) is None
+    assert said == [
+        f"::warning::shard 0: stale - main changed {many[0]} and 1 more after the commit "
+        "this shard ran on, so nothing landed. The next wake does the work again on the "
+        "new main"
+    ]
 
 
 def test_one_record_with_two_identities_is_exit_2(
@@ -244,8 +357,8 @@ def test_a_folder_named_for_deletion_is_refused_before_anything_stages(
 def test_a_shard_reports_the_worst_code_it_earned() -> None:
     assert worst() == EXIT_OK
     assert worst(EXIT_OK, EXIT_TASK_FAILED) == EXIT_TASK_FAILED
-    assert worst(EXIT_TASK_FAILED, EXIT_PUSH_KEPT_LOSING) == EXIT_PUSH_KEPT_LOSING
-    assert worst(EXIT_PUSH_KEPT_LOSING, EXIT_INTEGRITY, EXIT_OK) == EXIT_INTEGRITY
+    assert worst(EXIT_TASK_FAILED, EXIT_PUSH_REFUSED) == EXIT_PUSH_REFUSED
+    assert worst(EXIT_PUSH_REFUSED, EXIT_INTEGRITY, EXIT_OK) == EXIT_INTEGRITY
 
 
 def test_a_folder_that_is_not_a_checkout_has_no_commit_to_name(

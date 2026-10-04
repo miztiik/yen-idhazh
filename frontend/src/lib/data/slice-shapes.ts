@@ -54,23 +54,27 @@ export type Row = Record<string, string | number | boolean | null>;
  *  - `day-missing`: a day between the first and the newest packed day that no
  *    index names, so its rows are in no file a reader can find.
  *
- *  Three gaps are expected and are none of these: a day after the newest packed
- *  day, an entry with `rows: 0`, and a `monthly.json` or `yearly.json` with no
- *  entries. */
+ *  Some gaps are expected and are none of these: a day after the newest packed
+ *  day, an entry with `rows: 0`, an entry `empty`, which held no row and has no
+ *  file, a `monthly.json` or `yearly.json` with no entries, and a day an index
+ *  records lost, which an answer names in `lostDays`. */
 export const LEDGER_FAULTS = ['not-packed', 'index-missing', 'file-missing', 'day-missing'] as const;
 
 export type LedgerFault = (typeof LEDGER_FAULTS)[number];
 
 /** What the door hands a panel. `rows` is empty for every state but `ok`.
  *  `through` is the newest day `daily.json` names, or `null` before the first
- *  compaction, so a panel can say how far its data reaches. `fault` names the
+ *  compaction, so a panel can say how far its data reaches. `lostDays` names
+ *  the days in the span an index records lost - a daily entry `lost`, or a day
+ *  in a month's or a year's `lost_days` - ascending: each has no record, so a panel
+ *  says so rather than drawing it as a day with no rows. `fault` names the
  *  missing file behind a `missing` or an `unreachable`, and is `null` for an
  *  `unreachable` with another cause: an index this build will not act on, a file
  *  that did not arrive whole, an engine that could not answer, or a span that
  *  starts before the oldest day any index names. */
 export type SliceResult =
-	| { state: 'ok'; rows: Row[]; through: DateStamp }
-	| { state: 'quiet'; rows: []; through: DateStamp | null }
+	| { state: 'ok'; rows: Row[]; through: DateStamp; lostDays: DateStamp[] }
+	| { state: 'quiet'; rows: []; through: DateStamp | null; lostDays: DateStamp[] }
 	| { state: 'missing'; rows: []; fault: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreachable'; rows: []; at: DateStamp; fault: Exclude<LedgerFault, 'not-packed'> | null };
 
@@ -89,10 +93,12 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const OPERATORS: ReadonlySet<string> = new Set(['=', '!=', '<', '<=', '>', '>=', 'in']);
 
-/** Whether `stamp` is a real UTC day, `YYYY-MM-DD`, and not merely the shape of one. */
+/** Whether `stamp` is a real UTC day, `YYYY-MM-DD`, and not merely the shape of one.
+ *  A day past 31 has no time at all, so it is answered before it is printed. */
 export function isDay(stamp: unknown): stamp is DateStamp {
 	if (typeof stamp !== 'string' || !DAY.test(stamp)) return false;
-	return new Date(`${stamp}T00:00:00Z`).toISOString().slice(0, 10) === stamp;
+	const at = new Date(`${stamp}T00:00:00Z`);
+	return !Number.isNaN(at.getTime()) && at.toISOString().slice(0, 10) === stamp;
 }
 
 function checkedColumn(column: unknown, where: string): string {

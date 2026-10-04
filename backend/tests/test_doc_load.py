@@ -85,7 +85,7 @@ def test_changed_prints_only_the_pages_named_and_their_rank(tmp_path: Path, caps
 
 
 def test_a_change_touching_no_page_prints_nothing(tmp_path: Path, capsys: object) -> None:
-    """CI hands over whatever the diff listed, so a code-only change is silent."""
+    """A caller may name a whole diff, so a code-only change is silent."""
     tree(tmp_path)
 
     doc_load.changed(tmp_path, ["config/idhazh.json", "backend/idhazh/cli.py"])
@@ -104,6 +104,46 @@ def test_a_page_that_does_not_exist_is_skipped_rather_than_refused(
     printed = capsys.readouterr().out  # type: ignore[attr-defined]
     assert "docs/reference/light.md" in printed
     assert "docs/gone.md" not in printed
+
+
+PLAN = "TODO/20260101-1-a-plan.md"
+
+
+def plan(root: Path) -> None:
+    """A plan carries no date stamp and no See also, so the docs/ rules would fault it."""
+    (root / "TODO").mkdir()
+    (root / PLAN).write_text(
+        "# A plan\n\n## 1. The rows\n\nRow 1.\n", encoding="utf-8", newline="\n"
+    )
+
+
+def test_a_plan_gets_a_row_and_no_fault(tmp_path: Path) -> None:
+    """Any named page is measured; only docs/ is held to the required elements."""
+    plan(tmp_path)
+
+    assert [row[1] for row in doc_load.measure(tmp_path, [PLAN])] == [PLAN]
+    assert doc_load.faults(tmp_path, [PLAN]) == {}
+
+
+def test_a_plan_alone_is_not_reported_as_carrying_the_required_elements(
+    tmp_path: Path, capsys: object
+) -> None:
+    """Only docs/ was checked, so the all-clear says so rather than vouching for the plan."""
+    plan(tmp_path)
+
+    doc_load.changed(tmp_path, [PLAN])
+
+    printed = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert PLAN in printed
+    assert "Every page you touched under docs/ carries all of them." in printed
+
+
+def test_a_page_outside_the_repository_is_skipped(tmp_path: Path) -> None:
+    """A path that climbs out of the repository names no page in it."""
+    (tmp_path / "repo").mkdir()
+    (tmp_path / "elsewhere.md").write_text("# Elsewhere\n", encoding="utf-8", newline="\n")
+
+    assert doc_load.measure(tmp_path / "repo", ["../elsewhere.md"]) == []
 
 
 def test_a_relative_root_counts_the_same_inbound_links_as_an_absolute_one(

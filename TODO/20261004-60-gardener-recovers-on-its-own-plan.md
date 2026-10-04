@@ -45,7 +45,7 @@ Table A - what is out
 | 5 | A ledger's marks are read in one place | - | A | DONE | silver-dollop | #1279 | Plan 60 row 5: marks in one place |
 | 6 | One run id per workflow run | 1 | B | DONE | automatic-adventure | #1278 | Plan 60 row 6: one run id |
 | 7 | The month-delete switch is named for what it does | 1 | B | PENDING | - | - | - |
-| 8 | The site reads empty, lost and set-aside periods | 4 | B | PENDING | - | - | - |
+| 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | - | Plan 60 row 8: site reads lost periods |
 | 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | #1282 | Plan 60 row 9: job names |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
@@ -64,9 +64,9 @@ Table A - what is out
 | 24 | Months close 16 days after they end | 7, 17, 23 | F | PENDING | - | - | - |
 | 25 | The retired raw listings code goes | 15 | F | COLLAPSED #1267 | - | - | - |
 | 26 | doc_load.py reads a web address as a web address | - | A | DONE | stunning-garbanzo | - | Plan 60 row 26: doc_load web links |
-| 27 | A shard lands nothing stale, and says why when it cannot land | 3, 9 | C | PENDING | - | - | - |
+| 27 | A shard lands nothing stale, and says why when it cannot land | 3, 9 | C | DONE | urban-spoon | - | Plan 60 row 27: no stale landing |
 | 28 | The console can read the gardener ledger | 23 | F | PENDING | - | - | - |
-| 29 | doc_load.py measures every named Markdown page | 26 | A | PENDING | - | - | - |
+| 29 | doc_load.py measures every named Markdown page | 26 | A | DONE | effective-carnival | - | Plan 60 row 29: doc_load every page |
 
 ## 2. Shared declarations
 
@@ -340,17 +340,27 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/contracts/ledger_index.py`
   - `backend/tests/contracts/test_ledger_index.py`
   - `backend/tests/contracts/test_frontend_index_shapes.py`
+  - `backend/tests/contracts/_fixtures.py` (found during execution: the round-trip list names each fixture)
   - `tests/fixtures/contracts/compact-index/` (new: an `empty` day, a `lost` day, a month with `lost_days`, an index written before this row)
   - `frontend/src/lib/data/compact-index.ts`
   - `frontend/src/lib/data/slice-reader.ts`
   - `frontend/src/lib/data/slice.ts`
   - `frontend/src/lib/data/slice-shapes.ts`
-  - `frontend/src/lib/data/ledger-reach.ts`
+  - `frontend/src/lib/data/ledger-reach.ts` (read, no change: it counts an entry by its `covers` alone)
   - `frontend/src/lib/data/ask-reader.ts`
-  - `frontend/src/lib/console/recording.ts`
+  - `frontend/src/lib/console/recording.ts` (read, no change: it never reads an entry)
+  - `frontend/scripts/published-ledgers.mjs` (found during execution, and asked for again by the Fowler review 2026-10-04: the site build named a file for every entry)
   - `frontend/tests/ledger-door.spec.ts`
   - `frontend/tests/ledger-ranges.spec.ts`
+  - `frontend/tests/ledger-copy.spec.ts` (found during execution, and asked for again by the Fowler review 2026-10-04)
+  - `frontend/tests/published-ledgers.spec.ts` (found during execution)
   - `docs/architecture/contracts/persistence.md`
+  - `docs/architecture/contracts/schemas.md` (the `ENTRY_STATES` binding this row adds)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (found during execution)
+  - `backend/idhazh/ledger/ledger_files.py` (corrected during execution (Fowler review 2026-10-04))
+  - `backend/idhazh/evals/observation_migration.py` (corrected during execution (Fowler review 2026-10-04))
+  - `backend/tests/ledger/test_ledger_files.py` (corrected during execution (Fowler review 2026-10-04))
+  - `backend/tests/evals/test_observation_migration.py` (corrected during execution (Fowler review 2026-10-04))
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 -m contract backend/tests/contracts/test_ledger_index.py backend/tests/contracts/test_frontend_index_shapes.py`; the specs the selector lists; the browser smoke in run-the-gates.md on a ledger page served from a fixture with an `empty` and a `lost` day (CLAUDE.md section 12, including a missing index); `doc_load.py`. CI: the full suite.
 - **Oracle:** contract: an index written before this row reads as all `packed`; an `empty` entry with `bytes` above 0 is refused; a `lost_days` day outside its entry's period is refused; the field-set and vocabulary tests hold the frontend copy in step. Site: a slice across a `lost` day returns the other days' rows and names the lost day, and fetches no file for an `empty` or `lost` period. It cannot settle how a panel words the gap; Jony and Susan rule on that only if two layouts lead to different code.
 
@@ -1001,6 +1011,10 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/utilities/doc_load.py` (`pages_under`)
   - `backend/tests/test_doc_load.py`
   - `AGENTS.md` (step 3)
+  - `docs/reference/documentation-structure.md` (widened by the owner, 2026-10-04)
+  - `frontend/scripts/test-scope.ts` (widened by the owner, 2026-10-04)
+  - `frontend/scripts/tests/test-scope.test.mjs` (widened by the owner, 2026-10-04)
+  - `docs/reference/test-selection.md` (the page that owns the selector's mappings, changed with the owner's widening)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_doc_load.py`; ruff; mypy; `python backend/utilities/doc_load.py TODO/20261004-60-gardener-recovers-on-its-own-plan.md` prints one row. CI: the full suite.
 - **Oracle:** a test builds a page under `tmp_path/TODO/` and expects one row from `measure` and no fault from `faults`. It fails if the `docs/`-only filter comes back. The existing test that a deleted page is skipped still holds. It cannot settle whether `top h2` means anything for a plan, whose rows sit in one section by design.
 
