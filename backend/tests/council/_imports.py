@@ -53,6 +53,7 @@ MODULE_NAMES = (
     "idhazh.contracts.ledger_fault",
     "idhazh.contracts.ledger_index",
     "idhazh.contracts.ledger_name",
+    "idhazh.contracts.run_plan",
     "idhazh.contracts.ledgers",
     "idhazh.contracts.observation_index",
     "idhazh.contracts.observation_lookup",
