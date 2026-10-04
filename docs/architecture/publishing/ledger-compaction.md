@@ -440,10 +440,7 @@ monthly figure computes it from them when it draws. So the `monthly_window` of
 `config/gardener/compact-summary-quality-evals.json` is `forever`, and a live pass may make one
 file a day and one a month without taking a row. Its `monthly_keep_days` packs a
 finished year's month files into one year file, kept for ever, so the month files
-stop adding up and no row goes. Measurement IDs survive independently in the
-[exact-ID lookup](../contracts/observation-lookup.md). No gardener task folds
-that tree or removes its IDs by age; compaction must not make an old measurement
-new again.
+stop adding up and no row goes.
 
 ## See also
 

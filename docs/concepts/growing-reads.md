@@ -91,15 +91,8 @@ outgrows it.
 ### 2. A cover that is not a clock
 
 Sometimes a clock would answer a different question from the one asked. Then the
-answer is a cheaper cover, not a shorter memory. Three shapes, all in service
+answer is a cheaper cover, not a shorter memory. Two shapes, both in service
 today.
-
-**The inputs and files this job owns.** Evaluation publication takes a named
-batch manifest and the paths prepared from it. A push retry replays those
-original batches, not all recorded measurements. The
-[publication protocol](../architecture/contracts/observation-lookup.md#publication-across-jobs)
-owns the durable input and prepared-path rules. Its bound is the supplied work,
-not a date window; this does not bound a full Git checkout or fetch.
 
 **One run, or one date.** `ledger.load_settled_failures` and
 `ledger.load_source_counts` take a date and read that one day through
@@ -109,20 +102,8 @@ ledger the same way, because a run id already names its date.
 by construction - the input never had a clock, and putting one on it could only
 lose work the run just did.
 
-**The candidate identities themselves.** `evals.writer.recorded_observations`
-takes the supplied digests and asks which are already present. The
-[observation lookup](../architecture/contracts/observation-lookup.md) reads one
-fixed root, the bounded routes selected by those keys and capped SQLite leaves.
-It uses the leaf's primary-key index. It does not reconstruct the historical ID
-set, open unrelated leaves or scan evaluation rows. IDs never expire, so a
-measurement does not become new merely because it was last recorded long ago.
-
-The one-time [migration](../how-to/migrate-observation-lookup.md) reads all legacy
-IDs and raw and compact evaluation rows explicitly. It is not a fallback in the
-routine writer and is listed under [unbounded](#unbounded-and-it-says-so).
-
-`fingerprint.append_new` carries digests rather than built rows, and the set
-stops growing when the inputs stop changing.
+**The distinct inputs themselves.** `fingerprint.append_new` carries digests
+rather than built rows, and the set stops growing when the inputs stop changing.
 
 ### 3. Unbounded, on purpose, and it says so
 
@@ -218,7 +199,6 @@ reads are here and not how many. These are `backend/`'s;
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `evals.writer.recorded_observations` | the fixed lookup root, candidate-selected routing pages and capped SQLite leaves | the supplied candidate digests; routing depth and leaf bytes are bounded independently of retained history ([lookup bounds](../architecture/contracts/observation-lookup.md#bounds-and-costs)) |
 | `ledger.persist` on `LedgerName.COUNTERFACTUAL_SCORES` | one raw file of `state/raw/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day, through `ledger.load_days` | one date |
 | `ledger.load_story_similarity_pairs` | one day file of `state/content-similarity-judge/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |

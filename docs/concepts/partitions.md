@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -239,9 +239,6 @@ a daily pipeline is the first run of the next month.
 The rule binds writes to time partitions, not reads. A closed partition is
 still opened when `day_partition.days_in_window` names it. What bounds reads is
 [CLAUDE.md](../../CLAUDE.md) Guardrail #12, not whether a partition is closed.
-The [observation lookup](../architecture/contracts/observation-lookup.md) instead
-routes by exact keys. It has no calendar partition to close and reads only the
-routes and leaves selected by incoming IDs.
 
 Authority: owner, 2026-09-06.
 
@@ -250,7 +247,7 @@ Authority: owner, 2026-09-06.
 | Collection | Path pattern | Writer | What makes a partition closed |
 | --- | --- | --- | --- |
 | Eval ledger | `state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/`, packed under `state/compact/summary-quality-evals/` | `evals.writer.file_measurements`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. Every write is a file of its own, so two runs never collide on one, and a packing task makes each finished day one file. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
-| Eval measurement lookup | `state/summary-quality-evals-index/lookup/`, with pending batches under `incoming/` | `evals.observation_batches`, through the publication hook | Not time-partitioned. Exact keys route to capped leaves; updates replace touched nodes and the root. The [lookup contract](../architecture/contracts/observation-lookup.md) owns routing and publication. |
+| Eval measurement lookup | `state/summary-quality-evals-index/lookup/` | nothing in the pipeline; only `backend/utilities/migrate_observation_lookup.py`, a person's own run | Not time-partitioned, and no longer read by the writer: the [evaluation design rationale](evaluation.md#design-rationale) says why. The [lookup contract](../architecture/contracts/observation-lookup.md) owns its layout. |
 | Item health | `state/raw/item-health/<YYYY>/<MM>/<DD>/`, packed under `state/compact/item-health/` | `ledger.persist`, from `stages.record` and `stages.assemble` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. Each write files its own rows under the day those rows name, as a file of its own, so two runs never collide on one. Closed once the run's date leaves the day. |
 | Feed health | `state/raw/feed-health/<YYYY>/<MM>/<DD>/`, packed under `state/compact/feed-health/` | `stages.plan`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. The plan stage writes the run's own digest date and nothing else, as a file of its own, so two runs never collide on one, and a second attempt at one plan job replaces its first attempt's file. Closed once the run's date leaves the day. Its compaction makes each finished day one file, and the loader refuses one that keeps fewer month files than the widest console read opens. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Seen addresses | `state/raw/seen/<YYYY>/<MM>/<DD>/`, packed under `state/compact/seen/` | `ledger.append_seen`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. The plan job files under the run's own digest date and nothing else, as a file of its own, so two runs never collide on one, and a second attempt at one plan job replaces its first attempt's file. Closed once the run's date leaves the day. Its compaction makes each finished day one file, and the loader refuses one that keeps fewer days than `collect.seen_window_days`. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
