@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -191,6 +192,8 @@ function askedCounts(asked: Asked[]): Record<string, number> {
 const dayFile = (covers: string): string => dataPath(LEDGER, 'daily', covers);
 const bytesOf = (relative: string): Uint8Array => new Uint8Array(readFileSync(path.join(STATE, ...relative.split('/'))));
 const expectedAnswer = (name: string): Record<string, string | null>[] => JSON.parse(readFileSync(path.join(FIXTURE, 'answers', `${name}.json`), 'utf8'));
+/** The digest a listing that names no file carries: SHA-256 over no names, the empty string. */
+const EMPTY_NAMES_DIGEST = createHash('sha256').update('', 'utf8').digest('hex');
 
 test('the engine starts while a whole file is still arriving', async () => {
 	const { fetcher } = recorded();
@@ -1367,6 +1370,58 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 			maxFetchBytes: 100_000_000
 		}, { 'item-health': '2026-09-06' });
 		expect(answer).toEqual({ state: 'unreachable', ledger: 'item-health', at: '2026-09-06', fault: 'index-missing' });
+	});
+
+	test('a ledger whose packed days hold no rows answers through an empty view over its zero-row file', async () => {
+		const zeroRows = bytesOf(dataPath('item-health', 'daily', '2026-09-03'));
+		const index = (period: Period, entries: CompactEntry[]): Rule => ({
+			status: 200,
+			body: encoded({ version: COMPACT_INDEX_STAMP, ledger: 'item-health', period, entries })
+		});
+		const page = freshPage(recorded({
+			[indexPath('item-health', 'daily')]: index('daily', [{ covers: '2026-09-01', rows: 0, bytes: zeroRows.byteLength }]),
+			[indexPath('item-health', 'monthly')]: index('monthly', []),
+			[indexPath('item-health', 'yearly')]: index('yearly', []),
+			[dataPath('item-health', 'daily', '2026-09-01')]: { status: 200, body: zeroRows }
+		}).fetcher);
+		const both = { ...opts, ledgers: ['host-fingerprint', 'item-health'] as const, maxRows: 10 };
+		const hostRows = fixtureEntries('daily').find((entry) => entry.covers === '2026-09-01')?.rows;
+		expect(hostRows).toBeGreaterThan(0);
+		expect(await readAsk(page, { ...both, sql: 'SELECT count(*) AS rows FROM "host-fingerprint"' }, {})).toMatchObject({
+			state: 'ok',
+			rows: [{ rows: String(hostRows) }]
+		});
+		const empty = await readAsk(page, { ...both, sql: 'SELECT * FROM "item-health"' }, {});
+		expect(empty.state).toBe('quiet');
+		if (empty.state === 'quiet') expect(empty.columns.map((column) => column.name)).toEqual(expect.arrayContaining([...columns]));
+	});
+
+	test('a selected ledger with no file to take its columns from answers missing, and reaches no engine as an empty view', async () => {
+		const index = (period: Period): Rule => ({
+			status: 200,
+			body: encoded({ version: COMPACT_INDEX_STAMP, ledger: 'item-health', period, entries: [] })
+		});
+		const listing = decoded(readFileSync(path.join(STATE, ...rawIndexPath('item-health', '2026-09-06').split('/'))));
+		const nothingListed = (day: string): Rule => ({
+			status: 200,
+			body: encoded({ ...listing, date: day, files: [], bytes: [], content_sha256: EMPTY_NAMES_DIGEST })
+		});
+		const page = freshPage(recorded({
+			[indexPath('item-health', 'daily')]: index('daily'),
+			[indexPath('item-health', 'monthly')]: index('monthly'),
+			[indexPath('item-health', 'yearly')]: index('yearly'),
+			[rawIndexPath('item-health', '2026-09-05')]: nothingListed('2026-09-05'),
+			[rawIndexPath('item-health', '2026-09-06')]: nothingListed('2026-09-06')
+		}).fetcher);
+		const answer = await readAsk(page, {
+			...opts,
+			ledgers: ['host-fingerprint', 'item-health'],
+			from: '2026-09-05',
+			to: '2026-09-06',
+			sql: 'SELECT count(*) AS rows FROM "host-fingerprint"',
+			maxRows: 10
+		}, { 'item-health': '2026-09-06' });
+		expect(answer).toEqual({ state: 'missing', ledger: 'item-health' });
 	});
 
 	test('a bad statement is refused before the engine starts', async () => {
