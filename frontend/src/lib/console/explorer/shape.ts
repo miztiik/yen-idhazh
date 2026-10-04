@@ -82,9 +82,15 @@ function columnsOf(columns: readonly Column[], types: ReadonlySet<string>): stri
 	return columns.filter((column) => types.has(normalizedType(column))).map((column) => column.name);
 }
 
+/** A cell's number, or `null` when it holds none. The door returns every cell as text (plan
+ *  section 2.5 rule 8), so a number column's cell arrives as `'8'` or `'1.5'`; a number is
+ *  accepted too. Text that is not a finite number, and an integer past the safe range, is
+ *  `null`: a missing reading is left out of a chart, never drawn as a zero. */
 function numericValue(row: Row, column: string): number | null {
 	const value = row[column];
-	return typeof value === 'number' && Number.isFinite(value) ? value : null;
+	const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
+	if (!Number.isFinite(parsed)) return null;
+	return Number.isInteger(parsed) && !Number.isSafeInteger(parsed) ? null : parsed;
 }
 
 function dayValue(value: unknown): string | null {

@@ -64,6 +64,48 @@ test('the five documented answer cases choose their chart type or neutral senten
 	});
 });
 
+test('cells arrive as text, as the door returns them, and still give each chart its figures', () => {
+	// The door casts every cell to text (plan section 2.5 rule 8). Fixtures with JavaScript
+	// numbers hid that the main figures read none of them.
+	expect(shape([
+		{ name: 'day', type: 'DATE' },
+		{ name: 'scored', type: 'INTEGER' }
+	], [
+		{ day: '2026-10-01', scored: '3' },
+		{ day: '2026-10-02', scored: '5' },
+		{ day: '2026-10-03', scored: '8' }
+	])).toMatchObject({ type: 'dateSeries', mainFigure: { column: 'scored', value: 8, date: '2026-10-03' } });
+
+	expect(shape([
+		{ name: 'source', type: 'VARCHAR' },
+		{ name: 'items', type: 'BIGINT' }
+	], [
+		{ source: 'a', items: '5' },
+		{ source: 'b', items: '12' },
+		{ source: 'c', items: '1' }
+	])).toMatchObject({ type: 'rankedList', mainFigure: { label: 'b', value: 12, column: 'items' } });
+
+	expect(shape([
+		{ name: 'latency', type: 'DOUBLE' }
+	], [
+		{ latency: '10.5' },
+		{ latency: 'null' },
+		{ latency: '30.5' },
+		{ latency: null },
+		{ latency: '20.5' }
+	])).toMatchObject({ type: 'distribution', median: 20.5, mainFigure: 'Half of latency is at or under 20.5' });
+
+	expect(shape([
+		{ name: 'source', type: 'VARCHAR' },
+		{ name: 'change', type: 'INTEGER' }
+	], [
+		{ source: 'a', change: '4' },
+		{ source: 'b', change: '-2' },
+		{ source: 'c', change: '1' },
+		{ source: 'd', change: '3' }
+	]), 'a negative number in text is negative, so the answer is not ranked').toMatchObject({ type: 'distribution' });
+});
+
 test('a date answer with several rows on one UTC day draws no date chart and says why', () => {
 	expect(shape([
 		{ name: 'day', type: 'TIMESTAMP' },
