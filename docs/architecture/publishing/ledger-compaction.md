@@ -129,8 +129,9 @@ close and the days step 5 may pack, from the ledger's own indexes and marks and
 the wake's UTC day, and logs the choice once as one `periods chosen` line, the
 JSON of `PeriodsChosen` (`backend/idhazh/contracts/gardener_events.py`). Step 2
 takes the raw days of the months step 1 chose, and of those a first day run
-looks back over ([A month past the window](#a-month-past-the-window)). No
-choice reads the fixed window the planner names for each task
+looks back over ([A month past the window](#a-month-past-the-window)). The
+listing a wake hands the pass names only the ledger's indexes and watermarks,
+so a step reads only the periods it names itself
 ([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
 
 **Drops first and days last, because no pass may write a path it deletes.** A

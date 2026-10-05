@@ -1051,10 +1051,9 @@ def test_each_old_month_is_dropped_once_oldest_first_and_at_most_eight_a_wake(
     """THE ORACLE for the drop: nine months are past the line, so eight go at one wake, one at the next.
 
     The monthly index is the record of what is left to drop, so a month that has
-    gone is never chosen again. Over a wake's listing the planner names only
-    September to November 2025, and the drop step names the months it takes
-    itself. A raw day goes with its month, so one in the month past the cap
-    waits for it.
+    gone is never chosen again. Over a wake's listing the planner names only the
+    ledger's marks, and the drop step names the months it takes itself. A raw
+    day goes with its month, so one in the month past the cap waits for it.
     """
     root = tmp_path / "checkout"
     old_months(root)

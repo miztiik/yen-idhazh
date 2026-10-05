@@ -9,13 +9,23 @@ is null becomes a column that refuses the second row.
 from __future__ import annotations
 
 from enum import IntEnum, StrEnum
+from pathlib import Path
 from typing import Annotated, Any, ClassVar, Literal, cast
 
 import pytest
 from conftest import REPO_ROOT
 from pydantic import Field
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, RunId, Sha256
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    Contract,
+    DateStamp,
+    Model,
+    RunId,
+    Sha256,
+    derive_text_digest,
+    derive_url_key,
+)
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow
@@ -24,6 +34,7 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger.arrow_schema import (
@@ -143,18 +154,122 @@ def test_the_columns_come_in_the_contracts_own_field_order() -> None:
     "annotation",
     [
         dict[str, str],
-        Literal["a", "b"],
         tuple[str, str],
         int | str,
-        Literal["a"] | str,
+        Literal["a", 1],
+        Literal[True],
+        Literal[None],
+        Literal[Colour.RED],
     ],
-    ids=["dict", "literal", "fixed-tuple", "mixed-union", "literal-union"],
+    ids=[
+        "dict",
+        "fixed-tuple",
+        "mixed-union",
+        "mixed-literal",
+        "bool-literal",
+        "none-literal",
+        "enum-literal",
+    ],
 )
 def test_an_annotation_the_table_does_not_name_is_refused_by_name(annotation: object) -> None:
     with pytest.raises(
         TypeError, match=r"field is declared .* (unsupported|no logical type|do not reduce)"
     ):
         columns_of(_one_field(annotation))
+
+
+class FixedChoices(Contract):
+    """One field of every fixed-choice shape the mapper stores.
+
+    **A fixture, not a mock** (Guardrail #7): it stands in for nobody and is
+    deliberately absent from `contracts.CONTRACTS`.
+    """
+
+    __schema_stem__: ClassVar[str] = "fixed-choices"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-05",
+            change="Initial shape: one field of every fixed-choice shape the mapper stores.",
+            why="A fixed choice is proven to round-trip through a real parquet file.",
+        ),
+    )
+
+    word: Literal["a", "b"]
+    maybe_word: Literal["a"] | None = None
+    number: Literal[1, 2]
+    maybe_number: Literal[3] | None = None
+    word_or_text: Literal["a"] | str
+    words: tuple[Literal["a", "b"], ...] = ()
+
+
+def test_a_fixed_choice_maps_to_the_column_of_its_values() -> None:
+    columns = {column.name: column for column in columns_of(FixedChoices)}
+
+    assert columns["word"] == Column("word", ColumnType.STRING, nullable=False)
+    assert columns["maybe_word"] == Column("maybe_word", ColumnType.STRING, nullable=True)
+    assert columns["number"] == Column("number", ColumnType.INT64, nullable=False)
+    assert columns["maybe_number"] == Column("maybe_number", ColumnType.INT64, nullable=True)
+    assert columns["word_or_text"] == Column("word_or_text", STRING, nullable=False)
+    assert columns["words"] == Column(
+        "words", LogicalType(kind="list", item_type=STRING, item_nullable=False), nullable=False
+    )
+
+
+def test_a_mixed_fixed_choice_is_refused_at_its_full_path() -> None:
+    with pytest.raises(TypeError, match=r"RunPlan\.items\[\]\.choice .*all str or all int"):
+        logical_type_of(Literal["a", 1], field_path="RunPlan.items[].choice")
+
+
+def _round_trip[C: Contract](row: C, tmp_path: Path) -> C:
+    """One row written to a real parquet file under `tmp_path` and read back."""
+    from idhazh.contracts.file_envelope import Compression
+    from idhazh.ledger import parquet
+
+    model = type(row)
+    target = tmp_path / f"{model.__name__}.parquet"
+    target.write_bytes(
+        parquet.render(
+            columns_of(model),
+            [row.model_dump(mode="json")],
+            envelope={},
+            compression=Compression.NONE,
+        )
+    )
+    _, rows = parquet.read(target.read_bytes())
+    assert len(rows) == 1
+    return model.model_validate(rows[0])
+
+
+def test_a_fixed_choice_row_round_trips_through_a_parquet_file(tmp_path: Path) -> None:
+    row = FixedChoices.model_validate(
+        {"word": "b", "number": 2, "maybe_number": 3, "word_or_text": "free", "words": ("a",)}
+    )
+
+    assert _round_trip(row, tmp_path) == row
+
+
+def test_a_story_similarity_pair_round_trips_through_a_parquet_file(tmp_path: Path) -> None:
+    """The three scorer and judge choices on a scored pair reach the file and come back."""
+    low, high = sorted(
+        (derive_url_key("https://example.com/one"), derive_url_key("https://example.org/two"))
+    )
+    row = StorySimilarityPair.model_validate(
+        {
+            "date": "2026-09-18",
+            "run_id": "2026-09-18-1",
+            "shard": 0,
+            "pair_key": derive_text_digest(low + high),
+            "left_url_key": low,
+            "right_url_key": high,
+            "composite_score": 0.9,
+            "cosine": 0.9,
+            "headline": False,
+            "scorer_model": "all-minilm-l6-v2-quantized",
+            "cosine_weight": 1.0,
+        }
+    )
+
+    assert _round_trip(row, tmp_path) == row
 
 
 @pytest.mark.parametrize(

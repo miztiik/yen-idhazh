@@ -13,6 +13,8 @@
  * reported missing.
  * The copy is capped from each ledger's newest packed period rather than the
  * build clock, so a canary build keeps publishing the same fixture files next month.
+ * That window is `src/lib/data/site-window.ts`, which the Data explorer reads too, so
+ * it asks the archive only for days this copy may have dropped.
  * Reading the list rather than the tree also keeps `daily/watermark.json`, the
  * gardener's own marker, and any stray file off the site with no list of things
  * to leave out. The raw-day walk checks at most the widest console preset of
@@ -37,6 +39,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { siteKeepsFrom } from '../src/lib/data/site-window.ts';
 import { daysBetween, namesFile, newestNamed } from '../src/lib/data/slice.ts';
 
 /** The tunable knobs, the same file `backend/idhazh/contracts/app_config.py` validates. */
@@ -391,9 +394,10 @@ function rawDaysNotPackedYet(stateRoot, ledger, newestPacked, spanDays, listedAt
  * @param {string} stateRoot
  * @param {readonly string[]} ledgers
  * @param {string} [rootName] How a refusal names `stateRoot`: a repository path, never an absolute one.
+ * @param {number} [spanDays] How many UTC days the copy keeps: the widest console preset, unless a test names its own.
  * @returns {LedgerCopy}
  */
-export function ledgerCopy(stateRoot, ledgers, rootName = 'state') {
+export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = publishedWindowDays()) {
 	/** @type {LedgerCopy} */
 	const copy = { files: [], indexes: {}, refused: [], missing: [], logs: [] };
 	if (ledgers.length === 0) return copy;
@@ -407,7 +411,6 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state') {
 	const files = new Set();
 	/** @type {Set<string>} */
 	const missing = new Set();
-	const spanDays = publishedWindowDays();
 	const listedAt = new Date(Date.now()).toISOString().replace(/\.\d{3}Z$/, 'Z');
 	for (const ledger of ledgers) {
 		const missingIndexes = PERIODS.filter(
@@ -434,7 +437,7 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state') {
 			copy.logs.push(`published ledgers: ${ledger} has no packed day; raw-day walk skipped.`);
 			continue;
 		}
-		const firstDay = newest - spanDays + 1;
+		const firstDay = /** @type {number} */ (dayNumber(siteKeepsFrom(dayString(newest), spanDays)));
 		for (const period of PERIODS) {
 			const index = `compact/${ledger}/index/${period}.json`;
 			const at = join(stateRoot, ...index.split('/'));

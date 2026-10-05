@@ -66,7 +66,7 @@ A ledger that goes through the ledger door files under two roots rather than one
 | `llm-council/shard-outcomes` | `council/session.py` | nothing yet | the union driver keeps both | the nested folder name; `run_id` and `shard` |
 
 - **The nested folder name.** These ledgers sit one folder below their family, as in `content-similarity-judge/scored-pairs`. The door files a ledger under its own name, `raw/<ledger>/`, and the registry refuses any other prefix for the `raw-and-compact` grain, so it needs a rule for a nested name first.
-- **A fixed-choice field** is a field declared as `Literal[...]`, such as the judge's model name. The parquet column mapper, `ledger/arrow_schema.py`, refuses one until it learns a mapping for it.
+- **A fixed-choice field** is a field declared as `Literal[...]`, such as the judge's model name. The parquet column mapper, `ledger/arrow_schema.py`, stores one whose choices are all `str` as a string and all `int` as an int64 ([the column types](persistence.md#the-column-types)), so this is no longer a blocker.
 - **`run_id` and `shard`.** Every door file already records the `run_id` and `shard` of the job that wrote it, and a row field with either name takes the place of the door's cell. [The rule below](#the-rule-a-judge-ledger-follows-when-it-moves) settles both for the judge ledgers: `run_id` stays and means the council run, and `shard` is renamed in the change that moves its ledger.
 - **A whole-month file.** One writer rewrites `item-health-summary`'s month file on every run, and the migrator reads only the two day layouts. It needs a month layout, or a ruling that the ledger stays CSV.
 
