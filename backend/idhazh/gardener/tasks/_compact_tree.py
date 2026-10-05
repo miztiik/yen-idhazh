@@ -20,8 +20,8 @@ folders it opens before it opens one. The drop, year, month and day steps
 choose their periods as they run, so each names what it reads of them first,
 through `name_drops`, `name_years`, `name_months` and `name_days`, and the
 listing then answers for them from the same commit. A day step with no mark
-looks back over months the planner did not name either, and the pass names
-those through `name_raw_months` before it chooses.
+looks back over months no step has named yet, and the pass names those through
+`name_raw_months` before it chooses.
 
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
 that lands the pass refuses a path on both lists, so one pass that did either
@@ -105,7 +105,6 @@ class CompactTree:
     raw_days: list[str]
     #: How many raw day folders the pass listed, before any step set a day aside.
     listed: int = 0
-    months: frozenset[str] | None = None
     #: The periods whose index the pass found on disk.
     indexed: frozenset[Period] = frozenset()
     changes: list[Change] = field(default_factory=list)
@@ -118,22 +117,19 @@ class CompactTree:
     pending_watermarks: dict[Period, Watermark] = field(default_factory=dict)
 
     @classmethod
-    def read(
-        cls,
-        state_dir: Path,
-        ledger_name: LedgerName,
-        listing: FileListing,
-        *,
-        months: frozenset[str] | None = None,
-    ) -> CompactTree:
+    def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
         """The three watermarks, the three indexes and the raw day folder names, read once."""
         marks = ledger_marks.read_marks(state_dir, ledger_name, listing)
-        raw_days = named_trees.raw_days(listing, state_dir, ledger_name)
+        # A wake names no raw folder: each step names the raw folders it reads.
+        raw_days = (
+            named_trees.raw_days(listing, state_dir, ledger_name)
+            if listing.saw_any_of(ledger.raw_root(state_dir, ledger_name))
+            else []
+        )
         return cls(
             state_dir=state_dir,
             ledger=ledger_name,
             listing=listing,
-            months=months,
             daily_through=marks.through[Period.DAILY],
             monthly_through=marks.through[Period.MONTHLY],
             yearly_through=marks.through[Period.YEARLY],

@@ -53,7 +53,7 @@ Table A - what is out
 | 13 | Which days may be packed | 12 | D | DONE | silver-enigma | #1309 | Plan 60 row 13: which days may be packed |
 | 14 | Which years may be packed | 13 | D | DONE | scaling-train | - | Plan 60 row 14 |
 | 15 | Each old month is dropped once | 14 | D | DONE | redesigned-spoon | - | Plan 60 row 15 |
-| 16 | The shared window is gone | 15 | D | PENDING | - | - | - |
+| 16 | The shared window is gone | 15 | D | DONE | jubilant-waffle | - | Plan 60 row 16 |
 | 17 | A late file re-opens its month | 16 | D | PENDING | - | - | - |
 | 18 | An unreadable file is set aside, and extra files wait | 17 | D | PENDING | - | - | - |
 | 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | PENDING | - | - | - |
@@ -681,13 +681,19 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/gardener/tasks/compaction.py`
   - `backend/idhazh/gardener/tasks/_compact_tree.py`
   - `backend/idhazh/gardener/runner.py`
-  - `backend/idhazh/gardener/context.py` (`TaskContext.period_range` and `operator_range`; found during execution (row 12 report), owner 2026-10-04)
+  - `backend/idhazh/gardener/context.py` (`TaskContext.period_range` and `operator_range`; found during execution (row 12 report), owner 2026-10-04. `operator_range` is deleted, and a compaction reads `period_range` as its range; Fowler's ruling, 2026-10-05)
   - `backend/utilities/ledger_migration/packing.py` (`pack` passes `months` to `compaction.run`)
   - `backend/idhazh/contracts/knobs/gardener.py` (the `lookback` description)
   - `backend/tests/gardener/test_period_inputs.py`
   - `backend/tests/gardener/tasks/test_compaction.py`
-  - `backend/tests/gardener/test_publish.py`
-  - `backend/tests/ledger_migration/test_packing_scope.py` (its cases that pack only named months)
+  - `backend/tests/gardener/test_publish.py` (not changed: no case there names what a compaction's listing holds; found during execution)
+  - `backend/tests/ledger_migration/test_packing_scope.py` (its cases that pack only named months; not changed: they pass as they stand, with the months passed as the range; found during execution)
+  - `backend/tests/gardener/tasks/test_compaction_periods.py` (the seven ledgers of 2026-10-04 run over a wake's listing, Fowler's ruling; the `lookback` case moves here from `test_period_inputs.py`, because a first run is now the only reader of a compaction's `lookback`; found during execution)
+  - `backend/tests/gardener/tasks/test_compaction_years.py`, `backend/tests/gardener/test_sparse_shard.py` and `backend/tests/gardener/tasks/_task.py` (docstrings that described the planner's window; found during execution)
+  - `backend/idhazh/gardener/file_listing.py` and `backend/tests/gardener/test_file_listing.py` (`saw_any_of`, which `_refuse_unnamed` reuses: a wake names no raw folder of a compaction, so `CompactTree.read` takes in only the raw days the listing already names, and none when it names none; found during execution, Fowler's ruling)
+  - `tests/fixtures/gardener/task_packages/garden_tasks_ok/compaction.py` (it fetched its owned folder without naming it, which only the planner's window had made work; it names the folder first, as a compaction step does; found during execution)
+  - `docs/how-to/run-the-gates.md` (what a canary build in a base-commit copy needs beyond a test run: `frontend`, the root `.gitignore`, a commit, `node_modules`, and which two fields are clocks; found during execution, the user's instruction of 2026-10-05 that what a session learns goes to `docs/`)
+  - `docs/architecture/publishing/ledger-compaction.md`, `docs/architecture/publishing/idhazh-gardener.md` and `docs/concepts/config/idhazh-gardener.md` (sentences that described the planner's window, and `lookback` for a compaction; found during execution)
 - **Acceptance gates:** local: pytest on the four test files and the gardener tests the selector lists; ruff; mypy. CI: the full suite.
 - **Oracle:** this row removes code, and the property that could break is what each task names: `test_period_inputs.py` requires exactly the marks for every compaction task. The cases in `test_packing_scope.py` that pack only named months still pass, with the months passed as the operator range. It cannot settle anything the earlier rows did not already test.
 

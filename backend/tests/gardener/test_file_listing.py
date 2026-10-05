@@ -165,6 +165,25 @@ def test_a_named_folder_answers_whole_and_named_files_walks_only_the_named_perio
         listing.files_under("state/traces")
 
 
+def test_a_listing_says_whether_it_saw_any_of_a_path_where_a_walk_would_be_refused(
+    tmp_path: Path,
+) -> None:
+    """A caller that may find nothing named under a folder asks, rather than catching the refusal."""
+    root = a_checkout(tmp_path)
+    listing = FileListing.from_disk(
+        root, ["state/days", "state/traces"], paths=[root / "state/traces/2026/09/01"]
+    )
+
+    assert listing.saw_any_of("state/traces"), "a period inside it was named"
+    assert listing.saw_any_of("state/traces/2026/09/01/0001-0.jsonl"), "a folder above it was"
+    assert not listing.saw_any_of("state/traces/2026/09/02")
+    assert not listing.saw_any_of(root / "state" / "days")
+    with pytest.raises(PathNotNamedError):
+        listing.named_files("state/days")
+    with pytest.raises(ValueError, match="is not under a folder this task owns or reads"):
+        listing.saw_any_of("state/other")
+
+
 def test_a_step_names_a_period_as_it_runs_and_is_answered_for_it(tmp_path: Path) -> None:
     """The listing a task was handed did not name October; the task names it, and only then reads it."""
     root = a_checkout(tmp_path)
