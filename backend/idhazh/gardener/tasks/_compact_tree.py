@@ -56,7 +56,7 @@ from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import ledger_marks, named_trees
 from idhazh.gardener.file_listing import FileListing
-from idhazh.ledger import StoredRow
+from idhazh.ledger import RawFile, StoredRow
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +277,20 @@ class CompactTree:
         """One ledger file's rows beside their identity, read as the pass decides."""
         self.looked.add(path)
         return ledger.load_stored([path], model=model)
+
+    def raw_files(self, day: str, *, most: int) -> list[RawFile]:
+        """One day's raw files, oldest first, or a refusal saying why none of them may be taken.
+
+        A pass deletes what it read, so a file it cannot read refuses the day
+        rather than being skipped, and so does a day holding more than `most`
+        files, the most one period is built from.
+        """
+        files = ledger.read_day_files(self.state_dir, self.ledger, day)
+        if len(files) > most:
+            raise ValueError(
+                f"it holds {len(files)} raw files and one period is built from at most {most}"
+            )
+        return files
 
     def write(self, path: Path, data: bytes) -> None:
         """Decide to write one file whole."""

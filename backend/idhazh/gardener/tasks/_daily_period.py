@@ -134,15 +134,9 @@ def _take[C: Contract](
     Nothing is decided for a day that fails, and nothing is said of it.
     """
     try:
-        files = ledger.read_day_files(tree.state_dir, tree.ledger, day)
+        files = tree.raw_files(day, most=policy.max_raw_files_per_period)
     except ValueError as refusal:
         return str(refusal), None
-    if len(files) > policy.max_raw_files_per_period:
-        return (
-            f"it holds {len(files)} raw files and one period is built from at most "
-            f"{policy.max_raw_files_per_period}",
-            None,
-        )
     entry = tree.daily.get(day)
     if entry is not None and not files:
         _advance(tree, day, stamp=stamp, identity=identity)
