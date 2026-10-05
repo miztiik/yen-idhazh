@@ -52,7 +52,7 @@ Table A - what is out
 | 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | #1303 | Plan 60 row 12: which months may close |
 | 13 | Which days may be packed | 12 | D | DONE | silver-enigma | #1309 | Plan 60 row 13: which days may be packed |
 | 14 | Which years may be packed | 13 | D | DONE | scaling-train | - | Plan 60 row 14 |
-| 15 | Each old month is dropped once | 14 | D | PENDING | - | - | - |
+| 15 | Each old month is dropped once | 14 | D | DONE | redesigned-spoon | - | Plan 60 row 15 |
 | 16 | The shared window is gone | 15 | D | PENDING | - | - | - |
 | 17 | A late file re-opens its month | 16 | D | PENDING | - | - | - |
 | 18 | An unreadable file is set aside, and extra files wait | 17 | D | PENDING | - | - | - |
@@ -647,12 +647,16 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/gardener/tasks/_compaction_periods.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
   - `backend/idhazh/gardener/tasks/_daily_period.py`
-  - `backend/idhazh/gardener/period_inputs.py`
+  - `backend/idhazh/gardener/period_inputs.py` (not changed: no choice reads the planner's window after this row, and row 16 deletes it whole; changing its months-window branch first would have the planner name the month the month step's wake test must name itself; found during execution, Fowler's ruling)
   - `backend/idhazh/contracts/knobs/gardener.py` (the `max_periods_per_run` description now covers drops)
   - `backend/tests/gardener/tasks/test_compaction_periods.py`
   - `backend/tests/gardener/tasks/test_compaction.py`
-  - `backend/tests/gardener/test_period_inputs.py`
+  - `backend/tests/gardener/test_period_inputs.py` (not changed, for the same reason; found during execution, Fowler's ruling)
   - `docs/architecture/publishing/ledger-compaction.md`
+  - `backend/idhazh/contracts/gardener_events.py` (`PeriodsChosen` gains `drops`, None exactly when the window keeps every month; `oldest-indexed` also names where the drop step starts; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`name_drops`, beside `name_years`, `name_months` and `name_days`; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/compaction.py` (hands step 1 its choice, and step 2 the months step 1 takes and those a first day run looked back over; found during execution, Fowler's ruling)
+  - `docs/concepts/config/idhazh-gardener.md` (`max_periods_per_run` and `month_deletes_dry_run`; found during execution)
 - **Acceptance gates:** local: pytest on the three test files; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** a monthly index from 2025-01 to 2026-09, a keep line of 2025-10 and cap 8: B1 takes 2025-01 to 2025-08 and resumes at 2025-09. A live pass deletes those files and entries, and the next pass names no month older than the line. A report-only pass keeps them and reports them again. A raw day past the line whose file cannot be parsed is still deleted. An `empty` month entry past the line is dropped with no `FILE_MISSING` warning, and a `packed` entry whose file is absent still warns. It cannot settle the first live drop on a real ledger; `compact-gardener`'s first drop is due around November 2027.
 

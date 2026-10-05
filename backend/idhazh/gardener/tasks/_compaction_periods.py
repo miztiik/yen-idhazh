@@ -7,6 +7,13 @@ lists nothing: the pass first names the months a first day run looks back over
 (`first_run_months`), then the choice is made once, before any step runs,
 logged, and handed to each step as its parameters (`PeriodsChosen`).
 
+**The drop step takes the oldest months past the keep line**, the oldest month
+the monthly window keeps. It starts at the oldest monthly entry, because the
+monthly index is its record of what is left to drop: a month it drops leaves
+the index, so no later pass looks at it again. It takes the entries older than
+the line, oldest first, at most `max_periods_per_run` of them, and the span
+counts entries rather than calendar months.
+
 **The year step takes the years after its mark**, and only where the
 declaration sets `monthly_keep_days`. It starts at the year after the yearly
 mark; with no mark, at the oldest year an index names - a yearly entry a pass
@@ -46,7 +53,9 @@ that period, so the person widens the range rather than finding it left open.
 Whether that period is ready is read from the calendar and the marks alone, so
 the refusal reads nothing outside the range. The year step counts only the
 whole years a range holds, January to December, so it reads no month outside
-it; a range that holds no whole year takes no year and refuses none.
+it; a range that holds no whole year takes no year and refuses none. The drop
+step has no mark a range could carry past a month: a month the range leaves
+out stays in the index for a later pass, so its range refuses nothing.
 
 Every rule counts whole days after a period's own end, from 00:00 UTC on the
 wake's day, so every wake of one UTC day chooses the same (CLAUDE.md section 2).
@@ -93,6 +102,9 @@ def choose(
         cap=policy.max_periods_per_run,
         operator_range=operator_range,
         month_deletes_dry_run=policy.month_deletes_dry_run,
+        drops=_drops(
+            tree, keep_line=keep_line, cap=policy.max_periods_per_run, operator_range=operator_range
+        ),
         years=_years(tree, policy, now=now, operator_range=operator_range),
         months=_months(tree, policy, now=now, operator_range=operator_range),
         days=_days(tree, policy, now=now, keep_line=keep_line, operator_range=operator_range),
@@ -198,6 +210,44 @@ def _span(
             resume_from=after(capped, 1),
         )
     return StepChoice(start=why, first=start, last=end)
+
+
+def _drops(
+    tree: CompactTree,
+    *,
+    keep_line: str | None,
+    cap: int,
+    operator_range: tuple[str, str] | None,
+) -> StepChoice | None:
+    """The month entries the drop step may take: older than the keep line, in range, to the cap.
+
+    None when the monthly window keeps every month. The start is the oldest
+    entry past the line, or the oldest inside the operator range when the range
+    moved it, and the next entry past the cap is where the next wake starts.
+    """
+    if keep_line is None:
+        return None
+    if not tree.monthly:
+        return StepChoice(start=StartReason.NONE)
+    past = sorted(month for month in tree.monthly if month < keep_line)
+    ranged = (
+        past
+        if operator_range is None
+        else [month for month in past if operator_range[0] <= month <= operator_range[1]]
+    )
+    why = StartReason.OLDEST_INDEXED if ranged[:1] == past[:1] else StartReason.OPERATOR_RANGE
+    if not ranged:
+        return StepChoice(start=why)
+    taken = ranged[:cap]
+    if len(ranged) > cap:
+        return StepChoice(
+            start=why,
+            first=taken[0],
+            last=taken[-1],
+            stopped_because=StopReason.CEILING,
+            resume_from=ranged[cap],
+        )
+    return StepChoice(start=why, first=taken[0], last=taken[-1])
 
 
 def _years(
