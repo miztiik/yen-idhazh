@@ -255,7 +255,12 @@ def _runs_on_or_before(api: Api, day: str) -> int:
     return _count(api.read(f"{route}?created={created}&per_page=1"))
 
 
-def first_mark(api: Api, *, line: str) -> str:
+def _created_on(api: Api) -> date:
+    """The UTC day the repository was created, read from its own answer: no member is older."""
+    return date.fromisoformat(_day_of(str(api.read("")["created_at"])))
+
+
+def first_runs_mark(api: Api, *, line: str) -> str:
     """The UTC day a first walk of the runs starts after, read from GitHub and never from a count.
 
     No run is older than the repository, so a line before the day it was created
@@ -268,7 +273,7 @@ def first_mark(api: Api, *, line: str) -> str:
     A count of the whole collection could not do this: it says how many runs
     there are, and nothing of the day the oldest one was made.
     """
-    created = date.fromisoformat(_day_of(str(api.read("")["created_at"])))
+    created = _created_on(api)
     last = date.fromisoformat(line)
     if last < created:
         return line

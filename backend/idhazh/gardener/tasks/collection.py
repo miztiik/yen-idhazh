@@ -58,7 +58,7 @@ def run(context: TaskContext, *, api: Api | None = None) -> Pass:
             collection = github_collections.artifacts(transport)
             mark = None
         case PrunableCollection.WORKFLOW_RUNS:
-            mark = collection_mark.last_mark(context, policy) or github_collections.first_mark(
+            mark = collection_mark.last_mark(context, policy) or github_collections.first_runs_mark(
                 transport, line=line
             )
             collection = github_collections.runs(transport, after=mark, through=line)

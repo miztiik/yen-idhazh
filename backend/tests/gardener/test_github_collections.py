@@ -374,7 +374,7 @@ def test_a_line_before_the_repository_was_made_is_the_first_mark_and_no_run_is_r
     """The repository was created on 2026-08-20, so no run is older than a line before it."""
     api = RecordedAnswers(repository=fixture(REPOSITORY))
 
-    assert github_collections.first_mark(api, line="2026-07-06") == "2026-07-06"
+    assert github_collections.first_runs_mark(api, line="2026-07-06") == "2026-07-06"
     assert api.read_paths == [""]
 
 
@@ -386,14 +386,14 @@ def test_the_halving_finds_the_oldest_day_with_a_run_from_recorded_counts() -> N
     """
     api = RecordedAnswers(fixture(RUNS_BY_DAY), repository=fixture(REPOSITORY))
 
-    assert github_collections.first_mark(api, line="2026-08-22") == "2026-08-21"
+    assert github_collections.first_runs_mark(api, line="2026-08-22") == "2026-08-21"
     assert api.read_paths == ["", counted_through("2026-08-21"), counted_through("2026-08-22")]
 
 
 def test_with_no_run_on_or_before_the_line_the_first_mark_is_the_line() -> None:
     api = RecordedAnswers(fixture(RUNS_BY_DAY), repository=fixture(REPOSITORY))
 
-    assert github_collections.first_mark(api, line="2026-08-21") == "2026-08-21"
+    assert github_collections.first_runs_mark(api, line="2026-08-21") == "2026-08-21"
     assert api.read_paths == ["", counted_through("2026-08-21")]
 
 
