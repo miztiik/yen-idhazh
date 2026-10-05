@@ -16,12 +16,12 @@ so the record can count it, and keeps it.
 read.** The raw day folders, which compact files exist and what
 each weighs are all read off the listing. The watermarks and the indexes are
 fetched once, before they are read, and each step fetches the day or month
-folders it opens before it opens one. The year, month and day steps choose
-their periods as they run, so each names what it reads of them first, through
-`name_years`, `name_months` and `name_days`, and the listing then answers for
-them from the same commit. A day step with no mark looks back over months the
-planner did not name either, and the pass names those through
-`name_raw_months` before it chooses.
+folders it opens before it opens one. The drop, year, month and day steps
+choose their periods as they run, so each names what it reads of them first,
+through `name_drops`, `name_years`, `name_months` and `name_days`, and the
+listing then answers for them from the same commit. A day step with no mark
+looks back over months the planner did not name either, and the pass names
+those through `name_raw_months` before it chooses.
 
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
 that lands the pass refuses a path on both lists, so one pass that did either
@@ -152,6 +152,23 @@ class CompactTree:
     def raw_month_folder(self, month: str) -> Path:
         """The raw folder a `YYYY-MM` month's day folders sit in."""
         return ledger.raw_root(self.state_dir, self.ledger).joinpath(month[:4], month[5:7])
+
+    def name_drops(self, months: Sequence[str]) -> None:
+        """Name what the drop steps read of these months: each one's month file and raw folder.
+
+        Each month file, whichever format wrote it, and each raw month folder are
+        listed from the commit now, and the raw days found there are taken in:
+        the drop step chose the months as it ran. A drop deletes by these names
+        and opens nothing, so nothing here is fetched.
+        """
+        self._name(
+            [
+                ledger.compact_path(self.state_dir, self.ledger, Period.MONTHLY, month, fmt=fmt)
+                for month in months
+                for fmt in Format
+            ],
+            months=months,
+        )
 
     def name_years(self, years: Sequence[str]) -> None:
         """Name what the year step reads of these years: each one's month files and its own file.
@@ -365,8 +382,9 @@ class CompactTree:
 
         A deleted file takes any date folder it leaves empty with it, so the next
         listing of the raw tree does not meet a day that holds nothing. A file
-        deleted by its name alone - a month file the monthly window drops - may never have
-        been downloaded, and its deletion lands from the name.
+        deleted by its name alone - a month file or a raw file the drop steps
+        take - may never have been downloaded, and its deletion lands from the
+        name.
         """
         for change in self.changes:
             if change.data is None:

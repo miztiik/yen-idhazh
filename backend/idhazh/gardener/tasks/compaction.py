@@ -5,22 +5,26 @@ served by this module through its kind, so a ledger joins the compaction with
 one declaration and no Python. A pass runs five steps in one process, and the
 shard lands all of them in one commit:
 
-1. the month files the monthly window no longer keeps are dropped;
-2. raw days past the monthly window are dropped;
+1. the oldest months past the monthly window's keep line are dropped, at most
+   `max_periods_per_run` of them, each with every file at its paths and then
+   its index entry;
+2. raw days past the keep line are dropped by their listed paths, unread: those
+   in the months step 1 drops, and those a first day run looked back over;
 3. every year chosen for this wake is packed into its year file, or into an
    entry with no file, where the declaration sets `monthly_keep_days`;
 4. every month chosen for this wake is closed into its month file;
 5. every day chosen for this wake is packed into its day file, after each packed
    day that holds raw files again.
 
-**Each step chooses its own periods, or is moving to.** The years step 3 packs,
-the months step 4 closes and the days step 5 packs are chosen before any step
-runs, from the ledger's own marks and the wake's day (`_compaction_periods`),
-and logged once as `PeriodsChosen`; an operator range, or the months a
-migration names, limits that choice, and the window the planner named for the
-other steps does not. A day step with no mark first has the months it looks
-back over named, because its first day is a raw day. Steps 1 and 2 still read
-the window the planner named.
+**Each step chooses its own periods.** The months step 1 drops, the years step
+3 packs, the months step 4 closes and the days step 5 packs are chosen before
+any step runs, from the ledger's own indexes and marks and the wake's day
+(`_compaction_periods`), and logged once as `PeriodsChosen`; an operator range,
+or the months a migration names, limits that choice, and the window the planner
+names does not. A day step with no mark first has the months it looks back over
+named, because its first day is a raw day. Step 2 chooses nothing of its own:
+it takes the raw days past the keep line in the months step 1 drops and in
+those a first day run looked back over.
 
 **The monthly window has a switch of its own.** Steps 3 to 5 delete only files
 whose rows they have just written into a coarser file; the window's drops in
@@ -68,11 +72,10 @@ KIND = TaskKind.COMPACTION
 
 
 def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
-    """Drop, or only name, what the window no longer keeps; pack years and months; take days.
+    """Drop, or only name, the oldest months past the keep line; pack years and months; take days.
 
-    `months` are the months a migration names. The drop steps read only those,
-    and the year, month and day steps take nothing outside the first to the last
-    of them.
+    `months` are the months a migration names: no step takes anything outside
+    the first to the last of them.
     """
     import logging
     from datetime import UTC, datetime, time
@@ -107,19 +110,24 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     if months is None and context.period_range is not None:
         months = frozenset(month_partition.months_between(*context.period_range))
     tree = CompactTree.read(context.state_dir, policy.ledger, context.listing, months=months)
-    tree.name_raw_months(
-        _compaction_periods.first_run_months(tree, policy, now=now, operator_range=operator_range)
+    looked_back = _compaction_periods.first_run_months(
+        tree, policy, now=now, operator_range=operator_range
     )
+    tree.name_raw_months(looked_back)
     chosen = _compaction_periods.choose(tree, policy, now=now, operator_range=operator_range)
     logging.getLogger(__name__).info(
         "periods chosen %s", chosen.model_dump_json(exclude_none=True)
     )
     first_kept = chosen.keep_line
+    # Worked out before step 1 takes its months out of the index, for step 2 to read.
+    raw_drop_months = [*_monthly_period.months_to_drop(tree, chosen.drops), *looked_back]
     # A window that only reports keeps what it would drop, so packing reads it as forever.
     reports = policy.month_deletes_dry_run
     stops = (
-        *(_monthly_period.spare if reports else _monthly_period.drop)(tree, first_kept=first_kept),
-        *(_daily_period.spare if reports else _daily_period.drop)(tree, first_kept=first_kept),
+        *(_monthly_period.spare if reports else _monthly_period.drop)(tree, chosen.drops),
+        *(_daily_period.spare if reports else _daily_period.drop)(
+            tree, raw_drop_months, first_kept=first_kept
+        ),
         *(
             ()
             if chosen.years is None

@@ -40,7 +40,7 @@ flowchart TB
   RAWF[("state/raw/ledger/YYYY/MM/DD/file_id.parquet<br/>written once, many writers")]
 
   subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
-    DROP["1 and 2. drop the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while month_deletes_dry_run is true"]
+    DROP["1 and 2. drop the oldest months past the keep line,<br/>at most max_periods_per_run, with their raw days,<br/>or only name those while month_deletes_dry_run is true"]
     YDONE{"a year chosen for this wake?<br/>after the yearly mark, monthly_keep_days<br/>since it ended, its next January closed"}
     YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
     YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
@@ -117,18 +117,20 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 
 | Step | What it does |
 | --- | --- |
-| 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
-| 2 | Drops every raw day in a month the window no longer keeps. While the window only reports, names them and keeps them |
+| 1 | Drops the oldest months past the keep line, at most `max_periods_per_run` of them: every file at each month's paths, then its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
+| 2 | Drops, by their listed paths and unread, the raw days past the keep line in the months step 1 drops and in those a first day run looked back over. While the window only reports, names them and keeps them |
 | 3 | Packs every year chosen for this wake into its year file, or into an entry with no file, where the declaration sets `monthly_keep_days` |
 | 4 | Closes every month chosen for this wake into its month file, or into an entry with no file |
 | 5 | Packs every day chosen for this wake into its day file, or into an entry with no file, after each packed day that holds raw files again |
 
-**The year, month and day steps choose their own periods; the two drop steps
-do not yet.** Before any step runs, the pass chooses the years step 3 may pack,
-the months step 4 may close and the days step 5 may pack from the ledger's own
-marks and the wake's UTC day, and logs the choice once as one `periods chosen`
-line, the JSON of `PeriodsChosen` (`backend/idhazh/contracts/gardener_events.py`).
-Steps 1 and 2 still read the fixed window the planner names for each task
+**Every step chooses its own periods.** Before any step runs, the pass chooses
+the months step 1 may drop, the years step 3 may pack, the months step 4 may
+close and the days step 5 may pack, from the ledger's own indexes and marks and
+the wake's UTC day, and logs the choice once as one `periods chosen` line, the
+JSON of `PeriodsChosen` (`backend/idhazh/contracts/gardener_events.py`). Step 2
+takes the raw days of the months step 1 chose, and of those a first day run
+looks back over ([A month past the window](#a-month-past-the-window)). No
+choice reads the fixed window the planner names for each task
 ([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
 
 **Drops first and days last, because no pass may write a path it deletes.** A
@@ -273,6 +275,9 @@ Month M goes on the day month M plus the window becomes absorbable, so the
 monthly period holds exactly `monthly_window` month files on every day, and the
 ledger reaches back `daily_keep_days` further than that. At 13 months and 45
 days, January 2026 goes on 15 April 2027, the day February 2027 is absorbed.
+When more than `max_periods_per_run` months are past the line at once, the
+oldest go first and the rest at the next wakes
+([A month past the window](#a-month-past-the-window)).
 
 **Raw files that land in a month already absorbed are refused and kept.**
 `daily_keep_days` is at least 31, one day more than GitHub's 30-day re-run
@@ -343,6 +348,30 @@ filters on a date can skip the row groups of the other months. A year file over
 and its month files are kept: GitHub refuses a push that holds a file over
 100 MiB, and one that did would stall every later wake.
 
+## A month past the window
+
+**Each month past the window is dropped once, and the monthly index says which
+are left.** The keep line is the oldest month `monthly_window` keeps
+([A month](#a-month)). The drop step starts at the oldest monthly entry and
+takes the entries older than the line, oldest first, at most
+`max_periods_per_run` of them, and the next wake starts at the entry after the
+last one it took. A month it drops leaves the index, so no later pass looks at
+it again, and a month that went past the line while no pass ran is still in the
+index for the next one. An operator range only narrows the choice and refuses
+nothing, because a month it leaves out stays in the index. The step names each
+month's file and raw folder, and the shard lists them from its commit then
+([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
+
+**A month goes whole and by its names, and nothing of it is opened.** The step
+deletes every file at the month's paths, in either format and whatever its entry
+says, and then the entry. A `packed` entry with no file left is logged as
+`fault=file-missing`; an `empty` entry has no file to miss. Then each raw day
+past the line goes with every file the listing holds in its folder: the raw days
+in the months the step drops, and those in the months a first day run looked
+back over and did not take, because it starts no earlier than the line
+([A day](#a-day)). A raw file that cannot be read goes with the rest of its
+day, so no such file can stop a drop.
+
 ## The three indexes, and a file that is missing
 
 **A ledger's three indexes exist together.** Whatever writes one of
@@ -390,10 +419,11 @@ pass would write and delete. So the list a person reads before turning a
 compaction live is the list the live pass carries out.
 
 **The monthly window has a switch of its own, `month_deletes_dry_run`.** With
-it `true`, steps 1 and 2 name every month file past the window and every raw
-file of a day in a month past it, and keep them; steps 3 to 5 then pack those
-days and months like any other, as if the window kept every month, so a first
-pass may start before the keep line. `dry_run` still
+it `true`, steps 1 and 2 name every file a live pass would drop at that wake -
+the month files and raw days of the months the drop step chose - and keep them,
+so the next wake names the same months again; steps 3 to 5 then pack those days
+and months like any other, as if the window kept every month, so a first pass
+may start before the keep line. `dry_run` still
 decides whether anything lands, so a dry run with the window reporting names
 what that live pass would do. With it `false`, a pass drops what the window no
 longer keeps, as above.
@@ -589,6 +619,25 @@ has no alarm yet. Fowler review, 2026-10-04; owner to confirm.
 | 1 | A keep line for years | `published` and `summary-quality-evals` refuse deletion in `prune_refusal` | A knob, and deleting a whole year of rows from the ledgers that allow it |
 | 2 | Pack years into decades | The index still grows, one level up | A fourth period kind across the contracts and the site |
 | 3 | Keep only a first and a last year in the index | It changes every reader of an index to save about 14 gzipped bytes a year | The site's reader and the binding tests change |
+
+**2026-10-05: each month past the window is dropped once, and the monthly index
+says which are left.** The drop steps read only the planner's window, three
+months by default, so a month that had slid past those three was never dropped.
+They also opened every raw day past the line, so one file that could not be read
+kept its day and failed the pass. Now the drop step chooses from the monthly
+index, the oldest months first, at most `max_periods_per_run` a wake, and a
+dropped month leaves the index. The raw days go by the names the listing holds,
+unread, and only in the months the step drops and those a first day run looked
+back over, so what goes does not depend on how much the listing names. A month
+with no row has no file to miss, so only a `packed` month without its file is
+logged as missing. The person's ruling, 2026-10-04, that the index is the record
+of what is left to drop; Fowler's rulings, 2026-10-04 and 2026-10-05.
+
+| # | Option | Why rejected | What it would cost to take |
+| --- | --- | --- | --- |
+| 1 | A separate file saying how far the drops have reached | A second record that can disagree with the index | A new persisted shape |
+| 2 | Keep looking at the three months just past the line | A month that slides past those three is never dropped | Nothing to build |
+| 3 | Drop every raw day past the line that the listing names | What goes would depend on how much the listing names, so a test over a whole folder would prove drops a scheduled wake never makes | Nothing to build |
 
 **The `compact-summary-quality-evals` compaction packs the eval rows and never drops a month.** Every
 eval row is kept for ever and nothing summarises a month: the
