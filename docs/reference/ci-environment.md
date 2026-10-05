@@ -1,6 +1,6 @@
 # What CI depends on outside its own files
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-04
 
 The settings this repository has to carry and the platform behaviour nobody here
 controls. Both decide how a workflow behaves, and neither is visible in a
@@ -127,12 +127,11 @@ Verified 2026-08-20.
  `run.shard_timeout_minutes`, and 33 items their ledger steps had already
  recorded as published never reached `assemble`. **Fixing one step in a file is
  not fixing the file.**
-- **Every `digest.yml` artifact a re-render needs is gone within one day, so "re-render the day from its decisions" is not a repair option for any day older than 24 hours.** Read off `digest.yml` on 2026-09-15, it keeps seven: `plan` 1 day, `shard-visuals-<shard>` 1 - that one
- carries this run's rendered charts - `runtime-log-<shard>` 2, `items-<shard>`
- 7, `review` 7, `evidence-<shard>` 14, and `captures-<shard>` 90. **The re-render window is set by the
+- **Every `digest.yml` artifact a re-render needs is gone within one day, so "re-render the day from its decisions" is not a repair option for any day older than 24 hours.** Read off `digest.yml` on 2026-10-04, it keeps six: `plan` 1 day, `runtime-log-<shard>` 2, `items-<shard>`
+ 7 - a rendered chart travels inside its decision there - `review` 7, `evidence-<shard>` 14, and `captures-<shard>` 90. **The re-render window is set by the
  shortest of those and never by the longest**, which is the trap in reading the
- list: `assemble` downloads `plan`, `items-*` and `shard-visuals-*` and needs
- all three, so a week-old `items-*` repairs nothing once the other two have
+ list: `assemble` downloads `plan` and `items-*` and needs
+ both, so a week-old `items-*` repairs nothing once `plan` has
  gone - and a 90-day `captures-*` repairs nothing at all, because it holds what the model was asked rather than what the day published. Nothing under `backend/var/` is committed either: `.gitignore` line 52
  is `backend/var/`, and `git ls-files backend/var` returns no files. **The
  committed record of a run is the digest under `frontend/public/digest/` plus
@@ -150,9 +149,8 @@ Verified 2026-08-20.
  That is survivable here only because the expensive jobs are separate: a failed
  `assemble` re-runs alone - 82 s in run `33270983446` - while `plan` and the
  `work` shards keep their results and are not repeated. It works
- for one day, because `plan` and `shard-visuals-*`, two of the three artifacts
- `assemble` downloads, carry
- `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
+ for one day, because `plan`, one of the two artifacts `assemble` downloads,
+ carries `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
  workflow file as the original event**, so it cannot pick up a fix that landed
  afterwards, and a job that failed against a `main` which has since moved will
  re-measure the tree it started from rather than the one that is published now.

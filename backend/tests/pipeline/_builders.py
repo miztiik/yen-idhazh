@@ -86,6 +86,14 @@ def row(**overrides: object) -> EvalRow:
 #: is the server's own error shape (Guardrail #7).
 REFUSED_COMPLETION: Final = FIXTURES_DIR / "completions" / "errors" / "server-unavailable.json"
 
+#: The recorded pair for the one article in the fixture set a bar can be drawn
+#: from. Kept apart from the transport pair `test_two_calls` drives, because this
+#: pair's whole job is the picture, which needs four figures in one unit to exist
+#: at all. Served with `drawable_article_fetch`.
+DRAWS_LABEL: Final = FIXTURES_DIR / "completions" / "label" / "wind-labelled.json"
+
+DRAWS_SUMMARIZE_AND_PLAN: Final = FIXTURES_DIR / "completions" / "summarize-and-plan" / "wind-summary-and-plan.json"
+
 
 @contextmanager
 def a_server_that_refuses_every_completion() -> Iterator[RecordedEndpoint]:

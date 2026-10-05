@@ -7,7 +7,7 @@ from typing import ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, RelPath
+from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, RelPath, records_json
 
 
 class PublicationEntry(Model):
@@ -21,6 +21,12 @@ class PublicationEntry(Model):
 
 class PublicationInventory(Contract):
     """The named inventory at the public root, beside the digest directory."""
+
+    def to_json(self) -> str:
+        """Keep each file entry and changelog record on one line."""
+        return records_json(
+            self.model_dump(mode="json"), record_lists=frozenset({"entries", "changelog"})
+        )
 
     __schema_stem__: ClassVar[str] = "publication-inventory"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (

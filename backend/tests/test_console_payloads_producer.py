@@ -506,6 +506,11 @@ def test_a_published_shard_reads_back_as_it_was_written(tree: tuple[Path, Path])
     assert len(machine.read_shard(machine.shard_path(digest, NEWEST))) == 2
     assert len(run_days.read_shard(run_days.shard_path(digest, NEWEST))) == 1
     assert len(day_metrics.read_public_shard(day_metrics.public_shard_path(digest, NEWEST))) == 1
+    text = run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8")
+    assert text.startswith("[\n  {\n")
+    for day in json.loads(text):
+        for run in day["runs"]:
+            assert json.dumps(run, sort_keys=True, separators=(",", ": ")) in text
 
 
 # --- the run-day reduction ---------------------------------------------------

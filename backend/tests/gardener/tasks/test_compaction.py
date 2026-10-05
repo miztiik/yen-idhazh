@@ -27,11 +27,12 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text, seed_scores
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.knobs.gardener import MonthsWindow
@@ -136,6 +137,47 @@ def disjoint(outcome: Pass) -> bool:
 
 
 # --- the day: what a compact file holds ------------------------------------------
+
+
+def test_the_shipped_score_task_refreshes_the_console_files_without_a_live_override(
+    tmp_path: Path,
+) -> None:
+    """New scores reach packed files on consecutive wakes, with no row changed or lost."""
+    root = tmp_path / "checkout"
+    which = LedgerName.SUMMARY_QUALITY_EVALS
+    template = EvalRow.read(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json")
+    rows = [
+        EvalRow.model_validate(
+            {
+                **template.model_dump(mode="json"),
+                "date": on,
+                "run_id": f"{on}-1",
+                "scored_at": f"{on}T06:18:02Z",
+            }
+        )
+        for on in ("2026-10-01", "2026-10-02", "2026-10-03")
+    ]
+    for row in rows:
+        seed_scores(state(root), [row], run_id=row.run_id)
+
+    first = run_task("compact-summary-quality-evals", root, today=date(2026, 10, 4))
+
+    assert not first.dry_run and first.stopped_because is StopReason.EXHAUSTED
+    assert watermark(root, Period.DAILY, which) == "2026-10-02"
+    for row in rows[:2]:
+        packed = ledger.compact_path(state(root), which, Period.DAILY, row.date)
+        assert ledger.load([packed], model=EvalRow) == [row]
+        assert ledger.list_raw_files(state(root), which, days={row.date}) == []
+    pending = ledger.list_raw_files(state(root), which, days={rows[2].date})
+    assert len(pending) == 1
+
+    second = run_task("compact-summary-quality-evals", root, today=date(2026, 10, 5))
+
+    assert not second.dry_run and second.stopped_because is StopReason.EXHAUSTED
+    assert watermark(root, Period.DAILY, which) == "2026-10-03"
+    assert ledger.load_days(state(root), which, {row.date for row in rows}, model=EvalRow) == rows
+    assert ledger.list_raw_files(state(root), which, days={rows[2].date}) == []
+    assert disjoint(first) and disjoint(second)
 
 
 def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_same_order(
