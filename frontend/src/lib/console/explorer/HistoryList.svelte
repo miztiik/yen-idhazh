@@ -13,28 +13,32 @@
 </script>
 
 <details class="history-list">
-	<summary><Icon id="history" /> Asked in this browser</summary>
-	{#if runs.length === 0}
-		<p>Nothing asked in this browser yet.</p>
-	{:else}
-		<ul>
-			{#each runs as run (run.id)}
-				<li>
-					<button type="button" onclick={() => onPick(run)}>
-						<span>{time(run.askedAt)} - {run.rows} {run.rows === 1 ? 'row' : 'rows'} in {run.ms} ms - {run.ledgers.join(', ')}</span>
-					</button>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+	<summary><Icon id="history" /> History</summary>
+	<div class="history-menu">
+		<p class="storage">Kept in this browser only.</p>
+		{#if runs.length === 0}
+			<p>Nothing asked in this browser yet.</p>
+		{:else}
+			<ul>
+				{#each runs as run (run.id)}
+					<li>
+						<button type="button" onclick={() => onPick(run)}>
+							<span>{time(run.askedAt)} - {run.rows} {run.rows === 1 ? 'row' : 'rows'} in {run.ms} ms - {run.ledgers.join(', ')}</span>
+						</button>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
 </details>
 
 <style>
 	.history-list {
+		position: relative;
 		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
-		padding: var(--space-2) var(--space-3);
+		padding-inline: var(--space-3);
 	}
 
 	summary {
@@ -44,6 +48,29 @@
 		gap: var(--space-2);
 		cursor: pointer;
 		font-weight: 600;
+	}
+
+	.history-list[open] .history-menu {
+		position: absolute;
+		display: block;
+		z-index: 10;
+		inset-block-start: calc(100% + var(--space-1));
+		inset-inline-start: 0;
+		inline-size: min(28rem, calc(100vw - 2 * var(--space-4)));
+		padding: var(--space-3);
+		border: 1px solid var(--color-rule);
+		border-radius: var(--radius-md);
+		background: var(--color-surface-raised);
+		box-shadow: var(--shadow-md);
+	}
+
+	.storage {
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+	}
+
+	.history-menu {
+		display: none;
 	}
 
 	p,

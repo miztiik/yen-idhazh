@@ -8,6 +8,7 @@ from idhazh.contracts.base import Contract
 
 FIXTURE_NAMES = {
     "collection-prune-row": (
+        "a-dry-walk-that-counted-past-its-ceiling.json",
         "a-live-fold-beside-a-dry-window.json",
         "ceiling-reached.json",
         "exhausted-dry-run.json",

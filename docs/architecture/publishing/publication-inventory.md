@@ -1,6 +1,6 @@
 # Publication Inventory
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-05
 
 How does a static build find source days and files without walking the archive?
 
@@ -28,6 +28,11 @@ The telemetry dispatcher records the month files after its projections finish.
 The inventory includes search JSON and binary shards, telemetry CSV,
 run-day JSON, day-metrics JSON, machine CSV and run-timeline CSV when present.
 It also names the source-health view and console band.
+
+Every writer that changes a published file must refresh its inventory entry
+and commit `publication.json` with that file. Vector backfill records each
+repaired day through `record_day` after writing it. It rebuilds each touched
+month's search index, then refreshes its entries through `record_month`.
 
 Each update checks only the caller's named files. An absent named file removes
 its entry. Other entries remain untouched. The named inventory itself grows
@@ -125,7 +130,11 @@ inventory degrades to an empty page selection with one warning, rather than
 stopping the build. The backend must still refuse a missing inventory so an
 update cannot silently lose older names.
 
-The plan commits the named inventory with its state files. Separate checkouts
+Plan, assemble and vector backfill stage the named inventory with their output.
+Assemble also declares it in the derived refresh paths. A rejected push restores
+origin's inventory before regeneration, so the day and month writers update
+current entries without replacing another writer's names.
+Separate checkouts
 never resolve an inventory conflict with Git text merging. The commit retry
 takes origin's inventory and upserts only this run's named changes before it
 continues the existing rebase. It re-stats those files and refreshes their counts

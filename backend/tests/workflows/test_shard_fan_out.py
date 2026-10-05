@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Final
 
 import pytest
 from conftest import CONFIG_DIR, read_text
@@ -14,9 +15,7 @@ from utilities import shard_bound
 from ._harness import (
     CONTENT_REFRESH_SHARD_DEFAULT,
     CONTENT_REFRESH_SHARDS,
-    SUBSTITUTED_DAY_DIR,
     WORK_BOUND_KEYS,
-    _artifact_upload,
     _dispatch_inputs,
     _evaluate_shard_matrix,
     _expression,
@@ -34,6 +33,10 @@ from ._harness import (
 )
 
 pytestmark = pytest.mark.workflow
+
+#: What the site serves, relative to the repository root. Only the job that
+#: publishes writes under it.
+PUBLISHED_TREE: Final = "frontend/public/"
 
 
 def test_content_refresh_has_eight_total_work_shards_at_most() -> None:
@@ -232,47 +235,29 @@ def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> No
                 )
 
 
-def test_a_work_shard_hands_over_the_pictures_it_drew_itself() -> None:
-    """The work shards are the only job that draws, and their checkouts go away.
+def test_no_job_hands_a_published_file_to_another_job() -> None:
+    """The checkout that publishes writes the published tree, so no artifact carries any of it.
 
-    The summarize-and-plan call writes the summary and the plan in one reply, so `work` renders the
-    picture on its own runner and its checkout is thrown away when the shard
-    ends. The decisions travel inside `items-<shard>`; the drawn bytes do not,
-    because that artifact is rooted at the items directory. Without this pair
-    `assemble` publishes a payload naming an asset that is not there, which
-    `_picture_faults` reports as a broken image on every story that got one.
+    Run `37212772816` (2026-10-04): each work shard uploaded its whole day
+    directory so that assemble could collect the charts, and assemble unpacked
+    all four into its own day directory at once. Two shards whose ledger pushes
+    had rebased onto a newer tip carried a 128-story `digest.json` and the other
+    two carried 73 stories. The overlapping writes left the shorter file with the
+    longer one's tail, and assemble could not read the day it was extending.
 
-    Nothing else in the repository connects the two halves: one is YAML and the
-    other is where `render.write.asset_relpath` puts a file.
+    A chart's bytes travel inside its decision in `items-<shard>`, and assemble
+    writes the file itself (`render.write.write_charts_from_decisions`). So no
+    upload or download in any workflow names a path under the published tree.
     """
-    workflow = _load_workflows()["digest.yml"]
-    upload = _mapping(
-        _artifact_upload(workflow, "work", "shard-visuals-${{ matrix.shard }}").get("with"),
-        "upload",
-    )
-
-    assert _substitute(str(upload.get("path")).strip()) == f"{SUBSTITUTED_DAY_DIR}/", (
-        "this run's day and never the whole digest tree, which would send every "
-        "committed day back to Actions on every run"
-    )
-    assert upload.get("if-no-files-found") == "ignore", (
-        "a day where nothing was drawable matches nothing and must not fail the shard"
-    )
-
-    downloads = [
-        _mapping(step.get("with"), "assemble download")
-        for step in _steps(workflow, "assemble")
-        if str(step.get("uses", "")).startswith("actions/download-artifact")
-    ]
-    collected = [
-        asked
-        for asked in downloads
-        if str(asked.get("pattern", "")).startswith("shard-visuals-")
-    ]
-    assert len(collected) == 1, "assemble must collect the shards' pictures exactly once"
-    assert str(collected[0].get("merge-multiple")).lower() == "true", (
-        "four shards unpack into one day"
-    )
-    assert _substitute(str(collected[0].get("path"))) == f"{SUBSTITUTED_DAY_DIR}/", (
-        "the artifact is rooted at the day, so it unpacks back into the day"
-    )
+    for filename, workflow in _load_workflows().items():
+        for job_name in _mapping(workflow.get("jobs"), "jobs"):
+            for step in _steps(workflow, job_name):
+                uses = str(step.get("uses", ""))
+                if not uses.startswith(("actions/upload-artifact", "actions/download-artifact")):
+                    continue
+                asked = _mapping(step.get("with"), f"{filename} job {job_name} artifact step")
+                for line in _substitute(str(asked.get("path", ""))).splitlines():
+                    assert not line.strip().removeprefix("!").startswith(PUBLISHED_TREE), (
+                        f"{filename} job {job_name} moves {line.strip()} between jobs; "
+                        "the job that publishes writes the published tree itself"
+                    )

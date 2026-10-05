@@ -14,7 +14,8 @@ list.
 it walked; which run, attempt, job and shard it ran in, which task declared it,
 how long it took, when the shard finished its work, what the shard's owned
 folders weighed and what it downloaded are the runner's to say, so the runner
-hands them in.
+hands them in. The day a walk handled through is the pass's own, and the row
+carries it for the task's next pass to start after.
 
 **A task's fold is said beside its pass, on the same row.** It has a switch of
 its own, so its lines say whether it was live, and a fold that stopped part way
@@ -24,7 +25,9 @@ of it did.
 **A dry run never says a member is gone.** One that found members says nothing
 was deleted, and names the setting that makes the task live: `dry_run` in the
 task's own declaration. The gardener takes no flag for that, so a line that
-named one would send a person looking for a switch that does not exist.
+named one would send a person looking for a switch that does not exist. A dry
+run that walks from a mark does not stop inside a day, so past its ceiling it
+says where a live pass would stop, and that the rest of the day was counted.
 """
 
 from __future__ import annotations
@@ -68,6 +71,7 @@ def row(
         bytes_freed=outcome.bytes_freed,
         stopped_because=stopped,
         resume_from=outcome.resume_from,
+        handled_through=outcome.handled_through,
         duration_ms=duration_ms,
         work_ended_at=work_ended_at,
         cone_bytes=cone_bytes,
@@ -135,10 +139,17 @@ def _what_next(outcome: Pass) -> list[str]:
     """Why the pass stopped and what the next one does, and on a dry run how to make it real."""
     said: list[str] = []
     if outcome.stopped_because is StopReason.CEILING:
-        said.append(
-            f"  the ceiling of {outcome.ceiling} stopped this pass at {outcome.resume_from} - "
-            "there is more, so run it again"
-        )
+        if outcome.dry_run and outcome.handled_through is not None:
+            said.append(
+                f"  the ceiling of {outcome.ceiling} would stop a live pass at "
+                f"{outcome.resume_from}; the rest of that day was counted, not listed, and "
+                f"the next pass starts after {outcome.handled_through}"
+            )
+        else:
+            said.append(
+                f"  the ceiling of {outcome.ceiling} stopped this pass at {outcome.resume_from} - "
+                "there is more, so run it again"
+            )
     elif outcome.stopped_because is StopReason.FAILED:
         if outcome.resume_from is None:
             where = f"after {len(outcome.taken)} members, before it could name the next one"

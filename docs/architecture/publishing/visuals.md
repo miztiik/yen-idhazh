@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-04
 
 How an item gets a chart or - most of the time - nothing at all: which pass
 decides, which gate refuses, and what every refusal is called. The rule this
@@ -47,22 +47,29 @@ while it ran is in
 
 Two things follow from `work` being the job that draws. It is sharded four ways, so four runners
 render a quarter of the day each instead of one runner rendering all of it against a budget; and
-each shard has to hand its drawn bytes to `assemble` itself, which is the `shard-visuals-<n>`
-artifact in `digest.yml`. The decisions travel inside `items-<n>`, which is rooted at the items
-directory and therefore cannot carry a file written under `frontend/public/digest/`. Without the
-second artifact the day publishes a payload naming an asset nobody uploaded, which
-`publication_checks.checks.pictures` reports as "names a picture file that is not there".
+the file a shard writes stays on its runner, which is thrown away. What reaches `assemble` is the
+decision inside `items-<n>`, and a rendered decision carries the chart's bytes in `spec` - the
+same string the shard wrote to its file. So `assemble` writes each chart the day names from this
+run's own decision, before it records the day, and never replaces a file that is already there
+(`render.write.write_charts_from_decisions`). Until 2026-10-04 each shard also uploaded its whole
+day directory as `shard-visuals-<n>` and `assemble` merged the four into its own. In run
+`37212772816` two of them carried a newer `digest.json` than the other two, and the merged file
+could not be read. No job hands a file under `frontend/public/` to another job now, and
+`test_no_job_hands_a_published_file_to_another_job` holds that for every workflow.
 
 **The flag is the first of two commits** (plan 11 rows #5b and #6). The second deletes the flag,
 the small model, this stage and its job together. Until then the flag off leaves the pipeline
 exactly where it was.
 
-**What proves the fold still draws is `test_a_decided_item_leaves_a_drawn_chart_on_disk`, and it is
-the only test that does.** Once the small model goes, the two calls are the only thing left that
-puts a picture on disk, so the question a reader cares about is whether a file lands - not whether
-a decision does. Every route to no picture writes a decision too, so a test that reads
-`asked_the_model` off the payload passes on a day the digest drew nothing. This one reads the SVG
-back from the path the payload names and checks the bars carry the article's own entity names.
+**Two tests prove a drawn chart reaches a reader, one for each job.** Once the small model goes,
+the two calls are the only thing left that puts a picture on disk, so the question a reader cares
+about is whether a file lands - not whether a decision does. Every route to no picture writes a
+decision too, so a test that reads `asked_the_model` off the payload passes on a day the digest
+drew nothing. `test_a_decided_item_leaves_a_drawn_chart_on_disk` reads the SVG back from the path
+the payload names and checks the bars carry the article's own entity names.
+`test_assemble_publishes_a_chart_from_its_decision_alone` runs `work` and `assemble` in two trees,
+hands across only the items directory, and checks that the published day names the chart, that
+its bytes are the shard's, and that the inventory counts it.
 
 It needs an article a bar can legally be drawn from, which is rarer than it sounds.
 `tests/fixtures/pages/article.html` states three figures in three units - dollars, megawatts and

@@ -25,7 +25,15 @@ from typing import Annotated, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, MonthStamp, Timestamp
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    Contract,
+    DateStamp,
+    Model,
+    MonthStamp,
+    Timestamp,
+    records_json,
+)
 
 #: Nothing is forbidden, for the same structural reason `public_run_day.py`
 #: gives: this shape is not a projection of a ledger row, so there is no cell to
@@ -177,6 +185,12 @@ class ConsoleRoute(Model):
 
 class ConsoleBand(Contract):
     """What every console route carries above its own panels."""
+
+    def to_json(self) -> str:
+        """Keep short route and run records on one line."""
+        return records_json(
+            self.model_dump(mode="json"), record_lists=frozenset({"routes", "runs"})
+        )
 
     __schema_stem__: ClassVar[str] = "console-band"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (

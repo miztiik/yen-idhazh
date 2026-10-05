@@ -199,6 +199,9 @@ SeriesWindow = Window
 DEFAULT_DAY_LOOKBACK_PERIODS: Final = 7
 #: Default number of earlier periods a scheduled month-grain pass also examines.
 DEFAULT_MONTH_LOOKBACK_PERIODS: Final = 2
+#: How many UTC days of its own record a collection task reads for its mark. A
+#: wake runs once a day, so a week finds the last pass after six missed wakes.
+DEFAULT_MARK_LOOKBACK_DAYS: Final = 7
 
 
 class _Declared(Model):
@@ -398,6 +401,15 @@ class CollectionTaskPolicy(_Declared):
             "counts whole days back from the wake."
         )
     )
+    mark_lookback_days: int = Field(
+        default=DEFAULT_MARK_LOOKBACK_DAYS,
+        ge=1,
+        description=(
+            "How many UTC days of the gardener's record, today included, a pass reads "
+            "to find the day its last pass handled through. With no row in reach it "
+            "starts with no mark, which is correct and only slower."
+        ),
+    )
 
 
 #: How many days after a workflow run GitHub still lets it be re-run. A re-run
@@ -499,7 +511,8 @@ class CompactionPolicy(_Declared):
         ge=1,
         description=(
             "The most days, and separately the most months and the most years, one pass "
-            "compacts before it stops for the next wake."
+            "compacts, and separately the most months past monthly_window it drops, before "
+            "it stops for the next wake."
         ),
     )
     max_raw_files_per_period: int = Field(

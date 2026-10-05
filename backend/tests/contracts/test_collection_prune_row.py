@@ -155,3 +155,49 @@ def test_a_month_count_on_a_row_whose_task_did_not_fold_is_refused() -> None:
     """A month settled by no fold is a cell nobody could have filled honestly."""
     with pytest.raises(ValidationError, match="folded_months only beside them"):
         a_row(folded_months=0)
+
+
+def a_walking_row(**changes: Any) -> CollectionPruneRow:
+    sample = json.loads(
+        read_text(
+            CONTRACT_FIXTURES_DIR
+            / "collection-prune-row"
+            / "a-dry-walk-that-counted-past-its-ceiling.json"
+        )
+    )
+    return CollectionPruneRow.model_validate(sample | changes)
+
+
+def test_a_walk_says_the_day_it_handled_through_beside_where_a_live_pass_would_stop() -> None:
+    """A dry walk past its ceiling counted the rest of 2026-08-25, so its mark is that day."""
+    row = a_walking_row()
+    assert (row.task, row.dry_run, row.stopped_because) == ("workflow-runs", True, "ceiling")
+    assert (row.handled_through, row.resume_from) == ("2026-08-25", "32869125768")
+
+
+def test_a_row_from_before_the_mark_reads_as_a_task_that_keeps_none() -> None:
+    """`handled_through` is additive: every row written before it reads, and names no mark."""
+    sample = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "collection-prune-row" / "ceiling-reached.json")
+    )
+    sample.pop("handled_through")
+    older = CollectionPruneRow.model_validate(sample | {"version": "2026-10-03T18:00"})
+    assert older.handled_through is None
+
+
+@pytest.mark.parametrize(
+    ("handled_through", "refusal"),
+    [
+        pytest.param("2026-11-23", "on or after the day the pass ran", id="the-day-it-ran"),
+        pytest.param("2026-11-24", "on or after the day the pass ran", id="a-day-to-come"),
+        pytest.param("2026-8-25", "string_pattern_mismatch", id="not-a-day"),
+    ],
+)
+def test_a_mark_no_pass_could_have_written_is_refused(handled_through: str, refusal: str) -> None:
+    """A window keeps at least the day a pass runs, so its mark is always before that day.
+
+    A mark in the future would stop every later walk, which is why the row
+    refuses one rather than the reader quietly passing it over.
+    """
+    with pytest.raises(ValidationError, match=refusal):
+        a_walking_row(handled_through=handled_through)

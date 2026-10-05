@@ -138,8 +138,8 @@ def test_a_killed_shard_still_hands_assemble_the_items_it_finished() -> None:
     `work` writes each item's payloads as it finishes that item, so the items
     directory holds every story the shard completed at the moment the bound
     lands - which is how `record` above files rows on a cancelled shard at all.
-    Both artifacts carried no condition, so a cancelled shard uploaded neither
-    and assemble composed the day without them.
+    The uploads carried no condition, so a cancelled shard uploaded nothing and
+    assemble composed the day without its stories.
 
     Measured on run 34852763827 (2026-09-14, four shards): three were cancelled
     at `run.shard_timeout_minutes`, their `always()` ledger steps ran and filed
@@ -148,10 +148,8 @@ def test_a_killed_shard_still_hands_assemble_the_items_it_finished() -> None:
     shard that finished. The census over-reported by 3.5x and 33 articles of
     model time were paid for and thrown away.
 
-    The two are named together because they have to be guarded together: the
-    decision naming a chart travels in `items/` and the chart's own bytes travel
-    in `shard-visuals-*`, so a guard on one alone publishes a story naming a
-    picture file that is not there.
+    A rendered chart's bytes travel inside its decision in `items/`, so this
+    one guard covers the story and its picture together.
 
     It cannot settle whether assemble composes a partially-uploaded shard
     correctly in every case; a real run is the check for that.
@@ -244,10 +242,8 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     # for the harvest's reason: they run after the day is committed and touch
     # only days that can gain no more rows, so the most a
     # failure costs is one run's worth of bytes and the next run folds the same
-    # days again. The picture download joins them because a day where nothing
-    # was drawable produces no `shard-visuals-*` artifact at all, and every item
-    # then publishes with no picture. The review tree joins it one rung further
-    # out again: nothing downloads it, no gate reads it, and it is built after
+    # days again. The review tree joins them one rung further out: nothing
+    # downloads it, no gate reads it, and it is built after
     # the day is committed - so the most a failure costs is one day's contact
     # sheet, and the next run builds its own. The assemble job's own machine
     # probe is the newest: a run whose cost nobody can attribute is worse than a
@@ -270,7 +266,6 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     assert tolerant == {
         *(("work", name) for name in WORK_LEDGER_STEPS),
         ("plan", COMMIT_STEPS["plan"]),
-        ("assemble", "actions/download-artifact@v8"),
         ("assemble", FINGERPRINT_STEP),
         ("assemble", HARVEST_STEP),
         ("assemble", REVIEW_STEP),

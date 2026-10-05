@@ -12,6 +12,7 @@ from pathlib import Path
 from idhazh import (
     assemble,
     atomic_write,
+    publication,
 )
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
@@ -116,6 +117,7 @@ def stage_backfill_vectors(
         LOG.error("no encoder at %s - nothing to backfill with", ONNX_RELPATH)
         return 1
 
+    publication.read_inventory(root.parent)
     repaired = 0
     months: set[str] = set()
     for path in published_days_on_dates(root, selected):
@@ -142,6 +144,7 @@ def stage_backfill_vectors(
             update={"version": DigestDay.schema_version(), "embeddings": fresh}
         )
         atomic_write.write_atomic(path, repaired_day.to_json())
+        publication.record_day(root.parent, repaired_day)
         repaired += 1
         months.add(assemble.month_of(day.date))
         LOG.info(
@@ -157,6 +160,7 @@ def stage_backfill_vectors(
         index = assemble.rebuild_search_index(
             digest_root=root, index_root=index_root, month=month
         )
+        publication.record_month(root.parent, month)
         LOG.info(
             "rebuilt search index month=%s entries=%s vectors=%s",
             month,

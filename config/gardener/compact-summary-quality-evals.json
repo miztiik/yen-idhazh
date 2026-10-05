@@ -1,7 +1,7 @@
 {
   "compact_after_days": 1,
   "daily_keep_days": 45,
-  "dry_run": true,
+  "dry_run": false,
   "kind": "compaction",
   "ledger": "summary-quality-evals",
   "lifecycle_status": "active",

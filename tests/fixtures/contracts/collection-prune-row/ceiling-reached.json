@@ -12,6 +12,7 @@
   "folded_days": null,
   "folded_files": null,
   "folded_months": null,
+  "handled_through": null,
   "job": "run-tasks",
   "max_deletes_per_run": 50,
   "resume_from": "4529182755",

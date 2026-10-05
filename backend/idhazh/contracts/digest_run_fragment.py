@@ -29,6 +29,7 @@ from idhazh.contracts.base import (
     ItemId,
     RunId,
     Timestamp,
+    records_json,
 )
 from idhazh.contracts.digest_day import DigestEmbeddings, DigestItem
 from idhazh.contracts.run_plan import VerticalPlan
@@ -80,3 +81,8 @@ class DigestRunFragment(Contract):
     embeddings: DigestEmbeddings | None = Field(
         default=None, description="This run's vectors, for the duplicate pass over the whole day."
     )
+
+    def to_json(self) -> str:
+        return records_json(
+            self.model_dump(mode="json"), record_lists=frozenset({"items", "verticals"})
+        )

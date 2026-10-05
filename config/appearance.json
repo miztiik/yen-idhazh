@@ -139,9 +139,16 @@
     "explorer_chrome": "workbench",
     "explorer_cell_max_ch": 40,
     "explorer_counter_from_share": 0.9,
-    "explorer_editor_lines": [
+    "explorer_readout_lines": [
+      7,
+      3,
+      4,
+      3
+    ],
+    "explorer_notice_ms": 6000,
+    "explorer_editor_lines_shown": [
       8,
-      20
+      10
     ],
     "explorer_examples": [
       {
@@ -200,7 +207,7 @@
       3,
       6
     ],
-    "explorer_table_max_vh": 70,
+    "explorer_answer_svh": 60,
     "explorer_chart_min_rows": 3,
     "explorer_rank_max": 30,
     "explorer_saved_max": 20,

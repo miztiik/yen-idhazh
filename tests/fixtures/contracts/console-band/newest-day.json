@@ -7,51 +7,11 @@
     "2026-09"
   ],
   "routes": [
-    {
-      "carries": "Summary quality is on Summaries.",
-      "description": "Did the runs work, which feeds broke, and what each stage cost.",
-      "href": "/console/",
-      "id": "pipelines",
-      "label": "Pipelines",
-      "severity": 0,
-      "worst": null
-    },
-    {
-      "carries": "Feed failures are on Pipelines.",
-      "description": "What the model wrote, how long it took, and what it got wrong.",
-      "href": "/console/model/",
-      "id": "model",
-      "label": "Summaries",
-      "severity": 2,
-      "worst": "2 low-band days"
-    },
-    {
-      "carries": "Item failures are on Pipelines.",
-      "description": "The hardware the model ran on, and how much it varied between runs.",
-      "href": "/console/machine/",
-      "id": "machine",
-      "label": "Hardware",
-      "severity": 1,
-      "worst": "one slow shard"
-    },
-    {
-      "carries": "Summary doubt is on Summaries.",
-      "description": "What the model made of each article, and where we disagreed.",
-      "href": "/console/judgement/",
-      "id": "judgement",
-      "label": "Judgement",
-      "severity": 0,
-      "worst": null
-    },
-    {
-      "carries": "Feed failures are on Pipelines.",
-      "description": "Who supplied the day, and how far each feed is discounted.",
-      "href": "/console/voices/",
-      "id": "voices",
-      "label": "Voices",
-      "severity": 0,
-      "worst": null
-    }
+    {"carries": "Summary quality is on Summaries.","description": "Did the runs work, which feeds broke, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 0,"worst": null},
+    {"carries": "Feed failures are on Pipelines.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 2,"worst": "2 low-band days"},
+    {"carries": "Item failures are on Pipelines.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 1,"worst": "one slow shard"},
+    {"carries": "Summary doubt is on Summaries.","description": "What the model made of each article, and where we disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
+    {"carries": "Feed failures are on Pipelines.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 0,"worst": null}
   ],
   "rows_uncompacted": 303,
   "size": {
@@ -67,14 +27,8 @@
     "health": "green",
     "more_runs": 0,
     "runs": [
-      {
-        "health": "green",
-        "label": "run 1 ran clean"
-      },
-      {
-        "health": "amber",
-        "label": "run 2 is worth a look"
-      }
+      {"health": "green","label": "run 1 ran clean"},
+      {"health": "amber","label": "run 2 is worth a look"}
     ],
     "sentence": "Five runs on 2026-09-09 and all five ran clean."
   },

@@ -143,6 +143,12 @@ owner's carve-out for that one, 2026-08-30, on conditions this section holds:
 
 The Data explorer page is the exception to the console rule that translates ledger columns into prose. Its table prints column names, decimals, nulls and dates exactly as the engine returned them, because the operator writes the question and types those names back into the next one. Cells still render as text, never as links, images or HTML.
 
+## A workbench keeps its regions still
+
+The Data explorer is a workbench. Pressing Run, copying text, saving a question, opening History, sorting a column or changing the chart changes only the content inside a region. The toolbar, question row, ledger rail, editor, status bar, column rail, answer region and chart region keep their boxes.
+
+Long content scrolls inside the region that owns it. The SQL editor has a fixed line count, the status bar reserves readout lines, the answer region has a fixed viewport share, and notices float over the page instead of entering the document flow. The column rail may show ledger columns before a run and answer columns after an answered or quiet run, but the rail's box and its inner scroller keep their size.
+
 ## An axis title and a column header take one form
 
 `Article length, words`. **Sentence case, a comma, the unit in lower case, and

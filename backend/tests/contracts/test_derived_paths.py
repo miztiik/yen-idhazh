@@ -47,9 +47,8 @@ def test_the_rendered_line_is_every_derived_path_in_one_order_with_single_spaces
     assert "  " not in rendered, "two spaces is an empty path the script would try to stage"
     assert f"{A_DAY_DIR}/digest.json" in rendered.split()
     assert f"{A_DAY_DIR}/run.json" in rendered.split()
-    # Never the day's directory itself. The visuals artifact unpacks this run's
-    # rendered charts into it and no producer in the assemble job can make them
-    # again, so handing the directory back would delete them.
+    # Never the day's directory itself. It also holds the day's charts, and a
+    # raced chart is dropped before the rebase rather than handed back.
     assert A_DAY_DIR not in rendered.split()
 
 

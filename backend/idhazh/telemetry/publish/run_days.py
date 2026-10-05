@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import assemble
-from idhazh.contracts.base import canonical_json
+from idhazh.contracts.base import records_json
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
 from idhazh.contracts.run_manifest import RunManifest
@@ -187,7 +187,9 @@ def publish(
     def encode(month: str) -> bytes:
         built = (build_day(digest_root, stamp) for stamp in days_in_month(digest_root, month))
         rows = [row for row in built if row is not None]
-        text = canonical_json([row.model_dump(mode="json") for row in rows])
+        text = records_json(
+            [row.model_dump(mode="json") for row in rows], record_lists=frozenset({"runs"})
+        )
         return text.encode("utf-8")
 
     return series.publish_series(

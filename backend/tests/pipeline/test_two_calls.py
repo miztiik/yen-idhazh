@@ -30,6 +30,8 @@ from idhazh.stages.assemble import _recorded_inputs
 from idhazh.telemetry.record import HEALTH_SUFFIX
 
 from ._builders import (
+    DRAWS_LABEL,
+    DRAWS_SUMMARIZE_AND_PLAN,
     _work_stage,
     drawable_article_fetch,
     worked,
@@ -48,15 +50,6 @@ SUMMARIZE_AND_PLAN_REPLY: Final = FIXTURES_DIR / "completions" / "summarize-and-
 #: envelope says `length`, which is what the server really reports, so nothing
 #: has to be edited into it to drive the cut path.
 CUT_IN_THE_PLAN_REPLY: Final = FIXTURES_DIR / "completions" / "summarize-and-plan" / "cut-in-the-plan.json"
-
-
-#: The recorded pair for the one article in the fixture set a bar can be drawn
-#: from. Kept apart from the pair above because that pair's whole job is the
-#: transport - two calls, two costs, one payload - and this pair's whole job is
-#: the picture, which needs four figures in one unit to exist at all.
-DRAWS_LABEL: Final = FIXTURES_DIR / "completions" / "label" / "wind-labelled.json"
-
-DRAWS_SUMMARIZE_AND_PLAN: Final = FIXTURES_DIR / "completions" / "summarize-and-plan" / "wind-summary-and-plan.json"
 
 
 def worked_requests(

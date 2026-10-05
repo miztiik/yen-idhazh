@@ -10,8 +10,10 @@ The knobs that decide which file a day ends up in are written out here rather
 than read from the committed declaration, so a change to that declaration
 cannot move a day to another kind of file under a test: a month is absorbed 31
 days after it ends, months are kept for ever, and a finished year is packed 63
-days after it ends. These are the smallest waits the contract allows. Two months
-in the year prove that removing all rows of one month removes one row group.
+days after it ends. These are the smallest waits the contract allows. A first
+pass looks back four months from March, so it starts at the oldest filed day,
+in November. Two months in the year prove that removing all rows of one month
+removes one row group.
 """
 
 from __future__ import annotations
@@ -42,6 +44,7 @@ KNOBS: Final[dict[str, Any]] = {
     "monthly_keep_days": 63,
     "compact_after_days": 1,
     "max_periods_per_run": 400,
+    "lookback": 4,
 }
 
 #: The days rows are filed under, by the kind of file each one sits in once the

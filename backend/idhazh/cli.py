@@ -105,6 +105,17 @@ def _today() -> str:
     return assemble.utc_now()[:10]
 
 
+def _positive_int(text: str) -> int:
+    """A whole number of at least 1, refused by name before any feed is read."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"{value} is below 1")
+    return value
+
+
 def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None) -> str:
     """The run a council verb is, refused rather than invented when a step forgets it.
 
@@ -375,6 +386,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--article-limit",
+        type=_positive_int,
+        default=None,
+        help=(
+            "Plan at most this many stories for the whole run, best first. For a "
+            "short test run; unset plans the full day. Shard count is separate."
+        ),
+    )
+    parser.add_argument(
         "--repeats",
         type=int,
         default=None,
@@ -469,9 +489,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         help=(
             "The published day's directory, as the workflow already derived it: "
             "frontend/public/digest/<YYYY>/<MM>/<DD>. `derived-paths` names two files "
-            "inside it one at a time, because the day's directory itself must never be "
-            "handed back - this run's rendered charts are in it and no producer here "
-            "can make them again."
+            "inside it one at a time, because the day's directory itself is never "
+            "handed back - it also holds the day's charts, and a raced chart is "
+            "dropped before the rebase instead."
         ),
     )
     parser.add_argument(
@@ -727,6 +747,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             commit_sha=args.commit,
             fetcher=read_url,
             cap=args.cap,
+            article_limit=args.article_limit,
             execution=args.execution,
         )
         common.LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)

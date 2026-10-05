@@ -33,6 +33,7 @@ from idhazh.evals import metrics, sampling, score, writer
 from idhazh.fingerprint import (
     prose_changed_alone,
 )
+from idhazh.render import write_charts_from_decisions
 from idhazh.similarity import applied
 from idhazh.stages import common
 from idhazh.stages.common import (
@@ -349,6 +350,11 @@ def stage_assemble(
             ),
         )
         atomic_write.write_atomic(target / "digest.json", day.to_json())
+
+    # This run's charts reach this job inside their decisions, and only the day
+    # says which of them it names. Written before the inventory records the day,
+    # because the inventory skips a file that is not there.
+    write_charts_from_decisions(day, decisions, public_root=common.PUBLIC_ROOT.parent)
 
     # The month shard is a projection of the days on disk, so it is rebuilt after
     # the day is written and never patched in place.

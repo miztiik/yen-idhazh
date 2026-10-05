@@ -366,8 +366,8 @@ def held_months(state_dir: Path, ledger: LedgerName) -> list[str]:
 
     The three indexes and the names of the raw day folders: no data file is
     opened, so it costs one listing and three small reads whatever the ledger
-    holds. A month named here can still hold no row - a quiet day is a zero-row
-    file with an index entry, and a packed year names all twelve of its months -
+    holds. A month named here can still hold no row - a quiet day is an index
+    entry with no file, and a packed year names all twelve of its months -
     and `load_days` over its days then returns none.
     """
     months: set[str] = set()

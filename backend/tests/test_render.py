@@ -28,10 +28,11 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import telemetry
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.visuals import VisualsConfig
@@ -44,7 +45,12 @@ from idhazh.contracts.visual_decision import (
     VisualState,
 )
 from idhazh.render.chart import CompileError, compile_bar
-from idhazh.render.write import asset_relpath, drop_raced_assets, render_planned_visual
+from idhazh.render.write import (
+    asset_relpath,
+    drop_raced_assets,
+    render_planned_visual,
+    write_charts_from_decisions,
+)
 
 pytestmark = pytest.mark.visual
 
@@ -643,3 +649,99 @@ class TestDropRacedAssets:
         )
 
         assert _drop(tmp_path, [f"{DAY}/energy-01.json"]) == []
+
+
+#: A day whose story `ai-01` names one chart and whose other stories name none.
+CHARTED_DAY: Final = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
+
+CHARTED_ITEM: Final = "ai-01"
+
+
+def _charted_day() -> DigestDay:
+    return DigestDay.from_json(read_text(CHARTED_DAY))
+
+
+def _drawing_of(item_id: str) -> str:
+    """The committed bar chart's data, filed as a drawing of `item_id`."""
+    data = compile_bar(
+        VisualPlan.read(BAR_PLAN), ElementTable.read(BAR_TABLE), visuals=committed_visuals()
+    ).data
+    return data.model_copy(update={"item_id": item_id}).to_json()
+
+
+def _rendered(spec: str, data_path: str) -> VisualDecision:
+    """This run's decision for the charted story, carrying `spec` and naming `data_path`."""
+    return _decision(VisualKind.CHART, spec).model_copy(
+        update={
+            "item_id": CHARTED_ITEM,
+            "data_path": data_path,
+            "visual_state": VisualState.RENDERED,
+        }
+    )
+
+
+class TestWriteChartsFromDecisions:
+    """The checkout that publishes writes this run's charts from their decisions.
+
+    Run `37212772816` (2026-10-04) moved the whole day directory between jobs to
+    carry the charts, and the merged download corrupted `digest.json`. A rendered
+    decision already carries the chart's bytes, so nothing else has to travel.
+    """
+
+    def test_a_chart_the_checkout_lacks_is_written_byte_for_byte_from_its_decision(
+        self, tmp_path: Path
+    ) -> None:
+        """Byte for byte, so the blob matches the worker's copy and a race still dedupes."""
+        day = _charted_day()
+        relpath = asset_relpath(day.date, CHARTED_ITEM)
+        spec = _drawing_of(CHARTED_ITEM)
+
+        write_charts_from_decisions(day, [_rendered(spec, relpath)], public_root=tmp_path)
+
+        assert (tmp_path / relpath).read_bytes() == spec.encode("utf-8")
+
+    def test_a_chart_already_on_disk_keeps_its_published_bytes(self, tmp_path: Path) -> None:
+        """An earlier run published it and a reader may hold that address, or a
+        rebuild after a rebase finds this run's own copy. Neither is rewritten."""
+        day = _charted_day()
+        relpath = asset_relpath(day.date, CHARTED_ITEM)
+        published = tmp_path / relpath
+        published.parent.mkdir(parents=True)
+        published.write_bytes(b"what an earlier run published\n")
+
+        write_charts_from_decisions(
+            day, [_rendered(_drawing_of(CHARTED_ITEM), relpath)], public_root=tmp_path
+        )
+
+        assert published.read_bytes() == b"what an earlier run published\n"
+
+    def test_a_story_this_run_drew_no_chart_for_writes_nothing(self, tmp_path: Path) -> None:
+        """Another run's story, or one this run decided to nothing, is not this run's to write."""
+        day = _charted_day()
+        declined = _decision(VisualKind.NONE, None).model_copy(update={"item_id": CHARTED_ITEM})
+
+        write_charts_from_decisions(day, [], public_root=tmp_path)
+        write_charts_from_decisions(day, [declined], public_root=tmp_path)
+
+        assert not (tmp_path / "digest").exists()
+
+    @pytest.mark.parametrize(
+        ("filed_on", "drawn_for", "refusal"),
+        [
+            pytest.param("2026-08-22", CHARTED_ITEM, "is filed at", id="filed-under-another-day"),
+            pytest.param(None, "ai-02", "carries the chart of ai-02", id="another-story-drawn"),
+            pytest.param(None, None, "not chart data", id="not-chart-data"),
+        ],
+    )
+    def test_a_decision_that_disagrees_with_its_story_stops_the_run(
+        self, tmp_path: Path, filed_on: str | None, drawn_for: str | None, refusal: str
+    ) -> None:
+        """Both jobs run one commit, so a disagreement is a defect here, not bad web data."""
+        day = _charted_day()
+        spec = '{"marks": []}' if drawn_for is None else _drawing_of(drawn_for)
+        decision = _rendered(spec, asset_relpath(filed_on or day.date, CHARTED_ITEM))
+
+        with pytest.raises(ValueError, match=refusal):
+            write_charts_from_decisions(day, [decision], public_root=tmp_path)
+
+        assert not (tmp_path / asset_relpath(day.date, CHARTED_ITEM)).exists()

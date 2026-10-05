@@ -5,19 +5,21 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
+	import Notice from '$lib/components/Notice.svelte';
 	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
 	import { shortDate, dayMonth } from '$lib/format';
 	import QuestionStrip from '$lib/console/explorer/QuestionStrip.svelte';
 	import LedgerList from '$lib/console/explorer/LedgerList.svelte';
 	import ColumnList from '$lib/console/explorer/ColumnList.svelte';
 	import QueryEditor from '$lib/console/explorer/QueryEditor.svelte';
-	import ActionLine from '$lib/console/explorer/ActionLine.svelte';
+	import RunStatus from '$lib/console/explorer/RunStatus.svelte';
 	import AnswerTable from '$lib/console/explorer/AnswerTable.svelte';
 	import CopyAnswer from '$lib/console/explorer/CopyAnswer.svelte';
 	import HistoryList from '$lib/console/explorer/HistoryList.svelte';
 	import ShapePanel from '$lib/console/explorer/ShapePanel.svelte';
 	import { chooseExplorerShapes, type ExplorerChartType } from '$lib/console/explorer/shape';
 	import { gapLines } from '$lib/console/explorer/gaps';
+	import { size, statusSentence, statusWithHeld } from '$lib/console/explorer/status';
 	import { explorerAddress, parseExplorerAddress, LINK_TOO_LONG_NOTICE } from '$lib/console/explorer/address';
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
 	import { fetchRegistry, flattenRegistry, type LedgerRegistry, type RegistryLedger } from '$lib/console/explorer/registry';
@@ -41,6 +43,7 @@
 	let selected = $state<LedgerName[]>([]);
 	let sql = $state('SELECT count(*) AS rows FROM "published"');
 	let costing = $state(false);
+	let initializing = $state(true);
 	let running = $state(false);
 	let refreshing = $state(false);
 	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], siteFrom: null, through: {} });
@@ -53,21 +56,32 @@
 	let showAnswerColumns = $state(false);
 	let runSpan = $state<{ from: DateStamp; to: DateStamp } | null>(null);
 	let wide = $state(false);
+	let readoutBand = $state(0);
 	let savedQuestions = $state<KeptQuestion[]>([]);
 	let recentRuns = $state<RecentRun[]>([]);
 	let keepNotice = $state<string | null>(null);
 	let linkNotices = $state<string[]>([]);
 	let copiedLink = $state('');
 	let storageWorks = $state(true);
+	let storageNoticeDismissed = $state(false);
 	let selectedShapeType = $state<ExplorerChartType | null>(null);
+	let saving = $state(false);
+	let draftName = $state('');
+	let answerOffscreen = $state(false);
 
 	const ledgers = $derived<RegistryLedger[]>(flattenRegistry(registry));
 	const selectedPublished = $derived(selected.filter((name) => published.includes(name)));
 	const columns = $derived(showAnswerColumns && result !== null && 'columns' in result ? result.columns : ledgerColumns);
-	const columnLabel = $derived(showAnswerColumns ? 'Answer columns' : 'Columns in the selected ledgers');
+	const columnLabel = $derived(showAnswerColumns ? 'Answer columns' : 'Ledger columns');
 	const answerRows = $derived(result !== null && result.state === 'ok' ? (result.rows as Row[]) : []);
 	const answerColumns = $derived(result !== null && result.state === 'ok' ? result.columns : []);
-	const actionNotice = $derived([...linkNotices, keepNotice, copiedLink].filter(Boolean).join(' '));
+	const noticeText = $derived([keepNotice, copiedLink, !storageWorks && !storageNoticeDismissed ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
+	const persistentNotice = $derived(!storageWorks && !storageNoticeDismissed);
+	const readoutLines = $derived(config.readout_lines[readoutBand] ?? config.readout_lines[0]);
+	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
+	const statusText = $derived(statusWithHeld(statusLine(), heldBytes));
+	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
+	const answerLink = $derived(result !== null && !running && answerOffscreen ? '#data-explorer-rows' : '');
 	const shapeBounds = $derived({
 		chartMinRows: config.chart_min_rows,
 		rankMax: config.rank_max,
@@ -106,6 +120,16 @@
 		windowDays = spanDays();
 		void updateCostAndColumns();
 	}
+	function changeFrom(input: HTMLInputElement) {
+		const next = input.value > toDay ? toDay : input.value;
+		input.value = next;
+		setSpan(next, toDay);
+	}
+	function changeTo(input: HTMLInputElement) {
+		const next = input.value < fromDay ? fromDay : input.value;
+		input.value = next;
+		setSpan(fromDay, next);
+	}
 	function spanDays(): number {
 		if (!fromDay || !toDay) return windowDays;
 		return Math.round((Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86_400_000) + 1;
@@ -115,6 +139,34 @@
 	}
 	function quoteLedger(name: LedgerName): string {
 		return `"${name.replace(/"/g, '""')}"`;
+	}
+
+	function emptyLedgerLines(): string {
+		const lines = selected
+			.map((ledger) => ({ ledger, through: cost.through[ledger] }))
+			.filter((entry): entry is { ledger: LedgerName; through: string } => entry.through !== undefined && fromDay !== '' && entry.through < fromDay)
+			.map((entry) => `Nothing in ${entry.ledger} after ${shortDate(entry.through)}.`);
+		return lines.join(' ');
+	}
+
+	function statusLine(): string {
+		if (keepNotice !== null) return statusSentence({ state: 'notice', notice: keepNotice });
+		if (linkNotices.length > 0) return statusSentence({ state: 'link', linkNotices });
+		if (running) {
+			return statusSentence(lastRead === null ? { state: 'running-fetch', files: cost.files, bytes: cost.bytes } : { state: 'running-query' });
+		}
+		if (costing) return statusSentence({ state: 'costing' });
+		if (result?.state === 'ok' && lastRead !== null) {
+			return statusSentence({ state: 'answered', ms: lastMs, read: lastRead });
+		}
+		if (result?.state === 'quiet' && lastRead !== null) {
+			return statusSentence({ state: 'quiet', ms: lastMs, read: lastRead });
+		}
+		if (result?.state === 'refused') return statusSentence({ state: 'refused' });
+		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
+		if (result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
+		const empty = emptyLedgerLines();
+		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, days: spanDays(), firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
 	function toggle(name: LedgerName) {
 		selected = selected.includes(name) ? selected.filter((one) => one !== name) : [...selected, name];
@@ -251,6 +303,7 @@
 			return kept;
 		} catch {
 			storageWorks = false;
+			storageNoticeDismissed = false;
 			return [];
 		}
 	}
@@ -259,8 +312,10 @@
 		try {
 			localStorage.setItem(key, JSON.stringify(value));
 			storageWorks = true;
+			storageNoticeDismissed = false;
 		} catch {
 			storageWorks = false;
+			storageNoticeDismissed = false;
 		}
 	}
 
@@ -314,6 +369,17 @@
 		keepNotice = kept.notice ?? `Saved "${next.name}".`;
 		writeStored(SAVED_KEY, savedQuestions);
 		void replaceAddress();
+	}
+
+	function startSaving() {
+		draftName = suggestedSaveName(sql, config.save_name_max_chars);
+		saving = true;
+	}
+
+	function keepDraft() {
+		if (!draftName.trim()) return;
+		saveQuestion(draftName);
+		saving = false;
 	}
 
 	function forget(question: KeptQuestion) {
@@ -392,9 +458,19 @@
 		ready = true;
 		setWindow(data.console.default_window_days);
 		const query = matchMedia(`(min-width: ${data.frame.breakpoints_px[1]}px)`);
-		const sync = () => (wide = query.matches);
+		const sync = () => {
+			wide = query.matches;
+			const width = window.innerWidth;
+			readoutBand = width < data.frame.breakpoints_px[0] ? 0 : width < data.frame.breakpoints_px[1] ? 1 : width < data.frame.breakpoints_px[2] ? 2 : 3;
+		};
 		sync();
 		query.addEventListener('change', sync);
+		addEventListener('resize', sync);
+		const answerRegion = document.querySelector('[data-workbench-region="answer"]');
+		const answerObserver = answerRegion === null ? null : new IntersectionObserver(([entry]) => {
+			answerOffscreen = !entry.isIntersecting && entry.boundingClientRect.top > 0;
+		});
+		if (answerRegion !== null) answerObserver?.observe(answerRegion);
 		void (async () => {
 			savedQuestions = readStored<KeptQuestion>(SAVED_KEY, validStoredSaved);
 			recentRuns = readStored<RecentRun>(HISTORY_KEY, validStoredRun);
@@ -412,17 +488,21 @@
 				sql = recentRuns[0].statement;
 			}
 			await refreshRegistry();
+			initializing = false;
 		})();
-		return () => query.removeEventListener('change', sync);
+		return () => {
+			query.removeEventListener('change', sync);
+			removeEventListener('resize', sync);
+			answerObserver?.disconnect();
+		};
 	});
 </script>
 
-{#snippet questionActions()}
-	<button type="button" class="panel-button" onclick={copyLink}><Icon id="share-link" /> Copy link</button>
-{/snippet}
+<Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copiedLink = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
 
-<Panel id="data-explorer-ask" title="Your question" note={`One read-only DuckDB statement at a time, up to ${config.query_max_chars} characters.`} actions={questionActions}>
-	<div class="question-panel" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px`}>
+<div class="workbench" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px;--answer-size:${config.answer_svh}svh;--editor-lines:${editorLines};--readout-lines:${readoutLines}`}>
+<Panel id="data-explorer-ask" title="Your question">
+	<div class="question-panel">
 		<div class="workbench-toolbar" data-workbench-region="toolbar">
 			<WindowControl
 				days={windowDays}
@@ -431,24 +511,47 @@
 				ready={ready}
 				onChange={setWindow}
 			/>
-			<ActionLine files={cost.files} bytes={cost.bytes} {heldBytes} read={lastRead} busy={running || costing} disabled={selected.length === 0 || sql.trim() === ''} notice={actionNotice} from={fromDay} to={toDay} minDay={minReachDay()} maxDay={todayUtc()} saveName={suggestedSaveName(sql, config.save_name_max_chars)} saveNameMaxChars={config.save_name_max_chars} canSave={storageWorks && sql.trim() !== ''} canCopyQuestion={linkNotices.includes(LINK_TOO_LONG_NOTICE)} onRun={run} onSave={saveQuestion} onCopyQuestion={copyQuestion} onDates={setSpan} />
+			<div class="date-fields">
+				<label>From (UTC)<input type="date" value={fromDay} min={minReachDay()} max={toDay < todayUtc() ? toDay : todayUtc()} oninput={(event) => changeFrom(event.currentTarget)} onchange={(event) => changeFrom(event.currentTarget)} /></label>
+				<label>To (UTC)<input type="date" value={toDay} min={fromDay > minReachDay() ? fromDay : minReachDay()} max={todayUtc()} oninput={(event) => changeTo(event.currentTarget)} onchange={(event) => changeTo(event.currentTarget)} /></label>
+			</div>
+			<button type="button" class="run-button" aria-label={running ? 'Running' : 'Run'} aria-keyshortcuts="Control+Enter Meta+Enter" disabled={initializing} aria-disabled={initializing || running || selected.length === 0 || sql.trim() === ''} aria-busy={running} onclick={() => { if (!initializing && !running && selected.length > 0 && sql.trim() !== '') void run(); }}>
+				<Icon id="query-run" />
+				<span class="run-words"><span class:hidden-word={running}>Run</span><span class:hidden-word={!running}>Running</span></span>
+				<span class="run-shortcut">Ctrl+Enter</span>
+			</button>
 		</div>
-		<p class="state">Need help with the syntax? <a href={`${data.docsBase}/blob/main/docs/how-to/query-a-ledger-from-the-console.md`}><Icon id="docs" /> Read the Data explorer how-to.</a></p>
 		<div data-workbench-region="questions">
 			<QuestionStrip examples={config.examples} {published} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
+			<div class="question-links">
+				<HistoryList runs={recentRuns} onPick={pickRun} />
+				<a class="how-to" href={`${data.docsBase}/blob/main/docs/how-to/query-a-ledger-from-the-console.md`}><Icon id="docs" /> Read the Data explorer how-to</a>
+			</div>
 		</div>
-		{#if keepNotice}<p class="state">{keepNotice}</p>{/if}
-		{#if !storageWorks}<p class="state warn">This browser is not letting the page keep anything, so Save and the history are off.</p>{/if}
 		<div class="question-grid" class:wide>
 			<div data-workbench-region="ledgers">
-				<LedgerList ledgers={ledgers} selected={selected} {published} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
+				<LedgerList ledgers={ledgers} selected={selected} {published} through={cost.through} spanFrom={fromDay} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
 			</div>
 			<div class="editor-stack">
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}
 				<div data-workbench-region="editor">
-					<QueryEditor value={sql} maxChars={config.query_max_chars} minLines={config.editor_lines[0]} maxLines={config.editor_lines[1]} counterFromShare={config.counter_from_share} onInput={(value) => (sql = value)} onRun={run} />
+					<div class="editor-head">
+						<label for="explorer-sql">DuckDB SQL</label>
+						<div class="editor-actions">
+							{#if saving}
+								<label>Name <input bind:value={draftName} maxlength={config.save_name_max_chars} /></label>
+								<button type="button" onclick={keepDraft} disabled={!draftName.trim()}><Icon id="saved" /> Keep</button>
+								<button type="button" onclick={() => (saving = false)}>Cancel</button>
+							{:else}
+								<button type="button" onclick={startSaving} disabled={!storageWorks || sql.trim() === ''}><Icon id="saved" /> Save</button>
+								<button type="button" onclick={copyLink}><Icon id="share-link" /> Copy link</button>
+								{#if linkNotices.includes(LINK_TOO_LONG_NOTICE)}<button type="button" onclick={copyQuestion}><Icon id="copy" /> Copy question</button>{/if}
+							{/if}
+						</div>
+					</div>
+					<QueryEditor value={sql} maxChars={config.query_max_chars} lines={editorLines} onInput={(value) => { sql = value; if (linkNotices.some((notice) => notice.includes('came from a link'))) linkNotices = []; }} onRun={run} />
 				</div>
-				<HistoryList runs={recentRuns} onPick={pickRun} />
+				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href={answerLink} files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} {heldBytes} />
 			</div>
 			<div data-workbench-region="columns">
 				<ColumnList columns={columns} label={columnLabel} />
@@ -456,12 +559,6 @@
 		</div>
 	</div>
 </Panel>
-
-{#snippet answerActions()}
-	{#if result !== null && result.state === 'ok'}
-		<CopyAnswer columns={answerColumns} rows={orderedRows.length > 0 ? orderedRows : answerRows} />
-	{/if}
-{/snippet}
 
 {#snippet shapeActions()}
 	{#if shapeChoices.length > 1}
@@ -484,72 +581,313 @@
 	{/each}
 {/snippet}
 
-<Panel id="data-explorer-rows" title="The answer" wide actions={answerActions}>
-	{#if running}
-		<div class="answer-state shimmer" data-state="loading"></div>
-	{:else if result === null}
-		<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
-	{:else if result.state === 'ok'}
-			<div class="answer-note">
-				{#if runSpan}Read from {spanDays()} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}
-				{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}
-				{@render gapNotes(result.gaps)}
-			</div>
-		<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} tableMaxVh={config.table_max_vh} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} onOrderChange={(rows) => (orderedRows = rows)} />
-		{:else if result.state === 'quiet'}
-			<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}{@render gapNotes(result.gaps)}</div>
-	{:else if result.state === 'missing'}
-		<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
-	{:else if result.state === 'unreachable'}
-		<div class="answer-state warn" data-state="unreachable">{explorerUnreachableSentence(result.ledger, result.at, result.fault)}</div>
-	{:else if result.state === 'refused'}
-		<div class="answer-state" data-state="refused">{refusedSentence(result.because)}{#if result.because.kind === 'engine-error'}<pre>{result.because.message}</pre>{/if}</div>
-	{/if}
+<Panel id="data-explorer-rows" title="The answer" wide>
+	<div class="answer-region" data-workbench-region="answer">
+		<div class="region-bar">
+			{#if result !== null && result.state === 'ok'}
+				<CopyAnswer columns={answerColumns} rows={orderedRows.length > 0 ? orderedRows : answerRows} />
+			{/if}
+		</div>
+	{#key running ? 'loading' : result?.state ?? 'idle'}
+		{#if running}
+			<div class="answer-state shimmer" data-state="loading"></div>
+		{:else if result === null}
+			<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
+		{:else if result.state === 'ok'}
+				<div class="answer-note">
+					{#if runSpan}Read from {spanDays()} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}
+					{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}
+					{@render gapNotes(result.gaps)}
+				</div>
+			<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} onOrderChange={(rows) => (orderedRows = rows)} />
+			{:else if result.state === 'quiet'}
+				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}{@render gapNotes(result.gaps)}</div>
+		{:else if result.state === 'missing'}
+			<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
+		{:else if result.state === 'unreachable'}
+			<div class="answer-state warn" data-state="unreachable">{explorerUnreachableSentence(result.ledger, result.at, result.fault)}</div>
+		{:else if result.state === 'refused'}
+			<div class="answer-state" data-state="refused">{refusedSentence(result.because)}{#if result.because.kind === 'engine-error'}<pre>{result.because.message}</pre>{/if}</div>
+		{/if}
+	{/key}
+	</div>
 </Panel>
 
-<Panel id="data-explorer-shape" title="The answer, drawn" wide actions={shapeActions}>
-	{#if running}
-		<div class="answer-state shimmer" data-state="loading"></div>
-	{:else if result === null}
-		<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
-	{:else if result.state === 'ok'}
-		<ShapePanel columns={result.columns} rows={result.rows as Row[]} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} />
-	{:else if result.state === 'quiet'}
-		<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
-	{:else if result.state === 'refused'}
-		<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
-	{:else}
-		<div class="answer-state" data-state={result.state}>The answer did not arrive, so nothing to draw.</div>
-	{/if}
+<Panel id="data-explorer-shape" title="The answer, drawn" wide>
+	<div class="chart-region" data-workbench-region="chart">
+		<div class="region-bar">
+			{@render shapeActions()}
+		</div>
+	{#key running ? 'loading' : result?.state ?? 'idle'}
+		{#if running}
+			<div class="answer-state shimmer" data-state="loading"></div>
+		{:else if result === null}
+			<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
+		{:else if result.state === 'ok'}
+			<ShapePanel columns={result.columns} rows={result.rows as Row[]} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} />
+		{:else if result.state === 'quiet'}
+			<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
+		{:else if result.state === 'refused'}
+			<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
+		{:else}
+			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? 'Part of the data is not on this site, so nothing to draw.' : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
+		{/if}
+	{/key}
+	</div>
 </Panel>
+</div>
 
 <style>
-	.question-panel { display: grid; gap: var(--space-4); }
-	.workbench-toolbar {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
-		align-items: stretch;
-		gap: var(--space-3);
-		padding: var(--space-2);
+	.workbench {
+		overflow: clip;
 		border: 1px solid var(--item-edge);
 		border-radius: var(--radius-lg);
 		background: var(--color-surface);
+		box-shadow: var(--shadow-sm);
 	}
-	.question-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-	.editor-stack { display: grid; gap: var(--space-4); align-content: start; }
+
+	.question-panel { display: grid; }
+	.workbench-toolbar {
+		display: grid;
+		grid-template-columns: auto minmax(18rem, 1fr) auto;
+		align-items: center;
+		gap: var(--space-2);
+		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
+		padding: var(--space-1) var(--space-3);
+		border-block-end: 1px solid var(--color-rule);
+	}
+
+	.date-fields {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		align-items: end;
+		min-inline-size: 0;
+		overflow: hidden;
+	}
+
+	.date-fields label,
+	.editor-actions label {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		min-block-size: var(--workbench-control);
+		color: var(--color-text-tertiary);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: var(--tracking-label);
+		text-transform: uppercase;
+	}
+
+	input,
+	button,
+	.how-to,
+	.run-button {
+		max-inline-size: 100%;
+		min-inline-size: 0;
+		min-block-size: var(--workbench-control);
+		border: 1px solid var(--color-rule-strong);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		padding-inline: var(--space-3);
+		font: inherit;
+	}
+
+	:global([data-workbench-region='toolbar'] [data-window-control]),
+	:global([data-workbench-region='toolbar'] [data-window-control] button),
+	:global([data-workbench-region='questions'] .question-strip button),
+	:global([data-workbench-region='questions'] .question-strip summary),
+	:global([data-workbench-region='questions'] .history-list summary) {
+		min-block-size: var(--workbench-control);
+	}
+
+	:global([data-workbench-region='questions'] .question-strip),
+	:global([data-workbench-region='questions'] .question-strip button) {
+		min-inline-size: 0;
+		max-inline-size: 100%;
+		overflow: hidden;
+	}
+
+	.run-button {
+		display: grid;
+		grid-template-columns: auto auto auto;
+		gap: var(--space-2);
+		align-items: center;
+		border-color: var(--color-accent);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+		font-weight: 600;
+	}
+
+	.run-button[aria-disabled='true'] {
+		opacity: 0.75;
+	}
+
+	.run-shortcut {
+		font-family: var(--font-data);
+		font-size: var(--text-xs);
+		font-weight: 400;
+	}
+
+	.run-words {
+		display: grid;
+	}
+
+	.run-words > span {
+		grid-area: 1 / 1;
+	}
+
+	.hidden-word {
+		opacity: 0;
+	}
+
+	[data-workbench-region='questions'] {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
+		padding-inline: var(--space-3);
+		border-block-end: 1px solid var(--color-rule);
+	}
+
+	.question-links {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-inline-size: 0;
+		overflow: hidden;
+	}
+
+	.how-to {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		text-decoration: none;
+		font-size: var(--text-sm);
+	}
+
+	.question-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+	.editor-stack { display: grid; align-content: start; }
 	.state, .answer-note { margin: 0; color: var(--color-text-secondary); }
 	.gap-note { margin: var(--space-1) 0 0; }
 	.warn { color: var(--band-low); }
-	.answer-state { min-block-size: var(--idle-height); display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); border: 1px solid var(--color-rule); border-radius: var(--radius-md); }
+	.answer-state { min-block-size: 0; block-size: 100%; display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); }
 	.answer-state pre { max-inline-size: 100%; overflow-x: auto; white-space: pre; font-family: var(--font-data); color: var(--code-string); }
 	.shimmer { background: linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-raised) 50%, var(--color-surface) 100%); }
 	.question-grid.wide { grid-template-columns: minmax(12rem, var(--rail)) minmax(0, 1fr) minmax(12rem, var(--rail)); }
-	.panel-button { min-block-size: 2.75rem; border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); padding-inline: var(--space-3); font-weight: 600; }
+	.question-grid.wide > [data-workbench-region],
+	.editor-stack {
+		min-block-size: 100%;
+	}
+
+	[data-workbench-region='ledgers'],
+	[data-workbench-region='columns'] {
+		block-size: calc(4 * var(--space-3) + var(--workbench-control) + var(--editor-lines) * var(--workbench-field-leading) + var(--readout-lines) * var(--leading-sm) + 2 * var(--space-1));
+		min-block-size: 0;
+		overflow: auto;
+		border-inline-end: 1px solid var(--color-rule);
+		padding: var(--space-3);
+	}
+
+	[data-workbench-region='columns'] {
+		border-inline: 1px solid var(--color-rule) 0;
+	}
+
+	[data-workbench-region='editor'] {
+		padding: var(--space-3);
+	}
+
+	.editor-head,
+	.region-bar {
+		min-block-size: var(--workbench-control);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		color: var(--color-text-tertiary);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: var(--tracking-label);
+		text-transform: uppercase;
+	}
+
+	.editor-actions {
+		display: flex;
+		align-items: end;
+		gap: var(--space-2);
+	}
+
+	.editor-actions button,
+	.region-bar :global(button) {
+		font-size: var(--text-sm);
+		font-weight: 400;
+		letter-spacing: normal;
+		text-transform: none;
+	}
+
+	.answer-region {
+		block-size: var(--answer-size);
+		display: grid;
+		grid-template-rows: var(--workbench-control) auto minmax(0, 1fr);
+	}
+
+	.answer-region > :global(.answer-state) {
+		grid-row: 2 / -1;
+	}
+
+	.chart-region {
+		block-size: calc(var(--workbench-control) + var(--idle-height) + 4rem);
+		display: grid;
+		grid-template-rows: var(--workbench-control) minmax(var(--idle-height), auto);
+		overflow: auto;
+	}
+
+	.chart-region > :global(.answer-state) {
+		block-size: 100%;
+	}
+
 	.shape-actions { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
 	.shape-actions legend { color: var(--color-text-tertiary); font-size: var(--text-xs); }
 	@media (max-width: 1023px) {
 		.workbench-toolbar {
-			grid-template-columns: minmax(0, 1fr);
+			grid-template-columns: minmax(0, 1fr) auto;
+		}
+		.date-fields {
+			grid-column: 1;
+			grid-row: 2;
+		}
+		.run-button {
+			grid-column: 2;
+			grid-row: 2;
+			min-inline-size: 5rem;
+		}
+		[data-workbench-region='questions'] {
+			flex-wrap: wrap;
+		}
+		.run-shortcut {
+			display: none;
+		}
+		[data-workbench-region='ledgers'],
+		[data-workbench-region='columns'] {
+			border-inline: 0;
+			border-block: 1px solid var(--color-rule);
 		}
 	}
+
+	@media (max-width: 639px) {
+		[data-workbench-region='questions'] {
+			align-items: stretch;
+		}
+		:global([data-workbench-region='questions'] .question-strip),
+		.question-links,
+		.how-to {
+			min-inline-size: 0;
+			inline-size: 100%;
+			flex-basis: 100%;
+			overflow: hidden;
+		}
+	}
+
 </style>

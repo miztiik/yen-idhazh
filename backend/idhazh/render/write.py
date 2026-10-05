@@ -19,12 +19,16 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Final
 
+from pydantic import ValidationError
+
 from idhazh import assemble, telemetry
 from idhazh.contracts.base import ITEM_ID_PATTERN
+from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import VisualPlan
+from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     VisualDecision,
@@ -107,6 +111,59 @@ def write_bytes_atomic(path: Path, payload: bytes) -> None:
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)
         raise
+
+
+def write_charts_from_decisions(
+    day: DigestDay, decisions: Iterable[VisualDecision], *, public_root: Path
+) -> None:
+    """Write each chart the day names from this run's own decision, where the checkout lacks it.
+
+    A rendered decision carries the chart's bytes in `spec` -
+    `render_planned_visual` writes the file from that same string - and the
+    decision reaches `assemble` inside `items-<shard>`. The file the work shard
+    wrote stays on a runner that is thrown away, so the checkout that publishes
+    writes the file itself and no job hands the day's directory to another. Run
+    `37212772816` did hand it over: each shard uploaded its whole day directory,
+    two carried a newer `digest.json` than the other two, and the merged download
+    left a day no reader could parse.
+
+    **A file already on disk is never replaced.** An earlier run published it and
+    a reader may already hold that address, or a rebuild after a rebase finds
+    this run's own copy. An item no rendered decision of this run covers belongs
+    to the run that drew it, and `check-publication` names a file still missing.
+
+    The path is recomputed from the item's identity and has to agree with both
+    payloads, and the bytes have to be a drawing of that item. Both jobs run one
+    commit, so a disagreement is a defect in this repository and stops the run.
+    """
+    rendered = {
+        decision.item_id: decision
+        for decision in decisions
+        if decision.visual_state is VisualState.RENDERED
+    }
+    for item in day.items:
+        decision = rendered.get(item.item_id)
+        if decision is None or item.visual is None or item.visual.data_path is None:
+            continue
+        relpath = asset_relpath(day.date, item.item_id)
+        if item.visual.data_path != relpath or decision.data_path != relpath:
+            raise ValueError(
+                f"{item.item_id} is filed at {relpath}, but the day names "
+                f"{item.visual.data_path} and its decision names {decision.data_path}"
+            )
+        target = public_root / relpath
+        if target.is_file():
+            continue
+        spec = decision.spec
+        if spec is None:
+            raise ValueError(f"{item.item_id}: a rendered decision carries no spec")
+        try:
+            drawn = VisualData.from_json(spec)
+        except ValidationError as error:
+            raise ValueError(f"{item.item_id}: the decision's spec is not chart data") from error
+        if drawn.item_id != item.item_id:
+            raise ValueError(f"{item.item_id}: the decision carries the chart of {drawn.item_id}")
+        write_bytes_atomic(target, spec.encode("utf-8"))
 
 
 def drop_raced_assets(

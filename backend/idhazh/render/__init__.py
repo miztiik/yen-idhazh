@@ -17,6 +17,7 @@ from idhazh.render.write import (
     asset_relpath,
     drop_raced_assets,
     render_planned_visual,
+    write_charts_from_decisions,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "compile_bar",
     "drop_raced_assets",
     "render_planned_visual",
+    "write_charts_from_decisions",
 ]

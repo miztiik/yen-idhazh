@@ -17,13 +17,14 @@ import base64
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text, record_fixture_day
 
 from idhazh import assemble, atomic_write
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.contracts.knobs.assist import AssistConfig
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, to_base64
+from idhazh.publication import read_inventory, record_files
 from idhazh.stages.backfill_vectors import (
     earns_a_vector,
     is_closed,
@@ -77,8 +78,9 @@ def vector(value: float) -> str:
 
 
 def write_day(root: Path, payload: DigestDay) -> Path:
-    path = assemble.day_dir(root, payload.date) / "digest.json"
+    path = assemble.day_dir(root / "digest", payload.date) / "digest.json"
     atomic_write.write_atomic(path, payload.to_json())
+    record_fixture_day(root, payload.date, items=len(payload.items))
     return path
 
 
@@ -90,8 +92,8 @@ def needs_encoder() -> None:
 def backfill(root: Path, today: str, encoder: Embedder) -> int:
     """The command as the CLI invokes it, with the index beside the days."""
     return stage_backfill_vectors(
-        root=root,
-        index_root=root / "index",
+        root=root / "digest",
+        index_root=root / "assist" / "index",
         today=today,
         dates=[day().date],
         embedder=encoder,
@@ -188,6 +190,9 @@ class TestTheBackfill:
     ) -> None:
         needs_encoder()
         path = write_day(tmp_path, with_block(block({})))
+        atomic_write.write_atomic(tmp_path / "unrelated.csv", "keep\n")
+        record_files(tmp_path, paths=["unrelated.csv"])
+        before = read_inventory(tmp_path)
 
         assert backfill(tmp_path, "2026-08-22", embedder()) == 0
 
@@ -195,6 +200,23 @@ class TestTheBackfill:
         assert repaired.embeddings is not None
         assert set(repaired.embeddings.vectors) == {item.item_id for item in repaired.items}
         assert repaired.version == DigestDay.schema_version()
+        inventory = read_inventory(tmp_path)
+        entries = {entry.path: entry for entry in inventory.entries}
+        digest_name = path.relative_to(tmp_path).as_posix()
+        assert entries[digest_name].bytes == path.stat().st_size
+        assert entries[digest_name].bytes != next(
+            entry.bytes for entry in before.entries if entry.path == digest_name
+        )
+        assert entries[digest_name].items == len(repaired.items)
+        for suffix in ("json", "bin"):
+            name = f"assist/index/{repaired.date[:7]}.{suffix}"
+            assert entries[name].bytes == (tmp_path / name).stat().st_size
+        assert entries["unrelated.csv"] == next(
+            entry for entry in before.entries if entry.path == "unrelated.csv"
+        )
+        assert inventory.dates == before.dates
+        assert inventory.total_items == len(repaired.items)
+        assert inventory.total_bytes == sum(entry.bytes for entry in inventory.entries)
 
     def test_an_item_that_earns_nothing_gets_nothing(self, tmp_path: Path) -> None:
         needs_encoder()
@@ -242,10 +264,12 @@ class TestTheBackfill:
         path = write_day(tmp_path, with_block(block({})))
         backfill(tmp_path, "2026-08-22", embedder())
         once = path.read_bytes()
+        inventory_once = (tmp_path / "publication.json").read_bytes()
 
         backfill(tmp_path, "2026-08-22", embedder())
 
         assert path.read_bytes() == once
+        assert (tmp_path / "publication.json").read_bytes() == inventory_once
 
     def test_a_repaired_day_takes_its_month_index_with_it(self, tmp_path: Path) -> None:
         """A shard left naming the old vectors would rank against bytes the day dropped."""
@@ -255,9 +279,11 @@ class TestTheBackfill:
         backfill(tmp_path, "2026-08-22", embedder())
 
         built = SearchIndex.from_json(
-            (tmp_path / "index" / "2026-08.json").read_text(encoding="utf-8")
+            (tmp_path / "assist" / "index" / "2026-08.json").read_text(encoding="utf-8")
         )
-        assert built.vector_bytes == (tmp_path / "index" / "2026-08.bin").stat().st_size
+        assert built.vector_bytes == (
+            tmp_path / "assist" / "index" / "2026-08.bin"
+        ).stat().st_size
         assert built.vector_bytes > 0
 
     def test_the_live_day_is_left_alone(self, tmp_path: Path) -> None:
@@ -280,8 +306,8 @@ class TestTheBackfill:
         before = outside_path.read_bytes()
 
         assert stage_backfill_vectors(
-            root=tmp_path,
-            index_root=tmp_path / "index",
+            root=tmp_path / "digest",
+            index_root=tmp_path / "assist" / "index",
             today="2026-08-26",
             dates=[inside],
             embedder=embedder(),
@@ -298,5 +324,16 @@ class TestTheBackfill:
         before = path.read_bytes()
 
         assert backfill(tmp_path, "2026-08-22", embedder(tmp_path / "empty")) == 1
+
+        assert path.read_bytes() == before
+
+    def test_missing_inventory_stops_before_rewriting_a_day(self, tmp_path: Path) -> None:
+        needs_encoder()
+        path = write_day(tmp_path, with_block(block({})))
+        before = path.read_bytes()
+        (tmp_path / "publication.json").unlink()
+
+        with pytest.raises(FileNotFoundError, match=r"publication\.json is missing"):
+            backfill(tmp_path, "2026-08-22", embedder())
 
         assert path.read_bytes() == before
