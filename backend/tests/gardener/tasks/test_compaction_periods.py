@@ -32,7 +32,6 @@ from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener.file_listing import FileListing
-from idhazh.gardener.period_inputs import scheduled_range
 from idhazh.gardener.tasks import _compaction_periods
 from idhazh.gardener.tasks._compact_tree import CompactTree
 
@@ -286,6 +285,25 @@ def test_a_first_run_starts_at_the_oldest_raw_day_in_the_months_it_looks_back_ov
         "2026-08-19",
     )
     assert (choice.stopped_because, choice.resume_from) == (StopReason.CEILING, "2026-08-20")
+
+
+@pytest.mark.parametrize(
+    ("lookback", "looked_over"),
+    [(None, ("2026-08", "2026-10")), (4, ("2026-06", "2026-10"))],
+    ids=["default", "configured"],
+)
+def test_a_first_run_looks_back_over_the_newest_due_month_and_lookback_months_before_it(
+    lookback: int | None, looked_over: tuple[str, str]
+) -> None:
+    """The newest due day is 2 October, so October and, by default, the two months before it."""
+    looked = _compaction_periods.first_run_months(
+        marks(VISUALS, []),
+        policy_of(TASK, lookback=lookback),
+        now=at(FAILED_WAKE),
+        operator_range=None,
+    )
+
+    assert looked == month_partition.months_between(*looked_over)
 
 
 def test_a_first_run_with_no_raw_day_in_reach_takes_nothing() -> None:
@@ -778,7 +796,7 @@ ROWS_ON: Final = ("2026-09-12", "2026-09-20", "2026-09-25")
 
 @pytest.mark.parametrize("name", sorted(FAILED_ON_2026_10_04))
 def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(tmp_path: Path, name: str) -> None:
-    """The planner's window still names the months before each ledger began; the month step ignores it."""
+    """A wake's listing names only each ledger's marks, and the month step names what it chooses."""
     first, last = FAILED_ON_2026_10_04[name]
     policy = policy_of(name)
     root = tmp_path / "checkout"
@@ -787,9 +805,7 @@ def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(tmp_path: Path
     an_index(root, policy.ledger, Period.YEARLY, [])
     a_daily_mark(root, policy.ledger, last)
 
-    outcome = run_task(
-        name, root, today=FAILED_WAKE, period_range=scheduled_range(name, policy, FAILED_WAKE)
-    )
+    outcome = run_task(name, root, today=FAILED_WAKE, wake=True)
 
     assert outcome.stopped_because is not StopReason.FAILED, outcome.resume_from
     assert watermark(root, Period.MONTHLY, policy.ledger) is None
@@ -993,7 +1009,7 @@ def daily_entries(root: Path) -> dict[str, CompactEntry]:
 
 
 def test_raw_days_after_the_mark_reach_the_newest_due_day_in_two_wakes(tmp_path: Path) -> None:
-    """The planner's window names months before the keep line; the day step names its own days."""
+    """A wake's listing names only the ledger's marks; the day step names its own days."""
     root = tmp_path / "checkout"
     a_marked_ledger(root, "2026-09-16")
     for day in days("2026-09-17", "2026-10-02"):

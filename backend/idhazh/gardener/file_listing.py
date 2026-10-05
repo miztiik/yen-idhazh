@@ -40,6 +40,8 @@ and `fetch` raise `PathNotNamedError`, naming the path and the nearest paths a
 step did name. "Not held" there would be a guess, and a step that looked in the
 wrong months would act on it as if those months were empty. A folder that holds
 a named path passes too, because fetching it brings what was named inside it.
+`saw_any_of` says beforehand whether a path would pass, for a caller that may
+find nothing named there.
 
 **`files_under` answers for all of a folder or for none of it.** It answers
 only for a path a step named, or one inside such a path, because only there has
@@ -369,8 +371,7 @@ class FileListing:
         it: a file can hold no path, and fetching a folder brings what was named
         inside it.
         """
-        self._refuse_outside(path)
-        if any(_inside(path, named) or _inside(named, path) for named in self.named):
+        if self.saw_any_of(path):
             return
         folder = next(folder for folder in self.folders if _inside(path, folder))
         nearest = _nearest(path, [named for named in self.named if _inside(named, folder)])
@@ -379,6 +380,16 @@ class FileListing:
             "the listing never looked there, so it cannot say whether the commit holds it. "
             f"{nearest}. A step reads only inside the periods its task named"
         )
+
+    def saw_any_of(self, path: str | Path) -> bool:
+        """Whether the listing saw any of a path.
+
+        A step named it, a folder above it, or a path inside it. `answers_for`
+        says whether it saw all of the path.
+        """
+        relative = self._relative(path)
+        self._refuse_outside(relative)
+        return any(_inside(relative, named) or _inside(named, relative) for named in self.named)
 
     def answers_for(self, path: str | Path) -> bool:
         """Whether the listing saw all at or under a path: a step named it, or a folder above it."""

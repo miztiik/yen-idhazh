@@ -367,9 +367,9 @@ def test_a_scheduled_wake_packs_a_year_the_day_its_wait_ends_and_not_the_day_bef
 ) -> None:
     """2026 ended at 00:00 UTC on 1 January 2027, and 63 days later is 5 March.
 
-    A wake's listing names only the newest months the planner schedules, so the
-    year step names the months it reads itself. January 2027 is old enough to
-    close on both days, which is why the monthly index holds it.
+    A wake's listing names only the ledger's marks, so the year step names the
+    months it reads itself. January 2027 is old enough to close on both days,
+    which is why the monthly index holds it.
     """
     root = a_finished_year(tmp_path, today=today)
 
