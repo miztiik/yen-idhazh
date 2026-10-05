@@ -26,6 +26,13 @@ class StartReason(StrEnum):
     MARK = "mark"
     #: The oldest period an index names, because the step has no mark yet.
     OLDEST_INDEXED = "oldest-indexed"
+    #: The oldest raw day in the months a first day run looks in, because the
+    #: step has no mark yet.
+    OLDEST_RAW_DAY = "oldest-raw-day"
+    #: The keep line: the oldest raw day of a first day run falls in a month the
+    #: monthly window no longer keeps while its deletes are live, so the step
+    #: starts at the oldest raw day the window keeps, or takes nothing.
+    KEEP_LINE = "keep-line"
     #: An operator's range decided it: the range ends before the step's first
     #: period, or it leaves out the period the step must take first.
     OPERATOR_RANGE = "operator-range"
@@ -83,8 +90,10 @@ class PeriodsChosen(Model):
     """Which periods each compaction step may take on this wake, and what decided it.
 
     Chosen before the steps run, from the ledger's own marks, the wake's UTC day
-    and the declaration, never from folders a planner named. Each step takes its
-    own choice as its parameters, and the pass logs the whole once.
+    and the declaration, and for a first day run from the raw days the pass named
+    in the months it looks back over - never from folders a planner named for
+    another step. Each step takes its own choice as its parameters, and the pass
+    logs the whole once.
     """
 
     ledger: LedgerName = Field(description="The ledger the compaction packs.")
@@ -97,10 +106,22 @@ class PeriodsChosen(Model):
     yearly_mark: YearStamp | None = Field(
         description="The newest UTC year the year step has packed, or None before its first."
     )
+    newest_eligible_day: DateStamp = Field(
+        description=(
+            "The newest UTC day at least `compact_after_days` whole days past its end, at "
+            "00:00 UTC on the wake's day."
+        )
+    )
     newest_closable_month: MonthStamp = Field(
         description=(
             "The newest UTC month at least `daily_keep_days` whole days past its end, at "
             "00:00 UTC on the wake's day."
+        )
+    )
+    keep_line: MonthStamp | None = Field(
+        description=(
+            "The oldest UTC month the monthly window keeps at 00:00 UTC on the wake's day, "
+            "or None when it keeps every month."
         )
     )
     cap: int = Field(
@@ -116,19 +137,38 @@ class PeriodsChosen(Model):
         description="Whether the monthly window's deletes only report on this wake."
     )
     months: StepChoice = Field(description="The months the month step may close.")
+    days: StepChoice = Field(
+        description=(
+            "The new UTC days after the daily mark the day step may pack, at most. A day it "
+            "takes again counts against the same cap, so when those use it up the step's own "
+            "stop names the day the next wake starts at."
+        )
+    )
+    rerun_span: tuple[DateStamp, DateStamp] | None = Field(
+        description=(
+            "The first and last packed UTC day whose raw folders the day step names, because "
+            "a GitHub re-run may still write into them: from `GITHUB_RERUN_DAYS` days before "
+            "the wake's day to the daily mark, inside the operator range. None when no packed "
+            "day is that recent."
+        )
+    )
 
     @model_validator(mode="after")
-    def _the_month_step_chooses_months_and_a_range_runs_forward(self) -> Self:
-        """The month step's periods are UTC months, and an operator range starts before it ends."""
-        if self.operator_range is not None and self.operator_range[0] > self.operator_range[1]:
-            raise ValueError(
-                f"an operator range runs forward: {self.operator_range[0]} comes after "
-                f"{self.operator_range[1]}"
-            )
-        named = (self.months.first, self.months.last, self.months.resume_from)
-        for stamp in named:
-            if stamp is None:
-                continue
-            if not covers_fits(stamp, tier=Tier.COMPACT, period=Period.MONTHLY):
-                raise ValueError(f"the month step chose {stamp!r}, and it chooses UTC months")
+    def _each_step_chooses_its_own_grain_and_every_span_runs_forward(self) -> Self:
+        """The month step chooses UTC months, the day step UTC days, and every span runs forward."""
+        spans = (("an operator range", self.operator_range), ("a re-run span", self.rerun_span))
+        for named, span in spans:
+            if span is not None and span[0] > span[1]:
+                raise ValueError(f"{named} runs forward: {span[0]} comes after {span[1]}")
+        for step, period, choice in (
+            ("month", Period.MONTHLY, self.months),
+            ("day", Period.DAILY, self.days),
+        ):
+            for stamp in (choice.first, choice.last, choice.resume_from):
+                if stamp is None:
+                    continue
+                if not covers_fits(stamp, tier=Tier.COMPACT, period=period):
+                    raise ValueError(
+                        f"the {step} step chose {stamp!r}, and it chooses UTC {step}s"
+                    )
         return self

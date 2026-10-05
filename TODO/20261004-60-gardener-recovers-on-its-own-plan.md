@@ -50,7 +50,7 @@ Table A - what is out
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
 | 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | #1303 | Plan 60 row 12: which months may close |
-| 13 | Which days may be packed | 12 | D | PENDING | - | - | - |
+| 13 | Which days may be packed | 12 | D | DONE | silver-enigma | - | Plan 60 row 13: which days may be packed |
 | 14 | Which years may be packed | 13 | D | PENDING | - | - | - |
 | 15 | Each old month is dropped once | 14 | D | PENDING | - | - | - |
 | 16 | The shared window is gone | 15 | D | PENDING | - | - | - |
@@ -545,6 +545,16 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/tasks/test_compaction_batch.py`
   - `backend/tests/ledger_migration/test_packing_parity.py` (its parity case expects a file for every day from the 1st of the month, the days with no row packed as zero-row files)
   - `docs/architecture/publishing/ledger-compaction.md`
+  - `backend/idhazh/contracts/gardener_events.py` (`PeriodsChosen` gains `newest_eligible_day`, `keep_line`, `days` and `rerun_span`; `StartReason` gains `oldest-raw-day` and `keep-line`; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`name_days`, `name_raw_months` and one naming helper they share with `name_months`; `note_recovery`, moved from `_monthly_period`; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/_monthly_period.py` (calls `note_recovery`; found during execution)
+  - `backend/idhazh/ledger/ledger_files.py` (a docstring said a quiet day is a zero-row file; found during execution)
+  - `backend/tests/gardener/tasks/_task.py` (`wake`: the listing a scheduled wake builds; found during execution)
+  - `backend/tests/gardener/tasks/test_telemetry_aggregate_task.py` (the knobs it spreads into `run_task` are typed, now that `run_task` also takes `wake`; found during execution)
+  - `backend/tests/ledger_migration/test_full_chain.py` and `backend/tests/test_canary_packing.py` (each pinned the fill from the 1st; found during execution)
+  - `backend/tests/ledger_migration/test_packing_scope.py` (named months that leave out the day after the mark are now refused at that day; found during execution)
+  - `backend/tests/ledger/_every_tier.py` (its first pass looks back four months; found during execution)
+  - `docs/concepts/config/idhazh-gardener.md` (`lookback` for a compaction; found during execution)
 - **Acceptance gates:** local: pytest on the test files above; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:**
   - Unit: a mark of 2026-09-16, cap 8, `compact_after_days` 1 and today 2026-10-04 give new days 2026-09-17 to 2026-09-24, resuming at 2026-09-25.

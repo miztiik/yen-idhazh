@@ -62,12 +62,13 @@ def decide(root: Path, today: date) -> CompactTree:
         producer="gardener.tasks.compaction",
         git_sha=context.git_sha,
     )
+    tree.name_raw_months(
+        _compaction_periods.first_run_months(tree, policy, now=now, operator_range=None)
+    )
+    chosen = _compaction_periods.choose(tree, policy, now=now, operator_range=None)
     assert (
         _monthly_period.absorb(
-            tree,
-            _compaction_periods.choose(tree, policy, now=now, operator_range=None).months,
-            stamp="2026-03-05T00:00:00Z",
-            identity=identity,
+            tree, chosen.months, stamp="2026-03-05T00:00:00Z", identity=identity
         )
         == ()
     )
@@ -75,8 +76,8 @@ def decide(root: Path, today: date) -> CompactTree:
         _daily_period.compact(
             tree,
             policy,
-            first_kept=None,
-            now=now,
+            chosen.days,
+            rerun_span=chosen.rerun_span,
             stamp="2026-03-05T00:00:00Z",
             identity=identity,
         )
