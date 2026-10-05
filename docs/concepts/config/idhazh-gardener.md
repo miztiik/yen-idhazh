@@ -92,9 +92,10 @@ after a UTC year ends each waits to pack that year. Each ledger's own
 loader checks only that the value can take effect: at least `daily_keep_days`
 plus 32 days. How a pass runs is
 [../../architecture/publishing/ledger-compaction.md](../../architecture/publishing/ledger-compaction.md).
-Seven pack live - `compact-item-health`, `compact-host-fingerprint`,
+Eight pack live - `compact-item-health`, `compact-host-fingerprint`,
 `compact-counterfactual-scores`, `compact-candidate-models`, `compact-seen`,
-`compact-published` and `compact-feed-health` - and the other four ship
+`compact-published`, `compact-feed-health` and `compact-summary-quality-evals` -
+and the other three ship
 `dry_run: true`. Each owns its
 ledger's two folders,
 `state/raw/<ledger>` and `state/compact/<ledger>`. Six set
@@ -122,11 +123,10 @@ reports what it would delete ([the two switches](#the-keys-of-a-compaction)).
 | `compact-feed-health` | `feed-health`, what every feed did on every run | day files for 45 to 76 days, then 14 month files | its floor is the widest console read, 366 days, which can open 14 month files, and its CSV was kept the same 14 months. It packs live and its window only reports. Nothing older is summarised, because no older total has a reader |
 
 **The last four are the ledgers the console reads**, and the console reads their
-packed files and nothing newer. `compact-item-health`,
-`compact-host-fingerprint` and `compact-feed-health` pack live, so a finished
-day reaches the console within about 48 hours. `compact-summary-quality-evals` only reports, so the console shows its
-days up to the day its migration ran
-([../../architecture/contracts/persistence.md](../../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).
+packed files and nothing newer. All four pack live, so a finished day reaches
+the console within about 48 hours while daily wakes succeed. Scores keep every
+row: their forever window drops no month, and packing removes a source file
+only after preserving its rows in a coarser file.
 
 ### The keys of a compaction
 
@@ -213,7 +213,8 @@ beside it: `corpus-squash`'s `dry_run`, the `dry_run` and the
 `month_deletes_dry_run` of `compact-item-health` and
 `compact-host-fingerprint`, the `dry_run` of `compact-counterfactual-scores`,
 `compact-candidate-models`, `compact-seen`, `compact-published` and
-`compact-feed-health`. A task
+`compact-feed-health`, and both switches of `compact-summary-quality-evals`,
+whose forever window drops no rows. A task
 earns its first deletion from a person reading its records, so turning one live
 is an edit to that list, never a side effect of the change that added the task.
 
@@ -256,6 +257,15 @@ rather than to `backend/utilities/corpus_history.py`. **The deletion of a folder
 is refused by the commit loop, where the deletions are known.
 
 ## Design rationale
+
+**Score packing must run for score charts to refresh.** On 2026-10-04,
+kumarsnaveen requested a fix for console charts that had stopped updating.
+`compact-summary-quality-evals` now packs live because those charts read only
+packed files. The forever retention window, 45-day daily retention and 93-day
+year packing wait stay unchanged. A contract test checks that every console
+record packs finished days; an integration test runs the shipped score task
+without overriding its live switch and proves that consecutive wakes preserve
+the rows while advancing the files the console reads.
 
 **A month is counted where it is hardest to pass.** A comparison of
 days against months cannot be answered once: fourteen months hold between 424
