@@ -210,7 +210,7 @@ delegated, because they tell you the branch is wrong before CI has finished
 installing:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check.
+.\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_<the module you changed>.py
 ```
@@ -275,7 +275,7 @@ the copy's own `-q` hides that line when its settings were read.
 Python 3.12, 3.13 or 3.14. CI installs 3.12.
 
 ```powershell
-python -m venv.venv
+python -m venv .venv
 .\.venv\Scripts\python.exe -c "import sys; print(sys.version)"
 .\.venv\Scripts\python.exe -m ensurepip --upgrade
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
@@ -447,7 +447,7 @@ make this slower.
 Run all three from the repository root. Each must be clean.
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check.
+.\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest
 ```
@@ -464,7 +464,7 @@ inline shell, because a `run:` body is a string inside YAML rather than a file;
 the contract tests in `backend/tests/workflows/` execute the real steps instead
 ([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#nothing-lints-a-run-body)).
 
-**`ruff format` is not a gate.** `ruff format --check.` reports dozens of files
+**`ruff format` is not a gate.** `ruff format --check .` reports dozens of files
 it would rewrite, all of them
 pre-existing. That count is deliberately written as a magnitude rather than a
 figure: it tracks how much Python the repository holds, so an exact number here

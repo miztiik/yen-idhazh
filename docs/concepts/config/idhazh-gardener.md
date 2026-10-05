@@ -28,8 +28,8 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/traces.json` declares the task
-`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Nineteen ship today:
-six `retention` tasks, two `collection` tasks, ten `compaction` tasks (below)
+`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Twenty ship today:
+five `retention` tasks, two `collection` tasks, twelve `compaction` tasks (below)
 and `corpus-squash`, the one `history` task (below).
 There is no `name` key inside a declaration. Both plan writers open the same
 named list, so adding an unrelated file cannot change a wake's plan.
@@ -95,7 +95,7 @@ plus 32 days. How a pass runs is
 Eight pack live - `compact-item-health`, `compact-host-fingerprint`,
 `compact-counterfactual-scores`, `compact-candidate-models`, `compact-seen`,
 `compact-published`, `compact-feed-health` and `compact-summary-quality-evals` -
-and the other three ship
+and the other four ship
 `dry_run: true`. Each owns its
 ledger's two folders,
 `state/raw/<ledger>` and `state/compact/<ledger>`. Six set
@@ -107,6 +107,8 @@ ledger's two folders,
 packing runs live in the change that moves a ledger to the door, because it
 writes every row into a coarser file before it deletes one, and the window only
 reports what it would delete ([the two switches](#the-keys-of-a-compaction)).
+`compact-run-plan` sets it to `true` as well, and ships `dry_run: true`, so a
+pass of it only reports what it would pack.
 
 | Task | Ledger | Keeps | Why |
 | --- | --- | --- | --- |
@@ -117,6 +119,7 @@ reports what it would delete ([the two switches](#the-keys-of-a-compaction)).
 | `compact-candidate-models` | `candidate-models`, the verdicts on candidate models | day files for 45 to 76 days, then every month file until its year is packed 93 days after it ends, then one year file for ever | a verdict is why a model was adopted or refused, so none is dropped, and nothing deleted its CSV either. It packs live and its window only reports. Only a qualification writes it, under its trial root, which nothing packs |
 | `compact-seen` | `seen`, the first sight of every address | day files for 45 to 76 days, then 2 month files | its floor is `collect.seen_window_days`, 90 days, the days the collector reads. 45 days and the fewest days 2 months can hold reach back 104 days; 1 month would reach only 73. It packs live and its window only reports. The prune verb refuses it: a day taken out of it lets the next run find every address that day held as new |
 | `compact-published` | `published`, every address a digest carried | day files for 45 to 76 days, then every month file until its year is packed 93 days after it ends, then one year file for ever | `collect.published_window_days` is -1, which reads every day, so the loader refuses any window that drops a month. It packs live. The prune verb refuses it: it is the guard against publishing one story twice |
+| `compact-run-plan` | `run-plan`, the plan each run hands to the stages after it | day files for 45 to 76 days, then every month file until its year is packed 93 days after it ends, then one year file for ever | a later stage reads only the plan of the day it names, so no reader sets a floor. It ships `dry_run: true`, so a pass only reports what it would pack |
 | `compact-item-health` | `item-health`, the census | day files for 31 to 62 days, then 15 month files | its floor is the `full-grain` series of `telemetry-aggregate`, 14 months, and a month is summarised before this can delete it. It packs live, with `daily_keep_days` 31: the shortest wait no GitHub re-run can outlast ([why 31](../../architecture/publishing/ledger-compaction.md#design-rationale)) |
 | `compact-summary-quality-evals` | `summary-quality-evals`, the eval ledger | day files for 45 to 76 days, then every month file until its year is packed `monthly_keep_days` after it ends, then one year file for ever | every eval row is kept for ever and nothing summarises a month, so it may pack a month or a year and never drops one |
 | `compact-host-fingerprint` | `host-fingerprint`, the machine record | day files for 31 to 62 days, then 14 month files | its floor is `public_machine_keep_months`, 14 months, because the published machine shard is folded from this ledger; its CSV was kept the same 14 months. It packs live, with `daily_keep_days` 31, as `compact-item-health` does |
