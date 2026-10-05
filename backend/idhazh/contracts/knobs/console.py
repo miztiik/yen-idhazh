@@ -874,9 +874,7 @@ class ConsoleConfig(Model):
 
     @model_validator(mode="after")
     def _explorer_editor_bounds(self) -> Self:
-        if len(self.explorer_readout_lines) != 4 or any(
-            lines < 1 for lines in self.explorer_readout_lines
-        ):
+        if any(lines < 1 for lines in self.explorer_readout_lines):
             raise ValueError("console.explorer_readout_lines must hold four positive values")
         if (
             self.explorer_editor_lines_shown[0] < 1
