@@ -20,7 +20,7 @@ from typing import Any, Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text, seed_publication_inventory
 from origin_template import copy_origin, template
 
 from idhazh import ledger, path_classes
@@ -711,6 +711,7 @@ COMMIT_STAGED_PATHS: Final = {
     ],
     "assemble": [
         "frontend/public/digest",
+        "frontend/public/publication.json",
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
@@ -2127,6 +2128,7 @@ def _seed_digest_origin(root: Path, date: str) -> None:
         _write(seed / relative, "")
     for dirname in series.PUBLISHED_ROOTS:
         _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
+    seed_publication_inventory(seed / "frontend" / "public")
     _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
     _git(
         seed, env, "add", ".gitattributes", ".gitignore", "docs",
