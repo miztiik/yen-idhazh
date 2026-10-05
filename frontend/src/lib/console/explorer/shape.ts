@@ -1,4 +1,4 @@
-import type { Column, Row } from '../../data/slice-shapes';
+import type { Column, DateStamp, Row } from '../../data/slice-shapes';
 
 export type ExplorerChartType = 'dateSeries' | 'rankedList' | 'pairedScatter' | 'distribution';
 
@@ -213,6 +213,32 @@ function dateSeriesShape(dateColumn: string, numericColumns: readonly string[], 
 		mainFigure: latest && value !== null ? { column: firstSeries, value, date: dayValue(latest[dateColumn]) ?? String(latest[dateColumn]) } : null,
 		comparison: `${firstSeries} on each day against the other days in the span`
 	};
+}
+
+/** One UTC day on the date chart's axis, and the answer's row for it: `null` on a lost day. */
+export type DateSeriesDay = { day: DateStamp; row: Row | null };
+
+/** The days the date chart draws, ascending: each UTC day the answer has a row for, and each day a
+ *  selected ledger lost that falls between the first and the last of them with no row of its own.
+ *
+ *  A lost day has no record, so it sits on the axis with no value and the line breaks there,
+ *  instead of joining the days either side as if it held data. Any other day without a row stays
+ *  off the axis, because the page cannot know what the question would make of a day with no rows.
+ *  A lost day before the first day or after the last stays off too, so it never lengthens the chart
+ *  or stands beside days the question left out; the note under the span line names every lost day
+ *  (Jony, 2026-10-05). */
+export function chooseDateSeriesDays(dateColumn: string, rows: readonly Row[], lostDays: readonly DateStamp[]): DateSeriesDay[] {
+	const byDay = new Map<DateStamp, Row>();
+	for (const row of rows) {
+		const day = dayValue(row[dateColumn]);
+		if (day !== null) byDay.set(day, row);
+	}
+	const drawn = [...byDay.keys()].sort();
+	if (drawn.length === 0) return [];
+	const first = drawn[0];
+	const last = drawn[drawn.length - 1];
+	const lost = lostDays.filter((day) => first < day && day < last && !byDay.has(day));
+	return [...new Set([...drawn, ...lost])].sort().map((day) => ({ day, row: byDay.get(day) ?? null }));
 }
 
 function rankedListShape(labelColumn: string, valueColumn: string, rows: readonly Row[], bounds: ExplorerShapeBounds): RankedListShape {

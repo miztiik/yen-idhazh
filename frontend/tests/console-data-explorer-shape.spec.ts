@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { chooseExplorerShape, chooseExplorerShapes, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
+import { chooseDateSeriesDays, chooseExplorerShape, chooseExplorerShapes, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
 import type { Column, Row } from '../src/lib/data/slice-shapes';
 
 const bounds: ExplorerShapeBounds = {
@@ -142,6 +142,49 @@ test('date charts draw four number columns and name columns that would draw flat
 		omittedColumns: ['e'],
 		flatColumns: [{ name: 'tiny', share: 0.03, largestColumn: 'a' }]
 	});
+});
+
+test('a lost day between the days an answer has rows for joins the date axis with no row', () => {
+	const rows: Row[] = [
+		{ day: '2026-08-20', rows: '8' },
+		{ day: '2026-08-17', rows: '3' },
+		{ day: '2026-08-18', rows: '5' }
+	];
+	expect(chooseDateSeriesDays('day', rows, ['2026-08-19'])).toEqual([
+		{ day: '2026-08-17', row: rows[1] },
+		{ day: '2026-08-18', row: rows[2] },
+		{ day: '2026-08-19', row: null },
+		{ day: '2026-08-20', row: rows[0] }
+	]);
+});
+
+test('a lost day outside the answer\'s first and last day, or one the answer has a row for, adds no day', () => {
+	const rows: Row[] = [
+		{ day: '2026-08-17', rows: '3' },
+		{ day: '2026-08-18', rows: '5' },
+		{ day: '2026-08-20', rows: '8' }
+	];
+	// Two ledgers both lost 19 Aug. One of them also lost 18 Aug, which still has a row, and a day at each end.
+	const days = chooseDateSeriesDays('day', rows, ['2026-08-16', '2026-08-18', '2026-08-19', '2026-08-19', '2026-08-21']);
+	expect(days.map(({ day, row }) => [day, row?.rows ?? null])).toEqual([
+		['2026-08-17', '3'],
+		['2026-08-18', '5'],
+		['2026-08-19', null],
+		['2026-08-20', '8']
+	]);
+	expect(chooseDateSeriesDays('day', [], ['2026-08-19']), 'lost days alone draw nothing').toEqual([]);
+});
+
+test('a timestamp answer sits on the date axis by its UTC day', () => {
+	const rows: Row[] = [
+		{ day: '2026-08-17 00:00:00', rows: '3' },
+		{ day: '2026-08-19 00:00:00', rows: '8' }
+	];
+	expect(chooseDateSeriesDays('day', rows, ['2026-08-18']).map(({ day, row }) => [day, row?.rows ?? null])).toEqual([
+		['2026-08-17', '3'],
+		['2026-08-18', null],
+		['2026-08-19', '8']
+	]);
 });
 
 test('no-chart reasons follow the first matching documented case', () => {

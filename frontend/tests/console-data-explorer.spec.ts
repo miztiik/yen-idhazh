@@ -536,6 +536,45 @@ test('THE ORACLE: a count by day names the day a ledger lost and the files it se
 	);
 });
 
+test('THE ORACLE: a count by day across a lost day breaks its line there, and the strip prints no number for that day', async ({ page }) => {
+	// The index is served as the packing writes a day it lost: the second-newest day with rows.
+	const marked: { lost?: string } = {};
+	await page.route('**/state/compact/item-health/index/daily.json', async (route) => {
+		const response = await route.fetch();
+		const index = (await response.json()) as { entries: { covers: string; rows: number; bytes: number }[] };
+		marked.lost = index.entries.filter((entry) => entry.rows > 0).at(-2)?.covers;
+		await route.fulfill({
+			response,
+			json: { ...index, entries: index.entries.map((entry) => (entry.covers === marked.lost ? { ...entry, rows: 0, bytes: 0, state: 'lost' } : entry)) }
+		});
+	});
+	await openExplorer(page);
+	// `covers` is stored as text, so the question casts it: a text day column is ranked, not drawn over time.
+	await chooseExplorerQuestion(page, ['item-health'], 'SELECT CAST("covers" AS DATE) AS day, count(*) AS rows FROM "item-health" GROUP BY 1 ORDER BY 1');
+	await runExplorer(page);
+	const { lost } = marked;
+	if (lost === undefined) throw new Error('the canary packs fewer than two item-health days with rows');
+	const days = (await tableRows(page)).map(([day]) => day);
+	expect(days, 'the lost day has a row in the answer').not.toContain(lost);
+	expect(days.filter((day) => day < lost).length, 'no day with rows comes before the lost day').toBeGreaterThan(0);
+	expect(days.filter((day) => day > lost).length, 'no day with rows comes after the lost day').toBeGreaterThan(0);
+
+	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+	const plot = panel.locator('[data-chart-type="dateSeries"]');
+	await expect(plot).toHaveCount(1);
+	const line = panel.locator('[data-date-series-marks="data-explorer-shape"] path');
+	await expect(line).toHaveCount(1);
+	expect((await line.getAttribute('d'))?.match(/M/g)?.length, 'the line joined the days either side of the lost day').toBe(2);
+	await expect(panel.locator('[data-readout-columns]')).toHaveAttribute('data-readout-columns', String(days.length + 1));
+
+	// The lost day is the column before the newest: step onto it and read the strip.
+	await plot.focus();
+	await page.keyboard.press('End');
+	await page.keyboard.press('ArrowLeft');
+	await expect(panel.locator('[data-readout-day]')).toHaveText(lost);
+	await expect(panel.locator('[data-readout-row]')).toHaveText(['No number for this day']);
+});
+
 test('THE ORACLE: every chart case draws its type with a populated readout', async ({ page }) => {
 	await openExplorer(page);
 	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
@@ -626,4 +665,25 @@ test('THE ORACLE: browser storage is parsed against closed lists and saved overf
 	}
 	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toContainText('Saved "Saved 20". "Saved 0" was the oldest of 20 and is no longer kept.');
 	await expect(page.locator('.saved-chip .example')).toHaveCount(20);
+});
+
+test('THE ORACLE: a question kept with a day that is not on the calendar is dropped when the page reads browser storage', async ({ page }) => {
+	// Written as text, 2026-08-32 sorts inside the reach once August has ended, so the clock stands after it.
+	const kept = { id: 'not-a-day', name: 'Not a day', statement: 'SELECT 1', ledgers: ['published'], days: 14, from: '2026-08-32', end: '2026-09-01', updatedAt: '2026-09-01T00:00:00Z' };
+	await page.addInitScript((entry) => {
+		localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify([entry]));
+		localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify([{ ...entry, rows: 1, ms: 1, askedAt: '2026-09-01T00:00:00Z' }]));
+	}, kept);
+	const logs: string[] = [];
+	page.on('console', (message) => logs.push(message.text()));
+	await page.clock.setFixedTime('2026-09-01T12:00:00Z');
+	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
+	await expect(page.locator('.saved-chip')).toHaveCount(0);
+	await page.locator('.history-list summary').click();
+	await expect(page.locator('.history-list button')).toHaveCount(0);
+	expect(logs.filter((line) => line.startsWith('Data explorer storage'))).toEqual([
+		'Data explorer storage yen-idhazh:data-explorer:saved entry was invalid and was dropped.',
+		'Data explorer storage yen-idhazh:data-explorer:history entry was invalid and was dropped.'
+	]);
 });

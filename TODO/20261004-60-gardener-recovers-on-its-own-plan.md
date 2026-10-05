@@ -69,7 +69,7 @@ Table A - what is out
 | 29 | doc_load.py measures every named Markdown page | 26 | A | DONE | effective-carnival | #1289 | Plan 60 row 29: doc_load every page |
 | 30 | Every reader and rewriter of a compact index keeps an entry's state | 8 | D | DONE | psychic-guide | #1293 | Plan 60 row 30: index readers keep state |
 | 31 | Panels say which days have no record | 8 | E | DONE | congenial-waddle | #1301 | Plan 60 row 31: panels show lost days |
-| 32 | The explorer's date chart breaks its line at a lost day | 31 | E | PENDING | - | - | - |
+| 32 | The explorer's date chart breaks its line at a lost day | 31 | E | DONE | symmetrical-parakeet | - | Plan 60 row 32 |
 
 ## 2. Shared declarations
 
@@ -1226,6 +1226,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/src/lib/data/slice-shapes.ts` (read, no change: `isDay()`, which the explorer's address reads a day with since row 31)
   - `frontend/tests/console-data-explorer.spec.ts` (the lost-day answer, the chart cases and the questions kept in browser storage)
   - `frontend/tests/console-data-explorer-shape.spec.ts`
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md` (found during execution: it owns what the explorer shows for a lost day and how it reads a kept question)
+  - `docs/how-to/query-a-ledger-from-the-console.md` (found during execution: how an operator reads a result)
 - **Acceptance gates:** local: the two specs above, as `npm --prefix frontend run test:changed -- --list` selects them; `npm --prefix frontend run check` (svelte-check); the browser smoke in [run-the-gates.md](../docs/how-to/run-the-gates.md) on the data explorer, with a count by day across a lost day (CLAUDE.md section 12). CI: the full suite.
 - **Oracle:** in the browser, a count by day across a lost day draws its line in two segments, not one, and a saved question or recent run stored with the day `2026-08-32` is refused when the page reads browser storage. Each case fails on today's main. It cannot settle how the gap looks; Jony and Susan rule on that only if two layouts lead to different code.
 

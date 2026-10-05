@@ -1,6 +1,6 @@
 <script lang="ts">
 	/** Draws a Data explorer answer with the chart type its columns can honestly support. */
-	import type { Column, Row } from '$lib/data/ledger';
+	import type { Column, DateStamp, Row } from '$lib/data/ledger';
 	import { tooFewSentence } from '$lib/console/waiting';
 	import { frame } from '$lib/charts/frame';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
@@ -13,10 +13,10 @@
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { rank } from '$lib/charts/rank';
 	import RankedList from '$lib/components/RankedList.svelte';
-	import { chooseExplorerShapes, type ExplorerShape, type ExplorerShapeBounds, type ExplorerChartType } from './shape';
+	import { chooseDateSeriesDays, chooseExplorerShapes, type ExplorerShape, type ExplorerShapeBounds, type ExplorerChartType } from './shape';
 	import { printCell } from './answer';
 
-	let { columns, rows, bounds, height, selectedType = null }: { columns: readonly Column[]; rows: readonly Row[]; bounds: ExplorerShapeBounds; height: number; selectedType?: ExplorerChartType | null } = $props();
+	let { columns, rows, lostDays, bounds, height, selectedType = null }: { columns: readonly Column[]; rows: readonly Row[]; lostDays: readonly DateStamp[]; bounds: ExplorerShapeBounds; height: number; selectedType?: ExplorerChartType | null } = $props();
 
 	const shapes = $derived(chooseExplorerShapes(columns, rows, bounds));
 	const choices = $derived(shapes.filter((shape) => shape.kind === 'chart'));
@@ -101,8 +101,9 @@
 		{#if active.type === 'dateSeries'}
 			{@const box = frame(760, height)}
 			{@const seriesColumns = active.seriesColumns}
-			{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: chartTokens[index] ?? '--chart-1', points: rows.map((row) => ({ date: text(row, active.dateColumn), value: value(row, column) })) })), { frame: box, density: 6, valueTicks: 4, padding: 0.25 })}
-			{@const dateReadout = readoutOf({ type: 'dateSeries', columns: dateGeometry?.dates ?? [], series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(--chart-${index + 1})`, values: (dateGeometry?.dates ?? []).map((day) => rows.find((row) => text(row, active.dateColumn) === day)).map((row) => row ? value(row, column) : null), format: (n) => text({ [column]: n }, column) })), notMeasured: 'Not a number', resting: 'last' })}
+			{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
+			{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: chartTokens[index] ?? '--chart-1', points: days.map(({ day, row }) => ({ date: day, value: row === null ? null : value(row, column) })) })), { frame: box, density: 6, valueTicks: 4, padding: 0.25 })}
+			{@const dateReadout = readoutOf({ type: 'dateSeries', columns: days.map(({ day }) => day), series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(--chart-${index + 1})`, values: days.map(({ row }) => (row === null ? null : value(row, column))), format: (n) => text({ [column]: n }, column) })), notMeasured: 'No number for this day', resting: 'last' })}
 			<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
 				<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={760} {height} readout={dateReadout} />
 			</div>
