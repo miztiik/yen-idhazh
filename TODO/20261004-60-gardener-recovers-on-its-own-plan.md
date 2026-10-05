@@ -1,6 +1,6 @@
 # Plan 60 - The gardener chooses its own work and recovers on its own
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 **Level**: 5 (CLAUDE.md section 6). Rows 8, 10, 19 and 20 change persisted contracts (section 2.4). The owner approved each shape on 2026-10-04.
 
@@ -50,7 +50,7 @@ Table A - what is out
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | DONE | didactic-potato | - | Plan 60 row 10: runs read from a mark |
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
 | 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | #1303 | Plan 60 row 12: which months may close |
-| 13 | Which days may be packed | 12 | D | DONE | silver-enigma | - | Plan 60 row 13: which days may be packed |
+| 13 | Which days may be packed | 12 | D | DONE | silver-enigma | #1309 | Plan 60 row 13: which days may be packed |
 | 14 | Which years may be packed | 13 | D | PENDING | - | - | - |
 | 15 | Each old month is dropped once | 14 | D | PENDING | - | - | - |
 | 16 | The shared window is gone | 15 | D | PENDING | - | - | - |
@@ -77,7 +77,7 @@ Rows point here. Each name, shape and rule is declared once.
 
 ### 2.1 How each step chooses its periods
 
-Every line is computed from `today`, the wake's UTC day, and from each period's own end (CLAUDE.md section 2). An operator range (`--from` and `--to` on one named task, or the migrator's range) limits every step. The "newest eligible day" is the newest day at least `compact_after_days` whole days past its end. The cap is the declaration's `max_periods_per_run`.
+Every line is computed from `today`, the wake's UTC day, and from each period's own end (CLAUDE.md section 2). An operator range (`--from` and `--to` on one named task, or the migrator's range) limits every step. The "newest eligible day" is the newest day at least `compact_after_days` whole days past its end, and the "newest eligible month" in B7 is the month that holds it (Fowler, 2026-10-04). The cap is the declaration's `max_periods_per_run`.
 
 Table B - each step
 
@@ -87,8 +87,8 @@ Table B - each step
 | B2 | Drop raw days | - | Raw day folders older than the keep line, inside the months B1 names. They are deleted by listed path and never parsed | Nothing more |
 | B4 | Pack years, only with `monthly_keep_days` | The year after the yearly mark; with none, the year of the oldest monthly entry | Consecutive years whose age line has passed and whose December the monthly mark is strictly past, up to the cap. A ledger that began after January packs its first year from its first month. A year with no row is an entry `empty` with no file. Its months' `lost_days` carry into the year entry | That year's month files, named from the monthly index |
 | B5 | Absorb months | The month after the monthly mark; with none, the oldest month the daily index names; with an empty daily index, nothing | Consecutive months at least `daily_keep_days` past their end that the daily mark has passed, up to the cap. A month with a raw day still waiting is held for B6. Completeness counts days from the month's 1st, or from the ledger's first day when the ledger began inside that month. A missing day inside that span is recovered (Table C, C2). A month with no row is an entry `empty` with no file | Each month's daily files and its raw month folder |
-| B6 | Pack days | The day after the daily mark | New days up to the earlier of the mark plus the cap and the newest eligible day. Also packed days inside the 30-day re-run span that hold new raw files; they count against the cap. A raw file in a closed month re-opens it (Table C, C3). A day with no row is an entry `empty` with no file | The raw folders of the new days and of the re-run span |
-| B7 | First run: no daily mark | The oldest raw day in the raw month folders from the newest eligible month minus `lookback` months to the newest eligible month, or in the operator range. Never before the keep line when month deletes are live | As B6. With no raw day, nothing; the outcome is `empty` | Those raw month folders |
+| B6 | Pack days | The day after the daily mark | New days up to the earlier of the mark plus the cap and the newest eligible day. Also packed days inside the 30-day re-run span that hold new raw files; they count against the cap. A raw file in a closed month re-opens it (Table C, C3). A day with no row is an entry `empty` with no file | The raw folders and the packed day files of the new days and of the re-run span. Rule R and the re-take read the day files (Fowler, 2026-10-04) |
+| B7 | First run: no daily mark | The oldest raw day in the raw month folders from the newest eligible month minus `lookback` months to the newest eligible month, or in the operator range. Never before the keep line when month deletes are live. A daily index with no mark beside it, which a pass cut before its mark landed leaves, starts it at the index's oldest day when that is older; row 19 deletes this case (Fowler, 2026-10-04) | As B6. An indexed day with no raw file keeps its entry, and the mark moves past it. With no raw day, nothing; the outcome is `empty` | Those raw month folders |
 
 Every read has a fixed size (Guardrail #12). A pass names at most: the three indexes, plus the three watermarks until row 19; for each step, the cap times that step's periods; and, only when an index file is absent, the paths Rule L names (section 2.2). Each count comes from config or the calendar. Rule L's yearly paths grow by one a year, as the yearly index does (row 14, decision 3). Step B3, which dropped the retired raw listings, went with #1267 (row 25).
 
@@ -575,7 +575,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Acceptance gates:** local: pytest on the test files above; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:**
   - Unit: a mark of 2026-09-16, cap 8, `compact_after_days` 1 and today 2026-10-04 give new days 2026-09-17 to 2026-09-24, resuming at 2026-09-25.
-  - Integration: raw days 2026-09-17 to 2026-10-02 reach 2026-10-02 in two passes. An empty ledger, using the declaration from `tests/fixtures/gardener/runner/compact-gardener.json` with `dry_run` set false in the test, writes nothing and ends `empty`. A day with no row writes no file and an `empty` entry. A first run that starts mid-month writes no entry before the first raw day. The case in `test_compaction.py` that pins a fill from the 1st is turned around to pin that no fill happens, and so is the parity case in `test_packing_parity.py`.
+  - Integration: raw days 2026-09-17 to 2026-10-02 reach 2026-10-02 in two passes. An empty ledger, using the committed declaration `config/gardener/compact-gardener.json` with `dry_run` set false in the test, writes nothing and ends `empty` (corrected 2026-10-05: this line first named `tests/fixtures/gardener/runner/compact-gardener.json`, which owns only `state/compact/gardener`, so a real pass is refused before it reads a raw day; Fowler, 2026-10-04). A day with no row writes no file and an `empty` entry. A first run that starts mid-month writes no entry before the first raw day. The case in `test_compaction.py` that pins a fill from the 1st is turned around to pin that no fill happens, and so is the parity case in `test_packing_parity.py`.
   - It cannot settle when GitHub re-runs a job; rows 17 and 24 cover late files.
 
 | # | Decision | Authority |
@@ -677,6 +677,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #17 - A late file re-opens its month
 
 - **Scope:** A raw file that lands in a month already closed re-opens that month (Table C, C3). The month's rows and the late rows are settled by the ledger's record key, the month file and its entry are rewritten, and the late raw files are deleted. Level 3.
+- **Follow-ups:**
+  - The day step's refusal "raw files sit in a month already absorbed" compares a raw day's month with the monthly mark alone, so it also catches a raw day in a month before the ledger's first packed month, which no month entry names and which never closed. A first run that looks back `lookback` months (B7) can leave such a day behind. It is not a late re-run, so re-opening never treats its month as closed; found during execution (row 13 report), owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_daily_period.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
@@ -741,6 +743,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #19 - The marks are worked out from the indexes, and the watermark files go
 
 - **Scope:** Each mark is worked out from the three indexes (section 2.2), and an absent index is rebuilt from named paths by Rule L. The `Watermark` contract and every committed `state/compact/<ledger>/<period>/watermark.json` are deleted (Table D, D4), so a watermark without its index can no longer happen (Table C, C9), and `index-missing` can no longer stop a pass (C14). Level 5.
+- **Follow-ups:**
+  - Delete the first-run case in `_compaction_periods._days` that starts at the oldest day a daily index names when no daily mark is beside it (Table B, B7). Once the daily mark is worked out from the indexes, an index that names a day always gives a mark, so the case can no longer happen; found during execution (row 13 report, Fowler 2026-10-04), owner 2026-10-05.
 - **Files touched** (from a search for `watermark` in any case, `daily_through`, `monthly_through` and `yearly_through`, 2026-10-04, after #1267 merged; search again at dispatch, `TODO/` and `state/compact/` included. The benchmark record of what a compaction pass costs describes the pass it measured, and it stays as it is, as do the matches that mean another thing, such as a stream's `highWaterMark`):
   - `.gitattributes` (its `-merge` line for `state/compact/*/*/watermark.json`)
   - `config/idhazh_gardener.json` (`first_ledger_year`, Table D, D5)
@@ -752,6 +756,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/ledger/day_removal.py` (its docstring names the watermark)
   - `backend/idhazh/gardener/ledger_marks.py` (Rule L)
   - `backend/idhazh/gardener/tasks/_compact_tree.py`
+  - `backend/idhazh/gardener/tasks/_compaction_periods.py` (the first-run case that starts at the oldest indexed day; found during execution (row 13 report), owner 2026-10-05)
   - `backend/idhazh/gardener/tasks/_daily_period.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
   - `backend/idhazh/gardener/tasks/_yearly_period.py`
@@ -771,6 +776,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/test_period_inputs.py`
   - `backend/tests/gardener/tasks/test_compaction.py`
   - `backend/tests/gardener/tasks/test_compaction_batch.py`
+  - `backend/tests/gardener/tasks/test_compaction_periods.py` (the same case's unit test; found during execution (row 13 report), owner 2026-10-05)
   - `backend/tests/gardener/tasks/test_compaction_years.py`
   - `backend/tests/ledger/test_ledger_files.py`
   - `backend/tests/ledger/test_trial_roots.py`
@@ -921,6 +927,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #23 - The gardener ledger is packed live
 
 - **Scope:** `config/gardener/compact-gardener.json` gets `dry_run: false`, so the gardener's own records are packed into one file a day and then one a month. Level 2.
+- **Follow-ups:**
+  - A first run looks back `lookback` months (default 2) before the month that holds the newest eligible day (Table B, B7). The gardener ledger's oldest raw day was 2026-09-30 on 2026-10-05, and from the wake of 2026-12-03 it falls outside that look-back, so a first live pass from then on would leave its older raw days raw. Before switching on, check the oldest raw day against the look-back and, when it falls outside, raise `lookback` in the same change so the first live pass reaches it. `compact-visual-prunes` (oldest raw day 2026-09-06, outside from 2026-12-03) and `compact-run-plan` (2026-10-04, outside from 2027-01-03) have never packed either and need the same check when they switch on; found during execution (row 13 report), owner 2026-10-05.
+  - Since #1309 a first run starts at its oldest raw day and writes no zero-row file, so the cost named in rejected option 1 below no longer holds; Fowler's order for readable first-pass logs still does; found during execution (row 13 report), owner 2026-10-05.
 - **Files touched:**
   - `config/gardener/compact-gardener.json`
   - `backend/tests/contracts/test_gardener_config.py` (both of its switches in `LIVE_BY_DECISION`, with the owner's decision as the reason)
