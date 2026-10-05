@@ -330,6 +330,12 @@ def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(tmp_path: Path
 
     assert outcome.stopped_because is not StopReason.FAILED, outcome.resume_from
     assert watermark(root, Period.MONTHLY, policy.ledger) is None
+    expected = min(
+        date.fromisoformat(last) + timedelta(days=policy.max_periods_per_run),
+        FAILED_WAKE - timedelta(days=policy.compact_after_days + 1),
+    ).isoformat()
+    assert watermark(root, Period.DAILY, policy.ledger) == expected
+    assert outcome.until == "2026-10-02"
 
 
 @pytest.mark.parametrize(("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)])

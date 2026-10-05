@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Final
@@ -41,8 +42,10 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener import report, schedule
+from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.one_at_a_time import Pass
-from idhazh.gardener.tasks import _monthly_period
+from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
+from idhazh.gardener.tasks import _monthly_period, compaction
 from idhazh.ledger import paths
 
 from ._task import context_for, run_task
@@ -139,8 +142,10 @@ def disjoint(outcome: Pass) -> bool:
 # --- the day: what a compact file holds ------------------------------------------
 
 
+@pytest.mark.parametrize("first_day", ["2026-09-30", "2026-10-01"])
 def test_the_shipped_score_task_refreshes_the_console_files_without_a_live_override(
     tmp_path: Path,
+    first_day: str,
 ) -> None:
     """New scores reach packed files on consecutive wakes, with no row changed or lost."""
     root = tmp_path / "checkout"
@@ -155,12 +160,29 @@ def test_the_shipped_score_task_refreshes_the_console_files_without_a_live_overr
                 "scored_at": f"{on}T06:18:02Z",
             }
         )
-        for on in ("2026-10-01", "2026-10-02", "2026-10-03")
+        for on in (first_day, "2026-10-02", "2026-10-03")
     ]
     for row in rows:
         seed_scores(state(root), [row], run_id=row.run_id)
 
-    first = run_task("compact-summary-quality-evals", root, today=date(2026, 10, 4))
+    def scheduled_pass(today: date) -> Pass:
+        name = "compact-summary-quality-evals"
+        context = context_for(name, root, today=today)
+        period_range = scheduled_range(name, context.policy, today)
+        listing = FileListing.from_disk(
+            root,
+            context.listing.folders,
+            paths=paths_for_task(root, name, context.policy, period_range, today=today),
+        )
+        return compaction.run(replace(context, listing=listing, period_range=period_range))
+
+    first = scheduled_pass(date(2026, 10, 4))
+    budget = context_for("compact-summary-quality-evals", root).policy.max_periods_per_run
+    backlog = (date(2026, 10, 2) - date.fromisoformat(first_day).replace(day=1)).days
+    for _ in range(backlog // budget):
+        assert first.stopped_because is StopReason.CEILING
+        assert disjoint(first)
+        first = scheduled_pass(date(2026, 10, 4))
 
     assert not first.dry_run and first.stopped_because is StopReason.EXHAUSTED
     assert watermark(root, Period.DAILY, which) == "2026-10-02"
@@ -171,11 +193,16 @@ def test_the_shipped_score_task_refreshes_the_console_files_without_a_live_overr
     pending = ledger.list_raw_files(state(root), which, days={rows[2].date})
     assert len(pending) == 1
 
-    second = run_task("compact-summary-quality-evals", root, today=date(2026, 10, 5))
+    rows[0] = EvalRow.model_validate(
+        {**rows[0].model_dump(mode="json"), "scored_at": f"{first_day}T12:18:02Z"}
+    )
+    assert seed_scores(state(root), [rows[0]], run_id=rows[0].run_id, attempt=2) == 1
+    second = scheduled_pass(date(2026, 10, 5))
 
     assert not second.dry_run and second.stopped_because is StopReason.EXHAUSTED
     assert watermark(root, Period.DAILY, which) == "2026-10-03"
     assert ledger.load_days(state(root), which, {row.date for row in rows}, model=EvalRow) == rows
+    assert ledger.list_raw_files(state(root), which, days={rows[0].date}) == []
     assert ledger.list_raw_files(state(root), which, days={rows[2].date}) == []
     assert disjoint(first) and disjoint(second)
 

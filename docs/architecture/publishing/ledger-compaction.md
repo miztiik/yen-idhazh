@@ -122,13 +122,18 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 | 4 | Closes every month chosen for this wake into its month file, or into an entry with no file |
 | 5 | Takes every raw day that is due into its day file |
 
-**The month step chooses its own months; the other steps do not yet.** Before
+**The month and day steps choose their own periods.** Before
 any step runs, the pass chooses the months step 4 may close from the ledger's
 own marks and the wake's UTC day, and logs the choice once as one
 `periods chosen` line, the JSON of `PeriodsChosen`
-(`backend/idhazh/contracts/gardener_events.py`). Steps 1, 2, 3 and 5 still read
+(`backend/idhazh/contracts/gardener_events.py`). Steps 1, 2 and 3 still read
 the fixed window the planner names for each task
 ([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
+The day step starts after its daily mark, takes at most its configured budget,
+and names those raw day folders before it reads them. It also names the eligible
+days inside GitHub's 30-day re-run window so a late attempt replaces the first.
+The old-month window used for retention does not limit new daily packing.
+An operator's explicit month range still limits every step.
 
 **Drops first and days last, because no pass may write a path it deletes.** A
 shard refuses a path it both wrote and deleted, so a pass that did either would
@@ -156,6 +161,9 @@ index. Index bytes grow linearly with the final entry count, not with that count
 times the number of days taken. Before the indexes land, source files survive.
 After they land, an interrupted pass resumes from the indexed compact files
 and any source files left, with no row lost.
+The scheduled day selection holds at most the budget plus one new day; that
+extra day reports where a budget-limited pass resumes. Its listing adds those
+budgeted raw folders and the fixed re-run window, not a walk over raw history.
 The bounded fixture measurement is
 [what-a-compaction-pass-costs.md](../../reference/benchmarks/what-a-compaction-pass-costs.md).
 

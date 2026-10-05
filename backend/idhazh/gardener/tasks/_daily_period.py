@@ -56,7 +56,7 @@ from idhazh import ledger
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
-from idhazh.contracts.knobs.gardener import CompactionPolicy
+from idhazh.contracts.knobs.gardener import GITHUB_RERUN_DAYS, CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry
 from idhazh.gardener import named_trees, schedule
 from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
@@ -121,7 +121,14 @@ def spare(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
     return ()
 
 
-def _new_days(tree: CompactTree, *, newest: date, first_kept: str | None) -> list[str]:
+def _new_days(
+    tree: CompactTree,
+    *,
+    newest: date,
+    first_kept: str | None,
+    limit: int,
+    scheduled: bool = False,
+) -> list[str]:
     """The days after the watermark up to the newest eligible one, or a first run's days."""
     if tree.daily_through is not None:
         start = date.fromisoformat(tree.daily_through) + timedelta(days=1)
@@ -131,7 +138,7 @@ def _new_days(tree: CompactTree, *, newest: date, first_kept: str | None) -> lis
         if first_kept is not None and start.isoformat()[:7] < first_kept:
             start = date.fromisoformat(f"{first_kept}-01")
     days: list[str] = []
-    if tree.months is not None:
+    if tree.months is not None and not scheduled:
         for month in sorted(tree.months):
             year, number = map(int, month.split("-"))
             first = date(year, number, 1)
@@ -145,13 +152,33 @@ def _new_days(tree: CompactTree, *, newest: date, first_kept: str | None) -> lis
             cursor = max(start, first)
             while cursor <= min(last, newest):
                 days.append(cursor.isoformat())
+                if len(days) == limit:
+                    return days
                 cursor += timedelta(days=1)
             start = cursor
         return days
-    while start <= newest:
+    while start <= newest and len(days) < limit:
         days.append(start.isoformat())
         start += timedelta(days=1)
     return days
+
+
+def _name_days(tree: CompactTree, days: list[str]) -> None:
+    """List these raw days and any indexed day files before deciding what they hold."""
+    tree.listing = tree.listing.name(
+        [
+            *(tree.raw_day_folder(day) for day in days),
+            *(
+                ledger.compact_path(tree.state_dir, tree.ledger, Period.DAILY, day)
+                for day in days
+                if day in tree.daily
+            ),
+        ]
+    )
+    found = named_trees.raw_days(tree.listing, tree.state_dir, tree.ledger)
+    added = (set(found) & set(days)) - set(tree.raw_days)
+    tree.raw_days = sorted({*tree.raw_days, *added})
+    tree.listed += len(added)
 
 
 def _take[C: Contract](
@@ -228,10 +255,27 @@ def compact(
     stamp: str,
     identity: WriterIdentity,
     first_kept: str | None,
+    scheduled: bool = False,
 ) -> tuple[Stop, ...]:
     """Take the days waiting to be taken again, then the new ones, oldest first, to the budget."""
     model, key = ledger.door_contract(tree.ledger), ledger.door_key(tree.ledger)
     stops: list[Stop] = []
+    newest = schedule.newest_eligible(now=now, after_days=policy.compact_after_days)
+    if scheduled:
+        retries = [
+            (now.date() - timedelta(days=back)).isoformat()
+            for back in range(GITHUB_RERUN_DAYS, policy.compact_after_days + 1, -1)
+        ]
+        _name_days(tree, retries)
+    fresh_days = _new_days(
+        tree,
+        newest=newest,
+        first_kept=first_kept,
+        limit=policy.max_periods_per_run + 1,
+        scheduled=scheduled,
+    )
+    if scheduled:
+        _name_days(tree, fresh_days[: policy.max_periods_per_run])
     again: list[str] = []
     for day in tree.raw_days:
         if tree.daily_through is None or day > tree.daily_through:
@@ -245,8 +289,7 @@ def compact(
             stops.append(Stop(StopReason.FAILED, day))
             continue
         again.append(day)
-    newest = schedule.newest_eligible(now=now, after_days=policy.compact_after_days)
-    days = again + _new_days(tree, newest=newest, first_kept=first_kept)
+    days = again + fresh_days
     # Every day the budget can reach, fetched in one call before the first is read:
     # a day that fails costs nothing, so the ones waiting again may all fail first.
     reached = days[: len(again) + policy.max_periods_per_run]

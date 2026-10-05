@@ -14,10 +14,10 @@ shard lands all of them in one commit:
 
 **Each step chooses its own periods.** The months step 4 closes are chosen
 before any step runs, from the ledger's own marks and the wake's day
-(`_compaction_periods`), and logged once as `PeriodsChosen`; an operator range,
-or the months a migration names, limits that choice, and the window the
-planner named for the other steps does not. Steps 1, 2, 3 and 5 still read the
-window the planner named.
+(`_compaction_periods`), and logged once as `PeriodsChosen`. The scheduled day
+step names its budgeted days after the daily mark and the fixed re-run window.
+An operator range, or the months a migration names, limits both choices.
+Steps 1, 2 and 3 still read the window the planner named.
 
 **The monthly window has a switch of its own.** Steps 3 to 5 delete only files
 whose rows they have just written into a coarser file; the window's drops in
@@ -101,6 +101,7 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
         git_sha=context.git_sha,
     )
     operator_range = (min(months), max(months)) if months else context.operator_range
+    scheduled = operator_range is None and months is None and context.period_range is not None
     if months is None and context.period_range is not None:
         months = frozenset(month_partition.months_between(*context.period_range))
     tree = CompactTree.read(context.state_dir, policy.ledger, context.listing, months=months)
@@ -125,6 +126,7 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
             stamp=stamp,
             identity=identity,
             first_kept=None if reports else first_kept,
+            scheduled=scheduled,
         ),
     )
     tree.finish()
@@ -139,11 +141,11 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     stop = next((held for held in stops if held.because is StopReason.FAILED), None) or next(
         (held for held in stops if held.because is StopReason.CEILING), None
     )
-    if context.period_range is None:
+    if operator_range is None:
         date_range = None
         until = schedule.newest_eligible(now=now, after_days=policy.compact_after_days).isoformat()
     else:
-        date_range = month_partition.day_bounds(*context.period_range)
+        date_range = month_partition.day_bounds(*operator_range)
         until = date_range[1]
     outcome = Pass(
         collection=policy.ledger.value,
