@@ -1,7 +1,7 @@
 
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { nextSort, printCell, sortedRows, type PrintedCell } from '../src/lib/console/explorer/answer';
+import { nextSort, numericBarShare, printCell, sortedRows, type PrintedCell } from '../src/lib/console/explorer/answer';
 import type { Column, Row } from '../src/lib/data/ledger';
 
 test('THE ORACLE: cells print by engine column type, not by JavaScript value', () => {
@@ -46,6 +46,12 @@ test('the first press sorts numbers and days high to low and everything else A t
 	expect(['INTERVAL', 'INTEGER[]', 'STRUCT(a INTEGER)', 'VARCHAR', 'TIME'].map(first)).toEqual(['asc', 'asc', 'asc', 'asc', 'asc']);
 	const big = { name: 'n', type: 'BIGNUM' };
 	expect(sortedRows([{ n: '9' }, { n: '10' }, { n: '2' }], [big], { column: 'n', direction: 'desc' })).toEqual([{ n: '10' }, { n: '9' }, { n: '2' }]);
+});
+
+test('a column draws in-cell bars only when its type is a number, so text that holds digits draws none', () => {
+	const rows: Row[] = [{ n: '2' }, { n: '10' }];
+	expect(numericBarShare({ name: 'n', type: 'INTEGER' }, rows, 0.5)).toBe(10);
+	expect(numericBarShare({ name: 'n', type: 'VARCHAR' }, rows, 0.5)).toBeNull();
 });
 
 test('THE ORACLE: the Data explorer route and explorer components never render cell text as HTML', () => {

@@ -96,6 +96,7 @@ export function nextSort(current: SortSpec, column: Column): SortSpec {
 }
 
 export function numericBarShare(column: Column, rows: readonly Row[], spreadShare: number): number | null {
+	if (!isNumber(classifyType(column.type))) return null;
 	const values = rows.map((row) => Number(rawText(row[column.name]))).filter((n) => Number.isFinite(n) && n >= 0);
 	if (values.length !== rows.length || values.length === 0) return null;
 	const max = Math.max(...values);
