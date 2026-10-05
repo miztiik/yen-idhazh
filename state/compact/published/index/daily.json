@@ -1,317 +1,71 @@
 {
   "entries": [
-    {
-      "bytes": 3928,
-      "covers": "2026-08-01",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-02",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-03",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-04",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-05",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-06",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-07",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-08",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-09",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-10",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-11",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-12",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-13",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-14",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-15",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-16",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-17",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-18",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-19",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-20",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-21",
-      "rows": 0
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-08-22",
-      "rows": 0
-    },
-    {
-      "bytes": 11502,
-      "covers": "2026-08-23",
-      "rows": 137
-    },
-    {
-      "bytes": 36880,
-      "covers": "2026-08-24",
-      "rows": 731
-    },
-    {
-      "bytes": 36020,
-      "covers": "2026-08-25",
-      "rows": 724
-    },
-    {
-      "bytes": 31663,
-      "covers": "2026-08-26",
-      "rows": 621
-    },
-    {
-      "bytes": 19608,
-      "covers": "2026-08-27",
-      "rows": 334
-    },
-    {
-      "bytes": 10621,
-      "covers": "2026-08-28",
-      "rows": 117
-    },
-    {
-      "bytes": 21611,
-      "covers": "2026-08-29",
-      "rows": 366
-    },
-    {
-      "bytes": 23630,
-      "covers": "2026-08-30",
-      "rows": 431
-    },
-    {
-      "bytes": 30805,
-      "covers": "2026-08-31",
-      "rows": 601
-    },
-    {
-      "bytes": 32010,
-      "covers": "2026-09-01",
-      "rows": 627
-    },
-    {
-      "bytes": 29152,
-      "covers": "2026-09-02",
-      "rows": 537
-    },
-    {
-      "bytes": 30586,
-      "covers": "2026-09-03",
-      "rows": 593
-    },
-    {
-      "bytes": 30124,
-      "covers": "2026-09-04",
-      "rows": 582
-    },
-    {
-      "bytes": 21397,
-      "covers": "2026-09-05",
-      "rows": 374
-    },
-    {
-      "bytes": 21848,
-      "covers": "2026-09-06",
-      "rows": 387
-    },
-    {
-      "bytes": 20673,
-      "covers": "2026-09-07",
-      "rows": 357
-    },
-    {
-      "bytes": 17871,
-      "covers": "2026-09-08",
-      "rows": 282
-    },
-    {
-      "bytes": 20747,
-      "covers": "2026-09-09",
-      "rows": 360
-    },
-    {
-      "bytes": 20955,
-      "covers": "2026-09-10",
-      "rows": 365
-    },
-    {
-      "bytes": 21320,
-      "covers": "2026-09-11",
-      "rows": 372
-    },
-    {
-      "bytes": 20920,
-      "covers": "2026-09-12",
-      "rows": 356
-    },
-    {
-      "bytes": 9439,
-      "covers": "2026-09-13",
-      "rows": 75
-    },
-    {
-      "bytes": 6443,
-      "covers": "2026-09-14",
-      "rows": 13
-    },
-    {
-      "bytes": 14907,
-      "covers": "2026-09-15",
-      "rows": 188
-    },
-    {
-      "bytes": 23561,
-      "covers": "2026-09-16",
-      "rows": 364
-    },
-    {
-      "bytes": 18944,
-      "covers": "2026-09-17",
-      "rows": 272
-    },
-    {
-      "bytes": 12497,
-      "covers": "2026-09-18",
-      "rows": 138
-    },
-    {
-      "bytes": 3928,
-      "covers": "2026-09-19",
-      "rows": 0
-    },
-    {
-      "bytes": 20732,
-      "covers": "2026-09-20",
-      "rows": 301
-    },
-    {
-      "bytes": 19895,
-      "covers": "2026-09-21",
-      "rows": 291
-    },
-    {
-      "bytes": 15980,
-      "covers": "2026-09-22",
-      "rows": 210
-    },
-    {
-      "bytes": 21479,
-      "covers": "2026-09-23",
-      "rows": 325
-    },
-    {
-      "bytes": 24260,
-      "covers": "2026-09-24",
-      "rows": 370
-    },
-    {
-      "bytes": 22283,
-      "covers": "2026-09-25",
-      "rows": 342
-    },
-    {
-      "bytes": 23384,
-      "covers": "2026-09-26",
-      "rows": 366
-    },
-    {
-      "bytes": 20639,
-      "covers": "2026-09-27",
-      "rows": 309
-    },
-    {
-      "bytes": 21603,
-      "covers": "2026-09-28",
-      "rows": 318
-    },
-    {
-      "bytes": 22243,
-      "covers": "2026-09-29",
-      "rows": 340
-    },
-    {
-      "bytes": 22735,
-      "covers": "2026-09-30",
-      "rows": 347
-    },
-    {
-      "bytes": 20849,
-      "covers": "2026-10-01",
-      "rows": 311
-    }
+    {"bytes": 3928,"covers": "2026-08-01","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-02","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-03","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-04","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-05","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-06","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-07","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-08","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-09","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-10","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-11","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-12","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-13","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-14","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-15","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-16","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-17","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-18","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-19","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-20","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-21","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-08-22","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 11502,"covers": "2026-08-23","lost_days": [],"rows": 137,"set_aside": 0,"state": "packed"},
+    {"bytes": 36880,"covers": "2026-08-24","lost_days": [],"rows": 731,"set_aside": 0,"state": "packed"},
+    {"bytes": 36020,"covers": "2026-08-25","lost_days": [],"rows": 724,"set_aside": 0,"state": "packed"},
+    {"bytes": 31663,"covers": "2026-08-26","lost_days": [],"rows": 621,"set_aside": 0,"state": "packed"},
+    {"bytes": 19608,"covers": "2026-08-27","lost_days": [],"rows": 334,"set_aside": 0,"state": "packed"},
+    {"bytes": 10621,"covers": "2026-08-28","lost_days": [],"rows": 117,"set_aside": 0,"state": "packed"},
+    {"bytes": 21611,"covers": "2026-08-29","lost_days": [],"rows": 366,"set_aside": 0,"state": "packed"},
+    {"bytes": 23630,"covers": "2026-08-30","lost_days": [],"rows": 431,"set_aside": 0,"state": "packed"},
+    {"bytes": 30805,"covers": "2026-08-31","lost_days": [],"rows": 601,"set_aside": 0,"state": "packed"},
+    {"bytes": 32010,"covers": "2026-09-01","lost_days": [],"rows": 627,"set_aside": 0,"state": "packed"},
+    {"bytes": 29152,"covers": "2026-09-02","lost_days": [],"rows": 537,"set_aside": 0,"state": "packed"},
+    {"bytes": 30586,"covers": "2026-09-03","lost_days": [],"rows": 593,"set_aside": 0,"state": "packed"},
+    {"bytes": 30124,"covers": "2026-09-04","lost_days": [],"rows": 582,"set_aside": 0,"state": "packed"},
+    {"bytes": 21397,"covers": "2026-09-05","lost_days": [],"rows": 374,"set_aside": 0,"state": "packed"},
+    {"bytes": 21848,"covers": "2026-09-06","lost_days": [],"rows": 387,"set_aside": 0,"state": "packed"},
+    {"bytes": 20673,"covers": "2026-09-07","lost_days": [],"rows": 357,"set_aside": 0,"state": "packed"},
+    {"bytes": 17871,"covers": "2026-09-08","lost_days": [],"rows": 282,"set_aside": 0,"state": "packed"},
+    {"bytes": 20747,"covers": "2026-09-09","lost_days": [],"rows": 360,"set_aside": 0,"state": "packed"},
+    {"bytes": 20955,"covers": "2026-09-10","lost_days": [],"rows": 365,"set_aside": 0,"state": "packed"},
+    {"bytes": 21320,"covers": "2026-09-11","lost_days": [],"rows": 372,"set_aside": 0,"state": "packed"},
+    {"bytes": 20920,"covers": "2026-09-12","lost_days": [],"rows": 356,"set_aside": 0,"state": "packed"},
+    {"bytes": 9439,"covers": "2026-09-13","lost_days": [],"rows": 75,"set_aside": 0,"state": "packed"},
+    {"bytes": 6443,"covers": "2026-09-14","lost_days": [],"rows": 13,"set_aside": 0,"state": "packed"},
+    {"bytes": 14907,"covers": "2026-09-15","lost_days": [],"rows": 188,"set_aside": 0,"state": "packed"},
+    {"bytes": 23561,"covers": "2026-09-16","lost_days": [],"rows": 364,"set_aside": 0,"state": "packed"},
+    {"bytes": 18944,"covers": "2026-09-17","lost_days": [],"rows": 272,"set_aside": 0,"state": "packed"},
+    {"bytes": 12497,"covers": "2026-09-18","lost_days": [],"rows": 138,"set_aside": 0,"state": "packed"},
+    {"bytes": 3928,"covers": "2026-09-19","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 20732,"covers": "2026-09-20","lost_days": [],"rows": 301,"set_aside": 0,"state": "packed"},
+    {"bytes": 19895,"covers": "2026-09-21","lost_days": [],"rows": 291,"set_aside": 0,"state": "packed"},
+    {"bytes": 15980,"covers": "2026-09-22","lost_days": [],"rows": 210,"set_aside": 0,"state": "packed"},
+    {"bytes": 21479,"covers": "2026-09-23","lost_days": [],"rows": 325,"set_aside": 0,"state": "packed"},
+    {"bytes": 24260,"covers": "2026-09-24","lost_days": [],"rows": 370,"set_aside": 0,"state": "packed"},
+    {"bytes": 22283,"covers": "2026-09-25","lost_days": [],"rows": 342,"set_aside": 0,"state": "packed"},
+    {"bytes": 23384,"covers": "2026-09-26","lost_days": [],"rows": 366,"set_aside": 0,"state": "packed"},
+    {"bytes": 20639,"covers": "2026-09-27","lost_days": [],"rows": 309,"set_aside": 0,"state": "packed"},
+    {"bytes": 21603,"covers": "2026-09-28","lost_days": [],"rows": 318,"set_aside": 0,"state": "packed"},
+    {"bytes": 22243,"covers": "2026-09-29","lost_days": [],"rows": 340,"set_aside": 0,"state": "packed"},
+    {"bytes": 22735,"covers": "2026-09-30","lost_days": [],"rows": 347,"set_aside": 0,"state": "packed"},
+    {"bytes": 20849,"covers": "2026-10-01","lost_days": [],"rows": 311,"set_aside": 0,"state": "packed"},
+    {"bytes": 19491,"covers": "2026-10-02","lost_days": [],"rows": 281,"set_aside": 0,"state": "packed"},
+    {"bytes": 19731,"covers": "2026-10-03","lost_days": [],"rows": 286,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "published",
   "period": "daily",
-  "version": "2026-10-01T16:50"
+  "version": "2026-10-04"
 }
