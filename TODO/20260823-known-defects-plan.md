@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-04
 
-**Twenty-eight defects are open.** Three of them need evidence or a ruling before any code
+**Thirty-one defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -30,6 +30,11 @@ find its cause. Defects 53 and 54 were filed the same day from two findings plan
 50's rows wrote down and never filed, and 54 has a date: the first squash that
 rewrites history is due on 2026-10-29. Defect 55 was filed on 2026-10-04 from
 Fowler's review of plan 60: a page names a test that two pull requests deleted.
+Defects 56 to 58 were filed the same day: three tests that each failed once in
+the checks of plan 60's row 7 and passed when run again. The runs' own records
+settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
+57 is the fourth that needs evidence, because one stall is not enough to find
+its cause.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -93,6 +98,110 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
+| 56 | A byte-range test counts a correct 304 as a failure | 1 | **OPEN - the cause is settled; one test changes** |
+| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
+| 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
+
+## 58 - A ledger test expects an order for two runs written in the same millisecond (OPEN)
+
+**A ledger test failed once because two runs of one day came back in the
+other order.**
+`backend/tests/test_ledger.py::test_a_second_attempt_replaces_its_first_and_another_run_is_kept`
+writes three visual-prune files for one day, back to back: run 1, run 1's
+second attempt, then run 2. It expects run 1's row before run 2's. In CI run
+37221095434, attempt 1, at about 17:37 UTC on 2026-10-04, it read run 2's row
+first, and a re-run of the job passed. The likely cause, an estimate, is how a
+day's files are ordered: by the millisecond each was written, then by the
+file's id (`_order` in `backend/idhazh/ledger/raw_files.py`). The part of that
+id after the clock is a hash (`file_id` in `backend/idhazh/ledger/filenames.py`),
+so two files written in one millisecond sort by the hash, which that function's
+own docstring calls arbitrary.
+
+**Doing nothing costs a red `gates` job now and then, and a re-run.** The read
+is not wrong. `load_visual_prunes` promises the oldest day first and one row
+per run, not an order for two runs of one day, and nothing outside the tests
+calls it.
+
+**The next move is a worker's.** Write the three files with the clock held at
+one millisecond and see whether the order follows the hash; that confirms the
+cause. Then the test compares the day's rows without an order, because what it
+is about is the attempt that replaced its first and the run that was kept.
+Level 1 - one test.
+
+Found by plan 60's row 7 (#1286), whose checks went red three times with three
+different tests, and filed on 2026-10-04.
+
+## 57 - A day page stopped drawing during a browser test, and the test waited three minutes for it (OPEN)
+
+**One browser test waited out its whole 180-second limit for a page that had
+stopped drawing.** "Every drawn string resolves to a size on a 390 px screen"
+(`frontend/tests/item-visual.spec.ts`, line 547) timed out in CI run
+37220465924, attempt 1, at 17:32 UTC on 2026-10-04. It stopped inside
+`revealDayDrawings` (`frontend/tests/support/day-drawings.ts`), which scrolls
+the day one screen at a time and waits for two animation frames after each
+step. The test's trace shows the scroll start at 17:29:26.790 UTC, the page's
+last drawn frame at 17:29:26.937 and its last request at 17:29:26.948. Nothing
+was drawn or asked for in the three minutes after. The next run, on the next
+commit, passed the test, and on the last green run of that pull request it
+took 1.6 seconds.
+
+**The runner was not slow, though row 7's report read it that way.** The 374
+other tests that the red run and the last green run share took 335 seconds in
+all on the red run and 361 on the green one: 7 percent less time, not more. A
+page script that never finished and a browser that stopped drawing look the
+same in this trace, so it cannot say which one happened.
+
+**Doing nothing costs a red browser job each time it comes back, three runner
+minutes and a re-run.** How often that is, nobody knows: it has been seen once.
+
+**The next move is a worker's: make the stall come back where it can be
+watched.** Run this one test a few hundred times with Playwright's
+`--repeat-each`. At 1.6 seconds a run, 400 runs take about 11 minutes, an
+estimate. A stall caught that way shows whether a page script or the browser
+stopped. If none comes back, a second stall in CI opens a row, as defect 51
+does. The run's trace is kept in its `playwright-traces` artifact until
+2026-10-11. A raised timeout or a retry would hide the stall, not explain it
+(CLAUDE.md Guardrail #5). Level 2 - the fix is in the day page or in a helper
+that three specs share.
+
+Found by plan 60's row 7 (#1286), whose checks went red three times with three
+different tests, and filed on 2026-10-04.
+
+## 56 - A byte-range test counts a correct 304 as a failure (OPEN)
+
+**A browser test of reading a year file by byte range failed once on a 304
+that its own setup makes correct.** "A year file whose ETag changed after the
+browser kept part of it is still read by byte range"
+(`frontend/tests/ledger-ranges.spec.ts`, line 310 today and 271 on the commit
+that failed) failed in CI run 37218615995, attempt 1, at about 17:00 UTC on
+2026-10-04, and a re-run of the job passed. The test lets the browser keep an
+answer for 1 second, reads the year file, gives the file a new ETag (its
+`redeploy` step), waits 2 seconds, reads the file again from a new page, and
+expects the test's host to answer every GET with a 206.
+
+**The host's own request log settles the cause.** The run's
+`playwright-traces` artifact keeps it, as `ledger-ranges/requests.json`, until
+2026-10-11. The second read asked for byte 0 and got a 206, then for the end
+of the file. Then, before fetching the middle, the browser checked the copy of
+byte 0 it held from that same read: the request names the file's new ETag in
+`If-None-Match`, which asks whether a held copy is still current. The browser
+asks that only when its copy is older than the 1 second the test allows, so
+the read took longer than that, and the host answered 304, which is right. The
+read's answer still matched the disk, which the test checks first.
+
+**Doing nothing costs a red browser job whenever that read takes more than a
+second, and a re-run.** The site is not wrong: Pages lets the browser keep an
+answer for 600 seconds, and 304 is the right answer to a browser checking its
+copy.
+
+**The next move is a worker's.** Only what the first read kept has to be out
+of date, so the test can let the browser keep answers for the site's 600
+seconds again before the second read starts. Every GET of the second read is
+then a 206, and the test still reads a file whose ETag changed. Level 1 - one
+test.
+
+Found by plan 60's row 7 (#1286), whose checks went red three times with three
+different tests, and filed on 2026-10-04.
 
 ## 55 - The query-door page names a deleted test, so nothing may hold the rule it states (OPEN)
 

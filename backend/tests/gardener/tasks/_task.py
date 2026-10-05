@@ -3,7 +3,9 @@
 Through the task's own module and the committed declaration, with only the
 knobs a test names changed - `dry_run`, the window, the ceiling - so a test
 exercises the task as it ships. The folders the task walks are worked out by
-the runner's own `folders_of`, from the tree the test built.
+the runner's own `folders_of`, from the tree the test built. The listing names
+those folders whole, or, for a test that asks for a wake, only the period paths
+the runner names for the window it schedules.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from idhazh.gardener import registry, runner
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.one_at_a_time import Pass
+from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 
 from .._garden import COMMITTED_DECLARATIONS, named_task_modules
 from ._oracle_tree import REMOVALS, RUN_ID, TODAY
@@ -65,15 +68,29 @@ def context_for(
     *,
     today: date = TODAY,
     period_range: tuple[str, str] | None = None,
+    wake: bool = False,
     **changed: Any,
 ) -> TaskContext:
-    """The context the runner would hand this task over `root`, with these knobs changed."""
+    """The context the runner would hand this task over `root`, with these knobs changed.
+
+    With `wake`, it is what a scheduled wake hands it: the window the runner
+    schedules for `today`, and a listing that names only that window's period
+    paths, so a step that reads anything else has to name it first.
+    """
+    if wake and period_range is not None:
+        raise ValueError("a wake reads the window the runner schedules, not a named range")
     tasks = declared()
     policy = tasks[name]
     if changed:
         policy = _POLICY.validate_python({**policy.model_dump(mode="json"), **changed})
         tasks[name] = policy
     folders = runner.folders_of(name, tasks, root, committed_folders(root, tasks))
+    listed = runner.listed_folders(policy, folders)
+    if wake:
+        period_range = scheduled_range(name, policy, today)
+        named = paths_for_task(root, name, policy, period_range, today=today)
+    else:
+        named = tuple(root / folder for folder in listed)
     return TaskContext(
         state_dir=root / ledger.STATE_DIRNAME,
         repo_root=root,
@@ -85,14 +102,7 @@ def context_for(
         shard=0,
         git_sha=GIT_SHA,
         owned_folders=folders.walk,
-        listing=FileListing.from_disk(
-            root,
-            runner.listed_folders(policy, folders),
-            paths=(
-                root / folder
-                for folder in runner.listed_folders(policy, folders)
-            ),
-        ),
+        listing=FileListing.from_disk(root, listed, paths=named),
         period_range=period_range,
     )
 
@@ -103,12 +113,15 @@ def run_task(
     *,
     today: date = TODAY,
     period_range: tuple[str, str] | None = None,
+    wake: bool = False,
     **changed: Any,
 ) -> Pass:
     """Run one shipped task, found the way the runner finds it."""
     policy = declared()[name]
     held = registry.bind(name, policy.kind, named_task_modules())
-    return held.run(context_for(name, root, today=today, period_range=period_range, **changed))
+    return held.run(
+        context_for(name, root, today=today, period_range=period_range, wake=wake, **changed)
+    )
 
 
 def oracle() -> dict[str, Any]:

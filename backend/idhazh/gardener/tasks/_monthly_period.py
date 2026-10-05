@@ -166,13 +166,6 @@ def _waiting(tree: CompactTree, month: str) -> bool:
     return any(day.startswith(f"{month}-") for day in tree.raw_days)
 
 
-def _recovered(tree: CompactTree, note: RecoveryNote, covers: str) -> None:
-    """Say once what the pass recovered instead of stopping, and the period it is about."""
-    logger.warning(
-        "a period was recovered ledger=%s period=%s note=%s", tree.ledger.value, covers, note
-    )
-
-
 def _refused(
     tree: CompactTree, month: str, why: str, fault: ledger.LedgerFault | None = None
 ) -> tuple[Stop, ...]:
@@ -208,7 +201,7 @@ def _keep(tree: CompactTree, adopted: dict[str, ledger_marks.Adopted]) -> None:
     """Index each adopted day as `packed`, and say so once a day."""
     for day, held in adopted.items():
         tree.daily[day] = held.entry
-        _recovered(tree, RecoveryNote.INDEX_REBUILT, day)
+        tree.note_recovery(RecoveryNote.INDEX_REBUILT, day)
     if adopted:
         tree.mark_index(Period.DAILY)
 
@@ -308,7 +301,7 @@ def _close[C: Contract](
     if own is not None and not sources:
         tree.monthly[month] = own.entry
         tree.mark_index(Period.MONTHLY)
-        _recovered(tree, RecoveryNote.INDEX_REBUILT, month)
+        tree.note_recovery(RecoveryNote.INDEX_REBUILT, month)
         _forget_days(tree, month)
         return ()
     try:
@@ -332,10 +325,10 @@ def _close[C: Contract](
     _keep(tree, adopted)
     for day in holes:
         if day not in adopted:
-            _recovered(tree, RecoveryNote.RECORDED_LOST, day)
+            tree.note_recovery(RecoveryNote.RECORDED_LOST, day)
     if own is not None:
         tree.monthly[month] = own.entry.model_copy(update={"lost_days": lost})
-        _recovered(tree, RecoveryNote.INDEX_REBUILT, month)
+        tree.note_recovery(RecoveryNote.INDEX_REBUILT, month)
     elif rows:
         built = ledger.render_period(
             tree.state_dir,
