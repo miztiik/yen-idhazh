@@ -47,7 +47,10 @@ def test_a_summary_that_flattened_a_hedge_reaches_the_reader_as_medium() -> None
 
 
 def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """A scorer load failure costs eval rows and nothing else."""
+    """The first real runner attempt died here: a transformers upgrade broke the
+    checkpoint's own modelling code and all four workers exited before
+    summarizing anything. Losing the scorer must cost eval rows and nothing else.
+    """
 
     def explode(self: object) -> None:
         raise AttributeError("'HHEMv2ForSequenceClassification' has no 'all_tied_weights_keys'")
@@ -108,7 +111,11 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     fast_settings = config.Settings(
         app=settings.app,
         models=settings.models.model_copy(
-            update={"summarizer": summarizer.model_copy(update={"request_timeout_minutes": 0.001})}
+            update={
+                "summarizer": summarizer.model_copy(
+                    update={"request_timeout_minutes": 0.001}
+                )
+            }
         ),
         appearance=settings.appearance,
         sources=settings.sources,
@@ -143,9 +150,9 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     # an unreachable server cannot do - so the assertion documented the defect
     # instead of catching it.
     assert {summary.failure_code for summary in summaries} == {FailureCode.MODEL_TIMED_OUT}
-    assert all("did not answer" in (summary.failure_detail or "") for summary in summaries), (
-        "the detail has to send an operator to the output budget, not to the process"
-    )
+    assert all(
+        "did not answer" in (summary.failure_detail or "") for summary in summaries
+    ), "the detail has to send an operator to the output budget, not to the process"
 
 
 def test_a_shard_out_of_clock_stops_itself_instead_of_being_killed(

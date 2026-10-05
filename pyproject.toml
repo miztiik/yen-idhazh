@@ -55,8 +55,8 @@ dependencies = [
     # can break that claim without breaking anything an API test would notice.
     # A range here means two runners may disagree about the same day.
     "onnxruntime==1.29.0",
-    # Transformers 5.17 requires the typed tokenizer interface from 0.23.1.
-    "tokenizers>=0.23.1",
+    # Current Transformers 5 requires the typed tokenizer interface.
+    "tokenizers>=0.23.2",
     # One reading of robots.txt on every interpreter we support. The standard
     # library's `urllib.robotparser` disagrees with itself across the declared
     # range: 3.12 takes the first matching group and the first matching rule,

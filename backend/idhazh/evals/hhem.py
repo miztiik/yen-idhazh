@@ -73,6 +73,20 @@ class Scorer(Protocol):
     def score(self, premise: str, hypothesis: str) -> float: ...
 
 
+def _with_transformers_5_tied_weights(remote_class: type[Any]) -> type[Any]:
+    """Add the tied-weight map the pinned HHEM remote class does not initialize."""
+
+    class HHEMv2ForSequenceClassificationCompat(remote_class):  # type: ignore[misc]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.all_tied_weights_keys = {
+                "t5.transformer.encoder.embed_tokens.weight": "t5.transformer.shared.weight",
+                **(getattr(self, "_tied_weights_keys", None) or {}),
+            }
+
+    return HHEMv2ForSequenceClassificationCompat
+
+
 def chunks(text: str, size: int, overlap: int) -> list[str]:
     """Overlapping windows of exactly `size` words, the last one ending on the last word.
 
@@ -132,16 +146,8 @@ class HhemScorer:
             HHEM_MODEL,
             revision=self.revision,
         )
-
-        class HHEMv2ForSequenceClassificationCompat(remote_class):
-            @property
-            def all_tied_weights_keys(self) -> dict[str, str]:
-                return {
-                    "t5.transformer.encoder.embed_tokens.weight": "t5.transformer.shared.weight",
-                    **(getattr(self, "_tied_weights_keys", None) or {}),
-                }
-
-        self.model = HHEMv2ForSequenceClassificationCompat.from_pretrained(
+        compatible_class = _with_transformers_5_tied_weights(remote_class)
+        self.model = compatible_class.from_pretrained(
             HHEM_MODEL,
             config=config,
             revision=self.revision,
