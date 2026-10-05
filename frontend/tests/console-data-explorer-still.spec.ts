@@ -1,6 +1,6 @@
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
-import { explorerConfig } from '../src/lib/server/config';
+import { consoleConfig, explorerConfig } from '../src/lib/server/config';
 import { statusSentence, statusWithHeld } from '../src/lib/console/explorer/status';
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -216,7 +216,7 @@ test('M8: every workbench region keeps its idle block size at all four widths', 
 			expect(sizes.regions.columns, `${view.width} columns`).toBeCloseTo(editorHeight + statusHeight, 0);
 		}
 		expect(sizes.regions.answer, `${view.width} answer`).toBeCloseTo(view.height * explorerConfig().answer_svh / 100, 0);
-		expect(sizes.regions.chart, `${view.width} chart`).toBeCloseTo(sizes.control + 220 + 4 * sizes.rem, 0);
+		expect(sizes.regions.chart, `${view.width} chart`).toBeCloseTo(sizes.control + consoleConfig().chart_height + 4 * sizes.rem, 0);
 	}
 });
 
@@ -386,6 +386,49 @@ test('M16: phone width has no document overflow and controls stay inside their r
 	});
 	expect(overflow.documentFits).toBe(true);
 	expect(overflow.controlsFit, overflow.offenders.join('\n')).toBe(true);
+});
+
+test('no workbench control is cut off, idle or after a run, at any width', async ({ page }) => {
+	for (const view of VIEWS) {
+		await page.setViewportSize(view);
+		await openExplorer(page);
+		for (const phase of ['idle', 'after a run'] as const) {
+			if (phase === 'after a run') {
+				await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
+				await runExplorer(page);
+			}
+			const cut = await page.evaluate(() => {
+				// These regions never scroll, so a control outside them, or content past their
+				// height, is cut off. The rails scroll by design, so they are held only sideways.
+				const whole = ['toolbar', 'questions', 'editor'];
+				const sideways = ['ledgers', 'columns'];
+				const offenders: string[] = [];
+				for (const name of [...whole, ...sideways]) {
+					const region = document.querySelector<HTMLElement>(`[data-workbench-region="${name}"]`);
+					if (region === null) {
+						offenders.push(`${name}: the region is missing`);
+						continue;
+					}
+					const both = whole.includes(name);
+					if (both && region.scrollHeight > region.clientHeight + 0.5) {
+						offenders.push(`${name}: ${region.scrollHeight - region.clientHeight}px of content is hidden`);
+					}
+					const box = region.getBoundingClientRect();
+					for (const control of region.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary')) {
+						const rect = control.getBoundingClientRect();
+						if (rect.width === 0 || rect.height === 0 || getComputedStyle(control).visibility === 'hidden') continue;
+						const across = rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
+						const down = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
+						if (!across || (both && !down)) {
+							offenders.push(`${name}: ${control.tagName.toLowerCase()} "${(control.textContent ?? '').trim().slice(0, 40)}" at ${Math.round(rect.left)},${Math.round(rect.top)}-${Math.round(rect.right)},${Math.round(rect.bottom)} outside ${Math.round(box.left)},${Math.round(box.top)}-${Math.round(box.right)},${Math.round(box.bottom)}`);
+						}
+					}
+				}
+				return offenders;
+			});
+			expect(cut, `${view.width}px, ${phase}`).toEqual([]);
+		}
+	}
 });
 
 test('M17: keyboard order follows the visual order at desktop and phone widths', async ({ page }) => {

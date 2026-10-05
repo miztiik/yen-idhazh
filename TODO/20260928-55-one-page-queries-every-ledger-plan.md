@@ -61,7 +61,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 6 | Reach past the cap, the glyphs, the gates, the pictures and the how-to | 4, 5 | F | DONE | p55r6 | #1263 | p55-r6-worker |
 | 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | #1229 | p55-r7-worker |
 | 8 | The Data explorer draws the workbench chrome | 6 | G | DONE | p55r8 | #1298 | p55-n1-worker |
-| 9 | Run moves nothing on the Data explorer | 8 | H | DONE | p55r9 | #1310 | p55-redesign-worker |
+| 9 | Run moves nothing on the Data explorer | 8 | H | DONE | p55r9 | #1310 | p55-n2-worker |
 | 10 | The Data explorer reaches the reference's density | 9 | I | PENDING | - | - | - |
 
 **Ten rows, ten pull requests.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. No row waits for an owner's answer (section 0, "Decided 2026-10-02").
@@ -1063,13 +1063,13 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 ### Row #9 - Run moves nothing on the Data explorer
 
 - **Scope:** The workbench surface becomes fixed-region layout: fixed editor, fixed answer and chart regions, fixed column rail box that may flip between ledger and answer columns, `RunStatus`, `Notice`, floating history and question disclosures, and no in-flow notices.
-- **M checks:** M8 through M13 and M15 through M17, including the layout-shift spec that sums every layout-shift entry, checks boxes within 0.5 px, and verifies `scrollY` and `scrollHeight` do not move. **M7 moves to row 10** because the top edge stays above 300 px only after row 10's density pass folds the question chips with K6 and removes the extra row that currently pushes the editor down.
+- **M checks:** M8 through M13 and M15 through M17, including the layout-shift spec that sums every layout-shift entry, checks boxes within 0.5 px, and verifies `scrollY` and `scrollHeight` do not move. **M7, and M8's toolbar and question-row heights (Table D's D2 and D3), move to row 10**: both need row 10's density pass and K6's chip fold. Row 9 lets the toolbar and the question row take their content's height, because Run changes neither, and a test fails when any control in them, in the editor or in the rails is cut off.
 - **Specified in:** Jony's and Susan's redesign files, 2026-10-04; owner ruling 2026-10-04.
 
 ### Row #10 - The Data explorer reaches the reference's density
 
 - **Scope:** The workbench adopts the density tokens and region-specific type from Susan's table, finishes the rails and table rows, makes the chart use its measured width, and refreshes the judged-panel sufficiency drivers and captures after the layout is stable.
-- **M checks:** M7, M14, M18 and M19. M7 lands here because row 10's density pass folds the question chips with K6, which is what gets the editor frame top edge to 300 px or above. The chart matches its region width, the judged answer and chart panels pass the sufficiency gates or carry rationale, and every font size inside `.workbench` stays on the declared scale.
+- **M checks:** M7, M14, M18 and M19, and M8's D2 and D3. Measured on row 9 at 1440 x 900: the editor frame's top is at 315 px, 15 px past M7's 300. Above it stand the site header (88 px), the strip (33 px), the toolbar (53 px), the question row (97 px, its chips on two lines) and the editor head (44 px). Folding the chips onto one line with K6 brings the question row to D3's one row, about 52 px, which puts the frame's top near 270 px. Table D's D6 below 1024 px, where each rail is a 2.75rem summary, also lands here: row 9 keeps the rails as fixed scroll boxes at every width. The chart matches its region width, the judged answer and chart panels pass the sufficiency gates or carry rationale, and every font size inside `.workbench` stays on the declared scale.
 - **Specified in:** Jony's and Susan's redesign files, 2026-10-04; owner ruling 2026-10-04.
 
 ## Dependent plans
