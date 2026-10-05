@@ -71,14 +71,12 @@ def newest_eligible_month(*, now: datetime, after_days: int) -> str:
     return f"{total // 12:04d}-{total % 12 + 1:02d}"
 
 
-def year_ended_at(year: str) -> datetime:
-    """The instant a UTC year closed: 00:00 UTC on 1 January of the year after it.
+def newest_eligible_year(*, now: datetime, after_days: int) -> str:
+    """The newest `YYYY` year at least `after_days` whole days past its end at `now`.
 
-    `year` is `YYYY`, the stamp a yearly period carries.
+    A year ends at 00:00 UTC on 1 January of the year after it, so it is
+    eligible once that 1 January is at least `after_days` days before `now`: the
+    year before the one holding the day `after_days` back.
     """
-    return datetime(int(year) + 1, 1, 1, tzinfo=UTC)
-
-
-def is_year_eligible(year: str, *, now: datetime, after_days: int) -> bool:
-    """Whether at least `after_days` whole days have passed since `year` ended."""
-    return now - year_ended_at(year) >= timedelta(days=after_days)
+    back = now.astimezone(UTC).date() - timedelta(days=after_days)
+    return f"{back.year - 1:04d}"

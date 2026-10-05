@@ -34,7 +34,8 @@ class StartReason(StrEnum):
     #: starts at the oldest raw day the window keeps, or takes nothing.
     KEEP_LINE = "keep-line"
     #: An operator's range decided it: the range ends before the step's first
-    #: period, or it leaves out the period the step must take first.
+    #: period, it leaves out the period the step must take first, or it holds
+    #: no whole period at the step's grain.
     OPERATOR_RANGE = "operator-range"
     #: The ledger holds nothing for the step to start from.
     NONE = "none"
@@ -124,6 +125,12 @@ class PeriodsChosen(Model):
             "or None when it keeps every month."
         )
     )
+    newest_packable_year: YearStamp | None = Field(
+        description=(
+            "The newest UTC year at least `monthly_keep_days` whole days past its end, at "
+            "00:00 UTC on the wake's day. None when the declaration packs no year."
+        )
+    )
     cap: int = Field(
         ge=1, description="`max_periods_per_run`: the most periods one step takes on this wake."
     )
@@ -135,6 +142,12 @@ class PeriodsChosen(Model):
     )
     month_deletes_dry_run: bool = Field(
         description="Whether the monthly window's deletes only report on this wake."
+    )
+    years: StepChoice | None = Field(
+        description=(
+            "The UTC years the year step may pack. An operator range limits them to the whole "
+            "calendar years it holds. None when the declaration packs no year."
+        )
     )
     months: StepChoice = Field(description="The months the month step may close.")
     days: StepChoice = Field(
@@ -155,15 +168,27 @@ class PeriodsChosen(Model):
 
     @model_validator(mode="after")
     def _each_step_chooses_its_own_grain_and_every_span_runs_forward(self) -> Self:
-        """The month step chooses UTC months, the day step UTC days, and every span runs forward."""
+        """Each step chooses periods of its own grain, every span runs forward, and years pair up.
+
+        A declaration that packs years has a year line and a year choice; one that
+        packs none has neither.
+        """
+        if (self.newest_packable_year is None) != (self.years is None):
+            raise ValueError(
+                "a year line and a year choice come together: a declaration that packs years "
+                "has both, and one that packs none has neither"
+            )
         spans = (("an operator range", self.operator_range), ("a re-run span", self.rerun_span))
         for named, span in spans:
             if span is not None and span[0] > span[1]:
                 raise ValueError(f"{named} runs forward: {span[0]} comes after {span[1]}")
         for step, period, choice in (
+            ("year", Period.YEARLY, self.years),
             ("month", Period.MONTHLY, self.months),
             ("day", Period.DAILY, self.days),
         ):
+            if choice is None:
+                continue
             for stamp in (choice.first, choice.last, choice.resume_from):
                 if stamp is None:
                     continue
