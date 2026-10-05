@@ -13,7 +13,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-chart-lifetime', 'console-chart-pending', 'console-charts-rule',
 		'console-chrome', 'console-cold-load', 'console-compression', 'console-coverage',
 		'console-data-explorer', 'console-data-explorer-cells', 'console-data-explorer-still',
-		'console-disk-reads', 'console-doubt', 'console-extraction', 'console-failure',
+		'console-disk-reads', 'console-doubt', 'console-explorer-rails', 'console-extraction', 'console-failure',
 		'console-failures', 'console-flow', 'console-frame',
 		'console-item-cost', 'console-judgement-agreement', 'console-judgement-holdout',
 		'console-judgement-line', 'console-judgement-merges', 'console-judgement-verdict',
@@ -33,6 +33,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	logic: [
 		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'console-data-explorer-address', 'console-data-explorer-gaps', 'console-data-explorer-keep', 'console-data-explorer-shape',
+		'explorer-column-groups', 'explorer-type-colour',
 		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
 		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data',
 		'day-shards',

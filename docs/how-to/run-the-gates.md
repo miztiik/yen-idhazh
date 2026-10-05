@@ -779,7 +779,11 @@ component's own directory, so a relative import inside it resolves from
 `frontend/test-results/` and finds nothing, while a `$lib/...` import still
 resolves. Write the component's imports through `$lib` and hand it its data as
 props; `frontend/tests/support/server-render.ts` compiles a component with its
-children, pointing each child's import at the child's compiled copy. The
+children, pointing each child's import at the child's compiled copy. A
+build-time constant is missing there too: `Icon.svelte` reads
+`__ICON_STROKE_PX__`, which `vite.config.ts` defines from
+`iconsConfig().stroke_px`, so a spec that renders it sets that global the same
+way first, or `render` throws `ReferenceError`. The
 alternative is a route that exists only to host a test, and that route ships to
 a reader.
 
