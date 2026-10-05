@@ -1,4 +1,5 @@
 import type { Column, DateStamp, Row } from '../../data/slice-shapes';
+import { classifyType, isDay, isNumber, type TypeFamily } from './type-family';
 
 export type ExplorerChartType = 'dateSeries' | 'rankedList' | 'pairedScatter' | 'distribution';
 
@@ -76,16 +77,8 @@ export type NoShape = {
 
 export type ExplorerShape = DateSeriesShape | RankedListShape | PairedScatterShape | DistributionShape | NoShape;
 
-const DATE_TYPES = new Set(['DATE', 'TIMESTAMP', 'TIMESTAMP WITH TIME ZONE', 'TIMESTAMPTZ']);
-const NUMERIC_TYPES = new Set(['TINYINT', 'SMALLINT', 'INTEGER', 'INT', 'BIGINT', 'HUGEINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT', 'FLOAT', 'DOUBLE', 'REAL', 'DECIMAL', 'NUMERIC']);
-const TEXT_TYPES = new Set(['VARCHAR', 'TEXT', 'STRING', 'UUID']);
-
-function normalizedType(column: Column): string {
-	return column.type.trim().replace(/\(.*/, '').toUpperCase();
-}
-
-function columnsOf(columns: readonly Column[], types: ReadonlySet<string>): string[] {
-	return columns.filter((column) => types.has(normalizedType(column))).map((column) => column.name);
+function columnsOf(columns: readonly Column[], holds: (family: TypeFamily) => boolean): string[] {
+	return columns.filter((column) => holds(classifyType(column.type))).map((column) => column.name);
 }
 
 /** A cell's number, or `null` when it holds none. The door returns every cell as text and a
@@ -133,9 +126,9 @@ function biggestRow(rows: readonly Row[], column: string): Row | undefined {
 }
 
 export function chooseExplorerShapes(columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): readonly ExplorerShape[] {
-	const dateColumns = columnsOf(columns, DATE_TYPES);
-	const numericColumns = columnsOf(columns, NUMERIC_TYPES);
-	const textColumns = columnsOf(columns, TEXT_TYPES);
+	const dateColumns = columnsOf(columns, isDay);
+	const numericColumns = columnsOf(columns, isNumber);
+	const textColumns = columnsOf(columns, (family) => family === 'text');
 	const shapes: ExplorerShape[] = [];
 
 	if (numericColumns.length === 0) {

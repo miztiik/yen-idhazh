@@ -1,5 +1,6 @@
 
 import type { Column, Row } from '$lib/data/ledger';
+import { classifyType, isDay, isNumber } from './type-family';
 
 export type SortDirection = 'asc' | 'desc' | null;
 export type SortSpec = { column: string; direction: SortDirection };
@@ -19,10 +20,6 @@ function numberText(value: number): string {
 	return value.toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
 }
 
-function typeName(column: Column): string {
-	return column.type.toUpperCase();
-}
-
 function rawText(value: Row[string]): string {
 	if (value === null) return 'null';
 	if (typeof value === 'string') return value;
@@ -34,34 +31,40 @@ function rawText(value: Row[string]): string {
 export function printCell(column: Column, value: Row[string]): PrintedCell {
 	if (value === null || rawText(value).toUpperCase() === 'NULL') return { text: 'null', kind: 'null' };
 	const text = rawText(value);
-	const type = typeName(column);
-	if (/^U?BIGINT$|^INTEGER$|^U?INTEGER$|^SMALLINT$|^TINYINT$/.test(type)) {
-		return /^-?\d+$/.test(text) && text.replace('-', '').length <= 15
-			? { text: groupedInt(text), kind: 'number' }
-			: { text, kind: 'text' };
+	switch (classifyType(column.type)) {
+		case 'whole':
+			return /^-?\d+$/.test(text) && text.replace('-', '').length <= 15
+				? { text: groupedInt(text), kind: 'number' }
+				: { text, kind: 'text' };
+		case 'decimal': {
+			const n = Number(text);
+			return Number.isFinite(n) ? { text: numberText(n), kind: 'number' } : { text, kind: 'text' };
+		}
+		case 'date':
+			return { text: text.slice(0, 10), kind: 'text' };
+		case 'timestamp':
+			return { text: text.replace('T', ' ').replace(/Z$/, '').replace(/\.000$/, ''), kind: 'text' };
+		case 'truth':
+			return { text: text.toLowerCase() === 'true' ? 'true' : 'false', kind: 'boolean' };
+		case 'bytes':
+			return { text: `${text.length} bytes`, kind: 'blob' };
+		case 'nested':
+			return { text, kind: 'json' };
+		default:
+			return { text, kind: 'text' };
 	}
-	if (type.includes('DOUBLE') || type.includes('FLOAT') || type.includes('DECIMAL') || type.includes('REAL')) {
-		const n = Number(text);
-		return Number.isFinite(n) ? { text: numberText(n), kind: 'number' } : { text, kind: 'text' };
-	}
-	if (type === 'DATE') return { text: text.slice(0, 10), kind: 'text' };
-	if (type.includes('TIMESTAMP')) return { text: text.replace('T', ' ').replace(/Z$/, '').replace(/\.000$/, ''), kind: 'text' };
-	if (type === 'BOOLEAN' || type === 'BOOL') return { text: text.toLowerCase() === 'true' ? 'true' : 'false', kind: 'boolean' };
-	if (type.includes('BLOB')) return { text: `${text.length} bytes`, kind: 'blob' };
-	if (type.includes('LIST') || type.includes('STRUCT') || type.includes('MAP')) return { text, kind: 'json' };
-	return { text, kind: 'text' };
 }
 
 function comparable(column: Column, row: Row): string | number | null {
 	const value = row[column.name];
 	if (value === null || value === undefined) return null;
 	const text = rawText(value);
-	const type = typeName(column);
-	if (type.includes('INT') || type.includes('DOUBLE') || type.includes('FLOAT') || type.includes('DECIMAL') || type.includes('REAL')) {
+	const family = classifyType(column.type);
+	if (isNumber(family)) {
 		const n = Number(text);
 		return Number.isFinite(n) ? n : text;
 	}
-	if (type === 'DATE' || type.includes('TIMESTAMP')) return Date.parse(text.length === 10 ? `${text}T00:00:00Z` : text);
+	if (isDay(family)) return Date.parse(text.length === 10 ? `${text}T00:00:00Z` : text);
 	return text.toLowerCase();
 }
 
@@ -84,8 +87,8 @@ export function sortedRows(rows: readonly Row[], columns: readonly Column[], sor
 
 export function nextSort(current: SortSpec, column: Column): SortSpec {
 	if (current.column !== column.name || current.direction === null) {
-		const type = typeName(column);
-		const direction = type.includes('INT') || type.includes('DOUBLE') || type.includes('FLOAT') || type.includes('DECIMAL') || type === 'DATE' || type.includes('TIMESTAMP') ? 'desc' : 'asc';
+		const family = classifyType(column.type);
+		const direction = isNumber(family) || isDay(family) ? 'desc' : 'asc';
 		return { column: column.name, direction };
 	}
 	if (current.direction === 'desc') return { column: column.name, direction: 'asc' };

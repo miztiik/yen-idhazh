@@ -236,6 +236,49 @@ test('an answer can qualify for more than one chart type for the operator switch
 	], bounds)).toMatchObject({ kind: 'chart', type: 'rankedList' });
 });
 
+test('a timestamp of any precision is a day column, so a TIMESTAMP_NS day column draws over time', () => {
+	for (const type of ['TIMESTAMP_S', 'TIMESTAMP_MS', 'TIMESTAMP_NS']) {
+		expect(shape([
+			{ name: 'day', type },
+			{ name: 'rows', type: 'BIGINT' }
+		], [
+			{ day: '2026-08-17 00:00:00', rows: '3' },
+			{ day: '2026-08-18 00:00:00', rows: '5' },
+			{ day: '2026-08-19 00:00:00', rows: '8' }
+		]), type).toMatchObject({ kind: 'chart', type: 'dateSeries', dateColumn: 'day', seriesColumns: ['rows'] });
+	}
+});
+
+test('an enum names a ranked row, as text does', () => {
+	expect(shape([
+		{ name: 'verdict', type: "ENUM('kept', 'cut')" },
+		{ name: 'items', type: 'BIGINT' }
+	], [
+		{ verdict: 'kept', items: '5' },
+		{ verdict: 'cut', items: '2' }
+	])).toMatchObject({ kind: 'chart', type: 'rankedList', labelColumn: 'verdict', valueColumn: 'items' });
+});
+
+test('every whole number the engine prints is a number to the chart, and a list of numbers is not one', () => {
+	for (const type of ['UHUGEINT', 'BIGNUM']) {
+		expect(shape([
+			{ name: 'source', type: 'VARCHAR' },
+			{ name: 'n', type }
+		], [
+			{ source: 'a', n: '5' },
+			{ source: 'b', n: '2' }
+		]), type).toMatchObject({ kind: 'chart', type: 'rankedList', valueColumn: 'n' });
+	}
+	expect(shape([
+		{ name: 'source', type: 'VARCHAR' },
+		{ name: 'shares', type: 'DECIMAL(18,4)[]' }
+	], [{ source: 'a', shares: '[0.5000, 0.2500]' }])).toEqual({
+		kind: 'none',
+		code: 'no-number',
+		reason: 'Nothing here to draw: the answer has no number in it.'
+	});
+});
+
 test('a NULL is no reading: the spread and paired floors, the paired figure and the ranked tail count only rows with a number', () => {
 	expect(shape([{ name: 'latency', type: 'DOUBLE' }], [
 		{ latency: '10' },
