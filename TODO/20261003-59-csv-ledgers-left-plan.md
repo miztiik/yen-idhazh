@@ -2,9 +2,9 @@
 
 **Last Updated**: 2026-10-05
 
-**Level**: 5 (CLAUDE.md section 6): the plan renames five committed ledgers, renames a persisted field on two row contracts and moves committed data. Each row carries its own level below.
+**Level**: 5 (CLAUDE.md section 6): the plan teaches the door a folder of any depth, moves five committed ledgers onto it, renames a persisted field on two row contracts and moves committed data. Each row carries its own level below.
 
-**Status**: written 2026-10-05 by Fowler under the owner's directive of 2026-10-05: "no CSV ledger producer, consumer, test or doc is left; only Parquet ones, each with its lifecycle, retention and gardener onboarding". The owner was not reachable, so every ruling the draft of 2026-10-03 left open is made here and recorded as "Fowler, 2026-10-05". Each is a construction choice the owner may reverse before the row that applies it is dispatched. Checked against `main` at c076a221f. The owner authorized execution on 2026-10-05.
+**Status**: written 2026-10-05 by Fowler under the owner's directive of 2026-10-05: "no CSV ledger producer, consumer, test or doc is left; only Parquet ones, each with its lifecycle, retention and gardener onboarding". The owner was not reachable, so every ruling the draft of 2026-10-03 left open is made here and recorded as "Fowler, 2026-10-05". Each is a construction choice the owner may reverse before the row that applies it is dispatched. The owner ruled later on 2026-10-05 that a door ledger may sit any number of folders deep, so the judge ledgers keep their names and folders (Table D, row 11). Checked against `main` at c076a221f. The owner authorized execution on 2026-10-05.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
@@ -15,11 +15,11 @@ Table A - operating contract
 | # | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Ten ledgers write through the ledger door: Parquet files under `state/raw/`, packed under `state/compact/` by the gardener. Seven still write CSV files under `state/`, and the shared CSV ledger code stays alive for them. [ledger-registry.md](../docs/architecture/contracts/ledger-registry.md#ledgers-outside-raw-and-compact) maps each one and what blocks it. The council's own ledger, `llm-council/shard-outcomes`, moves under Plan 61 (`TODO/20261004-61-council-run-records-plan.md`). This plan moves the other six and then deletes every piece of CSV ledger code, its tests and its pages |
-| A2 | Hard scope - in | - The parquet column mapper reads a fixed-choice (`Literal`) field.<br>- The CSV code no ledger uses deleted now, with the four orphan `span-rollup` files under `state/span-rollup/`.<br>- Five judge ledgers moved to the door as five top-level families (Table D), each with its compaction, staging row, frontend names and migrator entry.<br>- `item-health-summary` written through the door; it has no committed file.<br>- Every committed judge CSV row moved onto the door in one data commit, with no cell lost except the cells Table G drops.<br>- The CSV ledger machinery, the migrator, their tests, fixtures and pages deleted once nothing needs them |
+| A2 | Hard scope - in | - The parquet column mapper reads a fixed-choice (`Literal`) field.<br>- The CSV code no ledger uses deleted now, with the four orphan `span-rollup` files under `state/span-rollup/`.<br>- The door files a ledger under its registry folder, however many folders deep (row 11).<br>- Five judge ledgers moved to the door under their family's folder, `content-similarity-judge/<ledger>`, with no name changed (Table D), each with its compaction, staging row, frontend names and migrator entry.<br>- `item-health-summary` written through the door; it has no committed file.<br>- Every committed judge CSV row moved onto the door in one data commit, with no cell lost except the cells Table G drops.<br>- The CSV ledger machinery, the migrator, their tests, fixtures and pages deleted once nothing needs them |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
 | A5 | Chosen strategy | One writer at a time, readers in the same change, data last, deletion after the data. Each move is the procedure in [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md): the code row first, then the owner's data commit in a quiet window. The four judge moves share one data commit (row 9), so the quiet window is taken once; it may be the same window as Plan 61's data commit |
-| A6 | Execution | Autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows 1, 2 and 3 start together; rows 4 to 7 are one chain because each reads what the one before writes; row 8 runs beside that chain. Rows 1 and 9 are carried by the plan's owner and never delegated. Merge with `gh pr merge <n> --squash --delete-branch`; GitHub refuses auto-merge on this repository |
+| A6 | Execution | Autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows 1, 2, 3 and 11 start together; rows 4 to 7 are one chain because each reads what the one before writes; row 8 runs beside that chain. Rows 1 and 9 are carried by the plan's owner and never delegated. Merge with `gh pr merge <n> --squash --delete-branch`; GitHub refuses auto-merge on this repository |
 
 ### Hard scope - out
 
@@ -41,7 +41,7 @@ Table C - when to stop and ask
 | # | Trigger | What happens, and the options |
 | --- | --- | --- |
 | C1 | A committed judge CSV row the migrator cannot read with the declarations in Tables F and G | Row 9 stops. No row is dropped, edited or mapped by hand |
-| C2 | A change to a name in Table D, or a persisted shape section 2 does not declare | Stop and surface ([handle-scope-change.md](../docs/how-to/handle-scope-change.md)). The names are Fowler's choice of 2026-10-05 and the owner may change them before row 4 |
+| C2 | A change to a name in Table D, or a persisted shape section 2 does not declare | Stop and surface ([handle-scope-change.md](../docs/how-to/handle-scope-change.md)). The nested folders are the owner's choice of 2026-10-05 |
 | C3 | The door cannot settle one ledger's key as Table E declares it, for example the holdout marks' "newest mark wins" | Stop the row; surface the two options: a preference the door table already offers, or a key the reader settles itself |
 | C4 | A workflow writes a judge CSV row after its code row merged and before row 9 | Not a stop: row 9 moves that row too, under the run id the procedure names |
 | C5 | Plan 61 row "The council saves its run records through the ledger door" changes `Tenant.settle`, `metrics_sink` or the migrator in a way rows 4 to 7 cannot build on | Stop and re-read that row's merged change before dispatching row 4 |
@@ -54,13 +54,14 @@ Table C - when to stop and ask
 | 1 | The first upkeep run after feed health moved is read | - | A | PENDING | - | - | - |
 | 2 | The parquet column mapper reads a fixed-choice field | - | A | PENDING | - | - | - |
 | 3 | The CSV code no ledger uses any more is deleted | Plan 61 "The council saves its run records through the ledger door"; pipeline-tests "Readers understand nested trial roots" | A | PENDING | - | - | - |
-| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 3 | B | PENDING | - | - | - |
+| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 3, 11 | B | PENDING | - | - | - |
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
 | 6 | The merge line's holdout score is saved through the door | 5 | D | PENDING | - | - | - |
 | 7 | The holdout marks are saved through the door | 6 | E | PENDING | - | - | - |
 | 8 | The item health summary is saved through the door | 2, 3 | B | PENDING | - | - | - |
-| 9 | The committed judge rows move onto the door, and the old folders go | 7 | F | PENDING | - | - | - |
+| 9 | The committed judge rows move onto the door, and the old CSV files go | 7 | F | PENDING | - | - | - |
 | 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; Plan 61 "The old-row reader and the migrator's council entry are deleted"; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | PENDING | - | - | - |
+| 11 | The door files a ledger under a folder of any depth | - | A | PENDING | - | - | - |
 
 Cross-plan dependencies name the other plan's row by title. Re-check each title at dispatch.
 
@@ -70,19 +71,29 @@ Rows point here. Each name, shape and rule is declared once.
 
 ### 2.1 Names
 
-Table D - names. Fowler, 2026-10-05. Each moved judge ledger becomes its own family, because the door files a ledger under its own name and the registry refuses a nested prefix for the door grain. Plan 61 set the precedent: the council's ledger left the `llm-council` nest as `council-run-records`.
+Table D - names and folders. The owner, 2026-10-05: a door ledger sits under its registry folder, and that folder may be any number of folders deep, so the judge ledgers keep their place under `content-similarity-judge/` and no name changes. Row 11 teaches the door the rule. This reverses the draft's five top-level families (row 4, rejected alternative 1).
 
-| # | Ledger | New family and ledger name | `LedgerName` member | Replaces |
+| # | Ledger | `LedgerName` member and value | Folder inside `state/raw/` and `state/compact/` | Compaction task |
 | --- | --- | --- | --- | --- |
-| D1 | Scored pairs | `similarity-scored-pairs` | `SIMILARITY_SCORED_PAIRS` | `content-similarity-judge/scored-pairs`, `CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS` |
-| D2 | Judge metrics | `similarity-judge-metrics` | `SIMILARITY_JUDGE_METRICS` | `content-similarity-judge/metrics`, `CONTENT_SIMILARITY_JUDGE_METRICS` |
-| D3 | Fitted merge line | `similarity-fitted-thresholds` | `SIMILARITY_FITTED_THRESHOLDS` | `content-similarity-judge/fitted-thresholds`, `CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS` |
-| D4 | Holdout score | `merge-line-holdout-scores` | `MERGE_LINE_HOLDOUT_SCORES` | `content-similarity-judge/merge-line-holdout-scores`, `CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES` |
-| D5 | Holdout marks | `similarity-holdout-pairs` | `SIMILARITY_HOLDOUT_PAIRS` | `content-similarity-judge/holdout-pairs.csv`, `CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS` |
-| D6 | Item health summary | `item-health-summary`, unchanged | `ITEM_HEALTH_SUMMARY`, unchanged | grain `month`, suffix `.csv` |
-| D7 | The `content-similarity-judge` family | Keeps `score-distribution.json` (grain `flat`) and `archive` (grain `stamp`), both JSON | - | - |
-| D8 | A person's own command | `ServerJob.OPERATOR`, value `operator`: a command a person runs on their own machine, outside any workflow. It names the writer of D4 and D5 | - |
-| D9 | Each compaction | `compact-<ledger>`, in `config/gardener/compact-<ledger>.json` | - |
+| D1 | Scored pairs | `CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS = "scored-pairs"`, unchanged | `content-similarity-judge/scored-pairs` | `compact-content-similarity-judge-scored-pairs` |
+| D2 | Judge metrics | `CONTENT_SIMILARITY_JUDGE_METRICS = "metrics"`, unchanged | `content-similarity-judge/metrics` | `compact-content-similarity-judge-metrics` |
+| D3 | Fitted merge line | `CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS = "fitted-thresholds"`, unchanged | `content-similarity-judge/fitted-thresholds` | `compact-content-similarity-judge-fitted-thresholds` |
+| D4 | Holdout score | `CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES = "merge-line-holdout-scores"`, unchanged | `content-similarity-judge/merge-line-holdout-scores` | `compact-content-similarity-judge-merge-line-holdout-scores` |
+| D5 | Holdout marks | `CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS = "holdout-pairs"`, unchanged; was the flat file `holdout-pairs.csv` | `content-similarity-judge/holdout-pairs` | `compact-content-similarity-judge-holdout-pairs` |
+| D6 | Item health summary | `ITEM_HEALTH_SUMMARY = "item-health-summary"`, unchanged; was grain `month`, suffix `.csv` | `item-health-summary` | `compact-item-health-summary` |
+| D7 | The `content-similarity-judge` family | Holds D1 to D5 on the door, and keeps `score-distribution.json` (grain `flat`) and `archive` (grain `stamp`), both JSON, under `state/content-similarity-judge/` | - | - |
+| D8 | A person's own command | `ServerJob.OPERATOR`, value `operator`: a command a person runs on their own machine, outside any workflow. It names the writer of D4 and D5 | - | - |
+| D9 | Each compaction | `compact-` and the ledger's folder with each `/` written `-`, in `config/gardener/<task>.json` | - | - |
+
+Table D, continued - the folder rule row 11 declares. The owner, 2026-10-05.
+
+| # | Rule | Why |
+| --- | --- | --- |
+| D10 | A door ledger's registry `prefix` starts with its family's name, ends with its value, and may hold any number of folders between. A ledger that is its own family has the prefix `[<value>]`, as today | The family check already reads the first folder; the last folder keeps the value the file's envelope carries |
+| D11 | Every door path - raw file, raw index, compact file, compact index, watermark, marks - is built from that prefix, never from the value alone | One rule, so no builder can file a nested ledger one folder up |
+| D12 | No door ledger's folder sits inside another door ledger's folder | A walk of the outer ledger's day folders would read the inner ledger's files |
+| D13 | The frontend reads a door ledger's folder from `LEDGER_FOLDERS` in `frontend/src/lib/data/slice-shapes.ts`, a hand copy of every prefix that is not `[<value>]`, held equal to the registry by `backend/tests/contracts/test_frontend_vocabularies.py` | The browser has no registry, and CLAUDE.md section 1a puts a small hand copy behind a named test |
+| D14 | A member nested in a family keeps its spelling: family name, then value, in upper snake case | The members already read that way, so no importer changes |
 
 ### 2.2 What each move declares
 
@@ -124,16 +135,16 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 ### 2.6 What every move row does
 
-Each of rows 4 to 8 does all of these for its ledger, so no row lists them again:
+Each of rows 4 to 8 does all of these for its ledger, so no row lists them again. Rows 4 to 7 need row 11 first; row 8's folder is one deep and does not:
 
-1. The family in `config/ledgers.json`: `lifecycle_status` `active`, a one-line description, `onboarded` the UTC day the row is written, and one ledger of the same name with grain `raw-and-compact`, prefix `[<name>]`, `stem` and `suffix` null. The old entry goes from its old family.
-2. The `LedgerName` member renamed (Table D), with every importer following.
+1. The ledger's entry in `config/ledgers.json` stays in its family, with grain `raw-and-compact`, the prefix of Table D (D10), and `stem` and `suffix` null. The family keeps `lifecycle_status` `active`; `item-health-summary` keeps its own family.
+2. If the prefix is not `[<value>]`, its `LEDGER_FOLDERS` entry (D13). No member is renamed.
 3. The key and contract in `_DOOR_SHAPES` (Table E).
 4. The writer calls `ledger.persist` with the identity in Table E; the CSV append goes.
 5. Each reader in Table E reads through the door in the same change.
 6. The compaction (Table E).
 7. A `staging.REGISTRY` row naming the writer.
-8. `LEDGER_NAMES` in `frontend/src/lib/data/slice-shapes.ts` follows the enum.
+8. `LEDGER_NAMES` in `frontend/src/lib/data/slice-shapes.ts` already holds the value; nothing changes there.
 9. The ledger's `merge=union` or `merge=text` line in `.gitattributes`, its `UNION_SAFE` entry in `backend/idhazh/path_classes.py`, and its `_TARGET_LEDGERS` entry in `backend/idhazh/telemetry/prune.py` go.
 10. A migrator entry in `backend/utilities/ledger_migration/csv_layouts.py`: the old layout and folders, `ForeverWindow`, and the `old_headings` of Tables F and G.
 11. `ENVELOPE_NAMED_FIELDS` in `backend/tests/contracts/test_door_ledgers_keep_no_csv_path.py` names the ledger's door names (`run_id` for E1 to E4).
@@ -200,18 +211,18 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 
 ### Row #4 - The judge's scored pairs and its metrics are saved through the door
 
-- **Scope:** D1 and D2 by section 2.6, with F1, F2 and Table G. `Tenant.settle` gains the council's writer identity and hands it to `count_verdicts` (Plan 61 Table H, H4). `Tenant.committed_paths` names `state/raw/similarity-scored-pairs` and `state/raw/similarity-judge-metrics` and loses the two CSV folders. The two ledgers move together because one stage writes both. Level 3.
+- **Scope:** D1 and D2 by section 2.6, with F1, F2 and Table G. `Tenant.settle` gains the council's writer identity and hands it to `count_verdicts` (Plan 61 Table H, H4). `Tenant.committed_paths` names `state/raw/content-similarity-judge/scored-pairs` and `state/raw/content-similarity-judge/metrics` and loses the two CSV folders. The two ledgers move together because one stage writes both. Level 3.
 - **Files touched** (from the inventory; search at dispatch for `CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS`, `CONTENT_SIMILARITY_JUDGE_METRICS`, `scored-pairs`, `append_story_similarity_pairs`, `load_story_similarity_pairs`, `ContentSimilarityJudgeMetrics`, `StorySimilarityPair`, `shard`):
   - `backend/idhazh/contracts/ledger_name.py`, `backend/idhazh/contracts/story_similarity_pair.py`, `backend/idhazh/contracts/content_similarity_judge_metrics.py`
   - `backend/idhazh/stages/count_verdicts.py`, `backend/idhazh/stages/set_merge_line.py`, `backend/idhazh/similarity/applied.py`, `backend/idhazh/similarity/tenant.py`, `backend/idhazh/council/metrics_sink.py`, `backend/idhazh/council/session.py` (identity hand-off)
   - `backend/idhazh/ledger/rows.py`, `backend/idhazh/ledger/keys.py`, `backend/idhazh/ledger/settle.py`, `backend/idhazh/ledger/staging.py`, `backend/idhazh/ledger/__init__.py`
   - `backend/idhazh/path_classes.py`, `backend/idhazh/telemetry/prune.py`
   - `backend/utilities/ledger_migration/csv_layouts.py`
-  - `config/ledgers.json`, `config/gardener/compact-similarity-scored-pairs.json` (new), `config/gardener/compact-similarity-judge-metrics.json` (new), `config/idhazh_gardener.json`, `.gitattributes`
+  - `config/ledgers.json`, `config/gardener/compact-content-similarity-judge-scored-pairs.json` (new), `config/gardener/compact-content-similarity-judge-metrics.json` (new), `config/idhazh_gardener.json`, `.gitattributes`
   - `frontend/src/lib/data/slice-shapes.ts`
   - tests: `backend/tests/contracts/test_story_similarity.py`, `backend/tests/contracts/test_content_similarity_judge_metrics.py`, `backend/tests/council/test_metrics_sink.py`, `backend/tests/test_similarity_counting.py`, `backend/tests/test_similarity_judge.py`, `backend/tests/test_similarity_fit.py`, `backend/tests/ledger/test_lifecycle.py`, `backend/tests/ledger/test_persist.py`, `backend/tests/contracts/test_door_ledgers_keep_no_csv_path.py`, `backend/tests/contracts/test_ledger_registry.py`, `backend/tests/workflows/test_ledger_staging.py`, `backend/tests/retention/test_union_safe_repeats.py`, `backend/tests/retention/test_prune_range.py`, `backend/tests/ledger_migration/test_csv_layouts.py`, and the contract fixtures under `tests/fixtures/contracts/` for the two contracts
   - docs: `ledger-registry.md`, `move-a-ledger-to-parquet.md`, `schemas.md`, `docs/architecture/publishing/llm-council.md`, `docs/architecture/publishing/autotune-content-similarity.md`
-- **Acceptance gates:** local: `python -m pytest -n 0` on every test file above plus `backend/tests/council`; `npm --prefix frontend run test:changed -- --list` and the selected specs; ruff; mypy; `doc_load.py`. CI: the full suite. Named observation: the first `llm-council.yml` night after merge commits raw files under `state/raw/similarity-scored-pairs/` and `state/raw/similarity-judge-metrics/` and none under `state/content-similarity-judge/`.
+- **Acceptance gates:** local: `python -m pytest -n 0` on every test file above plus `backend/tests/council`; `npm --prefix frontend run test:changed -- --list` and the selected specs; ruff; mypy; `doc_load.py`. CI: the full suite. Named observation: the first `llm-council.yml` night after merge commits raw files under `state/raw/content-similarity-judge/scored-pairs/` and `state/raw/content-similarity-judge/metrics/` and no CSV file under `state/content-similarity-judge/`.
 - **Oracle:** an integration test in `backend/tests/council/test_session.py` or `backend/tests/test_similarity_counting.py`: a fixture night's `settle` with `--commit <sha>` leaves one raw file per judged date for each ledger, read back through `ledger.load_days` with `work_part_index` per part and the identity of Table E, E1; `set_merge_line` then reads those rows. It fails today because `count_verdicts` appends CSV. It cannot settle a real night; the named observation reads that.
 
 **Decisions**
@@ -225,13 +236,13 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Keep the nest: teach the registry a nested door prefix | Plan 61 rejected it for the council, and the door, compaction and frontend all address a ledger by one name | A registry rule, a raw-root rule and a frontend path rule, each tested | Fowler, 2026-10-04 |
+| 1 | Five top-level families (`similarity-scored-pairs` and four more), the draft of this plan | The owner chose the nest: the folder layout stays, and the door learns a rule of any depth once (row 11) instead of five families, five renamed members and every importer | Five families in `config/ledgers.json`, five renames, and a layout that no longer groups the judge | The owner, 2026-10-05 |
 | 2 | One row for all four judge ledgers | Three different writers and two frontend readers in one review | A diff no reviewer reads whole | Fowler, 2026-10-05 |
 
 ### Row #5 - The fitted merge line is saved through the door
 
 - **Scope:** D3 by section 2.6. `set_merge_line` persists with E3's identity; `applied.applied_line` reads through `ledger.load_days` over its lookback; `frontend/src/lib/server/similarity-ledger.ts` reads through `sliceFromDisk`. Level 3.
-- **Files touched** (search at dispatch for `CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS`, `fitted-thresholds`, `append_fitted_thresholds`, `load_fitted_thresholds`, `readDayShards`): the shared files of row 4's list that name this ledger; `backend/idhazh/contracts/fitted_similarity_threshold.py` (`DROPPED_CELLS` stays for the migrator until row 10); `backend/idhazh/stages/set_merge_line.py`; `backend/idhazh/similarity/applied.py`; `config/gardener/compact-similarity-fitted-thresholds.json` (new); `frontend/src/lib/server/similarity-ledger.ts`; its spec under `frontend/tests/`; the console panel's spec that reads the fitted line.
+- **Files touched** (search at dispatch for `CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS`, `fitted-thresholds`, `append_fitted_thresholds`, `load_fitted_thresholds`, `readDayShards`): the shared files of row 4's list that name this ledger; `backend/idhazh/contracts/fitted_similarity_threshold.py` (`DROPPED_CELLS` stays for the migrator until row 10); `backend/idhazh/stages/set_merge_line.py`; `backend/idhazh/similarity/applied.py`; `config/gardener/compact-content-similarity-judge-fitted-thresholds.json` (new); `frontend/src/lib/server/similarity-ledger.ts`; its spec under `frontend/tests/`; the console panel's spec that reads the fitted line.
 - **Acceptance gates:** local: the backend tests that name the ledger, `npm --prefix frontend run test:changed` selection; the browser smoke of the console page that shows the fitted line, with and without a compact file; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** a fixture night writes a fitted line through the door, compacts it into `tmp_path`, and the frontend reader returns the same values. It fails today. It cannot settle the days between a write and the gardener's next pack; decision 1 prices that.
 
@@ -244,7 +255,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 ### Row #6 - The merge line's holdout score is saved through the door
 
 - **Scope:** D4 by section 2.6, with D8. `score_merge_line_holdout._append` becomes one `ledger.persist` call with E4's identity. `similarity-holdout.ts` reads the scores through `sliceFromDisk`. `ServerJob.OPERATOR` and the frontend's `SERVER_JOB` copy gain `operator`. Level 3.
-- **Files touched** (search at dispatch for `CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES`, `merge-line-holdout-scores`, `ServerJob`): `backend/idhazh/contracts/base.py`; `backend/idhazh/stages/score_merge_line_holdout.py`; `backend/idhazh/cli.py` (`--commit` for the stage); `frontend/src/lib/server/host-fingerprint.ts`; `frontend/src/lib/server/similarity-holdout.ts`; `config/gardener/compact-merge-line-holdout-scores.json` (new); `docs/reference/host-metrics.md` (`operator`); `docs/how-to/label-the-similarity-holdout.md`; the shared files of section 2.6; `backend/tests/contracts/test_merge_line_holdout_score.py`; `backend/tests/contracts/test_frontend_vocabularies.py`.
+- **Files touched** (search at dispatch for `CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES`, `merge-line-holdout-scores`, `ServerJob`): `backend/idhazh/contracts/base.py`; `backend/idhazh/stages/score_merge_line_holdout.py`; `backend/idhazh/cli.py` (`--commit` for the stage); `frontend/src/lib/server/host-fingerprint.ts`; `frontend/src/lib/server/similarity-holdout.ts`; `config/gardener/compact-content-similarity-judge-merge-line-holdout-scores.json` (new); `docs/reference/host-metrics.md` (`operator`); `docs/how-to/label-the-similarity-holdout.md`; the shared files of section 2.6; `backend/tests/contracts/test_merge_line_holdout_score.py`; `backend/tests/contracts/test_frontend_vocabularies.py`.
 - **Acceptance gates:** local: the tests above, the selected frontend specs, the browser smoke of the holdout panel; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** `score-merge-line-holdout --run-id <id> --labeller <name> --commit <sha>` over a fixture state root leaves one raw file read back with job `operator`. It fails today.
 
@@ -263,7 +274,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 ### Row #7 - The holdout marks are saved through the door
 
 - **Scope:** D5 by section 2.6 and E5. The owner's directive rules that a program writes the marks: `sample_sheet --harvest` already writes the whole file from the labels, so it now persists the rows of one harvest with `covers` the `--labelled-on` day and a new required `--run-id`. Readers settle on `(left_url, right_url)` with the newest `marked_on`. `similarity/holdout.marked_pairs` and `similarity-holdout.ts` read the ledger over a configured reach, `similarity.holdout_reach_days` in `config/idhazh.json`, default 730, so the read has a fixed-size input (Guardrail #12); every mark at c076a221f is inside it. The migrator gains a flat-file layout whose day comes from a named column (`marked_on`), used once in row 9. `check_seeded_ledgers.py` loses the holdout check. Level 3.
-- **Files touched** (search at dispatch for `holdout-pairs`, `HOLDOUT_PAIRS`, `marked_pairs`, `loadMarkedPairs`, `harvest`): `backend/utilities/sample_sheet.py`; `backend/idhazh/similarity/holdout.py`; `backend/idhazh/stages/score_merge_line_holdout.py`; `backend/utilities/build_canary_day.py`; `backend/utilities/check_seeded_ledgers.py`; `backend/utilities/ledger_migration/` (flat layout); `config/idhazh.json` and its config model; `config/gardener/compact-similarity-holdout-pairs.json` (new); `frontend/src/lib/server/similarity-holdout.ts`; `frontend/tests/console.spec.ts`; `backend/tests/test_similarity_judge.py`; `backend/tests/test_sample_sheet.py`; the shared files of section 2.6; `docs/how-to/label-the-similarity-holdout.md`, `docs/architecture/publishing/autotune-content-similarity.md`, `docs/architecture/contracts/schemas.md`, `docs/concepts/growing-reads.md`, `docs/reference/repository-layout.md`, `docs/architecture/contracts/persistence.md`.
+- **Files touched** (search at dispatch for `holdout-pairs`, `HOLDOUT_PAIRS`, `marked_pairs`, `loadMarkedPairs`, `harvest`): `backend/utilities/sample_sheet.py`; `backend/idhazh/similarity/holdout.py`; `backend/idhazh/stages/score_merge_line_holdout.py`; `backend/utilities/build_canary_day.py`; `backend/utilities/check_seeded_ledgers.py`; `backend/utilities/ledger_migration/` (flat layout); `config/idhazh.json` and its config model; `config/gardener/compact-content-similarity-judge-holdout-pairs.json` (new); `frontend/src/lib/server/similarity-holdout.ts`; `frontend/tests/console.spec.ts`; `backend/tests/test_similarity_judge.py`; `backend/tests/test_sample_sheet.py`; the shared files of section 2.6; `docs/how-to/label-the-similarity-holdout.md`, `docs/architecture/publishing/autotune-content-similarity.md`, `docs/architecture/contracts/schemas.md`, `docs/concepts/growing-reads.md`, `docs/reference/repository-layout.md`, `docs/architecture/contracts/persistence.md`.
 - **Acceptance gates:** local: the tests above, the selected frontend specs, the browser smoke of the holdout panel with and without data; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** two harvests on two days over a fixture, the second re-marking one pair, read back through `marked_pairs` as one row per pair with the second mark. It fails today because harvest rewrites a CSV file.
 
@@ -294,10 +305,10 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | --- | --- | --- |
 | 1 | The summary moves with no month layout in the migrator: it has no committed file | Fowler, 2026-10-05 |
 
-### Row #9 - The committed judge rows move onto the door, and the old folders go
+### Row #9 - The committed judge rows move onto the door, and the old CSV files go
 
 - **Scope:** the owner's data commit, by [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md#move-the-committed-files), for D1 to D5 together, in a quiet window: no run of `digest.yml`, `idhazh-gardener.yml`, `idhazh-pipeline-tests.yaml`, `validate.yml`, `measure.yml` or `llm-council.yml` queued or running. `migrate_to_parquet.py --plan`, `--write`, `--verify` and `--retire` per ledger, then `--check` over `state` and the three trial roots prints `0 CSV file(s) left` for each. The `content-similarity-judge` folder keeps only D7's two JSON ledgers. If Plan 61's data commit is ready, it may share the window. Level 4.
-- **Files touched:** `state/content-similarity-judge/` (39 CSV files at c076a221f, removed); `state/raw/similarity-*/` and `state/raw/merge-line-holdout-scores/` (added); `frontend/public/publication.json` if it names a removed path.
+- **Files touched:** `state/content-similarity-judge/` (39 CSV files at c076a221f, removed); `state/raw/content-similarity-judge/<ledger>/` for D1 to D5 (added); `state/content-similarity-judge/` keeps D7's two JSON ledgers; `frontend/public/publication.json` if it names a removed path.
 - **Acceptance gates:** the five commands' output quoted in the commit message, with Table G's drop counts; CI: the full suite on the commit.
 - **Oracle:** `--verify` reads every migrated row back equal to its CSV row under Tables F and G. It cannot settle a row a run writes during the window; the quiet-window check does.
 
@@ -320,3 +331,33 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep the migrator for a future ledger | No ledger is left to move, and every new ledger is born on the door | A package, a CLI and a test directory nobody runs | Fowler, 2026-10-05 |
+
+### Row #11 - The door files a ledger under a folder of any depth
+
+- **Scope:** declare D10 to D14 and make every door path follow them. Today `contracts/ledgers.py` line 129 refuses a `raw-and-compact` prefix other than `[<value>]`, and the door's builders join `ledger.value` as one folder. After this row, one function in `backend/idhazh/ledger/paths.py` returns a door ledger's folders from the registry, and every builder, reader and gardener task asks it rather than spelling `ledger.value` into a path. No ledger is moved and no committed file changes: every door ledger today has the prefix `[<value>]`, so every path it builds is the same before and after. Level 3: it changes how the backend, the gardener and the frontend address every door ledger.
+- **Files touched** (search at dispatch for `ledger.value`, `ledger_name.value`, `which.value`, `.name.value` and `${ledger}` in a path; the list below is from `main` at c076a221f):
+  - `backend/idhazh/contracts/ledgers.py` (the prefix check, D10; the nesting refusal, D12; the member spelling check, D14)
+  - `backend/idhazh/ledger/paths.py` (the folder function; `raw_root`, the compact file, index and watermark builders)
+  - `backend/idhazh/ledger/persist.py`, `ledger_files.py`, `raw_files.py`, `day_removal.py`, `lifecycle.py`, `keys.py` (each path it spells from the value)
+  - `backend/idhazh/gardener/compaction.py`, `ledger_marks.py`, `period_inputs.py` (the folder-to-ledger lookup at line 294 reads the registry rather than `LedgerName(<folder>)`), and `gardener/tasks/_compact_tree.py`, `_daily_period.py`, `_monthly_period.py`, `_yearly_period.py`
+  - `frontend/src/lib/data/slice-shapes.ts` (`LEDGER_FOLDERS`, empty until row 4), `frontend/src/lib/data/slice-reader.ts` (the four path builders at lines 79 to 101 read the folder)
+  - `.gitattributes` (`state/compact/*/index/*.json` and `state/compact/*/*/watermark.json` become `**` patterns)
+  - tests: `backend/tests/contracts/test_ledger_registry.py`, `backend/tests/contracts/test_frontend_vocabularies.py`, `backend/tests/ledger/test_persist.py`, `backend/tests/gardener/` (the compaction tests), `frontend/tests/ledger-door.spec.ts`, and a new `backend/tests/ledger/test_nested_door_folder.py`
+  - docs: `docs/architecture/contracts/ledger-registry.md` (the "nested folder name" blocker goes; the prefix rule gains D10 and D12), `docs/architecture/contracts/persistence.md` (the path grammar names `<folders>`, not `<ledger>`)
+- **Acceptance gates:** local: `python -m pytest -n 0` on every test file above plus `backend/tests/gardener` and `backend/tests/ledger`; `npm --prefix frontend run test:changed -- --list` and the selected specs; ruff; mypy; `doc_load.py` on each changed page. CI: the full suite.
+- **Oracle:** `backend/tests/ledger/test_nested_door_folder.py` loads a fixture registry under `tests/fixtures/ledger-door/` that files `CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS` two folders deep and `CONTENT_SIMILARITY_JUDGE_METRICS` three folders deep (`content-similarity-judge/deep/metrics`). Under `tmp_path`, each ledger persists one day, compacts it and reads it back through `ledger.load_days`, and every file sits under its declared folder and nowhere else. The same file proves that the registry refuses a door ledger inside another door ledger's folder (D12) and a prefix that does not end with the value (D10). It fails today because line 129 refuses both fixture prefixes. It cannot prove the browser reads a nested ledger, because `LEDGER_FOLDERS` is empty here. Row 5's frontend spec proves that over D3, the first nested ledger the site reads.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | No depth limit: the prefix holds as many folders as the family needs | The owner, 2026-10-05 |
+| 2 | The folder comes from the registry, not from a `/` inside the value: the value stays the name the envelope and the frontend vocabulary already carry | Fowler, 2026-10-05 |
+| 3 | A row of its own, ahead of row 4: one review reads the rule, and row 4 reads only the move | Fowler, 2026-10-05 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Put the folder in the value (`"content-similarity-judge/scored-pairs"`) | It renames five members' values, every envelope's `ledger` field and the frontend vocabulary, for a path the registry already holds | A persisted-field change on every judge file and a migration | Fowler, 2026-10-05 |
+| 2 | Allow exactly one extra folder | The owner ruled out a fixed depth | A second change the day a family needs a third folder | The owner, 2026-10-05 |
