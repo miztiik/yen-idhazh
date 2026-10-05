@@ -34,6 +34,9 @@ on:
         description: 'Run the faithfulness scorer (slow first run - downloads weights)'
         type: boolean
         default: true
+      article_limit:
+        description: 'Plan at most this many articles, best first, for a short test run. Blank plans the full day.'
+        default: ''
 
 permissions:
   contents: write
@@ -137,12 +140,26 @@ jobs:
         run: python3 backend/utilities/take_state_from_the_tip.py state
 
       # github.run_id gives every shard the same unique execution identity.
+      # A blank article limit (every scheduled run) plans the full day.
       - name: Plan the day
-        run: >-
-          python -m idhazh plan
-          --date "${{ steps.decide.outputs.date }}"
-          --execution "${{ github.run_id }}"
-          --commit "${{ github.sha }}"
+        env:
+          # Pass dispatch input as data, not interpolated shell code.
+          DISPATCH_ARTICLE_LIMIT: ${{ inputs.article_limit }}
+        run: |
+          set -euo pipefail
+          LIMIT=()
+          if [ -n "${DISPATCH_ARTICLE_LIMIT:-}" ]; then
+            if ! [[ "$DISPATCH_ARTICLE_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+              echo "article_limit must be blank or a whole number of at least 1" >&2
+              exit 1
+            fi
+            LIMIT=(--article-limit "$DISPATCH_ARTICLE_LIMIT")
+          fi
+          python -m idhazh plan \
+            --date "${{ steps.decide.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
+            --commit "${{ github.sha }}" \
+            "${LIMIT[@]}"
 
       # The probe needs the plan's execution ID and an otherwise idle runner.
       - name: What machine this job drew
@@ -575,7 +592,8 @@ jobs:
             --date ${{ needs.plan.outputs.date }}
         run: >-
           python backend/utilities/commit_and_push.py
-          frontend/public/digest frontend/public/telemetry frontend/public/assist/index
+          frontend/public/digest frontend/public/publication.json
+          frontend/public/telemetry frontend/public/assist/index
           frontend/public/source-health.json frontend/public/console
           frontend/public/run-days frontend/public/day-metrics
           frontend/public/machine

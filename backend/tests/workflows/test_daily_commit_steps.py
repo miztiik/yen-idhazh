@@ -397,6 +397,25 @@ def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
     assert assemble["COMMIT_MESSAGE"] == f"digest: {SUBSTITUTED_DATE}"
 
 
+def test_published_file_writers_stage_the_inventory_and_assemble_refreshes_it() -> None:
+    inventory = "frontend/public/publication.json"
+    staged, settings = _commit_call("assemble")
+    assert inventory in staged
+    assert inventory in path_classes.DERIVED
+    assert inventory in settings["REFRESH_PATHS"].split()
+
+    workflow = _load_workflows()["backfill.yml"]
+    step = _step(workflow, "backfill", "name", "Commit the repaired days")
+    command = shlex.split(_script(step, "backfill commit").splitlines()[-1])
+    assert command == [
+        "python",
+        "backend/utilities/commit_and_push.py",
+        "frontend/public/digest",
+        "frontend/public/assist/index",
+        inventory,
+    ]
+
+
 def test_the_plan_job_takes_the_tips_state_before_anything_writes_into_it() -> None:
     """A run reads a state root as old as its trigger commit unless it asks for a fresh one.
 

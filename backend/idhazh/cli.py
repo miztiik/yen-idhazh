@@ -105,6 +105,17 @@ def _today() -> str:
     return assemble.utc_now()[:10]
 
 
+def _positive_int(text: str) -> int:
+    """A whole number of at least 1, refused by name before any feed is read."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"{value} is below 1")
+    return value
+
+
 def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None) -> str:
     """The run a council verb is, refused rather than invented when a step forgets it.
 
@@ -372,6 +383,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             "Take at most this many stories from each vertical when planning. For "
             "validation only: how big a day is is what a reader wants, not what a "
             "measurement needs."
+        ),
+    )
+    parser.add_argument(
+        "--article-limit",
+        type=_positive_int,
+        default=None,
+        help=(
+            "Plan at most this many stories for the whole run, best first. For a "
+            "short test run; unset plans the full day. Shard count is separate."
         ),
     )
     parser.add_argument(
@@ -728,6 +748,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             commit_sha=args.commit,
             fetcher=read_url,
             cap=args.cap,
+            article_limit=args.article_limit,
             execution=args.execution,
         )
         common.LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)

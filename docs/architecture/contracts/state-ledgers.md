@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -54,9 +54,9 @@ The console reads the feed record at build time from its packed files under `sta
 
 ## The gardener
 
-`state/raw/gardener/` is the first ledger born under the two roots the ledger door files into. Each gardener shard writes one file a wake through `ledger.persist`, holding one `CollectionPruneRow` per task it ran - a dry run included - and lands it itself ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md)). A row names the task, the run, the attempt, the job and the shard that wrote it, what the pass saw and took, why it stopped, the task's own wall clock, the instant the shard finished working, and `cone_bytes`, what the folders the shard owns weighed at the commit it checked out, beside `downloaded_bytes`, what the shard downloaded for its tasks to read - both empty on a row a hand run wrote, because a hand run weighs nothing.
+`state/raw/gardener/` is the first ledger born under the two roots the ledger door files into. Each gardener shard writes one file a wake through `ledger.persist`, holding one `CollectionPruneRow` per task it ran - a dry run included - and lands it itself ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md)). A row names the task, the run, the attempt, the job and the shard that wrote it, what the pass saw and took, why it stopped, the task's own wall clock, the instant the shard finished working, and `cone_bytes`, what the folders the shard owns weighed at the commit it checked out, beside `downloaded_bytes`, what the shard downloaded for its tasks to read - both empty on a row a hand run wrote, because a hand run weighs nothing. A row of `workflow-runs` or `workflow-artifacts` also carries `handled_through`, the newest UTC day its walk has handled every member through; every other task's row leaves it empty.
 
-Nothing reads it yet, so it has no read window. It files at the `raw-and-compact` grain; what `prefix` means for that grain, and which builders refuse it, is [ledger-registry.md](ledger-registry.md#a-ledger-under-the-two-roots).
+Two tasks read it: `workflow-runs` and `workflow-artifacts` each read their own rows of the last `mark_lookback_days` UTC days, by named day, to find where their last walk stopped ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md#the-collection-tasks)). It files at the `raw-and-compact` grain; what `prefix` means for that grain, and which builders refuse it, is [ledger-registry.md](ledger-registry.md#a-ledger-under-the-two-roots).
 
 ## The published ledger sizes from the ceiling, not from today
 

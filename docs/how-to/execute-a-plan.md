@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the execution contract)
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-05
 The mechanics for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it, and owns the autonomy policy it runs under (section "Escalation").
 
 ASCII only in agent/customization Markdown: "-", "->", ">=", "section".
@@ -34,7 +34,7 @@ decision; a completed worker report is not a completed merge.
 
 1. **Every symbol the row names has to exist.** Search the tree for each identifier, path and command the row quotes. A row naming something renamed, moved or never written sends a worker looking for it, and the worker either invents a substitute or stops and asks. Correct the row before dispatching, and say what it was corrected from.
 
-2. **The row's check has to be able to fail for the reason the row exists.** Run it against the base tree first. An oracle that already passes measures something other than the row, so the work reports a green that proves nothing. **Where the row's whole value is that behaviour does not change** - a refactor, a move, a rename - the check passes at both ends by design, and what must be able to fail is the property the change could break. Say which of the two the row is, and do not invent a failing check to satisfy a rule.
+2. **The row's check has to be able to fail for the reason the row exists.** Run it against the base tree first: in a copy of the base commit outside the working checkout, never by stashing or resetting the checkout (`CLAUDE.md` section 8), and confirm the run used the copy's code, because a copy that leaves out the test runner's settings can import the branch's code and pass. The project's gate guide names the command. An oracle that already passes measures something other than the row, so the work reports a green that proves nothing. **Where the row's whole value is that behaviour does not change** - a refactor, a move, a rename - the check passes at both ends by design, and what must be able to fail is the property the change could break. Say which of the two the row is, and do not invent a failing check to satisfy a rule.
 
 	**For a request/response claim, check what the real client can send and observe what the server returns.** A fixture that sets a response header and then reads it back does not test the server, and a request header the client forbids page code from setting cannot be an acceptance condition.
 

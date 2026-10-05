@@ -19,6 +19,12 @@ A pass here walks a collection one page at a time and never holds it, so it
 genuinely does not know how many it did not reach - and a count it cannot take
 honestly is better replaced by the pointer it can.
 
+**`handled_through` is the mark a walk resumes from.** A task that walks its
+collection a UTC day at a time, oldest day first, writes the newest day it has
+handled whole, and its next pass starts the day after. Only a row from a pass
+with the same `dry_run` is read back for it: a dry run handles a day by
+reporting or counting it, which deletes nothing.
+
 **`deleted` and `bytes_freed` mean the same thing on a dry run as on a live
 one**: what this pass took, or would have taken. `dry_run` is the cell that says
 whether it happened. Reading them as zero on a dry run would make the preview
@@ -97,6 +103,11 @@ class CollectionPruneRow(Contract):
     __schema_stem__: ClassVar[str] = "collection-prune-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-04",
+            change="handled_through added; a dry walk's resume_from is where a live pass resumes.",
+            why="A collection task resumes the day after it, so no wake reads a day twice.",
+        ),
+        ChangelogEntry(
             version="2026-10-03T18:00",
             change="candidates_seen describes the fixed named period window.",
             why="Scheduled cleanup reads a window; older backlog uses an explicit range.",
@@ -110,11 +121,6 @@ class CollectionPruneRow(Contract):
             version="2026-09-30",
             change="downloaded_bytes, additive: file content the shard downloaded for its tasks.",
             why="A shard checks out only code, so what it paid is what its tasks downloaded.",
-        ),
-        ChangelogEntry(
-            version="2026-09-28T22:07",
-            change="fold_dry_run, folded_days, folded_files, additive; empty with no fold.",
-            why="A task folds its closed days on its own switch, and says what it folded.",
         ),
         ChangelogEntry(
             version="2026-09-17",
@@ -209,7 +215,19 @@ class CollectionPruneRow(Contract):
             "The member the next pass begins at. Empty on an exhausted pass, which is "
             "the one reading that says the backlog is cleared, and empty on a failed "
             "pass that failed before it could name a member. `stopped_because` says "
-            "which."
+            "which. On a dry run that walked from a mark, the member a live pass would "
+            "begin at: that dry run counted the rest of the member's day, and the next "
+            "one starts after `handled_through`."
+        ),
+    )
+    handled_through: DateStamp | None = Field(
+        default=None,
+        description=(
+            "The newest UTC day through which every member was handled by a pass with "
+            "this row's `dry_run`: deleted, or on a dry run reported or counted. The "
+            "task's next pass starts the day after it, and a pass that finished no new "
+            "day carries forward the day it started from. Empty on every row of a task "
+            "that keeps no mark, and when the pass failed before its walk began."
         ),
     )
     duration_ms: int = Field(
@@ -284,7 +302,7 @@ class CollectionPruneRow(Contract):
 
     @model_validator(mode="after")
     def _the_arithmetic_holds(self) -> Self:
-        """Nine cross-field rules, each one a way a hand-written row could lie."""
+        """Ten cross-field rules, each one a way a hand-written row could lie."""
         if self.job not in TASK_JOBS:
             raise ValueError(
                 f"job {self.job.value} runs no task. A row is written by "
@@ -302,6 +320,11 @@ class CollectionPruneRow(Contract):
             raise ValueError("a pass its ceiling stopped names where the next one begins")
         if self.since is not None and self.until is not None and self.since > self.until:
             raise ValueError("since is after until, so the window names no day")
+        if self.handled_through is not None and self.handled_through >= self.date:
+            raise ValueError(
+                "handled_through is on or after the day the pass ran, and a window keeps at "
+                "least that day, so a mark there would stop every later walk"
+            )
         fold = (self.fold_dry_run, self.folded_days, self.folded_files)
         if None in fold and any(value is not None for value in (*fold, self.folded_months)):
             raise ValueError(

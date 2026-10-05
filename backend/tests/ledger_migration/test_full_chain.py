@@ -72,8 +72,8 @@ def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path:
     writer files, a re-run's second attempt, a file under the eval ledger's old
     headings, and a closed day that held nothing. The door serves each day
     exactly as today's reader read it: no row lost, none invented, every cell
-    equal. The old day is packed, with the first of its month before it as an
-    empty day, and the new day stays a raw file.
+    equal. Packing starts at the oldest raw day, so the old day is packed and
+    no day before it is recorded, and the new day stays a raw file.
     """
     state = tmp_path / "state"
     census = [item_row(OLD, "ai-01", machine=False), item_row(OLD, "ai-02", machine=False)]
@@ -125,7 +125,7 @@ def test_every_row_todays_reader_returns_reads_back_and_every_csv_goes(tmp_path:
         assert moved[which].rows == sum(len(rows) for rows in days.values())
         for day, rows in days.items():
             assert read_back(state, which, day) == rows, f"{which.value} {day}"
-        assert moved[which].packed == [FIRST, OLD]
+        assert moved[which].packed == [OLD]
         assert ledger.raw_days(state, which) == [NEW]
         assert not csv_layouts.csv_root(state, which).exists(), (
             "every CSV file and emptied folder goes"

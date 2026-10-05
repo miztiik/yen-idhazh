@@ -1,6 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-05
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
 fast loop, not a different answer.
@@ -19,8 +19,8 @@ There are three models in this project and they are tested differently:
 ## Before anything
 
 ```bash
-python -m venv.venv
-.venv/bin/pip install -e ".[dev,faithfulness]" #.venv/Scripts/pip on Windows
+python -m venv .venv
+.venv/bin/pip install -e ".[dev,faithfulness]" # .venv/Scripts/pip on Windows
 ```
 
 `faithfulness` pulls torch and transformers - several hundred megabytes. Without
@@ -433,10 +433,10 @@ a historical number into a gate.
 To prove the digest does not depend on it at all:
 
 ```bash
-mv static/assist../assist-parked && npm run build
+mv static/assist ../assist-parked && npm run build
 test ! -d build/assist && grep -q Archive build/archive/index.html
 test -d build/index
-mv../assist-parked static/assist
+mv ../assist-parked static/assist
 ```
 
 The digest must render complete with the model directory gone. CI runs exactly

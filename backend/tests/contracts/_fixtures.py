@@ -38,6 +38,7 @@ FIXTURE_FILES: Final = (
     "article/fetch-failed.json",
     "article/ok.json",
     "article/truncated.json",
+    "collection-prune-row/a-dry-walk-that-counted-past-its-ceiling.json",
     "collection-prune-row/a-live-fold-beside-a-dry-window.json",
     "collection-prune-row/ceiling-reached.json",
     "collection-prune-row/exhausted-dry-run.json",

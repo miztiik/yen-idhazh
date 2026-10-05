@@ -1,6 +1,6 @@
 # Plan 60 - The gardener chooses its own work and recovers on its own
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 **Level**: 5 (CLAUDE.md section 6). Rows 8, 10, 19 and 20 change persisted contracts (section 2.4). The owner approved each shape on 2026-10-04.
 
@@ -25,7 +25,7 @@ Table A - what is out
 
 | # | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- | --- |
-| A1 | Switching workflow-runs and workflow-artifacts to live deletes | Old runs and artifacts stay, as today | An owner decision. First size `max_deletes_per_run` from a 7-day arrival count: `gh api "repos/miztiik/yen-idhazh/actions/runs?created=>=<today-7>&per_page=1" --jq .total_count`. On 2026-10-04 that read 1,226 runs, about 175 a day, and the declared ceiling is 50 deletes a wake |
+| A1 | Switching workflow-runs and workflow-artifacts to live deletes | Old runs and artifacts stay, as today. GitHub keeps a run's logs and artifacts for 90 days, this repository's setting and the most a public repository allows (read 2026-10-05). So the runs task, whose window is also 90 days, would delete only runs whose logs are already gone: a live pass shortens the Actions history and frees no log. A dry run deletes nothing, so the artifacts walk reads again from the last page to its line on every wake. The dry list may pass 2,500 artifacts within weeks (an estimate, row 11's report, 2026-10-05). The end-of-list check that row 11 added logs a count that stops short | An owner decision. First size `max_deletes_per_run` from a 7-day arrival count: `gh api "repos/miztiik/yen-idhazh/actions/runs?created=>=<today-7>&per_page=1" --jq .total_count`. On 2026-10-04 that read 1,226 runs, about 175 a day, and the declared ceiling is 50 deletes a wake. A day held between 32 and 401 runs from 2026-08-22 to 2026-10-04, and a live pass that its ceiling stops inside a day reads that day again at the next wake (row 10), so a ceiling below a busy day's count takes several wakes to pass it. A count from a search by date stops at 2,500, so a span longer than about two weeks is counted a day at a time |
 | A2 | A keep line for years | The yearly index of a ledger that keeps every row gains one entry a year (row 14, decision 3) | A ledger whose declaration lets it forget whole years. `published` and `summary-quality-evals` refuse that in `prune_refusal` |
 | A3 | Keying the rules in `backend/idhazh/gardener/period_inputs.py` on a declaration's kind instead of task names | One list of task names stays written in code (Guardrail #6) | A Level 2 row after row 16 |
 | A4 | Event logging in `backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py` | Those two commands keep free-text logs (CLAUDE.md section 1b) | A Level 2 row each after row 21, reusing `event_log` |
@@ -47,11 +47,11 @@ Table A - what is out
 | 7 | The month-delete switch is named for what it does | 1 | B | DONE | ubiquitous-journey | #1286 | Plan 60 row 7: rename month switch |
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | #1287 | Plan 60 row 8: site reads lost periods |
 | 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | #1282 | Plan 60 row 9: job names |
-| 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
-| 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
+| 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | DONE | didactic-potato | #1307 | Plan 60 row 10: runs read from a mark |
+| 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | DONE | psychic-potato | #1317 | Plan 60 row 11 |
 | 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | #1303 | Plan 60 row 12: which months may close |
-| 13 | Which days may be packed | 12 | D | PENDING | - | - | - |
-| 14 | Which years may be packed | 13 | D | PENDING | - | - | - |
+| 13 | Which days may be packed | 12 | D | DONE | silver-enigma | #1309 | Plan 60 row 13: which days may be packed |
+| 14 | Which years may be packed | 13 | D | DONE | scaling-train | - | Plan 60 row 14 |
 | 15 | Each old month is dropped once | 14 | D | PENDING | - | - | - |
 | 16 | The shared window is gone | 15 | D | PENDING | - | - | - |
 | 17 | A late file re-opens its month | 16 | D | PENDING | - | - | - |
@@ -77,7 +77,7 @@ Rows point here. Each name, shape and rule is declared once.
 
 ### 2.1 How each step chooses its periods
 
-Every line is computed from `today`, the wake's UTC day, and from each period's own end (CLAUDE.md section 2). An operator range (`--from` and `--to` on one named task, or the migrator's range) limits every step. The "newest eligible day" is the newest day at least `compact_after_days` whole days past its end. The cap is the declaration's `max_periods_per_run`.
+Every line is computed from `today`, the wake's UTC day, and from each period's own end (CLAUDE.md section 2). An operator range (`--from` and `--to` on one named task, or the migrator's range) limits every step. The "newest eligible day" is the newest day at least `compact_after_days` whole days past its end, and the "newest eligible month" in B7 is the month that holds it (Fowler, 2026-10-04). The cap is the declaration's `max_periods_per_run`.
 
 Table B - each step
 
@@ -87,8 +87,8 @@ Table B - each step
 | B2 | Drop raw days | - | Raw day folders older than the keep line, inside the months B1 names. They are deleted by listed path and never parsed | Nothing more |
 | B4 | Pack years, only with `monthly_keep_days` | The year after the yearly mark; with none, the year of the oldest monthly entry | Consecutive years whose age line has passed and whose December the monthly mark is strictly past, up to the cap. A ledger that began after January packs its first year from its first month. A year with no row is an entry `empty` with no file. Its months' `lost_days` carry into the year entry | That year's month files, named from the monthly index |
 | B5 | Absorb months | The month after the monthly mark; with none, the oldest month the daily index names; with an empty daily index, nothing | Consecutive months at least `daily_keep_days` past their end that the daily mark has passed, up to the cap. A month with a raw day still waiting is held for B6. Completeness counts days from the month's 1st, or from the ledger's first day when the ledger began inside that month. A missing day inside that span is recovered (Table C, C2). A month with no row is an entry `empty` with no file | Each month's daily files and its raw month folder |
-| B6 | Pack days | The day after the daily mark | New days up to the earlier of the mark plus the cap and the newest eligible day. Also packed days inside the 30-day re-run span that hold new raw files; they count against the cap. A raw file in a closed month re-opens it (Table C, C3). A day with no row is an entry `empty` with no file | The raw folders of the new days and of the re-run span |
-| B7 | First run: no daily mark | The oldest raw day in the raw month folders from the newest eligible month minus `lookback` months to the newest eligible month, or in the operator range. Never before the keep line when month deletes are live | As B6. With no raw day, nothing; the outcome is `empty` | Those raw month folders |
+| B6 | Pack days | The day after the daily mark | New days up to the earlier of the mark plus the cap and the newest eligible day. Also packed days inside the 30-day re-run span that hold new raw files; they count against the cap. A raw file in a closed month re-opens it (Table C, C3). A day with no row is an entry `empty` with no file | The raw folders and the packed day files of the new days and of the re-run span. Rule R and the re-take read the day files (Fowler, 2026-10-04) |
+| B7 | First run: no daily mark | The oldest raw day in the raw month folders from the newest eligible month minus `lookback` months to the newest eligible month, or in the operator range. Never before the keep line when month deletes are live. A daily index with no mark beside it, which a pass cut before its mark landed leaves, starts it at the index's oldest day when that is older; row 19 deletes this case (Fowler, 2026-10-04) | As B6. An indexed day with no raw file keeps its entry, and the mark moves past it. With no raw day, nothing; the outcome is `empty` | Those raw month folders |
 
 Every read has a fixed size (Guardrail #12). A pass names at most: the three indexes, plus the three watermarks until row 19; for each step, the cap times that step's periods; and, only when an index file is absent, the paths Rule L names (section 2.2). Each count comes from config or the calendar. Rule L's yearly paths grow by one a year, as the yearly index does (row 14, decision 3). Step B3, which dropped the retired raw listings, went with #1267 (row 25).
 
@@ -417,23 +417,31 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/gardener/one_at_a_time.py`
   - `backend/idhazh/gardener/report.py`
   - `backend/idhazh/contracts/collection_prune.py`
-  - `backend/idhazh/contracts/knobs/gardener.py` (`CollectionPolicy.mark_lookback_days`)
+  - `backend/idhazh/contracts/knobs/gardener.py` (`CollectionTaskPolicy.mark_lookback_days`; the row named `CollectionPolicy`, which does not exist)
   - `config/gardener/workflow-runs.json`
   - `backend/tests/gardener/test_github_collections.py`
   - `backend/tests/gardener/tasks/test_collection_task.py`
   - `backend/tests/gardener/test_one_at_a_time.py`
   - `backend/tests/contracts/test_collection_prune_row.py`
-  - `tests/fixtures/contracts/collection-prune-row/` (new: a row with `handled_through`)
-  - `tests/fixtures/github-collections/` (new files: recorded pages for one created day, a day whose `total_count` is 1,001, and the repository's own answer with its `created_at`)
+  - `tests/fixtures/contracts/collection-prune-row/` (new: a row with `handled_through`; the three rows already there gain `handled_through: null`, found during execution)
+  - `tests/fixtures/github-collections/` (new files: recorded pages for one created day, a day whose `total_count` is 1,001, and the repository's own answer with its `created_at`; `runs-page-1.json` deleted, because nothing reads it once the runs are searched by day, found during execution)
   - `docs/architecture/publishing/idhazh-gardener.md` (collections)
+  - `backend/idhazh/gardener/collection_mark.py` (new; first sentence "Through which UTC day has a collection task's walk handled every member, by its own record?"; found during execution, Fowler's ruling)
+  - `backend/tests/gardener/test_collection_mark.py` (new; found during execution)
+  - `backend/tests/gardener/_records.py` (new; files a record row through the ledger door for both test modules; found during execution)
+  - `backend/tests/gardener/test_report.py` (a dry walk's ceiling line; found during execution, Fowler's ruling)
+  - `backend/tests/contracts/_fixtures.py` and `backend/tests/ledger/_fixtures.py` (they name the new row; found during execution)
+  - `docs/concepts/config/idhazh-gardener.md`, `docs/architecture/contracts/state-ledgers.md` and `docs/how-to/prune-a-collection.md` (the knob, the row's new cell, the record's first reader, and the dry walk's ceiling line; found during execution)
 - **How it works:**
-  - The task reads its own newest record row from the `gardener` ledger, over the last `mark_lookback_days` named UTC days, with `ledger.load_days`. It names those day paths at run time with `FileListing.name` (row 12). A row written by a pass with a different `dry_run` value is not used.
+  - The task reads its own record rows from the `gardener` ledger, over the last `mark_lookback_days` named UTC days, with `ledger.load_days`, and takes the latest `handled_through` among them (decision 5). It names those day paths at run time with `FileListing.name` (row 12). A row written by a pass with a different `dry_run` value is not used.
   - With a mark: for each UTC day after the mark, up to the line's day, one query `created=YYYY-MM-DDT00:00:00Z..YYYY-MM-DDT23:59:59Z`. Both bounds carry `Z`, so the day's time zone is never left to GitHub. A day whose `total_count` is over 1,000 is split into 24 hourly queries, because one search returns at most 1,000 results. A day is handled whole, and then the mark moves to that day; a split day moves it only after all 24 queries. The pass stops at the ceiling, and the mark stays on the last whole day.
+  - Each query's pages are read from the last to the first, so a live delete never moves a run the pass has not read yet (Fowler, 2026-10-04).
   - With no mark: the task reads the repository's `created_at` once (`GET /repos/{owner}/{repo}`). If the line is before it, no run is older than the line, and the mark starts at the line's day. Otherwise the task finds the oldest day with a run by halving the span from `created_at` to the line, one query `created=<=D` with `per_page=1` a step, testing `total_count > 0`: about 9 queries for a year of days. The walk starts on that day.
   - A dry run reports at most the ceiling's worth of members and counts the rest of each day, so a dry run also moves at least one whole day a wake.
   - Every member is still checked against the line before it is taken.
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/gardener/test_github_collections.py backend/tests/gardener/tasks/test_collection_task.py backend/tests/gardener/test_one_at_a_time.py`, and `-m contract backend/tests/contracts/test_collection_prune_row.py`; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** with recorded pages, a pass on 2026-10-04 with a 90-day window and a mark of 2026-06-30 sends `created=2026-07-01T00:00:00Z..2026-07-01T23:59:59Z` first. A recorded day with `total_count` 1,001 sends 24 hourly queries, and the mark passes that day only after all of them. A pass that hits the ceiling partway through a day leaves the mark on the day before. A live pass ignores a mark written by a dry run. With no mark and a repository created after the line, no page of runs is read; with no mark and an older repository, the halving finds the oldest day from recorded `total_count` answers. A run newer than the line in a recorded page is still refused. It cannot settle GitHub's own `created` filter; the member check stays as the safety line.
+- **Found during execution:** the repository's oldest run is from 2026-08-22 (read from GitHub on 2026-10-04), so runs first reach the 90-day line on 2026-11-20, not on about 2026-11-18 as decision 4 estimated from the day the repository was created. `ledger.load_days` lists every raw day folder of a ledger on disk before it keeps the named days (`raw_files._day_folders`), so on a full checkout its read grows with the repository (Guardrail #12); on a runner the checkout holds only the days the task fetched. It is filed as defect 59 in `TODO/20260823-known-defects-plan.md`, because the read is the ledger door's and every caller of `ledger.load_days` shares it.
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -441,6 +449,12 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 2 | One UTC day per query, with `Z` on both bounds. A day is far below GitHub's cap of 1,000 results a search today, about 175 runs a day on 2026-10-04, but nothing holds it there, so a day over the cap is split into 24 hourly queries rather than losing runs while the mark moves past them | Plan author, 2026-10-04; the bounds and the split Fowler review, 2026-10-04 |
 | 3 | `mark_lookback_days` is a knob with a default of 7. With no row in reach, the task starts with no mark, which is correct and only slower | Plan author, 2026-10-04 |
 | 4 | With no mark, the walk starts from the repository's `created_at` or from the halving, never from `total_count`, which is a count and cannot name the oldest run. On 2026-10-04 the 90-day line, 2026-07-06, fell before the repository existed, so such a pass reads no page of runs; runs first reach the line on about 2026-11-18 | Fowler review, 2026-10-04 |
+| 5 | The mark is the latest `handled_through` on the task's own rows with the same `dry_run`, because a day stays true once written; a row with none is passed over. A pass that finishes no new day carries the day it started from forward, so null means a task that keeps no mark, or a pass that failed before its walk began | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 6 | Each query is read from its last page back | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 7 | A dry walk past its ceiling keeps `stopped_because: ceiling`, and `resume_from` names where a live pass would stop; its line says the rest of the day was counted, not listed | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 8 | `handled_through` is refused on or after the row's `date`, the bound that always holds. No bound against `until`: a lengthened window moves the line behind a mark already reached | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 9 | A run from an earlier day than one before it: the pass goes on, and its mark stays where it started. An hour GitHub counts over 1,000 fails the pass, with the mark on the last whole day | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 10 | The mark is read in a module of its own, and `collection_named` and `BUILDERS` went in a structural commit first, because the runs listing now takes its walk's days | Fowler, 2026-10-04 (row 10 worker's consult) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
@@ -448,37 +462,58 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 2 | A mark file under `state/raw/gardener/marks/` | Two tasks would own one folder | A change to the ownership rule in `backend/idhazh/config.py` | Plan author, 2026-10-04 |
 | 3 | A new folder `state/gardener/marks/` | Not under `state/raw/` as the owner asked, and a new root in `docs/reference/repository-layout.md` | One owned path per task and one new contract | Plan author, 2026-10-04 |
 | 4 | With no mark, read the oldest run from `total_count`, and walk newest first when it is above 1,000 (this row as first written) | A count is not a date, so it cannot name the oldest run, and the newest-first branch existed only because of that | Nothing to build; a first pass that cannot say where it starts | Fowler review, 2026-10-04 |
+| 5 | Read the 1,000 runs one search returns for an hour over the limit, and keep the mark on the day before | 1,000 runs in an hour is about 140 times today's rate, an estimate from about 175 runs a day, and a failed pass names the hour | It recovers on its own in a live pass, as deletes thin the hour, but needs the way of holding a mark that row 11 builds | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 6 | Read each query front to back, as the artifacts are | A live pass that deletes as it reads moves later runs onto pages already read, and the mark then passes them for good | Nothing to build | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 7 | The newest row's mark, rather than the latest day | A row whose pass failed before its walk began would send the next pass back to the halving | Nothing to build; a first walk repeated | Fowler, 2026-10-04 (row 10 worker's consult) |
 
 ### Row #11 - workflow-artifacts reads from the oldest end and resumes from its mark
 
 - **Scope:** The artifacts task reads pages from the last one backwards and stops at the first artifact newer than its line. Each page is checked against the order the walk relies on, against the mark, and against the first page's `total_count`. Every page is read only when the order check fails. Level 3.
+- **Follow-ups:**
+  - Row 10 built the walk this row needs. `collection_mark.last_mark` reads the mark for any collection task. `one_at_a_time.take(mark=...)` passes over what the mark covers, moves the mark a whole day at a time, counts the rest of a day on a dry run past its ceiling, and keeps the mark where it was when a member arrives out of day order. So this row hands `take` its artifacts oldest day first, and writes none of those rules again. `workflow-artifacts.json` names `state/raw/gardener` and `state/compact/gardener` under `reads`, and `mark_lookback_days`, as `workflow-runs.json` does; found during execution (row 10 report), 2026-10-05.
+  - A count from a search by date stops at 2,500: on 2026-10-05 the runs created on or before 2026-09-20 counted 2,500, where their days add up to 4,404. The artifacts list is not a search, but this row finds its last page and checks for shifted pages from `total_count`, so it first confirms the count is exact for the artifacts list; found during execution (row 10 report), 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/gardener/github_collections.py`
   - `backend/idhazh/gardener/tasks/collection.py`
-  - `config/gardener/workflow-artifacts.json`
+  - `config/gardener/workflow-artifacts.json` (gains `reads` and `mark_lookback_days`, as the first follow-up says)
   - `backend/tests/gardener/test_github_collections.py`
   - `backend/tests/gardener/tasks/test_collection_task.py`
-  - `tests/fixtures/github-collections/` (new: recorded artifact pages, one out of order, and pages whose `total_count` grows between two reads)
+  - `tests/fixtures/github-collections/` (new: `artifacts-oldest-pages.json`, GitHub's last four pages of the 1,613 artifacts it listed on 2026-10-05, served as pages 1 to 4 of 313. The page out of order and the count that grows are built in the tests from it, one field changed. `artifacts-page-1.json` deleted: it was not GitHub's order, and three of its artifacts were older than the repository; found during execution, Fowler's ruling)
   - `docs/architecture/publishing/idhazh-gardener.md` (collections)
+  - `backend/idhazh/gardener/one_at_a_time.py` (`Collection.listing_intact`; found during execution, Fowler's ruling)
+  - `backend/tests/gardener/test_one_at_a_time.py` (found during execution)
+  - `docs/concepts/config/idhazh-gardener.md`, `docs/how-to/prune-a-collection.md` and `docs/architecture/contracts/state-ledgers.md` (each said only `workflow-runs` keeps a mark; found during execution)
 - **How it works:**
   - The first page gives `total_count`, and that gives the last page.
-  - Pages are read from the last page backwards. On each page, every `created_at` must be at or before every `created_at` on the page read next, so the walk is oldest first.
+  - Pages are read from the last page backwards. Each page is sorted by `created_at`, and the oldest UTC day on each page must be at or after the newest UTC day on every page read before it, so the walk is oldest first by day (found during execution: GitHub orders by id, and `created_at` runs up to 76 minutes out of that order). The next page is read and checked before any artifact of the page in hand is taken.
   - Artifacts created on or before the mark day are skipped. Those after it, and on or before the line's day, are handled. The mark moves to a day only once every artifact of that day is handled.
   - When a page breaks the order, the pass reads every page as today, logs that the order check failed, and does not move the mark.
   - Each page's `total_count` must equal the first page's, less the artifacts this pass deleted. An artifact created during the read pushes every older one a place down, so one can move from a page not yet read onto a page already read while the order still holds. When the count differs, the pass handles what it read and does not move the mark.
+  - The list must end where the first page's count says: the last page holds what is left of the count, and when that page is full, the page after it is read, never handed on, and must be empty. When it does not, the pass handles what it read and does not move the mark (decision 10, the second follow-up).
 - **Acceptance gates:** local: pytest on the two test files; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** with recorded pages in GitHub's current order, a pass reads the last page and one more, and handles the oldest artifacts first. With one page out of order, it reads every page and leaves the mark where it was. With pages whose `total_count` grows between two reads, the mark stays. Safety never depends on the order, because each artifact is checked against the line before it is taken; completeness does, and the `total_count` check guards it. It cannot settle GitHub changing its order; the check catches that on the first wake after a change. Nor can it settle a shift that leaves the count unchanged, such as one artifact created and one expired between two reads; GitHub's own retention, 90 days by default and a repository setting to read at dispatch, deletes an artifact missed that way at most 60 days after the 30-day line.
+- **Found during execution:** read on 2026-10-05 with `gh api`, GitHub held 1,613 artifacts on 17 pages, listed by id, newest first, strictly. An id and its `created_at` disagreed by up to 4,534 seconds (76 minutes). Compared by instant, as this row was first written, the order check failed at 9 of the 16 page boundaries, so the walk would have read every page and kept its mark on about half of all wakes. Compared by UTC day, each page sorted by `created_at`, all 16 held, with no day out of order. The second follow-up is settled for today's size: every one of the 17 pages counted 1,613, and together they held 1,613 distinct artifacts, so the artifacts list's count was exact. Above 2,500 it cannot be read yet. A third of today's artifacts are kept 90 days, so with `dry_run` on the list may pass 2,500 within weeks (an estimate), and decision 10 checks the end of the list at every wake instead. Run on today's main, the new tests fail 24 of 87: main reads every page front to back, hands on the newest artifact first, deletes the newest in the window first, and keeps no mark on any artifacts pass. `RecordedApi`, which row 20's oracle names, went with this row: it answered every request with one page, which no walk from the last page can read. Its refused delete is `RecordedAnswers(fails_at=...)` now.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Combine a read from the oldest end (P2) with a stored mark (P3). The mark is a day, never a page number, because pages shift as artifacts expire | The owner, 2026-10-04 |
 | 2 | The order is checked on every page, so an undocumented order lowers the cost and never decides what is deleted | Plan author, 2026-10-04 |
 | 3 | The mark moves only while every page's `total_count` equals the first page's, less this pass's deletes, because a shifted page can carry an artifact onto a page already read | Fowler review, 2026-10-04 |
+| 4 | The order is checked by UTC day, each page sorted by `created_at` first, because the mark, the line and `take` all count days, and the instant check failed at 9 of 16 real boundaries | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 5 | A listing that may have missed a member says so through `Collection.listing_intact`, and `take`'s one record builder keeps the mark at every exit, a failed one included | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 6 | With no mark in reach, the first walk starts after the day before the repository was created, or at the line when that is earlier. `first_mark` became `first_runs_mark` beside `first_artifacts_mark`, with the read of the repository's day shared, in a structural commit first | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 7 | A count that differs keeps the mark, and the walk goes on to its line: a missed artifact costs completeness, never safety | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 8 | After the order breaks, the walk reads every remaining page, each once and still from the last back, with no stop at the line, so a live delete moves only artifacts already read (row 10, decision 6) | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 9 | Page p-1 is read and checked before any artifact of page p reaches `take`, so a pass that ends inside a page never ends past an unchecked boundary | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 10 | The list must end where the first page's count says: the last page holds what is left of it, and a full last page has an empty page after it. Otherwise the count is not trusted, the mark stays, and the walk goes on. One more request on a wake whose last page is full; a re-measure past 2,500 would prove the count only at that size, and only once someone noticed | Fowler, 2026-10-05 (row 11 worker's consult) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Read every page, as today (P1) | 14 pages every wake, about 7 seconds (an estimate) | Nothing to build | The owner, 2026-10-04 |
 | 2 | Reach artifacts through each old run | One request for every run, including runs with no artifact, about 175 a day | A request per run | Plan author, 2026-10-04 |
+| 3 | Check the order by instant, as this row was first written | Failed at 9 of 16 real page boundaries on 2026-10-05: the walk would read every page and keep its mark on about half of all wakes | Nothing to build; a mark that rarely moves | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 4 | Walk and check by id, GitHub's own order | 19 artifacts came after one from a later day, each in the half hour before a midnight, so `take` would hold the mark there; and a stop at the line could leave a later-made, lower-day artifact unread | Nothing to build | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 5 | The task replaces `handled_through` on the returned pass | Splits the rule that holds a mark over two modules, and misses the record a failed pass raises with | Nothing to build | Fowler, 2026-10-05 (row 11 worker's consult) |
 
 ### Row #12 - Which months may close
 
@@ -545,10 +580,20 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/tasks/test_compaction_batch.py`
   - `backend/tests/ledger_migration/test_packing_parity.py` (its parity case expects a file for every day from the 1st of the month, the days with no row packed as zero-row files)
   - `docs/architecture/publishing/ledger-compaction.md`
+  - `backend/idhazh/contracts/gardener_events.py` (`PeriodsChosen` gains `newest_eligible_day`, `keep_line`, `days` and `rerun_span`; `StartReason` gains `oldest-raw-day` and `keep-line`; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`name_days`, `name_raw_months` and one naming helper they share with `name_months`; `note_recovery`, moved from `_monthly_period`; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/_monthly_period.py` (calls `note_recovery`; found during execution)
+  - `backend/idhazh/ledger/ledger_files.py` (a docstring said a quiet day is a zero-row file; found during execution)
+  - `backend/tests/gardener/tasks/_task.py` (`wake`: the listing a scheduled wake builds; found during execution)
+  - `backend/tests/gardener/tasks/test_telemetry_aggregate_task.py` (the knobs it spreads into `run_task` are typed, now that `run_task` also takes `wake`; found during execution)
+  - `backend/tests/ledger_migration/test_full_chain.py` and `backend/tests/test_canary_packing.py` (each pinned the fill from the 1st; found during execution)
+  - `backend/tests/ledger_migration/test_packing_scope.py` (named months that leave out the day after the mark are now refused at that day; found during execution)
+  - `backend/tests/ledger/_every_tier.py` (its first pass looks back four months; found during execution)
+  - `docs/concepts/config/idhazh-gardener.md` (`lookback` for a compaction; found during execution)
 - **Acceptance gates:** local: pytest on the test files above; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:**
   - Unit: a mark of 2026-09-16, cap 8, `compact_after_days` 1 and today 2026-10-04 give new days 2026-09-17 to 2026-09-24, resuming at 2026-09-25.
-  - Integration: raw days 2026-09-17 to 2026-10-02 reach 2026-10-02 in two passes. An empty ledger, using the declaration from `tests/fixtures/gardener/runner/compact-gardener.json` with `dry_run` set false in the test, writes nothing and ends `empty`. A day with no row writes no file and an `empty` entry. A first run that starts mid-month writes no entry before the first raw day. The case in `test_compaction.py` that pins a fill from the 1st is turned around to pin that no fill happens, and so is the parity case in `test_packing_parity.py`.
+  - Integration: raw days 2026-09-17 to 2026-10-02 reach 2026-10-02 in two passes. An empty ledger, using the committed declaration `config/gardener/compact-gardener.json` with `dry_run` set false in the test, writes nothing and ends `empty` (corrected 2026-10-05: this line first named `tests/fixtures/gardener/runner/compact-gardener.json`, which owns only `state/compact/gardener`, so a real pass is refused before it reads a raw day; Fowler, 2026-10-04). A day with no row writes no file and an `empty` entry. A first run that starts mid-month writes no entry before the first raw day. The case in `test_compaction.py` that pins a fill from the 1st is turned around to pin that no fill happens, and so is the parity case in `test_packing_parity.py`.
   - It cannot settle when GitHub re-runs a job; rows 17 and 24 cover late files.
 
 | # | Decision | Authority |
@@ -576,6 +621,10 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/tasks/test_compaction_periods.py`
   - `backend/tests/gardener/tasks/test_compaction_years.py`
   - `docs/architecture/publishing/ledger-compaction.md` (and a `## Design rationale` entry for decision 3)
+  - `backend/idhazh/contracts/gardener_events.py` (`PeriodsChosen` gains `newest_packable_year` and `years`, both None when the declaration packs no year; `operator-range` also names a range that holds no whole year; found at dispatch by the owner, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`name_years`, beside `name_months` and `name_days`; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/schedule.py` (`newest_eligible_year`; `is_year_eligible` and `year_ended_at` deleted once nothing calls them; found during execution, Fowler's ruling)
+  - `docs/how-to/execute-a-plan.md` and `docs/how-to/run-the-gates.md` (how to run a new test against the base commit without stashing, and the false pass a copy without `pyproject.toml` gives; found during execution, the user's instruction of 2026-10-05 that what a session learns goes to `docs/`)
 - **Acceptance gates:** local: pytest on the two test files; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** a monthly index from 2026-01 to 2027-01, a monthly mark of 2027-01, `daily_keep_days` 31 and `monthly_keep_days` 63 make 2026 ready on 2027-03-05 and not on 2027-03-04. 63 is the lowest value the contract accepts before row 24, `daily_keep_days` + 32, and the index holds 2027-01 because that month is also old enough to close on both dates. With the monthly mark at 2026-12, 2026 is not ready. A ledger that began in 2026-05 packs 2026 from May. It cannot settle a real year; the first one packs in 2027.
 
@@ -589,7 +638,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- | --- | --- |
 | 1 | A keep line for years | `published` and `summary-quality-evals` refuse deletion in `prune_refusal` | A knob, and deleting a whole year of rows from the ledgers that allow it | Plan author, 2026-10-04 |
 | 2 | Pack years into decades | The index still grows, one level up | A fourth period kind across the contracts and the site | Plan author, 2026-10-04 |
-| 3 | Keep only a first and a last year in the index | A Level 5 change to every index reader, to save about 60 bytes a year | The site's reader and the binding tests change | Plan author, 2026-10-04 |
+| 3 | Keep only a first and a last year in the index | A Level 5 change to every index reader, to save one entry a year, about 14 bytes after gzip and 104 raw, as row 14's worker measured on 2026-10-05 | The site's reader and the binding tests change | Plan author, 2026-10-04 |
 
 ### Row #15 - Each old month is dropped once
 
@@ -650,6 +699,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #17 - A late file re-opens its month
 
 - **Scope:** A raw file that lands in a month already closed re-opens that month (Table C, C3). The month's rows and the late rows are settled by the ledger's record key, the month file and its entry are rewritten, and the late raw files are deleted. Level 3.
+- **Follow-ups:**
+  - The day step's refusal "raw files sit in a month already absorbed" compares a raw day's month with the monthly mark alone, so it also catches a raw day in a month before the ledger's first packed month, which no month entry names and which never closed. A first run that looks back `lookback` months (B7) can leave such a day behind. It is not a late re-run, so re-opening never treats its month as closed; found during execution (row 13 report), owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_daily_period.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
@@ -677,6 +728,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - Rule R's downloads (`ledger_marks.adopt`, row 12) count against the shard's download budget, as the periods a step chooses do (Table C, C8); found during execution (row 12 report), owner 2026-10-04.
   - The day step's re-take of a packed day builds a fresh `CompactEntry`, which drops the day's `set_aside`. The re-take keeps it; found during execution (row 30 report), owner 2026-10-04.
   - A set-aside file goes to `state/raw/<ledger>/set-aside/` (Table C, C5), the folder the console names to a person since row 31 (#1301); found during execution (row 31 report), owner 2026-10-04.
+  - The year step looks for its own year file by Rule R before its C13 step. Otherwise it records as lost the days that an adopted year file holds (Fowler); found during execution (row 14 report), owner 2026-10-05.
+  - When a year's months hold rows, `_yearly_period._pack` writes over a year file that sits at its path with no index entry. The month step refuses that case. Fowler rules whether the year step refuses it too or adopts the file by Rule R; found during execution (row 14 report), owner 2026-10-05.
+  - A month with no monthly entry inside a ready year is refused as `day-missing`, and Table C names no recovery for it. Rows 18 and 19 decide whether it gets one; found during execution (row 14 report), owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_daily_period.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
@@ -714,6 +768,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #19 - The marks are worked out from the indexes, and the watermark files go
 
 - **Scope:** Each mark is worked out from the three indexes (section 2.2), and an absent index is rebuilt from named paths by Rule L. The `Watermark` contract and every committed `state/compact/<ledger>/<period>/watermark.json` are deleted (Table D, D4), so a watermark without its index can no longer happen (Table C, C9), and `index-missing` can no longer stop a pass (C14). Level 5.
+- **Follow-ups:**
+  - Delete the first-run case in `_compaction_periods._days` that starts at the oldest day a daily index names when no daily mark is beside it (Table B, B7). Once the daily mark is worked out from the indexes, an index that names a day always gives a mark, so the case can no longer happen; found during execution (row 13 report, Fowler 2026-10-04), owner 2026-10-05.
 - **Files touched** (from a search for `watermark` in any case, `daily_through`, `monthly_through` and `yearly_through`, 2026-10-04, after #1267 merged; search again at dispatch, `TODO/` and `state/compact/` included. The benchmark record of what a compaction pass costs describes the pass it measured, and it stays as it is, as do the matches that mean another thing, such as a stream's `highWaterMark`):
   - `.gitattributes` (its `-merge` line for `state/compact/*/*/watermark.json`)
   - `config/idhazh_gardener.json` (`first_ledger_year`, Table D, D5)
@@ -725,6 +781,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/ledger/day_removal.py` (its docstring names the watermark)
   - `backend/idhazh/gardener/ledger_marks.py` (Rule L)
   - `backend/idhazh/gardener/tasks/_compact_tree.py`
+  - `backend/idhazh/gardener/tasks/_compaction_periods.py` (the first-run case that starts at the oldest indexed day; found during execution (row 13 report), owner 2026-10-05)
   - `backend/idhazh/gardener/tasks/_daily_period.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
   - `backend/idhazh/gardener/tasks/_yearly_period.py`
@@ -744,6 +801,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/test_period_inputs.py`
   - `backend/tests/gardener/tasks/test_compaction.py`
   - `backend/tests/gardener/tasks/test_compaction_batch.py`
+  - `backend/tests/gardener/tasks/test_compaction_periods.py` (the same case's unit test; found during execution (row 13 report), owner 2026-10-05)
   - `backend/tests/gardener/tasks/test_compaction_years.py`
   - `backend/tests/ledger/test_ledger_files.py`
   - `backend/tests/ledger/test_trial_roots.py`
@@ -785,6 +843,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - The operator-range refusal that row 12 added ends the task `failed` today. It is not a code defect, so it gets a fault word of its own in Table D, D3 and does not turn the job red; found during execution (row 12 report), owner 2026-10-04.
   - The day step writes the note `repacked-from-raw` when it packs a day inside history that had no entry (Table C, C2). Row 12 wired only `index-rebuilt` and `recorded-lost`; found during execution (row 12 report), owner 2026-10-04.
   - The outcome `outside-range` follows Table F, F8, whose meaning row 12 narrowed: a range that a ready period before it blocks is the refusal above, never `outside-range`; found during execution (row 12 report), owner 2026-10-04.
+  - `RecordedApi` is gone since row 11 (#1317): it answered every request with the same page, which a walk from the last page cannot read. The oracle names `RecordedAnswers`, whose `fails_at` makes a delete refuse; corrected from row 11's report, owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/contracts/collection_prune.py`
   - `backend/idhazh/contracts/gardener_fault.py` (new; first sentence "Why a gardener pass stopped, and what it recovered instead of stopping")
@@ -817,7 +876,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - Any other 4xx, or any other exception: fault `raised`, outcome `failed` (C12). It is a code or permission defect, and the job turns red.
   - `PruneInterruptedError` and `FoldInterruptedError` carry the classified cause, and never relabel a code defect.
 - **Acceptance gates:** local: `-m contract backend/tests/contracts/test_collection_prune_row.py`, and pytest on the other test files above; ruff; mypy; `doc_load.py`. CI: the full suite.
-- **Oracle:** the new fixtures round-trip. A `fault` beside `stopped_because: exhausted` is refused. `ceiling-reached.json`, which has no `fault`, still reads. Each recovery in Table C writes its note, and each stop writes its fault. The classifier maps each case above, built from real `HTTPError` and `URLError` objects. With `RecordedApi` answering 503, the outcome is `deferred`, the mark does not move, and the shard's other tasks run. With member 2 of 3 answering 422, members 1 and 3 are deleted, and the record holds one `not-deletable` note naming member 2. A shard whose only non-green task is `deferred` exits 0. It cannot settle wording; the sentence is rendered and can change with no migration. Nor can it settle what GitHub answers for a member it will not delete (decision 6).
+- **Oracle:** the new fixtures round-trip. A `fault` beside `stopped_because: exhausted` is refused. `ceiling-reached.json`, which has no `fault`, still reads. Each recovery in Table C writes its note, and each stop writes its fault. The classifier maps each case above, built from real `HTTPError` and `URLError` objects. With `RecordedAnswers` answering 503, the outcome is `deferred`, the mark does not move, and the shard's other tasks run. With member 2 of 3 answering 422, members 1 and 3 are deleted, and the record holds one `not-deletable` note naming member 2. A shard whose only non-green task is `deferred` exits 0. It cannot settle wording; the sentence is rendered and can change with no migration. Nor can it settle what GitHub answers for a member it will not delete (decision 6).
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -838,6 +897,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #21 - Every gardener log line is one JSON event
 
 - **Scope:** The events of Table E become models, `event_log.py` writes each one as one JSON line (section 2.5), and the free-text log lines of the gardener are deleted. Level 3.
+- **Follow-ups:**
+  - Row 11 (#1317) added three warning lines that become events here: the order check failed, a page's count differs from the first page's, and the list does not end where the count says. E2's pages read is filled from the walk; found during execution (row 11 report), owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/contracts/gardener_events.py`
   - `backend/idhazh/gardener/event_log.py` (new; first sentence "How a gardener event becomes one log line")
@@ -894,6 +955,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #23 - The gardener ledger is packed live
 
 - **Scope:** `config/gardener/compact-gardener.json` gets `dry_run: false`, so the gardener's own records are packed into one file a day and then one a month. Level 2.
+- **Follow-ups:**
+  - A first run looks back `lookback` months (default 2) before the month that holds the newest eligible day (Table B, B7). The gardener ledger's oldest raw day was 2026-09-30 on 2026-10-05, and from the wake of 2026-12-03 it falls outside that look-back, so a first live pass from then on would leave its older raw days raw. Before switching on, check the oldest raw day against the look-back and, when it falls outside, raise `lookback` in the same change so the first live pass reaches it. `compact-visual-prunes` (oldest raw day 2026-09-06, outside from 2026-12-03) and `compact-run-plan` (2026-10-04, outside from 2027-01-03) have never packed either and need the same check when they switch on; found during execution (row 13 report), owner 2026-10-05.
+  - Since #1309 a first run starts at its oldest raw day and writes no zero-row file, so the cost named in rejected option 1 below no longer holds; Fowler's order for readable first-pass logs still does; found during execution (row 13 report), owner 2026-10-05.
 - **Files touched:**
   - `config/gardener/compact-gardener.json`
   - `backend/tests/contracts/test_gardener_config.py` (both of its switches in `LIVE_BY_DECISION`, with the owner's decision as the reason)
