@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-05
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -149,6 +149,14 @@ The Data explorer is a workbench. Pressing Run, copying text, saving a question,
 
 Long content scrolls inside the region that owns it. The SQL editor has a fixed line count, the status bar reserves readout lines, the answer region has a fixed viewport share, and notices float over the page instead of entering the document flow. The column rail may show ledger columns before a run and answer columns after an answered or quiet run, but the rail's box and its inner scroller keep their size.
 
+## The Data explorer colours a type by its family, and marks a chosen ledger
+
+Every column type the page prints, in the column rail and under each header of the answer table, is in the data font at `--text-xs` and in the colour of its family. Text and numbers wear `--type-text` and `--type-number`, which are the editor's string and number colours, so one kind of value has one colour everywhere on the page. Dates and times wear `--type-time`, and true/false wears `--type-truth`. A list, a struct, a blob and a type no rule knows stay in the tertiary text colour. Whole numbers and decimals share a colour, as `42` and `3.14` do in the editor. The type is always printed in words, so the colour is a second signal and the page has no legend. One function decides the colour, `typeColour()` in `frontend/src/lib/console/explorer/type-colour.ts`: it returns the token, the label is painted with exactly that token, and the function tests for a list or a struct first, because `timestamp[]` is a list, not a time. In the answer header only the type word takes the colour; the note about the bars after it stays tertiary.
+
+The column rail prints each ledger's name once, as a heading that stays at the top of the list while that ledger's rows scroll, and each row prints only the column's own name. The full `ledger.column` name stays in the row's text for a screen reader and in its `title` for a hover. Rows are ordinary block flow with a 24 px minimum height: a long name or a long type wraps, the row grows, and nothing is cut short. A type that does not fit beside its name moves to its own line at the end of the row.
+
+A chosen ledger's row in the ledger rail has the `--tint-accent` ground, a 3 px `--color-accent` edge at its start, its name at weight 600 and its second line in the secondary text colour. Every row carries the edge, transparent until chosen, so choosing a ledger moves nothing. A ledger that is not on this site is one text colour step quieter, never dimmed with opacity.
+
 ## An axis title and a column header take one form
 
 `Article length, words`. **Sentence case, a comma, the unit in lower case, and
@@ -205,6 +213,47 @@ new section.
 **Say it once per screen.** A fact stated twice on one screen reads as two
 facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
+
+## Design rationale
+
+**A colour per type family.** The operator writes the next question from the
+column rail, and one ledger can list more than a hundred columns. A colour per
+family finds the
+numbers or the times without reading every type. Text and numbers reuse the
+editor's two colours, so the page has one colour for one kind of value. Time and
+true/false needed hues of their own: the other palette colours sit too close to
+the accent, which is the console's link colour, and the confidence hues carry a
+verdict that a type does not. Only four hues fit clear of both, so a list, a
+struct and an unknown type stay tertiary; the brackets in `varchar[]` already
+mark a list. Every type colour reads at least 4.5:1 on the surface in both
+themes, the level normal text needs, and `frontend/tests/tokens.spec.ts`
+recomputes it.
+
+**No fixed row height in the column rail.** The rail is a scroll box of fixed
+height. While its rows were a grid inside that box, each row stayed at its 24 px
+minimum and never grew to its content, because a grid only shares out free
+space and a full scroll box has none. A name that wrapped then printed over the
+rows below it. Block flow sizes each row to its content.
+
+**One heading per ledger instead of a prefix on every row.** In the 224 px rail
+a name gets about 13 characters of the data font a line, and every item-health
+column starts with the 12-character `item-health.`. Printed on every row, the
+prefix filled each row's first line with the same text; cut with an ellipsis,
+the name would lose the end that tells two columns apart. The heading says the
+ledger once, and wrapping keeps every character on screen.
+
+**The chosen ledger.** Before this, a chosen ledger differed from the others only
+by its checkbox. `--tint-accent` is already the console's chosen ground - a
+picked choice tile and a selected ranked row use it - and a 3 px edge, reserved
+on every item and coloured on the chosen one, is how the console's route tabs
+mark the open tab. `--color-mark` was not used:
+it means a word your filter matched, and this rail has a filter. On every tinted
+ground the tertiary colour reads under 4.5:1, so a chosen row's second line
+steps up to secondary.
+
+**No opacity on an unpublished ledger.** Opacity 0.72 put the second line of an
+unpublished ledger at 3.08:1 in dark and 2.90:1 in light, under the 4.5:1 that
+normal text needs. One text colour step keeps the row quieter and readable.
 
 ## See also
 
