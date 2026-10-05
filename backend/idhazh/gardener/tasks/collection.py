@@ -8,10 +8,10 @@ the window, the ceiling and the resume point are `one_at_a_time.take`'s; where
 the task's last walk stopped is `idhazh.gardener.collection_mark`'s. This
 module only joins them.
 
-**The runs are walked a UTC day at a time, from the task's own mark.** The
-mark is the day its last pass with the same `dry_run` handled through. With no
-such pass in reach, GitHub's own answers say where a first walk starts. The
-artifacts are still listed whole, every page, each wake.
+**Both collections are walked from the task's own mark.** The mark is the day
+its last pass with the same `dry_run` handled through. With no such pass in
+reach, GitHub's own answers say where a first walk starts. The runs are walked
+a UTC day at a time; the artifacts from the oldest end, a page at a time.
 
 **Nothing a pass takes is in the repository.** It takes GitHub ids, so the
 runner holds a collection task to what it wrote, and it writes nothing: the
@@ -39,7 +39,7 @@ KIND = TaskKind.COLLECTION
 
 
 def run(context: TaskContext, *, api: Api | None = None) -> Pass:
-    """Take up to the ceiling of members older than the window; the runs from the task's mark."""
+    """Take up to the ceiling of members older than the window, from the task's own mark."""
     from idhazh.contracts.knobs.gardener import CollectionTaskPolicy, PrunableCollection
     from idhazh.gardener import collection_mark, github_collections
     from idhazh.gardener.one_at_a_time import Window, take
@@ -52,15 +52,13 @@ def run(context: TaskContext, *, api: Api | None = None) -> Pass:
     line = window.until
     if line is None:
         raise ValueError("an age window ends on a day, and this one names none")
-    mark: str | None
+    kept = collection_mark.last_mark(context, policy)
     match policy.collection:
         case PrunableCollection.WORKFLOW_ARTIFACTS:
-            collection = github_collections.artifacts(transport)
-            mark = None
+            mark = kept or github_collections.first_artifacts_mark(transport, line=line)
+            collection = github_collections.artifacts(transport, through=line)
         case PrunableCollection.WORKFLOW_RUNS:
-            mark = collection_mark.last_mark(context, policy) or github_collections.first_runs_mark(
-                transport, line=line
-            )
+            mark = kept or github_collections.first_runs_mark(transport, line=line)
             collection = github_collections.runs(transport, after=mark, through=line)
         case _:
             assert_never(policy.collection)
