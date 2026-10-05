@@ -564,7 +564,14 @@ monthly mark strictly past the year's December. A month closed with no row is
 an `empty` entry, so the year reads it as a month with no rows, never as a
 missing file. An operator range limits the step to the whole years it holds,
 because a year is packed whole and a range promises that nothing outside its
-months changes. Fowler's rulings, 2026-10-04 and 2026-10-05.
+months changes. A year whose months hold no row adopts its own file before it
+is recorded `empty`, because an index restored from an older commit can leave a
+year's months giving no row while the year's own file still holds them, and an
+`empty` entry would hide those rows from every reader. The `periods chosen`
+line carries no year choice at all for a ledger whose declaration packs no
+year, rather than a choice that starts nowhere, which would be false for a
+ledger whose months are all indexed. Fowler's rulings, 2026-10-04 and
+2026-10-05.
 
 A yearly index gains one entry each year and loses none, so its read grows with
 time. That is a named exception to Guardrail #12 in

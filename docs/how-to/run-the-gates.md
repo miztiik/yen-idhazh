@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-05
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -244,6 +244,31 @@ clears in 90 seconds, costs far more than it finds.
 One exception where local is still the only place to run it. A published-site
 change needs the browser smoke in `CLAUDE.md` section 12, which is a real
 browser on your machine.
+
+### Run a new test against the base commit
+
+A row's new test has to fail on the base commit before its pass on the branch
+means anything ([execute-a-plan.md](execute-a-plan.md)). Run it in a copy of
+that commit outside this checkout, never by stashing or resetting the checkout
+(`CLAUDE.md` section 8). Copy in every test file the change touched, and remove
+the copy afterwards:
+
+```powershell
+$python = (Resolve-Path .\.venv\Scripts\python.exe).Path
+$copy = New-Item -ItemType Directory -Path (Join-Path $env:TEMP 'base-commit')
+git archive --format=tar <base-commit> backend config tests pyproject.toml | tar -x -C $copy
+Copy-Item backend\tests\<folder>\test_<changed>.py (Join-Path $copy 'backend\tests\<folder>')
+Push-Location $copy; & $python -m pytest -n 0 backend/tests/<folder>/test_<changed>.py; Pop-Location
+Remove-Item -Recurse -Force $copy
+```
+
+**Keep `pyproject.toml` in the copy.** Its `pythonpath = ["backend"]` is what
+makes pytest import the copy's code. Without it pytest takes a folder above the
+copy as its root and imports this checkout's code through the editable install,
+so the new test passes on "the base commit" while it ran the branch. Measured
+2026-10-05: one new test failed with the file in the copy and passed without it.
+The tell is a `rootdir:` line in the output naming a folder outside the copy;
+the copy's own `-q` hides that line when its settings were read.
 
 ## Set up the backend environment
 
