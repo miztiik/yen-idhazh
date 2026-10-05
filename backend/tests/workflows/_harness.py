@@ -20,7 +20,7 @@ from typing import Any, Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text, seed_publication_inventory
 from origin_template import copy_origin, template
 
 from idhazh import ledger, path_classes
@@ -69,7 +69,6 @@ RUNS_MAY_OVERLAP: Final = frozenset({"digest.yml"})
 EXPECTED_WORKFLOWS: Final = {
     "backfill.yml": ("Vector backfill", frozenset({"workflow_dispatch"})),
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
-    "compaction-profile.yml": ("Compaction profile", frozenset({"workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
@@ -140,6 +139,8 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     # The one that decides a published address. See the two tests that run the
     # step for what it accepts and what it now stops.
     ("digest.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+    # Blank plans the full day; a number lowers the run's crash guard to it.
+    ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
@@ -712,6 +713,7 @@ COMMIT_STAGED_PATHS: Final = {
     ],
     "assemble": [
         "frontend/public/digest",
+        "frontend/public/publication.json",
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
@@ -819,20 +821,16 @@ WORK_LEDGER_STEPS: Final = (RECORD_STEP, SCRAPE_STEP, JOB_CLOCK_STEP, COMMIT_STE
 
 TOLERATED: Final = "true"
 
-# The two artifacts a work shard hands to assemble, spelled the way `with.name`
-# spells them. A step with no `if:` runs on `success()` and a job stopped by
-# `timeout-minutes` is cancelled, so both were skipped on every shard that ran
-# out of time while the `always()` ledger steps above them ran. They travel
-# together or not at all: the decision naming a chart is in the first and the
-# chart's own bytes are in the second.
+# The artifact a work shard hands to assemble, spelled the way `with.name`
+# spells it. A step with no `if:` runs on `success()` and a job stopped by
+# `timeout-minutes` is cancelled, so it was skipped on every shard that ran out
+# of time while the `always()` ledger steps above it ran. A rendered chart's
+# bytes travel inside its decision, so this is the whole hand-off.
 #
 # `evidence-*` is not here. It is the labelling queue's copy of the article
 # text, no job downloads it and nothing on the publish path reads it, so
 # guarding it is a decision of its own rather than part of this hand-off.
-WORK_PAYLOAD_ARTIFACTS: Final = (
-    "items-${{ matrix.shard }}",
-    "shard-visuals-${{ matrix.shard }}",
-)
+WORK_PAYLOAD_ARTIFACTS: Final = ("items-${{ matrix.shard }}",)
 
 COMMIT_IDENTITY: Final = "miztiik <miztiik@users.noreply.github.com>"
 
@@ -2132,6 +2130,7 @@ def _seed_digest_origin(root: Path, date: str) -> None:
         _write(seed / relative, "")
     for dirname in series.PUBLISHED_ROOTS:
         _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
+    seed_publication_inventory(seed / "frontend" / "public")
     _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
     _git(
         seed, env, "add", ".gitattributes", ".gitignore", "docs",

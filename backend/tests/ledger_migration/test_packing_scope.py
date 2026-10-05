@@ -276,7 +276,7 @@ def test_named_months_cannot_skip_the_daily_watermark_gap(tmp_path: Path) -> Non
     day = "2026-10-01"
     write_csv(state, EVALS, day, writer_file_name(day, 1, ServerJob.WORK), [score_row(day, 2).csv_row()])
 
-    with pytest.raises(refusals.NotProvenError, match="named months omit 2026-09"):
+    with pytest.raises(refusals.NotProvenError, match="compaction refused at 2026-09-01"):
         phases.migrate_roots(
             MigrationInputs(
                 state_dirs=[state],
