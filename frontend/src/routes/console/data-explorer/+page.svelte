@@ -43,6 +43,7 @@
 	let selected = $state<LedgerName[]>([]);
 	let sql = $state('SELECT count(*) AS rows FROM "published"');
 	let costing = $state(false);
+	let initializing = $state(true);
 	let running = $state(false);
 	let refreshing = $state(false);
 	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], siteFrom: null, through: {} });
@@ -76,7 +77,7 @@
 	const persistentNotice = $derived(!storageWorks);
 	const readoutLines = $derived(config.readout_lines[readoutBand] ?? config.readout_lines[0]);
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
-	const statusText = $derived(statusLine());
+	const statusText = $derived(`${statusLine()} This page holds ${size(heldBytes)} of fetched files; a reload empties it.`);
 	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
 	const shapeBounds = $derived({
 		chartMinRows: config.chart_min_rows,
@@ -116,6 +117,16 @@
 		windowDays = spanDays();
 		void updateCostAndColumns();
 	}
+	function changeFrom(input: HTMLInputElement) {
+		const next = input.value > toDay ? toDay : input.value;
+		input.value = next;
+		setSpan(next, toDay);
+	}
+	function changeTo(input: HTMLInputElement) {
+		const next = input.value < fromDay ? fromDay : input.value;
+		input.value = next;
+		setSpan(fromDay, next);
+	}
 	function spanDays(): number {
 		if (!fromDay || !toDay) return windowDays;
 		return Math.round((Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86_400_000) + 1;
@@ -150,9 +161,8 @@
 	}
 
 	function statusLine(): string {
-		if (linkNotices.some((notice) => notice.includes('came from a link'))) {
-			return 'This question came from a link. Read it before you press Run.';
-		}
+		if (keepNotice !== null) return keepNotice;
+		if (linkNotices.length > 0) return linkNotices.join(' ');
 		if (running) {
 			return lastRead === null ? `Fetching ${plural(cost.files, 'file')}, ${size(cost.bytes)}.` : 'Running the question.';
 		}
@@ -480,6 +490,7 @@
 				sql = recentRuns[0].statement;
 			}
 			await refreshRegistry();
+			initializing = false;
 		})();
 		return () => {
 			query.removeEventListener('change', sync);
@@ -502,10 +513,10 @@
 				onChange={setWindow}
 			/>
 			<div class="date-fields">
-				<label>From (UTC)<input type="date" value={fromDay} min={minReachDay()} max={toDay < todayUtc() ? toDay : todayUtc()} oninput={(event) => setSpan(event.currentTarget.value, toDay)} /></label>
-				<label>To (UTC)<input type="date" value={toDay} min={fromDay > minReachDay() ? fromDay : minReachDay()} max={todayUtc()} oninput={(event) => setSpan(fromDay, event.currentTarget.value)} /></label>
+				<label>From (UTC)<input type="date" value={fromDay} min={minReachDay()} max={toDay < todayUtc() ? toDay : todayUtc()} oninput={(event) => changeFrom(event.currentTarget)} onchange={(event) => changeFrom(event.currentTarget)} /></label>
+				<label>To (UTC)<input type="date" value={toDay} min={fromDay > minReachDay() ? fromDay : minReachDay()} max={todayUtc()} oninput={(event) => changeTo(event.currentTarget)} onchange={(event) => changeTo(event.currentTarget)} /></label>
 			</div>
-			<button type="button" class="run-button" aria-label={running ? 'Running' : 'Run'} aria-keyshortcuts="Control+Enter Meta+Enter" aria-disabled={running || selected.length === 0 || sql.trim() === ''} aria-busy={running} onclick={() => { if (!running && selected.length > 0 && sql.trim() !== '') void run(); }}>
+			<button type="button" class="run-button" aria-label={running ? 'Running' : 'Run'} aria-keyshortcuts="Control+Enter Meta+Enter" disabled={initializing} aria-disabled={initializing || running || selected.length === 0 || sql.trim() === ''} aria-busy={running} onclick={() => { if (!initializing && !running && selected.length > 0 && sql.trim() !== '') void run(); }}>
 				<Icon id="query-run" />
 				<span class="run-words"><span class:hidden-word={running}>Run</span><span class:hidden-word={!running}>Running</span></span>
 				<span class="run-shortcut">Ctrl+Enter</span>

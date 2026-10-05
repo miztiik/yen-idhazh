@@ -52,6 +52,7 @@
 
 	.history-list[open] .history-menu {
 		position: absolute;
+		display: block;
 		z-index: 10;
 		inset-block-start: calc(100% + var(--space-1));
 		inset-inline-start: 0;
@@ -63,13 +64,13 @@
 		box-shadow: var(--shadow-md);
 	}
 
-	.history-menu {
-		display: none;
-	}
-
 	.storage {
 		color: var(--color-text-secondary);
 		font-size: var(--text-sm);
+	}
+
+	.history-menu {
+		display: none;
 	}
 
 	p,
