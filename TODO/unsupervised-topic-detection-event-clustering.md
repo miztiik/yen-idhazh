@@ -1,10 +1,12 @@
 # Unsupervised topic detection and event clustering
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 Group reports of the same occurrence, connect distinct developments, and publish a short explanation without losing the underlying reports.
 
 **Status:** Consolidated architecture, not implemented behavior. LanceDB, periodic batches, summary-based features, and Fastino GLiNER are selected. New Topic Domains are discovered automatically but require review before public promotion. Verified copies count as distribution, not new reporting. Ordinary active search uses a **configurable 15-day window**; activity decay does not declare an occurrence permanently dead.
+
+The selected frame policy prefers a supported complete Fastino GLiNER result, with the existing LLM result as cross-check or fallback. Joining still requires the member checks. Uncertain copies have pending contributions and configurable visibility/processing. Supported relationships with unknown direction are retained outside the Story DAG **provisionally; further research is required**.
 
 All tunable behavior belongs in configuration. The remaining thresholds require independent evidence, not copied values from a proposal. Runtime, throughput, memory estimates, and GLiNER model pins are omitted.
 
@@ -42,6 +44,7 @@ All tunable behavior belongs in configuration. The remaining thresholds require 
 - **Event Threading:** Connecting distinct events through a supported, directed Story Edge. It does not merge their reports into one occurrence.
 - **Story DAG:** A directed acyclic graph of distinct events. It can branch and converge; a linear reading path is only a selected view.
 - **Story Edge:** A typed, directed, evidence-backed relationship. Chronological, follow-up, thematic, and reported causal relationships have different meanings.
+- **Unordered event association:** A supported related-event connection whose direction is unknown. It is stored separately from directed Story Edges, asserts neither chronology nor causation, and is excluded from directed reading paths. This is the provisional choice requiring further research.
 - **Anchor Vector:** The founding Document Unit's immutable vector within its named representation. A changed display representative does not move it.
 - **Active Centroid:** The normalized mean of the declared semantic contributors to one Event Cluster, not of all events linked in its Story DAG.
 - **Verified copy:** A retained report established as substantially the same reporting contribution as another, through copy/origin evidence. Similar wording alone is only a candidate signal.
@@ -73,7 +76,7 @@ Changing an edge's endpoints or type creates a new edge identity with a recorded
 
 ### One summary and one owner of event meaning
 
-The operator-controlled LLM produces the standardized three-sentence summary, primary predicate frame, and supported time evidence in one response. Preserve the participants, action, negation, place, time, and material figures needed to distinguish the occurrence.
+The operator-controlled LLM produces the standardized three-sentence summary, a candidate predicate frame, and supported time evidence in one response. Fastino GLiNER proposes typed entities and complete predicate-linked frames from the frozen summary. One resolver selects a whole supported frame; downstream stages must not independently choose different extractors.
 
 The same frozen summary feeds every matching feature. Source metadata and bounded evidence references support validation, copy provenance, time resolution, and numerical checks; they are not a second raw-text semantic retrieval path.
 
@@ -82,7 +85,7 @@ Three sentences do not guarantee adequate evidence or a valid encoder input. Che
 ### Dense, entity, and sparse features
 
 - **Dense meaning:** Sentence-Transformers `all-MiniLM-L6-v2`, producing 384-dimensional FP32 working vectors normalized to unit L2 length. Compatible normalized vectors can use a dot product for cosine similarity. Validate nonzero, finite vectors.
-- **Typed entities:** Fastino GLiNER extracts PERSON, ORG, GPE, LOC, FACILITY, and REGULATION. It does not compete with the LLM for Action/Agents/Targets ownership. Deployment details are not specified here.
+- **Entities and frame candidates:** Fastino GLiNER extracts PERSON, ORG, GPE, LOC, FACILITY, and REGULATION and is preferred for complete Agent/Action/Target records when the selected capability supports predicate-linked extraction. Direction-labelled entity lists alone do not establish that capability. Deployment details remain unpinned.
 - **Lexical evidence:** spaCy tokenization and lemmatization, including the language components needed for correct lemmas, but not a second NER or predicate-extraction pipeline. Preserve negation, figures, units, proper names, and entity phrases.
 - **Sparse retrieval:** Store unigram and bigram counts; derive BM25 scores from an inverted index with a shared analyzer, alias rules, vocabulary, document frequencies, and average document length. Its statistical population is one selected representation per distinct reporting contribution in the named corpus. Final entity-preserving counts wait for both lexical and entity results.
 
@@ -91,6 +94,30 @@ Do not lemmatize the text sent to MiniLM or Fastino GLiNER. There is no free-for
 DATE, TIME, PERCENT, MONEY, QUANTITY, and CARDINAL are excluded from identity-entity selection only. Their values remain available for time, figure, and sparse evidence. Shared generic entities cannot justify Joining alone, but a universal exact place/ORG gate can wrongly exclude a real match. Resolve aliases rather than reward name length.
 
 Each frame binds its predicate to its participants, assertion status, time, place, and evidence. Preserve active/passive equivalents, role reversal, denial, plans, reported speech, and background context. Independent lists of verbs and names cannot preserve those bindings.
+
+### Frame selection and disagreement
+
+GLiNER is primary by **selection policy**, not execution order: the summary is produced first. Reuse the LLM frame already produced with that summary; do not introduce another LLM call merely to arbitrate. LLM time evidence remains explicit, and must be bound to the same predicate before a candidate uses it.
+
+Normalize known aliases and action forms while preserving direction, negation, modality, attribution, and the original supporting phrases. Validate candidate structure, evidence references, and predicate bindings. Passing those checks is not proof that the model interpreted the article correctly.
+
+Align candidates to the same source-supported primary predicate before comparing them. Frames for different actions are not two competing answers to one question. Missing required qualifications fail the declared candidate check; genuinely unknown optional time stays unknown rather than becoming a contradiction.
+
+The resolver's versioned comparison rule must establish equivalence of the required roles and assertion. Compatible but unequal optional information is not automatically a factual conflict. If occurrence alignment or the required equivalence cannot be established, keep the resolution unresolved with that reason; do not select the richer candidate or fill one candidate from the other.
+
+The resolver applies one rule to each primary occurrence:
+
+1. When normalized, supported candidates agree on the relevant facts, select the GLiNER frame and record the agreement.
+2. When only the GLiNER candidate passes the declared checks, select that complete candidate.
+3. When only the LLM candidate passes, select it as the fallback.
+4. When supported candidates conflict, retain both and mark the resolution unresolved. Decisions that depend on the disputed roles must wait.
+5. When neither candidate is adequate, record incomplete extraction. Do not invent an actor, target, or event.
+
+Select a whole candidate, never GLiNER's agent combined with the LLM's action and target. Cosine agreement between candidate texts does not choose the true frame: role reversals and negation can remain close in vector space. Do not mix unrelated model confidence scales or add a third arbitration model.
+
+Keep supporting role phrases even when they have no resolved identity entity. An entity link enriches a participant mention; it does not establish whether the participant acted in this predicate. Required roles that are genuinely unknown remain explicit rather than filled by inference.
+
+GLiNER preference is not a claim of demonstrated superiority. Evaluate both producers and the resolver on the same source-supported cases, including missing names, multiple predicates, passive voice, reversals, negation, plans, and quoted speech. Agreement on a generated summary can repeat a shared summary error.
 
 ### Three clocks
 
@@ -119,11 +146,25 @@ A publication proxy may support labelled freshness estimates or candidate orderi
 - **Distribution:** Where reporting appeared, including copies. Outlets, websites, and independent newsrooms are not interchangeable counts.
 - **Retrieval, verification, and views:** Candidate events, required member comparisons, and displayed reports each have a separate population.
 
-**Verified copies add distribution and provenance, but no extra centroid contribution and no reset of the 15-day clock.** Keep their articles and outlet references. A copy classification that is uncertain must not silently suppress a potentially distinct report or label it as proven independent.
+**Verified copies add distribution and provenance, but no extra centroid contribution and no reset of the 15-day clock.** Keep their articles and outlet references. If same-event membership is supported but copy status is uncertain, the report may stay assigned while its **extra reporting contribution is explicitly pending**.
 
 A source revision containing genuinely new reporting can create a new reporting observation. A changed hash, model output, or formatting alone cannot. Keep copy decisions and their evidence so corrections can recalculate contributions and observation attribution.
 
-Verified copies and superseded representations do not add independent BM25 or entity-frequency counts. Retain them for report access and provenance, not repeated statistical votes. Each comparison uses a named statistics snapshot; contribution corrections rebuild the affected statistics and derived search view under a new version.
+Pending copy contributions add no extra semantic vector weight, independent BM25/entity-frequency vote, reporting activity, or clock reset. Keep their unresolved counts and evidence visible. Once resolved, attribute any valid contribution to its original observation time, not the time of the classification decision.
+
+Verified copies and superseded representations likewise do not add independent statistics counts. Each comparison uses a named statistics snapshot; contribution corrections rebuild affected statistics and the derived search view under a new version. Neither uncertainty nor a verified copy may disappear from stored-report accounting.
+
+### Configurable handling of uncertain copies
+
+Use a single configuration policy, `uncertain_copy_handling`, with `show`, `hide`, and `drop` modes. This controls reader visibility and current processing, not whether uncertainty counts as new reporting.
+
+- **Show:** preserve the agreed visible-report behavior while the extra contribution remains pending.
+- **Hide:** retain the report and continue its permitted reassessment, but exclude it from newly generated public listings while uncertain.
+- **Drop:** exclude it from the current processing/publication path while retaining saved content, identity, evidence, and the reason for later reconsideration.
+
+Keep the visible behavior until configuration selects another mode. Drop is not deletion, and neither hide nor drop breaks an already published report address. Record the applied mode and classification reference; do not edit immutable Document Unit content to hide a report.
+
+A later resolution uses the original observation identity and time. Reconsideration cadence is a separate configured process, not an implicit repeated retry that creates new arrivals.
 
 ### Record responsibilities
 
@@ -143,6 +184,9 @@ These are logical contracts, not promises that Arrow or LanceDB automatically en
 | B8 | Story Edges | Endpoints, relation type, evidence, status, verifier version, and correction references; validate direction, self-links, cycles, and missing endpoints |
 | B9 | Decisions and snapshots | Input/base identity, participating shards, copy/membership/graph corrections, completeness, and affected record versions; publish a consistent result |
 | B10 | View projections | Snapshot and scoring identity, selection window/budget, topic/event references, selected path/branches, diagnostics, and reachable report links |
+| B11 | Frame resolution | Complete extractor candidates, supported participant phrases, validation outcomes, selected whole frame or unresolved status, and resolver version |
+| B12 | Unordered event associations | Related endpoint set, supporting evidence, unknown direction, and version; separate from DAG edges and directed paths; provisional and requires further research |
+| B13 | Evaluation case review | Original assessment references, one bounded whole-example review, supported reference grouping or unresolved result, and evaluation provenance |
 
 Preserve predicate-linked evidence instead of accumulating unrelated actor, action, and target lists. Keep occurrence-time intervals separate from `first_seen_at` and `last_seen_at`, which refer to eligible new-reporting observations.
 
@@ -177,6 +221,13 @@ EntityRef       = struct<
   aliases: list<utf8>,
   evidence_refs: list<EvidenceRef>
 >
+ParticipantRef  = struct<
+  participant_id: utf8,
+  text: utf8,                     # source-supported role phrase
+  normalized_value: utf8?,
+  entity_id: utf8?,               # optional resolved EntityRef, not a role prerequisite
+  evidence_refs: list<EvidenceRef>
+>
 EventTime       = struct<
   status: utf8,                    # resolved, unknown, ambiguous
   point_utc: UtcInstant?,
@@ -191,8 +242,9 @@ EventTime       = struct<
 PredicateFrame  = struct<
   frame_id: utf8,
   action: utf8,
-  agent_ids: list<utf8>,
-  target_ids: list<utf8>,
+  participants: list<ParticipantRef>,
+  agent_ids: list<utf8>,           # participant_ids bound to this predicate
+  target_ids: list<utf8>,          # participant_ids bound to this predicate
   assertion_status: utf8,
   attributed_to_ids: list<utf8>,
   location_ids: list<utf8>,
@@ -200,9 +252,34 @@ PredicateFrame  = struct<
   quantity_evidence: list<EvidenceRef>,
   evidence_refs: list<EvidenceRef>
 >
+FrameCandidate  = struct<
+  candidate_id: utf8,
+  extractor_id: utf8,             # gliner or llm
+  extractor_version: utf8,
+  representation_revision: utf8,
+  validation_rule_version: utf8,
+  frame: PredicateFrame?,
+  check_status: utf8,             # passed, failed, missing
+  check_reasons: list<utf8>
+>
+FrameResolution = struct<
+  resolver_version: utf8,
+  gliner_candidate_id: utf8?,
+  llm_candidate_id: utf8?,
+  selected_candidate_id: utf8?,
+  occurrence_alignment: utf8,     # aligned, unresolved
+  comparison_status: utf8,        # equivalent, conflicting, not_comparable, single_candidate
+  status: utf8,                   # resolved, unresolved, incomplete
+  reason: utf8                    # agreement, only_gliner, llm_fallback, conflict, neither,
+                                  # occurrence_unaligned, equivalence_unresolved
+>
 ```
 
-Resolved event time has a supported point or ordered interval, not both. Unknown time has no invented bounds. `reference_calendar` records the basis used to interpret source language; stored instants remain UTC. Predicate references must resolve within the Document Unit's typed evidence. Quantities excluded from identity NER remain in quantity evidence and lexical features.
+Resolved event time has a supported point or ordered interval, not both. Unknown time has no invented bounds. `reference_calendar` records the basis used to interpret source language; stored instants remain UTC. Agent, target, and attribution IDs resolve within the frame's supported participants; optional `entity_id` values resolve to typed identity evidence. Location IDs resolve to retained place evidence. Quantities excluded from identity NER remain in quantity evidence and lexical features.
+
+Every candidate refers to the same frozen Document Unit representation. Keep model-specific confidence, if recorded, in its own declared meaning; it is not the selection weight. `FrameResolution.selected_candidate_id` names a whole passed candidate only when the resolution is resolved. An unresolved or incomplete resolution cannot supply a trusted primary frame to Joining.
+
+Candidate and frame IDs are unique within the Document Unit. Each selected frame has exactly one resolution that points to its complete candidate. A `FrameRef` to that selected frame therefore identifies both its content and its selection provenance. Unaligned or not-comparable candidates cannot acquire a resolved status merely because no contradiction was detected.
 
 ### Topic Domain schema
 
@@ -250,14 +327,15 @@ event_clusters {
   member_count: int32
   semantic_contributor_count: int32
   reporting_contribution_count: int32
+  pending_contribution_count: int32
   mean_cosine_dispersion: float32?
   admission_distance_mean: float32?
   centroid_motion_per_time: float32?
   centroid_motion_per_contribution: float32?
   activity_score: float64?
   activity_evaluated_at: UtcInstant?
-  status: utf8                    # HOT, WARM, COLD
-  first_seen_at: UtcInstant
+  status: utf8                    # PROVISIONAL, HOT, WARM, COLD
+  first_seen_at: UtcInstant?
   last_reporting_observed_at: UtcInstant?
   last_distribution_observed_at: UtcInstant?
   temporal_envelope: EventTime
@@ -270,7 +348,11 @@ event_clusters {
 }
 ```
 
-`member_count` includes assigned reports; `semantic_contributor_count` is the vector population `n_C`. Copies must not inflate the latter. The activity clock uses `last_reporting_observed_at`, while copied distribution can change `last_distribution_observed_at`. The two dispersion fields have different definitions below and must not be interchanged.
+`member_count` includes assigned reports; `semantic_contributor_count` is the vector population `n_C`. Copies and pending contributions must not inflate the latter. Record `pending_contribution_count` separately. The activity clock uses `last_reporting_observed_at`, while copied distribution can change `last_distribution_observed_at`. An unresolved observation is not automatically attributed as confirmed reporting or copied distribution.
+
+A provisional event with no eligible semantic contributor has no usable centroid; its pending report evidence remains available for verification. Its reporting timestamps stay null and it is not promoted to ordinary HOT/WARM search using a fabricated arrival. `t_created` records creation of the proposal, not reporting activity. Retain it through an explicitly bounded pending-work input.
+
+When a genuine contribution is confirmed, fill reporting timestamps from its recorded original observation and assess current eligibility against the batch cutoff. Do not substitute a zero vector or the decision time. The two dispersion fields have different definitions below and must not be interchanged.
 
 Application checks enforce references to `topics`, `story_dags`, Document Units, and edges. Candidate scalar indexes cover status, observation times, and supported event-time bounds. Anchor and centroid indexes may help candidate diagnostics or cold recovery; Document Units remain the primary hybrid-search objects.
 
@@ -298,6 +380,8 @@ document_units {
   dense_vector: Vector384?
   sparse_token_counts: TokenCounts
   entities: list<EntityRef>
+  frame_candidates: list<FrameCandidate>
+  frame_resolutions: list<FrameResolution>
   frames: list<PredicateFrame>
   primary_frame_id: utf8?
   feature_versions: map<utf8, utf8>
@@ -309,7 +393,9 @@ document_units {
 
 Dense search uses the selected compatible vector representation; full-text retrieval uses the declared lexical representation and shared statistics. An absent vector is not a zero vector. An empty token map is not an error fallback. A Document Unit that lacks required evidence cannot be presented as a fully verified assignment.
 
-The original `event_id`, `topic_id`, `story_id`, and `is_syndicated_dup` fields remain available through a current-document projection that joins this record to assignments and copy decisions. The original `gliner_entities` becomes typed `entities`, not directional role strings; frames retain those roles.
+`frames` contains whole frames selected by resolved results. Candidate frames and unresolved reasons remain in their own fields for inspection; they are not combined into a synthetic frame. The primary frame is absent when its required roles remain disputed. A changed resolution that changes frozen semantic content uses a new representation revision.
+
+The original `event_id`, `topic_id`, `story_id`, and `is_syndicated_dup` fields remain available through a current-document projection that joins this record to assignments and copy decisions. The original `gliner_entities` becomes typed `entities`. Predicate-linked GLiNER and LLM outputs remain complete frame candidates; the selected frame records its extractor and resolution provenance.
 
 ### Assignment, contribution, and observation schemas
 
@@ -322,8 +408,12 @@ document_assignments {
   cluster_id: ULID?
   status: utf8                    # assigned, unresolved, withdrawn
   reporting_contribution_id: utf8?
+  contribution_state: utf8        # eligible, pending, suppressed_copy
+  handling_ref: RecordRef?
   is_representative: bool
   composite_score: float32?
+  member_check_refs: list<RecordRef>
+  member_checks_complete: bool
   scoring_version: utf8
   assigned_at: UtcInstant
   decision_ref: RecordRef
@@ -343,6 +433,7 @@ reporting_contributions {
 
 coverage_observations {
   version: DateStamp
+  record_revision: utf8
   observation_id: utf8
   source_revision: utf8
   document_id: UUIDv5
@@ -354,11 +445,32 @@ coverage_observations {
   classification_ref: RecordRef
   supersedes_observation: RecordRef?
 }
+
+uncertain_copy_handling {
+  version: DateStamp
+  record_revision: utf8
+  source_revision: utf8
+  document_id: UUIDv5?
+  copy_classification_ref: RecordRef
+  mode: utf8                      # show, hide, drop
+  reason: utf8
+  effective_at: UtcInstant
+  policy_version: utf8
+  supersedes_handling: RecordRef?
+}
 ```
 
 Each source revision has one current assignment and selected representation. Contribution and observation keys are recorded once and reused on replay. A correction changes attribution through a new revision; it must not replace the original observation time with the correction time.
 
+An observation correction retains `observation_id` and `observed_at`, allocates a new `record_revision`, and points `supersedes_observation` to the preceding revision of that same observation. Only the current eligible attribution contributes activity. The earlier unresolved revision remains addressable for audit rather than counting as another arrival.
+
 The derived `is_syndicated_dup` is true for verified copies, false for established distinct reporting, and null when unresolved. It is not a substitute for copy evidence or contribution membership.
+
+Supported membership and copy classification are separate: an assignment can be `assigned` with `contribution_state: pending`. The report has passed the required same-event checks but contributes no additional semantic/statistical weight or activity yet. If processing is dropped before those checks complete, membership stays unresolved.
+
+The handling record controls presentation and work eligibility without deleting Document Unit content. Preserve already-published links. On later classification, replace the pending observation through its correction reference while retaining the original observation time.
+
+`composite_score` records the candidate-level diagnostic. It cannot replace the completed member-check evidence required for `assigned` status. Copy-family representatives prevent repeated semantic votes, but any newly observed supported contradiction remains relevant.
 
 ### Story DAG and edge schemas
 
@@ -398,6 +510,32 @@ story_edges {
 
 `relation_score` is not the same-event Joining score and is not a calibrated probability unless its assessment establishes that interpretation. Preserve direct edge evidence even when an indirect path exists. Validate self-links, endpoint existence, direction, and cycles after all affected changes join.
 
+### Supported relationships with unknown direction
+
+**Provisional decision - requires further research:** retain a supported related-event association outside the directed Story DAG when its direction is unknown. This preserves the known connection without claiming chronology or causation.
+
+```text
+event_associations {
+  version: DateStamp
+  record_revision: utf8
+  association_id: utf8
+  event_ids: fixed_size_list<ULID, 2>
+  relation_type: utf8              # RELATED; no chronological or causal assertion
+  direction_status: utf8           # unknown
+  status: utf8                     # supported, uncertain, retracted
+  evidence_refs: list<EvidenceRef>
+  verifier_version: utf8
+  created_at: UtcInstant
+  supersedes_association: RecordRef?
+}
+```
+
+Both event IDs must be distinct and resolvable. Any canonical ordering used to identify or serialize their pair is not an event direction. Allocate the association identity once and reuse it on replay; final identity/promotion details remain part of the research.
+
+Do not add these associations to directed path selection, causal displays, or DAG cycle calculations. They do not merge Event Clusters or Story DAG identities merely by existing. If direction is later established, write a supported directed-edge decision and link it to the association evidence.
+
+A `THEMATIC` Story Edge still requires a defined directed meaning and supporting direction evidence. A common subject without that meaning belongs in an unordered association or remains uncertain, even when report publication times can be sorted.
+
 ### Snapshot and correction schemas
 
 ```text
@@ -415,7 +553,10 @@ state_snapshot {
   missing_shards: list<utf8>
   correction_refs: list<RecordRef>
   manifest_paths: list<utf8>        # validated relative POSIX paths
-  status: utf8                     # complete, partial, invalid
+  integrity: utf8                  # valid, invalid
+  input_coverage: utf8             # complete, partial
+  unresolved_decision_refs: list<RecordRef>
+  status: utf8                     # derived: complete, partial, invalid
 }
 
 state_correction {
@@ -446,7 +587,9 @@ pending_recovery {
 }
 ```
 
-The manifest makes a complete cross-table state explicit; table-local atomicity alone is insufficient. A partial result can describe domain uncertainty or missing work, but an invalid contract cannot be published as a successful empty result.
+The manifest separates **valid saved state** from **complete input coverage**. Cross-table integrity must be valid before publication. `status` is `invalid` whenever integrity fails; otherwise it is `partial` for partial input coverage and `complete` for complete coverage. Unresolved domain decisions are listed explicitly and do not by themselves imply corrupt state.
+
+A valid snapshot can publish successful reports while naming missing work. Invalid references, contradictory cross-record state, or malformed contracts cannot be published as a successful partial or empty result. Keep the previous valid snapshot available during recovery; table-local atomicity does not establish this cross-table integrity.
 
 ### Mapping the supplied storage fields
 
@@ -489,11 +632,12 @@ flowchart TB
   subgraph WORK["03 work - independent shards"]
     direction TB
     RAW["Extract and sanitize<br/>Raw Feed Items"]
-    LLM["LLM<br/>Three-sentence summary<br/>Bound frames and time evidence"]
+    LLM["LLM<br/>Summary, candidate frame<br/>and supported time evidence"]
     DENSE["MiniLM<br/>Dense summary vector"]
-    ENTITIES["Fastino GLiNER<br/>Typed entity spans"]
+    ENTITIES["Fastino GLiNER<br/>Entities and linked frame candidates"]
     TOKENS["spaCy<br/>Tokens and lemmas"]
     SPARSE["Entity-preserving token counts<br/>Shared BM25 statistics"]
+    FRAME["Resolve a whole frame<br/>GLiNER preference, LLM fallback<br/>Supported disagreement stays unresolved"]
     UNIT[("Frozen Document Units<br/>Source and observation references")]
   end
 
@@ -501,11 +645,11 @@ flowchart TB
     direction TB
     GATHER["Gather completed outputs<br/>Record missing work"]
     CANDIDATES["Hybrid retrieval and copy candidates<br/>Across shards and prior state"]
-    VERIFY["Verify membership and relations<br/>Use the decision table"]
-    SETTLE["Settle assignments and corrections<br/>Rebuild affected graph and counts"]
+    VERIFY["Required member and relation checks<br/>Use the decision table"]
+    SETTLE["Settle assignments, copy policy<br/>relationships and corrections"]
     TOPICS["Record candidate Topic Domains<br/>Public promotion requires review"]
     MEASURE["Measure activity, distribution and trends<br/>Prepare bounded reading views"]
-    RESULT[("Complete logical result<br/>Versioned LanceDB snapshot")]
+    RESULT[("Valid logical result<br/>Record missing input coverage")]
   end
 
   ASSEMBLE["05 assemble<br/>Static digest and view projections"]
@@ -513,7 +657,7 @@ flowchart TB
 
   subgraph COUNCIL["LLM-COUNCIL - content-similarity judge"]
     direction TB
-    AUDIT["07 Evaluate independent cases<br/>Reuse judge records at their grain"]
+    AUDIT["07 Evaluate independent cases<br/>Review contradictions once<br/>Keep unresolved outcomes"]
     GATE{"08 Evidence supports<br/>a permitted change?"}
     FIT["09 Fit a bounded change"]
     HOLD["09 Hold and record why"]
@@ -537,7 +681,9 @@ flowchart TB
   TOKENS --> SPARSE
   DENSE --> UNIT
   SPARSE --> UNIT
-  LLM -->|"Frames and time evidence"| UNIT
+  LLM -->|"Candidate frame and time evidence"| FRAME
+  ENTITIES -->|"Candidate frame"| FRAME
+  FRAME --> UNIT
   UNIT --> GATHER
   GATHER --> CANDIDATES
   CANDIDATES --> VERIFY
@@ -563,19 +709,19 @@ flowchart TB
   classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a;
   classDef ext fill:#faf5ff,stroke:#7e22ce,stroke-width:1.5px,stroke-dasharray:5 3,color:#581c87;
   classDef autotuned fill:#faf5ff,stroke:#8b5cf6,stroke-width:1.5px,color:#6b21a8;
-  class PLAN,LLM,DENSE,ENTITIES,TOKENS,SPARSE,GATHER,CANDIDATES,VERIFY,SETTLE,TOPICS,MEASURE,ASSEMBLE,PUBLISH,AUDIT,FIT,NEXT stage;
+  class PLAN,LLM,DENSE,ENTITIES,TOKENS,SPARSE,FRAME,GATHER,CANDIDATES,VERIFY,SETTLE,TOPICS,MEASURE,ASSEMBLE,PUBLISH,AUDIT,FIT,NEXT stage;
   class RAW ext;
   class BASE,UNIT,RESULT,SETTINGS ledger;
   class GATE decision;
   class HOLD warn;
   class FLOOR autotuned;
-  linkStyle 23 stroke:#15803d,stroke-width:1.5px;
-  linkStyle 24 stroke:#dc2626,stroke-width:1.5px;
+  linkStyle 25 stroke:#15803d,stroke-width:1.5px;
+  linkStyle 26 stroke:#dc2626,stroke-width:1.5px;
 ```
 
-Feature production can overlap within a configured executor. Sparse finalization waits for lexical and entity evidence. Reconciliation joins completed shard outputs, not separately mutated database copies.
+Feature production can overlap within a configured executor. Sparse finalization waits for lexical and entity evidence; frame resolution selects a complete candidate under its own rule. Reconciliation joins completed shard outputs, not separately mutated database copies.
 
-Required summaries or verification evidence may remain pending without blocking unrelated work. Record missing shards and incomplete decisions. Assemble can publish successfully processed reports without inventing group membership or graph edges. Infrastructure or contract failures are reported explicitly, not relabelled as successful empty results.
+Required summaries or verification evidence may remain pending without blocking unrelated work. Record missing shards and incomplete decisions. Assemble can publish successfully processed reports under their visibility policy without inventing membership or edges. Cross-record integrity must still pass; infrastructure or contract failures are not relabelled as successful partial results.
 
 ## Candidate retrieval and decisions
 
@@ -607,7 +753,11 @@ dense_candidates = (
 
 ### Verify the occurrence, not merely the score
 
-Compare compatible vectors, specific normalized entities, and predicate-linked event evidence. The composite content score may blend those components with configured, calibrated weights. It cannot overturn a supported contradiction.
+Compare compatible vectors, specific normalized entities, and resolved predicate-linked frames. The cluster-level composite score shortlists and prioritizes candidate events; it does not by itself accept a report.
+
+Before Joining, **every required member comparison must support the same-event decision**, with no supported contradiction. Absence of a detected contradiction is not sufficient positive evidence. Use one representative per verified reporting contribution for semantic comparisons; copies do not cast repeated votes. Preserve all report evidence that may reveal a contradiction.
+
+Record the compared member set, each outcome, the rule version, and whether verification completed. Missing or uncertain required checks leave the proposed Join unresolved. Retrieval effort and its top-K limit never waive those comparisons. Pairwise acceptance must be calibrated for its comparison unit, not inherit a cluster-average threshold without justification.
 
 Apply the same safeguards to Joining and duplicate-cluster mergers:
 
@@ -755,19 +905,21 @@ This matters when choosing a final threshold: a penalty near 0.589 leaves a maxi
 | ID | Outcome | Required evidence | State change |
 | --- | --- | --- | --- |
 | C1 | Verified copied reporting | Copy/origin evidence and compatible occurrence facts; SimHash or high cosine only proposes the check | Retain the report and its outlet links. Associate its reporting contribution; add distribution, not semantic weight or activity |
-| C2 | Same-event Joining | Sufficient primary-event evidence, no applicable veto, calibrated acceptance, and required member compatibility | Assign the report; update its distinct contribution and eligible observation once |
+| C2 | Same-event Joining | Sufficient primary-event evidence, no applicable veto, and every required member check passed | Assign the report. Its extra contribution stays pending while copy status is uncertain; only confirmed eligible reporting updates semantic weight and activity |
 | C3 | Distinct related event | Evidence of a different occurrence and a supported typed/directed relationship | Create the new event and Story Edge. A failed Join or intermediate score does not prove the edge |
 | C4 | Branch or convergence | Separately supported edges from/to distinct events | Keep multiple developments or predecessors. Do not disguise identity consolidation as a causal edge |
 | C5 | Distinct unlinked event | Sufficient evidence of a new occurrence, with no supported relation found | Create an event/root without forcing it onto the nearest story. Route to an approved or candidate Topic Domain |
 | C6 | Candidate Topic Domain | Evidence of a coherent emerging subject beyond existing routing, not one low-similarity outlier | Record a candidate and supporting events. Review naming, overlap, and promotion before public navigation changes |
 | C7 | Insufficient evidence | Missing primary occurrence, unresolved essential facts, incomplete verification, or uncertain relationship | Keep pending/unresolved status and its reason. Do not turn it into a negative label, forced edge, or raw-text shortcut |
 | C8 | Correction or consolidation | Re-evaluation establishes mistaken membership, duplicate identity, or unsupported edges | Write a versioned correction, recompute affected state, and preserve resolvable old references |
+| C9 | Supported relationship, direction unknown | The connection is supported but chronology or directed meaning is not | Record an unordered association outside the Story DAG. No directional or causal assertion, no path-selection edge; provisional, requires further research |
+| C10 | Uncertain copy handling | Same-event evidence may be supported, but independent reporting versus copying is unresolved | Keep the extra contribution pending and apply configured show/hide/drop handling. Drop retains saved content and evidence; no clock reset |
 
-Candidate generation, verification, and final settlement are separate. Required all-member verification pairs are not dropped by `candidate_k`. Copy detection must not bypass figure or role contradictions.
+Candidate generation, verification, and final settlement are separate. Required all-member verification pairs are not dropped by `candidate_k`. Unresolved extractor roles cannot supply an accepted member check that depends on those roles. Copy detection must not bypass figure or role contradictions.
 
 ### Supplied numerical decision matrix
 
-The values below preserve the attachment's operational matrix and the earlier draft's different proposals. They are **configuration candidates, not measured defaults or approved shortcuts**. The actions still require Table C's evidence.
+The values below preserve the attachment's operational matrix and the earlier draft's different proposals. They are **configuration candidates, not measured defaults or approved shortcuts**. The later brief's cluster-score-only acceptance is not selected: these scores may prioritize checks, while the original draft's required member checks still decide Joining.
 
 - **Retrieval:** the source proposes dense similarity at least 0.55 and up to 15 candidates; the earlier draft compares 3, 5, and 10 candidates. These concern retrieval effort, never the number of Event Clusters permitted to form. Sparse-only matches must not be erased by a dense cutoff.
 - **Verified copy candidate, C1:** SimHash distance at most 3 or cosine at least 0.94. SimHash bit width and normalization must be declared before that distance is meaningful. Either signal proposes verification; neither proves copied reporting or permits skipping contradictions.
@@ -812,6 +964,8 @@ A_C(t_1)=1
 ```
 
 This assumes one eligible reporting contribution with a valid unit vector. A copied report or replay does not repeat initialization. The unnormalized arithmetic mean is `S_C / n_C`; normalizing that mean produces the same direction as normalizing the sum.
+
+A pending copy contribution does not enter `I_C`, `S_C`, `n_C`, or the statistics population. If a later decision establishes distinct reporting, apply the contribution once with the original observation time. If it establishes a copy, retain the report reference without a new vector vote or arrival.
 
 ```math
 \vec{c}_C = \frac{\vec{S}_C}{\|\vec{S}_C\|_2}
@@ -890,6 +1044,7 @@ Every merge, split, reassignment, or copy correction updates together:
 - Membership, selected representations, and reporting contributions.
 - Contributor sums/counts, representatives, and attributed observations.
 - Affected Story Edge endpoints, evidence, identities, and aliases.
+- Unordered association endpoints and supporting evidence, without inventing direction after a merge or split.
 - The derived view or explicit correction needed for published references.
 
 Preserve the surviving event's founding reference. A split creates justified new event identities and maps old references explicitly. Revalidate incident edges instead of copying every old link to every child. Recompute activity using the observations' original times; a correction is not fresh reporting.
@@ -905,7 +1060,9 @@ A_C(T) = \sum_{o \in O_C}
 
 `O_C` contains deduplicated eligible observations no later than UTC evaluation time `T`. `tau` is a positive configured time constant, not a half-life. This defines the quantity; implementation can maintain a compatible accumulator rather than rescan historical observations.
 
-A new reporting contribution adds an observation. A verified copy, retry, representation refresh, merge, or Story Edge does not. A no-arrival evaluation only decays activity. Keep the activity evaluation time separate from the last real observation.
+A new confirmed reporting contribution adds an eligible observation. An uncertain copy's extra contribution remains pending. Later confirmation uses its recorded original time, so a delayed classification does not fabricate current attention. A verified copy, retry, representation refresh, merge, Story Edge, or unordered association adds no reporting observation.
+
+A no-arrival evaluation only decays activity. Keep the activity evaluation time separate from the last real observation.
 
 #### Exponential and Gaussian update proposals
 
@@ -1094,7 +1251,7 @@ Typed committed logical state is authoritative. Git records the complete logical
 
 Each shard and run writes its own evidence and decisions. Reconciliation uses one identified base, considers cross-shard candidates, and emits a consistent result before Assemble. LanceDB table transactions do not establish atomicity across membership, copies, edges, aliases, and published projections.
 
-If another run advances the base, replay affected decisions against it without repeating completed summaries. Never merge independently edited LanceDB directories as text. Publish only a validated complete snapshot; keep the previous complete one available during recovery.
+If another run advances the base, replay affected decisions against it without repeating completed summaries. Never merge independently edited LanceDB directories as text. Publish only a fully assembled, internally valid snapshot. It may cover incomplete input if it names missing work and unresolved decisions. Retain the previous valid snapshot when new state fails integrity; do not describe that failure as partial success.
 
 Search, corrections, archival access, and view generation take explicit bounded manifests or slices. No routine operation discovers its inputs by walking accumulated history. Replica and maintenance failures remain visible even when logical publication succeeded.
 
@@ -1185,6 +1342,8 @@ Check the actual consecutive transitions. A high average score must not hide one
 Reduce visual clutter only in the projection. A direct evidenced edge may mean more than an indirect route through other events; reachability alone does not make it safe to delete. Keep quiet but important branches reachable, with an expandable list or alternate route rather than an arbitrary percentage cutoff.
 
 A path is not automatically causal. Use the edge's supported relation type, direction, and uncertainty. Return disconnected fragments when no supported bridge exists instead of inventing a continuous story.
+
+An accepted unordered association may be presented as related context with order unknown, never as an arrow or a step in the main path. Its display remains a provisional research choice. Keeping the association does not waive the existing reachability or evidence requirements.
 
 #### Story backbone extraction formulas
 
@@ -1324,9 +1483,11 @@ StoryGraphView {
     is_backbone_node: bool
     core_frame: {
       action: utf8
-      agents: list<EntityRef>
-      targets: list<EntityRef>
+      agents: list<ParticipantRef>
+      targets: list<ParticipantRef>
       assertion_status: utf8
+      selected_extractor: utf8
+      frame_resolution_ref: FrameRef # selected frame and its unique recorded resolution
       evidence_refs: list<EvidenceRef>
     }?
     report_links: list<{
@@ -1346,10 +1507,23 @@ StoryGraphView {
     is_backbone_edge: bool
     evidence_refs: list<EvidenceRef>
   }>
+  related_events_unordered: list<{
+    association_id: utf8
+    event_ids: fixed_size_list<ULID, 2>
+    relation_type: utf8             # RELATED
+    direction_status: utf8          # unknown
+    evidence_refs: list<EvidenceRef>
+  }>
 }
 ```
 
 The source's scalar `agent` and `target` display values are retained as participant lists so multi-party events do not lose role information. Its `weight` is a view-selection weight, distinct from relation support. `CAUSAL_PROGRESSION` requires explicit causal evidence and maps to a supported edge type; it is not inferred from event ordering.
+
+`core_frame.frame_resolution_ref` resolves by `document_id` and the selected `frame_id`, then follows the unique resolution selecting that frame. `resolver_version` identifies the selection rules, not the identity of a result. A missing or non-unique reference prevents that trusted frame from being projected.
+
+Unresolved primary-frame candidates are not projected as a trusted `core_frame`. The separately named unordered collection has no source/target direction, path weight, or backbone flag. It records the provisional related-event policy and must be excluded from directed traversal. The original source JSON examples below remain unchanged and illustrate the earlier narrower shape.
+
+Report-link eligibility follows `uncertain_copy_handling` for new public lists. This cannot erase a previously published item address, saved source content, or evidence. Store the applied policy in view metadata or a referenced handling record so a missing entry has an explainable cause.
 
 The source example describes semiconductor export-control coverage, with a topic containing lead entities such as ASML, the Dutch government, and China; two event nodes describe announced oversight and later licensing requirements. That is an illustrative supplied example, not verified news or an independently labeled graph. Its example prominence, burstiness, and edge values are not calibration results.
 
@@ -1456,6 +1630,26 @@ Reuse existing judge-shard counts, disagreement, uncertainty, and decode records
 
 New feature or score versions need compatible distributions and labels. A reference cosine floor or old sampling band is not automatically valid for summary/frame scores or relation assessments. The application flag is not enabled by this document.
 
+### One review of contradictory evaluation judgments
+
+Pair judgments can conflict even when each pair was stable under reversed presentation. For example, A and B are judged to describe one event, B and C one event, but A and C different events. Do not join the positive answers into a reference group that contradicts the negative answer.
+
+Give the existing content-similarity judge **one bounded whole-example review** of the affected reports and source-supported evidence. Keep tested scores, production assignments, preferred outcomes, and extractor attribution out of the decision prompt. Retain the original judgments and link the new assessment to their IDs; this is a separate review record, not an overwrite of pair metrics.
+
+The review may propose a consistent supported grouping. If it cannot settle the case, retain unresolved status and exclude the affected example from tuning and fully labeled partition metrics. Record excluded counts; never make an unresolved example look like a correct separation. This policy does not require a routine human queue or a second judge.
+
+Agreement is not a truth guarantee. A resolved review result must still satisfy the evaluation's declared evidence and label-qualification requirements. A grouping known only for a reviewed subset is not a fully labeled reference for the entire dataset. Fitting and assessment stories remain separate.
+
+The review's `task_version` declares the qualification rubric:
+
+1. Name the frozen input set, evaluated source-report or contribution units, and evidence scope.
+2. Assign every included unit exactly once to a proposed reference group, with source-supported membership and separation decisions.
+3. Explicitly settle the conflicting assessments within that scope. If a required distinction remains unresolved, do not present the affected example as a qualified full partition.
+4. Record excluded/unresolved units and evaluate predictions on exactly the qualified scope, not a larger dataset.
+5. Preserve the original judgments, review result, evidence references, and eligibility reason so a later reader can distinguish a model assessment from independently established truth.
+
+Structural consistency alone cannot set `label_qualification: eligible`. A reference-group review is a case-level reading. Reuse of its qualified decisions in pair-based fitting requires the declared task/population compatibility; it must not create a second independent observation of a pair already counted.
+
 ### One registry for settings and readings
 
 **Table D - Controls, populations, and adjustment authority**
@@ -1467,8 +1661,8 @@ New feature or score versions need compatible distributions and labels. A refere
 | D3 | Activity decay | Eligible observations counted once at evaluation time T | Exponential baseline; positive time constant configured and calibrated |
 | D4 | HOT/WARM classification | Observation-derived activity, not occurrence age or similarity | Operational thresholds to calibrate; no separate identity rules by state |
 | D5 | Candidate retrieval effort | Distinct Event Clusters after dense/sparse rank fusion, plus unassigned current-batch candidates | Configurable K and index effort, not a cap on the number of clusters; evaluate D13 |
-| D6 | Joining score and acceptance | Compatible dense, specific-entity, and predicate-frame evidence after vetoes | Weights, anchor/centroid balance, and acceptance threshold require calibration; no publication-age subtraction |
-| D7 | Copy classification | Source-report pairs and their content/origin evidence | Hash/SimHash/vector signals propose checks. Only verified copies suppress a reporting contribution |
+| D6 | Joining score and acceptance | Candidate-level combined score plus the complete required member-comparison set | Combined score shortlists; all required member checks must pass before Joining. Unknown checks do not pass, and retrieval limits waive none of them |
+| D7 | Copy classification | Source-report pairs and their content/origin evidence | Verified copies add no extra reporting contribution. Uncertain copy contributions stay pending; they are not treated as proven distinct or proven copied |
 | D8 | Correction scope and triggers | Affected membership and incident edges in a configured window/slice | Dispersion, drift, and borderline decisions trigger review, not automatic truth or a forced two-way split |
 | D9 | Cold lookup and archival packing | Explicit manifests, inactive identities, and compatible verification evidence | Lookup and packing are configurable. No archive-deletion policy is selected; physical cleanup preserves logically required records and references |
 | D10 | Topic discovery and promotion | Candidate subject evidence across related events | Automatic discovery, reviewed public promotion. No new category from one low-similarity score alone |
@@ -1476,7 +1670,7 @@ New feature or score versions need compatible distributions and labels. A refere
 | D12 | Reading-view selection | Supported graph slice, query/seed, eligible time range, and reading budget | Configurable path/branch selection; preserve access to omitted reports and meaningful quiet branches |
 | D13 | Candidate recall | Independently labeled same-event and related-event cases, separately; exact-search reference for index loss | Compare dense, sparse, combined, new-item, and cold routes. Exact neighbors are not truth labels |
 | D14 | Event-group quality | Bounded independently labeled article partition and same-event pairs | Keep false/missed Joining counts; use B-Cubed precision and recall as partition summaries, with ARI or AMI as distinct secondary readings |
-| D15 | Relation quality | Independently assessed typed/directed event pairs | Count supported accepted, unsupported accepted, and missed valid edges; distinguish never-retrieved from rejected |
+| D15 | Relation quality | Independently assessed directed edges and unordered associations, with separate populations | Count supported, unsupported, missed, and direction-unknown relations distinctly. Do not use unordered links as positive direction labels |
 | D16 | Assignment churn | Distinct source revisions whose semantic membership changed, over eligible assignments in the same correction scope | Exclude alias-only renames and representation refreshes. Report split/merge operation counts separately |
 | D17 | Largest-cluster share | Largest semantic-contributor set divided by all contributors in the declared active population | Diagnostic, not proof of blobbing; a real major event can legitimately dominate |
 | D18 | Singleton persistence | Clusters with one reporting contribution in an age-qualified cohort | Cohort age and denominator configured. Copies do not make a singleton multi-source reporting |
@@ -1484,12 +1678,16 @@ New feature or score versions need compatible distributions and labels. A refere
 | D20 | Source distribution and provenance | Reporting origins, outlets, website distribution, copy families, and provenance status | Keep counts distinct. Signatures or entropy do not prove factual truth or newsroom independence |
 | D21 | Cohesion and drift | Current contributor centroid/dispersion and comparable prior snapshots | Diagnose changes within one representation; independent event evidence determines any split |
 | D22 | View usefulness | Important developments reached, weakest transitions, repetition, branch omissions, and reader tasks at a fixed reading budget | Judge explanations, not just the score used to construct them |
-| D23 | Judge health and completeness | Pair/shard accounting, reversed-order agreement, uncertainty, and exact denominators | Reuse declared metrics. Missing evidence or incompatible scoring stamps holds fitting; an empty population is not a zero error rate |
+| D23 | Judge health and completeness | Pair/shard accounting, reversed-order agreement, whole-example reviews, and their separate denominators | One bounded review of contradictory examples; unresolved results are excluded from tuning and recorded. Consistency alone is not ground truth |
 | D24 | Fit audit and authority | Previous/proposed/applied settings, evidence/version identity, hold/clamp reasons | Only individually authorized controls may move within declared bounds. No implicit PID driven by unlabeled graph size |
 | D25 | Complete processing cost | Producer/evaluation stages, load and transfer, maintenance, and peak resource use for a named input | Measure with hardware and execution conditions. No numerical performance promise is adopted |
 | D26 | Replay and identity integrity | Retried, replaced, copied, merged, split, and corrected records | Check duplicate contributions, fabricated arrivals, lost aliases, and unresolved public references |
 | D27 | Detection cost | A specifically defined event-detection task with labeled misses/false alarms, prior, and error costs | Optional TDT comparison. State the normalization reference; the raw weighted error expression is not already normalized |
 | D28 | Cold continuity | Late reports, recovered events, related new events, and unavailable historical evidence | Measure lost roots, false recovery, missing relationships, and unresolved work separately |
+| D29 | Frame resolver | Complete GLiNER/LLM frame candidates, checks, normalization, selected extractor, and evidence | Prefer supported GLiNER; use the LLM fallback when it alone passes. Supported disagreement stays unresolved. No cosine voting or mixed-column frames |
+| D30 | Uncertain-copy treatment | Copy classification, pending contribution, original observation time, and show/hide/drop policy | Configure presentation/current-work handling. Drop retains saved content and reasons. No extra statistics, vector weight, activity, or clock reset while pending |
+| D31 | Unknown relationship direction | Supported event pairs with unresolved direction outside the Story DAG | Proceed with unordered associations provisionally; requires further research. Exclude them from chronology, causal claims, and directed paths |
+| D32 | Snapshot publication eligibility | Cross-record integrity and input-coverage status | Valid state with partial input can publish successful content. Invalid state cannot publish as a partial or empty success |
 
 Fragmenting one true event lowers completeness; combining unrelated events lowers homogeneity. V-measure combines those readings but does not replace separate error counts. B-Cubed requires a labeled partition and reports per-item grouping precision/recall. ARI and AMI are different chance-adjusted comparisons, not interchangeable names.
 
@@ -1563,6 +1761,11 @@ Store the counts behind a rate. A missing denominator, unresolved label set, or 
 | E24 | `cold_recovery_count`, `false_recovery_count`, `recovery_pending_count` | Recovered identities, invalid recovered matches, and unfinished evidence retrieval | Source candidate anchor similarity: above or at 0.90, depending on the proposed comparator. Configure the exact boundary; verify before restoration |
 | E25 | Processing duration, memory, queue, and transfer readings | Declared workload, hardware, execution conditions, and complete stage boundaries | Metric fields are retained; previously excluded numerical performance promises and model-size assumptions are not restored |
 | E26 | `replay_duplicate_count`, `unresolved_reference_count`, fit audit | Duplicate effects, broken corrected references, and previous/proposed/applied settings with reasons | Integrity is not an unlabeled geometric threshold. Replays must not fabricate reports, distribution, or activity |
+| E27 | `frame_agreement_count`, `gliner_selected_count`, `llm_fallback_count`, `frame_conflict_count` | Whole-candidate outcomes for the same occurrence and frozen input, plus source-supported error assessment | Selection frequency is not accuracy. Report unresolved or missing candidates; no comparison of uncalibrated confidence scales |
+| E28 | `pending_contribution_count`, `uncertain_hidden_count`, `uncertain_dropped_count` | Current copy uncertainty and handling modes, recorded separately from known-copy distribution | The mode does not change pending accounting or permit stored-content deletion. Resolution uses the original observation time |
+| E29 | `unordered_association_count`, `direction_unresolved_count` | Supported associations and direction uncertainty outside accepted directed edges | Separate relationship support from direction correctness; do not include these records in DAG growth or path scores |
+| E30 | `evaluation_conflict_count`, `case_review_resolved_count`, `case_review_unresolved_count` | Initial contradictory examples and their single bounded whole-example reviews | Keep independent evidence qualification; unresolved cases are excluded, not silently labelled negative |
+| E31 | `invalid_snapshot_count`, `partial_input_snapshot_count` | Invalid cross-record state versus valid snapshots missing some expected input | Distinct readings: only valid state may be published; successful partial processing is not corruption |
 
 #### B-Cubed and labeled partition formulas
 
@@ -1579,6 +1782,8 @@ F_{B^3} &= \frac{2P_{B^3}R_{B^3}}{P_{B^3}+R_{B^3}}
 ```
 
 Unresolved labels are counted separately, not guessed. Copy-heavy and contribution-deduplicated evaluations answer different questions; record the chosen population and report both when assessing copy amplification.
+
+Use the reviewed reference grouping only for the examples and label scope it supports. Positive pair chains are not an automatic partition. Contradictory judgments follow the one-review policy; unresolved examples are outside the fully labeled metric population with their excluded count reported.
 
 For a contingency table `n_ij` between predicted and reference groups, the adjusted Rand formula can be expressed using pair counts:
 
@@ -1654,6 +1859,8 @@ Classify: EXACT_SAME_EVENT | SEQUENTIAL_FOLLOW_UP | UNRELATED
 
 The selected audit must also represent insufficient evidence. The existing same-event task remains blind to the tested score and algorithmic outcome. A separate relation task may use the source-supported evidence it needs, but extracted entities and proposed edges are not treated as ground truth. An intermediate score does not decide which label to ask the model to confirm.
 
+For the provisional unordered-association policy, add a distinct outcome for supported relation with unknown direction. The source prompt's three labels above are retained for provenance; they are not an instruction to force every related pair into a chronological follow-up.
+
 Sample joined, copied, threaded, rejected, and unresolved cases under configured budgets. Compare classifications with the algorithm only after obtaining the independent verdict. Keep reversed-order disagreement, uncertainty, and incomplete shards visible through the existing judge's metric records.
 
 The attachment proposes a sample of 30 cluster pairs per day. Preserve this as an audit-sampling configuration candidate, not a throughput claim, an adequate sample-size guarantee, or a selected fixed budget.
@@ -1718,6 +1925,31 @@ FittedControlRecord {
   evidence_rates: map<utf8, float64>
 }
 
+EvaluationCaseReview {
+  version: DateStamp
+  review_id: utf8
+  judge_id: utf8
+  task_version: utf8
+  input_snapshot_id: utf8
+  population_id: utf8
+  evaluation_unit: utf8            # source_report or reporting_contribution
+  document_ids: list<UUIDv5>
+  original_assessment_refs: list<RecordRef>
+  reason: utf8                     # contradictory_event_judgments
+  review_attempt: int32            # one bounded whole-example review
+  evidence_refs: list<EvidenceRef>
+  proposed_reference_groups: list<list<UUIDv5>>?
+  included_document_ids: list<UUIDv5>
+  excluded_document_ids: list<UUIDv5>
+  unresolved_document_ids: list<UUIDv5>
+  qualification_rubric_version: utf8
+  status: utf8                     # resolved, unresolved
+  result_reason: utf8
+  label_qualification: utf8        # pending, eligible, ineligible
+  eligibility_reason: utf8
+  assessed_at: UtcInstant
+}
+
 ProcessingMetricRecord {
   version: DateStamp
   run_id: utf8
@@ -1746,6 +1978,10 @@ ProcessingMetricRecord {
 ```
 
 The judge's accounting invariant is `pairs_dealt = pairs_read + pairs_refused + pairs_unreadable + pairs_abandoned`. Agreement is a subset of pairs read. Preserve the existing per-shard disagreement and uncertainty denominators; do not replace them with the size of a graph, a batch, or a concordant-source cohort.
+
+Whole-example review calls are not additional pair observations. Their records refer back to the original pair judgments and have separate call/accounting populations. `review_attempt` is one for this policy; no automatic retry-until-agreement loop is implied. Unresolved or unqualified review output cannot silently populate a tuning histogram.
+
+For contribution-level review, each listed Document Unit is the selected representative of one contribution in the named snapshot. Preserve that mapping with the population definition; a copied report or alternate materialization must not become another evaluated unit.
 
 The holdout's four cells evaluate the numeric merge line against independent labels; they do not by themselves evaluate headline overrides, full group construction, a relation verifier, or an entire Story DAG. Those need their own named outcome records.
 
@@ -1789,6 +2025,8 @@ These evidence, fitting, and display windows are not the **15-day active-search 
 
 The design separates event evidence from search approximations, reporting from distribution, and immutable versions from permanent closure. These distinctions let the system adapt without disguising uncertainty or losing reports.
 
+The original draft's LLM-only frame ownership and the later brief's dual extraction are resolved by one GLiNER-preferred whole-frame selector. The original all-member Joining check is retained rather than replaced by the later cluster-average threshold. The research-backed unordered relationship is accepted provisionally with further research required. Earlier formulas, schemas, and source examples remain for comparison; they do not override these choices.
+
 **Table F - Rejected or deferred alternatives**
 
 | ID | Alternative and benefit sought | Why it is not selected |
@@ -1805,6 +2043,10 @@ The design separates event evidence from search approximations, reporting from d
 | F10 | Delete transitive edges or weak branches from the authoritative graph | Simplifies a picture but can erase typed evidence or important quiet developments; simplify only the bounded view |
 | F11 | Permanent cold closure, or appending into an allegedly immutable file | Loses late evidence or contradicts immutability; preserve old versions and publish explicit updates/corrections |
 | F12 | Automatic public Topic Domains from isolated low-similarity documents | Finds novelty but can destabilize categories; discover candidates automatically and review public promotion |
+| F13 | Cosine-weighted voting between extractor outputs | Similar-looking frames can reverse roles or negation; use one evidence-aware whole-frame resolver, not score mixing or a third model |
+| F14 | Counting uncertain copies as independent reporting by default | Temporarily inflates semantic/statistical votes and activity; keep the extra contribution pending with explicit configurable handling |
+| F15 | Discarding a supported relationship because its direction is unknown | Loses useful evidence; retain an unordered association provisionally, outside directed paths |
+| F16 | Forcing inconsistent pair judgments into reference clusters | Manufactures labels; allow one bounded whole-example review and exclude unresolved or unqualified results |
 
 ## See also
 
