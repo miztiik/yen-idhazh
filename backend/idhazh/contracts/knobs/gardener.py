@@ -511,7 +511,8 @@ class CompactionPolicy(_Declared):
         ge=1,
         description=(
             "The most days, and separately the most months and the most years, one pass "
-            "compacts before it stops for the next wake."
+            "compacts, and separately the most months past monthly_window it drops, before "
+            "it stops for the next wake."
         ),
     )
     max_raw_files_per_period: int = Field(
