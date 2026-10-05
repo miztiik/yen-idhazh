@@ -136,7 +136,7 @@ test('Copy link notice is fixed and moves no region', async ({ page, context }) 
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	await page.setViewportSize({ width: 390, height: 844 });
 	await openExplorer(page);
-	await page.evaluate(() => window.scrollTo(0, 0));
+	await page.getByRole('button', { name: /^Copy link$/ }).scrollIntoViewIfNeeded();
 	await startShiftObserver(page);
 	const before = await snapshot(page);
 	await page.getByRole('button', { name: /^Copy link$/ }).click();
