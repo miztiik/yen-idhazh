@@ -609,7 +609,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	save_name_max_chars: 40,
 	series_floor_share: 0.05,
 	rail_rem: 14,
-	readout_lines: [5, 3, 4, 2],
+	readout_lines: [5, 3, 4, 3],
 	notice_ms: 6000,
 	editor_lines_shown: [8, 10],
 	strip_shown: [3, 6],
