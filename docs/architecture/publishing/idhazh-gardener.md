@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -436,47 +436,77 @@ config change. Both ship `dry_run: true`: a wake lists what the window selects
 and deletes nothing. How to read the list and turn one live is
 [../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md).
 
-**`workflow-runs` reads only the runs past its line that no earlier pass
+**Each task reads only the members past its line that no earlier pass
 handled.** Its row in each record carries `handled_through`: the newest UTC day
-on or before which every run was handled - deleted, or on a dry run reported or
-counted. The next pass reads that day back from the gardener's own ledger, over
-the last `mark_lookback_days` UTC days, today included, and starts the day
+on or before which every member was handled - deleted, or on a dry run reported
+or counted. The next pass reads that day back from the gardener's own ledger,
+over the last `mark_lookback_days` UTC days, today included, and starts the day
 after. Only a row from a pass with the same `dry_run` counts, because a day a
 dry run reported is a day nothing deleted. A row with no mark is passed over,
-and of the rest the latest day wins. The declaration names
+and of the rest the latest day wins. Both declarations name
 `state/raw/gardener` and `state/compact/gardener` under `reads`, and the task
 names the days it reads before it fetches them, so the read is those days and
 no more - about 35 record files a week, 10 KB each.
 
-**One search a UTC day, from 00:00:00Z to 23:59:59Z, oldest day first.** Both
-ends carry `Z`, so GitHub never chooses which day is meant. One search returns
-at most 1,000 runs, so a day GitHub counts over that is searched again an hour
-at a time; an hour over it stops the pass, and its mark stays on the day before.
-Each search is read from its last page back. GitHub lists the newest run first,
-and a run deleted from a page moves every later run up one place, so a pass
-that read front to back while deleting would step over runs it never read.
-Every run is still held to the line before it is taken, so GitHub's own filter
-is never what keeps a delete safe.
-
 **The mark moves a whole day at a time.** A live pass that its ceiling stops
 inside a day leaves the mark on the day before, and the next pass reads that day
 again for what is left. A dry run deletes nothing, so stopping inside a day would
-report the same runs at every wake: past its ceiling it counts the rest of that
-day without listing them, and its mark moves to that day. A run that arrives
-from an earlier day than one before it means the order failed: the pass goes
-on, and its mark stays where it started.
+report the same members at every wake: past its ceiling it counts the rest of
+that day without listing them, and its mark moves to that day. A member that
+arrives from an earlier day than one before it means the order failed: the pass
+goes on, and its mark stays where it started.
 
-**With no mark in reach, GitHub's answers say where the first walk starts.** No
-run is older than the repository, so a line before the day it was created
-leaves nothing to walk: the mark is the line, and no page of runs is read. On
-2026-10-04 the line was 2026-07-06, before the repository was created on
-2026-08-20. Its oldest run is from 2026-08-22, so the first run reaches the line
-on 2026-11-20. Once one does, the oldest day with a run is found by halving the
-days from the repository's first day to the line, one count of the runs created
-on or before a day a step - about 9 counts for a year of days - and the walk
-starts on that day.
+**The runs: one search a UTC day, from 00:00:00Z to 23:59:59Z, oldest day
+first.** Both ends carry `Z`, so GitHub never chooses which day is meant. One
+search returns at most 1,000 runs, so a day GitHub counts over that is searched
+again an hour at a time; an hour over it stops the pass, and its mark stays on
+the day before. Each search is read from its last page back. GitHub lists the
+newest run first, and a run deleted from a page moves every later run up one
+place, so a pass that read front to back while deleting would step over runs it
+never read. Every run is still held to the line before it is taken, so GitHub's
+own filter is never what keeps a delete safe.
 
-`workflow-artifacts` still lists every page of its collection at each wake.
+**With no mark in reach, GitHub's answers say where the first walk of the runs
+starts.** No run is older than the repository, so a line before the day it was
+created leaves nothing to walk: the mark is the line, and no page of runs is
+read. On 2026-10-04 the line was 2026-07-06, before the repository was created
+on 2026-08-20. Its oldest run is from 2026-08-22, so the first run reaches the
+line on 2026-11-20. Once one does, the oldest day with a run is found by halving
+the days from the repository's first day to the line, one count of the runs
+created on or before a day a step - about 9 counts for a year of days - and the
+walk starts on that day.
+
+**The artifacts: from the oldest end, a page at a time.** GitHub lists them by
+id, newest first, 100 to a page, and offers no search by day. So the first page
+is read only for its count, which names the last page, and the walk reads from
+the last page back: a delete then moves only artifacts already read. It stops
+at the first artifact created after the line. On 2026-10-05 GitHub held 1,613
+artifacts on 17 pages and the line fell inside the last one, so a pass read 3
+pages - the first, the last and the one before it - where reading every page
+took 17. A dry run deletes nothing, so as its mark moves on it reads from the
+last page up to its line. With no mark in reach, the first walk starts after
+the day before the repository was created: no artifact is older than that.
+
+**Each page is checked before any of its artifacts is taken.** The walk reads
+the next page before it hands on the one in hand, so a pass that ends inside a
+page never ends past a boundary nobody checked. It sorts each page by the
+instant its artifacts were created, and checks two things.
+
+- **Day order.** The oldest day on a page must be at or after the newest day on
+  every page read before it. When it is not, the walk logs that the order check
+  failed, reads every page, each once and still from the last back, and the mark
+  stays where it was.
+- **The count.** Each page's `total_count` must equal the first page's, less
+  the artifacts this pass deleted. An artifact made during the walk moves every
+  older one a place on, so one can slip onto a page already read while the order
+  still holds. When the count differs, the pass handles what it reads, and the
+  mark stays where it was.
+
+Every artifact is still held to the line before it is taken, so a failed check
+costs completeness and never safety. Neither check sees an artifact made and
+another gone between two reads, which leave the count as it was. GitHub's own
+retention - 90 days in this repository, read on 2026-10-05 - deletes an
+artifact missed that way at most 60 days after the 30-day line.
 
 ## The compaction
 
@@ -663,6 +693,23 @@ written it (Fowler).
 pass that read front to back while deleting would move each next page past runs
 it never read, and once the mark passed their day nobody would read them again.
 Read from the end, a delete moves only runs already read (Fowler).
+
+**2026-10-05: the artifacts are read from the oldest end, and their order is
+checked by UTC day.** Reading every page front to back took 17 requests on
+2026-10-05, and a live pass that deleted while it read would step over
+artifacts it never read. Reading from the last page back, with a mark on the
+record as `workflow-runs` keeps one, read 3 pages that day (the owner,
+2026-10-04). The order was first to be checked by the instant each artifact was
+created. GitHub orders by id, and across the 1,613 artifacts it listed on
+2026-10-05 an id and its instant disagreed by up to 76 minutes: that check
+failed at 9 of the 16 page boundaries, so the walk would have read every page
+and kept its mark on about half of all wakes. Compared by UTC day, each page
+sorted by instant, all 16 held. The mark and the line are days, so the day is
+the order the walk relies on. A walk by id was rejected: 19 artifacts came after
+one from a later day, all in the half hour before one of 4 midnights, and each
+would have held the mark. A listing that may have missed a member says so
+through `listing_intact`, so the one rule that holds a mark stays in
+`one_at_a_time.take`, beside the check it already made on day order (Fowler).
 
 **2026-10-04: a stale shard lands nothing, and `main`'s tip tells a lost push
 from a refused one.** The publisher used to check only whether `main` held the
