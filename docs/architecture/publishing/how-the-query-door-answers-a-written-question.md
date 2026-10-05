@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
@@ -73,6 +73,8 @@ When no selected ledger holds a file in the span, `ask()` answers `quiet` and st
 
 The Data explorer page prints one line a ledger and a state under the span line, in the plain note type, lost days first: a lost day has no record, so nothing from it is in the answer, and a set-aside file may hold rows the answer lacks. The set-aside line counts files, never days, because a month counts every file it set aside, and it names the folder a person reads them in, `state/raw/<ledger>/set-aside/`. The quiet answer carries the same lines. The chart panel repeats none of them.
 
+The date chart draws a lost day as a day with no value. A day a selected ledger lost, between the answer's first and last day and with no row of its own, sits on the axis with nothing drawn, so the line breaks there instead of joining the days either side as if that day held data. Pointing at it reads `No number for this day`, the strip's words for any day with no number. Any other day without a row stays off the axis, because the page cannot know what the question would make of a day with no rows. A lost day before the answer's first day or after its last also stays off, so it never lengthens the chart or stands beside days the question left out (Jony, 2026-10-05). The page cannot tell which selected ledger a row came from, so it takes the lost days of every selected ledger: the chart may show a gap that one ledger did not cause, but it never joins a line across a day with no record.
+
 ## Date range and address
 
 The Data explorer page uses two native date inputs, `From (UTC)` and `To (UTC)`. By default they accept the reader's UTC day and the 364 UTC days before it. The bound is `console.explorer_reach_days`, so an operator can widen or narrow it with a config edit rather than a source edit.
@@ -80,6 +82,8 @@ The Data explorer page uses two native date inputs, `From (UTC)` and `To (UTC)`.
 Preset tiles remain shortcuts. Pressing one sets `To (UTC)` to the reader's UTC day and `From (UTC)` to the preset's span ending on that day.
 
 A shared link carries a preset as `days=<n>`. A custom span replaces `days` with `from=YYYY-MM-DD` and `end=YYYY-MM-DD`. A date that is not a real UTC day, such as `2026-08-32`, a date outside the reach, or `from` after `end` is dropped with a sentence, and the page ends today. The day check is the door's own `isDay()`, which answers rather than throws. A link never runs a question.
+
+A question this browser keeps, saved or recently run, is read back with the same three checks. One that fails any of them is dropped, and the browser console names the list it was dropped from.
 
 ## Boundary
 

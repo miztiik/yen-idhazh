@@ -24,7 +24,7 @@
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
 	import { fetchRegistry, flattenRegistry, type LedgerRegistry, type RegistryLedger } from '$lib/console/explorer/registry';
 	import type { ExplorerExample } from '$lib/server/config';
-	import { LEDGER_NAMES } from '$lib/data/slice-shapes';
+	import { isDay, LEDGER_NAMES } from '$lib/data/slice-shapes';
 	import Icon from '$lib/icons/Icon.svelte';
 
 	let { data } = $props();
@@ -248,7 +248,7 @@
 	}
 
 	function validStoredDay(value: unknown): DateStamp | null {
-		if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+		if (!isDay(value)) return null;
 		const min = minReachDay();
 		const max = todayUtc();
 		return value >= min && value <= max ? value : null;
@@ -624,7 +624,7 @@
 		{:else if result === null}
 			<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
 		{:else if result.state === 'ok'}
-			<ShapePanel columns={result.columns} rows={result.rows as Row[]} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} />
+			<ShapePanel columns={result.columns} rows={result.rows as Row[]} lostDays={result.gaps.flatMap((gap) => gap.lostDays)} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} />
 		{:else if result.state === 'quiet'}
 			<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
 		{:else if result.state === 'refused'}
