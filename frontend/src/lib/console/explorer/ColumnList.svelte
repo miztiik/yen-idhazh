@@ -13,7 +13,8 @@
 		<p>No columns are known yet.</p>
 	{:else}
 		<div class="column-box" data-explorer-column-box>
-			{#each groups as group}
+			<!-- Keyed: a group for another ledger is new elements, not the old ones moved, and a moved element is a layout shift. -->
+			{#each groups as group, index (`${index}-${group.ledger}`)}
 				<div class="column-group">
 					{#if group.ledger !== null}<h4>{group.ledger}</h4>{/if}
 					<ul>
