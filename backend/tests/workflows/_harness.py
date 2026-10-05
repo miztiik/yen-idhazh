@@ -139,6 +139,8 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     # The one that decides a published address. See the two tests that run the
     # step for what it accepts and what it now stops.
     ("digest.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+    # Blank plans the full day; a number lowers the run's crash guard to it.
+    ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",

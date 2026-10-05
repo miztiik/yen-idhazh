@@ -75,6 +75,7 @@ def stage_plan(
     execution: int | None = None,
     state_dir: Path | None = None,
     cap: int | None = None,
+    article_limit: int | None = None,
 ) -> RunPlan:
     """Read every live feed, rank the pool, and write down what it saw. No model.
 
@@ -105,11 +106,18 @@ def stage_plan(
     guard: it works per vertical, before the day is deduplicated, and a run that
     does not ask for it plans exactly what it planned before.
 
+    `article_limit` bounds the whole run, for a short test run of the full
+    pipeline. It keeps the highest-ranked stories across every vertical, the
+    same way the crash guard does, and it can only lower that guard, never
+    raise it. The number of work shards is chosen separately.
+
     `commit_sha` is the commit this run checked out. Every file this run writes
     through the ledger door - a retirement, the first sights, the feed verdicts,
     the counterfactual scores - names it, so the file can be traced to the code
     that decided it.
     """
+    if article_limit is not None and article_limit < 1:
+        raise ValueError(f"article_limit must be at least 1, got {article_limit}")
     read_url = fetcher or common.live_fetcher(settings)
     clock = now or assemble.utc_now
     state = state_dir if state_dir is not None else common.STATE_ROOT
@@ -321,7 +329,11 @@ def stage_plan(
     items = _dedupe_planned_items(items)
     items = _one_piece_per_outlet(items, outlets=outlets)
     items = _record_plan_duplicates(items, embedder=embedder, leads=leads, collect=collect)
-    items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
+    run_ceiling = settings.app.run.safety_ceiling_per_run
+    if article_limit is not None:
+        LOG.info("article limit requested limit=%s", article_limit)
+        run_ceiling = min(run_ceiling, article_limit)
+    items = _within_ceiling(items, ceiling=run_ceiling)
     items = _within_day_ceiling(
         items,
         published_today=sum(day_carried.values()),
@@ -371,7 +383,7 @@ def stage_plan(
         capped = _dedupe_planned_items(capped)
         capped = _one_piece_per_outlet(capped, outlets=outlets)
         capped = _record_plan_duplicates(capped, embedder=embedder, leads=leads, collect=collect)
-        capped = _within_ceiling(capped, ceiling=settings.app.run.safety_ceiling_per_run)
+        capped = _within_ceiling(capped, ceiling=run_ceiling)
         capped = _within_day_ceiling(
             capped,
             published_today=sum(day_carried.values()),
