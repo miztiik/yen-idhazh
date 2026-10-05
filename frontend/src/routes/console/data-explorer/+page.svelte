@@ -6,7 +6,6 @@
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import Notice from '$lib/components/Notice.svelte';
-	import { megabytes } from '$lib/assist/session';
 	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
 	import { shortDate, dayMonth } from '$lib/format';
 	import QuestionStrip from '$lib/console/explorer/QuestionStrip.svelte';
@@ -20,6 +19,7 @@
 	import ShapePanel from '$lib/console/explorer/ShapePanel.svelte';
 	import { chooseExplorerShapes, type ExplorerChartType } from '$lib/console/explorer/shape';
 	import { gapLines } from '$lib/console/explorer/gaps';
+	import { size, statusSentence, statusWithHeld } from '$lib/console/explorer/status';
 	import { explorerAddress, parseExplorerAddress, LINK_TOO_LONG_NOTICE } from '$lib/console/explorer/address';
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
 	import { fetchRegistry, flattenRegistry, type LedgerRegistry, type RegistryLedger } from '$lib/console/explorer/registry';
@@ -79,7 +79,7 @@
 	const persistentNotice = $derived(!storageWorks && !storageNoticeDismissed);
 	const readoutLines = $derived(config.readout_lines[readoutBand] ?? config.readout_lines[0]);
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
-	const statusText = $derived(`${statusLine()} This page holds ${size(heldBytes)} of fetched files; a reload empties it.`);
+	const statusText = $derived(statusWithHeld(statusLine(), heldBytes));
 	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
 	const answerLink = $derived(result !== null && !running && answerOffscreen ? '#data-explorer-rows' : '');
 	const shapeBounds = $derived({
@@ -141,20 +141,6 @@
 		return `"${name.replace(/"/g, '""')}"`;
 	}
 
-	function plural(count: number, noun: string): string {
-		return `${count} ${noun}${count === 1 ? '' : 's'}`;
-	}
-
-	function size(bytes: number): string {
-		if (bytes > 0 && bytes < 102_400) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-		return `${megabytes(bytes)} MB`;
-	}
-
-	function elapsed(ms: number | null): string {
-		if (ms === null) return '0 ms';
-		return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
-	}
-
 	function emptyLedgerLines(): string {
 		const lines = selected
 			.map((ledger) => ({ ledger, through: cost.through[ledger] }))
@@ -164,22 +150,23 @@
 	}
 
 	function statusLine(): string {
-		if (keepNotice !== null) return keepNotice;
-		if (linkNotices.length > 0) return linkNotices.join(' ');
+		if (keepNotice !== null) return statusSentence({ state: 'notice', notice: keepNotice });
+		if (linkNotices.length > 0) return statusSentence({ state: 'link', linkNotices });
 		if (running) {
-			return lastRead === null ? `Fetching ${plural(cost.files, 'file')}, ${size(cost.bytes)}.` : 'Running the question.';
+			return statusSentence(lastRead === null ? { state: 'running-fetch', files: cost.files, bytes: cost.bytes } : { state: 'running-query' });
 		}
-		if (costing) return 'Choosing a ledger fetches one day of it to list its columns.';
+		if (costing) return statusSentence({ state: 'costing' });
 		if (result?.state === 'ok' && lastRead !== null) {
-			return `Answered in ${elapsed(lastMs)}. Fetched ${plural(lastRead.files, 'file')}, ${size(lastRead.bytes)}; ${lastRead.alreadyHeld} more were already in this page.`;
+			return statusSentence({ state: 'answered', ms: lastMs, read: lastRead });
 		}
 		if (result?.state === 'quiet' && lastRead !== null) {
-			return `Ran in ${elapsed(lastMs)} and matched no rows. Fetched ${plural(lastRead.files, 'file')}, ${size(lastRead.bytes)}.`;
+			return statusSentence({ state: 'quiet', ms: lastMs, read: lastRead });
 		}
-		if (result?.state === 'refused') return 'Did not run. The reason is where the answer would be.';
-		if (result?.state === 'missing') return `Did not run. ${result.ledger} is not on this site yet.`;
-		if (result?.state === 'unreachable') return result.fault === 'engine' ? 'Did not run. The query engine did not start.' : 'Did not run. The ledger files could not be fetched.';
-		return `Run reads ${plural(cost.files, 'file')}, ${size(cost.bytes)} from ${plural(selected.length, 'ledger')} over ${plural(spanDays(), 'UTC day')}. ${lastMs === null ? 'It also starts the query engine. ' : ''}${emptyLedgerLines()}`;
+		if (result?.state === 'refused') return statusSentence({ state: 'refused' });
+		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
+		if (result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
+		const empty = emptyLedgerLines();
+		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, days: spanDays(), firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
 	function toggle(name: LedgerName) {
 		selected = selected.includes(name) ? selected.filter((one) => one !== name) : [...selected, name];
@@ -513,7 +500,7 @@
 
 <Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copiedLink = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
 
-<div class="workbench" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px;--answer-size:${config.answer_svh}svh`}>
+<div class="workbench" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px;--answer-size:${config.answer_svh}svh;--editor-lines:${editorLines};--readout-lines:${readoutLines}`}>
 <Panel id="data-explorer-ask" title="Your question">
 	<div class="question-panel">
 		<div class="workbench-toolbar" data-workbench-region="toolbar">
@@ -562,7 +549,7 @@
 							{/if}
 						</div>
 					</div>
-					<QueryEditor value={sql} maxChars={config.query_max_chars} lines={editorLines} counterFromShare={config.counter_from_share} onInput={(value) => { sql = value; if (linkNotices.some((notice) => notice.includes('came from a link'))) linkNotices = []; }} onRun={run} />
+					<QueryEditor value={sql} maxChars={config.query_max_chars} lines={editorLines} onInput={(value) => { sql = value; if (linkNotices.some((notice) => notice.includes('came from a link'))) linkNotices = []; }} onRun={run} />
 				</div>
 				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href={answerLink} files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} {heldBytes} />
 			</div>
@@ -665,8 +652,7 @@
 		grid-template-columns: auto minmax(18rem, 1fr) auto;
 		align-items: center;
 		gap: var(--space-2);
-		block-size: calc(var(--workbench-control) + 2 * var(--space-1));
-		overflow: hidden;
+		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
 		padding: var(--space-1) var(--space-3);
 		border-block-end: 1px solid var(--color-rule);
 	}
@@ -761,8 +747,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-2);
-		block-size: calc(var(--workbench-control) + 2 * var(--space-1));
-		overflow: hidden;
+		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
 		padding-inline: var(--space-3);
 		border-block-end: 1px solid var(--color-rule);
 	}
@@ -799,7 +784,7 @@
 
 	[data-workbench-region='ledgers'],
 	[data-workbench-region='columns'] {
-		block-size: calc(var(--workbench-control) + var(--workbench-field-leading) * 10 + 2 * var(--space-3));
+		block-size: calc(4 * var(--space-3) + var(--workbench-control) + var(--editor-lines) * var(--workbench-field-leading) + var(--readout-lines) * var(--leading-sm) + 2 * var(--space-1));
 		min-block-size: 0;
 		overflow: auto;
 		border-inline-end: 1px solid var(--color-rule);
@@ -848,6 +833,10 @@
 		grid-template-rows: var(--workbench-control) auto minmax(0, 1fr);
 	}
 
+	.answer-region > :global(.answer-state) {
+		grid-row: 2 / -1;
+	}
+
 	.chart-region {
 		block-size: calc(var(--workbench-control) + var(--idle-height) + 4rem);
 		display: grid;
@@ -855,13 +844,15 @@
 		overflow: auto;
 	}
 
+	.chart-region > :global(.answer-state) {
+		block-size: 100%;
+	}
+
 	.shape-actions { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
 	.shape-actions legend { color: var(--color-text-tertiary); font-size: var(--text-xs); }
 	@media (max-width: 1023px) {
 		.workbench-toolbar {
 			grid-template-columns: minmax(0, 1fr) auto;
-			block-size: calc(2 * (var(--workbench-control) + 2 * var(--space-1)));
-			overflow: hidden;
 		}
 		.date-fields {
 			grid-column: 1;
@@ -899,9 +890,4 @@
 		}
 	}
 
-	@media (max-width: 639px) {
-		[data-workbench-region='questions'] {
-			block-size: calc(2 * (var(--workbench-control) + 2 * var(--space-1)));
-		}
-	}
 </style>

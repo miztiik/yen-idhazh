@@ -1,7 +1,5 @@
 <script lang="ts">
-	let { value, maxChars, lines, counterFromShare, onInput, onRun }: { value: string; maxChars: number; lines: number; counterFromShare: number; onInput: (value: string) => void; onRun?: () => void } = $props();
-	const count = $derived(value.length);
-	const showCounter = $derived(count >= maxChars * counterFromShare);
+	let { value, maxChars, lines, onInput, onRun }: { value: string; maxChars: number; lines: number; onInput: (value: string) => void; onRun?: () => void } = $props();
 	const rows = $derived((value || ' ').split('\n'));
 	function highlighted(line: string): { text: string; kind: string }[] {
 		return line.split(/(\bSELECT\b|\bFROM\b|\bWHERE\b|\bGROUP\b|\bORDER\b|\bBY\b|\bWITH\b|\bDESCRIBE\b|\bSUMMARIZE\b|\bEXPLAIN\b|'[^']*'|\b\d+(?:\.\d+)?\b|--.*$)/gi).filter(Boolean).map((text) => {
@@ -29,7 +27,6 @@
 		<pre class="highlight" aria-hidden="true">{#each rows as line}<span class="line">{#each highlighted(line) as part}<span data-code={part.kind}>{part.text}</span>{/each}</span>{/each}</pre>
 		<textarea id="explorer-sql" spellcheck="false" autocapitalize="off" autocomplete="off" value={value} maxlength={maxChars} oninput={(event) => onInput(event.currentTarget.value)} onkeydown={keydown} placeholder="Write one DuckDB question, or pick an example above."></textarea>
 	</div>
-	<p class="hint">Ctrl+Enter or Cmd+Enter runs it. Tab moves to the next control.{#if showCounter} {count} of {maxChars} characters.{/if}</p>
 </div>
 
 <style>
@@ -47,5 +44,4 @@
 	[data-code='string'] { color: var(--code-string); }
 	[data-code='number'] { color: var(--code-number); }
 	[data-code='comment'] { color: var(--code-comment); }
-	.hint { margin: 0; color: var(--color-text-tertiary); font-size: var(--text-xs); text-align: end; }
 </style>

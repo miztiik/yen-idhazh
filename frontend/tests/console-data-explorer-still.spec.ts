@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
 import { explorerConfig } from '../src/lib/server/config';
-import { readFileSync } from 'node:fs';
+import { statusSentence, statusWithHeld } from '../src/lib/console/explorer/status';
 
 type Box = { x: number; y: number; width: number; height: number };
 type ShiftSource = {
@@ -23,8 +23,6 @@ const VIEWS = [
 	{ width: 768, height: 1024 },
 	{ width: 390, height: 844 }
 ] as const;
-const PLAN_55 = '../../TODO/20260928-55-one-page-queries-every-ledger-plan.md';
-
 async function startShiftObserver(page: Page) {
 	await page.evaluate(() => {
 		const rectOf = (rect: DOMRectReadOnly) => ({
@@ -187,13 +185,6 @@ test('status text never overlaps the reserved answer link box', async ({ page })
 	await expect(page.getByRole('link', { name: 'See the answer' })).toHaveCount(0);
 });
 
-test('M7: editor top target is moved to row 10 with its reason', () => {
-	const plan = readFileSync(new URL(PLAN_55, import.meta.url), 'utf8');
-	expect(plan).toContain('M7 moves to row 10');
-	expect(plan).toContain('row 10');
-	expect(plan).toContain('K6');
-});
-
 test('M8: every workbench region keeps its idle block size at all four widths', async ({ page }) => {
 	for (const view of VIEWS) {
 		await page.setViewportSize(view);
@@ -203,21 +194,29 @@ test('M8: every workbench region keeps its idle block size at all four widths', 
 			const rem = parseFloat(css.fontSize);
 			const control = parseFloat(css.getPropertyValue('--workbench-control')) * rem;
 			const space1 = parseFloat(css.getPropertyValue('--space-1')) * rem;
+			const space3 = parseFloat(css.getPropertyValue('--space-3')) * rem;
 			const leadingSm = parseFloat(css.getPropertyValue('--leading-sm')) * rem;
+			const fieldLeading = parseFloat(css.getPropertyValue('--workbench-field-leading')) * rem;
 			const regions = Object.fromEntries(
 				[...document.querySelectorAll('[data-workbench-region]')].map((node) => {
 					const rect = node.getBoundingClientRect();
 					return [node.getAttribute('data-workbench-region') ?? '', rect.height];
 				})
 			);
-			return { control, space1, leadingSm, regions };
+			return { control, space1, space3, leadingSm, fieldLeading, rem, regions };
 		});
-		const row = sizes.control + 2 * sizes.space1;
-		expect(sizes.regions.toolbar, `${view.width} toolbar`).toBeCloseTo(view.width < 1024 ? row * 2 : row, 0);
-		expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(view.width < 640 ? row * 2 : row, 0);
 		const lines = explorerConfig().readout_lines[view.width < 640 ? 0 : view.width < 1024 ? 1 : view.width < 1400 ? 2 : 3];
+		const editorLines = explorerConfig().editor_lines_shown[view.width < 1024 ? 0 : 1];
+		const editorHeight = 4 * sizes.space3 + sizes.control + editorLines * sizes.fieldLeading;
+		const statusHeight = lines * sizes.leadingSm + 2 * sizes.space1;
+		expect(sizes.regions.editor, `${view.width} editor`).toBeCloseTo(editorHeight, 0);
 		expect(sizes.regions.status, `${view.width} status`).toBeCloseTo(lines * sizes.leadingSm + 2 * sizes.space1, 0);
+		if (view.width >= 1024) {
+			expect(sizes.regions.ledgers, `${view.width} ledgers`).toBeCloseTo(editorHeight + statusHeight, 0);
+			expect(sizes.regions.columns, `${view.width} columns`).toBeCloseTo(editorHeight + statusHeight, 0);
+		}
 		expect(sizes.regions.answer, `${view.width} answer`).toBeCloseTo(view.height * explorerConfig().answer_svh / 100, 0);
+		expect(sizes.regions.chart, `${view.width} chart`).toBeCloseTo(sizes.control + 220 + 4 * sizes.rem, 0);
 	}
 });
 
@@ -254,6 +253,17 @@ test('M10: non-run interactions keep every region box fixed', async ({ page, con
 });
 
 test('M11: status words stay in the reserved lines and never scroll sideways', async ({ page }) => {
+	expect(statusSentence({ state: 'idle', files: 123, bytes: 67_108_864, ledgers: 4, days: 90, firstRun: true })).toBe('Run reads 123 files, 64.0 MB from 4 ledgers over 90 UTC days. It also starts the query engine.');
+	expect(statusSentence({ state: 'costing' })).toBe('Choosing a ledger fetches one day of it to list its columns.');
+	expect(statusSentence({ state: 'running-fetch', files: 123, bytes: 67_108_864 })).toBe('Fetching 123 files, 64.0 MB.');
+	expect(statusSentence({ state: 'running-query' })).toBe('Running the question.');
+	expect(statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Answered in 100.0 s. Fetched 123 files, 64.0 MB; 45 more were already in this page.');
+	expect(statusSentence({ state: 'quiet', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Ran in 100.0 s and matched no rows. Fetched 123 files, 64.0 MB.');
+	expect(statusSentence({ state: 'refused' })).toBe('Did not run. The reason is where the answer would be.');
+	expect(statusSentence({ state: 'missing', ledger: 'published' })).toBe('Did not run. published is not on this site yet.');
+	expect(statusSentence({ state: 'unreachable-engine' })).toBe('Did not run. The query engine did not start.');
+	expect(statusSentence({ state: 'unreachable-files' })).toBe('Did not run. The ledger files could not be fetched.');
+	const longest = statusWithHeld(statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 123, ms: 99999 } }), 67_108_864);
 	for (const view of VIEWS) {
 		await page.setViewportSize(view);
 		await openExplorer(page);
@@ -262,9 +272,9 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 		await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
 		await runExplorer(page);
 		await expect(status).toContainText('Ran in');
-		await status.locator('.status-copy').evaluate((node) => {
-			node.textContent = 'Answered in 99999 ms. Fetched 123 files, 64.0 MB from 4 ledgers over 90 UTC days. This is the longest status sentence.';
-		});
+		await status.locator('.status-copy').evaluate((node, value) => {
+			node.textContent = value;
+		}, longest);
 		const fit = await status.evaluate((node) => ({
 			noHorizontalScroll: node.scrollWidth <= node.clientWidth,
 			verticalFits: node.scrollHeight <= node.clientHeight

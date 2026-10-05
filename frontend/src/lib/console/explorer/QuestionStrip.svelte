@@ -91,8 +91,6 @@
 			inline-size: 100%;
 			max-inline-size: 100%;
 			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
 		}
 	}
 </style>
