@@ -61,7 +61,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 6 | Reach past the cap, the glyphs, the gates, the pictures and the how-to | 4, 5 | F | DONE | p55r6 | #1263 | p55-r6-worker |
 | 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | #1229 | p55-r7-worker |
 | 8 | The Data explorer draws the workbench chrome | 6 | G | DONE | p55r8 | #1298 | p55-n1-worker |
-| 9 | Run moves nothing on the Data explorer | 8 | H | DONE | p55r9 | - | p55-redesign-worker |
+| 9 | Run moves nothing on the Data explorer | 8 | H | DONE | p55r9 | #1310 | p55-redesign-worker |
 | 10 | The Data explorer reaches the reference's density | 9 | I | PENDING | - | - | - |
 
 **Ten rows, ten pull requests.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. No row waits for an owner's answer (section 0, "Decided 2026-10-02").
