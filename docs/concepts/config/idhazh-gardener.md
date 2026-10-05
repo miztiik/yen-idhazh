@@ -84,9 +84,9 @@ Why each tree gets the age it has is
 Each moves one ledger's rows out of its raw files into one file a day and then
 one file a month, and deletes what it moved. A declaration that sets
 `monthly_keep_days` also packs each finished year's month files into one file a
-year. Three of the eleven set it, `compact-summary-quality-evals`,
-`compact-candidate-models` and `compact-published`, whose `monthly_keep_days`
-(93) is how many whole days
+year. Four of the twelve set it, `compact-candidate-models`,
+`compact-published`, `compact-run-plan` and `compact-summary-quality-evals`,
+whose `monthly_keep_days` (93) is how many whole days
 after a UTC year ends each waits to pack that year. Each ledger's own
 `monthly_keep_days` sets its wait, a ledger the site publishes included, and the
 loader checks only that the value can take effect: at least `daily_keep_days`
