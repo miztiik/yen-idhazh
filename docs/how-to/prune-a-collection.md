@@ -143,6 +143,7 @@ idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-2
 | the list, then exit 1 | a delete or a write failed part way; the files listed have already changed | fix the cause, then run the same command again |
 | `workflow-artifacts: page N holds an artifact from a day before one on a page read before it, so the order check failed` | GitHub's pages no longer run from the oldest day to the newest. The pass read every page, held each artifact to the line, and kept its mark | nothing for one wake. If every wake says it, GitHub changed its order: each pass then reads every page, so tell the gardener's owner |
 | `workflow-artifacts: page N counted ... so one may have moved onto a page already read` | an artifact was made or removed while the pass read, so one may have been missed. The pass kept its mark | nothing; the next wake starts from the same mark and reads again |
+| `workflow-artifacts: the list does not end on page N, where the first page's count of C says it ends` | GitHub's count no longer names the last page, so the pass may have started in the middle of the list. It kept its mark | nothing for one wake. If every wake says it, the count stops short of the list: tell the gardener's owner |
 | the same members print on every run | the pass is a dry run | for a ledger, add `--no-dry-run`; for a GitHub collection, set its declaration's `dry_run` to `false` |
 
 ## See also

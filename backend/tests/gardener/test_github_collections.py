@@ -275,6 +275,40 @@ def test_a_count_that_grows_between_two_reads_leaves_the_walk_not_intact() -> No
     assert not walk.listing_intact()
 
 
+@pytest.mark.parametrize(
+    ("counted", "after_the_last", "reads", "intact"),
+    [
+        pytest.param(300, None, (1, 3, 4, 2), False, id="a-full-last-page-with-artifacts-after-it"),
+        pytest.param(250, None, (1, 3, 2), False, id="a-last-page-holding-more-than-is-left"),
+        pytest.param(300, [], (1, 3, 4, 2), True, id="a-full-last-page-with-nothing-after-it"),
+    ],
+)
+def test_the_list_must_end_where_the_first_page_count_says(
+    counted: int, after_the_last: list[Any] | None, reads: tuple[int, ...], intact: bool
+) -> None:
+    """Every page counted as `counted`: the count names page 3 as the last of the 313.
+
+    A count that stopped short of the list would start the walk in its middle,
+    and the mark would pass the older pages unread. So the last page must hold
+    what is left of the count, and when it is full the page after it is read,
+    never handed on, and must be empty.
+    """
+    answers = {
+        artifact_page(page): recorded(ARTIFACT_PAGES, artifact_page(page)) | {"total_count": counted}
+        for page in range(1, 5)
+    }
+    if after_the_last is not None:
+        answers[artifact_page(4)] = {"total_count": counted, "artifacts": after_the_last}
+    api = RecordedAnswers(answering=answers)
+    walk = github_collections.artifacts(api, through=RECORDED_LINE)
+
+    members = list(walk.listing())
+
+    assert api.read_paths == [artifact_page(page) for page in reads]
+    assert members == [], "the oldest artifact on page 3 is newer than the line"
+    assert walk.listing_intact() is intact
+
+
 def test_a_page_read_after_deletes_is_held_to_the_count_they_left() -> None:
     """Page 2 is read after page 4's 13 artifacts went, so GitHub counts 313 less 13.
 

@@ -497,7 +497,7 @@ the day before the repository was created: no artifact is older than that.
 **Each page is checked before any of its artifacts is taken.** The walk reads
 the next page before it hands on the one in hand, so a pass that ends inside a
 page never ends past a boundary nobody checked. It sorts each page by the
-instant its artifacts were created, and checks two things.
+instant its artifacts were created, and checks three things.
 
 - **Day order.** The oldest day on a page must be at or after the newest day on
   every page read before it. When it is not, the walk logs that the order check
@@ -508,6 +508,14 @@ instant its artifacts were created, and checks two things.
   older one a place on, so one can slip onto a page already read while the order
   still holds. When the count differs, the pass handles what it reads, and the
   mark stays where it was.
+- **Where the list ends.** The last page must hold what is left of the first
+  page's count, and when it is full, the page after it is read and must be
+  empty; its artifacts are never handed on. GitHub's count for a search by date
+  stops at 2,500. The artifacts list is not a search, and its count was exact on
+  2026-10-05 - 17 pages held the 1,613 artifacts it named - but a count that
+  stopped short would start the walk in the middle of the list. When the list
+  does not end there, the pass handles what it reads, and the mark stays where it
+  was.
 
 Every artifact is still held to the line before it is taken, so a failed check
 costs completeness and never safety. Neither check sees an artifact made and

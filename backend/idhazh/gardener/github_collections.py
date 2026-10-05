@@ -326,8 +326,10 @@ class _ArtifactWalk:
     holds every member to the window. When the order breaks, the walk hands on
     every page, still from the last back, and no longer stops at the line. When
     a page's count is not the first page's less what this walk deleted, an
-    artifact may have moved onto a page already read. Either way the walk is no
-    longer intact, and the pass keeps its mark. One walk serves one pass.
+    artifact may have moved onto a page already read; when the list does not
+    end where the count says, the walk may have started in the middle of it.
+    Either way the walk is no longer intact, and the pass keeps its mark. One
+    walk serves one pass.
     """
 
     def __init__(self, api: Api, *, through: str) -> None:
@@ -364,12 +366,15 @@ class _ArtifactWalk:
         """Each page from the last to the first, oldest member first, checked as it is read."""
         route, key = _ROUTES[PrunableCollection.WORKFLOW_ARTIFACTS]
         first = self._api.read(_page(route, 1))
+        last = _last_page(first)
         newest: str | None = None
-        for page in range(_last_page(first), 0, -1):
+        for page in range(last, 0, -1):
             answer = first if page == 1 else self._api.read(_page(route, page))
+            members = sorted(answer.get(key, []), key=_created_at)
             if page > 1:
                 self._check_count(page, counted=_count(answer), first=_count(first))
-            members = sorted(answer.get(key, []), key=_created_at)
+            if page == last:
+                self._check_end(page, held=len(members), first=_count(first))
             if members:
                 self._check_order(page, oldest=_day_of(_created_at(members[0])), before=newest)
                 latest = _day_of(_created_at(members[-1]))
@@ -390,6 +395,32 @@ class _ArtifactWalk:
             counted,
             self._deleted,
             expected,
+        )
+
+    def _check_end(self, page: int, *, held: int, first: int) -> None:
+        """The list ends where the count says: on this page, and with no artifact after it.
+
+        The last page holds what is left of the count after the pages before it.
+        When that is a full page, the page after it is read and must be empty;
+        its artifacts are never handed on. A count that stopped short of the
+        list would otherwise start the walk in the middle of it, and the mark
+        would pass the older pages unread.
+        """
+        if not self._counted:
+            return
+        route, key = _ROUTES[PrunableCollection.WORKFLOW_ARTIFACTS]
+        left = first - PAGE_SIZE * (page - 1)
+        if held == left and (
+            held < PAGE_SIZE or not self._api.read(_page(route, page + 1)).get(key)
+        ):
+            return
+        self._counted = False
+        logger.warning(
+            "%s: the list does not end on page %d, where the first page's count of %d says it "
+            "ends, so the count cannot name the oldest page, and the mark stays where it was",
+            PrunableCollection.WORKFLOW_ARTIFACTS.value,
+            page,
+            first,
         )
 
     def _check_order(self, page: int, *, oldest: str, before: str | None) -> None:
