@@ -436,6 +436,48 @@ config change. Both ship `dry_run: true`: a wake lists what the window selects
 and deletes nothing. How to read the list and turn one live is
 [../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md).
 
+**`workflow-runs` reads only the runs past its line that no earlier pass
+handled.** Its row in each record carries `handled_through`: the newest UTC day
+on or before which every run was handled - deleted, or on a dry run reported or
+counted. The next pass reads that day back from the gardener's own ledger, over
+the last `mark_lookback_days` UTC days, today included, and starts the day
+after. Only a row from a pass with the same `dry_run` counts, because a day a
+dry run reported is a day nothing deleted. A row with no mark is passed over,
+and of the rest the latest day wins. The declaration names
+`state/raw/gardener` and `state/compact/gardener` under `reads`, and the task
+names the days it reads before it fetches them, so the read is those days and
+no more - about 35 record files a week, 10 KB each.
+
+**One search a UTC day, from 00:00:00Z to 23:59:59Z, oldest day first.** Both
+ends carry `Z`, so GitHub never chooses which day is meant. One search returns
+at most 1,000 runs, so a day GitHub counts over that is searched again an hour
+at a time; an hour over it stops the pass, and its mark stays on the day before.
+Each search is read from its last page back. GitHub lists the newest run first,
+and a run deleted from a page moves every later run up one place, so a pass
+that read front to back while deleting would step over runs it never read.
+Every run is still held to the line before it is taken, so GitHub's own filter
+is never what keeps a delete safe.
+
+**The mark moves a whole day at a time.** A live pass that its ceiling stops
+inside a day leaves the mark on the day before, and the next pass reads that day
+again for what is left. A dry run deletes nothing, so stopping inside a day would
+report the same runs at every wake: past its ceiling it counts the rest of that
+day without listing them, and its mark moves to that day. A run that arrives
+from an earlier day than one before it means the order failed: the pass goes
+on, and its mark stays where it started.
+
+**With no mark in reach, GitHub's answers say where the first walk starts.** No
+run is older than the repository, so a line before the day it was created
+leaves nothing to walk: the mark is the line, and no page of runs is read. On
+2026-10-04 the line was 2026-07-06, before the repository was created on
+2026-08-20. Its oldest run is from 2026-08-22, so the first run reaches the line
+on 2026-11-20. Once one does, the oldest day with a run is found by halving the
+days from the repository's first day to the line, one count of the runs created
+on or before a day a step - about 9 counts for a year of days - and the walk
+starts on that day.
+
+`workflow-artifacts` still lists every page of its collection at each wake.
+
 ## The compaction
 
 How a ledger's daily, monthly and yearly files are packed and dropped, by one
@@ -601,6 +643,26 @@ thin push under the flag was refused by the remote, because its deltas point at
 files the clone lacks. Every command on that index runs with the checkout's
 sparse patterns off, because git applies them to any index it reads, and that
 reads files the clone never downloaded (Carmack).
+
+**2026-10-04: `workflow-runs` keeps its mark on its own record row.** A mark
+file of its own under `state/raw/gardener/` would sit in a folder
+`compact-gardener` owns, and the loader refuses two owners of one folder; a new
+folder outside `state/raw/` was not where the owner asked for it. The record
+lands at every wake anyway, so the mark costs one cell, `handled_through`. A
+date filter with no mark was rejected: in a dry run, or with a backlog, it reads
+the same runs again at every wake (the owner, decisions O1 and O2).
+
+**2026-10-04: the first walk of the runs starts from days, never from a count.**
+`total_count` says how many runs there are and nothing of the day the oldest one
+was made, so it cannot say where a walk starts. The repository's own creation
+day and a halving of counts by day can. The latest day on any matching row is
+the mark rather than the newest row's, because a day stays true once a pass has
+written it (Fowler).
+
+**2026-10-04: a search of the runs is read from its last page back.** A live
+pass that read front to back while deleting would move each next page past runs
+it never read, and once the mark passed their day nobody would read them again.
+Read from the end, a delete moves only runs already read (Fowler).
 
 **2026-10-04: a stale shard lands nothing, and `main`'s tip tells a lost push
 from a refused one.** The publisher used to check only whether `main` held the

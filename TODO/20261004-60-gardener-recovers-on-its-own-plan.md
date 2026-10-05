@@ -47,7 +47,7 @@ Table A - what is out
 | 7 | The month-delete switch is named for what it does | 1 | B | DONE | ubiquitous-journey | #1286 | Plan 60 row 7: rename month switch |
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | #1287 | Plan 60 row 8: site reads lost periods |
 | 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | #1282 | Plan 60 row 9: job names |
-| 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | PENDING | - | - | - |
+| 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | DONE | didactic-potato | - | Plan 60 row 10: runs read from a mark |
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
 | 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | #1303 | Plan 60 row 12: which months may close |
 | 13 | Which days may be packed | 12 | D | DONE | silver-enigma | - | Plan 60 row 13: which days may be packed |
@@ -417,23 +417,31 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/gardener/one_at_a_time.py`
   - `backend/idhazh/gardener/report.py`
   - `backend/idhazh/contracts/collection_prune.py`
-  - `backend/idhazh/contracts/knobs/gardener.py` (`CollectionPolicy.mark_lookback_days`)
+  - `backend/idhazh/contracts/knobs/gardener.py` (`CollectionTaskPolicy.mark_lookback_days`; the row named `CollectionPolicy`, which does not exist)
   - `config/gardener/workflow-runs.json`
   - `backend/tests/gardener/test_github_collections.py`
   - `backend/tests/gardener/tasks/test_collection_task.py`
   - `backend/tests/gardener/test_one_at_a_time.py`
   - `backend/tests/contracts/test_collection_prune_row.py`
-  - `tests/fixtures/contracts/collection-prune-row/` (new: a row with `handled_through`)
-  - `tests/fixtures/github-collections/` (new files: recorded pages for one created day, a day whose `total_count` is 1,001, and the repository's own answer with its `created_at`)
+  - `tests/fixtures/contracts/collection-prune-row/` (new: a row with `handled_through`; the three rows already there gain `handled_through: null`, found during execution)
+  - `tests/fixtures/github-collections/` (new files: recorded pages for one created day, a day whose `total_count` is 1,001, and the repository's own answer with its `created_at`; `runs-page-1.json` deleted, because nothing reads it once the runs are searched by day, found during execution)
   - `docs/architecture/publishing/idhazh-gardener.md` (collections)
+  - `backend/idhazh/gardener/collection_mark.py` (new; first sentence "Through which UTC day has a collection task's walk handled every member, by its own record?"; found during execution, Fowler's ruling)
+  - `backend/tests/gardener/test_collection_mark.py` (new; found during execution)
+  - `backend/tests/gardener/_records.py` (new; files a record row through the ledger door for both test modules; found during execution)
+  - `backend/tests/gardener/test_report.py` (a dry walk's ceiling line; found during execution, Fowler's ruling)
+  - `backend/tests/contracts/_fixtures.py` and `backend/tests/ledger/_fixtures.py` (they name the new row; found during execution)
+  - `docs/concepts/config/idhazh-gardener.md`, `docs/architecture/contracts/state-ledgers.md` and `docs/how-to/prune-a-collection.md` (the knob, the row's new cell, the record's first reader, and the dry walk's ceiling line; found during execution)
 - **How it works:**
-  - The task reads its own newest record row from the `gardener` ledger, over the last `mark_lookback_days` named UTC days, with `ledger.load_days`. It names those day paths at run time with `FileListing.name` (row 12). A row written by a pass with a different `dry_run` value is not used.
+  - The task reads its own record rows from the `gardener` ledger, over the last `mark_lookback_days` named UTC days, with `ledger.load_days`, and takes the latest `handled_through` among them (decision 5). It names those day paths at run time with `FileListing.name` (row 12). A row written by a pass with a different `dry_run` value is not used.
   - With a mark: for each UTC day after the mark, up to the line's day, one query `created=YYYY-MM-DDT00:00:00Z..YYYY-MM-DDT23:59:59Z`. Both bounds carry `Z`, so the day's time zone is never left to GitHub. A day whose `total_count` is over 1,000 is split into 24 hourly queries, because one search returns at most 1,000 results. A day is handled whole, and then the mark moves to that day; a split day moves it only after all 24 queries. The pass stops at the ceiling, and the mark stays on the last whole day.
+  - Each query's pages are read from the last to the first, so a live delete never moves a run the pass has not read yet (Fowler, 2026-10-04).
   - With no mark: the task reads the repository's `created_at` once (`GET /repos/{owner}/{repo}`). If the line is before it, no run is older than the line, and the mark starts at the line's day. Otherwise the task finds the oldest day with a run by halving the span from `created_at` to the line, one query `created=<=D` with `per_page=1` a step, testing `total_count > 0`: about 9 queries for a year of days. The walk starts on that day.
   - A dry run reports at most the ceiling's worth of members and counts the rest of each day, so a dry run also moves at least one whole day a wake.
   - Every member is still checked against the line before it is taken.
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/gardener/test_github_collections.py backend/tests/gardener/tasks/test_collection_task.py backend/tests/gardener/test_one_at_a_time.py`, and `-m contract backend/tests/contracts/test_collection_prune_row.py`; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** with recorded pages, a pass on 2026-10-04 with a 90-day window and a mark of 2026-06-30 sends `created=2026-07-01T00:00:00Z..2026-07-01T23:59:59Z` first. A recorded day with `total_count` 1,001 sends 24 hourly queries, and the mark passes that day only after all of them. A pass that hits the ceiling partway through a day leaves the mark on the day before. A live pass ignores a mark written by a dry run. With no mark and a repository created after the line, no page of runs is read; with no mark and an older repository, the halving finds the oldest day from recorded `total_count` answers. A run newer than the line in a recorded page is still refused. It cannot settle GitHub's own `created` filter; the member check stays as the safety line.
+- **Found during execution:** the repository's oldest run is from 2026-08-22 (read from GitHub on 2026-10-04), so runs first reach the 90-day line on 2026-11-20, not on about 2026-11-18 as decision 4 estimated from the day the repository was created. `ledger.load_days` lists every raw day folder of a ledger on disk before it keeps the named days (`raw_files._day_folders`), so on a full checkout its read grows with the repository (Guardrail #12); on a runner the checkout holds only the days the task fetched. That is a follow-up for the ledger door, outside this row's files.
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -441,6 +449,12 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 2 | One UTC day per query, with `Z` on both bounds. A day is far below GitHub's cap of 1,000 results a search today, about 175 runs a day on 2026-10-04, but nothing holds it there, so a day over the cap is split into 24 hourly queries rather than losing runs while the mark moves past them | Plan author, 2026-10-04; the bounds and the split Fowler review, 2026-10-04 |
 | 3 | `mark_lookback_days` is a knob with a default of 7. With no row in reach, the task starts with no mark, which is correct and only slower | Plan author, 2026-10-04 |
 | 4 | With no mark, the walk starts from the repository's `created_at` or from the halving, never from `total_count`, which is a count and cannot name the oldest run. On 2026-10-04 the 90-day line, 2026-07-06, fell before the repository existed, so such a pass reads no page of runs; runs first reach the line on about 2026-11-18 | Fowler review, 2026-10-04 |
+| 5 | The mark is the latest `handled_through` on the task's own rows with the same `dry_run`, because a day stays true once written; a row with none is passed over. A pass that finishes no new day carries the day it started from forward, so null means a task that keeps no mark, or a pass that failed before its walk began | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 6 | Each query is read from its last page back | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 7 | A dry walk past its ceiling keeps `stopped_because: ceiling`, and `resume_from` names where a live pass would stop; its line says the rest of the day was counted, not listed | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 8 | `handled_through` is refused on or after the row's `date`, the bound that always holds. No bound against `until`: a lengthened window moves the line behind a mark already reached | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 9 | A run from an earlier day than one before it: the pass goes on, and its mark stays where it started. An hour GitHub counts over 1,000 fails the pass, with the mark on the last whole day | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 10 | The mark is read in a module of its own, and `collection_named` and `BUILDERS` went in a structural commit first, because the runs listing now takes its walk's days | Fowler, 2026-10-04 (row 10 worker's consult) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
@@ -448,6 +462,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 2 | A mark file under `state/raw/gardener/marks/` | Two tasks would own one folder | A change to the ownership rule in `backend/idhazh/config.py` | Plan author, 2026-10-04 |
 | 3 | A new folder `state/gardener/marks/` | Not under `state/raw/` as the owner asked, and a new root in `docs/reference/repository-layout.md` | One owned path per task and one new contract | Plan author, 2026-10-04 |
 | 4 | With no mark, read the oldest run from `total_count`, and walk newest first when it is above 1,000 (this row as first written) | A count is not a date, so it cannot name the oldest run, and the newest-first branch existed only because of that | Nothing to build; a first pass that cannot say where it starts | Fowler review, 2026-10-04 |
+| 5 | Read the 1,000 runs one search returns for an hour over the limit, and keep the mark on the day before | 1,000 runs in an hour is about 140 times today's rate, an estimate from about 175 runs a day, and a failed pass names the hour | It recovers on its own in a live pass, as deletes thin the hour, but needs the way of holding a mark that row 11 builds | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 6 | Read each query front to back, as the artifacts are | A live pass that deletes as it reads moves later runs onto pages already read, and the mark then passes them for good | Nothing to build | Fowler, 2026-10-04 (row 10 worker's consult) |
+| 7 | The newest row's mark, rather than the latest day | A row whose pass failed before its walk began would send the next pass back to the halving | Nothing to build; a first walk repeated | Fowler, 2026-10-04 (row 10 worker's consult) |
 
 ### Row #11 - workflow-artifacts reads from the oldest end and resumes from its mark
 

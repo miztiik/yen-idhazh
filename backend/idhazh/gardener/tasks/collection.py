@@ -4,8 +4,14 @@ One module serves every `collection` declaration. The declaration names its
 collection in `collection`, a closed word, and the loader refuses a declaration
 not named for it, so one collection has one task and one window. What a member
 is, and how one is listed or deleted, is `idhazh.gardener.github_collections`;
-the window, the ceiling and the resume point are `one_at_a_time.take`'s. This
-module only joins the two.
+the window, the ceiling and the resume point are `one_at_a_time.take`'s; where
+the task's last walk stopped is `idhazh.gardener.collection_mark`'s. This
+module only joins them.
+
+**The runs are walked a UTC day at a time, from the task's own mark.** The
+mark is the day its last pass with the same `dry_run` handled through. With no
+such pass in reach, GitHub's own answers say where a first walk starts. The
+artifacts are still listed whole, every page, each wake.
 
 **Nothing a pass takes is in the repository.** It takes GitHub ids, so the
 runner holds a collection task to what it wrote, and it writes nothing: the
@@ -20,7 +26,7 @@ module in every shard.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from idhazh.contracts.knobs.gardener import TaskKind
 from idhazh.gardener.context import TaskContext
@@ -33,18 +39,35 @@ KIND = TaskKind.COLLECTION
 
 
 def run(context: TaskContext, *, api: Api | None = None) -> Pass:
-    """Take up to the ceiling of members older than the window, in the order GitHub lists them."""
-    from idhazh.contracts.knobs.gardener import CollectionTaskPolicy
-    from idhazh.gardener import github_collections
+    """Take up to the ceiling of members older than the window; the runs from the task's mark."""
+    from idhazh.contracts.knobs.gardener import CollectionTaskPolicy, PrunableCollection
+    from idhazh.gardener import collection_mark, github_collections
     from idhazh.gardener.one_at_a_time import Window, take
 
     policy = context.policy
     if not isinstance(policy, CollectionTaskPolicy):
         raise ValueError(f"the collection task was handed a {policy.kind} declaration")
     transport = api if api is not None else github_collections.api_of_this_repository()
+    window = Window.older_than(today=context.today.isoformat(), days=policy.window.value)
+    line = window.until
+    if line is None:
+        raise ValueError("an age window ends on a day, and this one names none")
+    mark: str | None
+    match policy.collection:
+        case PrunableCollection.WORKFLOW_ARTIFACTS:
+            collection = github_collections.artifacts(transport)
+            mark = None
+        case PrunableCollection.WORKFLOW_RUNS:
+            mark = collection_mark.last_mark(context, policy) or github_collections.first_mark(
+                transport, line=line
+            )
+            collection = github_collections.runs(transport, after=mark, through=line)
+        case _:
+            assert_never(policy.collection)
     return take(
-        github_collections.collection_named(policy.collection.value, transport),
-        window=Window.older_than(today=context.today.isoformat(), days=policy.window.value),
+        collection,
+        window=window,
         ceiling=policy.max_deletes_per_run,
         dry_run=policy.dry_run,
+        mark=mark,
     )
