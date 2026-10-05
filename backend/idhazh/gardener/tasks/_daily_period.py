@@ -119,6 +119,20 @@ def _days_from(first: str, last: str) -> list[str]:
     return [(start + timedelta(days=step)).isoformat() for step in range((end - start).days + 1)]
 
 
+def _refused(
+    tree: CompactTree, day: str, why: str, fault: ledger.LedgerFault | None = None
+) -> Stop:
+    """A raw day the step does not take, said once by name. Its files are kept."""
+    logger.error(
+        "a raw day is not compacted, and its files are kept ledger=%s day=%s fault=%s reason=%s",
+        tree.ledger.value,
+        day,
+        fault or "none",
+        why,
+    )
+    return Stop(StopReason.FAILED, day)
+
+
 def _take[C: Contract](
     tree: CompactTree,
     policy: CompactionPolicy,
@@ -245,16 +259,14 @@ def compact(
     out, with nothing taken.
     """
     if choice.stopped_because is StopReason.FAILED and choice.resume_from is not None:
-        logger.error(
-            "a raw day is not compacted, and its files are kept "
-            "ledger=%s day=%s fault=%s reason=%s",
-            tree.ledger.value,
-            choice.resume_from,
-            "none",
-            "the operator range leaves it out, and it is due before any day the range names. "
-            "Widen the range to include it",
+        return (
+            _refused(
+                tree,
+                choice.resume_from,
+                "the operator range leaves it out, and it is due before any day the range "
+                "names. Widen the range to include it",
+            ),
         )
-        return (Stop(StopReason.FAILED, choice.resume_from),)
     new = (
         [] if choice.first is None or choice.last is None else _days_from(choice.first, choice.last)
     )
@@ -292,16 +304,7 @@ def compact(
         fresh = tree.daily_through is None or day > tree.daily_through
         refused = _take(tree, policy, day, model=model, key=key, identity=identity, stamp=stamp)
         if refused is not None:
-            why, fault = refused
-            logger.error(
-                "a raw day is not compacted, and its files are kept "
-                "ledger=%s day=%s fault=%s reason=%s",
-                tree.ledger.value,
-                day,
-                fault or "none",
-                why,
-            )
-            stops.append(Stop(StopReason.FAILED, day))
+            stops.append(_refused(tree, day, *refused))
             if fresh:
                 break
             continue
