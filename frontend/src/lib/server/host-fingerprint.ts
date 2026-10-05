@@ -44,7 +44,8 @@ export const SERVER_JOB = [
 	'decide',
 	'migrate',
 	'run-tasks',
-	'history'
+	'history',
+	'save_council_results'
 ] as const;
 
 export type ServerJob = (typeof SERVER_JOB)[number];

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Final, NamedTuple
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
@@ -147,14 +148,16 @@ FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
 COLLECTION_PRUNE_KEY: Final = ("date", "run_id", "task")
 
 
-#: What makes two council rows the same record. `judge_id` is in the key and a
-#: night running two tenants is why: one council run has one run id, so tenant
-#: A's unit 0 and tenant B's unit 0 on one judged date carry the same date, the
-#: same run and the same unit number. Without the slug the settlement would
-#: delete the second as a repeat, and the night would read as half of what it
-#: was. A repeat under all four cells is a second attempt at one unit, which did
-#: the same work under the same clock, so the first row wins.
-COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
+# What makes two rows of one council step the same record. A once-a-date step
+# has an empty part index; a repeated attempt at the same key is settled by the
+# door's writer identity, which keeps the highest attempt.
+COUNCIL_RUN_RECORD_KEY: Final = (
+    "date",
+    "run_id",
+    "judge_id",
+    "evaluation_step",
+    "work_part_index",
+)
 
 
 # One plan is the settled planning answer for one execution of one UTC day.
@@ -358,6 +361,9 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),
     LedgerName.RUN_PLAN: _DoorShape(RUN_PLAN_KEY, RunPlan),
+    LedgerName.COUNCIL_RUN_RECORDS: _DoorShape(
+        COUNCIL_RUN_RECORD_KEY, CouncilRunRecord
+    ),
 }
 
 

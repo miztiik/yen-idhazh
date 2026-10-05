@@ -57,8 +57,6 @@ FIXTURE_FILES: Final = (
     "council-run-record/a-migrated-count-that-had-nothing-to-do.json",
     "council-run-record/a-part-that-ran-the-model.json",
     "council-run-record/a-selection-that-ran-no-model.json",
-    "council-shard-outcome/a-unit-that-ran-no-model.json",
-    "council-shard-outcome/a-unit-that-stopped-on-its-own-clock.json",
     "counterfactual-score-row/a-refused-candidate-a-heavier-lens-would-lift.json",
     "counterfactual-score-row/no-lens-matched-so-both-scores-agree.json",
     "day-metrics/full.json",

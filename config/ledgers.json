@@ -311,6 +311,21 @@
           "suffix": null
         }
       ]
+    },
+    {
+      "name": "council-run-records",
+      "lifecycle_status": "active",
+      "description": "How each step of the nightly judging workflow ended, and what it cost.",
+      "onboarded": "2026-10-05",
+      "ledgers": [
+        {
+          "name": "council-run-records",
+          "grain": "raw-and-compact",
+          "prefix": ["council-run-records"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
     }
   ]
 }

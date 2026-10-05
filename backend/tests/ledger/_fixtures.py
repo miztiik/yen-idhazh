@@ -20,9 +20,10 @@ FIXTURE_NAMES = {
         "a-shard-that-read-its-pairs.json",
         "a-shard-that-was-dealt-nothing.json",
     ),
-    "council-shard-outcome": (
-        "a-unit-that-ran-no-model.json",
-        "a-unit-that-stopped-on-its-own-clock.json",
+    "council-run-record": (
+        "a-part-that-ran-the-model.json",
+        "a-selection-that-ran-no-model.json",
+        "a-migrated-count-that-had-nothing-to-do.json",
     ),
     "day-metrics": ("full.json", "with-label-similarity.json"),
     "eval-row": (

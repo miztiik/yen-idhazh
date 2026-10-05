@@ -49,6 +49,7 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.SEEN: frozenset(),
     LedgerName.PUBLISHED: frozenset(),
     LedgerName.RUN_PLAN: frozenset({"run_id"}),
+    LedgerName.COUNCIL_RUN_RECORDS: frozenset({"run_id"}),
 }
 
 

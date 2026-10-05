@@ -37,7 +37,7 @@ from idhazh.ledger.filenames import (
 from idhazh.ledger.headers import migrate_header, refiler
 from idhazh.ledger.keys import (
     COLLECTION_PRUNE_KEY,
-    COUNCIL_SHARD_OUTCOME_KEY,
+    COUNCIL_RUN_RECORD_KEY,
     COUNTERFACTUAL_SCORE_KEY,
     DATE_CELL,
     FEED_HEALTH_KEY,
@@ -112,7 +112,6 @@ from idhazh.ledger.raw_files import (
 )
 from idhazh.ledger.rows import (
     HEALTH_WINDOW_DAYS,
-    append_council_shard_outcomes,
     append_fitted_thresholds,
     append_published,
     append_seen,
@@ -198,7 +197,7 @@ __all__ = [  # noqa: RUF022
     "accepts_new_rows",
     # keys.py: what makes two rows one record, and which contract reads one.
     "COLLECTION_PRUNE_KEY",
-    "COUNCIL_SHARD_OUTCOME_KEY",
+    "COUNCIL_RUN_RECORD_KEY",
     "COUNTERFACTUAL_SCORE_KEY",
     "DATE_CELL",
     "FEED_HEALTH_KEY",
@@ -245,7 +244,6 @@ __all__ = [  # noqa: RUF022
     "refiler",
     # rows.py: how a caller puts rows in and gets them back.
     "HEALTH_WINDOW_DAYS",
-    "append_council_shard_outcomes",
     "append_fitted_thresholds",
     "append_published",
     "append_seen",

@@ -194,12 +194,8 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         job_labels=frozenset(),
     ),
     LedgerName.LLM_COUNCIL_SHARD_OUTCOMES: LedgerStaging(
-        writer=(
-            "idhazh.ledger.rows.append_council_shard_outcomes, called from the "
-            "council's tenant module, resolved from config at call time rather than "
-            "dispatched from a `digest.yml` job"
-        ),
-        symbol="idhazh.ledger.rows.append_council_shard_outcomes",
+        writer="no writer: the council now files its records in the ledger door",
+        symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: LedgerStaging(
@@ -250,6 +246,11 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
             "shard - its own workflow, not a `digest.yml` commit job"
         ),
         symbol="idhazh.gardener.runner._record",
+        job_labels=frozenset(),
+    ),
+    LedgerName.COUNCIL_RUN_RECORDS: LedgerStaging(
+        writer="idhazh.council.session._collect, through the ledger door",
+        symbol="idhazh.council.session._collect",
         job_labels=frozenset(),
     ),
 }

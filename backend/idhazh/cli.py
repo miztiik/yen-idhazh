@@ -624,6 +624,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             date=args.date or _today(),
             run_id=_council_run(parser, args.stage, args.run_id),
             state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
+            commit_sha=args.commit,
         )
         return 0
 
