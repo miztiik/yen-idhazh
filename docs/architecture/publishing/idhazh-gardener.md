@@ -435,6 +435,10 @@ missing one fails that task by name, and its siblings still run. The
 config change. Both ship `dry_run: true`: a wake lists what the window selects
 and deletes nothing. How to read the list and turn one live is
 [../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md).
+GitHub keeps a run's logs and artifacts for 90 days, this repository's setting
+and the most a public repository allows (read 2026-10-05). So a run past the
+90-day line of `workflow-runs` has already lost its logs, and deleting it removes
+only the run itself from the Actions history.
 
 **Each task reads only the members past its line that no earlier pass
 handled.** Its row in each record carries `handled_through`: the newest UTC day
@@ -460,11 +464,14 @@ goes on, and its mark stays where it started.
 first.** Both ends carry `Z`, so GitHub never chooses which day is meant. One
 search returns at most 1,000 runs, so a day GitHub counts over that is searched
 again an hour at a time; an hour over it stops the pass, and its mark stays on
-the day before. Each search is read from its last page back. GitHub lists the
-newest run first, and a run deleted from a page moves every later run up one
-place, so a pass that read front to back while deleting would step over runs it
-never read. Every run is still held to the line before it is taken, so GitHub's
-own filter is never what keeps a delete safe.
+the day before. GitHub's count for a search by date stops at 2,500: on
+2026-10-05 the runs created on or before 2026-09-20 counted 2,500, where their
+days add up to 4,404. The walk compares a count only with 0 and with 1,000, so
+that stop changes nothing it decides. Each search is read from its last page
+back. GitHub lists the newest run first, and a run deleted from a page moves
+every later run up one place, so a pass that read front to back while deleting
+would step over runs it never read. Every run is still held to the line before
+it is taken, so GitHub's own filter is never what keeps a delete safe.
 
 **With no mark in reach, GitHub's answers say where the first walk of the runs
 starts.** No run is older than the repository, so a line before the day it was
