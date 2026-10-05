@@ -80,6 +80,16 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 
 - Use the canary, the fixed test-data build, for the browser suite; use the real build for published-site measurements. Verify which build is served.
 - Finish one build before starting another that writes the same output directory. Do not rebuild files while a preview or test is reading them.
+- **A browser run ends `Timed out waiting 120000ms from config.webServer` and runs no test; the build was refused as stale.**
+  The build record fingerprints Git's committed tree, the working diff and
+  untracked files, so any edit after `build:canary`, a doc or a plan
+  included, makes `verified-preview.ts` refuse the build, and Playwright
+  pipes that refusal away. The tell is the timeout with no test line before
+  it. Commit or revert the edit, then build again before the run:
+  ```powershell
+  git status --porcelain
+  npm run build:canary
+  ```
 
 ## Serving a build to measure it
 
