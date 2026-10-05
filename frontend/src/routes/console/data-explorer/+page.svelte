@@ -63,9 +63,11 @@
 	let linkNotices = $state<string[]>([]);
 	let copiedLink = $state('');
 	let storageWorks = $state(true);
+	let storageNoticeDismissed = $state(false);
 	let selectedShapeType = $state<ExplorerChartType | null>(null);
 	let saving = $state(false);
 	let draftName = $state('');
+	let answerOffscreen = $state(false);
 
 	const ledgers = $derived<RegistryLedger[]>(flattenRegistry(registry));
 	const selectedPublished = $derived(selected.filter((name) => published.includes(name)));
@@ -73,12 +75,13 @@
 	const columnLabel = $derived(showAnswerColumns ? 'Answer columns' : 'Ledger columns');
 	const answerRows = $derived(result !== null && result.state === 'ok' ? (result.rows as Row[]) : []);
 	const answerColumns = $derived(result !== null && result.state === 'ok' ? result.columns : []);
-	const noticeText = $derived([keepNotice, copiedLink, !storageWorks ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
-	const persistentNotice = $derived(!storageWorks);
+	const noticeText = $derived([keepNotice, copiedLink, !storageWorks && !storageNoticeDismissed ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
+	const persistentNotice = $derived(!storageWorks && !storageNoticeDismissed);
 	const readoutLines = $derived(config.readout_lines[readoutBand] ?? config.readout_lines[0]);
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
 	const statusText = $derived(`${statusLine()} This page holds ${size(heldBytes)} of fetched files; a reload empties it.`);
 	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
+	const answerLink = $derived(result !== null && !running && answerOffscreen ? '#data-explorer-rows' : '');
 	const shapeBounds = $derived({
 		chartMinRows: config.chart_min_rows,
 		rankMax: config.rank_max,
@@ -174,7 +177,7 @@
 			return `Ran in ${elapsed(lastMs)} and matched no rows. Fetched ${plural(lastRead.files, 'file')}, ${size(lastRead.bytes)}.`;
 		}
 		if (result?.state === 'refused') return 'Did not run. The reason is where the answer would be.';
-		if (result?.state === 'missing') return published.includes(result.ledger) ? `Did not run. ${result.ledger} is not on this site yet.` : `Did not run. ${result.ledger} is not on this site yet.`;
+		if (result?.state === 'missing') return `Did not run. ${result.ledger} is not on this site yet.`;
 		if (result?.state === 'unreachable') return result.fault === 'engine' ? 'Did not run. The query engine did not start.' : 'Did not run. The ledger files could not be fetched.';
 		return `Run reads ${plural(cost.files, 'file')}, ${size(cost.bytes)} from ${plural(selected.length, 'ledger')} over ${plural(spanDays(), 'UTC day')}. ${lastMs === null ? 'It also starts the query engine. ' : ''}${emptyLedgerLines()}`;
 	}
@@ -313,6 +316,7 @@
 			return kept;
 		} catch {
 			storageWorks = false;
+			storageNoticeDismissed = false;
 			return [];
 		}
 	}
@@ -321,8 +325,10 @@
 		try {
 			localStorage.setItem(key, JSON.stringify(value));
 			storageWorks = true;
+			storageNoticeDismissed = false;
 		} catch {
 			storageWorks = false;
+			storageNoticeDismissed = false;
 		}
 	}
 
@@ -473,6 +479,11 @@
 		sync();
 		query.addEventListener('change', sync);
 		addEventListener('resize', sync);
+		const answerRegion = document.querySelector('[data-workbench-region="answer"]');
+		const answerObserver = answerRegion === null ? null : new IntersectionObserver(([entry]) => {
+			answerOffscreen = !entry.isIntersecting && entry.boundingClientRect.top > 0;
+		});
+		if (answerRegion !== null) answerObserver?.observe(answerRegion);
 		void (async () => {
 			savedQuestions = readStored<KeptQuestion>(SAVED_KEY, validStoredSaved);
 			recentRuns = readStored<RecentRun>(HISTORY_KEY, validStoredRun);
@@ -495,11 +506,12 @@
 		return () => {
 			query.removeEventListener('change', sync);
 			removeEventListener('resize', sync);
+			answerObserver?.disconnect();
 		};
 	});
 </script>
 
-<Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copiedLink = ''; keepNotice = null; if (!storageWorks) storageWorks = true; }} />
+<Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copiedLink = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
 
 <div class="workbench" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px;--answer-size:${config.answer_svh}svh`}>
 <Panel id="data-explorer-ask" title="Your question">
@@ -508,7 +520,7 @@
 			<WindowControl
 				days={windowDays}
 				presets={presets}
-				busy={false}
+				busy={costing || running}
 				ready={ready}
 				onChange={setWindow}
 			/>
@@ -537,7 +549,7 @@
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}
 				<div data-workbench-region="editor">
 					<div class="editor-head">
-						<strong>DuckDB SQL</strong>
+						<label for="explorer-sql">DuckDB SQL</label>
 						<div class="editor-actions">
 							{#if saving}
 								<label>Name <input bind:value={draftName} maxlength={config.save_name_max_chars} /></label>
@@ -552,7 +564,7 @@
 					</div>
 					<QueryEditor value={sql} maxChars={config.query_max_chars} lines={editorLines} counterFromShare={config.counter_from_share} onInput={(value) => { sql = value; if (linkNotices.some((notice) => notice.includes('came from a link'))) linkNotices = []; }} onRun={run} />
 				</div>
-				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href="#data-explorer-rows" files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} {heldBytes} />
+				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href={answerLink} files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} {heldBytes} />
 			</div>
 			<div data-workbench-region="columns">
 				<ColumnList columns={columns} label={columnLabel} />
@@ -653,7 +665,8 @@
 		grid-template-columns: auto minmax(18rem, 1fr) auto;
 		align-items: center;
 		gap: var(--space-2);
-		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
+		block-size: calc(var(--workbench-control) + 2 * var(--space-1));
+		overflow: hidden;
 		padding: var(--space-1) var(--space-3);
 		border-block-end: 1px solid var(--color-rule);
 	}
@@ -663,12 +676,16 @@
 		flex-wrap: wrap;
 		gap: var(--space-2);
 		align-items: end;
+		min-inline-size: 0;
+		overflow: hidden;
 	}
 
 	.date-fields label,
 	.editor-actions label {
-		display: grid;
+		display: flex;
+		align-items: center;
 		gap: var(--space-1);
+		min-block-size: var(--workbench-control);
 		color: var(--color-text-tertiary);
 		font-size: var(--text-xs);
 		font-weight: 600;
@@ -680,6 +697,8 @@
 	button,
 	.how-to,
 	.run-button {
+		max-inline-size: 100%;
+		min-inline-size: 0;
 		min-block-size: var(--workbench-control);
 		border: 1px solid var(--color-rule-strong);
 		border-radius: var(--radius-md);
@@ -687,6 +706,21 @@
 		color: var(--color-text);
 		padding-inline: var(--space-3);
 		font: inherit;
+	}
+
+	:global([data-workbench-region='toolbar'] [data-window-control]),
+	:global([data-workbench-region='toolbar'] [data-window-control] button),
+	:global([data-workbench-region='questions'] .question-strip button),
+	:global([data-workbench-region='questions'] .question-strip summary),
+	:global([data-workbench-region='questions'] .history-list summary) {
+		min-block-size: var(--workbench-control);
+	}
+
+	:global([data-workbench-region='questions'] .question-strip),
+	:global([data-workbench-region='questions'] .question-strip button) {
+		min-inline-size: 0;
+		max-inline-size: 100%;
+		overflow: hidden;
 	}
 
 	.run-button {
@@ -727,7 +761,8 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-2);
-		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
+		block-size: calc(var(--workbench-control) + 2 * var(--space-1));
+		overflow: hidden;
 		padding-inline: var(--space-3);
 		border-block-end: 1px solid var(--color-rule);
 	}
@@ -736,6 +771,8 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
+		min-inline-size: 0;
+		overflow: hidden;
 	}
 
 	.how-to {
@@ -822,7 +859,18 @@
 	.shape-actions legend { color: var(--color-text-tertiary); font-size: var(--text-xs); }
 	@media (max-width: 1023px) {
 		.workbench-toolbar {
-			grid-template-columns: minmax(0, 1fr);
+			grid-template-columns: minmax(0, 1fr) auto;
+			block-size: calc(2 * (var(--workbench-control) + 2 * var(--space-1)));
+			overflow: hidden;
+		}
+		.date-fields {
+			grid-column: 1;
+			grid-row: 2;
+		}
+		.run-button {
+			grid-column: 2;
+			grid-row: 2;
+			min-inline-size: 5rem;
 		}
 		[data-workbench-region='questions'] {
 			flex-wrap: wrap;
@@ -834,6 +882,26 @@
 		[data-workbench-region='columns'] {
 			border-inline: 0;
 			border-block: 1px solid var(--color-rule);
+		}
+	}
+
+	@media (max-width: 639px) {
+		[data-workbench-region='questions'] {
+			align-items: stretch;
+		}
+		:global([data-workbench-region='questions'] .question-strip),
+		.question-links,
+		.how-to {
+			min-inline-size: 0;
+			inline-size: 100%;
+			flex-basis: 100%;
+			overflow: hidden;
+		}
+	}
+
+	@media (max-width: 639px) {
+		[data-workbench-region='questions'] {
+			block-size: calc(2 * (var(--workbench-control) + 2 * var(--space-1)));
 		}
 	}
 </style>

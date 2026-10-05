@@ -9,8 +9,10 @@
 		onClose?: () => void;
 	} = $props();
 
-	let held = $state(false);
+	let hovered = $state(false);
+	let focused = $state(false);
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	const held = $derived(hovered || focused);
 
 	function clearTimer() {
 		if (timer !== null) clearTimeout(timer);
@@ -33,10 +35,10 @@
 		class="notice"
 		data-notice
 		role="status"
-		onpointerenter={() => (held = true)}
-		onpointerleave={() => (held = false)}
-		onfocusin={() => (held = true)}
-		onfocusout={() => (held = false)}
+		onpointerenter={() => (hovered = true)}
+		onpointerleave={() => (hovered = false)}
+		onfocusin={() => (focused = true)}
+		onfocusout={() => (focused = false)}
 	>
 		<p>{text}</p>
 		<button type="button" aria-label="Close" onclick={onClose}><Icon id="forget" /></button>

@@ -140,10 +140,10 @@
     "explorer_cell_max_ch": 40,
     "explorer_counter_from_share": 0.9,
     "explorer_readout_lines": [
+      5,
       3,
-      2,
-      2,
-      1
+      4,
+      2
     ],
     "explorer_notice_ms": 6000,
     "explorer_editor_lines_shown": [

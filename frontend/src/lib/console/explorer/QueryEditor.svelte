@@ -22,7 +22,6 @@
 </script>
 
 <div class="editor" style={`--lines:${lines}`}>
-	<label for="explorer-sql">Your question, in DuckDB SQL</label>
 	<div class="frame">
 		<div class="numbers" aria-hidden="true">
 			{#each rows as _, index}<span>{index + 1}</span>{/each}
@@ -35,7 +34,6 @@
 
 <style>
 	.editor { display: grid; gap: var(--space-2); }
-	label { font-weight: 600; }
 	.frame { position: relative; display: grid; grid-template-columns: calc(3ch + var(--space-3)) 1fr; block-size: calc(var(--lines) * var(--workbench-field-leading) + 2 * var(--space-3)); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; border: 1px solid var(--color-rule-strong); border-radius: var(--radius-md); background: var(--code-ground); font-family: var(--font-data); font-size: var(--workbench-field-text); line-height: var(--workbench-field-leading); }
 	.frame:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 	.numbers { display: grid; align-content: start; padding: var(--space-3) var(--space-2); color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; text-align: end; user-select: none; }

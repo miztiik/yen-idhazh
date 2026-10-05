@@ -1,5 +1,7 @@
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
+import { explorerConfig } from '../src/lib/server/config';
+import { readFileSync } from 'node:fs';
 
 type Box = { x: number; y: number; width: number; height: number };
 type ShiftSource = {
@@ -21,6 +23,7 @@ const VIEWS = [
 	{ width: 768, height: 1024 },
 	{ width: 390, height: 844 }
 ] as const;
+const PLAN_55 = '../../TODO/20260928-55-one-page-queries-every-ledger-plan.md';
 
 async function startShiftObserver(page: Page) {
 	await page.evaluate(() => {
@@ -59,6 +62,7 @@ async function startShiftObserver(page: Page) {
 						currentRect: rectOf(source.currentRect ?? new DOMRect())
 					});
 				}
+
 			}
 		});
 		held.__explorerObserver.observe({ type: 'layout-shift', buffered: false });
@@ -94,6 +98,20 @@ async function snapshot(page: Page): Promise<Snapshot> {
 			sources: (window as typeof window & { __explorerSources?: ShiftSource[] }).__explorerSources ?? []
 		};
 	});
+}
+
+async function box(page: Page, selector: string): Promise<Box> {
+	return page.locator(selector).evaluate((node) => {
+		const rect = node.getBoundingClientRect();
+		return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+	});
+}
+
+function closeBox(left: Box, right: Box) {
+	expect(right.x).toBeCloseTo(left.x, 0);
+	expect(right.y).toBeCloseTo(left.y, 0);
+	expect(right.width).toBeCloseTo(left.width, 0);
+	expect(right.height).toBeCloseTo(left.height, 0);
 }
 
 function expectStable(before: Snapshot, after: Snapshot) {
@@ -143,4 +161,240 @@ test('Copy link notice is fixed and moves no region', async ({ page, context }) 
 	await expect(page.locator('[data-notice]')).toHaveCSS('position', 'fixed');
 	await expect(page.locator('[data-notice]')).toHaveAttribute('role', 'status');
 	expectStable(before, await snapshot(page));
+});
+
+test('status text never overlaps the reserved answer link box', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await openExplorer(page);
+	await expect(page.getByRole('link', { name: 'See the answer' })).toHaveCount(0);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
+	await runExplorer(page);
+	const link = page.getByRole('link', { name: 'See the answer' });
+	await expect(link).toHaveAttribute('href', /#data-explorer-rows$/);
+	const overlap = await page.locator('[data-workbench-region="status"]').evaluate((status) => {
+		const text = status.querySelector('.status-copy')?.getBoundingClientRect();
+		const answer = status.querySelector('.status-link-box')?.getBoundingClientRect();
+		if (!text || !answer) return true;
+		return text.right > answer.left && text.left < answer.right && text.bottom > answer.top && text.top < answer.bottom;
+	});
+	expect(overlap).toBe(false);
+	expect(await page.locator('[data-workbench-region="status"]').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
+	await runExplorer(page);
+	await expect(page.getByRole('link', { name: 'See the answer' })).toHaveCount(0);
+});
+
+test('M7: editor top target is moved to row 10 with its reason', () => {
+	const plan = readFileSync(new URL(PLAN_55, import.meta.url), 'utf8');
+	expect(plan).toContain('M7 moves to row 10');
+	expect(plan).toContain('row 10');
+	expect(plan).toContain('K6');
+});
+
+test('M8: every workbench region keeps its idle block size at all four widths', async ({ page }) => {
+	for (const view of VIEWS) {
+		await page.setViewportSize(view);
+		await openExplorer(page);
+		const sizes = await page.evaluate(() => {
+			const css = getComputedStyle(document.documentElement);
+			const rem = parseFloat(css.fontSize);
+			const control = parseFloat(css.getPropertyValue('--workbench-control')) * rem;
+			const space1 = parseFloat(css.getPropertyValue('--space-1')) * rem;
+			const leadingSm = parseFloat(css.getPropertyValue('--leading-sm')) * rem;
+			const regions = Object.fromEntries(
+				[...document.querySelectorAll('[data-workbench-region]')].map((node) => {
+					const rect = node.getBoundingClientRect();
+					return [node.getAttribute('data-workbench-region') ?? '', rect.height];
+				})
+			);
+			return { control, space1, leadingSm, regions };
+		});
+		const row = sizes.control + 2 * sizes.space1;
+		expect(sizes.regions.toolbar, `${view.width} toolbar`).toBeCloseTo(view.width < 1024 ? row * 2 : row, 0);
+		expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(view.width < 640 ? row * 2 : row, 0);
+		const lines = explorerConfig().readout_lines[view.width < 640 ? 0 : view.width < 1024 ? 1 : view.width < 1400 ? 2 : 3];
+		expect(sizes.regions.status, `${view.width} status`).toBeCloseTo(lines * sizes.leadingSm + 2 * sizes.space1, 0);
+		expect(sizes.regions.answer, `${view.width} answer`).toBeCloseTo(view.height * explorerConfig().answer_svh / 100, 0);
+	}
+});
+
+test('M10: non-run interactions keep every region box fixed', async ({ page, context }) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT i AS row_number FROM range(0, 120) AS t(i)');
+	await runExplorer(page);
+	await page.evaluate(() => window.scrollTo(0, 0));
+	const measure = async (act: () => Promise<void>) => {
+		const before = await snapshot(page);
+		await act();
+		expectStable(before, await snapshot(page));
+	};
+	await measure(() => page.locator('[data-explorer-answer] th button').first().click());
+	await page.getByRole('button', { name: /^Show 50 more rows$/ }).scrollIntoViewIfNeeded();
+	await measure(() => page.getByRole('button', { name: /^Show 50 more rows$/ }).click());
+	if (await page.locator('[data-shape-choice]').count()) await measure(() => page.locator('[data-shape-choice]').last().click());
+	if (await page.locator('summary').filter({ hasText: 'more' }).count()) {
+		await measure(() => page.locator('summary').filter({ hasText: 'more' }).first().click());
+	}
+	await page.locator('.history-list summary').scrollIntoViewIfNeeded();
+	await measure(() => page.locator('.history-list summary').click());
+	await page.getByRole('button', { name: /^Copy as JSON$/ }).scrollIntoViewIfNeeded();
+	await measure(() => page.getByRole('button', { name: /^Copy as JSON$/ }).click());
+	await measure(() => page.getByRole('button', { name: /^Copy as table$/ }).click());
+	await page.getByRole('button', { name: /^Copy link$/ }).scrollIntoViewIfNeeded();
+	await measure(() => page.getByRole('button', { name: /^Copy link$/ }).click());
+	await measure(() => page.getByRole('button', { name: /^Save$/ }).click());
+	await page.getByLabel('Name').fill('Long question');
+	await measure(() => page.getByRole('button', { name: /^Keep$/ }).click());
+	await measure(() => page.locator('#explorer-sql').fill(Array.from({ length: 40 }, (_, index) => `SELECT ${index}`).join('\n')));
+});
+
+test('M11: status words stay in the reserved lines and never scroll sideways', async ({ page }) => {
+	for (const view of VIEWS) {
+		await page.setViewportSize(view);
+		await openExplorer(page);
+		const status = page.locator('[data-workbench-region="status"]');
+		await expect(status).toContainText('Run reads');
+		await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
+		await runExplorer(page);
+		await expect(status).toContainText('Ran in');
+		await status.locator('.status-copy').evaluate((node) => {
+			node.textContent = 'Answered in 99999 ms. Fetched 123 files, 64.0 MB from 4 ledgers over 90 UTC days. This is the longest status sentence.';
+		});
+		const fit = await status.evaluate((node) => ({
+			noHorizontalScroll: node.scrollWidth <= node.clientWidth,
+			verticalFits: node.scrollHeight <= node.clientHeight
+		}));
+		expect(fit.noHorizontalScroll, `${view.width} no horizontal scroll`).toBe(true);
+		expect(fit.verticalFits, `${view.width} reserved lines`).toBe(true);
+	}
+});
+
+test('M12: notices time out, pause on hover or focus, and close on the button', async ({ page, context }) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	await page.setViewportSize({ width: 390, height: 844 });
+	await openExplorer(page);
+	await page.clock.install();
+	await page.getByRole('button', { name: /^Copy link$/ }).scrollIntoViewIfNeeded();
+	await page.getByRole('button', { name: /^Copy link$/ }).click();
+	const notice = page.locator('[data-notice]');
+	await expect(notice).toBeVisible();
+	await page.clock.fastForward(explorerConfig().notice_ms + 100);
+	await expect(notice).toHaveCount(0);
+	await page.getByRole('button', { name: /^Copy link$/ }).click();
+	await expect(notice).toBeVisible();
+	await notice.hover();
+	await page.clock.fastForward(explorerConfig().notice_ms + 100);
+	await expect(notice).toBeVisible();
+	await notice.getByRole('button', { name: 'Close' }).focus();
+	await page.mouse.move(1, 1);
+	await page.clock.fastForward(explorerConfig().notice_ms + 100);
+	await expect(notice).toBeVisible();
+	await notice.getByRole('button', { name: 'Close' }).click();
+	await expect(notice).toHaveCount(0);
+});
+
+test('storage notice dismissal does not re-enable storage-backed controls', async ({ page }) => {
+	await openExplorer(page);
+	await page.evaluate(() => {
+		Storage.prototype.setItem = () => {
+			throw new Error('storage blocked');
+		};
+	});
+	await page.getByRole('button', { name: /^Save$/ }).click();
+	await page.getByLabel('Name').fill('Blocked');
+	await page.getByRole('button', { name: /^Keep$/ }).click();
+	const notice = page.locator('[data-notice]');
+	await expect(notice).toContainText('This browser keeps nothing.');
+	await notice.getByRole('button', { name: 'Close' }).click();
+	await expect(notice).toHaveCount(0);
+	await expect(page.getByRole('button', { name: /^Save$/ })).toBeDisabled();
+	await page.locator('.history-list summary').click();
+	await expect(page.locator('.history-list')).toContainText('Nothing asked in this browser yet.');
+});
+
+test('M13: B2 column rail text flips without changing either rail box', async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint" LIMIT 1');
+	const rail = '[data-workbench-region="columns"]';
+	const outer = await box(page, rail);
+	const inner = await box(page, '[data-explorer-column-box]');
+	await runExplorer(page);
+	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Answer columns');
+	closeBox(outer, await box(page, rail));
+	closeBox(inner, await box(page, '[data-explorer-column-box]'));
+	await page.locator('[data-ledger-name="published"] input').check();
+	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Ledger columns');
+	closeBox(outer, await box(page, rail));
+	closeBox(inner, await box(page, '[data-explorer-column-box]'));
+});
+
+test('M15: panel ids stay ordered, headed and joined into one workbench surface', async ({ page }) => {
+	await openExplorer(page);
+	const ids = await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-console-panel-id')));
+	expect(ids.slice(0, 3)).toEqual(['data-explorer-ask', 'data-explorer-rows', 'data-explorer-shape']);
+	for (const id of ['data-explorer-ask', 'data-explorer-rows', 'data-explorer-shape']) {
+		await expect(page.locator(`[data-console-panel-id="${id}"] h2`)).toHaveCount(1);
+	}
+	const gaps = await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.slice(0, 3).map((node, index, all) => {
+		if (index === 0) return 0;
+		return Math.round(node.getBoundingClientRect().top - all[index - 1].getBoundingClientRect().bottom);
+	}));
+	expect(gaps).toEqual([0, 0, 0]);
+	const colours = await page.evaluate(() => ({
+		page: getComputedStyle(document.body).backgroundColor,
+		workbench: getComputedStyle(document.querySelector('.workbench') as HTMLElement).backgroundColor
+	}));
+	expect(colours.workbench).not.toBe(colours.page);
+});
+
+test('M16: phone width has no document overflow and controls stay inside their regions', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await openExplorer(page);
+	const overflow = await page.evaluate(() => {
+		const regions = [...document.querySelectorAll('[data-workbench-region="toolbar"], [data-workbench-region="questions"]')];
+		const offenders: string[] = [];
+		return {
+			documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+			controlsFit: regions.every((region) => {
+				const box = region.getBoundingClientRect();
+				return [...region.querySelectorAll('button, input, a, summary')].every((node) => {
+					const rect = node.getBoundingClientRect();
+					if (rect.width === 0 || rect.height === 0 || getComputedStyle(node).visibility === 'hidden') return true;
+					const fits = rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
+					if (!fits) offenders.push(`${region.getAttribute('data-workbench-region')}: ${node.tagName} ${node.textContent?.trim()} ${rect.left}-${rect.right} outside ${box.left}-${box.right}`);
+					return fits;
+				});
+			}),
+			offenders
+		};
+	});
+	expect(overflow.documentFits).toBe(true);
+	expect(overflow.controlsFit, overflow.offenders.join('\n')).toBe(true);
+});
+
+test('M17: keyboard order follows the visual order at desktop and phone widths', async ({ page }) => {
+	for (const view of [{ width: 1440, height: 900 }, { width: 390, height: 844 }] as const) {
+		await page.setViewportSize(view);
+		await openExplorer(page);
+		const order = await page.evaluate(() => {
+			const regionOrder = ['strip', 'toolbar', 'questions', 'ledgers', 'editor', 'status', 'columns', 'answer', 'chart'];
+			return [...document.querySelectorAll<HTMLElement>('a[href], button, input, summary, textarea')]
+				.filter((node) => {
+					const rect = node.getBoundingClientRect();
+					return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility !== 'hidden';
+				})
+				.map((node, index) => {
+					const region = node.closest('[data-workbench-region]')?.getAttribute('data-workbench-region') ?? (node.closest('[data-console-strip]') ? 'strip' : '');
+					return { index, region, rank: regionOrder.indexOf(region) };
+				});
+		});
+		const ranks = order.filter((entry) => entry.rank >= 0).map((entry) => entry.rank);
+		expect(ranks).toEqual([...ranks].sort((left, right) => left - right));
+	}
 });

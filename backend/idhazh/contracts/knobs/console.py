@@ -585,10 +585,10 @@ class ConsoleConfig(Model):
         description="Side rail width on the Data explorer question panel, in rem.",
     )
     explorer_readout_lines: tuple[int, int, int, int] = Field(
-        default=(3, 2, 2, 1),
+        default=(5, 3, 4, 2),
         description=(
-            "Lines reserved by the Data explorer status bar, answer note and chart "
-            "foot, for the four frame breakpoint bands from narrowest to widest."
+            "Lines reserved by the Data explorer status bar, for the four frame "
+            "breakpoint bands from narrowest to widest."
         ),
     )
     explorer_notice_ms: int = Field(

@@ -529,7 +529,7 @@ Every value below is a knob (Guardrail #6), in `config/appearance.json` with its
 | `console.panel_groups["data-explorer"]` | 4, then 5 | **New** | Row 4: `["data-explorer-ask", "data-explorer-rows"]`. Row 5 adds `"data-explorer-shape"` (section 2.2 row 5) | `frontend/tests/support/console-panels.ts`, for the capture and sufficiency specs, which map it to its address. The route hands it to nobody: its one group is untitled, and an untitled group draws no jump link |
 | `console.explorer_row_page` | 4 | **New** | `50` | The answer table: how many rows one press of `Show {n} more rows` adds (section 2.11, answer-panel rule 8) |
 | `console.explorer_rail_rem` | 4 | **New** | `14` | From `frame.breakpoints_px[1]` (1024 px), the width of each side column of the question panel - the ledger list on the left, the column list on the right (section 2.16 rule 2). Jony, 2026-10-02 |
-| `console.explorer_readout_lines` | 9 | **New** | `[3, 2, 2, 1]` | The lines the status bar, the answer note and the chart foot reserve, per frame band. Text past that scrolls inside the fixed bar. |
+| `console.explorer_readout_lines` | 9 | **New** | `[5, 3, 4, 2]` | The lines the status bar reserves, per frame band. Text past that scrolls inside the fixed bar. |
 | `console.explorer_notice_ms` | 9 | **New** | `6000`, **an estimate** | A notice that answers a press stays for about 6 seconds; hover or focus holds it. A notice that arrives with the page stays until closed. |
 | `console.explorer_editor_lines_shown` | 9 | **Replaces `console.explorer_editor_lines`** | `[8, 10]` | The editor is exactly this many visible lines, below 1024 px and from 1024 px. A longer question scrolls inside. |
 | `console.explorer_strip_shown` | 4 | **New** | `[3, 6]` | How many chips the question strip shows before the rest fold into a `<details>` labelled `{n} more` (section 2.16 rule 3): the first value below `frame.breakpoints_px[0]` (640 px), where each chip fills its own row, and the second from 640 px. Jony, 2026-10-02 |
@@ -1063,13 +1063,13 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 ### Row #9 - Run moves nothing on the Data explorer
 
 - **Scope:** The workbench surface becomes fixed-region layout: fixed editor, fixed answer and chart regions, fixed column rail box that may flip between ledger and answer columns, `RunStatus`, `Notice`, floating history and question disclosures, and no in-flow notices.
-- **M checks:** M7 through M13 and M15 through M17, including the layout-shift spec that sums every layout-shift entry, checks boxes within 0.5 px, and verifies `scrollY` and `scrollHeight` do not move.
+- **M checks:** M8 through M13 and M15 through M17, including the layout-shift spec that sums every layout-shift entry, checks boxes within 0.5 px, and verifies `scrollY` and `scrollHeight` do not move. **M7 moves to row 10** because the top edge stays above 300 px only after row 10's density pass folds the question chips with K6 and removes the extra row that currently pushes the editor down.
 - **Specified in:** Jony's and Susan's redesign files, 2026-10-04; owner ruling 2026-10-04.
 
 ### Row #10 - The Data explorer reaches the reference's density
 
 - **Scope:** The workbench adopts the density tokens and region-specific type from Susan's table, finishes the rails and table rows, makes the chart use its measured width, and refreshes the judged-panel sufficiency drivers and captures after the layout is stable.
-- **M checks:** M14, M18 and M19. The chart matches its region width, the judged answer and chart panels pass the sufficiency gates or carry rationale, and every font size inside `.workbench` stays on the declared scale.
+- **M checks:** M7, M14, M18 and M19. M7 lands here because row 10's density pass folds the question chips with K6, which is what gets the editor frame top edge to 300 px or above. The chart matches its region width, the judged answer and chart panels pass the sufficiency gates or carry rationale, and every font size inside `.workbench` stays on the declared scale.
 - **Specified in:** Jony's and Susan's redesign files, 2026-10-04; owner ruling 2026-10-04.
 
 ## Dependent plans

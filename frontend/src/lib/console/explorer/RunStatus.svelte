@@ -22,14 +22,19 @@
 	style={`--readout-lines:${lines}`}
 >
 	<p class="status-copy">{text}</p>
-	{#if href}<a class="status-link" href={href}>See the answer</a>{/if}
+	<div class="status-link-box">
+		{#if href}<a class="status-link" href={href}>See the answer</a>{/if}
+	</div>
 </div>
 
 <style>
 	.run-status {
-		position: relative;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 7rem;
+		column-gap: var(--space-3);
 		block-size: calc(var(--readout-lines) * var(--leading-sm) + 2 * var(--space-1));
-		overflow: auto;
+		overflow-y: auto;
+		overflow-x: hidden;
 		scrollbar-width: thin;
 		scrollbar-color: var(--color-rule-strong) transparent;
 		padding: var(--space-1) var(--space-3);
@@ -46,20 +51,18 @@
 	}
 
 	.status-copy {
-		position: absolute;
-		inset-block: var(--space-1);
-		inset-inline: var(--space-3) 8rem;
 		margin: 0;
-		white-space: nowrap;
+		min-inline-size: 0;
+	}
+
+	.status-link-box {
+		min-inline-size: 0;
+		text-align: end;
 	}
 
 	.status-link {
-		position: absolute;
-		inset-block-start: var(--space-1);
-		inset-inline-end: var(--space-3);
-		inline-size: 7rem;
 		color: var(--color-text);
 		font-weight: 600;
-		text-align: end;
+		white-space: nowrap;
 	}
 </style>
