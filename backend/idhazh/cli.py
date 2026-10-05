@@ -239,9 +239,8 @@ def _scorer(enabled: bool) -> object | None:
 
     A scorer that will not load costs the run its eval rows. It must never cost
     the run its digest: `stage_assemble` already bands every item from the
-    model-free counterweights when no row exists. The first real runner attempt
-    died here - a transformers upgrade broke the checkpoint's own modelling code
-    and all four workers exited before summarizing a single article.
+    model-free counterweights when no row exists. A scorer load failure is
+    therefore visible as missing eval rows and does not stop publication.
     """
     if not enabled:
         common.LOG.warning("faithfulness scoring disabled - no eval rows will be written")
@@ -259,9 +258,7 @@ def _scorer(enabled: bool) -> object | None:
     return scorer
 
 
-def _scores_this_run(
-    observability: ObservabilityConfig, *, run_id: str, flag_allows: bool
-) -> bool:
+def _scores_this_run(observability: ObservabilityConfig, *, run_id: str, flag_allows: bool) -> bool:
     """Whether the work stage should load a scorer for this run at all.
 
     Three things have to agree. `observability.evaluation_enabled` is the

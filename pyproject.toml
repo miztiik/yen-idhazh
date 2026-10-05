@@ -55,8 +55,8 @@ dependencies = [
     # can break that claim without breaking anything an API test would notice.
     # A range here means two runners may disagree about the same day.
     "onnxruntime==1.29.0",
-    # 0.23 is the first release with a `py.typed` marker; below it mypy refuses the import.
-    "tokenizers>=0.23",
+    # Transformers 5.17 requires the typed tokenizer interface from 0.23.1.
+    "tokenizers>=0.23.1",
     # One reading of robots.txt on every interpreter we support. The standard
     # library's `urllib.robotparser` disagrees with itself across the declared
     # range: 3.12 takes the first matching group and the first matching rule,
@@ -147,12 +147,9 @@ dev = [
 # test path - the model-free counterweights are what run everywhere.
 faithfulness = [
     "torch>=2.5",
-    # Capped below 5. The HHEM checkpoint ships its own modelling code, which
-    # defines `_tied_weights_keys`; transformers 5 expects
-    # `all_tied_weights_keys` and raises AttributeError while loading it. An
-    # unpinned ceiling meant CI resolved to a version the model predates, and
-    # every worker died before summarizing a single article.
-    "transformers>=4.46,<5",
+    # Keep this open-ended so the extra receives current model-loading fixes.
+    # HHEM is loaded from its immutable revision in evals/hhem.py.
+    "transformers>=5.17",
 ]
 
 [project.scripts]
