@@ -18,6 +18,9 @@ class RecoveryNote(StrEnum):
     #: A day inside the ledger's history had no index entry and nothing left to
     #: rebuild it from, so its month lists it in `lost_days`.
     RECORDED_LOST = "recorded-lost"
+    #: Raw files landed in a month already closed, so the pass settled their rows
+    #: into the month's file and entry and deleted them.
+    REOPENED_MONTH = "reopened-month"
     #: A period's own packed file was at its named path while no index entry
     #: named it, so the pass adopted the file as the period's record.
     INDEX_REBUILT = "index-rebuilt"

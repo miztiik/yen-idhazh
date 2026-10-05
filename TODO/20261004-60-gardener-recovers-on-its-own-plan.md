@@ -54,7 +54,7 @@ Table A - what is out
 | 14 | Which years may be packed | 13 | D | DONE | scaling-train | - | Plan 60 row 14 |
 | 15 | Each old month is dropped once | 14 | D | DONE | redesigned-spoon | - | Plan 60 row 15 |
 | 16 | The shared window is gone | 15 | D | DONE | jubilant-waffle | - | Plan 60 row 16 |
-| 17 | A late file re-opens its month | 16 | D | PENDING | - | - | - |
+| 17 | A late file re-opens its month | 16 | D | DONE | curly-fiesta | - | Plan 60 row 17 |
 | 18 | An unreadable file is set aside, and extra files wait | 17 | D | PENDING | - | - | - |
 | 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | PENDING | - | - | - |
 | 20 | The record says what was recovered and why a pass stopped | 4, 11, 19 | E | PENDING | - | - | - |
@@ -714,10 +714,14 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - The day step's refusal "raw files sit in a month already absorbed" compares a raw day's month with the monthly mark alone, so it also catches a raw day in a month before the ledger's first packed month, which no month entry names and which never closed. A first run that looks back `lookback` months (B7) can leave such a day behind. It is not a late re-run, so re-opening never treats its month as closed; found during execution (row 13 report), owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_daily_period.py`
-  - `backend/idhazh/gardener/tasks/_monthly_period.py`
+  - `backend/idhazh/gardener/tasks/_monthly_period.py` (not changed: the re-open went to `_reopened_month.py`, because this module already answers two questions, absorb and drop; found during execution, Fowler's ruling)
   - `backend/idhazh/gardener/tasks/compaction.py`
   - `backend/tests/gardener/tasks/test_compaction.py`
   - `docs/architecture/publishing/ledger-compaction.md`
+  - `backend/idhazh/contracts/gardener_fault.py` (`RecoveryNote` gains `reopened-month`; log-only until row 20 persists the words; found at dispatch by the owner)
+  - `backend/idhazh/gardener/tasks/_reopened_month.py` (new; first sentence "How a closed month takes in raw files that land after it closed"; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`raw_files`, the raw-day read the day step and the re-open share, so row 18 changes one place; `name_months` says "a step"; found during execution, Fowler's ruling)
+  - `backend/tests/gardener/tasks/test_compaction_batch.py` (its direct call to the day step passes the keep line; found during execution)
 - **Acceptance gates:** local: pytest on `backend/tests/gardener/tasks/test_compaction.py` and the gardener tests the selector lists; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** a month closed with rows for two work units, then a late raw file from one unit's re-run with the same record keys. After the pass, the month file holds each key once, with the value the ledger's settle rule picks. The late file is gone, the outcome is `done`, and the note is `reopened-month`. Other days of the pass still pack. It cannot settle a re-run more than 30 days late; GitHub does not allow one.
 
