@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
@@ -43,11 +43,13 @@ listing that is absent inside the listed range is a file gap, not an empty day.
 
 ## Archive tier
 
-For dates before the site's oldest named packed day, Data explorer can read packed files from the committed repository. The prefix is `ledger.archive_base_url` in `config/idhazh.json`; the shipped value is `https://raw.githubusercontent.com/miztiik/yen-idhazh/main`.
+The archive is the committed repository, which holds every packed file a ledger still keeps. Data explorer reads it from `ledger.archive_base_url` in `config/idhazh.json`; the shipped value is `https://raw.githubusercontent.com/miztiik/yen-idhazh/main`.
+
+**The archive is read only for days the site copy may have dropped.** The site build keeps each published ledger's index entries that overlap the widest console preset of UTC days ending on the newest day the ledger's indexes name ([what the site holds](how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)). One function, `frontend/src/lib/data/site-window.ts`, holds that rule for the build and for this page, and the build hands the page the number of days as `__SITE_WINDOW_DAYS__`. The copy may have dropped days only when the site's first day is on or before the first day it keeps. Then a window that begins before the site's first day asks the archive for the days before it. Otherwise the archive host gets no request.
+
+**Days before a ledger began are cut from the selected window.** When the selected window begins before the first day any tier it read names, that ledger's earlier days are cut, and the answer names its first day: `Days before {day} are not on this site.` Nothing failed. The window itself does not change: the page still opens on the reader's UTC day, the presets still end on it, and nothing reads a ledger's first day to choose, widen or end a window. A day after that first day that no index names is still a hole, `day-missing`. With `ledger.archive_base_url` empty, the site is the only tier.
 
 The archive uses its own page keeper and its own three compact indexes. It chooses files with the same `filesFor()` rule as the site, but it fetches every archive data file whole. It never hands the archive address to DuckDB. The engine sees only buffers under engine-minted names.
-
-When `ledger.archive_base_url` is empty, Data explorer reads the site only. A span that starts before the site's oldest named packed day is clamped to that day, and the answer says `Days before {day} are not on this site.` Nothing failed in that case.
 
 `FetchCost` sums both keepers. A file the site already holds and a file the archive already holds both count as already held.
 
@@ -84,6 +86,12 @@ A shared link carries a preset as `days=<n>`. A custom span replaces `days` with
 ## Boundary
 
 The engine module is unchanged. The only module importing `@duckdb/duckdb-wasm` remains `frontend/src/lib/data/engine.ts`. The browser's shipped `connect-src` policy applies to the engine worker, so a statement that tries to read an unlisted origin is refused by the browser. The boundary test builds its support page with the same policy directives as `svelte.config.js` and asserts the refused request never reaches the network.
+
+## Design rationale
+
+**Days before a ledger began are cut from a window, not refused.** The owner ruled on 2026-10-05: when a Data explorer question begins before a ledger's first day, the explorer cuts that ledger's earlier days from the selected window and says `Days before {day} are not on this site.`, as it already did with no archive set. The rejected choice kept refusing such a question and changed only the test data. Ledgers start, pause, resume and stop, so a day before a ledger's first is outside the ledger, not a missing file. The cut changes the answer and never the window: the page still opens on the current day, a preset still ends on it, and a ledger that began years ago never moves a window into the past.
+
+**The archive is asked only when the site copy's own rule says it may have dropped days.** That costs one shared function and one build constant. In return, a ledger the copy did not trim, which is every ledger for its first window, answers from the site with no request to a third-party host. Asking the archive whenever a window begins before the site's first day would send three cross-origin requests a ledger, every time, for days no tier holds. A `trimmed_before` field written by the site copy would be exact, but it changes a persisted shape (`CLAUDE.md` section 6, Level 5). Dropping the archive would lose every day older than the site window, while `console.explorer_reach_days` offers a year. The rule's one cost: a ledger whose oldest entry holds the first day the copy keeps reads as trimmed, and costs one needless archive read.
 
 ## See also
 

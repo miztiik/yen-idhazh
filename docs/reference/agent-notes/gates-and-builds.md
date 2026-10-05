@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -58,6 +58,17 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   `ZLIB_VERSION` ending in `.zlib-ng`. Take this test's answer from CI:
   ```powershell
   python -c "import zlib; print(zlib.ZLIB_VERSION, getattr(zlib, 'ZLIBNG_VERSION', None))"
+  ```
+
+- **A logic spec that writes Parquet prints `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`, which reads as a crash; its tests passed.**
+  On 2026-10-05, on Windows with Node 24.12.0 and DuckDB-Wasm 1.33.1-dev57.0,
+  a Playwright worker that had written files with `COPY ... TO` printed this
+  libuv line while it shut down, after every result was reported, and the run
+  still ended `N passed` with exit 0. The door specs, which only read, print
+  nothing. The tell is the line arriving between results or at a worker
+  restart, never inside a test. Read the summary and the exit code:
+  ```powershell
+  node node_modules/@playwright/test/cli.js test --config playwright.logic.config.ts tests/ledger-lifecycle.spec.ts; "exit $LASTEXITCODE"
   ```
 
 ## Two heavy gates on one box

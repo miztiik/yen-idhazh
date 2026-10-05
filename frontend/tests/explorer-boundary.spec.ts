@@ -5,7 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
 import svelteConfig from '../svelte.config.js';
-import { engineExtensionRepository } from '../src/lib/server/config';
+import { engineExtensionRepository, ledgerArchiveBaseUrl } from '../src/lib/server/config';
+import { chooseExplorerQuestion, runExplorer, tableRows } from './support/explorer-answer';
+import { buildLedger, everyDay, serveToPage } from './support/ledger-lifecycle';
 import { addonCache, startRangeHost, type RangeHost } from './support/range-host';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -137,4 +139,30 @@ test.describe('explorer boundary', () => {
 		expect(external.every((request) => request.failed === 'csp')).toBe(true);
 		expect(external.every((request) => !request.responded)).toBe(true);
 	});
+});
+
+test('days before a ledger began are cut from the selected window, the page names that day, and the archive host gets no request', async ({ page, context }) => {
+	// The page reads host-fingerprint as a ledger this test builds: it began on 10 Jun 2030, five
+	// days before the day the test pins, and the test selects 2 to 15 Jun.
+	const ledger = 'host-fingerprint';
+	const root = test.info().outputPath('state');
+	await buildLedger(root, { ledger, pinned: '2030-06-15', days: everyDay(5, 0) });
+	await serveToPage(context, root, ledger);
+	const archive = ledgerArchiveBaseUrl();
+	expect(archive, 'the shipped config names an archive, so the page has one it could ask').not.toBe('');
+	const archiveAsked: string[] = [];
+	context.on('request', (request) => {
+		if (request.url().startsWith(`${archive}/`)) archiveAsked.push(request.url());
+	});
+
+	await page.clock.setFixedTime('2030-06-15T12:00:00Z');
+	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	await chooseExplorerQuestion(page, [ledger], `SELECT min("covers") AS first_day FROM "${ledger}"`);
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2030-06-02');
+	await runExplorer(page);
+	const panel = page.locator('[data-console-panel-id="data-explorer-rows"]');
+	await expect(panel.locator('.answer-note')).toContainText('Days before 10 Jun 2030 are not on this site.');
+	await expect(panel.locator('.warn')).toHaveCount(0);
+	expect(await tableRows(page)).toEqual([['2030-06-10']]);
+	expect(archiveAsked).toEqual([]);
 });
