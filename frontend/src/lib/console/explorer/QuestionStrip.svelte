@@ -83,4 +83,14 @@
 	.example:focus-visible, summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 	details { position: relative; }
 	.folded { position: absolute; z-index: 5; display: grid; gap: var(--space-2); min-inline-size: 16rem; padding: var(--space-2); border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-md); }
+	@media (max-width: 639px) {
+		.question-strip,
+		.example,
+		summary {
+			min-inline-size: 0;
+			inline-size: 100%;
+			max-inline-size: 100%;
+			overflow: hidden;
+		}
+	}
 </style>

@@ -771,8 +771,8 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
 
     So the day is refreshed from the tip the push wants and built again against
     it. Both runs' items reach the reader, both runs' rows reach all three
-    ledgers exactly once, the pull request is untouched, and this run's rendered
-    chart - which no producer in this job can make again - is still there.
+    ledgers exactly once, the pull request is untouched, and the chart this run
+    wrote into the day's directory is still there.
     """
     date = SUBSTITUTED_DATE
     month = date[:7]
@@ -787,8 +787,8 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     _race_the_day(
         tmp_path, env, date, ["item-c"], "Merge pull request #123 from someone/branch"
     )
-    # This run: the visuals artifact unpacked a chart into the day's directory,
-    # and assemble published two items on the base the checkout carried.
+    # This run: assemble wrote a chart into the day's directory and published
+    # two items on the base the checkout carried.
     _write(runner / SUBSTITUTED_DAY_DIR / "assets" / "chart-1.svg", "<svg />\n")
     _rebuild(runner, env, date, ["item-d", "item-e"])
 

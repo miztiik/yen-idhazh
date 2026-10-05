@@ -15,7 +15,10 @@
  * rows, and so did each day a month or a year lists in its `lost_days`: those
  * days come back by name, beside the files, because a day with no record is not
  * a day with no rows. `namesFile()` is the one reading of whether an entry has a
- * file, so every reader and the site build agree on it.
+ * file, so every reader and the site build agree on it. **An entry may also
+ * count files its packing set aside unread** (`set_aside`); each such period
+ * the range is read from comes back with its count, because its file, if it has
+ * one, holds every row but theirs.
  *
  * Where the ledger starts is worked out here too, `firstNamed()`, so the slice
  * and the reach never disagree about which hole lies before it.
@@ -25,7 +28,7 @@
  */
 
 import type { CompactEntry, Period } from './compact-index';
-import type { DateStamp } from './slice-shapes';
+import type { DateStamp, SetAsideFiles } from './slice-shapes';
 
 /** One file a range needs, and the first day of the range it answers for. */
 export interface ChosenFile {
@@ -34,8 +37,9 @@ export interface ChosenFile {
 	firstDay: DateStamp;
 }
 
-/** The files a range needs, in ascending order, and the days in it recorded lost; or the first day nothing holds. */
-export type FileSelection = { files: ChosenFile[]; lostDays: DateStamp[] } | { hole: DateStamp };
+/** The files a range needs, in ascending order, the days in it recorded lost, and the
+ *  files its periods set aside unread; or the first day nothing holds. */
+export type FileSelection = { files: ChosenFile[]; lostDays: DateStamp[]; setAside: SetAsideFiles } | { hole: DateStamp };
 
 const DAY_MS = 86_400_000;
 
@@ -120,8 +124,9 @@ export function newestFile(
 	return year === undefined ? null : { period: 'yearly', entry: year, firstDay: FIRST_DAY.yearly(year.covers) };
 }
 
-/** The files that answer every day from `from` to `to`, one file a day, and the
- *  days among them an index records lost. */
+/** The files that answer every day from `from` to `to`, one file a day, the days
+ *  among them an index records lost, and the files set aside by the periods they
+ *  are read from. */
 export function filesFor(
 	from: DateStamp,
 	to: DateStamp,
@@ -134,12 +139,14 @@ export function filesFor(
 	const days = new Map(daily.map((entry) => [entry.covers, entry]));
 	const chosen = new Map<string, ChosenFile>();
 	const lostDays: DateStamp[] = [];
+	const setAside: Record<string, number> = {};
 	for (const day of daysBetween(from, to)) {
 		const year = years.get(day.slice(0, 4));
 		const month = year === undefined ? months.get(day.slice(0, 7)) : undefined;
 		const period: Period = year ? 'yearly' : month ? 'monthly' : 'daily';
 		const entry = year ?? month ?? days.get(day);
 		if (entry === undefined) return { hole: day };
+		if (entry.set_aside !== undefined && entry.set_aside > 0) setAside[entry.covers] = entry.set_aside;
 		if (entry.state === 'lost' || entry.lost_days?.includes(day)) {
 			lostDays.push(day);
 			continue;
@@ -148,7 +155,7 @@ export function filesFor(
 		const key = `${period}/${entry.covers}`;
 		if (!chosen.has(key)) chosen.set(key, { period, entry, firstDay: day });
 	}
-	return { files: [...chosen.values()], lostDays };
+	return { files: [...chosen.values()], lostDays, setAside };
 }
 
 /** The days after the newest packed day that the staged site listed for a ledger. */

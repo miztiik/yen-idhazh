@@ -14,14 +14,13 @@ ledger gains a file on every run, and at a few rows a file a parquet file is
 mostly its footer.
 One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
 by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
-ledger is one declaration and no Python. Six ship - for `gardener`,
-`visual-prunes`, `feed-retirements`, `item-health`, `summary-quality-evals` and
-`host-fingerprint`. **`item-health` and `host-fingerprint` pack live**, and each
-packs a month 31 days after it ends: the console reads their packed files and
-nothing newer, so a finished day reaches it within about 48 hours. The other
-four only report, so the console shows the `summary-quality-evals` days up to the day that
-ledger's migration ran
-([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
+ledger is one declaration and no Python. The declarations that ship are in
+[../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship).
+**Every ledger the console reads packs live.** The console reads packed files
+and nothing newer, so a finished day reaches it within about 48 hours while
+the daily wakes succeed. `item-health` and `host-fingerprint` pack a month
+31 days after it ends; `summary-quality-evals` and `feed-health` wait 45 days.
+Report-only packing cannot refresh a packed-only reader.
 **`summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so it may pack
 the eval rows and never drops a month** ([below](#design-rationale)). It is the one
 ledger that packs a finished year into one year file ([A year](#a-year)). The files it
@@ -53,7 +52,7 @@ flowchart TB
     DHOLD["the day waits for a later wake:<br/>a run may still be writing, or the cap is used"]
     TAKE["5. plan day files, or an empty entry,<br/>after each packed day a re-run wrote into:<br/>indexes and deletes wait for the end of the pass"]
     DRY{"dry_run?"}
-    REPORT["report every path, land the record only<br/>four of the six compactions, today"]
+    REPORT["report every path, land the record only<br/>the three report-only compactions"]
     LAND["land every write and delete<br/>in the shard's one commit"]
   end
 

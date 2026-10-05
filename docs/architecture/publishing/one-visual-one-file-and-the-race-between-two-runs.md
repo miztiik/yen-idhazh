@@ -1,6 +1,6 @@
 # One visual, one file, and the race between two runs
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-10-04
 
 A visual's file is named for the item it belongs to, and nothing recomputes that
 name. This page is why: two earlier naming rules each published one story's
@@ -83,9 +83,11 @@ the archive has never produced.
 **Why a raced chart is dropped rather than merged, refreshed, renumbered or picked between.**
 Authority: the owner, 2026-08-27. Every cheaper-looking answer publishes a wrong picture instead of
 failing, which is worse than losing a day because nobody finds out. Adding the day's directory to
-`REFRESH_PATHS` makes the rebuild's hand-back delete every chart this run added that the tip lacks,
-while the regenerated `digest.json` still names them - `assemble` copies the path from the decision
-payload and cannot render anything - so the day publishes with broken images. Resolving the add/add
+`REFRESH_PATHS` made the rebuild's hand-back delete every chart this run added that the tip lacks,
+while the regenerated `digest.json` still named them, so the day published with broken images.
+Since 2026-10-04 `assemble` writes a missing chart from this run's decision, so that reason no
+longer holds; the directory stays out of the list until a change tests the hand-back of a whole
+directory, and the drop stays the control. Resolving the add/add
 by a stated side has two outcomes and no third one; `-X theirs` gives our item the tip's picture,
 `-X ours` overwrites an address a reader may already hold. **Renumbering was the answer while a path
 could mean two different stories**, and it is the wrong answer now: the path names one item, so
@@ -121,7 +123,7 @@ file before it can be enabled.
 | --- | --- |
 | Keep the per-vertical counter and seed it better | Every seeding rule reads something a process can observe, and the defect is that two processes observe different things. A per-process counter lost 2026-08-24; a directory-seeded counter lost run `32869125768`. There is no third thing to read. |
 | Name the asset from a hash of the address, `<vertical>-<url_key prefix>.svg` | It fixes the same defect as the item id and breaks a rule the item id does not: [`layout.md`](layout.md) says no hash appears in any path, filename or URL, and `backend/tests/contracts/test_repo_structure.py::test_no_hash_appears_in_any_published_path` holds it. The item id is already a published address - it is the anchor a reader lands on - so it costs the reader nothing that has not already been accepted. |
-| Add the day's directory to `REFRESH_PATHS` | The hand-back deletes what the tip lacks and restores what it has, so this run's own charts are deleted while the rebuilt `digest.json` still names them, and the colliding one comes back with the other story's bytes. A broken image and a wrong image, published, instead of a job that failed loudly. |
+| Add the day's directory to `REFRESH_PATHS` | Rejected while `assemble` could not write a chart: the hand-back deleted this run's charts while the rebuilt `digest.json` still named them, a broken image published instead of a job that failed loudly. Since 2026-10-04 `assemble` writes a missing chart from its decision, so that reason is gone; it is not adopted until the hand-back of a whole directory is tested. |
 | Resolve the add/add with `-X ours` or `-X theirs` | `theirs` puts the tip's picture under our alt text; `ours` overwrites an address a reader may already hold. Neither side of a coin flip is a correct answer to "whose chart is this". |
 | Renumber a raced chart instead of dropping it | Right while a path could mean two different stories, wrong now that it names one item. Moving this run's copy would file that item's picture under a name that is not its own, and leave two files where the day references one. |
 | Keep the first claimant's chart and null only the second | The order two items sit in a payload is not evidence of which one the chart was drawn for. This repairs 14 items by guessing on the other 14, and a guess that publishes is the failure being fixed. |
