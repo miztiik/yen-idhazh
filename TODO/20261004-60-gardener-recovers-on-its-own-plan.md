@@ -571,6 +571,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #13 - Which days may be packed
 
 - **Scope:** Day packing follows Table B, B6 and B7: it starts after the daily mark, re-takes packed days in the re-run span, starts a first run at the oldest raw day, and records a day with no row as an entry with no file. Level 3.
+- **Fixed after merge:** #1309 exposed a Data explorer fault on the canary: a window that began before a ledger's first day sent those days to the archive, which called them missing, and ten console tests went red on `main`. The owner ruled A1 on 2026-10-05: days before a ledger began are cut from the selected window, and the archive is asked only for days the site copy trimmed. #1327 is Fowler's phase L1.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_compaction_periods.py`
   - `backend/idhazh/gardener/tasks/_daily_period.py`
