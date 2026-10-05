@@ -222,8 +222,8 @@ def test_a_deletion_the_commit_never_listed_lands_nothing(
 
 
 #: The ledger the month-closing shard packs, the wake it closes September on, and
-#: the days of September that hold a row. The planner's window on that wake names
-#: 2025-08 to 2025-10, so September is named by the month step as it runs.
+#: the days of September that hold a row. The planner names only the ledger's
+#: marks on that wake, so September is named by the month step as it runs.
 CLOSED: Final = LedgerName.VISUAL_PRUNES
 CLOSING_WAKE: Final = datetime(2026, 11, 15, 0, 40, tzinfo=UTC)
 SEPTEMBER_ROWS: Final = ("2026-09-12", "2026-09-20")
@@ -311,7 +311,7 @@ def a_ledger_on_origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple
 def test_a_month_the_step_names_as_it_runs_is_closed_and_its_deletions_land(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The shard's listing named the planner's window; the month step names September itself.
+    """The shard's listing named only the ledger's marks; the month step names September itself.
 
     September's day files come from the commit when the step names them, arrive
     in the one download that reads them, and their deletions land beside the

@@ -1,12 +1,12 @@
 # Query a ledger from the Data explorer console
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 Use the Data explorer page when the console has the data you need but no purpose-built panel answers your question.
 
 ## What the page reads
 
-Data explorer reads the ledgers that `config/ledgers.json` declares and `config/idhazh.json` publishes. It reads the site copy first. For older packed days, it reads the committed repository through `ledger.archive_base_url`. If that value is empty, Data explorer reads the site only and says which older days are not on this site.
+Data explorer reads the ledgers that `config/ledgers.json` declares and `config/idhazh.json` publishes. It reads the site copy first. It asks the committed repository, through `ledger.archive_base_url`, only for older days the site copy trimmed. When the selected window begins before a ledger's first day, it moves the window's start to that day for that ledger and says so: `Days before {day} are not on this site.` The window's end never moves. If `ledger.archive_base_url` is empty, Data explorer reads the site only.
 
 ## Ask a question
 

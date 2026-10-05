@@ -91,7 +91,11 @@ def pack(
     today: date,
     months: Sequence[str],
 ) -> tuple[list[str], list[str], list[str]]:
-    """Pack only the named months until a pass writes and deletes no selected period."""
+    """Pack only the named months until a pass writes and deletes no selected period.
+
+    The first and last named month are each pass's range, as a person's `--from`
+    and `--to` would be.
+    """
     repo_root = state_dir.parent
     context = f"{label_path(state_dir)}: {which.value}"
     folders = tuple(policy.owns or ())
@@ -115,8 +119,8 @@ def pack(
                     listing=FileListing.from_disk(
                         repo_root, folders, paths=packing_paths(state_dir, which, months)
                     ),
+                    period_range=(min(months), max(months)),
                 ),
-                months=frozenset(months),
             )
         except ValueError as refusal:
             raise NotProvenError(f"{context}: packing refused: {refusal}") from refusal
