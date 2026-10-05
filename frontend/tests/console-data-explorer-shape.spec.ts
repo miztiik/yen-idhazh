@@ -1,7 +1,13 @@
 import { expect, test } from '@playwright/test';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { render } from 'svelte/server';
 
-import { chooseDateSeriesDays, chooseExplorerShape, chooseExplorerShapes, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
+import { chooseDateSeriesDays, chooseExplorerShape, chooseExplorerShapes, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
 import type { Column, Row } from '../src/lib/data/slice-shapes';
+import { serverCompiler } from './support/server-render';
+
+const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const bounds: ExplorerShapeBounds = {
 	chartMinRows: 3,
@@ -228,4 +234,127 @@ test('an answer can qualify for more than one chart type for the operator switch
 		{ source: 'b', items: 2 },
 		{ source: 'c', items: 1 }
 	], bounds)).toMatchObject({ kind: 'chart', type: 'rankedList' });
+});
+
+test('a NULL is no reading: the spread and paired floors, the paired figure and the ranked tail count only rows with a number', () => {
+	expect(shape([{ name: 'latency', type: 'DOUBLE' }], [
+		{ latency: '10' },
+		{ latency: null },
+		{ latency: '20' },
+		{ latency: '30' }
+	])).toMatchObject({ type: 'distribution', readings: 3, tooFew: true });
+
+	expect(shape([
+		{ name: 'host', type: 'VARCHAR' },
+		{ name: 'ms', type: 'DOUBLE' },
+		{ name: 'tokens', type: 'DOUBLE' }
+	], [
+		{ host: 'a', ms: '10', tokens: '100' },
+		{ host: 'b', ms: null, tokens: '150' },
+		{ host: 'c', ms: '30', tokens: '120' },
+		{ host: 'd', ms: '40', tokens: null },
+		{ host: 'e', ms: '50', tokens: '90' }
+	])).toMatchObject({ type: 'pairedScatter', readings: 3, subjects: 3, tooFew: true, mainFigure: '3 rows of tokens against ms' });
+
+	expect(shape([
+		{ name: 'source', type: 'VARCHAR' },
+		{ name: 'items', type: 'INTEGER' }
+	], [
+		{ source: 'a', items: '5' },
+		{ source: 'b', items: null },
+		{ source: 'c', items: '1' }
+	])).toMatchObject({ type: 'rankedList', rowsDrawn: 2, moreRows: 1 });
+});
+
+test.describe('the chart panel draws a NULL as no value, never as zero', () => {
+	let draw: (columns: readonly Column[], rows: readonly Row[], selectedType: ExplorerChartType) => string;
+
+	test.beforeAll(async ({}, testInfo) => {
+		// One directory a worker: a module rewritten while another worker imports it is read half-written.
+		const compiled = serverCompiler(path.join(frontend, 'test-results', 'explorer-shape-panel', String(testInfo.workerIndex)));
+		await compiled('src/lib/components/Reserved.svelte', 'Reserved', []);
+		await compiled('src/lib/charts/d3/EmptyState.svelte', 'EmptyState', [['$lib/components/Reserved.svelte', './Reserved.server.mjs']]);
+		await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
+		for (const chart of ['DateSeries', 'Distribution', 'PairedScatter']) {
+			await compiled(`src/lib/charts/d3/${chart}.svelte`, chart, [
+				['./EmptyState.svelte', './EmptyState.server.mjs'],
+				['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs']
+			]);
+		}
+		await compiled('src/lib/components/RankedList.svelte', 'RankedList', []);
+		const panel = await compiled('src/lib/console/explorer/ShapePanel.svelte', 'ShapePanel', [
+			['$lib/charts/d3/DateSeries.svelte', './DateSeries.server.mjs'],
+			['$lib/charts/d3/Distribution.svelte', './Distribution.server.mjs'],
+			['$lib/charts/d3/PairedScatter.svelte', './PairedScatter.server.mjs'],
+			['$lib/components/RankedList.svelte', './RankedList.server.mjs'],
+			['./shape', '$lib/console/explorer/shape'],
+			['./answer', '$lib/console/explorer/answer']
+		]);
+		const component = (await import(pathToFileURL(panel).href)).default;
+		draw = (columns, rows, selectedType) => render(component, { props: { columns, rows, lostDays: [], bounds, height: 200, selectedType } }).body;
+	});
+
+	test('the ranked list leaves the NULL row out and says it is in the table', () => {
+		const body = draw([{ name: 'source', type: 'VARCHAR' }, { name: 'items', type: 'INTEGER' }], [
+			{ source: 'a', items: '5' },
+			{ source: 'b', items: null },
+			{ source: 'c', items: '1' }
+		], 'rankedList');
+		expect(body.match(/data-ranked-row="[^"]*"/g)).toEqual(['data-ranked-row="a"', 'data-ranked-row="c"']);
+		expect(body).toContain('1 more row is in the table.');
+	});
+
+	test('the paired chart draws no point for a row with a NULL', () => {
+		const body = draw([{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [
+			{ host: 'a', ms: '10', tokens: '100' },
+			{ host: 'b', ms: '20', tokens: '150' },
+			{ host: 'c', ms: '30', tokens: '120' },
+			{ host: 'd', ms: '40', tokens: '90' },
+			{ host: 'e', ms: null, tokens: '60' }
+		], 'pairedScatter');
+		expect(body).toContain('data-readout-records="4"');
+		expect(body).toContain('4 rows of tokens against ms');
+	});
+
+	test('the spread chart counts no NULL among the readings in its bins', () => {
+		const body = draw([{ name: 'latency', type: 'DOUBLE' }], [
+			{ latency: '10' },
+			{ latency: '20' },
+			{ latency: null },
+			{ latency: '30' },
+			{ latency: '40' }
+		], 'distribution');
+		const binned = [...body.matchAll(/aria-label="[^"]*: (\d+) rows, /g)].map((bin) => Number(bin[1]));
+		expect(binned.length, 'no bin was drawn').toBeGreaterThan(0);
+		expect(binned.reduce((sum, count) => sum + count, 0)).toBe(4);
+	});
+
+	test('the date chart breaks its line at a day whose number is NULL', () => {
+		const body = draw([{ name: 'day', type: 'DATE' }, { name: 'rows', type: 'INTEGER' }], [
+			{ day: '2026-08-17', rows: '3' },
+			{ day: '2026-08-18', rows: '5' },
+			{ day: '2026-08-19', rows: null },
+			{ day: '2026-08-20', rows: '8' },
+			{ day: '2026-08-21', rows: '9' }
+		], 'dateSeries');
+		const line = body.match(/data-date-series-marks="data-explorer-shape"[\s\S]*?<path d="([^"]*)"/)?.[1] ?? '';
+		expect(line.match(/M/g)?.length, 'the line joined the days either side of the NULL').toBe(2);
+	});
+
+	test('a floor counts readings, so a NULL can leave a chart too few to draw, and the sentence names the floor it missed', () => {
+		expect(draw([{ name: 'latency', type: 'DOUBLE' }], [
+			{ latency: '10' },
+			{ latency: '20' },
+			{ latency: null },
+			{ latency: '30' }
+		], 'distribution')).toContain('Only 3 of the 4 readings this chart needs are in this window, so it is not drawn.');
+
+		expect(draw([{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [
+			{ host: 'a', ms: '10', tokens: '100' },
+			{ host: 'a', ms: '20', tokens: '150' },
+			{ host: 'b', ms: '30', tokens: '120' },
+			{ host: 'b', ms: '40', tokens: '90' },
+			{ host: 'c', ms: null, tokens: '60' }
+		], 'pairedScatter')).toContain('Only 2 of the 3 subjects this chart needs are in this window, so it is not drawn.');
+	});
 });
