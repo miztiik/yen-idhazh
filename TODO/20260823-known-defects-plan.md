@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
-**Thirty-one defects are open.** Four of them need evidence or a ruling before any code
+**Thirty-two defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -34,7 +34,9 @@ Defects 56 to 58 were filed the same day: three tests that each failed once in
 the checks of plan 60's row 7 and passed when run again. The runs' own records
 settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
 57 is the fourth that needs evidence, because one stall is not enough to find
-its cause.
+its cause. Defect 59 was filed on 2026-10-05 by plan 60's row 10: reading named
+days of a ledger that the ledger door files lists every raw day folder the ledger
+holds.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -101,6 +103,37 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 56 | A byte-range test counts a correct 304 as a failure | 1 | **OPEN - the cause is settled; one test changes** |
 | 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
+| 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
+
+## 59 - Reading named days of a door ledger lists every raw day folder the ledger holds (OPEN)
+
+**`ledger.load_days` lists every raw day folder its ledger holds, then keeps the
+days it was handed.** It finds raw files with `raw_files.list_raw_files` and its
+`days` argument. That walks every `<YYYY>/<MM>/<DD>` folder under
+`state/raw/<ledger>/` (`_day_folders` in `backend/idhazh/ledger/raw_files.py`)
+and skips the days nobody asked for. It opens only the files of the days it was
+handed, so what grows is the walk: one folder name for every raw day on disk.
+[`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) says the
+read is the raw files of the named days alone, and Guardrail #12 forbids a walk
+over a committed tree that grows.
+
+**It costs little today, and it grows where a ledger is not packed live.** A
+ledger packed live keeps only its newest days raw, so the walk is a day or two.
+A ledger packed report-only keeps every raw day: `state/raw/gardener/` held 6
+day folders on 2026-10-05, from 2026-09-30, and gains one a day until plan 60's
+row 23 packs it live. A gardener shard's checkout holds only the folders it
+fetched, so on a runner the walk sees those alone; a full checkout, such as a
+developer's, holds them all.
+
+**The fix is one function.** When `days` is named, `list_raw_files` builds each
+named day's folder from `paths.raw_root` and reads those alone. With `days=None`
+it keeps the walk, which `raw_days` and the whole-ledger reads need, and only
+those then warn about a folder that is not a day. Level 2 - the rows each caller
+gets do not change, and the callers include the reads that keep a story from
+being published twice, so each is checked by name.
+
+Found on 2026-10-05 by plan 60's row 10 (#1307), whose `workflow-runs` task reads
+seven named days of the gardener's own record at every wake.
 
 ## 58 - A ledger test expects an order for two runs written in the same millisecond (OPEN)
 

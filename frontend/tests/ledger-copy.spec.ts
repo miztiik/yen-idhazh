@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import { cpSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
+import { siteKeepsFrom, siteMayHaveTrimmed } from '../src/lib/data/site-window';
+import { daysBetween } from '../src/lib/data/slice';
 
 /**
  * Which files of `state/` the build copies for a published ledger, and when it stops.
@@ -14,8 +16,8 @@ import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
  */
 
 /** A state tree under this test's own output directory: path under the root -> text. */
-function aStateTree(files: Record<string, string>): string {
-	const root = test.info().outputPath('state');
+function aStateTree(files: Record<string, string>, name = 'state'): string {
+	const root = test.info().outputPath(name);
 	for (const [path, text] of Object.entries(files)) {
 		const file = join(root, ...path.split('/'));
 		mkdirSync(dirname(file), { recursive: true });
@@ -111,6 +113,39 @@ test('the copy is capped from the newest packed day and trims each index to the 
 		'2026-06'
 	]);
 	expect(JSON.parse(copy.indexes['compact/item-health/index/yearly.json']).entries).toEqual([]);
+});
+
+/** A daily index naming every UTC day from `first` to `last`, each a day that held no row. */
+function quietDays(ledger: string, first: string, last: string): string {
+	const entries = daysBetween(first, last).map((covers) => ({ bytes: 0, covers, rows: 0, state: 'empty' }));
+	return `${JSON.stringify({ entries, ledger, period: 'daily', version: '2026-10-04' }, null, 2)}\n`;
+}
+
+test('a 90-day copy keeps the entries that overlap 18 Mar to 15 Jun 2030, and the rule says when older days may be the archive\'s', () => {
+	// Each root is a ledger whose newest day is 15 Jun 2030. Every expected value is written out.
+	expect(siteKeepsFrom('2030-06-15', 90)).toBe('2030-03-18');
+	const roots = [
+		{ name: 'began-120-days-before', months: [], days: ['2030-02-15', '2030-06-15'], keptMonths: [], keptDays: ['2030-03-18', '2030-06-15', 90], siteFirst: '2030-03-18', mayHaveTrimmed: true },
+		{ name: 'began-30-days-before', months: [], days: ['2030-05-16', '2030-06-15'], keptMonths: [], keptDays: ['2030-05-16', '2030-06-15', 31], siteFirst: '2030-05-16', mayHaveTrimmed: false },
+		{ name: 'closed-months', months: ['2030-02', '2030-03'], days: ['2030-04-01', '2030-06-15'], keptMonths: ['2030-03'], keptDays: ['2030-04-01', '2030-06-15', 76], siteFirst: '2030-03-01', mayHaveTrimmed: true },
+		// Nothing was dropped, but the site alone cannot tell: one needless archive read.
+		{ name: 'began-on-the-first-kept-day', months: [], days: ['2030-03-18', '2030-06-15'], keptMonths: [], keptDays: ['2030-03-18', '2030-06-15', 90], siteFirst: '2030-03-18', mayHaveTrimmed: true }
+	] as const;
+	for (const root of roots) {
+		const tree: Record<string, string> = {
+			'compact/item-health/index/daily.json': quietDays('item-health', root.days[0], root.days[1]),
+			'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', [...root.months]),
+			'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', [])
+		};
+		for (const month of root.months) tree[`compact/item-health/monthly/${month.replace('-', '/')}.parquet`] = 'PAR1';
+		const copy = ledgerCopy(aStateTree(tree, root.name), ['item-health'], 'state', 90);
+		expect(copy.refused, root.name).toEqual([]);
+		expect(copy.missing, root.name).toEqual([]);
+		const days = coversIn(copy.indexes['compact/item-health/index/daily.json']);
+		expect([days[0], days.at(-1), days.length], root.name).toEqual(root.keptDays);
+		expect(coversIn(copy.indexes['compact/item-health/index/monthly.json']), root.name).toEqual(root.keptMonths);
+		expect(siteMayHaveTrimmed(root.siteFirst, '2030-06-15', 90), root.name).toBe(root.mayHaveTrimmed);
+	}
 });
 
 test('an empty daily index anchors on the newest month and copies that month file', () => {

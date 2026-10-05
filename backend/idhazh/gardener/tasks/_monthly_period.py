@@ -42,9 +42,18 @@ window would drop at once. A declaration that packs years keeps the window
 forever, and its month files leave only by being packed into their year
 (`_yearly_period`).
 
+**Each old month is dropped once, and the monthly index says which are left.**
+The drop step takes the months chosen for this wake (`_compaction_periods`):
+the oldest monthly entries past the keep line, at most `max_periods_per_run`
+of them. It names each one's month file and raw folder, deletes every file at
+the month's paths whatever its entry says, and then the entry, so no later pass
+looks at the month again. It opens nothing. A `packed` entry with no file left
+is said once as `file-missing`; an `empty` one has no file to miss.
+
 **A window that only reports names the month files it would drop and keeps
 them**, with their index entries, so the record counts what turning it live
-would take while packing goes on. `drop` and `spare` read the same list.
+would take at that wake while packing goes on. `drop` and `spare` read the same
+months.
 
 Every month here is a UTC month, and every rule is whole days after a month's
 own end, so every wake of one UTC day gets the same answer (CLAUDE.md section 2).
@@ -59,7 +68,7 @@ from pathlib import Path
 from idhazh import ledger, month_partition
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
 from idhazh.contracts.gardener_events import StepChoice
 from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
@@ -100,33 +109,42 @@ def first_kept_month(*, now: datetime, daily_keep_days: int, window: Window) -> 
     return shift(newest_absorbable, 1 - window.value)
 
 
-def _past_the_window(tree: CompactTree, *, first_kept: str | None) -> list[tuple[str, Path | None]]:
-    """Every month the window no longer keeps, oldest first, beside its file or None.
+def months_to_drop(tree: CompactTree, choice: StepChoice | None) -> list[str]:
+    """The months the drop step takes on this wake: each monthly entry inside its choice's span.
 
-    It reads the listing and decides nothing, so a window that only reports names
-    exactly the files a live one deletes.
+    The span counts entries, so a month inside it that the index does not name
+    is not one. The pass works this out before the step takes the months out of
+    the index, so the raw-day drop is handed the same months.
     """
-    if first_kept is None:
+    if choice is None or choice.first is None or choice.last is None:
         return []
-    return [
-        (
-            month,
-            named_trees.compact_file(
-                tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
-            ),
-        )
-        for month in sorted(tree.monthly)
-        if month < first_kept and (tree.months is None or month in tree.months)
-    ]
+    first, last = choice.first, choice.last
+    return [month for month in sorted(tree.monthly) if first <= month <= last]
 
 
-def drop(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
-    """Every month file the window no longer keeps goes, with its index entry."""
-    gone = _past_the_window(tree, first_kept=first_kept)
-    for month, found in gone:
-        if found is not None:
-            tree.delete(found)
-        else:
+def _files_at(tree: CompactTree, month: str) -> list[Path]:
+    """Every file the listing holds at a month's named paths, in any format."""
+    named = (
+        ledger.compact_path(tree.state_dir, tree.ledger, Period.MONTHLY, month, fmt=fmt)
+        for fmt in Format
+    )
+    return [path for path in named if tree.listing.holds(path)]
+
+
+def drop(tree: CompactTree, choice: StepChoice | None) -> tuple[Stop, ...]:
+    """Each month chosen past the keep line goes: every file at its paths, then its entry.
+
+    A file at an `empty` entry's path goes too, because nothing looks at the
+    month again once its entry has left. A `packed` entry with no file left is
+    said once as `file-missing`; an `empty` one has no file to miss.
+    """
+    months = months_to_drop(tree, choice)
+    tree.name_drops(months)
+    for month in months:
+        found = _files_at(tree, month)
+        for path in found:
+            tree.delete(path)
+        if not found and tree.monthly[month].names_file:
             logger.warning(
                 "a month the window drops has no file left to delete ledger=%s month=%s fault=%s",
                 tree.ledger.value,
@@ -134,16 +152,28 @@ def drop(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
                 ledger.LedgerFault.FILE_MISSING,
             )
         del tree.monthly[month]
-    if gone:
+    if months:
         tree.mark_index(Period.MONTHLY)
+    if (
+        choice is not None
+        and choice.stopped_because is StopReason.CEILING
+        and choice.resume_from is not None
+    ):
+        return (Stop(StopReason.CEILING, choice.resume_from),)
     return ()
 
 
-def spare(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
-    """Every month file the window would drop is named and kept, with its index entry."""
-    for _month, found in _past_the_window(tree, first_kept=first_kept):
-        if found is not None:
-            tree.spare(found)
+def spare(tree: CompactTree, choice: StepChoice | None) -> tuple[Stop, ...]:
+    """Each month chosen past the keep line is named and kept, with every file at its paths.
+
+    A window that only reports takes nothing, so it stops nowhere, and the next
+    wake names the same months again.
+    """
+    months = months_to_drop(tree, choice)
+    tree.name_drops(months)
+    for month in months:
+        for path in _files_at(tree, month):
+            tree.spare(path)
     return ()
 
 
