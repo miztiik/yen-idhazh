@@ -4,7 +4,7 @@
 
 **Level**: 3 (CLAUDE.md section 6). L1 and L5 cross a boundary: L1 joins the site build to the data explorer, and L5 changes how every console route places its window. No row changes a persisted shape, and Table C, C1 stops any row that would.
 
-**Status**: written 2026-10-05 from Fowler's proposal and his revision of the same day, and from the owner's rulings on them (Table D). Checked against `main` at 36fe716e0. L1 is in flight under plan 60 (row L1, decision 5). The owner ruled that the plan 60 owner session runs this plan after L1 merges (Table D, D4). An id such as "Fowler's option M3" names a row of those two documents, which are not in the repository.
+**Status**: written 2026-10-05 from Fowler's proposal and his revision of the same day, and from the owner's rulings on them (Table D). Checked against `main` at 36fe716e0. L1 merged under plan 60 as #1327 (row L1, decision 5). The owner ruled that the plan 60 owner session runs this plan after L1 merges (Table D, D4). An id such as "Fowler's option M3" names a row of those two documents, which are not in the repository.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
@@ -52,7 +52,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| L1 | Days before a ledger began are cut from the selected window | - | A | IN-FLIGHT | fantastic-fortnight | - | L1 explorer starts at first day |
+| L1 | Days before a ledger began are cut from the selected window | - | A | DONE #1327, carried under plan 60 (row L1, decision 5) | fantastic-fortnight | #1327 | L1 explorer starts at first day |
 | L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | PENDING | - | - | - |
 | L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
 | L4 | A slice cuts only the days before a ledger began | L1 | B | PENDING | - | - | - |
@@ -231,7 +231,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 2 | The explorer asks the archive only when the site's first day is on or before its trim line. It works that out with the site copy's own rule, through `site-window.ts` and one build constant, `__SITE_WINDOW_DAYS__`, and never with a second copy of the arithmetic (Fowler's option F2) | Fowler, 2026-10-05 |
 | 3 | A day before every tier's first day is outside the ledger, so the answer is cut and is never `unreachable`. `unreachable` stays for a hole after the first day, an absent named file, an absent coarser index, a file that did not arrive whole, and an engine that did not start | Fowler, 2026-10-05 |
 | 4 | No persisted shape changes. The readers work out "trimmed" from the indexes and the copy's rule; Table B, B1 prices the field that would record it (Fowler's option C1) | Fowler, 2026-10-05 |
-| 5 | The plan 60 owner carries L1 under plan 60's row "Which days may be packed" ([plan 60](20261004-60-gardener-recovers-on-its-own-plan.md)), as that row's "Fixed after merge" follow-up. If this plan-doc is on `main` when L1's pull request merges, that pull request stamps this line DONE with its number. If not, this plan-doc's own pull request stamps it before it merges. Either way the work is counted once | The owner, 2026-10-05 (Table D, D4) |
+| 5 | The plan 60 owner carried L1 under plan 60's row "Which days may be packed" ([plan 60](20261004-60-gardener-recovers-on-its-own-plan.md)), as that row's "Fixed after merge" follow-up. It merged as #1327 before this plan-doc reached `main`, so this plan-doc's own pull request stamped this line DONE, and the work is counted once | The owner, 2026-10-05 (Table D, D4) |
 
 **Rejected alternatives**
 
