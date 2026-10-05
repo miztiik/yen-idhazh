@@ -51,7 +51,7 @@ Table A - what is out
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
 | 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | #1303 | Plan 60 row 12: which months may close |
 | 13 | Which days may be packed | 12 | D | DONE | silver-enigma | #1309 | Plan 60 row 13: which days may be packed |
-| 14 | Which years may be packed | 13 | D | PENDING | - | - | - |
+| 14 | Which years may be packed | 13 | D | DONE | scaling-train | - | Plan 60 row 14 |
 | 15 | Each old month is dropped once | 14 | D | PENDING | - | - | - |
 | 16 | The shared window is gone | 15 | D | PENDING | - | - | - |
 | 17 | A late file re-opens its month | 16 | D | PENDING | - | - | - |
@@ -603,6 +603,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/tasks/test_compaction_periods.py`
   - `backend/tests/gardener/tasks/test_compaction_years.py`
   - `docs/architecture/publishing/ledger-compaction.md` (and a `## Design rationale` entry for decision 3)
+  - `backend/idhazh/contracts/gardener_events.py` (`PeriodsChosen` gains `newest_packable_year` and `years`, both None when the declaration packs no year; `operator-range` also names a range that holds no whole year; found at dispatch by the owner, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`name_years`, beside `name_months` and `name_days`; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/schedule.py` (`newest_eligible_year`; `is_year_eligible` and `year_ended_at` deleted once nothing calls them; found during execution, Fowler's ruling)
 - **Acceptance gates:** local: pytest on the two test files; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** a monthly index from 2026-01 to 2027-01, a monthly mark of 2027-01, `daily_keep_days` 31 and `monthly_keep_days` 63 make 2026 ready on 2027-03-05 and not on 2027-03-04. 63 is the lowest value the contract accepts before row 24, `daily_keep_days` + 32, and the index holds 2027-01 because that month is also old enough to close on both dates. With the monthly mark at 2026-12, 2026 is not ready. A ledger that began in 2026-05 packs 2026 from May. It cannot settle a real year; the first one packs in 2027.
 

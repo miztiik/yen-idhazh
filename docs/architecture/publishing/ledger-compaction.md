@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -22,8 +22,9 @@ the daily wakes succeed. `item-health` and `host-fingerprint` pack a month
 31 days after it ends; `summary-quality-evals` and `feed-health` wait 45 days.
 Report-only packing cannot refresh a packed-only reader.
 **`summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so it may pack
-the eval rows and never drops a month** ([below](#design-rationale)). It is the one
-ledger that packs a finished year into one year file ([A year](#a-year)). The files it
+the eval rows and never drops a month** ([below](#design-rationale)). It packs
+each finished year into one year file, as every ledger whose declaration sets
+`monthly_keep_days` does ([A year](#a-year)). The files it
 writes are laid out in
 [../contracts/persistence.md](../contracts/persistence.md#the-two-roots), and
 its knobs are in
@@ -40,10 +41,10 @@ flowchart TB
 
   subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
     DROP["1 and 2. drop the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while month_deletes_dry_run is true"]
-    YDONE{"a year done?<br/>monthly_keep_days since it ended,<br/>its next January absorbed, every month named"}
+    YDONE{"a year chosen for this wake?<br/>after the yearly mark, monthly_keep_days<br/>since it ended, its next January closed"}
     YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
     YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
-    PACK["3. plan year files, one row group a month:<br/>indexes and deletes wait for the end of the pass"]
+    PACK["3. plan year files, one row group a month,<br/>or an empty entry:<br/>indexes and deletes wait for the end of the pass"]
     MDONE{"a month chosen for this wake?<br/>after the monthly mark, daily_keep_days<br/>since it ended, its last day packed"}
     MWAIT["not yet, or a raw day still waits in it:<br/>the month waits for a later wake"]
     MREC["each day from the ledger's first:<br/>a day no index names is adopted<br/>from its own file, or listed lost"]
@@ -118,16 +119,16 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 | --- | --- |
 | 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
 | 2 | Drops every raw day in a month the window no longer keeps. While the window only reports, names them and keeps them |
-| 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
+| 3 | Packs every year chosen for this wake into its year file, or into an entry with no file, where the declaration sets `monthly_keep_days` |
 | 4 | Closes every month chosen for this wake into its month file, or into an entry with no file |
 | 5 | Packs every day chosen for this wake into its day file, or into an entry with no file, after each packed day that holds raw files again |
 
-**The month and day steps choose their own periods; the other steps do not
-yet.** Before any step runs, the pass chooses the months step 4 may close and
-the days step 5 may pack from the ledger's own marks and the wake's UTC day,
-and logs the choice once as one `periods chosen` line, the JSON of
-`PeriodsChosen` (`backend/idhazh/contracts/gardener_events.py`). Steps 1, 2 and
-3 still read the fixed window the planner names for each task
+**The year, month and day steps choose their own periods; the two drop steps
+do not yet.** Before any step runs, the pass chooses the years step 3 may pack,
+the months step 4 may close and the days step 5 may pack from the ledger's own
+marks and the wake's UTC day, and logs the choice once as one `periods chosen`
+line, the JSON of `PeriodsChosen` (`backend/idhazh/contracts/gardener_events.py`).
+Steps 1 and 2 still read the fixed window the planner names for each task
 ([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
 
 **Drops first and days last, because no pass may write a path it deletes.** A
@@ -280,28 +281,42 @@ The rest of the pass still runs.
 
 ## A year
 
-**A year is packed only where its declaration sets `monthly_keep_days`.** One
-declaration sets it: `compact-summary-quality-evals`, whose `monthly_keep_days` in
-`config/gardener/compact-summary-quality-evals.json` (93) is how many whole days
-after a year ends the eval ledger waits to pack it. Every other ledger keeps its
-month files exactly as `monthly_window` says. A ledger that packs years keeps
-`monthly_window` forever, because a window would delete a month file before its
-year took it, and its year files are kept for ever. **Each ledger's own
-declaration sets its wait, a ledger the site publishes included**: the browser
-reads a year file by byte range, at an address no earlier read used
+**A year is packed only where its declaration sets `monthly_keep_days`**, how
+many whole days after a year ends the ledger waits to pack it. Which
+declarations set it is in
+[../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship).
+Every other ledger keeps its month files exactly as `monthly_window` says. A
+ledger that packs years keeps `monthly_window` forever, because a window would
+delete a month file before its year took it, and its year files are kept for
+ever. **Each ledger's own declaration sets its wait, a ledger the site publishes
+included**: the browser reads a year file by byte range, at an address no
+earlier read used
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-a-year-file-is-read-by-byte-range)),
 so no wait has to keep the console's reads away from year files.
 
-**A year is packed whole or not at all, and only when three things are true**:
-`monthly_keep_days` whole days have passed since it ended, at 00:00 UTC on 1
-January; the monthly watermark is past its December, so its next January is
-absorbed; and `index/monthly.json` names every one of its months, each with its
-file. A year that fails the first or second waits for a later wake. A year
-missing a month is refused by name, the yearly watermark stays, and the task
-exits 1. A year's months run from January to December, except in the first year
-a ledger packs, whose months start at the oldest month the monthly index names.
-That year's file still covers the whole year, so a reach that counts from the
-yearly index starts on its 1 January even when its first rows came later.
+**The year step chooses which years it packs.** It starts at the year after the
+yearly mark; with no mark, at the oldest year an index names. It takes
+consecutive years, each at least `monthly_keep_days` whole days past its end, at
+00:00 UTC on 1 January, and each whose December the monthly mark is strictly
+past, so its next January is closed too, at most `max_periods_per_run` of them.
+A year that is not ready waits for a later wake. An operator range limits the
+step to the whole years it holds, January to December, so a ranged pass reads
+no month outside the range, and a range that holds no whole year takes no year.
+The step names what it reads of its years - each year's month files and its own
+file - and the shard lists them from its commit then
+([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
+
+**A year is packed whole or not at all, and a month with no row does not stop
+it.** A year accounts for every month from January, or from the ledger's first
+month when the ledger began inside that year, so a month before a ledger began
+is never called missing. A month with a `packed` entry gives its file's rows,
+an `empty` month gives none, and every month's `lost_days` carry into the year's
+entry. A year whose months give no row is an `empty` entry with no file, unless
+its own file is at its path while no entry names it: that file is adopted
+(`note=index-rebuilt`), as a month adopts one ([A month](#a-month)). A month no
+index names is refused by name, the yearly watermark stays, and the task exits
+1. A year's file covers the whole year, so a reach that counts from the yearly
+index starts on its 1 January even when its first rows came later.
 
 **The earliest a year can go is `daily_keep_days` plus 32 days after it ends.**
 Its next January is absorbed `daily_keep_days` after that January ends, 31 days
@@ -317,7 +332,8 @@ every month file, so the next wake packs that year again. A pass that stopped
 after it leaves a year the yearly index already names, so the next wake deletes
 the month files still there by calendar month, even if the monthly index no
 longer names them, rewrites the monthly index and moves the
-watermark, and builds nothing. Either way a reader in between reads each month
+watermark, and builds nothing; an `empty` year has no file of its own to look
+for. Either way a reader in between reads each month
 once: a month both indexes name is read from its year.
 
 **A year file is built one month at a time, one row group a month.** The pass
@@ -537,6 +553,35 @@ measured once on a laptop. The first live pass times it on a runner. A year file
 sits in a folder of its own, `yearly/<YYYY>/<YYYY>.parquet`, because a shard
 fetches a watermark together with every file beside it: a year file beside the
 year watermark would be downloaded on every wake, one more file every year.
+
+**2026-10-05: the year step chooses its own years, and each yearly index grows
+by one entry a year.** The year step read the planner's window, which for every
+shipped declaration that packs years names the newest three months, and it
+packed a year only when all twelve of its months were inside that window, so no
+scheduled wake would ever have packed one. Now it chooses from its own marks,
+as the month and day steps do, with one readiness test in every case: the
+monthly mark strictly past the year's December. A month closed with no row is
+an `empty` entry, so the year reads it as a month with no rows, never as a
+missing file. An operator range limits the step to the whole years it holds,
+because a year is packed whole and a range promises that nothing outside its
+months changes. Fowler's rulings, 2026-10-04 and 2026-10-05.
+
+A yearly index gains one entry each year and loses none, so its read grows with
+time. That is a named exception to Guardrail #12 in
+[CLAUDE.md](../../../CLAUDE.md) section 1, which asks every read to have a
+fixed-size input. An entry is about 14 bytes after gzip, so the index reaches
+the bundle gate's line of 2,200 gzipped bytes for a file under
+`state/compact/<ledger>/index/` in about 150 years (measured 2026-10-05: the
+155th entry crosses it). The bundle gate is the alarm: it fails the build when
+an index file crosses that line. It covers only a ledger the site publishes.
+`compact-run-plan` also packs years and is not published, so its yearly index
+has no alarm yet. Fowler review, 2026-10-04; owner to confirm.
+
+| # | Option | Why rejected | What it would cost to take |
+| --- | --- | --- | --- |
+| 1 | A keep line for years | `published` and `summary-quality-evals` refuse deletion in `prune_refusal` | A knob, and deleting a whole year of rows from the ledgers that allow it |
+| 2 | Pack years into decades | The index still grows, one level up | A fourth period kind across the contracts and the site |
+| 3 | Keep only a first and a last year in the index | It changes every reader of an index to save about 14 gzipped bytes a year | The site's reader and the binding tests change |
 
 **The `compact-summary-quality-evals` compaction packs the eval rows and never drops a month.** Every
 eval row is kept for ever and nothing summarises a month: the

@@ -1,4 +1,4 @@
-"""Which periods may the month and day steps take on a wake, and what does taking one record?
+"""Which periods may the year, month and day steps take on a wake, and what does taking one record?
 
 Each step chooses its periods from the ledger's own marks and the wake's UTC
 day, never from the window a planner named for another step: that window
@@ -21,7 +21,7 @@ from typing import Final
 
 import pytest
 
-from idhazh import ledger
+from idhazh import ledger, month_partition
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
@@ -100,6 +100,8 @@ def marks(
     *,
     monthly: tuple[str, ...] = (),
     monthly_through: str | None = None,
+    yearly: tuple[str, ...] = (),
+    yearly_through: str | None = None,
     raw_days: tuple[str, ...] = (),
 ) -> CompactTree:
     """A ledger's marks as a pass reads them, with no file behind them: the chooser reads none.
@@ -112,10 +114,10 @@ def marks(
         listing=FileListing.from_paths(Path(), [], folders=["state"]),
         daily_through=daily[-1] if daily else None,
         monthly_through=monthly_through,
-        yearly_through=None,
+        yearly_through=yearly_through,
         daily={day: quiet(day) for day in daily},
         monthly={month: CompactEntry(covers=month, rows=1, bytes=1) for month in monthly},
-        yearly={},
+        yearly={year: CompactEntry(covers=year, rows=1, bytes=1) for year in yearly},
         raw_days=sorted(raw_days),
     )
 
@@ -376,6 +378,169 @@ def test_the_re_run_span_runs_from_thirty_days_before_the_wake_to_the_mark(
     )
 
     assert chosen.rerun_span == span
+
+
+# --- the year step's choice: unit cases over literal marks -------------------------
+
+#: The smallest waits the declaration contract allows that pack years: a month
+#: closes 31 days after it ends, and a year 63 days after, 31 plus 32.
+PACKS_YEARS: Final[dict[str, object]] = {
+    "daily_keep_days": 31,
+    "monthly_window": {"unit": "forever"},
+    "monthly_keep_days": 63,
+}
+
+
+def closed(first: str, last: str) -> tuple[str, ...]:
+    """The months from `first` to `last`, each closed into the monthly index."""
+    return tuple(month_partition.months_between(first, last))
+
+
+def years_chosen(
+    tree: CompactTree,
+    policy: CompactionPolicy,
+    today: date,
+    *,
+    operator: tuple[str, str] | None = None,
+) -> StepChoice:
+    chosen = _compaction_periods.choose(tree, policy, now=at(today), operator_range=operator)
+    assert chosen.years is not None, "a declaration that packs years chooses years"
+    return chosen.years
+
+
+@pytest.mark.parametrize(("today", "ready"), [(date(2027, 3, 4), False), (date(2027, 3, 5), True)])
+def test_a_year_may_be_packed_63_whole_days_after_it_ends(today: date, ready: bool) -> None:
+    """2026 ends at 00:00 UTC on 1 January 2027, and 63 days later is 5 March.
+
+    January 2027 is old enough to close on both days, which is why the monthly
+    index holds it and the monthly mark stands on it.
+    """
+    tree = marks(VISUALS, [], monthly=closed("2026-01", "2027-01"), monthly_through="2027-01")
+
+    chosen = _compaction_periods.choose(
+        tree, policy_of(TASK, **PACKS_YEARS), now=at(today), operator_range=None
+    )
+
+    assert chosen.newest_closable_month == "2027-01"
+    assert chosen.newest_packable_year == ("2026" if ready else "2025")
+    assert chosen.years is not None
+    assert (chosen.years.start, chosen.years.first, chosen.years.last) == (
+        StartReason.OLDEST_INDEXED,
+        "2026" if ready else None,
+        "2026" if ready else None,
+    )
+
+
+@pytest.mark.parametrize(
+    "operator", [None, ("2026-01", "2026-12")], ids=["scheduled", "the-year-named-whole"]
+)
+def test_a_year_waits_while_the_monthly_mark_stands_on_its_december(
+    operator: tuple[str, str] | None,
+) -> None:
+    """The mark must be strictly past December, whether or not a range names the year."""
+    tree = marks(VISUALS, [], monthly=closed("2026-01", "2026-12"), monthly_through="2026-12")
+
+    choice = years_chosen(tree, policy_of(TASK, **PACKS_YEARS), date(2027, 6, 1), operator=operator)
+
+    assert (choice.first, choice.stopped_because) == (None, None)
+
+
+def test_a_ledger_that_began_in_may_chooses_its_first_year() -> None:
+    tree = marks(VISUALS, [], monthly=closed("2026-05", "2027-01"), monthly_through="2027-01")
+
+    choice = years_chosen(tree, policy_of(TASK, **PACKS_YEARS), date(2027, 3, 5))
+
+    assert (choice.start, choice.first, choice.last) == (StartReason.OLDEST_INDEXED, "2026", "2026")
+
+
+def test_the_years_start_after_the_yearly_mark_and_the_cap_cuts_them() -> None:
+    """Five years are ready and two go a wake: 2027 and 2028, and the next wake starts at 2029."""
+    tree = marks(
+        VISUALS,
+        [],
+        monthly=closed("2027-01", "2032-01"),
+        monthly_through="2032-01",
+        yearly=("2026",),
+        yearly_through="2026",
+    )
+
+    choice = years_chosen(
+        tree, policy_of(TASK, **PACKS_YEARS, max_periods_per_run=2), date(2032, 3, 5)
+    )
+
+    assert (choice.start, choice.first, choice.last) == (StartReason.MARK, "2027", "2028")
+    assert (choice.stopped_because, choice.resume_from) == (StopReason.CEILING, "2029")
+
+
+def test_a_yearly_index_with_no_mark_starts_the_years_at_its_oldest() -> None:
+    """A pass cut after the yearly index landed and before its mark did leaves exactly this."""
+    tree = marks(VISUALS, [], monthly=("2027-01",), monthly_through="2027-01", yearly=("2026",))
+
+    choice = years_chosen(tree, policy_of(TASK, **PACKS_YEARS), date(2027, 3, 5))
+
+    assert (choice.start, choice.first, choice.last) == (StartReason.OLDEST_INDEXED, "2026", "2026")
+
+
+def test_a_ledger_with_nothing_indexed_offers_no_year() -> None:
+    choice = years_chosen(marks(VISUALS, []), policy_of(TASK, **PACKS_YEARS), date(2027, 3, 5))
+
+    assert (choice.start, choice.first, choice.stopped_because) == (StartReason.NONE, None, None)
+
+
+def test_a_declaration_that_packs_no_year_chooses_no_year() -> None:
+    tree = marks(VISUALS, [], monthly=closed("2026-01", "2027-01"), monthly_through="2027-01")
+
+    chosen = _compaction_periods.choose(
+        tree, policy_of(TASK), now=at(date(2028, 1, 1)), operator_range=None
+    )
+
+    assert (chosen.newest_packable_year, chosen.years) == (None, None)
+
+
+@pytest.mark.parametrize(
+    ("operator", "expected"),
+    [
+        (("2026-01", "2026-12"), (StartReason.OLDEST_INDEXED, "2026", "2026", None, None)),
+        (("2026-01", "2027-03"), (StartReason.OLDEST_INDEXED, "2026", "2026", None, None)),
+        (("2026-11", "2026-12"), (StartReason.OPERATOR_RANGE, None, None, None, None)),
+        (("2026-02", "2026-11"), (StartReason.OPERATOR_RANGE, None, None, None, None)),
+        (
+            ("2027-01", "2027-12"),
+            (StartReason.OPERATOR_RANGE, None, None, StopReason.FAILED, "2026"),
+        ),
+        (("2025-01", "2025-12"), (StartReason.OPERATOR_RANGE, None, None, None, None)),
+    ],
+    ids=[
+        "names-a-year-whole",
+        "names-one-year-whole-and-part-of-the-next",
+        "names-the-end-of-a-year",
+        "names-the-middle-of-a-year",
+        "skips-a-ready-year",
+        "ends-before",
+    ],
+)
+def test_an_operator_range_limits_the_years_to_those_it_holds_whole(
+    operator: tuple[str, str],
+    expected: tuple[StartReason, str | None, str | None, StopReason | None, str | None],
+) -> None:
+    """A year goes under a range only when the range names its January to its December.
+
+    So a ranged pass reads no month outside the range. A range that holds no
+    whole year asks for no year's work, so it takes none and refuses none; a
+    range that holds a whole year and leaves out an older ready one is refused
+    at that year, as the month step refuses a month.
+    """
+    tree = marks(VISUALS, [], monthly=closed("2026-01", "2028-01"), monthly_through="2028-01")
+
+    choice = years_chosen(tree, policy_of(TASK, **PACKS_YEARS), date(2028, 6, 1), operator=operator)
+
+    assert (
+        choice.start,
+        choice.first,
+        choice.last,
+        choice.stopped_because,
+        choice.resume_from,
+    ) == expected
 
 
 # --- the pass: integration over a ledger built under tmp_path ----------------------

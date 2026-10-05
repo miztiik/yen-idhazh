@@ -7,20 +7,20 @@ shard lands all of them in one commit:
 
 1. the month files the monthly window no longer keeps are dropped;
 2. raw days past the monthly window are dropped;
-3. every year that is done is packed into its year file, where the declaration
-   sets `monthly_keep_days`;
+3. every year chosen for this wake is packed into its year file, or into an
+   entry with no file, where the declaration sets `monthly_keep_days`;
 4. every month chosen for this wake is closed into its month file;
 5. every day chosen for this wake is packed into its day file, after each packed
    day that holds raw files again.
 
-**Each step chooses its own periods, or is moving to.** The months step 4
-closes and the days step 5 packs are chosen before any step runs, from the
-ledger's own marks and the wake's day (`_compaction_periods`), and logged once
-as `PeriodsChosen`; an operator range, or the months a migration names, limits
-that choice, and the window the planner named for the other steps does not. A
-day step with no mark first has the months it looks back over named, because
-its first day is a raw day. Steps 1, 2 and 3 still read the window the planner
-named.
+**Each step chooses its own periods, or is moving to.** The years step 3 packs,
+the months step 4 closes and the days step 5 packs are chosen before any step
+runs, from the ledger's own marks and the wake's day (`_compaction_periods`),
+and logged once as `PeriodsChosen`; an operator range, or the months a
+migration names, limits that choice, and the window the planner named for the
+other steps does not. A day step with no mark first has the months it looks
+back over named, because its first day is a raw day. Steps 1 and 2 still read
+the window the planner named.
 
 **The monthly window has a switch of its own.** Steps 3 to 5 delete only files
 whose rows they have just written into a coarser file; the window's drops in
@@ -71,8 +71,8 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     """Drop, or only name, what the window no longer keeps; pack years and months; take days.
 
     `months` are the months a migration names. The drop steps read only those,
-    and the month and day steps take nothing outside the first to the last of
-    them.
+    and the year, month and day steps take nothing outside the first to the last
+    of them.
     """
     import logging
     from datetime import UTC, datetime, time
@@ -120,7 +120,11 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     stops = (
         *(_monthly_period.spare if reports else _monthly_period.drop)(tree, first_kept=first_kept),
         *(_daily_period.spare if reports else _daily_period.drop)(tree, first_kept=first_kept),
-        *_yearly_period.absorb(tree, policy, now=now, stamp=stamp, identity=identity),
+        *(
+            ()
+            if chosen.years is None
+            else _yearly_period.absorb(tree, chosen.years, stamp=stamp, identity=identity)
+        ),
         *_monthly_period.absorb(tree, chosen.months, stamp=stamp, identity=identity),
         *_daily_period.compact(
             tree, policy, chosen.days, rerun_span=chosen.rerun_span, stamp=stamp, identity=identity

@@ -16,12 +16,12 @@ so the record can count it, and keeps it.
 read.** The raw day folders, which compact files exist and what
 each weighs are all read off the listing. The watermarks and the indexes are
 fetched once, before they are read, and each step fetches the day or month
-folders it opens before it opens one. The month and day steps choose their
-periods as they run, so each names what it reads of them first, through
-`name_months` and `name_days`, and the listing then answers for them from the
-same commit. A day step with no mark looks back over months the planner did
-not name either, and the pass names those through `name_raw_months` before it
-chooses.
+folders it opens before it opens one. The year, month and day steps choose
+their periods as they run, so each names what it reads of them first, through
+`name_years`, `name_months` and `name_days`, and the listing then answers for
+them from the same commit. A day step with no mark looks back over months the
+planner did not name either, and the pass names those through
+`name_raw_months` before it chooses.
 
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
 that lands the pass refuses a path on both lists, so one pass that did either
@@ -152,6 +152,28 @@ class CompactTree:
     def raw_month_folder(self, month: str) -> Path:
         """The raw folder a `YYYY-MM` month's day folders sit in."""
         return ledger.raw_root(self.state_dir, self.ledger).joinpath(month[:4], month[5:7])
+
+    def name_years(self, years: Sequence[str]) -> None:
+        """Name what the year step reads of these years: each one's month files and its own file.
+
+        Each year's monthly folder, and its year file whichever format wrote it,
+        are listed from the commit now: the year step chose them as it ran.
+        """
+        self._name(
+            [
+                path
+                for year in years
+                for path in (
+                    self.monthly_year_folder(year),
+                    *(
+                        ledger.compact_path(
+                            self.state_dir, self.ledger, Period.YEARLY, year, fmt=fmt
+                        )
+                        for fmt in Format
+                    ),
+                )
+            ]
+        )
 
     def name_months(self, months: Sequence[str]) -> None:
         """Name what the month step reads of these months, and take in their raw days.
