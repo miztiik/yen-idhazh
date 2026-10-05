@@ -39,7 +39,9 @@ member was handled through, hands that day in as `mark`. The pass says on its
 record the newest day it handled whole, and the next pass starts after that.
 A dry run never stops part way through a day: it deletes nothing, so it would
 report the same members again on every wake. Past its ceiling it counts the
-rest of that day without naming them, and its mark moves to that day.
+rest of that day without naming them, and its mark moves to that day. A
+listing that can see it may have missed a member - pages that shifted under it,
+or an order it checks that broke - says so, and the mark stays where it was.
 
 **A refusal is by name, with a reason.** A collection missing from a vocabulary
 reads as an oversight; a collection refused with a sentence reads as a decision.
@@ -136,9 +138,14 @@ class Window:
         return not (self.until is not None and day > self.until)
 
 
+def _always_intact() -> bool:
+    """A listing that cannot see a gap of its own has none to report."""
+    return True
+
+
 @dataclass(frozen=True, slots=True)
 class Collection[Raw]:
-    """One collection, as three callables and a name.
+    """One collection, as three callables and a name, and a fourth that may report a gap.
 
     `Raw` is whatever the caller's listing yields - a page of JSON, a `Path`.
     This module never looks inside one: it passes it to the caller's own
@@ -150,12 +157,19 @@ class Collection[Raw]:
     deletes the thing it listed rather than rebuilding it from an id.
     Splitting the three is what makes a collection something a caller supplies
     rather than something this module has to know.
+
+    `listing_intact` says whether the listing, as far as it has been walked,
+    has yielded every member of each day it reached, in day order. A listing
+    that checks itself - pages counted against each other, an order it relies
+    on - turns it false when a check fails, and a walk from a mark then keeps its
+    mark. A listing that checks nothing leaves the default, which is always true.
     """
 
     name: str
     listing: Callable[[], Iterable[Raw]]
     describe: Callable[[Raw], Member]
     delete: Callable[[Raw], None]
+    listing_intact: Callable[[], bool] = _always_intact
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,7 +327,9 @@ def take[Raw](
     listing ends. A pass whose mark is already that day reads nothing. A member
     from an earlier day than one before it means the listing is out of order:
     the pass goes on, every member still held to the window, but which days are
-    whole can no longer be said, so the mark stays where the pass started.
+    whole can no longer be said, so the mark stays where the pass started. A
+    listing that reports a gap of its own through `listing_intact` keeps the
+    mark there too, whichever way the pass ends.
     """
     if ceiling is not None and ceiling < 0:
         raise ValueError(f"a ceiling is a count of members, not {ceiling}")
@@ -350,7 +366,7 @@ def take[Raw](
             bytes_freed=freed,
             stopped_because=because,
             resume_from=resume_from,
-            handled_through=through,
+            handled_through=through if collection.listing_intact() else mark,
         )
 
     if mark is not None and line is not None and mark >= line:

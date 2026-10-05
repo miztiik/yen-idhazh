@@ -19,6 +19,7 @@ refusal from the real file system, not an exception somebody wrote.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -495,6 +496,33 @@ def test_a_walk_out_of_day_order_keeps_its_mark_and_says_so(
     assert sorted(taken.taken) == list(WALK)
     assert taken.handled_through == "2026-07-28"
     assert "out of day order" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("ceiling", "moved"),
+    [
+        pytest.param(None, "2026-08-02", id="the-listing-runs-out"),
+        pytest.param(1, "2026-07-29", id="the-ceiling-stops-it"),
+    ],
+)
+def test_a_listing_that_reports_a_gap_keeps_the_mark_however_the_pass_ends(
+    tmp_path: Path, ceiling: int | None, moved: str
+) -> None:
+    """The same walk moves its mark to `moved`, so the mark it keeps is the listing's report alone.
+
+    A listing that may have missed a member cannot say any day it reached was
+    whole. The pass still takes what the window holds, member for member.
+    """
+    walk = a_walk(tmp_path, WALK)
+    window = Window(until="2026-08-02")
+    gapped = dataclasses.replace(walk, listing_intact=lambda: False)
+
+    intact = one_at_a_time.take(walk, window=window, ceiling=ceiling, mark="2026-07-28")
+    held = one_at_a_time.take(gapped, window=window, ceiling=ceiling, mark="2026-07-28")
+
+    assert intact.handled_through == moved
+    assert (held.taken, held.stopped_because) == (intact.taken, intact.stopped_because)
+    assert held.handled_through == "2026-07-28"
 
 
 def test_a_live_walk_that_fails_keeps_its_mark_on_the_last_whole_day(tmp_path: Path) -> None:
