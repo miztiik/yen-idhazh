@@ -25,7 +25,7 @@ Table A - what is out
 
 | # | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- | --- |
-| A1 | Switching workflow-runs and workflow-artifacts to live deletes | Old runs and artifacts stay, as today. GitHub keeps a run's logs and artifacts for 90 days, this repository's setting and the most a public repository allows (read 2026-10-05). So the runs task, whose window is also 90 days, would delete only runs whose logs are already gone: a live pass shortens the Actions history and frees no log | An owner decision. First size `max_deletes_per_run` from a 7-day arrival count: `gh api "repos/miztiik/yen-idhazh/actions/runs?created=>=<today-7>&per_page=1" --jq .total_count`. On 2026-10-04 that read 1,226 runs, about 175 a day, and the declared ceiling is 50 deletes a wake. A day held between 32 and 401 runs from 2026-08-22 to 2026-10-04, and a live pass that its ceiling stops inside a day reads that day again at the next wake (row 10), so a ceiling below a busy day's count takes several wakes to pass it. A count from a search by date stops at 2,500, so a span longer than about two weeks is counted a day at a time |
+| A1 | Switching workflow-runs and workflow-artifacts to live deletes | Old runs and artifacts stay, as today. GitHub keeps a run's logs and artifacts for 90 days, this repository's setting and the most a public repository allows (read 2026-10-05). So the runs task, whose window is also 90 days, would delete only runs whose logs are already gone: a live pass shortens the Actions history and frees no log. A dry run deletes nothing, so the artifacts walk reads again from the last page to its line on every wake. The dry list may pass 2,500 artifacts within weeks (an estimate, row 11's report, 2026-10-05). The end-of-list check that row 11 added logs a count that stops short | An owner decision. First size `max_deletes_per_run` from a 7-day arrival count: `gh api "repos/miztiik/yen-idhazh/actions/runs?created=>=<today-7>&per_page=1" --jq .total_count`. On 2026-10-04 that read 1,226 runs, about 175 a day, and the declared ceiling is 50 deletes a wake. A day held between 32 and 401 runs from 2026-08-22 to 2026-10-04, and a live pass that its ceiling stops inside a day reads that day again at the next wake (row 10), so a ceiling below a busy day's count takes several wakes to pass it. A count from a search by date stops at 2,500, so a span longer than about two weeks is counted a day at a time |
 | A2 | A keep line for years | The yearly index of a ledger that keeps every row gains one entry a year (row 14, decision 3) | A ledger whose declaration lets it forget whole years. `published` and `summary-quality-evals` refuse that in `prune_refusal` |
 | A3 | Keying the rules in `backend/idhazh/gardener/period_inputs.py` on a declaration's kind instead of task names | One list of task names stays written in code (Guardrail #6) | A Level 2 row after row 16 |
 | A4 | Event logging in `backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py` | Those two commands keep free-text logs (CLAUDE.md section 1b) | A Level 2 row each after row 21, reusing `event_log` |
@@ -48,7 +48,7 @@ Table A - what is out
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | #1287 | Plan 60 row 8: site reads lost periods |
 | 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | #1282 | Plan 60 row 9: job names |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | DONE | didactic-potato | #1307 | Plan 60 row 10: runs read from a mark |
-| 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | DONE | psychic-potato | - | Plan 60 row 11 |
+| 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | DONE | psychic-potato | #1317 | Plan 60 row 11 |
 | 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | #1303 | Plan 60 row 12: which months may close |
 | 13 | Which days may be packed | 12 | D | DONE | silver-enigma | #1309 | Plan 60 row 13: which days may be packed |
 | 14 | Which years may be packed | 13 | D | DONE | scaling-train | - | Plan 60 row 14 |
@@ -638,7 +638,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- | --- | --- |
 | 1 | A keep line for years | `published` and `summary-quality-evals` refuse deletion in `prune_refusal` | A knob, and deleting a whole year of rows from the ledgers that allow it | Plan author, 2026-10-04 |
 | 2 | Pack years into decades | The index still grows, one level up | A fourth period kind across the contracts and the site | Plan author, 2026-10-04 |
-| 3 | Keep only a first and a last year in the index | A Level 5 change to every index reader, to save about 60 bytes a year | The site's reader and the binding tests change | Plan author, 2026-10-04 |
+| 3 | Keep only a first and a last year in the index | A Level 5 change to every index reader, to save one entry a year, about 14 bytes after gzip and 104 raw, as row 14's worker measured on 2026-10-05 | The site's reader and the binding tests change | Plan author, 2026-10-04 |
 
 ### Row #15 - Each old month is dropped once
 
@@ -728,6 +728,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - Rule R's downloads (`ledger_marks.adopt`, row 12) count against the shard's download budget, as the periods a step chooses do (Table C, C8); found during execution (row 12 report), owner 2026-10-04.
   - The day step's re-take of a packed day builds a fresh `CompactEntry`, which drops the day's `set_aside`. The re-take keeps it; found during execution (row 30 report), owner 2026-10-04.
   - A set-aside file goes to `state/raw/<ledger>/set-aside/` (Table C, C5), the folder the console names to a person since row 31 (#1301); found during execution (row 31 report), owner 2026-10-04.
+  - The year step looks for its own year file by Rule R before its C13 step. Otherwise it records as lost the days that an adopted year file holds (Fowler); found during execution (row 14 report), owner 2026-10-05.
+  - When a year's months hold rows, `_yearly_period._pack` writes over a year file that sits at its path with no index entry. The month step refuses that case. Fowler rules whether the year step refuses it too or adopts the file by Rule R; found during execution (row 14 report), owner 2026-10-05.
+  - A month with no monthly entry inside a ready year is refused as `day-missing`, and Table C names no recovery for it. Rows 18 and 19 decide whether it gets one; found during execution (row 14 report), owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_daily_period.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
@@ -840,6 +843,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - The operator-range refusal that row 12 added ends the task `failed` today. It is not a code defect, so it gets a fault word of its own in Table D, D3 and does not turn the job red; found during execution (row 12 report), owner 2026-10-04.
   - The day step writes the note `repacked-from-raw` when it packs a day inside history that had no entry (Table C, C2). Row 12 wired only `index-rebuilt` and `recorded-lost`; found during execution (row 12 report), owner 2026-10-04.
   - The outcome `outside-range` follows Table F, F8, whose meaning row 12 narrowed: a range that a ready period before it blocks is the refusal above, never `outside-range`; found during execution (row 12 report), owner 2026-10-04.
+  - `RecordedApi` is gone since row 11 (#1317): it answered every request with the same page, which a walk from the last page cannot read. The oracle names `RecordedAnswers`, whose `fails_at` makes a delete refuse; corrected from row 11's report, owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/contracts/collection_prune.py`
   - `backend/idhazh/contracts/gardener_fault.py` (new; first sentence "Why a gardener pass stopped, and what it recovered instead of stopping")
@@ -872,7 +876,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - Any other 4xx, or any other exception: fault `raised`, outcome `failed` (C12). It is a code or permission defect, and the job turns red.
   - `PruneInterruptedError` and `FoldInterruptedError` carry the classified cause, and never relabel a code defect.
 - **Acceptance gates:** local: `-m contract backend/tests/contracts/test_collection_prune_row.py`, and pytest on the other test files above; ruff; mypy; `doc_load.py`. CI: the full suite.
-- **Oracle:** the new fixtures round-trip. A `fault` beside `stopped_because: exhausted` is refused. `ceiling-reached.json`, which has no `fault`, still reads. Each recovery in Table C writes its note, and each stop writes its fault. The classifier maps each case above, built from real `HTTPError` and `URLError` objects. With `RecordedApi` answering 503, the outcome is `deferred`, the mark does not move, and the shard's other tasks run. With member 2 of 3 answering 422, members 1 and 3 are deleted, and the record holds one `not-deletable` note naming member 2. A shard whose only non-green task is `deferred` exits 0. It cannot settle wording; the sentence is rendered and can change with no migration. Nor can it settle what GitHub answers for a member it will not delete (decision 6).
+- **Oracle:** the new fixtures round-trip. A `fault` beside `stopped_because: exhausted` is refused. `ceiling-reached.json`, which has no `fault`, still reads. Each recovery in Table C writes its note, and each stop writes its fault. The classifier maps each case above, built from real `HTTPError` and `URLError` objects. With `RecordedAnswers` answering 503, the outcome is `deferred`, the mark does not move, and the shard's other tasks run. With member 2 of 3 answering 422, members 1 and 3 are deleted, and the record holds one `not-deletable` note naming member 2. A shard whose only non-green task is `deferred` exits 0. It cannot settle wording; the sentence is rendered and can change with no migration. Nor can it settle what GitHub answers for a member it will not delete (decision 6).
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -893,6 +897,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #21 - Every gardener log line is one JSON event
 
 - **Scope:** The events of Table E become models, `event_log.py` writes each one as one JSON line (section 2.5), and the free-text log lines of the gardener are deleted. Level 3.
+- **Follow-ups:**
+  - Row 11 (#1317) added three warning lines that become events here: the order check failed, a page's count differs from the first page's, and the list does not end where the count says. E2's pages read is filled from the walk; found during execution (row 11 report), owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/contracts/gardener_events.py`
   - `backend/idhazh/gardener/event_log.py` (new; first sentence "How a gardener event becomes one log line")
