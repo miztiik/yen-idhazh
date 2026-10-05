@@ -38,7 +38,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data',
 		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
-		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
+		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
 		'one-pass-reductions',
 		'platform-mix', 'preview-port',
 		'processor-lost', 'prompt-reuse',

@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from pathlib import Path
 
-from idhazh import month_partition
+from idhazh import config, month_partition
 from idhazh.contracts.knobs.gardener import CompactionPolicy, RetentionPolicy
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
-
-from ._garden import GARDENER_FIXTURES
-
-
-def _compaction_policy() -> CompactionPolicy:
-    path = GARDENER_FIXTURES / "runner" / "compact-gardener.json"
-    return CompactionPolicy.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
 def _monthly_fold_policy() -> RetentionPolicy:
@@ -52,45 +44,36 @@ def _named(root: Path, paths: tuple[Path, ...]) -> list[str]:
     return sorted(path.relative_to(root).as_posix() for path in paths)
 
 
-def test_compaction_range_uses_its_configured_month_lookback() -> None:
-    policy = _compaction_policy()
+def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Path) -> None:
+    """A compaction's steps name the periods they choose, so the planner names only marks.
 
-    default_range = scheduled_range("compact-gardener", policy, date(2026, 9, 27))
-    configured = policy.model_copy(update={"lookback": 4})
-    configured_range = scheduled_range("compact-gardener", configured, date(2026, 9, 27))
+    A scheduled wake builds no window for a compaction, and a range a person
+    names limits what the steps choose, not what the listing starts with. A
+    listing that lost a mark would hand the pass an index or watermark it reads
+    as absent.
+    """
+    today = date(2026, 9, 27)
+    compactions = {
+        name: policy
+        for name, policy in config.load_gardener().tasks.items()
+        if isinstance(policy, CompactionPolicy)
+    }
 
-    assert policy.lookback_periods == 2
-    assert default_range is not None
-    assert configured_range is not None
-    assert len(month_partition.months_between(*default_range)) == 3
-    assert len(month_partition.months_between(*configured_range)) == 5
-
-
-def test_a_compaction_names_its_month_its_year_and_its_ledger_s_marks_and_nothing_else(
-    tmp_path: Path,
-) -> None:
-    """A listing that lost a mark would hand the pass an index or watermark it reads as absent."""
-    paths = paths_for_task(
-        tmp_path,
-        "compact-gardener",
-        _compaction_policy(),
-        ("2026-08", "2026-08"),
-        today=date(2026, 9, 27),
-    )
-
-    assert _named(tmp_path, paths) == [
-        "state/compact/gardener/daily/2026/08",
-        "state/compact/gardener/daily/watermark.json",
-        "state/compact/gardener/index/daily.json",
-        "state/compact/gardener/index/monthly.json",
-        "state/compact/gardener/index/yearly.json",
-        "state/compact/gardener/monthly/2026/08.json",
-        "state/compact/gardener/monthly/2026/08.parquet",
-        "state/compact/gardener/monthly/watermark.json",
-        "state/compact/gardener/yearly/2026/2026.json",
-        "state/compact/gardener/yearly/2026/2026.parquet",
-        "state/compact/gardener/yearly/watermark.json",
-    ]
+    assert compactions, "config/idhazh_gardener.json names no compaction"
+    for name, policy in compactions.items():
+        compact = f"state/compact/{policy.ledger.value}"
+        assert scheduled_range(name, policy, today) is None, name
+        for period_range in (None, ("2026-08", "2026-08")):
+            assert _named(
+                tmp_path, paths_for_task(tmp_path, name, policy, period_range, today=today)
+            ) == [
+                f"{compact}/daily/watermark.json",
+                f"{compact}/index/daily.json",
+                f"{compact}/index/monthly.json",
+                f"{compact}/index/yearly.json",
+                f"{compact}/monthly/watermark.json",
+                f"{compact}/yearly/watermark.json",
+            ], (name, period_range)
 
 
 def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_nothing_else(

@@ -471,8 +471,9 @@ def run(
     `listing` is the files under every folder the tasks own or read; None lists
     them off the disk here. What the tasks downloaded is read off it once they
     have run. `period_range` is a range a person named for one task: the task
-    reads that range and is told it is the person's, where a scheduled wake
-    reads the window `scheduled_range` builds.
+    reads it in place of the window `scheduled_range` builds for a scheduled
+    wake. A compaction has no such window, so a named range only limits the
+    periods its steps choose.
     """
     refused = history_tasks_among(names, settings.tasks)
     if refused:
@@ -551,7 +552,6 @@ def run(
                 owned_folders=resolved[name].walk,
                 listing=listing.within(covered[name]),
                 period_range=period_ranges[name],
-                operator_range=period_range,
             )
             done = _run_one(name, bound[name], context, resolved[name])
             _refuse_a_path_outside(done, settings.tasks)

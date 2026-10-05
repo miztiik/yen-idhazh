@@ -210,7 +210,7 @@ delegated, because they tell you the branch is wrong before CI has finished
 installing:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check.
+.\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_<the module you changed>.py
 ```
@@ -270,12 +270,27 @@ so the new test passes on "the base commit" while it ran the branch. Measured
 The tell is a `rootdir:` line in the output naming a folder outside the copy;
 the copy's own `-q` hides that line when its settings were read.
 
+**A canary build in the copy needs more of the tree.** Add `frontend` and the
+root `.gitignore` to the archive, run `git init` and commit the copy, and point
+`frontend\node_modules` at an installed one with a directory junction
+(`New-Item -ItemType Junction`); remove the junction with `cmd /c rmdir` before
+the copy, so the removal never reaches the folder it points at. The site build
+fingerprints its inputs through git: with no `.gitignore` its own output counts
+as an input, and it ends with "Build inputs changed during compilation". Run
+`build_canary_day.py` from the copy's root with `PYTHONPATH` set to the copy's
+`backend`, and `build-canary.mjs` from its `frontend` with `IDHAZH_PYTHON` set
+to an installed interpreter, so the copy's code is what packs. Compare entries
+and names, not bytes, and leave out two clocks: the name of each raw file the
+canary writes after packing holds the time of its write, and each watermark's
+`advanced_at` the time of its pass, so both differ between any two builds of
+one commit.
+
 ## Set up the backend environment
 
 Python 3.12, 3.13 or 3.14. CI installs 3.12.
 
 ```powershell
-python -m venv.venv
+python -m venv .venv
 .\.venv\Scripts\python.exe -c "import sys; print(sys.version)"
 .\.venv\Scripts\python.exe -m ensurepip --upgrade
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
@@ -447,7 +462,7 @@ make this slower.
 Run all three from the repository root. Each must be clean.
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check.
+.\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest
 ```
@@ -464,7 +479,7 @@ inline shell, because a `run:` body is a string inside YAML rather than a file;
 the contract tests in `backend/tests/workflows/` execute the real steps instead
 ([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#nothing-lints-a-run-body)).
 
-**`ruff format` is not a gate.** `ruff format --check.` reports dozens of files
+**`ruff format` is not a gate.** `ruff format --check .` reports dozens of files
 it would rewrite, all of them
 pre-existing. That count is deliberately written as a magnitude rather than a
 figure: it tracks how much Python the repository holds, so an exact number here

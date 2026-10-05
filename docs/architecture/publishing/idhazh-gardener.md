@@ -37,7 +37,7 @@ cannot change which tasks a wake plans.
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
 | 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each task's fixed UTC period window, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each retention task's fixed UTC period window and each compaction's ledger indexes and watermarks, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
 | 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
@@ -90,7 +90,7 @@ reads and does not own is declared under `reads`; asking about a folder it
 neither owns nor reads is refused rather than answered empty, and so is asking
 for every file under a folder no step named, nor a folder above it, rather than
 answered with the named periods inside it. A step that chooses its periods as
-it runs - the compaction's month step - names them first, and the shard lists
+it runs - every step of a compaction - names them first, and the shard lists
 them from the same commit then.
 
 **The plan is written twice.** The plan job runs before anything of ours is

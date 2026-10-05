@@ -1659,15 +1659,7 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		expect(missing).toEqual({ state: 'unreachable', ledger: 'item-health', at: '2026-09-07', fault: 'file-missing' });
 	});
 
-	test('a date in no tier is unreachable at that date, and with no archive the span starts at the site', async () => {
-		const archive = freshPage(recorded({}, YEAR_STATE, ARCHIVE_PREFIX).fetcher, counted(), ARCHIVE_PREFIX);
-		const missing = await readAsk(freshPage(recorded().fetcher), archive, { ...opts, from: '2025-07-30', to: '2025-07-30' }, {});
-		expect(missing).toMatchObject({ state: 'unreachable', at: '2025-07-30', fault: 'day-missing' });
-		const siteOnly = await readAsk(freshPage(recorded().fetcher), null, { ...opts, from: '2026-07-30', to: '2026-07-30' }, {});
-		expect(siteOnly).toMatchObject({ state: 'quiet', siteFrom: '2026-08-01' });
-	});
-
-	test('the archive tier answers days before the site starts, and empty archive clamps to the site', async () => {
+	test('the archive answers the days the site copy dropped, and with no archive the days before the site\'s first are cut', async () => {
 		const fullDaily = decoded(readFileSync(path.join(STATE, ...DAILY_INDEX.split('/'))));
 		const siteDaily = {
 			...fullDaily,
@@ -1689,7 +1681,8 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 			sql: 'SELECT date, run_id, job, shard FROM "host-fingerprint" ORDER BY date, run_id, shard',
 			maxRows: 20
 		};
-		const answer = await readAsk(sitePage, archivePage, query, {});
+		// This site is what a copy that keeps the five days 1 to 5 Sep leaves.
+		const answer = await readAsk(sitePage, { keeper: archivePage, siteWindowDays: 5 }, query, {});
 		expect(answer).toMatchObject({ state: 'ok', siteFrom: null });
 		if (answer.state !== 'ok') return;
 		expect(answer.rows).toEqual(expectedAnswer('archive-before-site'));

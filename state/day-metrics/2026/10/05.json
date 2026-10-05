@@ -1,5 +1,5 @@
 {
-  "addresses_considered": 10017,
+  "addresses_considered": 10048,
   "bands": {
     "high": 98,
     "low": 7,
@@ -200,8 +200,8 @@
       }
     }
   ],
-  "items_failed": 12,
-  "items_planned": 160,
+  "items_failed": 172,
+  "items_planned": 320,
   "items_published": 148,
   "items_truncated": 0,
   "label_similarity": {
@@ -226,8 +226,8 @@
     "unattributed": 0,
     "unsupported_number": 1
   },
-  "revision": 2,
-  "runs": 2,
+  "revision": 4,
+  "runs": 4,
   "sources": [
     {
       "doubted": 0,

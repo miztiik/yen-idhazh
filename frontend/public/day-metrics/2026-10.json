@@ -610,7 +610,7 @@
     "visuals_rendered": 0
   },
   {
-    "addresses_considered": 10017,
+    "addresses_considered": 10048,
     "bands": {
       "high": 98,
       "low": 7,
@@ -646,8 +646,8 @@
       {"column": "summary_words","stat": {"count": 148,"maximum": 124.0,"minimum": 33.0,"p25": 58.0,"p50": 67.0,"p75": 90.0,"total": 10669.0}},
       {"column": "verbatim_run","stat": {"count": 148,"maximum": 0.45454545454545453,"minimum": 0.02,"p25": 0.07407407407407407,"p50": 0.10606060606060606,"p75": 0.15151515151515152,"total": 18.247197614861065}}
     ],
-    "items_failed": 12,
-    "items_planned": 160,
+    "items_failed": 172,
+    "items_planned": 320,
     "items_published": 148,
     "items_truncated": 0,
     "label_similarity": {
@@ -672,8 +672,8 @@
       "unattributed": 0,
       "unsupported_number": 1
     },
-    "revision": 2,
-    "runs": 2,
+    "revision": 4,
+    "runs": 4,
     "sources": [
       {"doubted": 0,"published": 2,"source_id": "abc-au-world","truncated": 0},
       {"doubted": 1,"published": 2,"source_id": "africanews","truncated": 0},

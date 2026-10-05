@@ -16,11 +16,11 @@ so the record can count it, and keeps it.
 read.** The raw day folders, which compact files exist and what
 each weighs are all read off the listing. The watermarks and the indexes are
 fetched once, before they are read, and each step fetches the day or month
-folders it opens before it opens one. The year, month and day steps choose
-their periods as they run, so each names what it reads of them first, through
-`name_years`, `name_months` and `name_days`, and the listing then answers for
-them from the same commit. A day step with no mark looks back over months the
-planner did not name either, and the pass names those through
+folders it opens before it opens one. The drop, year, month and day steps
+choose their periods as they run, so each names what it reads of them first,
+through `name_drops`, `name_years`, `name_months` and `name_days`, and the
+listing then answers for them from the same commit. A day step with no mark
+looks back over months no step has named yet, and the pass names those through
 `name_raw_months` before it chooses.
 
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
@@ -105,7 +105,6 @@ class CompactTree:
     raw_days: list[str]
     #: How many raw day folders the pass listed, before any step set a day aside.
     listed: int = 0
-    months: frozenset[str] | None = None
     #: The periods whose index the pass found on disk.
     indexed: frozenset[Period] = frozenset()
     changes: list[Change] = field(default_factory=list)
@@ -118,22 +117,19 @@ class CompactTree:
     pending_watermarks: dict[Period, Watermark] = field(default_factory=dict)
 
     @classmethod
-    def read(
-        cls,
-        state_dir: Path,
-        ledger_name: LedgerName,
-        listing: FileListing,
-        *,
-        months: frozenset[str] | None = None,
-    ) -> CompactTree:
+    def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
         """The three watermarks, the three indexes and the raw day folder names, read once."""
         marks = ledger_marks.read_marks(state_dir, ledger_name, listing)
-        raw_days = named_trees.raw_days(listing, state_dir, ledger_name)
+        # A wake names no raw folder: each step names the raw folders it reads.
+        raw_days = (
+            named_trees.raw_days(listing, state_dir, ledger_name)
+            if listing.saw_any_of(ledger.raw_root(state_dir, ledger_name))
+            else []
+        )
         return cls(
             state_dir=state_dir,
             ledger=ledger_name,
             listing=listing,
-            months=months,
             daily_through=marks.through[Period.DAILY],
             monthly_through=marks.through[Period.MONTHLY],
             yearly_through=marks.through[Period.YEARLY],
@@ -152,6 +148,23 @@ class CompactTree:
     def raw_month_folder(self, month: str) -> Path:
         """The raw folder a `YYYY-MM` month's day folders sit in."""
         return ledger.raw_root(self.state_dir, self.ledger).joinpath(month[:4], month[5:7])
+
+    def name_drops(self, months: Sequence[str]) -> None:
+        """Name what the drop steps read of these months: each one's month file and raw folder.
+
+        Each month file, whichever format wrote it, and each raw month folder are
+        listed from the commit now, and the raw days found there are taken in:
+        the drop step chose the months as it ran. A drop deletes by these names
+        and opens nothing, so nothing here is fetched.
+        """
+        self._name(
+            [
+                ledger.compact_path(self.state_dir, self.ledger, Period.MONTHLY, month, fmt=fmt)
+                for month in months
+                for fmt in Format
+            ],
+            months=months,
+        )
 
     def name_years(self, years: Sequence[str]) -> None:
         """Name what the year step reads of these years: each one's month files and its own file.
@@ -365,8 +378,9 @@ class CompactTree:
 
         A deleted file takes any date folder it leaves empty with it, so the next
         listing of the raw tree does not meet a day that holds nothing. A file
-        deleted by its name alone - a month file the monthly window drops - may never have
-        been downloaded, and its deletion lands from the name.
+        deleted by its name alone - a month file or a raw file the drop steps
+        take - may never have been downloaded, and its deletion lands from the
+        name.
         """
         for change in self.changes:
             if change.data is None:

@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -60,6 +60,17 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   python -c "import zlib; print(zlib.ZLIB_VERSION, getattr(zlib, 'ZLIBNG_VERSION', None))"
   ```
 
+- **A logic spec that writes Parquet prints `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`, which reads as a crash; its tests passed.**
+  On 2026-10-05, on Windows with Node 24.12.0 and DuckDB-Wasm 1.33.1-dev57.0,
+  a Playwright worker that had written files with `COPY ... TO` printed this
+  libuv line while it shut down, after every result was reported, and the run
+  still ended `N passed` with exit 0. The door specs, which only read, print
+  nothing. The tell is the line arriving between results or at a worker
+  restart, never inside a test. Read the summary and the exit code:
+  ```powershell
+  node node_modules/@playwright/test/cli.js test --config playwright.logic.config.ts tests/ledger-lifecycle.spec.ts; "exit $LASTEXITCODE"
+  ```
+
 ## Two heavy gates on one box
 
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.
@@ -69,6 +80,16 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 
 - Use the canary, the fixed test-data build, for the browser suite; use the real build for published-site measurements. Verify which build is served.
 - Finish one build before starting another that writes the same output directory. Do not rebuild files while a preview or test is reading them.
+- **A browser run ends `Timed out waiting 120000ms from config.webServer` and runs no test; the build was refused as stale.**
+  The build record fingerprints Git's committed tree, the working diff and
+  untracked files, so any edit after `build:canary`, a doc or a plan
+  included, makes `verified-preview.ts` refuse the build, and Playwright
+  pipes that refusal away. The tell is the timeout with no test line before
+  it. Commit or revert the edit, then build again before the run:
+  ```powershell
+  git status --porcelain
+  npm run build:canary
+  ```
 
 ## Serving a build to measure it
 

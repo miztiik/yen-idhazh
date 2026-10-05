@@ -42,14 +42,18 @@ raw files, and advances its watermark once, last. Before the index lands, raw
 files survive; after it lands, the next wake moves the mark past each indexed
 day no raw file is left in, and takes again a day whose raw files remain.
 
-**Raw days in a month the window no longer keeps are past the ledger's reach**,
-and are dropped. A window that only reports keeps them instead: it names their
-files for the record, and the step takes those days like any other.
+**Raw days past the keep line are past the ledger's reach**, and are dropped
+by their listed paths: those in the months the drop step takes, and those a
+first run looked back over and did not take. Nothing of them is fetched or
+opened, so a file that cannot be read goes with its day. A window that only
+reports keeps them instead: it names their files for the record, and the step
+takes those days like any other.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -67,60 +71,45 @@ from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
 logger = logging.getLogger(__name__)
 
 
-def _past_the_window(
-    tree: CompactTree, *, first_kept: str | None
-) -> list[tuple[str, list[Path] | ValueError]]:
-    """Every raw day past the window, with its files or why they cannot be read.
+def _past_the_line(
+    tree: CompactTree, months: Sequence[str], *, first_kept: str | None
+) -> list[tuple[str, list[Path]]]:
+    """Every raw day past the keep line in these months, beside every file the listing holds in it.
 
-    It reads those days and decides nothing, so a window that only reports names
-    exactly the files a live one deletes.
+    Read off the listing alone, so nothing is fetched or opened, and a file that
+    cannot be read is named with the rest of its day.
     """
     if first_kept is None:
         return []
-    past = [day for day in tree.raw_days if day[:7] < first_kept]
-    tree.listing.fetch([tree.raw_day_folder(day) for day in past])
-    found: list[tuple[str, list[Path] | ValueError]] = []
-    for day in past:
-        try:
-            files = ledger.read_day_files(tree.state_dir, tree.ledger, day)
-        except ValueError as refusal:
-            found.append((day, refusal))
-            continue
-        found.append((day, [held.path for held in files]))
-    return found
+    named = set(months)
+    root = tree.listing.repo_root
+    return [
+        (day, [root / path for path in tree.listing.files_under(tree.raw_day_folder(day))])
+        for day in tree.raw_days
+        if day[:7] in named and day[:7] < first_kept
+    ]
 
 
-def drop(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
-    """Raw days the monthly window no longer keeps go, each with every file it holds."""
-    stops: list[Stop] = []
-    gone: set[str] = set()
-    for day, held in _past_the_window(tree, first_kept=first_kept):
-        if isinstance(held, ValueError):
-            logger.error(
-                "a raw day past the window is kept ledger=%s day=%s reason=%s",
-                tree.ledger.value,
-                day,
-                held,
-            )
-            stops.append(Stop(StopReason.FAILED, day))
-            continue
-        for path in held:
-            tree.delete(path)
-        gone.add(day)
-    tree.raw_days = [day for day in tree.raw_days if day not in gone]
-    return tuple(stops)
+def drop(tree: CompactTree, months: Sequence[str], *, first_kept: str | None) -> tuple[Stop, ...]:
+    """Raw days past the keep line in these months go, each with every file it holds, unread.
 
-
-def spare(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
-    """Every raw file the monthly window would drop is named and kept, for `compact` to take.
-
-    A day that cannot be read is one a live window keeps too, so it is not named
-    here; `compact` refuses it by name when it comes to take it.
+    `months` are those the drop step takes and those a first run looked back
+    over, so what goes does not depend on how much else the listing names.
     """
-    for _day, held in _past_the_window(tree, first_kept=first_kept):
-        if not isinstance(held, ValueError):
-            for path in held:
-                tree.spare(path)
+    gone = _past_the_line(tree, months, first_kept=first_kept)
+    for _day, files in gone:
+        for path in files:
+            tree.delete(path)
+    dropped = {day for day, _files in gone}
+    tree.raw_days = [day for day in tree.raw_days if day not in dropped]
+    return ()
+
+
+def spare(tree: CompactTree, months: Sequence[str], *, first_kept: str | None) -> tuple[Stop, ...]:
+    """Every raw file a live drop would take is named and kept, for `compact` to take."""
+    for _day, files in _past_the_line(tree, months, first_kept=first_kept):
+        for path in files:
+            tree.spare(path)
     return ()
 
 
