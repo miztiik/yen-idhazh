@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -174,11 +174,11 @@ is
 each page of 100 members and one request a delete, and the token Actions hands
 a run has an hourly allowance, so the ceiling bounds what one wake spends of it.
 
-**`workflow-runs` reads its own record.** It names `state/raw/gardener` and
-`state/compact/gardener`, which `compact-gardener` owns, under `reads`, and
+**Both collection tasks read their own record.** Each names `state/raw/gardener`
+and `state/compact/gardener`, which `compact-gardener` owns, under `reads`, and
 `mark_lookback_days: 7`, so it finds the day its last pass handled through and
-asks GitHub only for the days after it. Only `workflow-runs` reads that key
-today; `workflow-artifacts` still lists its whole collection at each wake.
+asks GitHub only for what was created after it: `workflow-runs` searches the
+days after it, and `workflow-artifacts` reads its pages from the oldest end.
 
 ## The history declaration: `corpus-squash`
 

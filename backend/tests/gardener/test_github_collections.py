@@ -1,8 +1,9 @@
 """Does the GitHub driver read a real API answer into members, and delete exactly one at a time?
 
 The adapter's whole job is a translation: a page of REST JSON in, a `Member`
-out, a member id into one DELETE, and a span of UTC days into the searches that
-list the runs created in it. So the test drives it with recorded answers - what
+out, a member id into one DELETE, a span of UTC days into the searches that
+list the runs created in it, and the artifacts' pages into a walk from the
+oldest end. So the test drives it with recorded answers - what
 `GET /repos/{owner}/{repo}`, `.../actions/artifacts` and `.../actions/runs`
 really returned - and never the network (Guardrail #7).
 
@@ -10,7 +11,8 @@ The transport is the declared injection point, the way `idhazh.fetch` takes its
 connection class. Nothing here is a stand-in for the adapter: the adapter runs,
 against bytes an API really produced. The runs and the repository were recorded
 from this repository on 2026-10-04, each run trimmed to the fields that say
-which run it is.
+which run it is; the artifacts on 2026-10-05, each trimmed to the four fields
+`describe` reads.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from conftest import FIXTURES_DIR
 
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.gardener import github_collections, one_at_a_time
-from idhazh.gardener.one_at_a_time import Window
+from idhazh.gardener.one_at_a_time import Member, Window
 
 pytestmark = pytest.mark.contract
 
@@ -38,31 +40,13 @@ RUNS_BY_DAY: Final = "runs-by-day.json"
 OVER_A_THOUSAND: Final = "runs-a-day-over-a-thousand.json"
 #: The repository's own answer, which says the day it was created.
 REPOSITORY: Final = "repository.json"
-
-
-class RecordedApi:
-    """The two calls the driver makes, answered from a recorded page.
-
-    `removed` is the whole point of the class: it is the ordered list of the
-    paths this was asked to DELETE, which is how a test says "one call a member,
-    in this order" rather than "the member is gone".
-    """
-
-    def __init__(self, page: Path, *, fails_at: str | None = None) -> None:
-        self._page = page
-        self._fails_at = fails_at
-        self.removed: list[str] = []
-        self.read_paths: list[str] = []
-
-    def read(self, path: str) -> dict[str, Any]:
-        self.read_paths.append(path)
-        payload: dict[str, Any] = json.loads(self._page.read_bytes().decode("utf-8"))
-        return payload
-
-    def remove(self, path: str) -> None:
-        if self._fails_at is not None and path.endswith(self._fails_at):
-            raise OSError("the API said no")
-        self.removed.append(path)
+#: GitHub's last four pages of the 1,613 artifacts it listed on 2026-10-05 -
+#: the oldest 313, by id and newest first, as GitHub orders them - served as
+#: pages 1 to 4 of a collection of 313. The boundaries fall where GitHub's did,
+#: because the 1,300 artifacts left out fill 13 whole pages.
+ARTIFACT_PAGES: Final = "artifacts-oldest-pages.json"
+#: The thirty-day line on the day the artifacts were recorded.
+RECORDED_LINE: Final = "2026-09-05"
 
 
 class RecordedAnswers:
@@ -72,6 +56,11 @@ class RecordedAnswers:
     what was asked off the same strings the adapter sends. `answering` adds or
     replaces an answer for a test's own case. A request with no answer raises,
     naming it, as a request GitHub could not answer would.
+
+    `removed` is the ordered list of the paths this was asked to DELETE, which is
+    how a test says "one call a member, in this order" rather than "the member is
+    gone". A DELETE whose path ends in `fails_at` is refused, as the API can
+    refuse one.
     """
 
     def __init__(
@@ -79,6 +68,7 @@ class RecordedAnswers:
         *recordings: Path,
         repository: Path | None = None,
         answering: Mapping[str, dict[str, Any]] | None = None,
+        fails_at: str | None = None,
     ) -> None:
         self._answers: dict[str, dict[str, Any]] = {}
         for recording in recordings:
@@ -86,6 +76,7 @@ class RecordedAnswers:
         if repository is not None:
             self._answers[""] = json.loads(repository.read_bytes().decode("utf-8"))
         self._answers.update(answering or {})
+        self._fails_at = fails_at
         self.read_paths: list[str] = []
         self.removed: list[str] = []
 
@@ -96,6 +87,8 @@ class RecordedAnswers:
         return copy.deepcopy(self._answers[path])
 
     def remove(self, path: str) -> None:
+        if self._fails_at is not None and path.endswith(self._fails_at):
+            raise OSError("the API said no")
         self.removed.append(path)
 
 
@@ -160,31 +153,28 @@ def counted_through(day: str) -> str:
     return f"actions/runs?created=%3C%3D{day}T23:59:59Z&per_page=1"
 
 
-def artifacts_page() -> Path:
-    return fixture("artifacts-page-1.json")
+def artifact_page(page: int) -> str:
+    """The request for one page of the artifacts, as the walk sends it."""
+    return f"actions/artifacts?per_page=100&page={page}"
 
 
-def test_an_artifact_page_becomes_members_with_a_day_and_a_size() -> None:
-    """Id, created day and bytes, read off the fields the API really sends."""
-    api = RecordedApi(artifacts_page())
-    collection = github_collections.artifacts(api)
+def oldest_first(page: int) -> list[dict[str, Any]]:
+    """One recorded page's artifacts in the order they were created, oldest first."""
+    artifacts: list[dict[str, Any]] = recorded(ARTIFACT_PAGES, artifact_page(page))["artifacts"]
+    return sorted(artifacts, key=lambda artifact: str(artifact["created_at"]))
+
+
+def test_an_artifact_becomes_a_member_with_its_id_day_size_and_name() -> None:
+    """Read off the fields the API really sends, for the oldest artifact GitHub listed."""
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES))
+    collection = github_collections.artifacts(api, through=RECORDED_LINE)
 
     members = [collection.describe(raw) for raw in collection.listing()]
 
-    assert [m.id for m in members] == [
-        "4529182634",
-        "4529182700",
-        "4529182755",
-        "4529182810",
-    ]
-    assert [m.day for m in members] == [
-        "2026-07-04",
-        "2026-08-18",
-        "2026-08-19",
-        "2026-09-16",
-    ]
-    assert members[0].size_bytes == 35123456
-    assert members[0].label == "github-pages"
+    assert members[0] == Member(
+        id="9472586501", day="2026-08-22", size_bytes=1557, label="bench-corpus"
+    )
+    assert len(members) == 10
 
 
 def test_a_run_reports_no_size_rather_than_a_made_up_one() -> None:
@@ -199,91 +189,228 @@ def test_a_run_reports_no_size_rather_than_a_made_up_one() -> None:
     assert {m.day for m in members} == {"2026-08-22"}
 
 
-def test_a_pass_deletes_one_member_a_call_in_listing_order() -> None:
-    """Three members in the window, three DELETEs, each naming exactly one artifact.
+# --- The artifacts, from the oldest end -----------------------------------------
 
-    Twenty-nine days before 2026-09-17 is 2026-08-19, which is the third
-    artifact's own day - so the window holds three of the four and the boundary
-    is a real one rather than a gap.
+
+def test_a_walk_reads_the_last_page_and_one_more_and_hands_on_the_oldest_first() -> None:
+    """GitHub's own order: page 1 for the count, then page 4, then page 3 to check it by.
+
+    The line falls inside page 4, so nothing older waits on a later page: page 3
+    is read only to check that its oldest day is not before page 4's newest.
     """
-    api = RecordedApi(artifacts_page())
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES))
+    walk = github_collections.artifacts(api, through=RECORDED_LINE)
+
+    members = list(walk.listing())
+
+    assert api.read_paths == [artifact_page(1), artifact_page(4), artifact_page(3)]
+    assert [raw["id"] for raw in members] == [raw["id"] for raw in oldest_first(4)[:10]]
+    assert walk.listing_intact()
+
+
+def test_times_that_cross_inside_one_utc_day_do_not_send_the_walk_through_every_page() -> None:
+    """GitHub's page 3 holds an artifact made at 22:14 on 2026-09-17, page 2 one at 22:02.
+
+    GitHub orders by id, and the instants disagree with it by up to an hour, so
+    a check by instant would fail here. The days agree, and the day is what the
+    mark and the line count, so the walk stays intact and stops at its line.
+    """
+    third = recorded(ARTIFACT_PAGES, artifact_page(3))["artifacts"]
+    second = recorded(ARTIFACT_PAGES, artifact_page(2))["artifacts"]
+    latest, earliest = max(a["created_at"] for a in third), min(a["created_at"] for a in second)
+    assert latest > earliest, "the recorded boundary no longer crosses"
+    assert latest[:10] == earliest[:10] == "2026-09-17"
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES))
+    walk = github_collections.artifacts(api, through="2026-09-15")
+
+    members = list(walk.listing())
+
+    assert api.read_paths == [artifact_page(page) for page in (1, 4, 3, 2)]
+    assert walk.listing_intact()
+    assert len(members) == 13 + 44, "page 4 whole, then page 3 up to 2026-09-15"
+
+
+def test_a_page_from_a_day_before_one_already_read_sends_the_walk_through_every_page(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Page 4's newest artifact moved to 00:05 on 2026-09-15 - the one field changed.
+
+    Page 3 holds artifacts from 23:24 the day before, so the two pages cross
+    midnight and which days are whole can no longer be said. The walk reads
+    every page, each once and still from the last back, hands on every artifact,
+    and is no longer intact.
+    """
+    last = recorded(ARTIFACT_PAGES, artifact_page(4))
+    moved = next(raw for raw in last["artifacts"] if raw["id"] == 10336260332)
+    moved["created_at"] = "2026-09-15T00:05:00Z"
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), answering={artifact_page(4): last})
+    walk = github_collections.artifacts(api, through=RECORDED_LINE)
+
+    with caplog.at_level("WARNING", logger="idhazh.gardener.github_collections"):
+        members = list(walk.listing())
+
+    assert api.read_paths == [artifact_page(page) for page in (1, 4, 3, 2)]
+    assert len(members) == len({raw["id"] for raw in members}) == 313
+    assert not walk.listing_intact()
+    assert "order check failed" in caplog.text
+
+
+def test_a_count_that_grows_between_two_reads_leaves_the_walk_not_intact() -> None:
+    """Page 3 read after one artifact was made: every artifact moved one place on.
+
+    So page 2's last artifact is now page 3's first, page 3's last moved onto
+    page 4, which was already read, and GitHub counts 314. The order still
+    holds, so only the count can say an artifact slipped past the walk.
+    """
+    second = recorded(ARTIFACT_PAGES, artifact_page(2))["artifacts"]
+    third = recorded(ARTIFACT_PAGES, artifact_page(3))["artifacts"]
+    pushed = {"total_count": 314, "artifacts": [second[-1], *third[:-1]]}
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), answering={artifact_page(3): pushed})
+    walk = github_collections.artifacts(api, through=RECORDED_LINE)
+
+    members = list(walk.listing())
+
+    assert api.read_paths == [artifact_page(1), artifact_page(4), artifact_page(3)]
+    assert len(members) == 10, "the walk handled what it read"
+    assert not walk.listing_intact()
+
+
+@pytest.mark.parametrize(
+    ("counted", "after_the_last", "reads", "intact"),
+    [
+        pytest.param(300, None, (1, 3, 4, 2), False, id="a-full-last-page-with-artifacts-after-it"),
+        pytest.param(250, None, (1, 3, 2), False, id="a-last-page-holding-more-than-is-left"),
+        pytest.param(300, [], (1, 3, 4, 2), True, id="a-full-last-page-with-nothing-after-it"),
+    ],
+)
+def test_the_list_must_end_where_the_first_page_count_says(
+    counted: int, after_the_last: list[Any] | None, reads: tuple[int, ...], intact: bool
+) -> None:
+    """Every page counted as `counted`: the count names page 3 as the last of the 313.
+
+    A count that stopped short of the list would start the walk in its middle,
+    and the mark would pass the older pages unread. So the last page must hold
+    what is left of the count, and when it is full the page after it is read,
+    never handed on, and must be empty.
+    """
+    answers = {
+        artifact_page(page): recorded(ARTIFACT_PAGES, artifact_page(page)) | {"total_count": counted}
+        for page in range(1, 5)
+    }
+    if after_the_last is not None:
+        answers[artifact_page(4)] = {"total_count": counted, "artifacts": after_the_last}
+    api = RecordedAnswers(answering=answers)
+    walk = github_collections.artifacts(api, through=RECORDED_LINE)
+
+    members = list(walk.listing())
+
+    assert api.read_paths == [artifact_page(page) for page in reads]
+    assert members == [], "the oldest artifact on page 3 is newer than the line"
+    assert walk.listing_intact() is intact
+
+
+def test_a_page_read_after_deletes_is_held_to_the_count_they_left() -> None:
+    """Page 2 is read after page 4's 13 artifacts went, so GitHub counts 313 less 13.
+
+    A walk that held every page to the first page's count would call its own
+    deletes a gap, and no live pass that reached a second page would move its
+    mark.
+    """
+    second = recorded(ARTIFACT_PAGES, artifact_page(2)) | {"total_count": 300}
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), answering={artifact_page(2): second})
+
+    outcome = one_at_a_time.take(
+        github_collections.artifacts(api, through="2026-09-15"),
+        window=Window(until="2026-09-15"),
+        ceiling=None,
+        dry_run=False,
+        mark="2026-08-19",
+    )
+
+    assert api.read_paths == [artifact_page(page) for page in (1, 4, 3, 2)]
+    assert len(api.removed) == 13 + 44
+    assert (outcome.stopped_because, outcome.handled_through) == (
+        StopReason.EXHAUSTED,
+        "2026-09-15",
+    )
+
+
+def test_a_pass_deletes_one_artifact_a_call_oldest_first() -> None:
+    """Five DELETEs for a ceiling of five, each naming the artifact it listed."""
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES))
 
     taken = one_at_a_time.take(
-        github_collections.artifacts(api),
-        window=Window.older_than(today="2026-09-17", days=29),
+        github_collections.artifacts(api, through=RECORDED_LINE),
+        window=Window.older_than(today="2026-10-05", days=30),
         ceiling=5,
         dry_run=False,
     )
 
-    assert api.removed == [
-        "actions/artifacts/4529182634",
-        "actions/artifacts/4529182700",
-        "actions/artifacts/4529182755",
-    ], "one call a member, and the member deleted is the member listed"
-    assert taken.taken == ("4529182634", "4529182700", "4529182755")
-    assert taken.bytes_freed == 35123456 + 204811 + 1048576
-    assert taken.stopped_because is StopReason.EXHAUSTED
+    oldest = oldest_first(4)[:5]
+    assert api.removed == [f"actions/artifacts/{raw['id']}" for raw in oldest], (
+        "one call a member, and the member deleted is the member listed"
+    )
+    assert taken.taken == tuple(str(raw["id"]) for raw in oldest)
+    assert taken.bytes_freed == sum(raw["size_in_bytes"] for raw in oldest)
+    assert taken.stopped_because is StopReason.CEILING
 
 
 def test_the_upper_end_of_an_age_window_is_inclusive() -> None:
-    """A member created on the line itself qualifies, and the day after it does not."""
-    api = RecordedApi(artifacts_page())
+    """Thirty days before 2026-09-22 is 2026-08-23: its three artifacts go, 2026-08-24's does not."""
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES))
 
     taken = one_at_a_time.take(
-        github_collections.artifacts(api),
-        window=Window.older_than(today="2026-09-17", days=30),
-        ceiling=5,
+        github_collections.artifacts(api, through="2026-08-23"),
+        window=Window.older_than(today="2026-09-22", days=30),
+        ceiling=None,
     )
 
-    assert taken.until == "2026-08-18"
-    assert taken.taken == ("4529182634", "4529182700"), (
-        "the artifact created on 2026-08-19 is one day inside the window and was taken"
-    )
+    assert taken.until == "2026-08-23"
+    assert taken.taken == tuple(str(raw["id"]) for raw in oldest_first(4)[:9])
 
 
 def test_a_failed_delete_stops_the_pass_and_keeps_what_went_before() -> None:
     """The interruption property, through the real driver rather than a file tree."""
-    api = RecordedApi(artifacts_page(), fails_at="4529182700")
+    first, second = (str(raw["id"]) for raw in oldest_first(4)[:2])
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), fails_at=second)
 
     with pytest.raises(one_at_a_time.PruneInterruptedError) as stop:
         one_at_a_time.take(
-            github_collections.artifacts(api),
-            window=Window.older_than(today="2026-09-17", days=29),
+            github_collections.artifacts(api, through=RECORDED_LINE),
+            window=Window.older_than(today="2026-10-05", days=30),
             ceiling=5,
             dry_run=False,
         )
 
-    assert api.removed == ["actions/artifacts/4529182634"], "a later member was still deleted"
-    assert stop.value.so_far.taken == ("4529182634",)
-    assert stop.value.so_far.resume_from == "4529182700"
+    assert api.removed == [f"actions/artifacts/{first}"], "a later member was still deleted"
+    assert stop.value.so_far.taken == (first,)
+    assert stop.value.so_far.resume_from == second
 
 
 def test_a_dry_run_reads_the_collection_and_calls_no_delete() -> None:
     """The default. It pages the API and touches nothing."""
-    api = RecordedApi(artifacts_page())
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES))
 
     taken = one_at_a_time.take(
-        github_collections.artifacts(api),
-        window=Window.older_than(today="2026-09-17", days=29),
-        ceiling=5,
+        github_collections.artifacts(api, through=RECORDED_LINE),
+        window=Window.older_than(today="2026-10-05", days=30),
+        ceiling=50,
     )
 
     assert api.removed == []
-    assert len(taken.taken) == 3, "a dry run names what a live pass would take"
+    assert len(taken.taken) == 10, "a dry run names what a live pass would take"
 
 
-def test_a_short_page_ends_the_walk() -> None:
-    """One request, because a page under 100 members is the last page.
+def test_a_first_walk_of_the_artifacts_starts_after_the_day_before_the_repository() -> None:
+    """The repository was created on 2026-08-20, so no artifact is older than that day.
 
-    Stopping on a short page rather than on `total_count` is what makes this
-    safe while it is deleting: the count is a fact about the moment the first
-    page was read, and a pass that is deleting is changing it.
+    A line before it leaves nothing to walk, so the mark is the line itself.
     """
-    api = RecordedApi(artifacts_page())
+    api = RecordedAnswers(repository=fixture(REPOSITORY))
 
-    list(github_collections.artifacts(api).listing())
-
-    assert api.read_paths == ["actions/artifacts?per_page=100&page=1"]
+    assert github_collections.first_artifacts_mark(api, line=RECORDED_LINE) == "2026-08-19"
+    assert github_collections.first_artifacts_mark(api, line="2026-08-16") == "2026-08-16"
+    assert api.read_paths == ["", ""]
 
 
 # --- The runs, a UTC day at a time ---------------------------------------------
@@ -374,7 +501,7 @@ def test_a_line_before_the_repository_was_made_is_the_first_mark_and_no_run_is_r
     """The repository was created on 2026-08-20, so no run is older than a line before it."""
     api = RecordedAnswers(repository=fixture(REPOSITORY))
 
-    assert github_collections.first_mark(api, line="2026-07-06") == "2026-07-06"
+    assert github_collections.first_runs_mark(api, line="2026-07-06") == "2026-07-06"
     assert api.read_paths == [""]
 
 
@@ -386,14 +513,14 @@ def test_the_halving_finds_the_oldest_day_with_a_run_from_recorded_counts() -> N
     """
     api = RecordedAnswers(fixture(RUNS_BY_DAY), repository=fixture(REPOSITORY))
 
-    assert github_collections.first_mark(api, line="2026-08-22") == "2026-08-21"
+    assert github_collections.first_runs_mark(api, line="2026-08-22") == "2026-08-21"
     assert api.read_paths == ["", counted_through("2026-08-21"), counted_through("2026-08-22")]
 
 
 def test_with_no_run_on_or_before_the_line_the_first_mark_is_the_line() -> None:
     api = RecordedAnswers(fixture(RUNS_BY_DAY), repository=fixture(REPOSITORY))
 
-    assert github_collections.first_mark(api, line="2026-08-21") == "2026-08-21"
+    assert github_collections.first_runs_mark(api, line="2026-08-21") == "2026-08-21"
     assert api.read_paths == ["", counted_through("2026-08-21")]
 
 

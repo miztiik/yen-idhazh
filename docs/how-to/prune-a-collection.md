@@ -1,6 +1,6 @@
 # Prune a collection
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
@@ -38,9 +38,9 @@ Read the task's row in the gardener's record from the last wake, under
 `state/raw/gardener/<YYYY>/<MM>/<DD>/`: `selected` is how many members the window
 holds, `deleted` is how many a live pass would take, up to the ceiling, and
 `stopped_because` says whether there is more. That wake's log lists every member
-by id. `workflow-runs` reads only the days after `handled_through` on its last
-row, so its `selected` counts the runs of those days, and `handled_through` says
-how far its walk has got.
+by id. Each task reads only what was created after `handled_through` on its
+last row, so its `selected` counts the members of those days, and
+`handled_through` says how far its walk has got.
 
 To see it now, run the task in a checkout with the two variables exported. It
 lists the collection, deletes nothing while the declaration says `dry_run: true`,
@@ -60,7 +60,7 @@ ceiling is `max_deletes_per_run` beside it.
 | `nothing was deleted - a live run would delete the members above` | the pass was a dry run; the line above it says why it stopped | to delete them, follow step 3 |
 | `the collection is exhausted` | nothing else is inside the window | one live pass finishes the job |
 | `the ceiling of N stopped this pass at <id>` | there is more | each later wake takes the next batch, until the line changes |
-| `the ceiling of N would stop a live pass at <id>; the rest of that day was counted, not listed` | a dry run of `workflow-runs` listed the ceiling's worth of one day's runs and counted the rest | nothing; the next dry run starts on the day after the one it names |
+| `the ceiling of N would stop a live pass at <id>; the rest of that day was counted, not listed` | a dry run listed the ceiling's worth of one day's members and counted the rest | nothing; the next dry run starts on the day after the one it names |
 | `the pass failed at <id>` | the members above it are gone | fix the cause; the next wake retries that member |
 | `the pass failed after N members, before it could name the next one` | the listing itself failed, or a member could not be read | fix the cause; the next wake starts from the oldest member the window holds |
 
@@ -141,6 +141,9 @@ idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-2
 | `... cannot be read, so which files hold the days is not known` or `... names <period> and no file holds it` | an index of the ledger is damaged, or names a file that is gone. Nothing was changed | restore the index or the file from git, then run the command again |
 | `since is after until` | the two ends are swapped | the oldest day comes first |
 | the list, then exit 1 | a delete or a write failed part way; the files listed have already changed | fix the cause, then run the same command again |
+| `workflow-artifacts: page N holds an artifact from a day before one on a page read before it, so the order check failed` | GitHub's pages no longer run from the oldest day to the newest. The pass read every page, held each artifact to the line, and kept its mark | nothing for one wake. If every wake says it, GitHub changed its order: each pass then reads every page, so tell the gardener's owner |
+| `workflow-artifacts: page N counted ... so one may have moved onto a page already read` | an artifact was made or removed while the pass read, so one may have been missed. The pass kept its mark | nothing; the next wake starts from the same mark and reads again |
+| `workflow-artifacts: the list does not end on page N, where the first page's count of C says it ends` | GitHub's count no longer names the last page, so the pass may have started in the middle of the list. It kept its mark | nothing for one wake. If every wake says it, the count stops short of the list: tell the gardener's owner |
 | the same members print on every run | the pass is a dry run | for a ledger, add `--no-dry-run`; for a GitHub collection, set its declaration's `dry_run` to `false` |
 
 ## See also

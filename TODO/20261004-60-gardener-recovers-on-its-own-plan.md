@@ -48,7 +48,7 @@ Table A - what is out
 | 8 | The site reads empty, lost and set-aside periods | 4 | B | DONE | refactored-eureka | #1287 | Plan 60 row 8: site reads lost periods |
 | 9 | Each job's name says what its shard runs | 6 | C | DONE | miniature-waddle | #1282 | Plan 60 row 9: job names |
 | 10 | workflow-runs reads only runs past its line, from its own mark | 2, 7, 9, 12 | C | DONE | didactic-potato | #1307 | Plan 60 row 10: runs read from a mark |
-| 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | PENDING | - | - | - |
+| 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | DONE | psychic-potato | - | Plan 60 row 11 |
 | 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | #1303 | Plan 60 row 12: which months may close |
 | 13 | Which days may be packed | 12 | D | DONE | silver-enigma | #1309 | Plan 60 row 13: which days may be packed |
 | 14 | Which years may be packed | 13 | D | DONE | scaling-train | - | Plan 60 row 14 |
@@ -475,30 +475,45 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched:**
   - `backend/idhazh/gardener/github_collections.py`
   - `backend/idhazh/gardener/tasks/collection.py`
-  - `config/gardener/workflow-artifacts.json`
+  - `config/gardener/workflow-artifacts.json` (gains `reads` and `mark_lookback_days`, as the first follow-up says)
   - `backend/tests/gardener/test_github_collections.py`
   - `backend/tests/gardener/tasks/test_collection_task.py`
-  - `tests/fixtures/github-collections/` (new: recorded artifact pages, one out of order, and pages whose `total_count` grows between two reads)
+  - `tests/fixtures/github-collections/` (new: `artifacts-oldest-pages.json`, GitHub's last four pages of the 1,613 artifacts it listed on 2026-10-05, served as pages 1 to 4 of 313. The page out of order and the count that grows are built in the tests from it, one field changed. `artifacts-page-1.json` deleted: it was not GitHub's order, and three of its artifacts were older than the repository; found during execution, Fowler's ruling)
   - `docs/architecture/publishing/idhazh-gardener.md` (collections)
+  - `backend/idhazh/gardener/one_at_a_time.py` (`Collection.listing_intact`; found during execution, Fowler's ruling)
+  - `backend/tests/gardener/test_one_at_a_time.py` (found during execution)
+  - `docs/concepts/config/idhazh-gardener.md`, `docs/how-to/prune-a-collection.md` and `docs/architecture/contracts/state-ledgers.md` (each said only `workflow-runs` keeps a mark; found during execution)
 - **How it works:**
   - The first page gives `total_count`, and that gives the last page.
-  - Pages are read from the last page backwards. On each page, every `created_at` must be at or before every `created_at` on the page read next, so the walk is oldest first.
+  - Pages are read from the last page backwards. Each page is sorted by `created_at`, and the oldest UTC day on each page must be at or after the newest UTC day on every page read before it, so the walk is oldest first by day (found during execution: GitHub orders by id, and `created_at` runs up to 76 minutes out of that order). The next page is read and checked before any artifact of the page in hand is taken.
   - Artifacts created on or before the mark day are skipped. Those after it, and on or before the line's day, are handled. The mark moves to a day only once every artifact of that day is handled.
   - When a page breaks the order, the pass reads every page as today, logs that the order check failed, and does not move the mark.
   - Each page's `total_count` must equal the first page's, less the artifacts this pass deleted. An artifact created during the read pushes every older one a place down, so one can move from a page not yet read onto a page already read while the order still holds. When the count differs, the pass handles what it read and does not move the mark.
+  - The list must end where the first page's count says: the last page holds what is left of the count, and when that page is full, the page after it is read, never handed on, and must be empty. When it does not, the pass handles what it read and does not move the mark (decision 10, the second follow-up).
 - **Acceptance gates:** local: pytest on the two test files; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** with recorded pages in GitHub's current order, a pass reads the last page and one more, and handles the oldest artifacts first. With one page out of order, it reads every page and leaves the mark where it was. With pages whose `total_count` grows between two reads, the mark stays. Safety never depends on the order, because each artifact is checked against the line before it is taken; completeness does, and the `total_count` check guards it. It cannot settle GitHub changing its order; the check catches that on the first wake after a change. Nor can it settle a shift that leaves the count unchanged, such as one artifact created and one expired between two reads; GitHub's own retention, 90 days by default and a repository setting to read at dispatch, deletes an artifact missed that way at most 60 days after the 30-day line.
+- **Found during execution:** read on 2026-10-05 with `gh api`, GitHub held 1,613 artifacts on 17 pages, listed by id, newest first, strictly. An id and its `created_at` disagreed by up to 4,534 seconds (76 minutes). Compared by instant, as this row was first written, the order check failed at 9 of the 16 page boundaries, so the walk would have read every page and kept its mark on about half of all wakes. Compared by UTC day, each page sorted by `created_at`, all 16 held, with no day out of order. The second follow-up is settled for today's size: every one of the 17 pages counted 1,613, and together they held 1,613 distinct artifacts, so the artifacts list's count was exact. Above 2,500 it cannot be read yet. A third of today's artifacts are kept 90 days, so with `dry_run` on the list may pass 2,500 within weeks (an estimate), and decision 10 checks the end of the list at every wake instead. Run on today's main, the new tests fail 24 of 87: main reads every page front to back, hands on the newest artifact first, deletes the newest in the window first, and keeps no mark on any artifacts pass. `RecordedApi`, which row 20's oracle names, went with this row: it answered every request with one page, which no walk from the last page can read. Its refused delete is `RecordedAnswers(fails_at=...)` now.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Combine a read from the oldest end (P2) with a stored mark (P3). The mark is a day, never a page number, because pages shift as artifacts expire | The owner, 2026-10-04 |
 | 2 | The order is checked on every page, so an undocumented order lowers the cost and never decides what is deleted | Plan author, 2026-10-04 |
 | 3 | The mark moves only while every page's `total_count` equals the first page's, less this pass's deletes, because a shifted page can carry an artifact onto a page already read | Fowler review, 2026-10-04 |
+| 4 | The order is checked by UTC day, each page sorted by `created_at` first, because the mark, the line and `take` all count days, and the instant check failed at 9 of 16 real boundaries | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 5 | A listing that may have missed a member says so through `Collection.listing_intact`, and `take`'s one record builder keeps the mark at every exit, a failed one included | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 6 | With no mark in reach, the first walk starts after the day before the repository was created, or at the line when that is earlier. `first_mark` became `first_runs_mark` beside `first_artifacts_mark`, with the read of the repository's day shared, in a structural commit first | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 7 | A count that differs keeps the mark, and the walk goes on to its line: a missed artifact costs completeness, never safety | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 8 | After the order breaks, the walk reads every remaining page, each once and still from the last back, with no stop at the line, so a live delete moves only artifacts already read (row 10, decision 6) | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 9 | Page p-1 is read and checked before any artifact of page p reaches `take`, so a pass that ends inside a page never ends past an unchecked boundary | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 10 | The list must end where the first page's count says: the last page holds what is left of it, and a full last page has an empty page after it. Otherwise the count is not trusted, the mark stays, and the walk goes on. One more request on a wake whose last page is full; a re-measure past 2,500 would prove the count only at that size, and only once someone noticed | Fowler, 2026-10-05 (row 11 worker's consult) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Read every page, as today (P1) | 14 pages every wake, about 7 seconds (an estimate) | Nothing to build | The owner, 2026-10-04 |
 | 2 | Reach artifacts through each old run | One request for every run, including runs with no artifact, about 175 a day | A request per run | Plan author, 2026-10-04 |
+| 3 | Check the order by instant, as this row was first written | Failed at 9 of 16 real page boundaries on 2026-10-05: the walk would read every page and keep its mark on about half of all wakes | Nothing to build; a mark that rarely moves | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 4 | Walk and check by id, GitHub's own order | 19 artifacts came after one from a later day, each in the half hour before a midnight, so `take` would hold the mark there; and a stop at the line could leave a later-made, lower-day artifact unread | Nothing to build | Fowler, 2026-10-05 (row 11 worker's consult) |
+| 5 | The task replaces `handled_through` on the returned pass | Splits the rule that holds a mark over two modules, and misses the record a failed pass raises with | Nothing to build | Fowler, 2026-10-05 (row 11 worker's consult) |
 
 ### Row #12 - Which months may close
 
