@@ -51,7 +51,7 @@ flowchart TB
     ABSORB["4. plan month files, or an empty entry:<br/>indexes and deletes wait for the end of the pass"]
     DDUE{"a day chosen for this wake?<br/>after the daily mark, compact_after_days<br/>since it ended, at most max_periods_per_run"}
     DHOLD["the day waits for a later wake:<br/>a run may still be writing, or the cap is used"]
-    TAKE["5. plan day files, or an empty entry,<br/>after each packed day a re-run wrote into:<br/>indexes and deletes wait for the end of the pass"]
+    TAKE["5. re-open each closed month a re-run wrote into,<br/>then plan day files, or an empty entry,<br/>after each packed day a re-run wrote into:<br/>indexes and deletes wait for the end of the pass"]
     DRY{"dry_run?"}
     REPORT["report every path, land the record only<br/>the three report-only compactions"]
     LAND["land every write and delete<br/>in the shard's one commit"]
@@ -121,7 +121,7 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 | 2 | Drops, by their listed paths and unread, the raw days past the keep line in the months step 1 drops and in those a first day run looked back over. While the window only reports, names them and keeps them |
 | 3 | Packs every year chosen for this wake into its year file, or into an entry with no file, where the declaration sets `monthly_keep_days` |
 | 4 | Closes every month chosen for this wake into its month file, or into an entry with no file |
-| 5 | Packs every day chosen for this wake into its day file, or into an entry with no file, after each packed day that holds raw files again |
+| 5 | Re-opens each closed month that raw files landed in ([A late file](#a-late-file)), then packs every day chosen for this wake into its day file, or into an entry with no file, after each packed day that holds raw files again |
 
 **Every step chooses its own periods.** Before any step runs, the pass chooses
 the months step 1 may drop, the years step 3 may pack, the months step 4 may
@@ -206,7 +206,8 @@ attempt 2 replace attempt 1 even when it filed fewer rows. The watermark does
 not move back. **A raw day at or below the mark is taken again however old it
 is**, in any month not yet closed: the month step holds such a month until the
 day is packed ([A month](#a-month)), so leaving it would hold the month for
-ever.
+ever. A raw day in a month already closed re-opens that month instead
+([A late file](#a-late-file)).
 
 **A first pass starts at the oldest raw day, never on the 1st of its month.** It
 looks for that day in the raw folders of the month that holds the newest due
@@ -280,10 +281,47 @@ When more than `max_periods_per_run` months are past the line at once, the
 oldest go first and the rest at the next wakes
 ([A month past the window](#a-month-past-the-window)).
 
-**Raw files that land in a month already absorbed are refused and kept.**
-`daily_keep_days` is at least 31, one day more than GitHub's 30-day re-run
-window, so no re-run can land there; a file that does is for a person to read.
-The rest of the pass still runs.
+## A late file
+
+**A raw file that lands in a month already closed re-opens that month.** A
+GitHub re-run writes into the day its run first wrote, up to 30 days later,
+and a month closes `daily_keep_days` after it ends. The day step meets the late
+day among the raw days it names and re-opens its month before it takes any
+day. A re-opened month counts once against `max_periods_per_run`, as a day
+does. The step names the month's file and raw folder first, so every late day
+of the month is taken in, and the month is written once.
+
+**The re-opened month holds what packing the late day first would have held.**
+Every row of a month file keeps the day its raw file covered, so the month's
+rows are split back into days. Each late day is settled as a day taken again is
+([A day](#a-day)): the month's rows of that day first, then the day's raw files
+oldest first, one file's rows per work unit and then one row per key, by the
+ledger's own key and preference in `backend/idhazh/ledger/keys.py`. The other
+days' rows do not change, and the month is joined again day by day in date
+order. The month file and its entry are written again, the late raw files are
+deleted, and the pass logs `note=reopened-month` with the month. A late day
+leaves the month's `lost_days`, because it now has a record. No mark moves. An
+`empty` month has no file, so its rows are the late rows alone. The re-open is
+`backend/idhazh/gardener/tasks/_reopened_month.py`.
+
+**A re-open that cannot finish keeps every file, and the pass ends `failed` at
+the month.** A `packed` entry whose month file is not there is refused as
+`fault=file-missing`: rebuilt from the late files alone, the month would hold
+only the days that ran again. A late raw file that cannot be read, or a late
+day with more files than `max_raw_files_per_period`, refuses the month the
+same way. The rest of the pass still runs.
+
+| # | Where a raw day at or below the daily mark is | What the day step does |
+| --- | --- | --- |
+| 1 | A month the monthly index names, which the monthly window keeps | Re-opens the month, as above |
+| 2 | A month the monthly index names, past the keep line | Nothing. The drop steps own it: a live window deletes it unread with its month, and a window that only reports names it and keeps it ([A month past the window](#a-month-past-the-window)) |
+| 3 | A month the monthly mark is past that no monthly entry names | Refuses the day by name and keeps its files, for a person: the month never closed, was dropped, or sits in a packed year, so there is no month to re-open |
+| 4 | A month not yet closed | Takes the day again ([A day](#a-day)) |
+
+**A month inside a packed year never re-opens.** A year packs no earlier than
+`daily_keep_days` plus 32 days after its December ([A year](#a-year)), and a
+re-run lands within 30 days, so no re-run reaches one. A raw day there is row
+3 above.
 
 ## A year
 
@@ -422,9 +460,10 @@ compaction live is the list the live pass carries out.
 **The monthly window has a switch of its own, `month_deletes_dry_run`.** With
 it `true`, steps 1 and 2 name every file a live pass would drop at that wake -
 the month files and raw days of the months the drop step chose - and keep them,
-so the next wake names the same months again; steps 3 to 5 then pack those days
-and months like any other, as if the window kept every month, so a first pass
-may start before the keep line. `dry_run` still
+so the next wake names the same months again; steps 3 to 5 then pack every
+other period as if the window kept every month, so a first pass may start
+before the keep line, and a raw day left in a closed month past the line stays
+where it is ([A late file](#a-late-file)). `dry_run` still
 decides whether anything lands, so a dry run with the window reporting names
 what that live pass would do. With it `false`, a pass drops what the window no
 longer keeps, as above.
@@ -481,13 +520,15 @@ way no such gap can open, so the rule went (Fowler and Carmack).
 re-run for 30 days, and the re-run writes into its first day, so a month absorbed
 sooner could still be reached by one. The 30 is declared once, as
 `GITHUB_RERUN_DAYS` in `backend/idhazh/contracts/knobs/gardener.py`, and the
-floor is derived from it. A raw file that lands in an absorbed month anyway is
-refused and kept for a person (Carmack and Fowler).
+floor is derived from it (Carmack and Fowler). A raw file that lands in an
+absorbed month anyway re-opens that month ([A late file](#a-late-file)).
 
 **The two ledgers packed live wait 31 days, not 45.** 31 is the
 shortest wait that still catches every re-run GitHub allows, and nothing needs
 the 14 days more that 45 waits. A shorter wait, such as 15 days, would need a
-month file rebuilt when a late re-run lands, which the packing refuses. The two
+month file rebuilt when a late re-run lands, which the packing could not do
+when this was decided; a late file now re-opens its month
+([A late file](#a-late-file)). The two
 declarations set 31, and the four that only report set 45.
 
 **A compaction's monthly window has a switch of its own.** Packing deletes only
@@ -639,6 +680,28 @@ of what is left to drop; Fowler's rulings, 2026-10-04 and 2026-10-05.
 | 1 | A separate file saying how far the drops have reached | A second record that can disagree with the index | A new persisted shape |
 | 2 | Keep looking at the three months just past the line | A month that slides past those three is never dropped | Nothing to build |
 | 3 | Drop every raw day past the line that the listing names | What goes would depend on how much the listing names, so a test over a whole folder would prove drops a scheduled wake never makes | Nothing to build |
+
+**2026-10-05: a late file re-opens its month.** A raw file in a month already
+closed used to stop its day as `failed`, with the file kept for a person, on
+every wake that named it. Now the month re-opens and is settled with the
+ledger's own key and preference, the rule day packing uses, so a re-opened
+month holds what packing the late day first would have held. A month past the
+keep line is the drop steps' instead: re-opening it would open a file the
+window has disowned, write a month file the window deletes, and let a file that
+cannot be read fail a pass that only reports. A month the monthly mark is past
+that no entry names has nothing to re-open, so its day is still refused: left
+raw, its rows would vanish from every reader once its year packs, and taken as
+a day, it would leave an entry no step ever clears. A re-opened month counts
+once against the cap, so a month is never half re-opened and never waits for
+ever. The owner's ruling, 2026-10-04, that a late file re-opens its month;
+Fowler's rulings, 2026-10-05.
+
+| # | Option | Why rejected | What it would cost to take |
+| --- | --- | --- | --- |
+| 1 | Fail the task and keep the late file | A red run until a person acts | Nothing to build |
+| 2 | Writers refuse to write into a closed month | The re-run's rows are lost, and every writer learns compaction state | Every writer changes |
+| 3 | Re-open a month past the keep line as well | A pass that only reports would change files the window deletes | Nothing more to build |
+| 4 | Count each late day against the cap | A month re-opened whole could overshoot the cap, or wait for ever when it holds more late days than the cap | A rule for a month that does not fit |
 
 **The `compact-summary-quality-evals` compaction packs the eval rows and never drops a month.** Every
 eval row is kept for ever and nothing summarises a month: the

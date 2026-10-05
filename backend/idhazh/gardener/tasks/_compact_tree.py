@@ -189,11 +189,11 @@ class CompactTree:
         )
 
     def name_months(self, months: Sequence[str]) -> None:
-        """Name what the month step reads of these months, and take in their raw days.
+        """Name what a step reads of these months, and take in their raw days.
 
         Each month's daily folder, raw folder and month file, whichever format
-        wrote it, are listed from the commit now: the month step chose them as
-        it ran.
+        wrote it, are listed from the commit now: the step chose them as it
+        ran.
         """
         self._name(
             [

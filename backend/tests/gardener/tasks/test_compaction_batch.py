@@ -78,6 +78,7 @@ def decide(root: Path, today: date) -> CompactTree:
             policy,
             chosen.days,
             rerun_span=chosen.rerun_span,
+            first_kept=chosen.keep_line,
             stamp="2026-03-05T00:00:00Z",
             identity=identity,
         )

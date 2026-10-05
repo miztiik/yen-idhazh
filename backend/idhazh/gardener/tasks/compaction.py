@@ -13,8 +13,9 @@ shard lands all of them in one commit:
 3. every year chosen for this wake is packed into its year file, or into an
    entry with no file, where the declaration sets `monthly_keep_days`;
 4. every month chosen for this wake is closed into its month file;
-5. every day chosen for this wake is packed into its day file, after each packed
-   day that holds raw files again.
+5. every closed month a raw file landed in is re-opened, then every day chosen
+   for this wake is packed into its day file, after each packed day that holds
+   raw files again.
 
 **Each step chooses its own periods.** The months step 1 drops, the years step
 3 packs, the months step 4 closes and the days step 5 packs are chosen before
@@ -134,7 +135,13 @@ def run(context: TaskContext) -> Pass:
         ),
         *_monthly_period.absorb(tree, chosen.months, stamp=stamp, identity=identity),
         *_daily_period.compact(
-            tree, policy, chosen.days, rerun_span=chosen.rerun_span, stamp=stamp, identity=identity
+            tree,
+            policy,
+            chosen.days,
+            rerun_span=chosen.rerun_span,
+            first_kept=first_kept,
+            stamp=stamp,
+            identity=identity,
         ),
     )
     tree.finish()
