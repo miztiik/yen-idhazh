@@ -20,8 +20,9 @@
  * the range is read from comes back with its count, because its file, if it has
  * one, holds every row but theirs.
  *
- * Where the ledger starts is worked out here too, `firstNamed()`, so the slice
- * and the reach never disagree about which hole lies before it.
+ * Where the ledger starts is worked out here too, `firstNamed()`, and how far it
+ * is packed, `newestNamed()`, so every reader cuts a span at the same first day
+ * and clamps it at the same newest one.
  *
  * Pure: it takes the range and the three entry lists, and reads nothing else.
  * It imports types only, so the site build loads it in plain Node.
@@ -66,9 +67,9 @@ const FIRST_DAY: Record<Exclude<Period, 'daily'>, (covers: string) => DateStamp>
 };
 
 /** The oldest day any index names, a month counting from its first day and a
- *  year from its 1 January. `daily` names at least one day; a hole before this
- *  day is before the ledger starts, and a hole from it on is a day the packing
- *  lost. */
+ *  year from its 1 January. At least one index names a period; a day before
+ *  this one is before the ledger began, so a reader cuts a span there, and a day
+ *  from it on that no index names is a hole. */
 export function firstNamed(
 	daily: readonly CompactEntry[],
 	monthly: readonly CompactEntry[],

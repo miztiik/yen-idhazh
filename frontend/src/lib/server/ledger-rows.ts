@@ -129,8 +129,9 @@ function textCells(row: Row): Record<string, string> {
  * that make up for them are read at its start. `-1` reads every packed day, and
  * a caller says beside the call why (`docs/concepts/growing-reads.md`).
  *
- * The span never starts before the record's first packed day, because a day
- * before it is a day no index names, and the door answers one as a hole.
+ * A span that starts before the record's first packed day is cut there by the
+ * door, which answers from that day, so a record younger than the span reads
+ * every day it holds.
  *
  * The read names the days in it the record's index records lost, and the files
  * its periods set aside unread, from both reads when there are two; keyed by
@@ -153,7 +154,7 @@ export async function newestRows(
 	if (reach.state === 'unreachable') return empty({ state: 'unreadable', at: null, fault: null });
 
 	const every = days < 1;
-	const from = every ? reach.first : later(reach.first, shiftDay(reach.through, 1 - days));
+	const from = every ? reach.first : shiftDay(reach.through, 1 - days);
 	const found = await ask(from, reach.through);
 	if (found.state === 'missing') return empty({ state: 'not-packed' });
 	if (found.state === 'unreachable') return empty({ state: 'unreadable', at: found.at, fault: found.fault });
@@ -167,7 +168,7 @@ export async function newestRows(
 	const newest = rows.reduce((top, row) => later(top, cellText(row.date)), '');
 	const lag = daysBetween(newest, reach.through) - 1;
 	if (!every && lag > 0 && from > reach.first) {
-		const before = await ask(later(reach.first, shiftDay(from, -lag)), shiftDay(from, -1));
+		const before = await ask(shiftDay(from, -lag), shiftDay(from, -1));
 		if (before.state === 'unreachable') {
 			return empty({ state: 'unreadable', at: before.at, fault: before.fault });
 		}

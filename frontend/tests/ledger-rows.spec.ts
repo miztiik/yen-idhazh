@@ -186,8 +186,8 @@ test.describe('reading a packed record', () => {
 	});
 
 	test('a span never starts before the first packed day, whatever it asks for', async () => {
-		// A day before the first one packed is a day no index names, and the door
-		// answers one as a hole. Ninety days back from 2026-09-03 would ask for June.
+		// Ninety days back from 2026-09-03 asks from June, and the door cuts the days
+		// before the first packed day: they are before the record began.
 		const root = packedUpTo('2026-09-03');
 		try {
 			const table = await machineRecord(90, root);

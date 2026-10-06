@@ -103,14 +103,15 @@
 						return;
 					}
 					const window = windowOfDays([reach.through], reach.through, days, 'right');
-					const from = window.start < reach.first ? reach.first : window.start;
-					span = { start: from, end: reach.through };
+					span = { start: window.start, end: reach.through };
 					const answer = await slice('host-fingerprint', {
 						columns: FLEET_COLUMNS,
-						from,
+						from: window.start,
 						to: reach.through
 					});
 					if (!current) return;
+					// The door cuts a window that starts before the record began, and names the day it answered from.
+					if (answer.state === 'ok' || answer.state === 'quiet') span = { start: answer.first, end: reach.through };
 					rows = answer.rows;
 					panelState = answer.state === 'ok' ? 'ready' : answer.state;
 					fault = answer.state === 'missing' || answer.state === 'unreachable' ? answer.fault : reach.fault;
