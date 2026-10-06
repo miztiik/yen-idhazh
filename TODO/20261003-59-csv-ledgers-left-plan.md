@@ -56,7 +56,7 @@ Table C - when to stop and ask
 | 3 | The CSV code no ledger uses any more is deleted | Plan 61 "The council saves its run records through the ledger door"; pipeline-tests "Readers understand nested trial roots" | A | PENDING | - | - | - |
 | 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11; Plan 61 "The council saves its run records through the ledger door" | B | PENDING | - | - | - |
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
-| 6 | The merge line's holdout score is saved through the door | 2, 11 | B | PENDING | - | - | - |
+| 6 | The merge line's holdout score is saved through the door | 2, 11 | B | DONE | p59-row-6 | - | Fowler |
 | 7 | The holdout marks are saved through the door | 6 | C | PENDING | - | - | - |
 | 8 | The item health summary is saved through the door | 2 | B | DONE | p59-row-8 | - | Fowler |
 | 9 | The committed judge rows move onto the door, and the old CSV files go | 5, 7 | F | PENDING | - | - | - |
@@ -269,6 +269,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | --- | --- | --- |
 | 1 | `operator` joins `ServerJob` with a docstring line, as `migrate` did: the door names every file's writer from that set, and a person's command has no workflow job | Fowler, 2026-10-05 |
 | 2 | Runs beside rows 4 and 5, not after them. The stage reads the fitted line through `applied.effective_same_story` and the marks through `holdout.marked_pairs`, and this row changes only its writer, so it shares no read or write with rows 4 and 5. Row 7 still follows it, because both edit `score_merge_line_holdout.py` and `similarity-holdout.ts` | Fowler, 2026-10-06 |
+| 3 | The migrator's old CSV layout table accepts nested day-tree prefixes for this ledger, because row 11 already made the door's nested folder rule real and row 9 needs this row's old files declared before it moves data | Fowler, 2026-10-06 |
 
 **Rejected alternatives**
 

@@ -108,9 +108,10 @@ after its ledger write. It derives only its own filenames from its UTC days
 and writer identity. The canary registers its fixed feed-health files through
 the same helper. A frontend consumer selects state entries with the `feed-health/`
 prefix; it does not list the state tree. Other ledger indexes remain separate.
-The merge-line and holdout-score stages also register their own dated CSV files:
-`content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` and
-`content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`.
+The merge-line stage also registers its own dated CSV file:
+`content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv`. The
+holdout-score stage registers the raw door file it wrote under
+`raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`.
 The canary writes and registers these same named series before the site build.
 
 Initial migration can supply a second explicit list:

@@ -212,9 +212,10 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         writer=(
             "a person, running `python -m idhazh score-merge-line-holdout`. The marked "
             "file changes when somebody labels more pairs rather than when a day "
-            "publishes, so nothing in the daily pipeline calls it and no job stages it"
+            "publishes, so nothing in the daily pipeline calls it and no job stages it. "
+            "The stage writes through the ledger door"
         ),
-        symbol=None,
+        symbol="idhazh.stages.score_merge_line_holdout.stage_score_merge_line_holdout",
         job_labels=frozenset(),
     ),
     LedgerName.TRACES: LedgerStaging(

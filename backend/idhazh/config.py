@@ -251,9 +251,7 @@ _SUMMARY_SERIES: Final[Mapping[str, str]] = MappingProxyType({"telemetry-aggrega
 
 #: Each ledger whose files a console read can still open. The declaration that
 #: governs it keeps every month file the widest read can select.
-_CONSOLE_READ_LEDGERS: Final[tuple[LedgerName, ...]] = (
-    LedgerName.FEED_HEALTH,
-)
+_CONSOLE_READ_LEDGERS: Final[tuple[LedgerName, ...]] = (LedgerName.FEED_HEALTH,)
 
 #: Each task series whose files a console read can still open, held the same way.
 _CONSOLE_READ_SERIES: Final[tuple[tuple[str, str], ...]] = (
@@ -406,6 +404,7 @@ def _refuse_overlapping_claims(tasks: Mapping[str, TaskPolicy]) -> None:
                         "whatever their status, or both would delete in it"
                     )
 
+
 def _refuse_a_file_where_a_folder_belongs(tasks: Mapping[str, TaskPolicy], repo_root: Path) -> None:
     """A shard lists the files under each folder a task owns, so an owned file would list none."""
     for name, policy in tasks.items():
@@ -517,7 +516,7 @@ def _governing(
     # while it loads, so importing it back at module scope would be a cycle.
     from idhazh.ledger.paths import STATE_DIRNAME, entry
 
-    name = f"compact-{ledger.value}"
+    name = f"compact-{'-'.join(entry(ledger).prefix)}"
     compaction = tasks.get(name)
     if isinstance(compaction, CompactionPolicy) and compaction.ledger is ledger:
         return name, compaction
@@ -822,10 +821,20 @@ def _refuse_a_compaction_that_cuts_its_ledger(
     """
     where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
     ledger = policy.ledger
-    if name != f"compact-{ledger.value}":
+    raw_roots = sorted(
+        folder.removeprefix("state/raw/")
+        for folder in policy.owns or ()
+        if folder.startswith("state/raw/")
+    )
+    expected = (
+        f"compact-{raw_roots[0].replace('/', '-')}"
+        if len(raw_roots) == 1
+        else f"compact-{ledger.value}"
+    )
+    if name != expected:
         raise ValueError(
-            f"{where} compacts {ledger.value}, and a compaction is named for its ledger: "
-            f"call it compact-{ledger.value}.json"
+            f"{where} compacts {ledger.value}, and a compaction is named for its folder: "
+            f"call it {expected}.json"
         )
     reach = _reach(policy)
     if ledger in app.ledger.published:

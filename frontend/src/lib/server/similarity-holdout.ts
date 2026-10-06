@@ -36,7 +36,9 @@ import {
 	type HoldoutSkip,
 	type ScoreWeights
 } from '../console/holdout';
-import { DIGEST_ROOT, LEDGER_WINDOW_DAYS, readCsv, readDayShards, STATE_ROOT } from './payload';
+import { datedFirst, newestRows } from './ledger-rows';
+import { sliceFromDisk } from './ledger-disk';
+import { DIGEST_ROOT, LEDGER_WINDOW_DAYS, readCsv, STATE_ROOT } from './payload';
 
 /** Every mark the day tree could answer for, and every one it could not. */
 export interface HoldoutReading {
@@ -50,8 +52,9 @@ export interface HoldoutReading {
 
 /** One committed reading of the line against the marks - the four cells and their line.
  *
- * `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` is
- * one row a scoring run, written by `python -m idhazh score-merge-line-holdout`.
+ * `state/compact/content-similarity-judge/merge-line-holdout-scores/` holds
+ * one row a scoring run, written by `python -m idhazh score-merge-line-holdout`
+ * through the ledger door and packed by the gardener.
  * The page reads it rather than counting the same cells again: two answers to
  * one question is what the committed row exists to stop.
  */
@@ -67,6 +70,19 @@ export interface MergeLineHoldoutScore {
 	pairsUnresolved: number;
 	labelledTwoStoryPairs: number;
 }
+
+const HOLDOUT_SCORE_COLUMNS = [
+	'date',
+	'run_id',
+	'applied_line',
+	'labeller',
+	'merged_and_one_story',
+	'merged_and_two_stories',
+	'apart_and_one_story',
+	'apart_and_two_stories',
+	'pairs_unresolved',
+	'labelled_two_story_pairs'
+] as const;
 
 /** The identity a holdout row and a published item are joined on.
  *
@@ -202,14 +218,16 @@ export function holdoutReading(
  * Bounded by the same window every other read on this route takes: the day files
  * a span of days reaches and no more (Guardrail #12).
  */
-export function mergeLineHoldoutScore(
+export async function mergeLineHoldoutScore(
 	days: number = LEDGER_WINDOW_DAYS,
 	root: string = STATE_ROOT
-): MergeLineHoldoutScore | null {
-	const table = readDayShards(
-		join(root, 'content-similarity-judge', 'merge-line-holdout-scores'),
-		days,
-		root
+): Promise<MergeLineHoldoutScore | null> {
+	const table = await newestRows(root, 'merge-line-holdout-scores', days, HOLDOUT_SCORE_COLUMNS, (from, to) =>
+		sliceFromDisk(root, 'merge-line-holdout-scores', {
+			columns: datedFirst(HOLDOUT_SCORE_COLUMNS),
+			from,
+			to
+		})
 	);
 	let newest: MergeLineHoldoutScore | null = null;
 	for (const row of table.rows) {

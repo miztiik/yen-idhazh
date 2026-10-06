@@ -43,6 +43,7 @@ COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.jso
 #: The task declarations these integration fixtures exercise, not a directory census.
 COMMITTED_DECLARATIONS: Final = (
     "compact-candidate-models.json",
+    "compact-content-similarity-judge-merge-line-holdout-scores.json",
     "compact-counterfactual-scores.json",
     "compact-feed-health.json",
     "compact-feed-retirements.json",
@@ -137,9 +138,7 @@ def a_config(root: Path, *declarations: Path) -> Path:
     gardener_config = config_dir / "idhazh_gardener.json"
     gardener_settings = json.loads(gardener_config.read_text(encoding="utf-8"))
     gardener_settings["task_names"] = sorted(task_names)
-    gardener_config.write_text(
-        json.dumps(gardener_settings, indent=2) + "\n", encoding="utf-8"
-    )
+    gardener_config.write_text(json.dumps(gardener_settings, indent=2) + "\n", encoding="utf-8")
     return config_dir
 
 

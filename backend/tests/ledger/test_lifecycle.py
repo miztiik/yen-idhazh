@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from conftest import CONFIG_DIR, SEED_COMMIT, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
@@ -200,7 +200,10 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         1,
         lambda s: _wrote(
-            s, lambda: score_merge_line_holdout._append(s, A_DAY, _first(MergeLineHoldoutScore))
+            s,
+            lambda: score_merge_line_holdout._append(
+                s, A_DAY, _first(MergeLineHoldoutScore), commit_sha=SEED_COMMIT
+            ),
         ),
     ),
     "collect_judge_metrics": (LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, 1, _collect_metrics),
@@ -237,9 +240,7 @@ def test_every_checked_route_writes_nothing_into_a_paused_family_and_says_so_onc
 
     skipped = [record.getMessage() for record in caplog.records if SKIPPED in record.getMessage()]
     assert not wrote, f"{route} wrote into the paused family {family}"
-    assert skipped == [
-        f"{SKIPPED} ledger={which.value} family={family} status=paused rows={rows}"
-    ]
+    assert skipped == [f"{SKIPPED} ledger={which.value} family={family} status=paused rows={rows}"]
 
 
 def test_a_retired_family_is_skipped_exactly_like_a_paused_one(

@@ -1,6 +1,6 @@
 """What one pass of a ledger's compaction does, in which order, and what its record says.
 
-One task a ledger, declared as `config/gardener/compact-<ledger>.json` and
+One task a ledger, declared as `config/gardener/compact-<folder>.json` and
 served by this module through its kind, so a ledger joins the compaction with
 one declaration and no Python. A pass runs five steps in one process, and the
 shard lands all of them in one commit:
@@ -150,9 +150,7 @@ def run(context: TaskContext) -> Pass:
     )
     tree.name_raw_months(looked_back)
     chosen = _compaction_periods.choose(tree, policy, now=now, operator_range=operator_range)
-    logging.getLogger(__name__).info(
-        "periods chosen %s", chosen.model_dump_json(exclude_none=True)
-    )
+    logging.getLogger(__name__).info("periods chosen %s", chosen.model_dump_json(exclude_none=True))
     first_kept = chosen.keep_line
     # Worked out before step 1 takes its months out of the index, for step 2 to read.
     raw_drop_months = [*_monthly_period.months_to_drop(tree, chosen.drops), *looked_back]

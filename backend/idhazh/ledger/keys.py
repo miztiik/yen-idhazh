@@ -32,6 +32,7 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import (
@@ -114,11 +115,9 @@ STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 #: marks are hand-written and the day payloads are committed, so two attempts
 #: count the same cells and the first row wins.
 #:
-#: Spelled here as four strings and nothing else. The shape they name is
-#: `idhazh.contracts.merge_line_holdout_score`, and this module may not import
-#: it: a council verb reaches this module for its own row types, and a judge
-#: contract arriving through it would put a judge in the council's import
-#: closure (`backend/tests/council/test_council_runs_without_a_judge.py`).
+#: Spelled here as four strings and nothing else. The row contract joins the
+#: door table below because a door ledger needs its contract before it can file
+#: a parquet row.
 MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 
 
@@ -368,6 +367,9 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.FEED_HEALTH: _DoorShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: _DoorShape(
+        MERGE_LINE_HOLDOUT_SCORE_KEY, MergeLineHoldoutScore
+    ),
     LedgerName.RUN_PLAN: _DoorShape(RUN_PLAN_KEY, RunPlan),
 }
 

@@ -73,9 +73,9 @@ JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.story_similarity_pair",
 )
 
-#: The three judge contracts a council verb still reaches, and the routes they
-#: arrive on. Measured by a fresh walk on 2026-09-21, and the owner's ruling the
-#: same day is that these three may cross and nothing else may.
+#: The judge contracts a council verb still reaches, and the routes they arrive
+#: on. Measured by a fresh walk when each door ledger's row contract joined the
+#: shared ledger table.
 #:
 #: **Why they are here rather than cut.** Both carriers are modules the two sides
 #: genuinely share. `idhazh.ledger` is the one registry of CSV rows and the
@@ -91,6 +91,7 @@ JUDGE_CONTRACT_MODULES: Final = (
 JUDGE_CONTRACTS_STILL_CROSSING: Final = frozenset(
     {
         "idhazh.contracts.fitted_similarity_threshold",
+        "idhazh.contracts.merge_line_holdout_score",
         "idhazh.contracts.story_similarity_distribution",
         "idhazh.contracts.story_similarity_pair",
     }

@@ -119,6 +119,10 @@ PACKED_ON_THE_MOVE: Final = (
 #: its records, never from the change that added it.
 LIVE_BY_DECISION: Final = {
     ("compact-candidate-models", "dry_run"): PACKED_ON_THE_MOVE,
+    (
+        "compact-content-similarity-judge-merge-line-holdout-scores",
+        "dry_run",
+    ): PACKED_ON_THE_MOVE,
     ("compact-counterfactual-scores", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-feed-health", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-host-fingerprint", "dry_run"): PACKED_FOR_THE_CONSOLE,

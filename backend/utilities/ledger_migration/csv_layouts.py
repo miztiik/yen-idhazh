@@ -26,7 +26,9 @@ class CsvLedger(NamedTuple):
 
 def _tree(name: LedgerName, folder: str | None = None) -> LedgerEntry:
     """A CSV day tree, one file a writer a day, under its own name unless it sat elsewhere."""
-    return LedgerEntry(name=name, grain=Grain.DAY_TREE, prefix=(folder or name.value,))
+    return LedgerEntry(
+        name=name, grain=Grain.DAY_TREE, prefix=tuple((folder or name.value).split("/"))
+    )
 
 
 def _day_file(name: LedgerName) -> LedgerEntry:
@@ -38,12 +40,14 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
     {
         # The full-grain series of the telemetry-aggregate task deleted it.
         LedgerName.ITEM_HEALTH: CsvLedger(
-            _tree(LedgerName.ITEM_HEALTH), MonthsWindow(unit="months", value=14),
+            _tree(LedgerName.ITEM_HEALTH),
+            MonthsWindow(unit="months", value=14),
             RETIRED_CELLS,
         ),
         # Filed under `scores/`, its name before it was renamed. No eval row is deleted.
         LedgerName.SUMMARY_QUALITY_EVALS: CsvLedger(
-            _tree(LedgerName.SUMMARY_QUALITY_EVALS, "scores"), ForeverWindow(unit="forever"),
+            _tree(LedgerName.SUMMARY_QUALITY_EVALS, "scores"),
+            ForeverWindow(unit="forever"),
             RENAMED_CELLS,
         ),
         # The host-fingerprint retention task deleted it, until its compaction took over.
@@ -59,6 +63,14 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
         ),
         LedgerName.FEED_HEALTH: CsvLedger(
             _tree(LedgerName.FEED_HEALTH), MonthsWindow(unit="months", value=14)
+        ),
+        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: CsvLedger(
+            _tree(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+                "content-similarity-judge/merge-line-holdout-scores",
+            ),
+            ForeverWindow(unit="forever"),
+            MappingProxyType({"key_point_weight": None}),
         ),
         LedgerName.SEEN: CsvLedger(_day_file(LedgerName.SEEN), DaysWindow(unit="days", value=90)),
         # Nothing deletes a published record: forgetting one republishes it.
@@ -76,7 +88,7 @@ def require_layout(which: LedgerName) -> LedgerEntry:
     if which not in CSV_LEDGERS:
         raise RefusedError(f"{which.value}: no supported CSV layout in CSV_LEDGERS")
     entry = CSV_LEDGERS[which].old_entry
-    if len(entry.prefix) != 1 or entry.grain not in (Grain.DAY_TREE, Grain.DAY_FILE):
+    if entry.grain not in (Grain.DAY_TREE, Grain.DAY_FILE):
         raise RefusedError(
             f"{which.value}: unsupported CSV layout {entry.grain.value} "
             f"under {'/'.join(entry.prefix)}"

@@ -49,6 +49,7 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.FEED_HEALTH: frozenset({"run_id"}),
     LedgerName.SEEN: frozenset(),
     LedgerName.PUBLISHED: frozenset(),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: frozenset({"run_id"}),
     LedgerName.RUN_PLAN: frozenset({"run_id"}),
 }
 
@@ -90,10 +91,10 @@ def test_a_door_ledger_is_not_a_csv_prune_target() -> None:
 
 
 def test_a_compaction_and_a_door_ledger_come_together() -> None:
-    """Every door ledger has its `compact-<ledger>`, and nothing compacts a ledger on CSV.
+    """Every door ledger has its compaction, and nothing compacts a ledger on CSV.
 
-    The loader refuses a compaction not named for its ledger, so a compaction that
-    loads is the file `config/gardener/compact-<ledger>.json`.
+    The loader refuses a compaction not named for its folder, so a compaction that
+    loads is the file `config/gardener/compact-<folder>.json`.
     """
     tasks = config.load_gardener().tasks
     compacted = {policy.ledger for policy in tasks.values() if isinstance(policy, CompactionPolicy)}

@@ -618,6 +618,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.date or _today(),
             run_id=args.run_id,
             labeller=args.labeller,
+            commit_sha=args.commit,
             settings=settings,
             state_dir=None if args.state_root is None else args.state_root,
             digest_root=args.digest_root,

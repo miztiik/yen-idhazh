@@ -133,6 +133,9 @@ class ServerJob(StrEnum):
     repository, which is why none of the three is version-stamped for it - a
     stamp says a shape moved, and theirs did not.
 
+    **`operator` names a person-run command.** Some door ledgers are written by
+    a command a person runs on their own machine, outside any workflow job.
+
     **`migrate`, `run-tasks` and `history` are here before any workflow runs
     them.** The ledger door names a file's writer from this set, so a job has to
     be in it before the first file carries its name. A migration job moves rows
@@ -160,6 +163,7 @@ class ServerJob(StrEnum):
     MIGRATE = "migrate"
     RUN_TASKS = "run-tasks"
     HISTORY = "history"
+    OPERATOR = "operator"
 
 
 #: The jobs whose writes file rows again rather than record new ones. The

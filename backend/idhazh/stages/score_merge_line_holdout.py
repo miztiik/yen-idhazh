@@ -19,6 +19,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from idhazh import config, ledger, publication
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.placement import HOLDOUT_TWO_STORY_MAX
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
@@ -34,30 +36,32 @@ from idhazh.stages.common import LOG
 _MAX_DRIFT_TOLERANCE = 0.00005
 
 
-def _append(state_dir: Path, date: str, row: MergeLineHoldoutScore) -> int:
-    """Put the row in its day file, and settle the file after the write.
+def _append(
+    state_dir: Path, date: str, row: MergeLineHoldoutScore, *, commit_sha: str
+) -> list[Path]:
+    """Put the row through the ledger door and return the raw files written.
 
     The writer lives here rather than in `idhazh.ledger` because the ledger may
     not import a judge's contract: a council verb reaches that module for its own
     row types, and a judge contract arriving through it would put a judge in the
     council's import closure. The path and the settlement key are the ledger's,
     which is where a path belongs.
-
-    **The day file is created even when nothing was scored**, the way every
-    ledger beside it is: the commit step names this directory, `git add` runs
-    under `set -euo pipefail`, and a path missing from the working tree aborts
-    the step and costs the ledgers staged with it.
     """
     which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
-    if not ledger.accepts_new_rows(which, 1):
-        return 0
-    path = ledger.path(state_dir, which, date)
-    columns = MergeLineHoldoutScore.csv_columns()
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = ledger.extend_ledger_file(path, columns, [row])
-    return landed - ledger.drop_repeated_rows(path, ledger.MERGE_LINE_HOLDOUT_SCORE_KEY)
+    return ledger.persist(
+        state_dir,
+        [row],
+        ledger=which,
+        covers=date,
+        identity=WriterIdentity(
+            run_id=row.run_id,
+            attempt=1,
+            job=ServerJob.OPERATOR,
+            shard=0,
+            producer="stages.score_merge_line_holdout",
+            git_sha=commit_sha,
+        ),
+    )
 
 
 def _warn_on_a_stale_maximum(reading: holdout.Reading) -> None:
@@ -103,6 +107,7 @@ def stage_score_merge_line_holdout(
     *,
     run_id: str,
     labeller: str,
+    commit_sha: str,
     settings: config.Settings,
     state_dir: Path | None = None,
     digest_root: Path = common.PUBLIC_ROOT,
@@ -174,16 +179,13 @@ def stage_score_merge_line_holdout(
         scorer_model=scorer.scorer_model,
         cosine_weight=scorer.cosine_weight,
     )
-    _append(state, date, row)
-    publication.record_state_files(
-        digest_root.parent,
-        state,
-        paths=[
-            ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, date)
-            .relative_to(state)
-            .as_posix()
-        ],
-    )
+    written = _append(state, date, row, commit_sha=commit_sha)
+    if written:
+        publication.record_state_files(
+            digest_root.parent,
+            state,
+            paths=[path.relative_to(state).as_posix() for path in written],
+        )
     LOG.info(
         "score-merge-line-holdout date=%s run=%s line=%s merged_one=%d merged_two=%d "
         "apart_one=%d apart_two=%d unresolved=%d marked=%d two_story_marks=%d days=%d",

@@ -31,8 +31,9 @@ writers left or in a daily, monthly or yearly file that holds other days as
 well, so `door_prune` takes the day out of each of those instead. Whether this
 may take any day of such a ledger is its compaction declaration's
 `prune_refusal`, beside the windows a person reads in
-`config/gardener/compact-<ledger>.json`: null lets it, and a sentence refuses
-the ledger with that sentence. A live pass there rewrites files, and each names
+`config/gardener/compact-<folder>.json`, where `<folder>` is the door folder
+with `/` written `-`: null lets it, and a sentence refuses the ledger with that
+sentence. A live pass there rewrites files, and each names
 the run and the commit that wrote it, so `--no-dry-run` there needs `--run-id`
 and `--commit`.
 
@@ -132,7 +133,6 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
     LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
 )

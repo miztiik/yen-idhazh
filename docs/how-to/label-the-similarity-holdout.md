@@ -200,16 +200,20 @@ Widen `--draw-root` rather than editing the batch.
 
 ```powershell
 python -m idhazh score-merge-line-holdout --date 2026-09-21 `
-  --run-id 2026-09-21-35534060762 --labeller claude-opus-4.6
+  --run-id 2026-09-21-35534060762 --labeller claude-opus-4.6 `
+  --commit <full-commit-sha>
 ```
 
 It counts what the merge line in force does to every marked pair and writes one
 row into
-`state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`:
+`state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`,
+which the gardener packs under
+`state/compact/content-similarity-judge/merge-line-holdout-scores/`:
 the line, the four cells, how many pairs it could not score, and how many marks
 say two stories. `--labeller` is the same name the harvest was given, and
 `--run-id` is `<date>-<a number>` - the row has to say which run took the
-reading.
+reading. `--commit` is the full commit SHA of the checkout that took it, so the
+door file's envelope points back to the code that wrote it.
 
 **Nothing schedules it.** The marked file changes when somebody labels more
 pairs rather than when a day publishes, so no workflow runs this verb and no job

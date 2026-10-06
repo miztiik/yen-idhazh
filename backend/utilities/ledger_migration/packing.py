@@ -49,7 +49,7 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
                 f"to move into yet: its entry becomes {Grain.RAW_AND_COMPACT.value} in the "
                 "change that moves its writers and readers"
             )
-        task = f"compact-{name.value}"
+        task = f"compact-{'-'.join(entries[name].prefix)}"
         policy = tasks.get(task)
         if not isinstance(policy, CompactionPolicy):
             raise RefusedError(

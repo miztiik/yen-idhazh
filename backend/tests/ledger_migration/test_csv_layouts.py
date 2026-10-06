@@ -45,13 +45,26 @@ def test_the_eval_ledgers_csv_tree_is_read_where_its_old_name_filed_it(tmp_path:
     """
     state = tmp_path / "state"
     assert csv_layouts.csv_root(state, EVALS) == state / "scores"
-    write_csv(state, EVALS, NEW, writer_file_name(NEW, 1, ServerJob.WORK), [score_row(NEW, 1).csv_row()])
+    write_csv(
+        state, EVALS, NEW, writer_file_name(NEW, 1, ServerJob.WORK), [score_row(NEW, 1).csv_row()]
+    )
 
     (moved,) = run_migration(state, EVALS)
 
     assert (moved.days, moved.rows) == (1, 1)
     assert list(read_back(state, EVALS, NEW).values()) == [score_row(NEW, 1).csv_row()]
     assert not (state / "scores").exists()
+
+
+def test_a_nested_similarity_judge_csv_tree_keeps_its_old_root(tmp_path: Path) -> None:
+    """The migrator can name a day tree under a family folder."""
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+    state = tmp_path / "state"
+
+    assert csv_layouts.csv_root(state, which) == (
+        state / "content-similarity-judge" / "merge-line-holdout-scores"
+    )
+    assert csv_layouts.CSV_LEDGERS[which].old_headings == {"key_point_weight": None}
 
 
 def test_every_unmoved_table_entry_is_the_registry_entry() -> None:
@@ -78,7 +91,8 @@ def test_every_moved_ledger_keeps_its_old_window() -> None:
     moved = csv_layouts.door_ledgers()
     short: list[str] = []
     for name in moved:
-        policy = tasks[f"compact-{name.value}"]
+        task_name = f"compact-{'-'.join(ledger.entry(name).prefix)}"
+        policy = tasks[task_name]
         assert isinstance(policy, CompactionPolicy), name
         if not config.compaction_reaches(policy, csv_layouts.CSV_LEDGERS[name].old_window):
             short.append(name.value)

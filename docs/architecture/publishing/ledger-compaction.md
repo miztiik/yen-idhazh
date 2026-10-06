@@ -12,8 +12,9 @@ it moved.** Where its declaration asks, it then packs each finished year's month
 files into one file a year. A raw file holds one writer's rows for one day, so a
 ledger gains a file on every run, and at a few rows a file a parquet file is
 mostly its footer.
-One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
-by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
+One task a ledger does the move: `config/gardener/compact-<folder>.json`, where
+`<folder>` is its door folder with `/` written `-`. It is served by
+`backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
 ledger is one declaration and no Python. The declarations that ship are in
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship).
 **Every ledger the console reads packs live.** The console reads packed files

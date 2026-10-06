@@ -24,7 +24,6 @@ import pytest
 from idhazh import ledger, path_classes
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
-from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 
 pytestmark = pytest.mark.contract
@@ -43,12 +42,6 @@ _TREES = (
         CouncilShardOutcome,
         ledger.COUNCIL_SHARD_OUTCOME_KEY,
         {"date": A_DATE, "run_id": A_RUN, "judge_id": "judge-a", "shard": "0"},
-    ),
-    (
-        "state/content-similarity-judge/merge-line-holdout-scores",
-        MergeLineHoldoutScore,
-        ledger.MERGE_LINE_HOLDOUT_SCORE_KEY,
-        {"date": A_DATE, "run_id": A_RUN},
     ),
     (
         "state/content-similarity-judge/scored-pairs",

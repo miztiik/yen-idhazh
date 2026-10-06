@@ -53,14 +53,13 @@ A ledger that goes through the ledger door files under two roots rather than one
 
 ## Ledgers outside raw and compact
 
-[Telemetry intent](../../concepts/telemetry-intent.md) N1 and N11 still have the six CSV ledgers below to move, and N6 still has the `merge=union` driver on five of them to retire. The last column says what has to happen before a ledger can move; the list under the table explains each term.
+[Telemetry intent](../../concepts/telemetry-intent.md) N1 and N11 still have the five CSV ledgers below to move, and N6 still has the `merge=union` driver on four of them to retire. The last column says what has to happen before a ledger can move; the list under the table explains each term.
 
 | Ledger under `state/` | Writer, under `backend/idhazh/` | What reads its rows, besides upkeep: backend under `backend/idhazh/`, console under `frontend/src/lib/server/` | Two writers on one file | What blocks its move |
 | --- | --- | --- | --- | --- |
 | `content-similarity-judge/scored-pairs` | `stages/count_verdicts.py` | `stages/set_merge_line.py` | the union driver keeps both | three fixed-choice fields; `run_id` and `shard` |
 | `content-similarity-judge/fitted-thresholds` | `stages/set_merge_line.py` | `stages/set_merge_line.py`, `similarity/applied.py`, `similarity-ledger.ts` | the union driver keeps both | two fixed-choice fields; `run_id` |
 | `content-similarity-judge/metrics` | `stages/count_verdicts.py` | nothing yet | the union driver keeps both | two fixed-choice fields; `run_id` and `shard` |
-| `content-similarity-judge/merge-line-holdout-scores` | `stages/score_merge_line_holdout.py` | `similarity-holdout.ts` | the union driver keeps both | one fixed-choice field; `run_id` |
 | `content-similarity-judge/holdout-pairs.csv` | a person, by hand | `similarity/holdout.py`, `similarity-holdout.ts` | `merge=text` stops the push for a person | nothing: it stays CSV while a person edits it by hand |
 | `llm-council/shard-outcomes` | `council/session.py` | nothing yet | the union driver keeps both | `run_id` and `shard` |
 
@@ -69,7 +68,7 @@ A ledger that goes through the ledger door files under two roots rather than one
 
 ### The rule a judge ledger follows when it moves
 
-A judge ledger is one the council or the similarity judge's code writes: the council's own record of each step of its night, and four of the `content-similarity-judge` ledgers above - `scored-pairs`, `fitted-thresholds`, `metrics` and `merge-line-holdout-scores`. Each follows the rule below when it moves to the door, so a reader who joins two of them meets one vocabulary.
+A judge ledger is one the council or the similarity judge's code writes: the council's own record of each step of its night, and the `content-similarity-judge` ledgers above. Each follows the rule below when it moves to the door, so a reader who joins two of them meets one vocabulary. `merge-line-holdout-scores` already follows it through the door.
 
 The council's own record has its door row contract already: `CouncilRunRecord` in `backend/idhazh/contracts/council_run_record.py`. It names a step and a part where the CSV row filed one `shard` number, and its `from_csv_row` reads every row the CSV filed. Nothing writes it yet.
 
@@ -92,10 +91,10 @@ Each piece goes with its last user. Two pieces have none left: no ledger has fil
 | `gardener/closed_day_fold.py`, and the fold branch in `gardener/runner.py` | fold a closed day's writer files into one `settled.csv` | none: no retention declaration has a `fold` | now |
 | `day_shards.py` | read CSV day files and settle their rows | the migrator, the canary builder (`backend/utilities/build_canary_day.py`), the closed-day fold, the gardener's file walks (`gardener/named_trees.py`, `gardener/retention_files.py`) and `path_classes.py` | the migrator and the fold are gone |
 | `ledger.extend_ledger_file` in `ledger/csv_file.py` | append rows to one CSV day file | the writers of the five ledgers above with a union driver | those five have moved |
-| `readDayShards` in `frontend/src/lib/server/payload.ts` | read CSV day files when the site builds | `similarity-ledger.ts` and `similarity-holdout.ts` | `fitted-thresholds` and `merge-line-holdout-scores` have moved |
+| `readDayShards` in `frontend/src/lib/server/payload.ts` | read CSV day files when the site builds | `similarity-ledger.ts` | `fitted-thresholds` has moved |
 | `backend/utilities/ledger_migration/` | declare and read the old CSV layouts, then plan, write, prove and retire named months; `backend/utilities/migrate_to_parquet.py` is the command | the next ledger to move | no ledger a program writes is left on CSV ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
-| the five `merge=union` lines in `.gitattributes`, and `path_classes.UNION_SAFE` | let two writers append to one CSV file | the five ledgers above with a union driver | each of those ledgers has moved |
-| `_TARGET_LEDGERS` in `telemetry/prune.py` | name the CSV ledgers the prune verb reaches | the five ledgers above with a union driver | the five have moved |
+| the four `merge=union` lines in `.gitattributes`, and `path_classes.UNION_SAFE` | let two writers append to one CSV file | the four ledgers above with a union driver | each of those ledgers has moved |
+| `_TARGET_LEDGERS` in `telemetry/prune.py` | name the CSV ledgers the prune verb reaches | the four ledgers above with a union driver | the four have moved |
 
 **Eight CSV files belong to no ledger.** Runs that started before the span summary retired (#1189) wrote four under `state/span-rollup/2026/10/02/`, and two in the `span-rollup` folder of each of two trial roots. Nothing reads or writes that folder now.
 

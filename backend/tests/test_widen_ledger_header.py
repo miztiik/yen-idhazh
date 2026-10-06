@@ -69,9 +69,6 @@ WIDE = FIXTURES_DIR / "state" / "scored-pairs-carrying-the-decode-digest.csv"
 UNREGISTERED: Final = frozenset(
     {
         "-".join(ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).prefix),
-        "-".join(
-            ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES).prefix
-        ),
     }
 )
 
@@ -364,5 +361,5 @@ def test_every_store_in_the_vocabulary_resolves_except_the_named_ledgers(
 
     assert refused == UNREGISTERED
     assert len(widen_ledger_header.LEDGERS) - len(refused) == 3, (
-        "three of six have CSV headers; the other three are named in UNREGISTERED"
+        "three of four have CSV headers; the other one is named in UNREGISTERED"
     )

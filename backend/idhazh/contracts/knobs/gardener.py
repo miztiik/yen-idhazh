@@ -461,7 +461,7 @@ class CompactionPolicy(_Declared):
     ledger: LedgerName = Field(
         description=(
             "The ledger this task compacts. Typed rather than read off the file's name, "
-            "and the declaration must be called compact-<ledger>."
+            "and the declaration must be called compact-<folder>."
         )
     )
     lookback: int | None = Field(

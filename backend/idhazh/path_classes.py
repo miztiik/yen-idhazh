@@ -84,7 +84,6 @@ DERIVED: Final[tuple[str, ...]] = (
 UNION_SAFE: Final[tuple[str, ...]] = (
     "state/llm-council/shard-outcomes",
     "state/content-similarity-judge/metrics",
-    "state/content-similarity-judge/merge-line-holdout-scores",
     "state/content-similarity-judge/scored-pairs",
     "state/content-similarity-judge/fitted-thresholds",
 )

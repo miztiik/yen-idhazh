@@ -127,11 +127,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/content-similarity-judge/metrics/2026/09/18.csv",
         "state/content-similarity-judge/metrics",
     ),
-    "CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES": (
-        "state/content-similarity-judge/merge-line-holdout-scores/2026/09/18.csv",
-        "state/content-similarity-judge/merge-line-holdout-scores/2026/09/18.csv",
-        "state/content-similarity-judge/merge-line-holdout-scores",
-    ),
     "LLM_COUNCIL_SHARD_OUTCOMES": (
         "state/llm-council/shard-outcomes/2026/09/18.csv",
         "state/llm-council/shard-outcomes/2026/09/18.csv",

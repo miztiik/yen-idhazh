@@ -28,9 +28,10 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, seed_publication_inventory
+from conftest import CONFIG_DIR, SEED_COMMIT, seed_publication_inventory
 
 from idhazh import assemble, config, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import (
     DigestDay,
     DigestEmbeddings,
@@ -113,9 +114,7 @@ def publish(root: Path, date: str, items: list[DigestItem], angles: list[float])
             model_id=EMBEDDER_ID,
             dimensions=DIMENSIONS,
             dtype=DTYPE,
-            vectors={
-                one.item_id: unit(angle) for one, angle in zip(items, angles, strict=True)
-            },
+            vectors={one.item_id: unit(angle) for one, angle in zip(items, angles, strict=True)},
         ),
     )
     target = assemble.day_dir(root, date)
@@ -153,10 +152,13 @@ def write_marks(state: Path, marks: list[SimilarityHoldoutPair]) -> Path:
 
 
 def committed_rows(state: Path, date: str) -> list[MergeLineHoldoutScore]:
-    """The rows one day file holds, read back through the contract that wrote them."""
-    path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, date)
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return [MergeLineHoldoutScore.from_csv_row(row) for row in csv.DictReader(handle)]
+    """The rows one day holds, read back through the door."""
+    return ledger.load_days(
+        state,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+        [date],
+        model=MergeLineHoldoutScore,
+    )
 
 
 def a_marked_tree(tmp_path: Path) -> tuple[Path, Path]:
@@ -258,9 +260,7 @@ def test_the_negative_population_counts_marks_the_line_never_reached() -> None:
 # --- how much of the file has to be counted ------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("marked", "floor"), [(0, 0), (1, 1), (200, 100), (201, 101), (3, 2)]
-)
+@pytest.mark.parametrize(("marked", "floor"), [(0, 0), (1, 1), (200, 100), (201, 101), (3, 2)])
 def test_the_floor_is_half_the_marked_file_rounded_up(marked: int, floor: int) -> None:
     """Half, and never half minus one: an odd file rounds towards the stricter answer."""
     assert holdout.resolved_floor(marked) == floor
@@ -298,6 +298,7 @@ def test_the_four_cells_and_the_unresolved_count_add_up_to_the_marked_file(
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=committed_settings(),
         state_dir=state,
         digest_root=digest,
@@ -325,6 +326,7 @@ def test_the_row_is_written_where_the_ledger_says_and_reads_back(tmp_path: Path)
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=committed_settings(),
         state_dir=state,
         digest_root=digest,
@@ -333,7 +335,15 @@ def test_the_row_is_written_where_the_ledger_says_and_reads_back(tmp_path: Path)
     assert row is not None
     written = committed_rows(state, SCORED_ON)
     assert written == [row]
-    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, SCORED_ON).is_file()
+    assert list(
+        ledger.raw_days(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES)
+    ) == [SCORED_ON]
+    (raw_file,) = ledger.list_raw_files(
+        state,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+        days=[SCORED_ON],
+    )
+    assert raw_file.envelope.identity.job is ServerJob.OPERATOR
 
 
 def test_a_second_attempt_at_one_run_leaves_one_row(tmp_path: Path) -> None:
@@ -350,6 +360,7 @@ def test_a_second_attempt_at_one_run_leaves_one_row(tmp_path: Path) -> None:
             SCORED_ON,
             run_id=A_RUN,
             labeller=A_LABELLER,
+            commit_sha=SEED_COMMIT,
             settings=settings,
             state_dir=state,
             digest_root=digest,
@@ -396,13 +407,16 @@ def test_a_reading_below_the_floor_writes_no_row_at_all(tmp_path: Path) -> None:
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=committed_settings(),
         state_dir=state,
         digest_root=digest,
     )
 
     assert row is None
-    assert not ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, SCORED_ON).exists()
+    assert not ledger.raw_root(
+        state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+    ).exists()
 
 
 def test_a_marked_file_that_is_not_there_writes_no_row(tmp_path: Path) -> None:
@@ -413,6 +427,7 @@ def test_a_marked_file_that_is_not_there_writes_no_row(tmp_path: Path) -> None:
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=committed_settings(),
         state_dir=state,
         digest_root=digest,
@@ -434,6 +449,7 @@ def test_the_row_records_the_ruler_the_cells_were_counted_under(tmp_path: Path) 
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=settings,
         state_dir=state,
         digest_root=digest,

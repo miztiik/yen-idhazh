@@ -49,7 +49,7 @@ function spanOfDays(days: number): string[] {
  * reads and none of it belongs in this document, so it is reduced to its counts
  * here rather than handed to the browser.
  */
-export function load() {
+export async function load() {
 	const console = consoleConfig();
 	const widestDays = Math.max(...console.window_presets);
 	const merges: MergeDay[] = publishedDates(undefined, widestDays)
@@ -83,7 +83,7 @@ export function load() {
 	// counted again here. Null where nobody has run the verb that writes it, or
 	// where the newest row is older than the widest preset reaches - and the panel
 	// says the line has not been scored rather than showing four zeros.
-	const scored = mergeLineHoldoutScore(widestDays);
+	const scored = await mergeLineHoldoutScore(widestDays);
 	return {
 		// Oldest first, the order every chart on this console draws a day axis in.
 		merges,
