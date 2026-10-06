@@ -30,6 +30,8 @@ writes nothing, so the log says how many rows would become how many.
 
 from __future__ import annotations
 
+import uuid
+
 from idhazh.contracts.knobs.gardener import TaskKind
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
@@ -44,7 +46,7 @@ def run(context: TaskContext) -> Pass:
 
     from idhazh import config, day_partition, ledger, month_partition, retention
     from idhazh.config import FULL_GRAIN
-    from idhazh.contracts.file_envelope import Period, WriterIdentity
+    from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
     from idhazh.contracts.item_health import ItemHealthRow
     from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
     from idhazh.contracts.knobs.gardener import ForeverWindow, RetentionPolicy
@@ -135,6 +137,19 @@ def run(context: TaskContext) -> Pass:
         producer=__name__.partition(".")[2],
         git_sha=context.git_sha,
     )
+    planned = [
+        ledger.raw_path(
+            state,
+            LedgerName.ITEM_HEALTH_SUMMARY,
+            day,
+            uuid.uuid5(uuid.NAMESPACE_URL, f"{context.run_id}|item-health-summary|{day}"),
+            fmt=Format.PARQUET,
+        )
+        .relative_to(context.repo_root)
+        .as_posix()
+        for summary in summaries.values()
+        for day in sorted({row.date for row in summary})
+    ]
     for month, summary in summaries.items():
         if policy.dry_run:
             continue
@@ -185,5 +200,5 @@ def run(context: TaskContext) -> Pass:
     )
     return dataclasses.replace(
         outcome,
-        appended=tuple(filed),
+        written=tuple(planned if policy.dry_run else filed),
     )

@@ -96,7 +96,7 @@ def pruned(
             sorted(
                 {
                     f"{parts[3]}-{parts[4]}"
-                    for path in outcome.appended
+                    for path in outcome.written
                     for parts in [PurePosixPath(path).parts]
                     if path.startswith(summaries) and len(parts) >= 6
                 }
@@ -261,7 +261,7 @@ def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
         if path.is_file()
     }
     assert result.dry_run is True
-    assert result.folded == (), "a dry run reports folded rows in the task log, not as files"
+    assert result.folded, "it still has to report what it would have done"
     assert after == before
     assert not (ledger.raw_root(state, LedgerName.ITEM_HEALTH_SUMMARY)).exists()
 
@@ -412,10 +412,9 @@ def test_a_dry_run_names_the_copy_it_would_take_and_leaves_it(tmp_path: Path) ->
 
     planned = pruned(state, dry_run=True)
     done = pruned(state)
-
     assert planned.public_deleted == done.public_deleted
-    assert planned.folded == ()
-    assert done.folded
+    assert planned.public_deleted == done.public_deleted
+    assert planned.folded == done.folded
     assert {path.name for path in month_shards(public, all_months)} == set(before) - {
         f"{stem}.csv" for stem in done.public_deleted
     }

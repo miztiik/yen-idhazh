@@ -186,10 +186,12 @@ class Pass:
     so `take` always leaves it empty; a task that writes a file of its own fills
     it, and the runner holds every path in it to what the task owns.
 
-    `appended` is the raw files a task filed through the ledger door into a ledger
-    its declaration `appends_to`, on a dry run too. They are held to that ledger
-    rather than to what the task owns, and they land whatever `dry_run` says,
-    because a report or fold is what a dry run is for.
+    `appended` is the raw report files a task filed through the ledger door into
+    a ledger its declaration `appends_to`, on a dry run too. They are held to
+    that ledger's wake-day folder rather than to what the task owns, and they land
+    whatever `dry_run` says, because a report is what a dry run is for. A task
+    that writes a non-report row through `appends_to` names it in `written`; dry
+    run reports that path without landing it.
 
     `handled_through` is the newest UTC day through which every member was
     handled, by this pass or the ones before it, on a pass that walked from a
