@@ -1,11 +1,12 @@
 import { chartConfig, collectConfig, consoleConfig } from '$lib/server/config';
-import { recordNotes } from '$lib/console/recording';
+import { windowOfDays } from '$lib/charts/viewport';
+import { recordNotesByWindow, type OfferedWindow } from '$lib/console/recording';
 import { itemHealthRows } from '$lib/server/ledger-rows';
+import { windowDay } from '$lib/server/window-day';
 import {
 	feedResults,
 	latestDate,
 	reliabilityPublished,
-	shardDays,
 	sourceHealthView,
 	type DayYield,
 	type FeedResult,
@@ -616,14 +617,20 @@ export async function load() {
 	const console = consoleConfig();
 	// The widest span the control offers. Nothing older than this can be drawn
 	// whatever the operator picks, so one read at this width covers every preset.
+	// Every span ends on the site's newest published day.
 	const widest = Math.max(...console.window_presets);
-	const days = shardDays(widest);
+	const day = windowDay();
+	const offered: OfferedWindow[] = console.window_presets.map((days) => ({
+		days,
+		...windowOfDays(day, days, console.today_anchor)
+	}));
+	const readSpan = windowOfDays(day, widest, console.today_anchor);
 	// From its packed files, so it stops at the newest packed day and says so on
 	// the page rather than drawing the days after it as quiet ones.
-	const items = await itemHealthRows(days);
+	const items = await itemHealthRows(readSpan);
 	const itemRows = items.rows;
 	const quarantineAfter = collectConfig().availability_strikes_before_rest;
-	const results = await feedResults(days);
+	const results = await feedResults(readSpan);
 	const troubled = trouble(results, quarantineAfter);
 	// Capped here rather than in the browser: this list is inlined into the
 	// prerendered document, so the rows the cap drops cost the page nothing.
@@ -666,21 +673,17 @@ export async function load() {
 		// One table per preset, because the section follows the page's window and the
 		// browser has no ledger to re-aggregate. Four tables of ten rows is cheaper
 		// than one fetch, and it keeps the section working with no script at all.
-		sourceCutsByWindow: console.window_presets.map((days) =>
-			sourceCuts(itemRows, {
-				days,
-				limit: SOURCE_CUT_ROWS
-			})
-		),
+		sourceCutsByWindow: offered.map((window) => sourceCuts(itemRows, window, { limit: SOURCE_CUT_ROWS })),
 		console,
 		// How a chart labels its axis. The feed strip's date axis reads it, and an
 		// operator moves it without editing a component.
 		chart: chartConfig(),
 		// What the page says about the article record before the cut-short table
-		// draws from it: not packed yet, did not load, packed some days short of
-		// the newest published day, or with a day it has no record for or files it
-		// set aside unread.
-		recordNotes: recordNotes([{ record: 'article', read: items.read }], latestDate(undefined, 1)),
-		today: new Date().toISOString().slice(0, 10)
+		// draws from it, one set for each span the control offers: not packed yet,
+		// did not load, packed short of the newest published day, with no rows in the
+		// span, or with a day it has no record for or files it set aside unread.
+		recordNotes: recordNotesByWindow([{ record: 'article', read: items.read }], latestDate(undefined, 1), offered),
+		// The day every window on this route ends on: the site's newest published day.
+		windowDay: day
 	};
 }

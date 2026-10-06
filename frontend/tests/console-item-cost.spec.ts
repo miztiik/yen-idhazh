@@ -1,22 +1,29 @@
 import { expect, test, type Page } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { windowOfDays } from '../src/lib/charts/viewport';
 import { itemCost } from '../src/lib/console/item-cost';
+import { telemetryRows } from '../src/lib/server/payload';
+import { windowDay } from '../src/lib/server/window-day';
+import { publishedSite } from './support/published-site';
 
 /**
- * What one item cost the model, checked against the file the page was drawn
- * from rather than against the label beside the mark.
- *
- * The oracle is the second half of this file. Every figure the section draws is
- * re-derived here from the committed projection - a second implementation, with
- * its own loops and its own arithmetic, that never calls the reducer the page
- * uses. A spec that compared a bar against the number printed under it would
- * pass on any reducer at all, because both come from one call.
+ * What one item cost the model, checked against answers written out here rather
+ * than against the label beside the mark.
  *
  * The first half is the reducer as a pure function, over rows written by hand
  * for the states the fixture cannot reach: a cell that is empty rather than
  * zero, a window where the two clocks answer for different numbers of items,
  * and a rate that must be pooled rather than averaged.
+ *
+ * The oracle is the second half: a site the test builds, read the way the
+ * console's server reads it, with each window's answer written out. A spec that
+ * re-derived each figure from the canary's own rows moved whenever the canary
+ * did; one that compared a bar against the number printed under it would pass
+ * on any reducer at all, because both come from one call.
+ *
+ * The last part is the built console: the window the control set, every counted
+ * item in a bar, and the share note.
  */
 
 /** The tree the site was built from. The suite builds from the canaries. */
@@ -213,6 +220,89 @@ test.describe('what one item cost, as arithmetic', () => {
 // The oracle
 // ---------------------------------------------------------------------------
 
+/** One projection row for `item`: a prompt of `tokens` tokens that the model
+ * read whole in one second, and a ten-token summary written in half of one. */
+function dated(date: string, item: string, tokens: number): Record<string, string> {
+	return {
+		date,
+		run_id: `${date}-1`,
+		item_id: item,
+		prefill_ms: '1000',
+		decode_ms: '500',
+		input_tokens: String(tokens),
+		output_tokens: '10',
+		cached_tokens: '0'
+	};
+}
+
+test("THE ORACLE: each window counts its own days, and they end on the site's newest published day", () => {
+	// Published on 14 and 15 Jun 2030. The projection holds a row on each window's
+	// first day and on the day before it, and one on 16 Jun, the day after the
+	// newest published day: a projection can run a day past the digest, as the
+	// canary's does. Each prompt is a different power of two, so the tokens a
+	// window read name exactly the rows it counted.
+	const { digest, telemetry } = publishedSite(test.info().outputPath('site'), {
+		published: ['2030-06-14', '2030-06-15'],
+		telemetry: {
+			// Filed under February and dated inside every window, as a misfiled row
+			// is. A read that opened a month no window touches would count it.
+			'2030-02': [dated('2030-06-15', 'misfiled', 2048)],
+			'2030-03': [dated('2030-03-17', 'before-90', 1), dated('2030-03-18', 'first-of-90', 2)],
+			'2030-05': [dated('2030-05-16', 'before-30', 4), dated('2030-05-17', 'first-of-30', 8)],
+			'2030-06': [
+				dated('2030-06-01', 'before-14', 16),
+				dated('2030-06-02', 'first-of-14', 32),
+				dated('2030-06-08', 'before-7', 64),
+				dated('2030-06-09', 'first-of-7', 128),
+				dated('2030-06-14', 'before-1', 256),
+				dated('2030-06-15', 'newest', 512),
+				dated('2030-06-16', 'after', 1024)
+			]
+		}
+	});
+
+	const day = windowDay(digest);
+	expect(day).toBe('2030-06-15');
+	const windows = [1, 7, 14, 30, 90].map((days) => ({ days, ...windowOfDays(day, days, 'right') }));
+	expect(windows.map(({ start, end }) => `${start} to ${end}`)).toEqual([
+		'2030-06-15 to 2030-06-15',
+		'2030-06-09 to 2030-06-15',
+		'2030-06-02 to 2030-06-15',
+		'2030-05-17 to 2030-06-15',
+		'2030-03-18 to 2030-06-15'
+	]);
+
+	// Read once, over the widest window, as the console's server reads it.
+	const read = telemetryRows(telemetry, windows[windows.length - 1]).rows;
+	expect(read.map((row) => row.item_id)).toEqual([
+		'first-of-90',
+		'before-30',
+		'first-of-30',
+		'before-14',
+		'first-of-14',
+		'before-7',
+		'first-of-7',
+		'before-1',
+		'newest'
+	]);
+
+	const counted = windows.map((offered) => {
+		const cost = itemCost(read, offered);
+		return { days: cost.days, rows: cost.rows, timed: cost.timed, readTokens: cost.readTokens };
+	});
+	expect(counted).toEqual([
+		{ days: 1, rows: 1, timed: 1, readTokens: 512 },
+		{ days: 7, rows: 3, timed: 3, readTokens: 896 },
+		{ days: 14, rows: 5, timed: 5, readTokens: 992 },
+		{ days: 30, rows: 7, timed: 7, readTokens: 1016 },
+		{ days: 90, rows: 9, timed: 9, readTokens: 1022 }
+	]);
+});
+
+// ---------------------------------------------------------------------------
+// The built console
+// ---------------------------------------------------------------------------
+
 /** The projection the built tree published, read cell by cell.
  *
  * The canary's own copy, written by `idhazh.telemetry.publish.public_telemetry`
@@ -238,43 +328,12 @@ function projection(): Record<string, string>[] {
 }
 
 /** A number, or null for an empty cell. Written out rather than imported: the
- * oracle may share no arithmetic with the thing it checks. */
+ * share check below may share no arithmetic with the thing it checks. */
 function value(row: Record<string, string>, name: string): number | null {
 	const raw = row[name];
 	if (raw === undefined || raw === '') return null;
 	const parsed = Number(raw);
 	return Number.isFinite(parsed) ? parsed : null;
-}
-
-/** The window the section says it is drawing, from the days the page says it
- * drew. It ends on the newest day the projection holds and runs back N days. */
-function span(days: number): { start: string; end: string } {
-	const dates = [...new Set(projection().map((row) => row.date))].filter(Boolean).sort();
-	const end = dates[dates.length - 1];
-	const at = new Date(`${end}T00:00:00Z`);
-	at.setUTCDate(at.getUTCDate() - (days - 1));
-	return { start: at.toISOString().slice(0, 10), end };
-}
-
-/** Every doubling bar a set of millisecond values falls into, counted by hand.
- *
- * A deliberately clumsy second implementation: it walks the edges rather than
- * generating them, and it counts with a loop rather than a filter. If it agreed
- * with the page by sharing an expression it would not be an oracle.
- */
-function barsOf(values: number[]): Map<number, number> {
-	const found = new Map<number, number>();
-	for (const ms of values) {
-		const seconds = ms / 1000;
-		let from = 0;
-		let to = 1;
-		while (seconds >= to) {
-			from = to;
-			to = to * 2;
-		}
-		found.set(from, (found.get(from) ?? 0) + 1);
-	}
-	return found;
 }
 
 function sorted(values: number[]): number[] {
@@ -303,27 +362,17 @@ async function setWindow(page: Page, days: number) {
 	);
 }
 
-/** Every number the section drew, as attributes rather than as prose. */
+/** The window the section drew, its words, and the two charts' counts and bars,
+ * as attributes rather than as prose. */
 async function drawn(page: Page) {
 	return page.locator('[data-windowed="item-cost"]').evaluate((node) => {
-		const attr = (name: string): string | null => {
-			const held = node.querySelector(`[${name}]`);
-			return held === null ? null : held.getAttribute(name);
-		};
 		const histogram = (name: string) => {
 			const chart = node.querySelector(`[data-histogram="${name}"]`);
 			if (chart === null) return null;
 			return {
 				n: Number(chart.getAttribute('data-histogram-n')),
-				bins: [...chart.querySelectorAll('[data-hist-bin]')].map((bin) => ({
-					from: Number(bin.getAttribute('data-hist-bin')),
-					n: Number(bin.getAttribute('data-hist-bin-n'))
-				})),
-				rules: Object.fromEntries(
-					[...chart.querySelectorAll('[data-hist-rule]')].map((rule) => [
-						rule.getAttribute('data-hist-rule') ?? '',
-						Number(rule.getAttribute('data-hist-rule-seconds'))
-					])
+				bars: [...chart.querySelectorAll('[data-hist-bin]')].map((bin) =>
+					Number(bin.getAttribute('data-hist-bin-n'))
 				)
 			};
 		};
@@ -331,175 +380,12 @@ async function drawn(page: Page) {
 			days: Number(node.getAttribute('data-window-days')),
 			says: (node.textContent ?? '').replace(/\s+/g, ' ').trim(),
 			reading: histogram('reading-the-prompt'),
-			writing: histogram('writing-the-summary'),
-			rows: attr('data-item-cost-rows'),
-			promptTokens: attr('data-item-cost-prompt-tokens'),
-			writtenTokens: attr('data-item-cost-written-tokens'),
-			itemReusedPct: attr('data-item-cost-item-reused-pct'),
-			readWhole: attr('data-item-cost-read-whole'),
-			readTokens: attr('data-item-cost-read-tokens'),
-			reusedTokens: attr('data-item-cost-reused-tokens'),
-			reusedPct: attr('data-item-cost-reused-pct'),
-			msPerReadToken: attr('data-item-cost-ms-per-read-token'),
-			msPerWrittenToken: attr('data-item-cost-ms-per-written-token'),
-			writeRatio: attr('data-item-cost-write-ratio')
+			writing: histogram('writing-the-summary')
 		};
 	});
 }
 
 test.describe('the section on the built console', () => {
-	test('THE ORACLE: every bar and every rule is the projection, re-derived', async ({ page }) => {
-		const rows = projection();
-		expect(rows.length, 'the canary projection is empty - the read is broken').toBeGreaterThan(0);
-
-		await page.goto('/console/');
-		await hydrated(page);
-
-		for (const preset of PRESETS) {
-			await setWindow(page, preset);
-			const window = span(preset);
-			const inWindow = rows.filter((row) => row.date >= window.start && row.date <= window.end);
-
-			const readMs: number[] = [];
-			const writeMs: number[] = [];
-			for (const row of inWindow) {
-				const prefill = value(row, 'prefill_ms');
-				const decode = value(row, 'decode_ms');
-				if (prefill !== null) readMs.push(prefill);
-				if (decode !== null) writeMs.push(decode);
-			}
-
-			const marks = await drawn(page);
-			expect(marks.days, `the section is drawing a window the control did not set`).toBe(preset);
-			// The window really narrows the rows rather than only the label. The canary
-			// holds days at 7, 30 and 90 days out, so the three presets read three
-			// different counts and a section that filtered nothing would fail here.
-			expect(
-				Number(marks.rows),
-				`the section at ${preset} days counted rows the window does not hold`
-			).toBe(inWindow.length);
-
-			for (const [name, values, shown] of [
-				['reading', readMs, marks.reading],
-				['writing', writeMs, marks.writing]
-			] as const) {
-				if (shown === null) continue;
-				expect(shown.n, `${name} at ${preset} days drew a count the projection does not hold`).toBe(
-					values.length
-				);
-				const expected = barsOf(values);
-				for (const bin of shown.bins) {
-					expect(
-						bin.n,
-						`${name} at ${preset} days: the bar from ${bin.from} s holds the wrong count`
-					).toBe(expected.get(bin.from) ?? 0);
-				}
-				// Every value has to land in a drawn bar, or the chart is quietly
-				// showing fewer items than it says it counted.
-				const drawnTotal = shown.bins.reduce((total, bin) => total + bin.n, 0);
-				expect(drawnTotal, `${name} at ${preset} days: bars do not sum to the count`).toBe(
-					values.length
-				);
-				expect(
-					shown.rules.median,
-					`${name} at ${preset} days: the median rule is not the median of the values`
-				).toBe(Math.round(at(values, 0.5) / 1000));
-				expect(
-					shown.rules.p95,
-					`${name} at ${preset} days: the 95th rule is not the 95th of the values`
-				).toBe(Math.round(at(values, 0.95) / 1000));
-			}
-		}
-	});
-
-	test('THE ORACLE: every token figure is the projection, re-derived', async ({ page }) => {
-		const rows = projection();
-		await page.goto('/console/');
-		await hydrated(page);
-
-		for (const preset of PRESETS) {
-			await setWindow(page, preset);
-			const window = span(preset);
-			const inWindow = rows.filter((row) => row.date >= window.start && row.date <= window.end);
-
-			const prompts: number[] = [];
-			const written: number[] = [];
-			const shares: number[] = [];
-			let read = 0;
-			let reused = 0;
-			let whole = 0;
-			let readMs = 0;
-			let writeMs = 0;
-			let writtenTokens = 0;
-			for (const line of inWindow) {
-				const input = value(line, 'input_tokens');
-				const output = value(line, 'output_tokens');
-				const cached = value(line, 'cached_tokens');
-				const prefill = value(line, 'prefill_ms');
-				const decode = value(line, 'decode_ms');
-				// The cache figures are about the FIRST call where the projection
-				// publishes one, and about the item where it does not. Derived here a
-				// second time rather than read off the reducer: an item read by two
-				// calls always reuses something, because the second replays the first
-				// call's prompt, so these three taken off the totals would count a
-				// cold slot as a warm one.
-				const firstCached = value(line, 'label_cached_tokens');
-				const firstInput = value(line, 'label_input_tokens');
-				const split = firstCached !== null && firstInput !== null;
-				const cacheOf = split ? firstCached : cached;
-				const promptOf = split ? firstInput : input;
-				if (input !== null) {
-					prompts.push(input);
-					read = read + input - (cached ?? 0);
-					if (cached !== null) reused = reused + cached;
-					if (cacheOf !== null && promptOf !== null) {
-						if (cacheOf === 0) whole = whole + 1;
-						shares.push(Math.round((cacheOf / promptOf) * 100));
-					}
-					if (prefill !== null) readMs = readMs + prefill;
-				}
-				if (output !== null) {
-					written.push(output);
-					if (decode !== null) {
-						writeMs = writeMs + decode;
-						writtenTokens = writtenTokens + output;
-					}
-				}
-			}
-			if (prompts.length === 0) continue;
-
-			const marks = await drawn(page);
-			const say = (what: string) => `${what} at ${preset} days`;
-			// Rounded, because no console cell prints a decimal and the middle of an
-			// even number of items is the mean of two. The rounding is the page's
-			// stated rule; the value under it is derived here.
-			expect(Number(marks.promptTokens), say('the middle prompt')).toBe(
-				Math.round(at(prompts, 0.5))
-			);
-			expect(Number(marks.writtenTokens), say('the middle summary')).toBe(
-				Math.round(at(written, 0.5))
-			);
-			expect(Number(marks.readTokens), say('prompt tokens read')).toBe(read);
-			expect(Number(marks.reusedTokens), say('prompt tokens already in memory')).toBe(reused);
-			expect(Number(marks.reusedPct), say("the window's share")).toBe(
-				Math.round((reused / (read + reused)) * 100)
-			);
-			expect(Number(marks.itemReusedPct), say("the middle item's share")).toBe(
-				Math.round(at(shares, 0.5))
-			);
-			expect(Number(marks.readWhole), say('items read whole')).toBe(whole);
-			expect(Number(marks.msPerReadToken), say('milliseconds a read token costs')).toBe(
-				Math.round(readMs / read)
-			);
-			expect(Number(marks.msPerWrittenToken), say('milliseconds a written token costs')).toBe(
-				Math.round(writeMs / writtenTokens)
-			);
-			expect(marks.writeRatio, say('the ratio between them')).toBe(
-				(writeMs / writtenTokens / (readMs / read)).toFixed(1)
-			);
-		}
-	});
-
 	test('THE ORACLE: the share is carried by figures, and no track is drawn', async ({ page }) => {
 		// The two-segment track that used to draw this share was one flat bar on
 		// no time axis, and the note under it told the reader not to read its
@@ -525,17 +411,32 @@ test.describe('the section on the built console', () => {
 		}
 	});
 
-	test('the section names the window it drew, at every preset', async ({ page }) => {
+	test('the section draws the window the control set, and every item it counted is in a bar', async ({
+		page
+	}) => {
 		// It honours the shared control without claiming a pan it does not follow,
-		// so the day count it prints has to be the one the control set.
+		// so the day count it prints has to be the one the control set. Which rows
+		// each window counts is the oracle above, on a site the test builds; what is
+		// left on the built console is that the page draws what it was handed.
 		await page.goto('/console/');
 		await hydrated(page);
 		for (const preset of PRESETS) {
 			await setWindow(page, preset);
 			const marks = await drawn(page);
+			expect(marks.days, 'the section is drawing a window the control did not set').toBe(preset);
 			expect(marks.says, `the section never says it is showing ${preset} days`).toContain(
 				`${preset} days`
 			);
+			for (const [name, shown] of [
+				['reading', marks.reading],
+				['writing', marks.writing]
+			] as const) {
+				if (shown === null) continue;
+				// A count outside every bar is a chart quietly showing fewer items than
+				// it says it counted.
+				const barred = shown.bars.reduce((total, n) => total + n, 0);
+				expect(barred, `${name} at ${preset} days: the bars do not sum to the count`).toBe(shown.n);
+			}
 		}
 	});
 

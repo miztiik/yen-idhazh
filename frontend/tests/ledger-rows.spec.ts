@@ -5,25 +5,38 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
 
-import { recordingNotes, recordNotes, type RecordNote, type RecordRead } from '../src/lib/console/recording';
+import { windowOfDays, type TimeWindow } from '../src/lib/charts/viewport';
+import {
+	recordingNotes,
+	recordNotes,
+	type OfferedWindow,
+	type RecordNote,
+	type RecordRead,
+	type RouteRecord
+} from '../src/lib/console/recording';
 import { checkedRequest, type Row } from '../src/lib/data/slice-shapes';
 import { HOST_FINGERPRINT_COLUMNS, machineRecord } from '../src/lib/server/host-fingerprint';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
-import { datedFirst, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS } from '../src/lib/server/ledger-rows';
+import { datedFirst, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
+import { windowDay } from '../src/lib/server/window-day';
+import { buildLedger, daysBefore, everyDay } from './support/ledger-lifecycle';
+import { publishedSite } from './support/published-site';
 import { serverCompiler } from './support/server-render';
 
 /**
  * How a console route reads a packed record at build time, and what it says
  * about the read.
  *
- * The readers are driven over the query door's own fixture under
+ * Most readers are driven over the query door's own fixture under
  * `tests/fixtures/ledger-door/`, through the machine record: the article and
  * score records take the same path with other columns. Each case reads inside
  * the test that asks, and a case that needs a tree the fixture does not hold
  * builds it in a temporary directory from the fixture's own files, so nothing
- * here grows with the archive (`CLAUDE.md` section 13). Nothing touches the
- * network but the engine, whose first query on a machine downloads its parquet
- * add-on (owner ruling, 2026-09-28).
+ * here grows with the archive (`CLAUDE.md` section 13). The window cases build
+ * their own site and ledger with the lifecycle builder, with days counted back
+ * from a day the test pins. Nothing touches the network but the engine, whose
+ * first query on a machine downloads its parquet add-on (owner ruling,
+ * 2026-09-28).
  *
  * The fixture holds daily files for 2026-08-31, 09-01, 09-02 and 09-05, a
  * zero-row day on 09-03, a hole on 09-04, and a monthly file for 2026-08. A
@@ -96,7 +109,8 @@ async function recordNotesComponent() {
 	return (await import(pathToFileURL(module).href)).default;
 }
 
-/** Each line the route prints, as its note kind, its records, whether it looks like a fault, and its text. */
+/** Each line the route prints, as its note kind, its records, whether it looks like a fault,
+ *  whether it is the quietest line, and its text. */
 async function printedNotes(notes: RecordNote[]) {
 	const RecordNotes = await recordNotesComponent();
 	const lines = [...render(RecordNotes, { props: { notes } }).body.matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/g)];
@@ -105,15 +119,19 @@ async function printedNotes(notes: RecordNote[]) {
 		kind: attribute(attributes, 'data-record-note'),
 		records: attribute(attributes, 'data-records'),
 		fault: /\brecord-fault\b/.test(attributes),
+		quiet: /\btext-text-tertiary\b/.test(attributes),
 		text: text.replace(/<!--[\s\S]*?-->/g, '').trim()
 	}));
 }
+
+/** A window of the fixture's days, both ends included. */
+const days = (start: string, end: string): TimeWindow => ({ start, end });
 
 test.describe('reading a packed record', () => {
 	test('a record with no packed file is not packed, and says so rather than throwing', async () => {
 		const root = mkdtempSync(path.join(tmpdir(), 'idhazh-unpacked-'));
 		try {
-			const table = await machineRecord(-1, root);
+			const table = await machineRecord(days('2026-09-01', '2026-09-05'), root);
 			expect(table.read).toEqual({ state: 'not-packed' });
 			expect(table.rows).toEqual([]);
 			// The header survives: a panel that reads its columns off the table still
@@ -127,7 +145,7 @@ test.describe('reading a packed record', () => {
 	test('a packed day missing from the middle makes the whole read unreadable, at that day, named day-missing', async () => {
 		// Every packed day from the first, and 2026-09-04 is named by neither index.
 		// Drawing the days either side of it would draw a gap as a quiet day.
-		const table = await machineRecord(-1, FIXTURE);
+		const table = await machineRecord(days('2026-08-31', '2026-09-05'), FIXTURE);
 		expect(table.read).toEqual({ state: 'unreadable', at: '2026-09-04', fault: 'day-missing' });
 		expect(table.rows).toEqual([]);
 	});
@@ -136,7 +154,7 @@ test.describe('reading a packed record', () => {
 		const root = packedUpTo('2026-09-03');
 		try {
 			rmSync(path.join(root, PACKED, 'daily', '2026', '09', '02.parquet'));
-			const table = await machineRecord(2, root);
+			const table = await machineRecord(days('2026-09-02', '2026-09-03'), root);
 			expect(table.read).toEqual({ state: 'unreadable', at: '2026-09-02', fault: 'file-missing' });
 			expect(table.rows).toEqual([]);
 		} finally {
@@ -144,9 +162,15 @@ test.describe('reading a packed record', () => {
 		}
 	});
 
-	test('the newest day reads on its own, and every cell comes back as the day files spelled it', async () => {
-		const table = await machineRecord(1, FIXTURE);
-		expect(table.read).toEqual({ state: 'read', through: '2026-09-05', lostDays: [], setAside: {} });
+	test('one day reads on its own, and every cell comes back as the day files spelled it', async () => {
+		const table = await machineRecord(days('2026-09-05', '2026-09-05'), FIXTURE);
+		expect(table.read).toEqual({
+			state: 'read',
+			through: '2026-09-05',
+			lastRows: { period: 'daily', covers: '2026-09-05' },
+			lostDays: [],
+			setAside: {}
+		});
 		expect(table.rows.map((row) => row.date)).toEqual(['2026-09-05', '2026-09-05']);
 
 		// The rule, stated here rather than borrowed: nothing is '', a number is its
@@ -169,29 +193,38 @@ test.describe('reading a packed record', () => {
 		}
 	});
 
-	test('packed days that hold no row at the end are made up for at the start', async () => {
-		// Packed through 2026-09-03, a day that holds no row. A window is anchored on
-		// the newest day that holds one, 2026-09-02, so two days read back from the
-		// newest PACKED day would reach one day too few. The reader reads the day
-		// that makes up for it.
+	test('a window whose packed days hold no row reads no row, and names where the rows stop instead of reaching back', async () => {
+		// Packed through 2026-09-03, a day that holds no row. The reader used to read
+		// back to 2026-09-02 to fill the window; now the window is the read.
 		const root = packedUpTo('2026-09-03');
 		try {
-			const table = await machineRecord(2, root);
-			expect(table.read).toEqual({ state: 'read', through: '2026-09-03', lostDays: [], setAside: {} });
-			expect([...new Set(table.rows.map((row) => row.date))]).toEqual(['2026-09-01', '2026-09-02']);
-			expect(table.rows).toHaveLength(3 + 2);
+			const table = await machineRecord(days('2026-09-03', '2026-09-03'), root);
+			expect(table.read).toEqual({
+				state: 'read',
+				through: '2026-09-03',
+				lastRows: { period: 'daily', covers: '2026-09-02' },
+				lostDays: [],
+				setAside: {}
+			});
+			expect(table.rows).toEqual([]);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
 	});
 
-	test('a span never starts before the first packed day, whatever it asks for', async () => {
-		// Ninety days back from 2026-09-03 asks from June, and the door cuts the days
-		// before the first packed day: they are before the record began.
+	test('a window that starts before the first packed day is read from that day', async () => {
+		// Ninety days to 2026-09-03 starts in June, and the door cuts the days before
+		// the first packed day: they are before the record began.
 		const root = packedUpTo('2026-09-03');
 		try {
-			const table = await machineRecord(90, root);
-			expect(table.read).toEqual({ state: 'read', through: '2026-09-03', lostDays: [], setAside: {} });
+			const table = await machineRecord(days('2026-06-06', '2026-09-03'), root);
+			expect(table.read).toEqual({
+				state: 'read',
+				through: '2026-09-03',
+				lastRows: { period: 'daily', covers: '2026-09-02' },
+				lostDays: [],
+				setAside: {}
+			});
 			expect([...new Set(table.rows.map((row) => row.date))]).toEqual([
 				'2026-08-31',
 				'2026-09-01',
@@ -212,10 +245,11 @@ test.describe('reading a packed record', () => {
 			{ ...fixtureDay('2026-09-05'), set_aside: 1 }
 		]);
 		try {
-			const table = await machineRecord(-1, root);
+			const table = await machineRecord(days('2026-08-31', '2026-09-05'), root);
 			expect(table.read).toEqual({
 				state: 'read',
 				through: '2026-09-05',
+				lastRows: { period: 'daily', covers: '2026-09-05' },
 				lostDays: ['2026-09-04'],
 				setAside: { '2026-09-04': 2, '2026-09-05': 1 }
 			});
@@ -230,9 +264,9 @@ test.describe('reading a packed record', () => {
 		}
 	});
 
-	test('the day read to make up for an empty end keeps what it is missing', async () => {
-		// Two days back from 2026-09-03, which held no row, reach one day too few, so the
-		// reader reads 2026-09-01 as well - lost here, with a file set aside.
+	test('a day lost before the window is not named, because nothing before the window is read', async () => {
+		// 2026-09-01 is lost with a file set aside, and the window is 2026-09-02 to
+		// 2026-09-03: the reader used to reach back over it, and named it.
 		const root = packedTree([
 			fixtureDay('2026-08-31'),
 			noFile('2026-09-01', 'lost', 1),
@@ -240,12 +274,13 @@ test.describe('reading a packed record', () => {
 			noFile('2026-09-03', 'empty')
 		]);
 		try {
-			const table = await machineRecord(2, root);
+			const table = await machineRecord(days('2026-09-02', '2026-09-03'), root);
 			expect(table.read).toEqual({
 				state: 'read',
 				through: '2026-09-03',
-				lostDays: ['2026-09-01'],
-				setAside: { '2026-09-01': 1 }
+				lastRows: { period: 'daily', covers: '2026-09-02' },
+				lostDays: [],
+				setAside: {}
 			});
 			expect([...new Set(table.rows.map((row) => row.date))]).toEqual(['2026-09-02']);
 		} finally {
@@ -253,7 +288,6 @@ test.describe('reading a packed record', () => {
 		}
 	});
 });
-
 test.describe('what a read asks the door for', () => {
 	test('the day and the run lead, so rows come back oldest day first and a run together', () => {
 		expect(datedFirst(['version', 'date', 'run_id', 'item_id'])).toEqual([
@@ -281,19 +315,35 @@ test.describe('what a read asks the door for', () => {
 	});
 });
 
-test.describe('what a route says about the records it read', () => {
-	const read = (through: string, lostDays: string[] = [], setAside: Record<string, number> = {}): RecordRead => ({
-		state: 'read',
-		through,
-		lostDays,
-		setAside
-	});
+/** Each window the control offers on a route, placed on `day`: 1, 7, 14, 30 and 90 days. */
+function offeredOn(day: string): OfferedWindow[] {
+	return [1, 7, 14, 30, 90].map((count) => ({ days: count, ...windowOfDays(day, count, 'right') }));
+}
 
-	test('records read and current say nothing', () => {
+/** The offered window of `count` days that ends on `day`. */
+function openOn(day: string, count: number): OfferedWindow {
+	return { days: count, ...windowOfDays(day, count, 'right') };
+}
+
+/** The notes a route prints for its 14-day window, which ends on `newestDay`. */
+function notesFor(reads: readonly RouteRecord[], newestDay: string | null, count = 14): RecordNote[] {
+	const day = newestDay ?? '2026-09-29';
+	return recordNotes(reads, newestDay, openOn(day, count), offeredOn(day));
+}
+
+test.describe('what a route says about the records it read', () => {
+	const read = (
+		through: string,
+		lostDays: string[] = [],
+		setAside: Record<string, number> = {},
+		lastRows: { period: 'daily' | 'monthly' | 'yearly'; covers: string } | null = { period: 'daily', covers: through }
+	): RecordRead => ({ state: 'read', through, lastRows, lostDays, setAside });
+
+	test('records read and packed as far as the newest published day say nothing', () => {
 		expect(
-			recordNotes(
+			notesFor(
 				[
-					{ record: 'article', read: read('2026-09-28') },
+					{ record: 'article', read: read('2026-09-29') },
 					{ record: 'score', read: read('2026-09-29') }
 				],
 				'2026-09-29'
@@ -302,7 +352,7 @@ test.describe('what a route says about the records it read', () => {
 	});
 
 	test('records not packed share one plain sentence that is not a fault', () => {
-		const notes = recordNotes(
+		const notes = notesFor(
 			[
 				{ record: 'article', read: { state: 'not-packed' } },
 				{ record: 'score', read: { state: 'not-packed' } }
@@ -314,13 +364,14 @@ test.describe('what a route says about the records it read', () => {
 				kind: 'not-packed',
 				records: ['article', 'score'],
 				text:
-					'The article and score records have not been packed yet, so nothing below that uses them has anything to show. That is a step not yet run, not a quiet pipeline.'
+					'The article and score records have not been packed yet, so nothing below that uses them has anything to show. That is a step not yet run, not a quiet pipeline.',
+				emptiesWindow: true
 			}
 		]);
 	});
 
 	test('a record that did not load is a fault, named with the day that failed where there is one', () => {
-		const notes = recordNotes(
+		const notes = notesFor(
 			[
 				{ record: 'machine', read: { state: 'unreadable', at: '2026-09-04', fault: null } },
 				{ record: 'article', read: { state: 'unreadable', at: null, fault: null } }
@@ -337,7 +388,7 @@ test.describe('what a route says about the records it read', () => {
 	});
 
 	test('a missing file and a missing day each say which, because each has its own fix', () => {
-		const notes = recordNotes(
+		const notes = notesFor(
 			[
 				{ record: 'machine', read: { state: 'unreadable', at: '2026-09-04', fault: 'file-missing' } },
 				{ record: 'score', read: { state: 'unreadable', at: '2026-09-04', fault: 'day-missing' } }
@@ -348,21 +399,20 @@ test.describe('what a route says about the records it read', () => {
 			{
 				kind: 'unreadable',
 				records: ['machine'],
-				text: 'The machine record lists a packed file for 4 Sep 2026 that is not there, so nothing below that uses this record has anything to show. This is a fault to fix, not a quiet day.'
+				text: 'The machine record lists a packed file for 4 Sep 2026 that is not there, so nothing below that uses this record has anything to show. This is a fault to fix, not a quiet day.',
+				emptiesWindow: true
 			},
 			{
 				kind: 'unreadable',
 				records: ['score'],
-				text: 'The score record is missing 4 Sep 2026, a day between packed days, so nothing below that uses this record has anything to show. This is a fault to fix, not a quiet day.'
+				text: 'The score record is missing 4 Sep 2026, a day between packed days, so nothing below that uses this record has anything to show. This is a fault to fix, not a quiet day.',
+				emptiesWindow: true
 			}
 		]);
 	});
 
 	test('a record packed short of the day before the newest published day says where it stops', () => {
-		// The day before the newest published day may not have ended when packing
-		// last ran, so a record packed that far is as current as packing can be.
-		expect(recordNotes([{ record: 'article', read: read('2026-09-28') }], '2026-09-29')).toEqual([]);
-		const notes = recordNotes(
+		const notes = notesFor(
 			[
 				{ record: 'article', read: read('2026-09-25') },
 				{ record: 'score', read: read('2026-09-25') },
@@ -374,37 +424,134 @@ test.describe('what a route says about the records it read', () => {
 			{
 				kind: 'behind',
 				records: ['article', 'score'],
-				text: 'The article and score records are packed as far as 25 Sep 2026, so the 4 days after it are not shown yet.'
+				text: 'The article and score records are packed as far as 25 Sep 2026, so the 4 days after it are not shown yet.',
+				emptiesWindow: false
 			},
 			{
 				kind: 'behind',
 				records: ['machine'],
-				text: 'The machine record is packed as far as 27 Sep 2026, so the 2 days after it are not shown yet.'
+				text: 'The machine record is packed as far as 27 Sep 2026, so the 2 days after it are not shown yet.',
+				emptiesWindow: false
+			}
+		]);
+		// A window that holds no packed day is empty because packing is late.
+		expect(notesFor([{ record: 'machine', read: read('2026-09-27') }], '2026-09-29', 1)).toEqual([
+			{
+				kind: 'behind',
+				records: ['machine'],
+				text: 'The machine record is packed as far as 27 Sep 2026, so the 2 days after it are not shown yet.',
+				emptiesWindow: true
 			}
 		]);
 	});
 
-	test('a day a record has no record for is named plainly, and the files it set aside say where they wait', () => {
-		const notes = recordNotes(
-			[{ record: 'machine', read: read('2026-08-20', ['2026-08-19'], { '2026-08-19': 2 }) }],
-			'2026-08-20'
+	test('records packed as far as the day before the newest published day print the quietest line, last', () => {
+		// A day is packed only after it ends, so this is every day in normal running.
+		expect(
+			notesFor(
+				[
+					{ record: 'machine', read: read('2026-10-05', ['2026-10-01']) },
+					{ record: 'article', read: read('2026-10-05') }
+				],
+				'2026-10-06'
+			)
+		).toEqual([
+			{
+				kind: 'lost',
+				records: ['machine'],
+				text: 'There is no machine record for 1 Oct 2026, so nothing below that uses this record shows that day. The record for that day was lost and could not be recovered; it was not a quiet day.',
+				emptiesWindow: false
+			},
+			{
+				kind: 'on-time',
+				records: ['machine', 'article'],
+				text: 'The machine and article records are packed as far as 5 Oct 2026, so nothing below that uses them shows 6 Oct 2026 yet. That is normal: a day is packed only after it ends.',
+				emptiesWindow: false
+			}
+		]);
+		// One record, and a one-day window, which holds only the day not packed yet.
+		expect(notesFor([{ record: 'machine', read: read('2026-10-05') }], '2026-10-06', 1)).toEqual([
+			{
+				kind: 'on-time',
+				records: ['machine'],
+				text: 'The machine record is packed as far as 5 Oct 2026, so nothing below that uses it shows 6 Oct 2026 yet. That is normal: a day is packed only after it ends.',
+				emptiesWindow: true
+			}
+		]);
+	});
+
+	test('a record whose packed rows stop before the window says from when, and names the window that reaches back to them', () => {
+		// Packed as far as the newest published day, 6 Oct 2026, with no rows after
+		// 6 Sep. The 14-day window starts on 23 Sep and the 30-day one on 7 Sep, so
+		// the narrowest window that reaches back to 6 Sep is 90 days.
+		const stopped = read('2026-10-06', [], {}, { period: 'daily', covers: '2026-09-06' });
+		expect(notesFor([{ record: 'machine', read: stopped }], '2026-10-06')).toEqual([
+			{
+				kind: 'rows-end',
+				records: ['machine'],
+				text: 'The newest packed rows in the machine record are from 6 Sep 2026. The packed days since then hold no rows, so nothing below that uses this record has anything to show in these 14 days. This page cannot tell if that is a quiet stretch or a fault. The 90-day window reaches back to 6 Sep 2026.',
+				emptiesWindow: true
+			}
+		]);
+		// Two records that stop on one day share a sentence, and a window that holds
+		// their last rows prints nothing about them.
+		const both = [
+			{ record: 'article' as const, read: read('2026-10-06', [], {}, { period: 'daily', covers: '2026-09-28' }) },
+			{ record: 'score' as const, read: read('2026-10-06', [], {}, { period: 'daily', covers: '2026-09-28' }) }
+		];
+		expect(notesFor(both, '2026-10-06', 7).map((note) => note.text)).toEqual([
+			'The newest packed rows in the article and score records are from 28 Sep 2026. The packed days since then hold no rows, so nothing below that uses them has anything to show in these 7 days. This page cannot tell if that is a quiet stretch or a fault. The 14-day window reaches back to 28 Sep 2026.'
+		]);
+		expect(notesFor(both, '2026-10-06', 14)).toEqual([]);
+		// The one-day window names its day.
+		expect(notesFor([{ record: 'machine', read: stopped }], '2026-10-06', 1)[0].text).toContain(
+			'has anything to show on 6 Oct 2026.'
 		);
+	});
+
+	test('rows that stop in a closed month or a packed year are named as that month or year', () => {
+		const month = read('2026-10-05', [], {}, { period: 'monthly', covers: '2026-08' });
+		// The 90-day window starts on 9 Jul, so it reaches back to the whole of August.
+		expect(notesFor([{ record: 'machine', read: month }], '2026-10-06', 30).map((note) => note.text)).toEqual([
+			'The newest packed rows in the machine record are from August 2026. The packed days since then hold no rows, so nothing below that uses this record has anything to show in these 30 days. This page cannot tell if that is a quiet stretch or a fault. The 90-day window reaches back to August 2026.'
+		]);
+		// No window reaches back to the whole of 2025, so nothing sends the operator to one.
+		const year = read('2026-10-06', [], {}, { period: 'yearly', covers: '2025' });
+		expect(notesFor([{ record: 'score', read: year }], '2026-10-06').map((note) => note.text)).toEqual([
+			'The newest packed rows in the score record are from 2025. The packed days since then hold no rows, so nothing below that uses this record has anything to show in these 14 days. This page cannot tell if that is a quiet stretch or a fault.'
+		]);
+	});
+
+	test('a record whose rows stop says so once: not on time as well, and not where the route says its measurement is off', () => {
+		const stopped = read('2026-10-05', [], {}, { period: 'daily', covers: '2026-09-06' });
+		expect(notesFor([{ record: 'machine', read: stopped }], '2026-10-06').map((note) => note.kind)).toEqual(['rows-end']);
+		expect(notesFor([{ record: 'machine', read: stopped, switchedOff: true }], '2026-10-06').map((note) => note.kind)).toEqual([
+			'on-time'
+		]);
+		// A record that has never held a row has no rows to stop: its quiet days stay quiet.
+		expect(notesFor([{ record: 'machine', read: read('2026-10-06', [], {}, null) }], '2026-10-06')).toEqual([]);
+	});
+
+	test('a day a record has no record for is named plainly, and the files it set aside say where they wait', () => {
+		const notes = notesFor([{ record: 'machine', read: read('2026-08-20', ['2026-08-19'], { '2026-08-19': 2 }) }], '2026-08-20');
 		expect(notes).toEqual([
 			{
 				kind: 'lost',
 				records: ['machine'],
-				text: 'There is no machine record for 19 Aug 2026, so nothing below that uses this record shows that day. The record for that day was lost and could not be recovered; it was not a quiet day.'
+				text: 'There is no machine record for 19 Aug 2026, so nothing below that uses this record shows that day. The record for that day was lost and could not be recovered; it was not a quiet day.',
+				emptiesWindow: false
 			},
 			{
 				kind: 'set-aside',
 				records: ['machine'],
-				text: '2 machine record files were set aside unread when this data was packed, so anything below that uses this record may be missing their rows. They wait in state/raw/host-fingerprint/set-aside/ for a person to read.'
+				text: '2 machine record files were set aside unread when this data was packed, so anything below that uses this record may be missing their rows. They wait in state/raw/host-fingerprint/set-aside/ for a person to read.',
+				emptiesWindow: false
 			}
 		]);
 	});
 
 	test('lost days read as runs with the year once, one file reads as one file, and a new year names both years', () => {
-		const notes = recordNotes(
+		const notes = notesFor(
 			[{ record: 'article', read: read('2026-08-20', ['2026-08-14', '2026-08-15', '2026-08-16', '2026-08-19'], { '2026-08': 1 }) }],
 			'2026-08-20'
 		);
@@ -413,14 +560,14 @@ test.describe('what a route says about the records it read', () => {
 			'1 article record file was set aside unread when this data was packed, so anything below that uses this record may be missing its rows. It waits in state/raw/item-health/set-aside/ for a person to read.'
 		]);
 		// "31 Dec to 1 Jan 2027" would name the wrong December.
-		const [turn] = recordNotes([{ record: 'score', read: read('2027-01-02', ['2026-12-31', '2027-01-01']) }], '2027-01-02');
+		const [turn] = notesFor([{ record: 'score', read: read('2027-01-02', ['2026-12-31', '2027-01-01']) }], '2027-01-02');
 		expect(turn.text).toContain('There is no score record for 31 Dec 2026 to 1 Jan 2027, so');
 	});
 
 	test('the route prints one line a note, and only a record that did not load looks like a fault', async () => {
 		// Compiled and rendered for real, because the canary packs every record as
 		// far as its own day and so never shows a route one of these lines.
-		const notes = recordNotes(
+		const notes = notesFor(
 			[
 				{ record: 'article', read: { state: 'not-packed' } },
 				{ record: 'machine', read: { state: 'unreadable', at: '2026-09-04', fault: 'file-missing' } },
@@ -432,8 +579,24 @@ test.describe('what a route says about the records it read', () => {
 		expect(printed.map((line) => line.kind)).toEqual(['not-packed', 'unreadable', 'behind', 'lost', 'set-aside']);
 		expect(printed.map((line) => line.records)).toEqual(['article', 'machine', 'score', 'score', 'score']);
 		expect(printed.map((line) => line.fault)).toEqual([false, true, false, false, false]);
+		expect(printed.map((line) => line.quiet)).toEqual([false, false, false, false, false]);
 		expect(printed.map((line) => line.text)).toEqual(notes.map((note) => note.text));
 		expect(await printedNotes([])).toEqual([]);
+	});
+
+	test('the line for the day not packed yet prints a step quieter than the others, and last', async () => {
+		const notes = notesFor(
+			[
+				{ record: 'machine', read: read('2026-10-05', [], {}, { period: 'daily', covers: '2026-09-06' }) },
+				{ record: 'article', read: read('2026-10-05') }
+			],
+			'2026-10-06'
+		);
+		const printed = await printedNotes(notes);
+		expect(printed.map((line) => [line.kind, line.records, line.fault, line.quiet])).toEqual([
+			['rows-end', 'machine', false, false],
+			['on-time', 'article', false, true]
+		]);
 	});
 });
 
@@ -443,14 +606,21 @@ test.describe('THE ORACLE for the Hardware note: a day the machine record lost r
 		// the lost day was a day before the record started, and the start the day after it.
 		const root = packedTree([noFile('2026-09-03', 'empty'), noFile('2026-09-04', 'lost'), fixtureDay('2026-09-05')]);
 		try {
-			const machine = await machineRecord(-1, root);
-			expect(machine.read).toEqual({ state: 'read', through: '2026-09-05', lostDays: ['2026-09-04'], setAside: {} });
-			const printed = await printedNotes(recordNotes([{ record: 'machine', read: machine.read }], '2026-09-05'));
+			const machine = await machineRecord(days('2026-09-03', '2026-09-05'), root);
+			expect(machine.read).toEqual({
+				state: 'read',
+				through: '2026-09-05',
+				lastRows: { period: 'daily', covers: '2026-09-05' },
+				lostDays: ['2026-09-04'],
+				setAside: {}
+			});
+			const printed = await printedNotes(notesFor([{ record: 'machine', read: machine.read }], '2026-09-05'));
 			expect(printed).toEqual([
 				{
 					kind: 'lost',
 					records: 'machine',
 					fault: false,
+					quiet: false,
 					text: 'There is no machine record for 4 Sep 2026, so nothing below that uses this record shows that day. The record for that day was lost and could not be recovered; it was not a quiet day.'
 				}
 			]);
@@ -465,5 +635,59 @@ test.describe('THE ORACLE for the Hardware note: a day the machine record lost r
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
+	});
+});
+
+test.describe('THE ORACLE: a console window ends on the site\'s newest published day, and reads only its own days', () => {
+	const PUBLISHED = '2030-06-15';
+
+	test('a record whose rows stop 40 days before the newest published day reads nothing before the window, and the note names its last day', async () => {
+		// Published on 14 and 15 Jun 2030. The machine record holds one row a day up to
+		// 6 May, 40 days before the newest published day, and is packed with empty days
+		// from 7 May to 14 Jun, the day before it.
+		const { digest } = publishedSite(test.info().outputPath('site'), { published: ['2030-06-14', PUBLISHED] });
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PUBLISHED,
+			days: [...everyDay(45, 40), ...Array.from({ length: 39 }, (_, at) => ({ ago: 39 - at, state: 'empty' as const }))]
+		});
+		expect(daysBefore(PUBLISHED, 40)).toBe('2030-05-06');
+
+		const day = windowDay(digest);
+		expect(day).toBe(PUBLISHED);
+		const open = { days: 30, ...windowOfDays(day, 30, 'right') };
+		expect(open).toEqual({ days: 30, start: '2030-05-17', end: '2030-06-15' });
+
+		const asked: [string, string][] = [];
+		const table = await windowRows(state, 'host-fingerprint', open, HOST_FINGERPRINT_COLUMNS, (from, to) => {
+			asked.push([from, to]);
+			return sliceFromDisk(state, 'host-fingerprint', { columns: [...datedFirst(HOST_FINGERPRINT_COLUMNS)], from, to });
+		});
+		expect(asked).toEqual([['2030-05-17', '2030-06-15']]);
+		expect(table.rows).toEqual([]);
+		expect(table.read).toEqual({
+			state: 'read',
+			through: '2030-06-14',
+			lastRows: { period: 'daily', covers: '2030-05-06' },
+			lostDays: [],
+			setAside: {}
+		});
+		// The machine record's own reader answers the same window the same way.
+		expect(await machineRecord(open, state)).toEqual(table);
+
+		const notes = recordNotes([{ record: 'machine', read: table.read }], day, open, offeredOn(day));
+		expect(notes.map((note) => note.text)).toEqual([
+			'The newest packed rows in the machine record are from 6 May 2030. The packed days since then hold no rows, so nothing below that uses this record has anything to show in these 30 days. This page cannot tell if that is a quiet stretch or a fault. The 90-day window reaches back to 6 May 2030.'
+		]);
+	});
+
+	test('a site that has published nothing places every window on the build\'s own UTC day', () => {
+		const empty = test.info().outputPath('nothing-published');
+		mkdirSync(path.join(empty, 'digest'), { recursive: true });
+		const before = new Date().toISOString().slice(0, 10);
+		const day = windowDay(path.join(empty, 'digest'));
+		const after = new Date().toISOString().slice(0, 10);
+		expect([before, after]).toContain(day);
 	});
 });

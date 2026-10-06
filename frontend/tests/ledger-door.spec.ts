@@ -1072,6 +1072,7 @@ test.describe('how far a ledger reaches', () => {
 			state: 'ok',
 			first: '2026-08-01',
 			through: '2026-09-05',
+			lastRows: { period: 'daily', covers: '2026-09-05' },
 			fault: null
 		});
 		expect(asked.map((one) => one.path).sort()).toEqual([DAILY_INDEX, MONTHLY_INDEX, YEARLY_INDEX].sort());
@@ -1086,6 +1087,7 @@ test.describe('how far a ledger reaches', () => {
 			state: 'ok',
 			first: '2026-01-01',
 			through: '2027-01-01',
+			lastRows: { period: 'yearly', covers: '2026' },
 			fault: null
 		});
 		expect(engine.opened()).toBe(0);
@@ -1094,14 +1096,14 @@ test.describe('how far a ledger reaches', () => {
 	test('a yearly.json this build will not act on leaves what the other two name, and the console says why', async () => {
 		const { fetcher } = recorded({ [YEARLY_INDEX]: reshaped({ version: '2099-01-01' }) }, YEAR_STATE);
 		const { result, warned } = await warnings(() => readReach(freshPage(fetcher), LEDGER));
-		expect(result).toEqual({ state: 'ok', first: '2027-01-01', through: '2027-01-01', fault: null });
+		expect(result).toEqual({ state: 'ok', first: '2027-01-01', through: '2027-01-01', lastRows: null, fault: null });
 		expect(warned.join('\n')).toMatch(/^\[ledger\] host-fingerprint: yearly\.json .*reaches back only to 2027-01-01/);
 	});
 
 	test('with no monthly.json, it reaches back to the oldest day daily.json names, and names index-missing once', async () => {
 		const { fetcher } = recorded({ [MONTHLY_INDEX]: { status: 404 } });
 		const { result, warned } = await warnings(() => readReach(freshPage(fetcher), LEDGER));
-		expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', fault: 'index-missing' });
+		expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', lastRows: { period: 'daily', covers: '2026-09-05' }, fault: 'index-missing' });
 		expect(warned).toEqual([
 			`[ledger] index-missing host-fingerprint state/${MONTHLY_INDEX}: it is not there, though daily.json is. ` +
 				'Run the upkeep again to write it; it lists nothing until a month is packed.'
@@ -1117,7 +1119,7 @@ test.describe('how far a ledger reaches', () => {
 		test(`a monthly.json that is ${what} leaves the days daily.json names, and the console says why`, async () => {
 			const { fetcher } = recorded({ [MONTHLY_INDEX]: rule });
 			const { result, warned } = await warnings(() => readReach(freshPage(fetcher), LEDGER));
-			expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', fault: null });
+			expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', lastRows: { period: 'daily', covers: '2026-09-05' }, fault: null });
 			expect(warned.join('\n')).toMatch(/^\[ledger\] host-fingerprint: monthly\.json .*reaches back only to 2026-08-31/);
 		});
 
@@ -1208,7 +1210,7 @@ test.describe('THE ORACLE for a missing file: a name, the state it draws, and on
 			without: [MONTHLY_INDEX],
 			span: ['2026-08-30', '2026-09-01'],
 			answer: { state: 'unreachable', rows: [], at: '2026-08-30', fault: 'index-missing' },
-			reach: { state: 'ok', first: '2026-08-31', through: '2026-09-05', fault: 'index-missing' },
+			reach: { state: 'ok', first: '2026-08-31', through: '2026-09-05', lastRows: { period: 'daily', covers: '2026-09-05' }, fault: 'index-missing' },
 			names: MONTHLY_INDEX
 		},
 		{
@@ -1216,7 +1218,7 @@ test.describe('THE ORACLE for a missing file: a name, the state it draws, and on
 			without: [dayFile('2026-09-02')],
 			span: ['2026-09-01', '2026-09-02'],
 			answer: { state: 'unreachable', rows: [], at: '2026-09-02', fault: 'file-missing' },
-			reach: { state: 'ok', first: '2026-08-01', through: '2026-09-05', fault: null },
+			reach: { state: 'ok', first: '2026-08-01', through: '2026-09-05', lastRows: { period: 'daily', covers: '2026-09-05' }, fault: null },
 			names: dayFile('2026-09-02')
 		},
 		{
@@ -1224,7 +1226,7 @@ test.describe('THE ORACLE for a missing file: a name, the state it draws, and on
 			without: [],
 			span: ['2026-09-02', '2026-09-05'],
 			answer: { state: 'unreachable', rows: [], at: '2026-09-04', fault: 'day-missing' },
-			reach: { state: 'ok', first: '2026-08-01', through: '2026-09-05', fault: null },
+			reach: { state: 'ok', first: '2026-08-01', through: '2026-09-05', lastRows: { period: 'daily', covers: '2026-09-05' }, fault: null },
 			names: DAILY_INDEX
 		}
 	] as const;
@@ -1282,7 +1284,7 @@ test.describe('THE ORACLE for a missing file: a name, the state it draws, and on
 		}));
 		expect(browser.result).toEqual({
 			drawn: { state: 'unreachable', rows: [], at: '2026-07-30', fault: 'index-missing' },
-			reach: { state: 'ok', first: '2026-08-01', through: '2026-09-05', fault: 'index-missing' }
+			reach: { state: 'ok', first: '2026-08-01', through: '2026-09-05', lastRows: { period: 'daily', covers: '2026-09-05' }, fault: 'index-missing' }
 		});
 		expect(browser.warned).toEqual([
 			`[ledger] index-missing ${LEDGER} state/${YEARLY_INDEX}: it is not there, though daily.json is. ` +
@@ -1310,7 +1312,7 @@ test.describe('an empty monthly.json or yearly.json is a gap the design expects:
 		const { result: drawn, warned } = await warnings(() => readSlice(page, LEDGER, ask('2026-08-30', '2026-09-02')));
 		const { result: reach } = await warnings(() => readReach(page, LEDGER));
 		expect(drawn).toMatchObject({ state: 'ok', first: '2026-08-31' });
-		expect(reach).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', fault: null });
+		expect(reach).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05', lastRows: { period: 'daily', covers: '2026-09-05' }, fault: null });
 		expect(asked.filter((one) => one.path.endsWith('.json')).map((one) => one.path).sort()).toEqual([DAILY_INDEX, MONTHLY_INDEX, YEARLY_INDEX].sort());
 		expect(asked.filter((one) => one.answered !== 200)).toEqual([]);
 		for (const fault of LEDGER_FAULTS) expect(warned.join('\n')).not.toContain(` ${fault} `);
@@ -1426,7 +1428,7 @@ test.describe('THE ORACLE for a period with no file: an empty day is quiet, a lo
 		const newestLost = withNoFile([{ ...LOST_DAY, covers: '2026-09-06' }]);
 		const { fetcher } = recorded(servedWithNoFile(newestLost));
 		const page = freshPage(fetcher);
-		expect(await readReach(page, LEDGER)).toEqual({ state: 'ok', first: '2026-08-01', through: '2026-09-06', fault: null });
+		expect(await readReach(page, LEDGER)).toEqual({ state: 'ok', first: '2026-08-01', through: '2026-09-06', lastRows: { period: 'daily', covers: '2026-09-05' }, fault: null });
 		expect(await readSlice(page, LEDGER, ask('2026-09-06', '2026-09-06'))).toEqual({
 			state: 'quiet',
 			rows: [],

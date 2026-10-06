@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-06
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds three of its panels - where a run's time went, what one item cost
@@ -333,7 +333,7 @@ Reducing on the server costs the page about a hundred numbers a preset and draws
 complete before any script runs.
 
 What it costs is stated on the page: panning does not move these days, and they
-always end on the newest day the ledger holds. The section says so in the same
+always end on the newest published day. The section says so in the same
 words `Sources cut short most often` does, because one rule stated two ways reads
 as two rules.
 

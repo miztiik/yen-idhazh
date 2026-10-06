@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createRequire } from 'node:module';
+import { windowOfDays, type TimeWindow } from '../src/lib/charts/viewport';
+import { recordNotes } from '../src/lib/console/recording';
 import { readAsk } from '../src/lib/data/ask-reader';
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
@@ -9,10 +11,12 @@ import { daysBetween } from '../src/lib/data/slice';
 import { readSlice } from '../src/lib/data/slice-reader';
 import type { AskOptions, SliceOptions } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository } from '../src/lib/server/config';
+import { sliceFromDisk } from '../src/lib/server/ledger-disk';
+import { windowRows, type LedgerTable } from '../src/lib/server/ledger-rows';
 import { buildLedger, everyDay, servedFrom, siteCopy, type BuiltLedger } from './support/ledger-lifecycle';
 
 /**
- * Which days do a written question and a panel slice read from a ledger in each lifecycle state?
+ * Which days do a written question, a panel slice and a console window read from a ledger in each lifecycle state?
  *
  * Every ledger here is built by the test that asks, with its days counted back from a day the
  * test pins, so each expected value is written out from what that test built: the rows an
@@ -378,7 +382,13 @@ test.describe('how far a ledger is packed comes from all three indexes', () => {
 		// monthly.json names May.
 		const { page, asked } = await builtSite(everyDay(45, 15), ['2030-05']);
 		try {
-			expect(await readReach(page, LEDGER)).toEqual({ state: 'ok', first: '2030-05-01', through: '2030-05-31', fault: null });
+			expect(await readReach(page, LEDGER)).toEqual({
+				state: 'ok',
+				first: '2030-05-01',
+				through: '2030-05-31',
+				lastRows: { period: 'monthly', covers: '2030-05' },
+				fault: null
+			});
 			expect(await readSlice(page, LEDGER, slicing('2030-05-18', '2030-05-31'))).toEqual({
 				state: 'ok',
 				rows: daysBetween('2030-05-18', '2030-05-31').map((date) => ({ date, n: 1 })),
@@ -399,5 +409,104 @@ test.describe('how far a ledger is packed comes from all three indexes', () => {
 		} finally {
 			await page.release();
 		}
+	});
+});
+
+/** The rows a console route reads from a ledger built under a fresh root, for `window`, and
+ *  every span its reader asked the door for. */
+async function consoleRead(days: BuiltLedger['days'], window: TimeWindow, closedMonths: string[] = []): Promise<{ table: LedgerTable; asked: [string, string][] }> {
+	const root = test.info().outputPath('state');
+	await buildLedger(root, { ledger: LEDGER, pinned: PINNED, days, closedMonths });
+	const asked: [string, string][] = [];
+	const table = await windowRows(root, LEDGER, window, ['date', 'n'], (from, to) => {
+		asked.push([from, to]);
+		return sliceFromDisk(root, LEDGER, { columns: ['date', 'n'], from, to });
+	});
+	return { table, asked };
+}
+
+/** Each window the control offers, ending on the pinned day, the site's newest published day. */
+const OFFERED = [1, 7, 14, 30, 90].map((days) => ({ days, ...windowOfDays(PINNED, days, 'right') }));
+const FORTNIGHT = OFFERED.find((window) => window.days === 14)!;
+
+/** The empty days from `oldest` days before the pinned day to `newest` days before it. */
+function emptyDays(oldest: number, newest: number): BuiltLedger['days'] {
+	const days: BuiltLedger['days'][number][] = [];
+	for (let ago = oldest; ago >= newest; ago -= 1) days.push({ ago, state: 'empty' });
+	return days;
+}
+
+test.describe('a console window ends on the newest published day, and reads only its own days', () => {
+	test('a writer that stopped through a month close: the window reads no row, and the note names that month', async () => {
+		// One row a day from 10 to 20 May 2030, May closed, then June packed empty to 14
+		// Jun. The 14-day window is 2 to 15 Jun, and the 90-day one starts on 18 Mar.
+		const { table, asked } = await consoleRead([...everyDay(36, 26), ...emptyDays(25, 1)], FORTNIGHT, ['2030-05']);
+		expect(asked).toEqual([['2030-06-02', '2030-06-15']]);
+		expect(table.rows).toEqual([]);
+		expect(table.read).toEqual({
+			state: 'read',
+			through: '2030-06-14',
+			lastRows: { period: 'monthly', covers: '2030-05' },
+			lostDays: [],
+			setAside: {}
+		});
+		expect(recordNotes([{ record: 'machine', read: table.read }], PINNED, FORTNIGHT, OFFERED)).toEqual([
+			{
+				kind: 'rows-end',
+				records: ['machine'],
+				text: 'The newest packed rows in the machine record are from May 2030. The packed days since then hold no rows, so nothing below that uses this record has anything to show in these 14 days. This page cannot tell if that is a quiet stretch or a fault. The 90-day window reaches back to May 2030.',
+				emptiesWindow: true
+			}
+		]);
+	});
+
+	test('packing that paused 5 days before the newest published day: the window reads to where packing stopped, and the note names the days after', async () => {
+		// One row a day, packed as far as 10 Jun 2030.
+		const { table, asked } = await consoleRead(everyDay(30, 5), FORTNIGHT);
+		expect(asked).toEqual([['2030-06-02', '2030-06-15']]);
+		expect(table.rows).toEqual(daysBetween('2030-06-02', '2030-06-10').map((date) => ({ date, n: '1' })));
+		expect(table.read).toEqual({
+			state: 'read',
+			through: '2030-06-10',
+			lastRows: { period: 'daily', covers: '2030-06-10' },
+			lostDays: [],
+			setAside: {}
+		});
+		expect(recordNotes([{ record: 'machine', read: table.read }], PINNED, FORTNIGHT, OFFERED)).toEqual([
+			{
+				kind: 'behind',
+				records: ['machine'],
+				text: 'The machine record is packed as far as 10 Jun 2030, so the 5 days after it are not shown yet.',
+				emptiesWindow: false
+			}
+		]);
+	});
+
+	test('a ledger packed as far as the day before the newest published day: the window reads to that day, and the quietest line names the day after', async () => {
+		const { table } = await consoleRead(everyDay(20, 1), FORTNIGHT);
+		expect(table.rows).toEqual(daysBetween('2030-06-02', '2030-06-14').map((date) => ({ date, n: '1' })));
+		expect(recordNotes([{ record: 'machine', read: table.read }], PINNED, FORTNIGHT, OFFERED)).toEqual([
+			{
+				kind: 'on-time',
+				records: ['machine'],
+				text: 'The machine record is packed as far as 14 Jun 2030, so nothing below that uses it shows 15 Jun 2030 yet. That is normal: a day is packed only after it ends.',
+				emptiesWindow: false
+			}
+		]);
+	});
+
+	test('a ledger that began inside the window is read from its first day, and says nothing about rows stopping', async () => {
+		// Began on 10 Jun 2030, packed as far as 15 Jun.
+		const { table, asked } = await consoleRead(everyDay(5, 0), FORTNIGHT);
+		expect(asked).toEqual([['2030-06-02', '2030-06-15']]);
+		expect(table.rows).toEqual(daysBetween('2030-06-10', '2030-06-15').map((date) => ({ date, n: '1' })));
+		expect(recordNotes([{ record: 'machine', read: table.read }], PINNED, FORTNIGHT, OFFERED)).toEqual([]);
+	});
+
+	test('a ledger that has never held a row: its quiet days stay quiet, and no note says its rows stopped', async () => {
+		const { table } = await consoleRead(emptyDays(20, 0), FORTNIGHT);
+		expect(table.rows).toEqual([]);
+		expect(table.read).toEqual({ state: 'read', through: PINNED, lastRows: null, lostDays: [], setAside: {} });
+		expect(recordNotes([{ record: 'machine', read: table.read }], PINNED, FORTNIGHT, OFFERED)).toEqual([]);
 	});
 });

@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-06
 
 The console's interactive charts read a published projection of item health. They
 never read the item-health ledger directly.
@@ -518,7 +518,7 @@ The run-length panel is different and is filtered rather than re-measured: a run
 is already three numbers, so narrowing the window drops columns and recomputes
 nothing.
 
-Every span is anchored on the same day list the cards are anchored on, so the
+Every span ends on the site's newest published day, as the cards' lines do, so the
 panels on that page name one window. `DayWindow` in
 [frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts)
 is that one answer, passed down rather than re-derived.

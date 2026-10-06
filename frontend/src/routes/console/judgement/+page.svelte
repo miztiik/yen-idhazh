@@ -60,12 +60,7 @@
 	}
 
 	const viewport = $derived(
-		windowOfDays(
-			data.merges.map((day) => day.date),
-			data.today,
-			windowDays,
-			data.console.today_anchor
-		)
+		windowOfDays(data.windowDay, windowDays, data.console.today_anchor)
 	);
 
 	/** Where the pairs a person read as two stories sit, for the one chart on
