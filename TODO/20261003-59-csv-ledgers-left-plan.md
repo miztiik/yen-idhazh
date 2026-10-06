@@ -1,6 +1,6 @@
 # Plan 59 - The ledgers left on CSV move to the door, and the CSV ledger code goes
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 **Level**: 5 (CLAUDE.md section 6): the plan teaches the door a folder of any depth, moves five committed ledgers onto it, renames a persisted field on two row contracts and moves committed data. Each row carries its own level below.
 
@@ -19,7 +19,7 @@ Table A - operating contract
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
 | A5 | Chosen strategy | One writer at a time, readers in the same change, data last, deletion after the data. Each move is the procedure in [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md): the code row first, then the owner's data commit in a quiet window. The four judge moves share one data commit (row 9), so the quiet window is taken once; it may be the same window as Plan 61's data commit |
-| A6 | Execution | Autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows 1, 2, 3 and 11 start together; rows 4 to 7 are one chain because each reads what the one before writes; row 8 runs beside that chain. Rows 1 and 9 are carried by the plan's owner and never delegated. Merge with `gh pr merge <n> --squash --delete-branch`; GitHub refuses auto-merge on this repository |
+| A6 | Execution | Autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows 1, 2, 3 and 11 start together. Rows 4 and 5 are one chain, and rows 6 and 7 are another, because in each pair the second edits what the first changed: `set_merge_line.py` and `applied.py`, then `score_merge_line_holdout.py` and `similarity-holdout.ts`. The two chains, row 3 and row 8 share only list files such as `keys.py`, `staging.py` and `config/ledgers.json`, so they run side by side, and the one that merges later keeps both entries. Rows 1 and 9 are carried by the plan's owner and never delegated. Merge with `gh pr merge <n> --squash --delete-branch`; GitHub refuses auto-merge on this repository |
 
 ### Hard scope - out
 
@@ -44,22 +44,22 @@ Table C - when to stop and ask
 | C2 | A change to a name in Table D, or a persisted shape section 2 does not declare | Stop and surface ([handle-scope-change.md](../docs/how-to/handle-scope-change.md)). The nested folders are the owner's choice of 2026-10-05 |
 | C3 | The door cannot settle one ledger's key as Table E declares it, for example the holdout marks' "newest mark wins" | Stop the row; surface the two options: a preference the door table already offers, or a key the reader settles itself |
 | C4 | A workflow writes a judge CSV row after its code row merged and before row 9 | Not a stop: row 9 moves that row too, under the run id the procedure names |
-| C5 | Plan 61 row "The council saves its run records through the ledger door" changes `Tenant.settle`, `metrics_sink` or the migrator in a way rows 4 to 7 cannot build on | Stop and re-read that row's merged change before dispatching row 4 |
+| C5 | Plan 61 row "The council saves its run records through the ledger door" changes `Tenant.settle`, `metrics_sink` or the migrator in a way rows 4 to 7 cannot build on | Stop and re-read that row's merged change before dispatching row 4. Rows 6 and 7 touch neither `Tenant.settle` nor `metrics_sink`; if one of them meets that change in the migrator, the change that merges later keeps both migrator entries |
 | C6 | Two personas still disagree after one debate | Stop and surface |
 
 ## 1. Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The first upkeep run after feed health moved is read | - | A | PENDING | - | - | - |
+| 1 | The first upkeep run after feed health moved is read | - | A | DONE | p59-main-read | - | Fowler |
 | 2 | The parquet column mapper reads a fixed-choice field | - | A | DONE | p59-row-2 | - | Fowler |
 | 3 | The CSV code no ledger uses any more is deleted | Plan 61 "The council saves its run records through the ledger door"; pipeline-tests "Readers understand nested trial roots" | A | PENDING | - | - | - |
-| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 3, 11 | B | PENDING | - | - | - |
+| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11; Plan 61 "The council saves its run records through the ledger door" | B | PENDING | - | - | - |
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
-| 6 | The merge line's holdout score is saved through the door | 5 | D | PENDING | - | - | - |
-| 7 | The holdout marks are saved through the door | 6 | E | PENDING | - | - | - |
+| 6 | The merge line's holdout score is saved through the door | 2, 11 | B | PENDING | - | - | - |
+| 7 | The holdout marks are saved through the door | 6 | C | PENDING | - | - | - |
 | 8 | The item health summary is saved through the door | 2 | B | DONE | p59-row-8 | - | Fowler |
-| 9 | The committed judge rows move onto the door, and the old CSV files go | 7 | F | PENDING | - | - | - |
+| 9 | The committed judge rows move onto the door, and the old CSV files go | 5, 7 | F | PENDING | - | - | - |
 | 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; Plan 61 "The old-row reader and the migrator's council entry are deleted"; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | PENDING | - | - | - |
 | 11 | The door files a ledger under a folder of any depth | - | A | DONE | p59-row-11 | - | Fowler |
 
@@ -158,6 +158,9 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 - **Files touched:** none, unless a late CSV file is found; then that file and `frontend/public/publication.json`.
 - **Acceptance gates:** the two readings above, quoted in the row's report.
 - **Oracle:** the gardener ledger's record for that run. It cannot settle a later run; Plan 60 owns the gardener's health.
+- **Readings, 2026-10-06:**
+  1. The first scheduled run after the merge, 37182327138 on 2026-10-04, failed in every compaction task, feed health's included, with the month fault "a month is not absorbed" that Plan 60 fixed. Nothing in it is particular to feed health. The next scheduled run, 37271019053 on 2026-10-05, filed this `compact-feed-health` record in the `gardener` ledger: `dry_run` false, `stopped_because` `exhausted`, no failure, and the month window 2025-06-01 to 2025-08-31 only reported, because `month_deletes_dry_run` is true. A dispatched run the same morning, 37286849600, packed 5 raw files live and freed 108463 bytes.
+  2. `migrate_to_parquet.py --check --ledger feed-health` over `state` and the three trial roots, months 2025-06 to 2026-10, printed `0 CSV file(s) left` and exited 0. No late CSV file was found, so nothing was migrated.
 
 **Decisions**
 
@@ -231,6 +234,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | --- | --- | --- |
 | 1 | Two commits: (1) behavioural: declare, write and read through the door; (2) structural, Remove Dead Code: the CSV writer, loader and settlement entries | Fowler, 2026-10-05 |
 | 2 | The rename of `shard` ships here, not earlier (Plan 61 Table H, H6) | The owner, 2026-10-04 |
+| 3 | Does not wait for row 3. Both edit `rows.py`, `keys.py` and `ledger-registry.md`, but neither reads what the other writes, so whichever is ready first merges first and the other merges `main` | Fowler, 2026-10-06 |
 
 **Rejected alternatives**
 
@@ -264,6 +268,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | `operator` joins `ServerJob` with a docstring line, as `migrate` did: the door names every file's writer from that set, and a person's command has no workflow job | Fowler, 2026-10-05 |
+| 2 | Runs beside rows 4 and 5, not after them. The stage reads the fitted line through `applied.effective_same_story` and the marks through `holdout.marked_pairs`, and this row changes only its writer, so it shares no read or write with rows 4 and 5. Row 7 still follows it, because both edit `score_merge_line_holdout.py` and `similarity-holdout.ts` | Fowler, 2026-10-06 |
 
 **Rejected alternatives**
 

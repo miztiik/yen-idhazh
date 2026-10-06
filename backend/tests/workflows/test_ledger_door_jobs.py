@@ -48,6 +48,7 @@ DOOR_WRITING_VERBS: Final[dict[str, str]] = {
     "qualify-decide": "idhazh.stages.qualify_decide (candidate-models)",
     "fingerprint": "idhazh.telemetry.silicon (host-fingerprint)",
     "job-clock": "idhazh.telemetry.silicon (host-fingerprint)",
+    "council-settle": "idhazh.council.session._collect (council-run-records)",
 }
 
 

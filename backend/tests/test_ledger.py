@@ -26,7 +26,6 @@ from conftest import (
 from idhazh import config, day_shards, ledger, month_partition
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -172,25 +171,6 @@ def pair_row(*, on: str = DATE, judged_by_run_id: str | None = None) -> StorySim
             "date": on,
             "run_id": f"{on}-1",
             "judged_by_run_id": judged_by_run_id,
-        }
-    )
-
-
-def council_row(*, on: str = DATE) -> CouncilShardOutcome:
-    """One recorded unit of council work, read from the committed fixture and re-dated.
-
-    Read inside the helper for the reason `pair_row` gives: a fixture that stops
-    parsing fails the test that asked for a row rather than the whole file.
-    """
-    raw = json.loads(
-        read_text(CONTRACT_FIXTURES_DIR / "council-shard-outcome" / "a-unit-that-ran-no-model.json")
-    )
-    return CouncilShardOutcome.model_validate(
-        raw
-        | {
-            "version": CouncilShardOutcome.schema_version(),
-            "date": on,
-            "run_id": f"{on}-1",
         }
     )
 
@@ -1271,67 +1251,6 @@ def test_load_visual_prunes_skips_a_file_it_cannot_read_and_names_it(
 # --- The pass that runs after the merge ------------------------------------
 
 
-def council_unit(shard: int, host: str) -> CouncilShardOutcome:
-    """One unit of a two-unit night, on the machine `host` names - the cell a repeat varies."""
-    return CouncilShardOutcome.model_validate(
-        council_row().model_dump(mode="json") | {"shard": shard, "shards": 2, "host_model": host}
-    )
-
-
-def test_a_repeated_row_is_dropped_and_every_other_byte_is_left_alone(tmp_path: Path) -> None:
-    """First row wins, and a kept row is the line that was read.
-
-    The rule is the one every appending caller already states: a second attempt
-    at one unit of work is skipped, so the ledger keeps describing the attempt
-    that got there first. Rewriting rather than re-serializing is what makes a
-    clean file a no-op - a pass that re-quoted a cell would show up as a diff on
-    every run.
-
-    The council's record is the example because this pass still settles it after
-    every append: two units of one night, then a second attempt at the first
-    unit that drew another machine.
-    """
-    assert (
-        ledger.append_council_shard_outcomes(
-            tmp_path, DATE, [council_unit(0, "first"), council_unit(1, "second")]
-        )
-        == 2
-    )
-    path = ledger.path(tmp_path, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, DATE)
-    header = ",".join(CouncilShardOutcome.csv_columns())
-    clean = path.read_text(encoding="utf-8")
-    assert clean.startswith(header)
-
-    # What a second attempt at one unit leaves behind: the same key twice,
-    # different cells. The machine is the last column, so the line ends on it.
-    kept = clean.splitlines()[1]
-    assert kept.endswith(",first"), "the fixture has to end on the cell the repeat varies"
-    second_attempt = kept.removesuffix(",first") + ",third"
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(f"{second_attempt}\n")
-    assert ledger.repeated_keys(path, ledger.COUNCIL_SHARD_OUTCOME_KEY)
-
-    assert ledger.drop_repeated_rows(path, ledger.COUNCIL_SHARD_OUTCOME_KEY) == 1
-    assert path.read_text(encoding="utf-8") == clean
-    assert ledger.drop_repeated_rows(path, ledger.COUNCIL_SHARD_OUTCOME_KEY) == 0
-    assert path.read_text(encoding="utf-8") == clean
-
-
-def test_the_pass_leaves_a_ledger_it_cannot_key_alone(tmp_path: Path) -> None:
-    """A row written before the key existed is not a row to start deleting from.
-
-    Refusing would cost a run the whole commit step it was called from, over a
-    file whose header no longer names every cell the key reads.
-    """
-    path = tmp_path / "shard-outcomes.csv"
-    path.write_text("date,shard\n2026-08-29,0\n2026-08-29,0\n", encoding="utf-8", newline="")
-    before = path.read_bytes()
-
-    assert ledger.drop_repeated_rows(path, ledger.COUNCIL_SHARD_OUTCOME_KEY) == 0
-    assert path.read_bytes() == before
-    assert ledger.drop_repeated_rows(tmp_path / "absent.csv", ledger.COUNCIL_SHARD_OUTCOME_KEY) == 0
-
-
 def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> None:
     """Everything here says what makes two of its rows one record, and is settled.
 
@@ -1351,7 +1270,6 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     call. Its sibling `scored-pairs/` has a writer and is filled by one.
     """
     ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
-    ledger.append_council_shard_outcomes(tmp_path, DATE, [council_row()])
     fitted = ledger.path(tmp_path, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, DATE)
     fitted.parent.mkdir(parents=True, exist_ok=True)
     fitted.write_text(",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8")
@@ -1363,10 +1281,6 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         (
             f"content-similarity-judge/scored-pairs/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_PAIR_KEY,
-        ),
-        (
-            f"llm-council/shard-outcomes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
-            ledger.COUNCIL_SHARD_OUTCOME_KEY,
         ),
     ]
 

@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -45,14 +45,22 @@ of four nothings without inspecting an error:
 | # | Answer | When |
 | --- | --- | --- |
 | 1 | `ok`, with the rows | At least one row matched. The rows are what the files hold, sorted by the requested columns left to right; the door never merges two rows, because the compaction already wrote one row per record |
-| 2 | `quiet` | Every day asked for is covered and nothing matched, or the whole span lies after the newest day compacted. A filter that matches nothing is `quiet`, never an empty `ok` |
+| 2 | `quiet` | Every day asked for is covered and nothing matched, or the whole span lies after the newest day compacted or before the ledger began. A filter that matches nothing is `quiet`, never an empty `ok` |
 | 3 | `missing` | The ledger has no `daily.json`, so it is not published. Its fault is `not-packed` |
-| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why. A file the ledger should hold and does not is named as one of four faults ([below](#when-a-file-is-missing)); the other causes are a span that starts before the oldest day any index names, a named file that arrived at the wrong length or could not be fetched, an index this build will not act on, and an engine that could not run the query |
+| 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why. A file the ledger should hold and does not is named as one of four faults ([below](#when-a-file-is-missing)); the other causes are a named file that arrived at the wrong length or could not be fetched, an index this build will not act on, and an engine that could not run the query |
 
-`ok` and `quiet` carry `through`, the newest day `daily.json` names - `null`
-before the first compaction - so a panel can say how far its data reaches. A day
-after `through` has not been compacted yet, so it is clamped away rather than
-drawn as a zero. `ok` and `quiet` also carry `lostDays`, the days in the span an
+`ok` and `quiet` carry `first`, the first day the answer covers: the span's own
+first day, or the ledger's first day when the span starts before it. The days
+before a ledger began are outside the ledger, not missing from it, so the door
+cuts them and names the day it answered from, as the Data explorer does
+([its cut](how-the-query-door-answers-a-written-question.md#archive-tier)). The
+span's end stays where it was asked to end, so no caller clamps its span to a
+ledger's first day.
+
+`ok` and `quiet` carry `through`, how far the ledger is packed: the newest day
+any index names, `null` before the first compaction, so a panel can say how far
+its data reaches. A day after `through` has not been compacted yet, so it is
+clamped away rather than drawn as a zero. `ok` and `quiet` also carry `lostDays`, the days in the span an
 index records lost, ascending: each has no record, so a panel says so rather than
 drawing it as a day with no rows, and the other days are drawn as usual. A span
 of nothing but lost days is `quiet` with every day in `lostDays`. They carry
@@ -72,7 +80,10 @@ index for a period never packed names nothing - and declared as `CompactIndex` i
 
 1. **`daily.json` first; `monthly.json` only when the span starts before the
    oldest day `daily.json` names; and `yearly.json` only when it starts before the
-   oldest day those two name.** A span of 30 days or less reads one index.
+   oldest day those two name.** When `daily.json` names no day, the door reads
+   the other two, to learn how far the ledger is packed. The packing moves a
+   closed month's days out of `daily.json`, so while it names a day, its newest
+   day is the newest any index names. A span of 30 days or less reads one index.
 2. **For each day, the coarsest period that holds it**: the year file when
    `yearly.json` names that year, else the month file when `monthly.json` names
    that month, otherwise the day file. A day is read through exactly one file, so
@@ -81,9 +92,9 @@ index for a period never packed names nothing - and declared as `CompactIndex` i
 3. **A day no index names, between the oldest day any index names and
    `through`, is a hole**, and the answer is `unreachable` at the first one,
    named `day-missing`. Drawing the days around it would be an undercount nobody
-   could see. A span that starts before the oldest named day is `unreachable` at
-   its first day with no fault: those days were never packed, and a route clamps
-   its span to the reach's `first` (below).
+   could see. A span that starts before the oldest named day is cut there:
+   those days are before the ledger began, and the answer names the day it
+   starts from as `first`. A span that ends before that day is `quiet`.
 4. **An entry with `rows: 0` is never fetched, and neither is one that names no
    file.** An entry `empty` held no row and an entry `lost` lost its rows, so
    neither has a file ([../contracts/persistence.md](../contracts/persistence.md#what-an-index-entry-says)).
@@ -157,9 +168,9 @@ deploy re-packed or removed, and that the page had not read yet, answers
 `unreachable`, and the console says why - it arrived at a length its kept entry
 does not give, or it is not there, which is `file-missing`. A reload fixes both.
 
-**Why the index is kept rather than read again.** A console route anchors its
-span on a first and a newest day fixed for the page, and a panel that read a
-newer index than its neighbour would draw a different span beside it. Reading the
+**Why the index is kept rather than read again.** A console route draws one
+window for the page, and a panel that read a newer index than its neighbour would
+stop its rows on a different day beside it. Reading the
 index again before every slice would also put one more round trip in front of
 each one, where a cold load allows four serial round trips in all
 (`frontend/tests/console-cold-load.spec.ts`).
@@ -174,13 +185,17 @@ paths, and keeps the four-hop ceiling and every engine download in scope.
 
 ## How far a ledger reaches
 
-`ledgerReach(ledger)` answers the oldest and the newest day a ledger holds, so a
-route can anchor its span on the data rather than on the clock:
+`ledgerReach(ledger)` answers the oldest and the newest day a ledger holds, and
+where its rows stop, from its indexes alone. Every console window ends on the
+site's newest published day
+([the window](which-console-surfaces-follow-the-window-and-which-say-why-not.md#one-window-governs-the-page)),
+and a route reads exactly that window and no day before it, so the reach is how
+it learns where a record's rows stop when none of them is in the window:
 
 | # | Answer | When |
 | --- | --- | --- |
-| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day any index names, a month counting from its first day and a year from its 1 January. Its `fault` is `index-missing` when there is no `monthly.json` or no `yearly.json`, and `first` is then the oldest day the indexes that are there name |
-| 2 | `quiet` | `daily.json` names no day yet |
+| 1 | `ok`, with `first`, `through` and `lastRows` | `through` is the newest day any index names, a month counting through its last UTC day and a year through 31 December: the same day a slice returns. `first` is the oldest day any index names, a month counting from its first day and a year from its 1 January. `lastRows` is the newest period whose file holds rows - a day, a month or a year, as the index names it, a day before a month before a year - or `null` when no entry holds a row. Its `fault` is `index-missing` when there is no `monthly.json` or no `yearly.json`, and `first`, `through` and `lastRows` are then what the indexes that are there name |
+| 2 | `quiet` | No index names a day yet |
 | 3 | `missing` | There is no `daily.json`, so the ledger is not published. Its fault is `not-packed` |
 | 4 | `unreachable` | `daily.json` is one this build will not act on, or could not be read. It carries no day, because the reach asks for none; the console says why |
 
@@ -228,6 +243,7 @@ unread, which names the folder a person reads them in,
 `state/raw/<ledger>/set-aside/`.
 
 **Some gaps are expected, and none of them is a fault or a request**: a day
+before the ledger began is cut and the answer names its `first`, a day
 after the newest packed day is clamped away, an entry with `rows: 0` or one that
 names no file is never fetched, a lost day is named in `lostDays`, a period that
 set files aside is named in `setAside`, and an empty
@@ -631,6 +647,36 @@ rows in the same order whichever engine read them and however it split the work.
 integer back as a `BigInt`; one outside the range a `number` holds exactly is
 refused by name, and the slice is `unreachable`, because a rounded count is a
 wrong count nobody can see.
+
+**A span that starts before a ledger began is cut, and the answer names the day
+it starts from.** Ledgers start, pause, resume and stop, so a day before a
+ledger's first day is outside the ledger, not a file it lost. The design this
+replaced gave two answers for one fact: the Data explorer cut such a span, while
+a panel slice answered `unreachable` and each caller clamped its span to the
+reach's first day, so a new panel that forgot to clamp drew a fault for every
+young ledger. Refusing such a span as a request error was weighed too; it turns
+a normal state into an error that every caller must avoid by reading the reach
+first. The cut moves only the start, and only later: the span's end stays where
+the caller put it. Fowler, 2026-10-05, under the owner's ruling of that day that
+a ledger's first day never moves a window.
+
+**How far a ledger is packed is the newest day any index names.** The packing
+moves a closed month's days out of `daily.json`, so `daily.json` can name no day
+while `monthly.json` names a month. Read from `daily.json` alone, such a ledger
+answered `quiet` with no `through`, as if nothing were packed. The door reads the
+other two indexes only then, so a short span still reads one index. Fowler,
+2026-10-05.
+
+**A console route reads exactly its window, and the reach says where a record's
+rows stop.** The build-time reader used to count its span back from the newest
+packed day and, when the newest packed days held no row, read further back until
+it found some, so a record that stopped writing still drew its last rows and its
+window moved into the past. Every window now ends on the site's newest published
+day (owner ruling of 2026-10-05), and the reader asks the door for that window
+and nothing earlier. Where the rows stop is a fact the indexes already hold, so
+the reach names it as `lastRows` and no day before the window is read. It is a
+period, not always a day: once a record's last rows are packed into a month or a
+year, the index knows only that month or year.
 
 ## See also
 

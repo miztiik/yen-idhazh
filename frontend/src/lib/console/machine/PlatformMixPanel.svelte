@@ -29,7 +29,7 @@
 	} from '$lib/charts/fleet';
 	import { chartWidth, frame, observeWidth } from '$lib/charts/frame';
 	import { rateWords, type MachineRamp } from '$lib/charts/machine-colour';
-	import { windowOfDays, type TimeWindow } from '$lib/charts/viewport';
+	import type { TimeWindow } from '$lib/charts/viewport';
 	import FleetDots from '$lib/console/machine/FleetDots.svelte';
 	import type { LostDay, RecordingNotes } from '$lib/console/recording';
 	import type { PanelState } from '$lib/console/waiting';
@@ -83,7 +83,8 @@
 	let fault = $state<LedgerFault | null>(null);
 	onMount(() => { mounted = true; });
 	$effect(() => {
-		const days = windowDays;
+		const from = start;
+		const to = end;
 		const enabled = recording;
 		if (!mounted) return;
 		let current = true;
@@ -102,15 +103,13 @@
 						fault = reach.state === 'missing' ? reach.fault : null;
 						return;
 					}
-					const window = windowOfDays([reach.through], reach.through, days, 'right');
-					const from = window.start < reach.first ? reach.first : window.start;
-					span = { start: from, end: reach.through };
-					const answer = await slice('host-fingerprint', {
-						columns: FLEET_COLUMNS,
-						from,
-						to: reach.through
-					});
+					// The route's own window, which ends on the site's newest published day,
+					// never on this record's newest packed day.
+					span = { start: from, end: to };
+					const answer = await slice('host-fingerprint', { columns: FLEET_COLUMNS, from, to });
 					if (!current) return;
+					// The door cuts a window that starts before the record began, and names the day it answered from.
+					if (answer.state === 'ok' || answer.state === 'quiet') span = { start: answer.first, end: to };
 					rows = answer.rows;
 					panelState = answer.state === 'ok' ? 'ready' : answer.state;
 					fault = answer.state === 'missing' || answer.state === 'unreachable' ? answer.fault : reach.fault;

@@ -8,6 +8,7 @@ import { openExplorer, runExplorer } from './support/explorer-answer';
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT, type ConsoleWidth } from './support/console-widths';
 import { fillShare, readPanel } from './support/panel-gates';
+import { newestDate } from './support/published';
 import { viewsOf } from './support/views';
 
 /**
@@ -305,7 +306,8 @@ for (const route of PICTURED) {
 			const asked = recorded(page);
 			await opened(page, listed.address, width, theme);
 			if (route === 'data-explorer') {
-				await openExplorer(page);
+				// A picture of the canary, so the page takes the canary's own newest day as today.
+				await openExplorer(page, newestDate());
 				await runExplorer(page);
 			}
 			await walked(page, listed.panels);

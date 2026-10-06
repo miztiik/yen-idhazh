@@ -130,7 +130,7 @@
 	     not read, or read only as far as a day some while back, is the reason every
 	     panel built on it is empty or stops early, and the notes below it would
 	     otherwise explain an empty page as something the recording did. -->
-	<RecordNotes notes={data.recordNotes} />
+	<RecordNotes notes={data.recordNotes[String(view.days)] ?? []} />
 
 	<!-- What the recording was doing, before anything says what it recorded.
 	     None of these is an error and none is styled as one: each states a fact

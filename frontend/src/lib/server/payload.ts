@@ -18,7 +18,7 @@ import { basename, join, relative, resolve } from 'node:path';
 import { publicFiles, stateFiles } from './publication';
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
 // where no Vite alias exists to resolve one.
-import { dayKey, toDay } from '../charts/viewport';
+import { dayKey, monthsInWindow, toDay, type TimeWindow } from '../charts/viewport';
 import { deskOf, orderByTime } from '../day-shape';
 import { settled } from '../feed-health';
 import { publishedVisual, refusedDrawing } from '../payload/drawing';
@@ -745,65 +745,30 @@ export function indexMonths(
 	return unbounded(months) ? found : found.slice(0, months);
 }
 
-/** The oldest day the seed keeps, or null when no month holds a dated row.
+/** The projection's rows inside `window`, from the month shards it touches.
  *
- * Anchored on the newest day on record rather than on today, because that is
- * what the viewport anchors its opening window on. Anchored on today instead,
- * a corpus that stopped last month would seed an empty page.
+ * Every console window ends on the site's newest published day, so this reads
+ * exactly the window it is handed. Run back from the projection's own newest
+ * row instead, a projection holding a day after that published day cut the
+ * oldest days off the widest window, and one that stopped earlier read days no
+ * window draws.
+ *
+ * A window is a count of days, so it can straddle month boundaries. The shards
+ * are monthly, so a read opens one shard for each month the window touches and
+ * leaves every other one unread, however many months are committed. With no
+ * window every shard is read; no page asks for that.
  */
-function seedCutoff(
-	months: string[],
-	read: (month: string) => CsvTable,
-	windowDays: number
-): string | null {
-	for (const month of [...months].reverse()) {
-		const dates = read(month)
-			.rows.map((row) => row.date ?? '')
-			.filter((date) => date !== '');
-		if (dates.length === 0) continue;
-		const newest = dates.reduce((later, date) => (date > later ? date : later));
-		return dayKey(new Date(toDay(newest).getTime() - (windowDays - 1) * DAY_MS));
-	}
-	return null;
-}
-
-/** Initial telemetry for the SSR fallback. Runtime panning fetches the same files.
- *
- * `windowDays` bounds the seed to the window the viewport opens on. Without it
- * every committed month is concatenated and inlined into the prerendered HTML,
- * so the page a reader downloads grows for as long as the pipeline runs. The
- * month shards are untouched, so panning back still reaches the dropped days -
- * the browser fetches the same files it always did.
- *
- * A window is a count of days, so it can straddle a month boundary. Reading is
- * still bounded: the shards are monthly, so the worst case is two of them.
- *
- * The month list follows the same rule. A bounded seed needs `LEDGER_WINDOW_MONTHS`
- * shards at most, so it asks for those; an unbounded seed asks for every month,
- * which is what "no window" means.
- */
-export function telemetryRows(root: string = TELEMETRY_ROOT, windowDays?: number): CsvTable {
-	const bounded = windowDays !== undefined && windowDays > 0;
-	const months = telemetryMonths(root, bounded ? LEDGER_WINDOW_MONTHS : -1);
-	const shards = new Map<string, CsvTable>();
-	const read = (month: string): CsvTable => {
-		let table = shards.get(month);
-		if (!table) {
-			table = readCsv(join(root, `${month}.csv`));
-			shards.set(month, table);
-		}
-		return table;
-	};
-
-	const cutoff =
-		bounded && windowDays !== undefined ? seedCutoff(months, read, windowDays) : null;
+export function telemetryRows(root: string = TELEMETRY_ROOT, window?: TimeWindow): CsvTable {
+	const touched = window === undefined ? null : new Set(monthsInWindow(window));
+	const inside = (date: string) =>
+		window === undefined || (date >= window.start && date <= window.end);
 	const rows: Record<string, string>[] = [];
 	let columns: string[] = [];
-	for (const month of months) {
-		if (cutoff !== null && month < cutoff.slice(0, 7)) continue;
-		const table = read(month);
+	for (const month of telemetryMonths(root, -1)) {
+		if (touched !== null && !touched.has(month)) continue;
+		const table = readCsv(join(root, `${month}.csv`));
 		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
-		rows.push(...table.rows.filter((row) => cutoff === null || (row.date ?? '') >= cutoff));
+		rows.push(...table.rows.filter((row) => inside(row.date ?? '')));
 	}
 	return { rows, columns };
 }
@@ -819,7 +784,7 @@ export interface FeedResult {
 	detail: string;
 }
 
-/** Feed results from the newest `days` packed days, one per feed per run, oldest first.
+/** Feed results in `window`, one per feed per run, oldest first.
  *
  * Read from the feed record's packed files through `feedHealthRows`, so it
  * stops at the newest packed day as the console's other packed records do. A
@@ -832,11 +797,8 @@ export interface FeedResult {
  * same rule, and doing it here once is what stops two panels disagreeing about
  * the same feed.
  */
-export async function feedResults(
-	days: number = LEDGER_WINDOW_DAYS,
-	root: string = STATE_ROOT
-): Promise<FeedResult[]> {
-	const found: FeedResult[] = (await feedHealthRows(days, root)).rows.map((row) => ({
+export async function feedResults(window: TimeWindow, root: string = STATE_ROOT): Promise<FeedResult[]> {
+	const found: FeedResult[] = (await feedHealthRows(window, root)).rows.map((row) => ({
 		runId: row.run_id ?? '',
 		date: row.date ?? '',
 		feedId: row.feed_id ?? '',

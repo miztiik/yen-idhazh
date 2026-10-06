@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-06
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -20,10 +20,31 @@ slider was rejected for the same reason: every span is a different number of
 month files to fetch, and the spans between these five cannot be told apart once
 drawn. The narrowest is one day, the cheapest read the console can do.
 
-The viewport default and where today sits are `console.default_window_days` and
-`console.today_anchor`. Arrow keys pan, and `+` / `-` step the window to the next
+The viewport default is `console.default_window_days`, and `console.today_anchor`
+says where the day every window ends on sits in it. Arrow keys pan, and `+` / `-` step the window to the next
 preset, from a labelled focusable control with a visible focus ring; the buttons
 beside it pan with a pointer.
+
+**Every window ends on the site's newest published day**, the newest day the
+site published a digest, which is the day the console treats as today. Every
+route places every span the control offers on that one day, read at build time
+by `windowDay()` in `frontend/src/lib/server/window-day.ts`. Neither the build
+clock nor any record's own newest day places a window, so two builds of the same
+data draw the same windows, and a record whose rows stop leaves its panels empty
+for the window rather than moving the window back to its last rows. A route
+reads exactly the widest window and no day before it
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-far-a-ledger-reaches)).
+When the site has published no day, the window is placed on the build's own UTC
+day: there is nothing to draw either way, and the page still renders.
+
+**The route says when a window is empty because of its record.** A day is
+packed only after it ends, so in normal running the packed records reach the day
+before the newest published day, and every panel built on one draws that day
+with nothing in it. The last line of the route's record notes says so, a step
+quieter than the others, every day. A record whose packed rows stop before the
+window says from when, and names the narrowest window that reaches back to them
+([console-payloads.md](console-payloads.md)). Each route writes its notes once
+for each preset, so the page picks the open window's and fetches nothing.
 
 Three rules keep the control honest and all three are in the contract, so a bad
 config fails the build rather than the page:
@@ -117,7 +138,7 @@ rules: `Sources cut short most often`
 ([console-truncation.md](console-truncation.md)) and `What one item cost the
 model`
 ([what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md#it-follows-the-windows-length-not-a-pan)).
-The days they read always end on the newest day the ledger holds. Their rows are
+The days they read always end on the newest published day. Their rows are
 aggregated once per preset at build time - four sets of numbers cost less than
 one fetch, and it keeps the section working with no script at all.
 
@@ -132,8 +153,9 @@ reading the control's own attribute back against the panel's.
 
 `pipelineChanges`, which draws the model-change markers on `/console/` and
 `/console/machine/`, and `scoredDays` with `modelByDate` on `/console/model/`,
-read the score record's newest packed days - the widest window preset, the cover
-every other panel on those routes reads - and never the whole ledger. The
+read the score record's packed days in the widest window preset, which ends on
+the newest published day - the cover every other panel on those routes reads -
+and never the whole ledger. The
 `compact-summary-quality-evals` compaction never drops a month: its `monthly_window`
 is `forever`, and a year it packs keeps every row, so turning it live moves
 none of their dates.
@@ -143,8 +165,9 @@ none of their dates.
 The server used to concatenate every committed month and inline all of it, so the
 console document grew for as long as the pipeline ran - a reader downloaded four
 months to look at thirty days, and would have downloaded a year by next summer.
-It reads `console.default_window_days` back from the newest day on record now,
-which is the window the viewport opens on, so the two cannot disagree.
+It reads only the window it is handed now: the widest preset, which ends on the
+newest published day as every other console window does, so the read and the
+windows cannot disagree.
 
 Measured 2026-08-26 on one Windows dev machine, against four months of real row
 volume - the committed August shard (2,000 rows, 171 KB) plus three copies of it
@@ -170,14 +193,42 @@ Two consequences worth stating, because both are the reason this is safe:
  are one arrow key away rather than gone. That fetch path already existed and
  was dead code: with every month in the seed, there was never a month left to
  fetch.
-- **The cutoff is anchored on the newest committed day, never on the build
- clock.** Anchored on today, a corpus that stopped last month would seed an
+- **The read ends on the newest published day, never on the build clock.**
+ Anchored on the build clock, a pipeline that stopped last month would draw an
  empty console - the page would go blank precisely when the pipeline broke,
- which is when an operator needs it.
+ which is when an operator needs it. Run back from the projection's own newest
+ row instead, a projection holding a day after the newest published day cuts
+ the oldest day off the widest window.
 
-The read is bounded too. A window is a count of days, so it straddles a month
-boundary and reads two shards at worst; every older shard is skipped unopened,
-however many the repository has accumulated (`CLAUDE.md` Guardrail #12).
+The read is bounded too. A window is a count of days, so it straddles month
+boundaries and opens one shard for each month it touches - four at most for a
+90-day window. Every other shard is skipped unopened, however many the
+repository has accumulated (`CLAUDE.md` Guardrail #12).
+
+## Design rationale
+
+**Every window ends on the newest published day, not on a record's own rows.**
+The owner ruled this on 2026-10-05. Each route used to end its windows on the
+newest day in whatever rows it held, so a record that stopped writing kept its
+last rows on screen and moved its window into the past, and two records on one
+route could end on different days. Three other days were weighed and refused:
+the build's UTC day (a build that runs before the day's digest ends every window
+on a day with nothing published), each record's newest rows (the past-moving
+window above), and the newest day packing can have reached (it is not the
+current day, and the packing delay differs by ledger).
+
+**The day packing has not reached gets one quiet line on the route, not a mark
+on every panel.** Ruled on 2026-10-06 by Susan and Jony, with Reader on the
+words, after one debate round in which each accepted the other's wording. A
+mark on every date-axis panel is about 20 components in three drawing systems.
+What the line leaves, said rather than implied: on bar and day-strip panels the
+newest day looks like a day with nothing in it, and at the one-day window some
+panels print a sentence that reads as quiet, for example
+`Nothing was timed in these 1 days.` on Summaries, while the line above them
+says that day is not packed yet. So waiting and quiet still look alike for one
+day on those panels. The follow-up row that marks the unpacked days on bar and
+strip panels, and gives every panel whose whole window is unpacked its own
+sentence, closes it; until it lands, this entry is the record of the gap.
 
 ## See also
 

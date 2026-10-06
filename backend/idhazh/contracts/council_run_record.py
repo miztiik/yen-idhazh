@@ -33,7 +33,22 @@ from typing import Any, ClassVar, Final, Self
 from pydantic import Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, Slug, Timestamp
-from idhazh.contracts.council_shard_outcome import JUDGE_ID_MAX_LENGTH, ShardOutcome
+
+# The council records any tenant name it hosts; this bound keeps the row narrow.
+JUDGE_ID_MAX_LENGTH = 64
+
+
+class ShardOutcome(StrEnum):
+    """The three ways one unit of hosted work ends."""
+
+    #: The unit reached the end of the work it owned.
+    COMPLETED = "completed"
+
+    #: The unit stopped itself before its deadline with work still owned.
+    STOPPED_ON_DEADLINE = "stopped_on_deadline"
+
+    #: The unit was given nothing to do.
+    NOTHING_TO_DO = "nothing_to_do"
 
 
 class EvaluationStep(StrEnum):

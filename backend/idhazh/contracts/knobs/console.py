@@ -81,7 +81,13 @@ class ConsoleConfig(Model):
     )
     today_anchor: TodayAnchor = Field(
         default=TodayAnchor.RIGHT,
-        description="Where today sits in the initial viewport when enough history exists.",
+        description=(
+            "Where every console window places the site's newest published day, "
+            "the day the console treats as today: `right` makes it the window's "
+            "last day, and `centre` puts it in the middle, leaving room for days "
+            "not yet published. Neither the build clock nor the newest day a "
+            "record holds places a window."
+        ),
     )
     completeness_grace_days: int = Field(
         default=1,
