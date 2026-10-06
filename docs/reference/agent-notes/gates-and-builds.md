@@ -94,6 +94,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.
 - Reproduce a timing failure in isolation before changing code. Do not raise a timeout or weaken an assertion merely to obtain a pass.
+- **A `--repeat-each` run reads as hung between repeats, then as failed with every test passed; it is Playwright waiting for each repeat's new worker to exit, then killing it.**
+  The wait is `PWTEST_CHILD_PROCESS_TIMEOUT`, 5 minutes by default. On
+  2026-10-06, on Windows with Node 24.12.0 and Playwright 1.62.1, workers of
+  one `ledger-ranges.spec.ts` test outlived it 1 time in 2; with it at 20
+  seconds, 16 times in 30 and then 4 in 30. Only the worker and its esbuild
+  service process stay alive; the cause is unknown, and CI shows no stall.
+  The tell is `force-killed it` between results, and at the end
+  `errors were not a part of any test`. Shorten the wait, and run a spec that
+  never contacts the preview server from a config with no `webServer`:
+  ```powershell
+  $env:PWTEST_CHILD_PROCESS_TIMEOUT = '20000'
+  ```
 
 ## The canary build
 
