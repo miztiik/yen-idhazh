@@ -427,8 +427,10 @@ test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', 
 	const root = test.info().outputPath('state');
 	await serveBuilt(context, root, { ledger: 'published', pinned: PINNED, days: [{ ago: 0, rows: 3 }] });
 	const size = String(statSync(join(root, 'compact', 'published', 'daily', '2030', '06', '15.parquet')).size);
-	await openExplorer(page, PINNED, { address: `?ledgers=published&from=${PINNED}&end=${PINNED}` });
+	// The link names no question, so Run waits for one to be written before it is ready.
+	await openExplorer(page, PINNED, { address: `?ledgers=published&from=${PINNED}&end=${PINNED}`, ready: false });
 	await page.locator('#explorer-sql').fill('SELECT count(*) AS rows FROM "published"');
+	await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['3']]);
