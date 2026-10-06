@@ -323,6 +323,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
   - `frontend/tests/console-data-explorer-window.spec.ts` (found at dispatch by the owner: it calls `openExplorer`)
   - `TODO/20261005-62-ledger-lifecycle-plan.md` (Table H, and Table G lines G21 to G23 that list it, brought up to date; found at dispatch by the owner)
+  - `docs/reference/agent-notes/gates-and-builds.md` (found during execution: on a busy box the preview start limit fails a fresh build, which reads as a stale one)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the groups it selects; the changed specs fall in `console`, `panels`, `publishing` and `logic`. Then `npm --prefix frontend run check`, and `doc_load.py` on the two pages. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push to `main`.
 - **Oracle:** a canary-day move (Table E, E10) over every spec that Table H names for this row. On the branch every one of them stays green. On the base commit the same move turns red the tests that read the canary, which is what lets this check fail. It cannot settle whether the explorer answers correctly over real published data, which no browser test reads.
 

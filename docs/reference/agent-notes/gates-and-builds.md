@@ -109,6 +109,16 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   git status --porcelain
   npm run build:canary
   ```
+- **The same timeout from a fresh build reads as a stale one; the box was too busy to start the preview in 120 s.**
+  `verified-preview.ts` checks the build's inputs and output before it
+  serves. On this Windows box at 90 to 100 percent CPU on 2026-10-06, it
+  printed nothing for over 100 s from a clean tree, and once printed its
+  address just after the limit; the same build served on the next try. The
+  tell is an empty `git status --porcelain` since the build. Do not rebuild;
+  run the same command again when the load drops:
+  ```powershell
+  (Get-CimInstance Win32_Processor).LoadPercentage
+  ```
 
 ## Serving a build to measure it
 
