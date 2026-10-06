@@ -1,6 +1,6 @@
 # How the Data explorer shares the window
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 Where each region of the Data explorer stands, how much of the window it takes, and what holds still while an operator uses it. The words, states and colours on the page are ruled by [../console-design.md](../console-design.md).
 
@@ -12,7 +12,9 @@ From 1024 px the workbench is two halves of the window's height. The top half as
 
 Run stands at the right end of the editor's heading line, after Save and Copy link, in one group of buttons. It is the group's last button, so naming a question - which turns Save and Copy link into a name field, Keep and Cancel - never moves it. Ctrl+Enter in the editor still runs the question.
 
-The answer has a heading line of its own, one control tall: the word `Answer` at its start, and `Copy as JSON` and `Copy as table` at its end. The chart's heading line carries the word `Chart` and, when more than one shape fits the answer, the shape tiles. What a copy did is said in the page's floating notice.
+The answer has a heading line of its own, one control tall: the word `Answer` at its start, and `Copy as JSON` and `Copy as table` at its end. The chart's heading line carries the word `Chart` and, when more than one shape fits the answer, the shape tiles; the line holds still and the drawing scrolls in its own box beneath it, so nothing passes under the tiles. What a copy did is said in the page's floating notice.
+
+From 640 px the question strip is one line beside the History and how-to links. It shows as many chips as fit, this browser's saved questions first and then the examples, at most `console.explorer_strip_shown[1]`, and folds the rest into `{n} more`, whose list opens under the strip. Saving a question therefore folds an example away instead of making the strip taller. Below 640 px the strip keeps its column of `console.explorer_strip_shown[0]` chips.
 
 ## A workbench keeps its regions still
 
@@ -47,6 +49,8 @@ beside Save and Copy link. The last button of a group that stands at the end of
 its line never moves when anything to its left changes, so naming a question
 moves nothing. The words `DuckDB SQL` give way first, cut short with an
 ellipsis, so the line never wraps after a click.
+
+**The question strip is one line.** Saving a question added a chip, and on a strip that wraps the chip pushed it onto a second line: at 1440 x 900 the editor, the rails and the status bar moved down 40 px, which breaks the rule that only a region's content changes. A line that folds what does not fit has one height whatever is saved (the executing owner, 2026-10-06).
 
 **The copy buttons stand on a line one control tall.** They were 2.75rem
 buttons in a heading row one workbench control tall, which is 2rem with a

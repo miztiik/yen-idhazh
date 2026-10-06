@@ -33,7 +33,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	logic: [
 		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'console-data-explorer-address', 'console-data-explorer-gaps', 'console-data-explorer-keep', 'console-data-explorer-shape',
-		'explorer-column-groups', 'explorer-type-colour', 'explorer-type-family',
+		'explorer-column-groups', 'explorer-strip-fit', 'explorer-type-colour', 'explorer-type-family',
 		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
 		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data',
 		'day-shards',

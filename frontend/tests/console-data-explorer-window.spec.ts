@@ -72,6 +72,136 @@ for (const view of [
 	});
 }
 
+/** A question whose answer has `count` columns, each named under a ledger, so the column rail lists them as that ledger's. */
+function prefixedColumns(count: number): string {
+	return `SELECT ${Array.from({ length: count }, (_, index) => `${index + 1} AS "published.c${String(index + 1).padStart(2, '0')}"`).join(', ')}`;
+}
+
+for (const view of [
+	{ width: 1440, height: 900 },
+	{ width: 1920, height: 1080 }
+] as const) {
+	test(`a long list of a ledger's columns scrolls inside the column rail and never stretches the page, at ${view.width} x ${view.height}`, async ({ page }) => {
+		await page.setViewportSize(view);
+		await openExplorer(page);
+		await chooseExplorerQuestion(page, ['published'], prefixedColumns(80));
+		await runExplorer(page);
+		await expect(page.locator('[data-explorer-columns] li')).toHaveCount(80);
+		const at = await page.evaluate(() => {
+			const list = document.querySelector('[data-explorer-column-box]') as HTMLElement;
+			const root = document.documentElement;
+			return { scrollHeight: root.scrollHeight, listScrolls: list.scrollHeight > list.clientHeight };
+		});
+		expect(at.listScrolls, 'the 80 columns did not scroll inside the rail').toBe(true);
+		expect(at.scrollHeight, 'the column list stretched the page').toBe(view.height);
+	});
+}
+
+/** Eight questions saved in this browser, each with a name the test wrote, near the 40-character cap. */
+const SAVED = Array.from({ length: 8 }, (_, index) => ({
+	id: `strip-${index + 1}`,
+	name: `Saved question number ${index + 1} with a long name`,
+	statement: `SELECT ${index + 1} AS one`,
+	ledgers: ['published'],
+	days: 14,
+	updatedAt: `2026-08-20T0${index}:00:00Z`
+}));
+
+for (const view of [
+	{ width: 768, height: 1024 },
+	{ width: 1440, height: 900 },
+	{ width: 1920, height: 1080 }
+] as const) {
+	test(`the question strip stays one line, folds the rest into "{n} more" and keeps every title whole, at ${view.width}`, async ({ page }) => {
+		await page.addInitScript((saved) => localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(saved)), SAVED);
+		await page.setViewportSize(view);
+		await openExplorer(page);
+		const strip = page.locator('[data-workbench-region="questions"] .question-strip');
+		const fold = strip.locator(':scope > details > summary');
+		await expect(fold).toBeVisible();
+		const read = () => strip.evaluate((node) => {
+			const box = node.getBoundingClientRect();
+			const shown = [...node.querySelectorAll(':scope > .run-label, :scope > .example, :scope > .saved-chip, :scope > details > summary')] as HTMLElement[];
+			const middles = shown.map((part) => part.getBoundingClientRect().top + part.getBoundingClientRect().height / 2);
+			const titles = [...node.querySelectorAll(':scope > .example, :scope > .saved-chip .example')] as HTMLElement[];
+			return {
+				height: box.height,
+				spread: Math.max(...middles) - Math.min(...middles),
+				whole: titles.every((title) => {
+					const part = title.getBoundingClientRect();
+					return title.scrollWidth <= title.clientWidth && part.left >= box.left - 0.5 && part.right <= box.right + 0.5;
+				}),
+				more: Number((node.querySelector(':scope > details > summary')?.textContent ?? '').trim().split(' ')[0]),
+				listed: node.querySelectorAll(':scope > details .folded .example').length
+			};
+		});
+		const before = await read();
+		expect(before.spread, 'the strip is not one line').toBeLessThanOrEqual(1);
+		expect(before.whole, 'a chip on the line is cut short').toBe(true);
+		expect(before.more, 'the fold names a different count from the chips it holds').toBe(before.listed);
+
+		// The folded chips open in view, each title whole.
+		await fold.click();
+		const list = strip.locator('.folded');
+		await expect(list).toBeVisible();
+		const opened = await list.evaluate((node) => [...node.querySelectorAll('.example')].every((chip) => {
+			const box = chip.getBoundingClientRect();
+			const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+			return hit !== null && chip.contains(hit) && chip.scrollWidth <= chip.clientWidth;
+		}));
+		expect(opened, 'a folded chip is hidden or cut short').toBe(true);
+		await fold.click();
+
+		// Saving one more question folds a chip away; the strip keeps its height.
+		await page.getByRole('button', { name: /^Save$/ }).click();
+		await page.getByLabel('Name', { exact: true }).fill('One more saved question');
+		await page.getByRole('button', { name: /^Keep$/ }).click();
+		await expect(strip.locator(':scope > .saved-chip .example').first()).toContainText('One more saved question');
+		const after = await read();
+		expect(after.spread, 'the strip is not one line after a save').toBeLessThanOrEqual(1);
+		expect(after.height).toBeCloseTo(before.height, 0);
+		expect(after.more).toBe(after.listed);
+	});
+}
+
+test('the chart heading line holds still and the drawing scrolls in its own box beneath it', async ({ page }) => {
+	await page.setViewportSize({ width: 1024, height: 768 });
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3, 5), (DATE '2026-08-19', 5, 4), (DATE '2026-08-20', 8, 9)) AS t(date, a, b)");
+	await runExplorer(page);
+	const chart = page.locator('[data-workbench-region="chart"]');
+	await expect(chart.locator('[data-shape-choice]').first()).toBeVisible();
+	const body = chart.locator('.chart-body');
+	const line = chart.locator(':scope > .region-bar');
+	const before = await line.boundingBox();
+	await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
+	const found = await chart.evaluate((region) => {
+		const bar = region.querySelector(':scope > .region-bar') as HTMLElement;
+		const drawing = region.querySelector('.chart-body') as HTMLElement;
+		const tiles = [...bar.querySelectorAll('[data-shape-choice]')] as HTMLElement[];
+		return {
+			scrolled: drawing.scrollTop > 0,
+			below: drawing.getBoundingClientRect().top >= bar.getBoundingClientRect().bottom - 0.5,
+			tilesOnTop: tiles.every((tile) => {
+				const box = tile.getBoundingClientRect();
+				const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+				return hit !== null && tile.contains(hit);
+			}),
+			tilesInLine: tiles.every((tile) => {
+				const box = tile.getBoundingClientRect();
+				const edge = bar.getBoundingClientRect();
+				return box.top >= edge.top - 0.5 && box.bottom <= edge.bottom + 0.5;
+			})
+		};
+	});
+	expect(found.scrolled, 'the drawing did not need to scroll, so this proves nothing').toBe(true);
+	expect(found.below, 'the drawing starts above the heading line').toBe(true);
+	expect(found.tilesInLine, 'a shape tile stands outside the heading line').toBe(true);
+	expect(found.tilesOnTop, 'something is drawn over a shape tile').toBe(true);
+	const after = await line.boundingBox();
+	expect(after?.y).toBeCloseTo(before?.y ?? -1, 0);
+});
+
 test('a long answer and a long question scroll inside their own regions, and the page does not grow', async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await openExplorer(page);
@@ -81,7 +211,7 @@ test('a long answer and a long question scroll inside their own regions, and the
 	await page.locator('#explorer-sql').fill(Array.from({ length: 40 }, (_, index) => `SELECT ${index}`).join('\n'));
 	const at = await page.evaluate(() => {
 		const table = document.querySelector('[data-chart="answer-table"]') as HTMLElement;
-		const editor = document.querySelector('[data-workbench-region="editor"] .frame') as HTMLElement;
+		const editor = document.querySelector('[data-workbench-region="editor"] .editor-frame') as HTMLElement;
 		const root = document.documentElement;
 		return {
 			pageScrolls: root.scrollHeight > root.clientHeight,
@@ -114,13 +244,13 @@ for (const view of [
 test('only the Data explorer lifts the width cap and leaves the footer out', async ({ page }) => {
 	await page.setViewportSize({ width: 1920, height: 1080 });
 	await page.goto('/console/', { waitUntil: 'domcontentloaded' });
-	await expect(page.locator('.frame > footer')).toBeVisible();
-	const capped = await page.locator('.frame').evaluate((node) => node.getBoundingClientRect().width);
+	await expect(page.locator('.frame:has(> main) > footer')).toBeVisible();
+	const capped = await page.locator('.frame:has(> main)').evaluate((node) => node.getBoundingClientRect().width);
 	expect(capped, 'the Pipelines route lost its width cap').toBeLessThan(1920);
 
 	await openExplorer(page);
-	await expect(page.locator('.frame > footer')).toBeHidden();
-	const lifted = await page.locator('.frame').evaluate((node) => node.getBoundingClientRect().width);
+	await expect(page.locator('.frame:has(> main) > footer')).toBeHidden();
+	const lifted = await page.locator('.frame:has(> main)').evaluate((node) => node.getBoundingClientRect().width);
 	expect(lifted).toBeCloseTo(1920, 0);
 });
 

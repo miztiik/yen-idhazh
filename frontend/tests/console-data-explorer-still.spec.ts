@@ -86,7 +86,7 @@ async function snapshot(page: Page): Promise<Snapshot> {
 			['answer', '[data-workbench-region="answer"]'],
 			['chart', '[data-workbench-region="chart"]'],
 			['run', '.run-button'],
-			['editorFrame', '[data-workbench-region="editor"] .frame']
+			['editorFrame', '[data-workbench-region="editor"] .editor-frame']
 		] as const;
 		return {
 			boxes: Object.fromEntries(selectors.map(([name, selector]) => [name, read(selector)])),
@@ -386,7 +386,8 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 					const box = region.getBoundingClientRect();
 					for (const control of region.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary')) {
 						const rect = control.getBoundingClientRect();
-						if (rect.width === 0 || rect.height === 0 || getComputedStyle(control).visibility === 'hidden') continue;
+						// checkVisibility() is false for a chip in a closed fold, which the page lays out but never draws.
+						if (rect.width === 0 || rect.height === 0 || !control.checkVisibility() || getComputedStyle(control).visibility === 'hidden') continue;
 						const across = rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
 						const down = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
 						if (!across || (both && !down)) {

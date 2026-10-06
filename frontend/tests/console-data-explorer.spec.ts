@@ -391,7 +391,10 @@ test('THE ORACLE: every published example runs without refusal or unreachable st
 	for (const title of titles) {
 		await statePage(page, async (one) => {
 			await openExplorer(one);
-			await one.getByRole('button', { name: title }).click();
+			// A chip that does not fit the strip's one line waits in its fold.
+			const chip = one.getByRole('button', { name: title });
+			if (!(await chip.isVisible())) await one.locator('.question-strip > details > summary').click();
+			await chip.click();
 			await expect(one.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 			await runExplorer(one);
 			await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"], [data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toHaveCount(0);

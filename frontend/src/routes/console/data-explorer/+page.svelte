@@ -706,7 +706,13 @@
 		min-block-size: var(--workbench-control);
 	}
 
-	:global([data-workbench-region='questions'] .question-strip),
+	/* The strip takes the room the links leave and stays one line from 640 px, so a saved
+	   question folds an example away instead of making the row taller. */
+	:global([data-workbench-region='questions'] .question-strip) {
+		flex: 1 1 0;
+		min-inline-size: 0;
+	}
+
 	:global([data-workbench-region='questions'] .question-strip button) {
 		min-inline-size: 0;
 		max-inline-size: 100%;
@@ -756,6 +762,7 @@
 	}
 
 	.question-links {
+		flex: none;
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -860,7 +867,8 @@
 	}
 
 	.editor-actions button,
-	.region-bar :global(button) {
+	.region-bar :global(button),
+	.region-bar :global(.choice-tile) {
 		font-size: var(--text-sm);
 		font-weight: 400;
 		letter-spacing: normal;
@@ -883,11 +891,13 @@
 		grid-row: 2 / -1;
 	}
 
+	/* The heading line holds still and the drawing scrolls in its own box beneath it, so
+	   nothing the chart draws ever passes under the shape tiles. */
 	.chart-region {
 		contain: size;
 		display: grid;
-		grid-template-rows: var(--workbench-control) minmax(var(--idle-height), auto);
-		overflow: auto;
+		grid-template-rows: var(--workbench-control) minmax(0, 1fr);
+		overflow: clip;
 		border-block-start: 1px solid var(--color-rule);
 		background: var(--color-surface);
 	}
@@ -897,6 +907,8 @@
 	}
 
 	.chart-body {
+		min-block-size: 0;
+		overflow: auto;
 		padding: 0 var(--space-3) var(--space-3);
 	}
 
@@ -957,9 +969,6 @@
 		.workbench-toolbar {
 			grid-template-columns: minmax(0, 1fr);
 		}
-		[data-workbench-region='questions'] {
-			flex-wrap: wrap;
-		}
 		.run-shortcut {
 			display: none;
 		}
@@ -979,9 +988,13 @@
 
 	@media (max-width: 639px) {
 		[data-workbench-region='questions'] {
+			flex-wrap: wrap;
 			align-items: stretch;
 		}
-		:global([data-workbench-region='questions'] .question-strip),
+		:global([data-workbench-region='questions'] .question-strip) {
+			inline-size: 100%;
+			flex-basis: 100%;
+		}
 		.question-links,
 		.how-to {
 			min-inline-size: 0;
