@@ -26,11 +26,12 @@ import { COMPACT_INDEX_STAMP, type CompactEntry, type Period } from '../../src/l
 import { nodeEngine } from '../../src/lib/data/engine';
 import type { Fetcher } from '../../src/lib/data/fetched-bytes';
 import type { DateStamp, LedgerName } from '../../src/lib/data/slice-shapes';
-import { engineExtensionRepository } from '../../src/lib/server/config';
+import { engineExtensionRepository, ledgerArchiveBaseUrl } from '../../src/lib/server/config';
 
-/** One day of a built ledger, `ago` days before the pinned day: a packed day holds `rows` rows,
- *  an `empty` day held none, and a `lost` day lost its rows. */
-export type BuiltDay = { ago: number; rows: number } | { ago: number; state: 'empty' | 'lost' };
+/** One day of a built ledger, `ago` days before the pinned day: a packed day holds `rows` rows and
+ *  may have set `setAside` of its writer's files aside unread, an `empty` day held none, and a
+ *  `lost` day lost its rows. */
+export type BuiltDay = { ago: number; rows: number; setAside?: number } | { ago: number; state: 'empty' | 'lost' };
 
 export interface BuiltLedger {
 	ledger: LedgerName;
@@ -59,6 +60,13 @@ export function everyDay(oldest: number, newest: number, rows = 1): BuiltDay[] {
 	return days;
 }
 
+/** Every day from `oldest` days before the pinned day to `newest` days before it, each `empty`. */
+export function quietDays(oldest: number, newest: number): BuiltDay[] {
+	const days: BuiltDay[] = [];
+	for (let ago = oldest; ago >= newest; ago -= 1) days.push({ ago, state: 'empty' });
+	return days;
+}
+
 /** Write `rows` rows for each day into one Parquet file at `target`, through this process's own
  *  query engine, and return the file's size. */
 async function writeParquet(target: string, days: readonly [DateStamp, number][]): Promise<number> {
@@ -78,6 +86,11 @@ function indexText(ledger: LedgerName, period: Period, entries: CompactEntry[]):
 	return `${JSON.stringify({ entries, ledger, period, version: COMPACT_INDEX_STAMP }, null, 2)}\n`;
 }
 
+/** The files a packed day set aside, as an entry carries them: absent when it set none aside. */
+function setAsideOf(day: BuiltDay): { set_aside?: number } {
+	return 'setAside' in day && day.setAside !== undefined ? { set_aside: day.setAside } : {};
+}
+
 /** Write a built ledger under `root` as `state/` holds one: three indexes and the files they name. */
 export async function buildLedger(root: string, built: BuiltLedger): Promise<void> {
 	const closed = new Set(built.closedMonths ?? []);
@@ -87,6 +100,8 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 		const covers = daysBefore(built.pinned, day.ago);
 		if (named.has(covers)) throw new Error(`${built.ledger} names ${covers} twice`);
 		if ('rows' in day && !(Number.isInteger(day.rows) && day.rows > 0)) throw new Error(`${covers} is packed with ${day.rows} rows`);
+		const setAside = setAsideOf(day).set_aside;
+		if (setAside !== undefined && !(Number.isInteger(setAside) && setAside > 0)) throw new Error(`${covers} set ${setAside} files aside`);
 		named.set(covers, day);
 	}
 	const ascending = [...named.keys()].sort();
@@ -102,7 +117,7 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 		}
 		const [year, month, date] = covers.split('-');
 		const bytes = await writeParquet(path.join(ledgerRoot, 'daily', year!, month!, `${date}.parquet`), [[covers, day.rows]]);
-		daily.push({ covers, rows: day.rows, bytes });
+		daily.push({ covers, rows: day.rows, bytes, ...setAsideOf(day) });
 	}
 	for (const month of [...closed].sort()) {
 		const inMonth = ascending.filter((covers) => covers.startsWith(`${month}-`));
@@ -115,13 +130,16 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 			return 'state' in day && day.state === 'lost';
 		});
 		const lostDays = lost.length > 0 ? { lost_days: lost } : {};
+		// A month counts every file its days set aside.
+		const setAside = inMonth.reduce((sum, covers) => sum + (setAsideOf(named.get(covers)!).set_aside ?? 0), 0);
+		const setAsideFiles = setAside > 0 ? { set_aside: setAside } : {};
 		if (packed.length === 0) {
 			monthly.push({ covers: month, rows: 0, bytes: 0, state: 'empty', ...lostDays });
 			continue;
 		}
 		const [year, number] = month.split('-');
 		const bytes = await writeParquet(path.join(ledgerRoot, 'monthly', year!, `${number}.parquet`), packed);
-		monthly.push({ covers: month, rows: packed.reduce((sum, [, rows]) => sum + rows, 0), bytes, ...lostDays });
+		monthly.push({ covers: month, rows: packed.reduce((sum, [, rows]) => sum + rows, 0), bytes, ...lostDays, ...setAsideFiles });
 	}
 	mkdirSync(path.join(ledgerRoot, 'index'), { recursive: true });
 	writeFileSync(path.join(ledgerRoot, 'index', 'daily.json'), indexText(built.ledger, 'daily', daily));
@@ -164,11 +182,32 @@ export function servedFrom(root: string, prefix: string): { fetcher: Fetcher; as
 	return { fetcher, asked };
 }
 
-/** Answer a page's requests for one ledger's compact files from `root`, a 404 for a file it lacks. */
+/** Answer a page's requests to its own site for one ledger's compact files from `root`, a 404 for
+ *  a file it lacks, and switch the page's writers' tier off: a built ledger has no writer's files,
+ *  so the raw days the site build listed would be read from the canary. A request to the archive
+ *  host is left to `serveArchiveToPage`, or to the block in `tests/support/browser.ts`. */
 export async function serveToPage(context: BrowserContext, root: string, ledger: LedgerName): Promise<void> {
-	await context.route(`**/state/compact/${ledger}/**`, (route) => {
-		const pathname = new URL(route.request().url()).pathname;
-		const bytes = servedFile(root, pathname.slice(pathname.indexOf('/state/') + '/state/'.length));
-		return bytes === null ? route.fulfill({ status: 404 }) : route.fulfill({ status: 200, body: Buffer.from(bytes) });
+	const archive = ledgerArchiveBaseUrl();
+	await context.addInitScript(() => Object.defineProperty(globalThis, '__RAW_LISTED_THROUGH__', { value: {}, configurable: true }));
+	await context.route(
+		(url) => (archive === '' || !url.href.startsWith(`${archive}/`)) && url.pathname.includes(`/state/compact/${ledger}/`),
+		(route) => {
+			const pathname = new URL(route.request().url()).pathname;
+			const bytes = servedFile(root, pathname.slice(pathname.indexOf('/state/') + '/state/'.length));
+			return bytes === null ? route.fulfill({ status: 404 }) : route.fulfill({ status: 200, body: Buffer.from(bytes) });
+		}
+	);
+}
+
+/** Answer a page's requests to the archive host, `ledger.archive_base_url`, from `root`, as the
+ *  committed repository serves its `state/` tree to any origin, a 404 for a file it lacks. */
+export async function serveArchiveToPage(context: BrowserContext, root: string): Promise<void> {
+	const archive = ledgerArchiveBaseUrl();
+	if (archive === '') throw new Error('ledger.archive_base_url is empty, so a page has no archive host to be served');
+	const base = new URL(`${archive}/state/`).pathname;
+	await context.route(`${archive}/state/**`, (route) => {
+		const bytes = servedFile(root, decodeURIComponent(new URL(route.request().url()).pathname.slice(base.length)));
+		const headers = { 'access-control-allow-origin': '*' };
+		return bytes === null ? route.fulfill({ status: 404, headers }) : route.fulfill({ status: 200, headers, body: Buffer.from(bytes) });
 	});
 }

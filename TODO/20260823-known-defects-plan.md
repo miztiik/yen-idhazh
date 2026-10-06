@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
-**Thirty-two defects are open.** Four of them need evidence or a ruling before any code
+**Thirty defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -100,7 +100,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
-| 56 | A byte-range test counts a correct 304 as a failure | 1 | **OPEN - the cause is settled; one test changes** |
+| 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (PR #1354) |
 | 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
@@ -206,17 +206,17 @@ that three specs share.
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
 different tests, and filed on 2026-10-04.
 
-## 56 - A byte-range test counts a correct 304 as a failure (OPEN)
+## 56 - A byte-range test counts a correct 304 as a failure (FIXED 2026-10-06)
 
-**A browser test of reading a year file by byte range failed once on a 304
+**A browser test of reading a year file by byte range keeps failing on a 304
 that its own setup makes correct.** "A year file whose ETag changed after the
 browser kept part of it is still read by byte range"
 (`frontend/tests/ledger-ranges.spec.ts`, line 310 today and 271 on the commit
-that failed) failed in CI run 37218615995, attempt 1, at about 17:00 UTC on
-2026-10-04, and a re-run of the job passed. The test lets the browser keep an
-answer for 1 second, reads the year file, gives the file a new ETag (its
-`redeploy` step), waits 2 seconds, reads the file again from a new page, and
-expects the test's host to answer every GET with a 206.
+that failed first) failed first in CI run 37218615995, attempt 1, at about
+17:00 UTC on 2026-10-04, and a re-run of the job passed. The test lets the
+browser keep an answer for 1 second, reads the year file, gives the file a new
+ETag (its `redeploy` step), waits 2 seconds, reads the file again from a new
+page, and expects the test's host to answer every GET with a 206.
 
 **The host's own request log settles the cause.** The run's
 `playwright-traces` artifact keeps it, as `ledger-ranges/requests.json`, until
@@ -228,19 +228,35 @@ asks that only when its copy is older than the 1 second the test allows, so
 the read took longer than that, and the host answered 304, which is right. The
 read's answer still matched the disk, which the test checks first.
 
-**Doing nothing costs a red browser job whenever that read takes more than a
-second, and a re-run.** The site is not wrong: Pages lets the browser keep an
-answer for 600 seconds, and 304 is the right answer to a browser checking its
-copy.
+**It failed twice more the same way, and the second time in main's own
+checks.** CI run 37382246965, the checks of #1326, failed it on attempt 1 (job
+id 112007006566) at about 22:28 UTC on 2026-10-05, and a re-run of the job
+passed. CI run 37427112258, the checks main ran when #1328 merged, failed it
+in the browser job (job id 112149278674) at about 07:05 UTC on 2026-10-06, and
+that run stays red. The failed assertion prints the request it counted. In
+both runs that request is a GET for byte 0 of
+`compact/host-fingerprint/yearly/2026/2026.parquet`, answered 304 with no
+body. Its `If-None-Match` names the ETag the host was serving:
+`"6ac43266-4fe1"` in run 37382246965 and `"6ac4ab97-4fe1"` in run
+37427112258. Its address carries a `read` mark that no other read uses
+(`read=37617a44d53a84f5` and `read=f9688832d6ad26de`), so the copy the browser
+checked came from that same read. That is the request the host's log showed
+the first time, so the cause is the same.
 
-**The next move is a worker's.** Only what the first read kept has to be out
-of date, so the test can let the browser keep answers for the site's 600
-seconds again before the second read starts. Every GET of the second read is
-then a 206, and the test still reads a file whose ETag changed. Level 1 - one
-test.
+**Doing nothing costs a red browser job whenever that read takes more than a
+second, and a re-run.** It has cost that three times in three days, and once
+it was the one failure that turned main's own checks red. The site is not
+wrong: Pages lets the browser keep an answer for 600 seconds, and 304 is the
+right answer to a browser checking its copy.
+
+**Fixed on 2026-10-06 by #1354.** The test sets the host back to Pages' 600
+seconds after its 2-second wait and before the second read starts, so only what
+the first read kept is stale and every GET of the second read is a 206. Level 1 -
+one test.
 
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
-different tests, and filed on 2026-10-04.
+different tests, and filed on 2026-10-04. The two later failures were added on
+2026-10-06.
 
 ## 55 - The query-door page names a deleted test, so nothing may hold the rule it states (OPEN)
 
