@@ -25,7 +25,6 @@ from conftest import CONFIG_DIR, read_text
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import Period, RowIdentity, Tier, WriterIdentity
@@ -117,7 +116,7 @@ def _collect_metrics(state: Path) -> bool:
     metrics_sink.ship_judge_metrics(
         _first(ContentSimilarityJudgeMetrics),
         judge_id="content-similarity-judge",
-        shard=0,
+        name="0",
         out_dir=shipped,
     )
     which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
@@ -186,14 +185,6 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
         lambda s: _wrote(
             s,
             lambda: ledger.append_fitted_thresholds(s, A_DAY, [_first(FittedSimilarityThreshold)]),
-        ),
-    ),
-    "append_council_shard_outcomes": (
-        LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
-        1,
-        lambda s: _wrote(
-            s,
-            lambda: ledger.append_council_shard_outcomes(s, A_DAY, [_first(CouncilShardOutcome)]),
         ),
     ),
     "score_merge_line_holdout": (

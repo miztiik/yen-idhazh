@@ -43,7 +43,6 @@ import pytest
 from idhazh import ledger
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.keys import (
-    COUNCIL_SHARD_OUTCOME_KEY,
     STORY_SIMILARITY_PAIR_KEY,
     STORY_SIMILARITY_THRESHOLD_KEY,
 )
@@ -68,16 +67,12 @@ pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 # run.
 TRIAL_WORKFLOW: Final = "measure.yml"
 
-#: A ledger's settlement key, declared by hand beside the three places `keyed_paths`
-#: already names it: `backend/idhazh/ledger/settle.py` registers exactly these
-#: three ledgers today, and each key is the same tuple constant its own writer
-#: settles on in `backend/idhazh/ledger/rows.py`. A fourth keyed ledger adds its
-#: row here in the same commit that registers it in `keyed_paths`.
+#: A ledger's CSV settlement key, declared by hand beside the places `keyed_paths`
+#: names it. Door ledgers use `ledger.keys._DOOR_SHAPES` instead.
 LEDGER_KEYS: Final[Mapping[LedgerName, tuple[str, ...]]] = MappingProxyType(
     {
         LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: STORY_SIMILARITY_THRESHOLD_KEY,
         LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: STORY_SIMILARITY_PAIR_KEY,
-        LedgerName.LLM_COUNCIL_SHARD_OUTCOMES: COUNCIL_SHARD_OUTCOME_KEY,
     }
 )
 

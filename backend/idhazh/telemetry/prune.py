@@ -122,19 +122,15 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: deleting a fitted row takes a day out of the guard's median and out of what
 #: step 4 compares against. Either can go on its own.
 #:
-#: **`llm-council-shard-outcomes` is here before anything writes it.** The shape
-#: and the path land ahead of the step that appends to them (Guardrail #3), and a
-#: ledger an operator cannot name is a ledger a day cannot be taken out of. A range
-#: over a ledger with no file selects nothing and says so. The four
-#: `content-similarity-judge` ledgers are here for the same reason, and they are
-#: the judge's rather than the council's: what a reading is about decides where
-#: it is filed, never what executed it.
+#: The four `content-similarity-judge` ledgers are here before their first row
+#: for the same reason: a ledger an operator cannot name is a ledger a day
+#: cannot be taken out of. What a reading is about decides where it is filed,
+#: never what executed it.
 _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-    LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
 )
 
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(

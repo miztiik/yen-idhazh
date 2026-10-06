@@ -478,6 +478,7 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-retirements",
         "candidate-models",
+        "council-run-records",
         "item-health-summary",
         "summary-quality-evals",
         "traces",
