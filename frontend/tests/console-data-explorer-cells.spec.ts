@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { nextSort, numericBarShare, printCell, sortedRows, type PrintedCell } from '../src/lib/console/explorer/answer';
 import type { Column, Row } from '../src/lib/data/ledger';
+import { inZone } from './support/in-zone';
 
 test('THE ORACLE: cells print by engine column type, not by JavaScript value', () => {
 	const cases: [Column, Row[string], string][] = [
@@ -47,20 +48,6 @@ test('the first press sorts numbers and days high to low and everything else A t
 	const big = { name: 'n', type: 'BIGNUM' };
 	expect(sortedRows([{ n: '9' }, { n: '10' }, { n: '2' }], [big], { column: 'n', direction: 'desc' })).toEqual([{ n: '10' }, { n: '9' }, { n: '2' }]);
 });
-
-/** Runs `check` with this process's clock in `zone`, then puts the starting zone back. Node
- *  reads `TZ` the moment it is set, and deleting it does not bring the old zone back. */
-function inZone(zone: string, check: () => void): void {
-	const variable = process.env.TZ;
-	const starting = Intl.DateTimeFormat().resolvedOptions().timeZone;
-	process.env.TZ = zone;
-	try {
-		check();
-	} finally {
-		process.env.TZ = variable ?? starting;
-		if (variable === undefined) delete process.env.TZ;
-	}
-}
 
 test('a timestamp with no zone sorts by its UTC instant when the run is in another time zone', () => {
 	const column = { name: 'at', type: 'TIMESTAMP' };
