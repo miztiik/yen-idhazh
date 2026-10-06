@@ -758,38 +758,72 @@
     "visuals_rendered": 0
   },
   {
-    "addresses_considered": null,
+    "addresses_considered": 6731,
     "bands": {
       "high": 0,
       "low": 0,
-      "medium": 0
+      "medium": 1
     },
     "date": "2026-10-06",
     "determinism_violations": 0,
-    "extraction": null,
+    "extraction": {
+      "chartable": 1,
+      "chartable_charted": 0,
+      "chartable_published": 1,
+      "elements_found": 17,
+      "items": 1,
+      "narrative": 0,
+      "span_integrity_pass": 1,
+      "unclassified": 0
+    },
     "extraction_suspect": 0,
     "instruments": [],
     "items_failed": 240,
-    "items_planned": 240,
-    "items_published": 0,
+    "items_planned": 241,
+    "items_published": 1,
     "items_truncated": 0,
-    "label_similarity": null,
+    "label_similarity": {
+      "encoder_ref": "all-minilm-l6-v2-quantized/2026-08-22",
+      "nearest": {
+        "count": 1,
+        "maximum": 0.20273009181807056,
+        "minimum": 0.20273009181807056,
+        "p25": 0.20273009181807056,
+        "p50": 0.20273009181807056,
+        "p75": 0.20273009181807056,
+        "total": 0.20273009181807056
+      },
+      "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
+    },
     "model_id": "qwen3-5-9b-q4-k-m",
     "reasons": {
       "faithfulness": 0,
       "hedge_dropped": 0,
       "lead_missing": 0,
-      "not_scored": 0,
+      "not_scored": 1,
       "unattributed": 0,
       "unsupported_number": 0
     },
-    "revision": 3,
-    "runs": 3,
-    "sources": [],
-    "sources_present": 0,
-    "stage_timing": [],
+    "revision": 4,
+    "runs": 4,
+    "sources": [
+      {"doubted": 1,"published": 1,"source_id": "straitstimes-business","truncated": 0}
+    ],
+    "sources_present": 1,
+    "stage_timing": [
+      {"max_ms": 933,"p50_ms": 933,"p90_ms": 933,"stage": "fetch","sum_ms": 933,"timed": 1},
+      {"max_ms": 57,"p50_ms": 57,"p90_ms": 57,"stage": "extract","sum_ms": 57,"timed": 1},
+      {"max_ms": 739615,"p50_ms": 739615,"p90_ms": 739615,"stage": "summarize","sum_ms": 739615,"timed": 1}
+    ],
     "summaries_scored": 0,
-    "throughput": null,
+    "throughput": {
+      "cached_tokens": 5062,
+      "decode_ms": 311734,
+      "input_tokens": 8937,
+      "items": 1,
+      "output_tokens": 1478,
+      "prefill_ms": 427816
+    },
     "version": "2026-09-29",
     "visuals_rendered": 0
   }
