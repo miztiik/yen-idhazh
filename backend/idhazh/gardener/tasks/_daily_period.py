@@ -41,13 +41,23 @@ at its path is adopted first** (`ledger_marks.adopt`): an index restored from
 an older commit can lose a day whose file is still there, and recording the
 day empty, or writing over the file, would lose its rows.
 
-**A file that cannot be read stops its day and is never deleted**; a day
-holding more than `max_raw_files_per_period` files is refused the same way.
-Either one leaves the mark before that day, so the next wake retries it rather
-than stepping past it. The pass writes its final daily index once, then deletes
-raw files, and advances its watermark once, last. Before the index lands, raw
-files survive; after it lands, the next wake moves the mark past each indexed
-day no raw file is left in, and takes again a day whose raw files remain.
+**A file that cannot be read is moved aside, and the rest of its day packs.**
+Its envelope or a row this build refuses moves it to the ledger's set-aside
+folder, under its path (`CompactTree.set_aside`), and the day's entry counts it
+in `set_aside`; a day taken again keeps the count it had and adds to it. **A
+day holding more than `max_raw_files_per_period` readable files packs its
+oldest that many**, and the rest stay in its folder: the mark moves past the
+day, the pass ends `ceiling` at it, and the next wake takes the rest in as it
+takes a re-run. Nothing is decided for a day that is refused, so a refused day
+keeps every file. The pass writes its final daily index once, then deletes raw
+files, and advances its watermark once, last. Before the index lands, raw files
+survive; after it lands, the next wake moves the mark past each indexed day no
+raw file is left in, and takes again a day whose raw files remain.
+
+**The step takes only the days whose fetch fits the shard's download budget**,
+oldest first, read off the listing's sizes before anything is downloaded. The
+first day that does not fit ends the step at `ceiling`, for a later wake, or
+`failed` by name when that day alone is larger than the whole budget.
 
 **Raw days past the keep line are past the ledger's reach**, and are dropped
 by their listed paths: those in the months the drop step takes, and those a
@@ -76,8 +86,9 @@ from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.gardener import ledger_marks, named_trees
+from idhazh.gardener.file_listing import OverBudgetError
 from idhazh.gardener.tasks import _reopened_month
-from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
+from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 
 logger = logging.getLogger(__name__)
 
@@ -153,17 +164,21 @@ def _take[C: Contract](
     key: tuple[str, ...],
     identity: WriterIdentity,
     stamp: str,
-) -> tuple[str, ledger.LedgerFault | None] | None:
-    """Pack one day, or say why it cannot be and which fault that is, if any.
+) -> Stop | None:
+    """Pack one day; None when it is packed whole.
 
-    Nothing is decided for a day that fails, and nothing is said of it.
+    A `ceiling` stop at the day when it is packed from its oldest files and the
+    rest wait in its folder for the next wake. A `failed` stop when the day is
+    refused: nothing is decided for it, and the refusal is all that is said of
+    it. A fetch past the shard's budget raises `OverBudgetError`, with nothing
+    decided either.
     """
     try:
-        files = tree.raw_files(day, most=policy.max_raw_files_per_period)
+        raw = tree.read_raw_day(day, most=policy.max_raw_files_per_period, model=model)
     except ValueError as refusal:
-        return str(refusal), None
+        return _refused(tree, day, str(refusal))
     entry = tree.daily.get(day)
-    if entry is not None and not files:
+    if entry is not None and not (raw.taken or raw.unreadable or raw.carried):
         _advance(tree, day, stamp=stamp, identity=identity)
         return None
     adopted: ledger_marks.Adopted | None = None
@@ -173,7 +188,9 @@ def _take[C: Contract](
         )
         if existing is None:
             where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.DAILY)
-            return (
+            return _refused(
+                tree,
+                day,
                 f"{where.name} names the day and its file is not there. Restore the file from "
                 "git history, and the next wake takes the re-run in",
                 ledger.LedgerFault.FILE_MISSING,
@@ -184,32 +201,52 @@ def _take[C: Contract](
                 tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day
             )
         except ValueError as refusal:
-            return str(refusal), None
+            return _refused(tree, day, str(refusal))
         existing = None if adopted is None else adopted.path
-    if adopted is not None and not files:
-        tree.daily[day] = adopted.entry
-    else:
-        try:
-            rows = [tree.load(existing, model=model)] if existing is not None else []
-            for held in files:
-                rows.append(tree.load(held.path, model=model))
-        except ValueError as refusal:
-            return str(refusal), None
+    try:
+        kept = [tree.load(existing, model=model)] if existing is not None and raw.taken else []
+    except ValueError as refusal:
+        return _refused(tree, day, str(refusal))
+    for path, why in raw.unreadable:
+        tree.set_aside(path, day, why)
+    set_aside = (0 if entry is None else entry.set_aside) + len(raw.unreadable)
+    if raw.taken:
         _record(
             tree,
             day,
-            ledger.settle_rows(rows, key),
+            ledger.settle_rows([*kept, *(rows for _path, rows in raw.taken)], key),
             existing,
             model=model,
             identity=identity,
-            built_from=len(files) + (existing is not None),
+            built_from=len(raw.taken) + (existing is not None),
+            set_aside=set_aside,
         )
-        for held in files:
-            tree.delete(held.path)
+        for path, _rows in raw.taken:
+            tree.delete(path)
+    elif adopted is not None:
+        tree.daily[day] = adopted.entry.model_copy(update={"set_aside": set_aside})
+    elif entry is not None:
+        tree.daily[day] = entry.model_copy(update={"set_aside": set_aside})
+    else:
+        tree.daily[day] = CompactEntry(
+            covers=day, rows=0, bytes=0, state=EntryState.EMPTY, set_aside=set_aside
+        )
+    if raw.unreadable:
+        tree.note_recovery(RecoveryNote.SET_ASIDE, day)
     if adopted is not None:
         tree.note_recovery(RecoveryNote.INDEX_REBUILT, day)
     tree.mark_index(Period.DAILY)
     _advance(tree, day, stamp=stamp, identity=identity)
+    if raw.carried:
+        tree.note_recovery(RecoveryNote.CARRIED_OVER, day)
+        logger.info(
+            "a day's newest raw files wait for the next wake ledger=%s day=%s waiting=%s most=%s",
+            tree.ledger.value,
+            day,
+            raw.carried,
+            policy.max_raw_files_per_period,
+        )
+        return Stop(StopReason.CEILING, day)
     return None
 
 
@@ -229,15 +266,20 @@ def _record[C: Contract](
     model: type[C],
     identity: WriterIdentity,
     built_from: int,
+    set_aside: int,
 ) -> None:
     """Write one day's settled rows into its day file, or record a day with no row as `empty`.
 
     A day with no row gets no file, so any file at its path goes with it.
+    `set_aside` is every file the day's packing has moved aside, this pass's
+    and those its entry counted before.
     """
     if not settled:
         if existing is not None:
             tree.delete(existing)
-        tree.daily[day] = CompactEntry(covers=day, rows=0, bytes=0, state=EntryState.EMPTY)
+        tree.daily[day] = CompactEntry(
+            covers=day, rows=0, bytes=0, state=EntryState.EMPTY, set_aside=set_aside
+        )
         return
     built = ledger.render_period(
         tree.state_dir,
@@ -252,7 +294,24 @@ def _record[C: Contract](
     if existing is not None and existing != built.path:
         tree.delete(existing)
     tree.write(built.path, built.data)
-    tree.daily[day] = CompactEntry(covers=day, rows=len(settled), bytes=len(built.data))
+    tree.daily[day] = CompactEntry(
+        covers=day, rows=len(settled), bytes=len(built.data), set_aside=set_aside
+    )
+
+
+def _fetched(tree: CompactTree, day: str) -> PeriodFetch:
+    """What packing one day downloads: its raw folder, and its month's day files beside its own.
+
+    The day's own file is read when the day is taken again, or adopted when no
+    entry names it, and a day file comes with the files beside it.
+    """
+    own = named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day)
+    return PeriodFetch(
+        folders=(
+            tree.raw_day_folder(day),
+            *(() if own is None else (tree.daily_month_folder(day[:7]),)),
+        )
+    )
 
 
 def compact(
@@ -270,7 +329,9 @@ def compact(
     `first_kept` is the keep line, the oldest month the monthly window keeps,
     or None when it keeps every month. A re-opened month counts once against
     the cap, as a day does. A choice an operator range refused stops here, at
-    the day the range left out, with nothing taken.
+    the day the range left out, with nothing taken. The step takes only the
+    days whose fetch fits what is left of the shard's download budget, and
+    stops at the first that does not.
     """
     if choice.stopped_because is StopReason.FAILED and choice.resume_from is not None:
         return (
@@ -313,39 +374,47 @@ def compact(
     for month in closed:
         if taken == policy.max_periods_per_run:
             return (*stops, Stop(StopReason.CEILING, month))
-        refusal = _reopened_month.reopen(
-            tree,
-            month,
-            most=policy.max_raw_files_per_period,
-            model=model,
-            key=key,
-            identity=identity,
-        )
-        if refusal:
-            stops.extend(refusal)
-        else:
+        try:
+            reopened = _reopened_month.reopen(
+                tree,
+                month,
+                most=policy.max_raw_files_per_period,
+                model=model,
+                key=key,
+                identity=identity,
+            )
+        except OverBudgetError as spent:
+            return (*stops, tree.stop_spent(month, spent))
+        stops.extend(reopened)
+        if not any(stop.because is StopReason.FAILED for stop in reopened):
             taken += 1
     days = again + new
-    # Every day the budget can reach, fetched in one call before the first is read:
-    # a day that fails costs nothing, so the ones waiting again may all fail first.
+    # Every day the cap and the budget can reach, fetched in one call before the
+    # first is read: a day that fails costs nothing, so the ones waiting again may
+    # all fail first.
     reached = days[: len(again) + policy.max_periods_per_run - taken]
-    tree.listing.fetch(
-        [
-            *(tree.raw_day_folder(day) for day in reached),
-            *sorted({tree.daily_month_folder(day[:7]) for day in reached if day in tree.daily}),
-        ]
-    )
-    for day in days:
+    fits, over = tree.fit_to_budget(reached, lambda day: _fetched(tree, day))
+    tree.fetch(_fetched(tree, day) for day in fits)
+    for position, day in enumerate(days):
         if taken == policy.max_periods_per_run:
             stops.append(Stop(StopReason.CEILING, day))
             break
+        if over is not None and position == len(fits):
+            stops.append(over)
+            break
         fresh = tree.daily_through is None or day > tree.daily_through
-        refused = _take(tree, policy, day, model=model, key=key, identity=identity, stamp=stamp)
-        if refused is not None:
-            stops.append(_refused(tree, day, *refused))
+        try:
+            stop = _take(tree, policy, day, model=model, key=key, identity=identity, stamp=stamp)
+        except OverBudgetError as spent:
+            stops.append(tree.stop_spent(day, spent))
+            break
+        if stop is not None and stop.because is StopReason.FAILED:
+            stops.append(stop)
             if fresh:
                 break
             continue
+        if stop is not None:
+            stops.append(stop)
         taken += 1
     else:
         if choice.stopped_because is StopReason.CEILING and choice.resume_from is not None:

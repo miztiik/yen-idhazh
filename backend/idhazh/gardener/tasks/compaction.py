@@ -57,11 +57,15 @@ deletes and every file the monthly window would delete that the pass kept
 because the window only reports, so `selected` minus the deletes is what turning
 the window live would take at that wake. `bytes_freed` is what the
 deletes free and is never netted against the writes: the net is `bytes_freed`
-minus the `bytes` of the index entries the pass wrote. `seen` counts every raw
-day folder listed and every file read or weighed, so the listing's growth while
-a compaction stays dry shows in each record. A day, month or year refused ends
-the pass `failed` at that period, and the task exits 1 while every other step it
-took still lands; a budget running out ends it at `ceiling`.
+minus the `bytes` of the index entries the pass wrote. A file moved aside is
+deleted at its old path and written at its new one, so it is in both lists and
+frees nothing. `seen` counts every raw day folder listed and every file read or
+weighed, so the listing's growth while a compaction stays dry shows in each
+record. A day, month or year refused ends the pass `failed` at that period, and
+the task exits 1 while every other step it took still lands; a budget running
+out ends it at `ceiling` - the cap, a day's most raw files, or what is left of
+the shard's download budget. A pass whose marks do not fit that budget takes
+nothing and ends `ceiling` at its index folder.
 """
 
 from __future__ import annotations
@@ -83,17 +87,18 @@ def run(context: TaskContext) -> Pass:
     from datetime import UTC, datetime, time
     from pathlib import Path
 
-    from idhazh import month_partition
+    from idhazh import ledger, month_partition
     from idhazh.contracts.collection_prune import StopReason
-    from idhazh.contracts.file_envelope import WriterIdentity
+    from idhazh.contracts.file_envelope import Period, WriterIdentity
     from idhazh.contracts.knobs.gardener import CompactionPolicy
+    from idhazh.gardener.file_listing import OverBudgetError
     from idhazh.gardener.tasks import (
         _compaction_periods,
         _daily_period,
         _monthly_period,
         _yearly_period,
     )
-    from idhazh.gardener.tasks._compact_tree import CompactTree
+    from idhazh.gardener.tasks._compact_tree import CompactTree, stop_over_budget
 
     policy = context.policy
     if not isinstance(policy, CompactionPolicy):
@@ -109,7 +114,37 @@ def run(context: TaskContext) -> Pass:
         git_sha=context.git_sha,
     )
     operator_range = context.period_range
-    tree = CompactTree.read(context.state_dir, policy.ledger, context.listing)
+    if operator_range is None:
+        date_range = None
+        until = _compaction_periods.newest_due(policy, now=now)
+    else:
+        date_range = month_partition.day_bounds(*operator_range)
+        until = date_range[1]
+
+    def shown(path: Path) -> str:
+        return path.relative_to(context.repo_root).as_posix()
+
+    try:
+        tree = CompactTree.read(context.state_dir, policy.ledger, context.listing)
+    except OverBudgetError as spent:
+        marks = ledger.compact_index_path(context.state_dir, policy.ledger, Period.DAILY).parent
+        held = stop_over_budget(
+            policy.ledger, shown(marks), needed=spent.needed, budget=spent.budget
+        )
+        return Pass(
+            collection=policy.ledger.value,
+            since=None if date_range is None else date_range[0],
+            until=until,
+            ceiling=None,
+            dry_run=policy.dry_run,
+            seen=0,
+            selected=0,
+            taken=(),
+            written=(),
+            bytes_freed=0,
+            stopped_because=held.because,
+            resume_from=held.resume_from,
+        )
     looked_back = _compaction_periods.first_run_months(
         tree, policy, now=now, operator_range=operator_range
     )
@@ -148,20 +183,11 @@ def run(context: TaskContext) -> Pass:
     if not policy.dry_run:
         tree.apply()
 
-    def shown(path: Path) -> str:
-        return path.relative_to(context.repo_root).as_posix()
-
     taken = tree.taken(shown)
     spared = tree.spared(shown)
     stop = next((held for held in stops if held.because is StopReason.FAILED), None) or next(
         (held for held in stops if held.because is StopReason.CEILING), None
     )
-    if operator_range is None:
-        date_range = None
-        until = chosen.newest_eligible_day
-    else:
-        date_range = month_partition.day_bounds(*operator_range)
-        until = date_range[1]
     outcome = Pass(
         collection=policy.ledger.value,
         since=None if date_range is None else date_range[0],

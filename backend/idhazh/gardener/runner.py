@@ -21,13 +21,16 @@ and `backend/utilities/corpus_history.py` binds it itself; run here, it would
 only stamp the day it last ran and hold off the next real rewrite by a whole
 cadence. So a shard or a hand run that names one is exit 2 before anything runs.
 
-**What a shard downloads is an alarm, not a gate.** What the folders its tasks
-own weighed at its commit arrives as data, read by the program that runs git,
-and lands on every row as `cone_bytes`. What its tasks downloaded to read lands
-beside it as `downloaded_bytes`. Over `max_downloaded_mb` the shard says so,
-naming its three heaviest folders, lands its record, and exits 1: the downloads
-are paid for by the time the number is known, and stopping would only stop the
-passes that shrink the tree.
+**What a shard downloads is held to `max_downloaded_mb`.** What the folders its
+tasks own weighed at its commit arrives as data, read by the program that runs
+git, and lands on every row as `cone_bytes`. What its tasks downloaded to read
+lands beside it as `downloaded_bytes`. A compaction step takes a period only
+while what it downloads fits what is left of that budget, so a correct choice
+never passes it. Over it the shard says so, naming its three heaviest folders,
+lands its record, and exits 1: a task downloaded without choosing by the
+budget, which is a code defect. The downloads are paid for by the time the
+number is known, so stopping then would only stop the passes that shrink the
+tree.
 
 **A task that fails still has a row.** Its row says `failed`, its siblings still
 run, and the shard exits 1 when nothing worse happened. What it had already done
@@ -425,7 +428,8 @@ def over_the_ceiling(
 
     `downloaded` is what the shard's tasks downloaded under each folder it
     listed. Over means strictly more than the ceiling: a shard that downloaded
-    exactly the ceiling is inside it.
+    exactly the ceiling is inside it. A step that chooses its periods by the
+    budget never passes it, so a shard over it is a code defect to fix.
     """
     total = sum(downloaded.values())
     if total <= ceiling_mb * BYTES_PER_MB:
@@ -437,8 +441,10 @@ def over_the_ceiling(
     return (
         f"shard {shard}: its tasks downloaded {total / BYTES_PER_MB:.1f} MB ({total:,} bytes) "
         f"of file content, over max_downloaded_mb {ceiling_mb} in "
-        f"config/idhazh_gardener.json. The heaviest: {named}. Its tasks ran and its record "
-        "still lands, and the shard exits 1"
+        f"config/idhazh_gardener.json. The heaviest: {named}. A step that chooses its "
+        "periods by the budget never passes it, so a task downloaded without choosing by "
+        "it, which is a code defect. Its tasks ran and its record still lands, and the "
+        "shard exits 1"
     )
 
 

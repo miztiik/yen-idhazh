@@ -20,9 +20,16 @@ month has no file, so its rows are the late rows alone.
 **A re-open that cannot be finished keeps every file.** A `packed` entry whose
 month file is not there is refused as `file-missing`: rebuilt from the late
 files alone, the month would hold only the days that ran again, and its entry
-would call that smaller month complete. A late raw file that cannot be read,
-or a late day holding more raw files than one period is built from, refuses the
-month the same way.
+would call that smaller month complete.
+
+**A late raw file that cannot be read is moved aside**, as the day step moves
+one, and the month's entry counts it in `set_aside`; a late day whose files
+were all moved aside gives no record, so it stays in `lost_days`. A late day
+holding more raw files than one period is built from gives its oldest, the rest
+wait in its folder, and the month re-opens again at the next wake for them,
+ending this pass at `ceiling`. The re-open's download is held to what is left
+of the shard's budget: past it, `OverBudgetError` is raised before anything is
+decided.
 """
 
 from __future__ import annotations
@@ -36,7 +43,7 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.ledger_index import CompactEntry
 from idhazh.gardener import named_trees
-from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
+from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +76,8 @@ def reopen[C: Contract](
 
     The month's raw folder is named first, so every late day of the month is
     taken in, not only the ones the day step named, and the month is written
-    once. `most` is how many raw files one period is built from at most.
+    once. `most` is how many raw files one period is built from at most. A
+    `ceiling` stop at the month says late files wait for the next wake.
     """
     tree.name_months([month])
     late = [day for day in tree.raw_days if day.startswith(f"{month}-")]
@@ -85,44 +93,71 @@ def reopen[C: Contract](
             "git history, and the next wake re-opens the month",
             ledger.LedgerFault.FILE_MISSING,
         )
-    tree.listing.fetch(
-        [tree.raw_day_folder(day) for day in late], beside=[] if own is None else [own]
+    tree.fetch(
+        [
+            PeriodFetch(
+                folders=tuple(tree.raw_day_folder(day) for day in late),
+                beside=() if own is None else (own,),
+            )
+        ]
     )
     try:
-        held = {day: tree.raw_files(day, most=most) for day in late}
+        raws = {day: tree.read_raw_day(day, most=most, model=model) for day in late}
+        answered = {day: raw for day, raw in raws.items() if raw.taken}
         days: dict[str, list[ledger.StoredRow[C]]] = {}
-        for row in [] if own is None else tree.load(own, model=model):
+        for row in [] if own is None or not answered else tree.load(own, model=model):
             days.setdefault(row.identity.covers, []).append(row)
-        for day, files in held.items():
+        for day, raw in answered.items():
             days[day] = ledger.settle_rows(
-                [days.get(day, []), *(tree.load(file.path, model=model) for file in files)], key
+                [days.get(day, []), *(rows for _path, rows in raw.taken)], key
             )
         rows = [row for day in sorted(days) for row in days[day]]
-        built = ledger.render_period(
-            tree.state_dir,
-            rows,
-            model=model,
-            ledger=tree.ledger,
-            period=Period.MONTHLY,
-            covers=month,
-            identity=identity,
-            built_from=(own is not None) + sum(len(files) for files in held.values()),
+        built = (
+            ledger.render_period(
+                tree.state_dir,
+                rows,
+                model=model,
+                ledger=tree.ledger,
+                period=Period.MONTHLY,
+                covers=month,
+                identity=identity,
+                built_from=(own is not None)
+                + sum(len(raw.taken) for raw in answered.values()),
+            )
+            if answered
+            else None
         )
     except ValueError as refusal:
         return _kept(tree, month, str(refusal))
-    if own is not None and own != built.path:
-        tree.delete(own)
-    tree.write(built.path, built.data)
-    tree.monthly[month] = CompactEntry(
-        covers=month,
-        rows=len(rows),
-        bytes=len(built.data),
-        lost_days=[day for day in entry.lost_days if day not in held],
-        set_aside=entry.set_aside,
-    )
+    moved = 0
+    for day, raw in raws.items():
+        for path, why in raw.unreadable:
+            tree.set_aside(path, day, why)
+            moved += 1
+    if built is None:
+        tree.monthly[month] = entry.model_copy(update={"set_aside": entry.set_aside + moved})
+    else:
+        if own is not None and own != built.path:
+            tree.delete(own)
+        tree.write(built.path, built.data)
+        tree.monthly[month] = CompactEntry(
+            covers=month,
+            rows=len(rows),
+            bytes=len(built.data),
+            lost_days=[day for day in entry.lost_days if day not in answered],
+            set_aside=entry.set_aside + moved,
+        )
     tree.mark_index(Period.MONTHLY)
-    for files in held.values():
-        for file in files:
-            tree.delete(file.path)
-    tree.note_recovery(RecoveryNote.REOPENED_MONTH, month)
+    for raw in answered.values():
+        for path, _rows in raw.taken:
+            tree.delete(path)
+    if built is not None:
+        tree.note_recovery(RecoveryNote.REOPENED_MONTH, month)
+    for day, raw in raws.items():
+        if raw.unreadable:
+            tree.note_recovery(RecoveryNote.SET_ASIDE, day)
+        if raw.carried:
+            tree.note_recovery(RecoveryNote.CARRIED_OVER, day)
+    if any(raw.carried for raw in raws.values()):
+        return (Stop(StopReason.CEILING, month),)
     return ()
