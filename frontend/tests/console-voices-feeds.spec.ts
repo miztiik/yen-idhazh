@@ -14,6 +14,7 @@ import {
 } from '../src/lib/feed-health';
 import { axisLabels, denseCellFor, ROW_STRIP_PX } from '../src/lib/charts/run-history';
 import { feedHealthRows } from '../src/lib/server/ledger-rows';
+import { canaryWindow } from './support/canary-records';
 
 /**
  * The feed section answers one question: which feed is about to be dropped.
@@ -68,13 +69,13 @@ function tickDensity(): number {
  * these are the rows `build_canary_day.py` filed and packed.
  *
  * Through `feedHealthRows`, the reader the page's own server uses, so a grain
- * change cannot pass here and fail there. `-1` is every packed canary day,
- * which is a fixture of fixed size rather than a collection a run appends to.
+ * change cannot pass here and fail there, over the window the page's server reads.
+ * The canary is a fixture of fixed size rather than a collection a run appends to.
  */
 type LedgerRow = FeedEvent;
 
 async function ledger(): Promise<LedgerRow[]> {
-	const table = await feedHealthRows(-1, join(CANARY, 'state'));
+	const table = await feedHealthRows(canaryWindow(), join(CANARY, 'state'));
 	return table.rows.map((row) => ({
 		date: row.date ?? '',
 		runId: row.run_id ?? '',

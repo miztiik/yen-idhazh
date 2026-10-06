@@ -8,7 +8,7 @@ import { CUT_FLAG_MEANS_A_CUT_FROM } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 import { feedHealthRows } from '../src/lib/server/ledger-rows';
 import { failing, preserves, reliability, type FeedRecord } from '../src/lib/feed-health';
-import { canaryArticleRows, canaryScoreRows, heldRows } from './support/canary-records';
+import { canaryArticleRows, canaryScoreRows, canaryWindow, heldRows } from './support/canary-records';
 import { days } from './support/consecutive-days';
 
 /**
@@ -102,17 +102,12 @@ const TODAY_ANCHOR = (
 	) as { console?: { today_anchor?: 'right' | 'centre' } }
 ).console?.today_anchor ?? 'right';
 
-/** The span every windowed surface opens on, hung off the build clock the way
- * the page hangs it. Both daily tables follow the control since 2026-08-31, so
- * a test that expected every committed day would fail on the two the fixture
- * puts before the default window reaches back to. */
-function openWindow(dates: string[]) {
-	return windowOfDays(
-		dates,
-		new Date().toISOString().slice(0, 10),
-		DEFAULT_WINDOW_DAYS,
-		TODAY_ANCHOR
-	);
+/** The span every windowed surface opens on, ending on the canary's newest
+ * published day the way the page places it. Both daily tables follow the control
+ * since 2026-08-31, so a test that expected every committed day would fail on the
+ * two the fixture puts before the default window reaches back to. */
+function openWindow() {
+	return windowOfDays(DAY, DEFAULT_WINDOW_DAYS, TODAY_ANCHOR);
 }
 
 /** Every window control is disabled in the prerendered document and enabled on
@@ -284,7 +279,7 @@ test('the strip reads oldest to newest, left to right', async ({ page }) => {
 	expect(dates.length).toBe(DEFAULT_WINDOW_DAYS);
 	expect(dates).toEqual(days(dates[0], dates.length));
 	const committed = manifestDays().map((day) => day.date);
-	const span = openWindow(committed);
+	const span = openWindow();
 	const ran = committed.filter((date) => date >= span.start && date <= span.end);
 	expect(ran.length, 'the window reaches no committed day, so this asserts nothing').toBeGreaterThan(0);
 	expect(dates.filter((date) => ran.includes(date))).toEqual(ran);
@@ -683,7 +678,7 @@ const MIN_ATTEMPTS =
  * change cannot pass here and fail there.
  */
 async function feedLedger(root: string): Promise<FeedRecord[]> {
-	const table = await feedHealthRows(-1, join(root, 'state'));
+	const table = await feedHealthRows(canaryWindow(), join(root, 'state'));
 	return table.rows.map((row) => ({
 		date: row.date ?? '',
 		runId: row.run_id ?? '',
@@ -1526,7 +1521,7 @@ test('every chart cell equals what the day committed', async ({ page }) => {
 	// fourteen-day rule. Days older than the window are the section's own answer
 	// to a preset the reader picked, not rows that went missing.
 	const committed = manifestDays().map((day) => day.date);
-	const span = openWindow(committed);
+	const span = openWindow();
 	const expected = committed.filter((date) => date >= span.start && date <= span.end).reverse();
 	expect(expected.length, 'the window reaches no committed day, so this asserts nothing').toBeGreaterThan(
 		0
@@ -1563,7 +1558,7 @@ test('the measured day prints rates, and the day with no minutes prints dashes',
 	// The table follows the open window, so the quiet day is the oldest
 	// committed day inside it.
 	const committed = manifestDays().map((day) => day.date);
-	const span = openWindow(committed);
+	const span = openWindow();
 	const quietDay = committed.find((date) => date >= span.start && date <= span.end && date !== DAY);
 	expect(quietDay, 'the open window holds no quiet day, so this asserts nothing').toBeDefined();
 	const quiet = page.locator(`[data-chart-day="${quietDay}"]`);
@@ -1760,7 +1755,7 @@ test('every model cell equals what the day committed', async ({ page }) => {
 	// A day outside the open window gets none either, because the rows answer the
 	// same control the cards above them do.
 	const worked = modelDays();
-	const span = openWindow(worked);
+	const span = openWindow();
 	const expected = worked.filter((date) => date >= span.start && date <= span.end);
 	expect(expected.length, 'the window reaches no worked day, so this asserts nothing').toBeGreaterThan(
 		0

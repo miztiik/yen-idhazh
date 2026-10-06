@@ -4,20 +4,20 @@ import { chartFlow } from '$lib/charts/chart-flow';
 import type { ExtractionDay } from '$lib/charts/extraction-trend';
 import type { RunYieldSource } from '$lib/charts/run-yield';
 import { itemCost, type ItemCost } from '$lib/console/item-cost';
-import { recordNotes } from '$lib/console/recording';
+import { recordNotesByWindow, type OfferedWindow } from '$lib/console/recording';
 import { extraction, type Extraction } from '$lib/console/extraction';
 import { health, runOutcome, squareLabel, type DayColumn } from '$lib/console/run-square';
 import { pipelineChanges, wasCut } from '$lib/server/model-work';
 import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
 import { chartConfig, consoleConfig, panelGroupsFor, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
+import { windowDay } from '$lib/server/window-day';
 import {
 	dayMetrics,
 	latestDate,
 	loadManifests,
 	publishedCharts,
 	publishedItems,
-	shardDays,
 	telemetryRows,
 	TELEMETRY_ROOT,
 	type DayVisuals,
@@ -189,14 +189,19 @@ export async function load() {
 	// whatever the operator does, so every read below is covered by it and no
 	// panel loses a day (`CLAUDE.md` Guardrail #12). Read from `console.window_presets`
 	// rather than written down here, so raising the widest preset widens the
-	// reads with it (Guardrail #6). One cover, in days: all three `state/` ledgers
-	// this route reads file by day.
+	// reads with it (Guardrail #6). Every window ends on the site's newest
+	// published day, so the widest one is every day the two records are read for.
 	const widest = Math.max(...console.window_presets);
-	const days = shardDays(widest);
+	const day = windowDay();
+	const offered: OfferedWindow[] = console.window_presets.map((days) => ({
+		days,
+		...windowOfDays(day, days, console.today_anchor)
+	}));
+	const widestSpan = windowOfDays(day, widest, console.today_anchor);
 	// Both from their packed files, so both stop at the newest packed day and say
 	// so below rather than drawing the days after it as quiet ones.
-	const scores = await evalRows(days);
-	const items = await itemHealthRows(days);
+	const scores = await evalRows(widestSpan);
+	const items = await itemHealthRows(widestSpan);
 	const { rows } = scores;
 	const itemRows = items.rows;
 	const floorPct = runConfig().success_floor_pct;
@@ -244,7 +249,6 @@ export async function load() {
 
 	const charts = chartDays(manifests, publishedCharts(undefined, widest));
 	const flow = chartFlow(charts);
-	const today = new Date().toISOString().slice(0, 10);
 	// The cost section is reduced here, once per span the control offers, and it
 	// is the reason those eight columns were published at all.
 	//
@@ -258,26 +262,20 @@ export async function load() {
 	// question about days the reduction was not taken over, and the browser has
 	// only the months it has fetched to re-take it from.
 	const costRows = telemetryRows(TELEMETRY_ROOT, widest).rows;
-	const costDates = [...new Set(costRows.map((row) => row.date ?? '').filter(Boolean))].sort();
-	const itemCostByWindow: ItemCost[] = console.window_presets.map((days) => {
-		const span = windowOfDays(costDates, today, days, console.today_anchor);
-		return itemCost(costRows, { ...span, days });
-	});
+	const itemCostByWindow: ItemCost[] = offered.map((span) => itemCost(costRows, span));
 	// One day record per date the window holds, read once at the widest preset and
 	// sliced per preset from that map. `charts` already names every published day,
 	// so this adds no listing of the tree - only `widest` file opens, whatever the
 	// archive holds behind it (`CLAUDE.md` Guardrail #12).
 	const chartDates = charts.map((day) => day.date).sort();
-	const widestSpan = windowOfDays(chartDates, today, widest, console.today_anchor);
 	const recordsByDate = dayMetrics(
 		chartDates.filter((date) => date >= widestSpan.start && date <= widestSpan.end)
 	);
-	const extractionByWindow: Extraction[] = console.window_presets.map((days) => {
-		const span = windowOfDays(chartDates, today, days, console.today_anchor);
+	const extractionByWindow: Extraction[] = offered.map((span) => {
 		const inside = chartDates.filter((date) => date >= span.start && date <= span.end);
 		return extraction(
 			inside.map((date) => recordsByDate.get(date)?.extraction ?? null),
-			days
+			span.days
 		);
 	});
 	// The same records again, kept per day rather than summed, because the
@@ -378,16 +376,19 @@ export async function load() {
 		chart,
 		summarizeBands: summarize.bands,
 		// What the page says about the two records it read before any panel draws
-		// from them: one not packed yet, one that did not load, one packed some
-		// days short of the newest published day, or one with a day it has no
-		// record for or files it set aside unread.
-		recordNotes: recordNotes(
+		// from them, one set for each window the control offers: one not packed
+		// yet, one that did not load, one packed short of the newest published day,
+		// one whose rows stop before the window, or one with a day it has no record
+		// for or files it set aside unread.
+		recordNotes: recordNotesByWindow(
 			[
 				{ record: 'article', read: items.read },
 				{ record: 'score', read: scores.read }
 			],
-			latestDate(undefined, 1)
+			latestDate(undefined, 1),
+			offered
 		),
-		today
+		// The day every window on this route ends on: the site's newest published day.
+		windowDay: day
 	};
 }

@@ -381,6 +381,9 @@ test('what the cut cost is the first sentence of the section, with its n', async
 	expect(order[0], 'the cost sentence is no longer the first line of the section').toBe(true);
 });
 
+/** The seven days the unit cases below read, ending on the day their rows sit on. */
+const WEEK = { start: '2026-08-22', end: '2026-08-28', days: 7 };
+
 test('a window with no cut renders its own empty state, and absence is not zero', () => {
 	// Driven at the module, because the canary cuts something in every preset it
 	// offers and a fixture that reached this state would stop testing the plot.
@@ -394,10 +397,7 @@ test('a window with no cut renders its own empty state, and absence is not zero'
 
 	// Seven days here is this test's own window, not the page's. The function
 	// takes the span it is given, and these rows all sit on one day.
-	const nothing = sourceCuts([migrated('a', 0), migrated('a', 1)], {
-		days: 7,
-		limit: SOURCE_CUT_ROWS
-	});
+	const nothing = sourceCuts([migrated('a', 0), migrated('a', 1)], WEEK, { limit: SOURCE_CUT_ROWS });
 	// Not listed with a zero. Zero cuts and no measurement are different facts,
 	// and the zero is the one nobody checks.
 	expect(nothing.rows).toEqual([]);
@@ -422,7 +422,8 @@ test('a window with no cut renders its own empty state, and absence is not zero'
 				source_words_before_cap: '2612'
 			}
 		],
-		{ days: 7, limit: SOURCE_CUT_ROWS }
+		WEEK,
+		{ limit: SOURCE_CUT_ROWS }
 	);
 	expect(some.measured).toBe(true);
 	expect(some.rows).toHaveLength(1);
@@ -448,7 +449,8 @@ test('a window with no cut renders its own empty state, and absence is not zero'
 					source_words_before_cap: '2612'
 				}
 			],
-			{ days: 7, limit: SOURCE_CUT_ROWS }
+			WEEK,
+			{ limit: SOURCE_CUT_ROWS }
 		).rows
 	).toEqual([]);
 });
@@ -462,7 +464,7 @@ test('a cut point per length the cap left, oldest first, read off the rows', () 
 		source_words_before_cap: before
 	});
 	const capsOf = (rows: Record<string, string>[]) =>
-		sourceCuts(rows, { days: 30, limit: SOURCE_CUT_ROWS }).caps;
+		sourceCuts(rows, { start: '2026-08-01', end: '2026-08-30', days: 30 }, { limit: SOURCE_CUT_ROWS }).caps;
 
 	// One cut point, over the days it was in force. A lone cap needs no dates on
 	// its label, and they are here so the next case can have them.
@@ -505,7 +507,8 @@ test('a cut point per length the cap left, oldest first, read off the rows', () 
 				source_words_before_cap: '5000'
 			}
 		],
-		{ days: 7, limit: SOURCE_CUT_ROWS }
+		WEEK,
+		{ limit: SOURCE_CUT_ROWS }
 	);
 	expect(many.rows).toHaveLength(SOURCE_CUT_ROWS);
 	expect(many.moreSources).toBe(3);

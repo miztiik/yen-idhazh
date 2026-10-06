@@ -150,27 +150,30 @@ async function windowed(page: Page) {
 	);
 }
 
-test('a window of N days is exactly N days, whatever the ledger holds', () => {
+test('a window of N days is exactly N days, and ends on the day it is handed', () => {
 	// It used to shrink to the rows it found. That was invisible while nothing
 	// named the span and a lie the moment a control does: a page reading 90 while
-	// the charts draw 2 cannot be trusted about anything else.
-	const short = ['2026-08-27', '2026-08-28'];
-	expect(windowOfDays(short, '2026-08-28', 30, 'right')).toEqual({
+	// the charts draw 2 cannot be trusted about anything else. It also used to end
+	// on the newest date in the rows it was handed, so a record that stopped moved
+	// its window into the past; every route now hands it the newest published day.
+	expect(windowOfDays('2026-08-28', 30, 'right')).toEqual({
 		start: '2026-07-30',
 		end: '2026-08-28'
 	});
-	expect(windowOfDays(short, '2026-08-28', 7, 'right')).toEqual({
+	expect(windowOfDays('2026-08-28', 7, 'right')).toEqual({
 		start: '2026-08-22',
 		end: '2026-08-28'
 	});
-	// With nothing on record at all it hangs off the build clock instead.
-	expect(windowOfDays([], '2026-08-28', 7, 'right')).toEqual({
-		start: '2026-08-22',
+	expect(windowOfDays('2026-08-28', 1, 'right')).toEqual({
+		start: '2026-08-28',
 		end: '2026-08-28'
 	});
-	// Centred pushes the end past the newest day, which is the anchor's whole
+	// Centred pushes the end past the day it is handed, which is the anchor's whole
 	// purpose: room on the right for days that have not happened yet.
-	expect(windowOfDays(short, '2026-08-28', 7, 'centre').end).toBe('2026-08-31');
+	expect(windowOfDays('2026-08-28', 7, 'centre')).toEqual({
+		start: '2026-08-25',
+		end: '2026-08-31'
+	});
 });
 
 test('a step lands on a preset, and stops at the ends rather than wrapping', () => {
@@ -225,7 +228,7 @@ test('the widest window this control offers never names a shard the cleanup age 
 	for (let offset = 0; offset < 366; offset += 1) {
 		const today = minus('2026-12-31', offset);
 		const kept = monthsKept(today, keepMonths);
-		const widest = windowOfDays([today], today, maxDays, 'right');
+		const widest = windowOfDays(today, maxDays, 'right');
 		expect(
 			monthsToFetch(widest, kept, []),
 			`a ${maxDays}-day read on ${today} wants a month ${keepMonths} months of cleanup removed`
@@ -583,11 +586,10 @@ async function disclosures(page: Page) {
 
 /** The day the open window ends on, taken from the page rather than the clock.
  *
- * `windowOfDays` anchors on the newest date it is handed, not on today, and the
- * two routes hand it different arrays - Pipelines the telemetry dates and
- * Summaries the days the model worked. The run strip draws one column per day
- * of the window, so its last column IS the end; on Summaries the table's own
- * widest reading is, because the same array anchors both.
+ * Every console window ends on the newest published day. The run strip draws
+ * one column per day of the window, so on Pipelines its last column IS the
+ * end; on Summaries the table's own widest reading is, because the canary
+ * holds a worked day on its newest published day.
  */
 async function endOfWindow(page: Page, route: string, widest: string[]): Promise<string> {
 	if (route !== '/console/') return [...widest].sort().at(-1) as string;

@@ -5,8 +5,8 @@
  * under a state root on disk - `STATE_ROOT` from `payload.ts` when the site is
  * built - so a build-time page and a browser panel asking for the same span get
  * the same rows from the same files. `reachFromDisk()` is the disk twin of
- * `ledgerReach()`, so a build-time reader can anchor its span on the newest
- * compacted day before it asks for one. Both live under `$lib/server/`, so
+ * `ledgerReach()`, so a build-time reader learns how far a ledger is packed and
+ * where its rows stop without reading a data file. Both live under `$lib/server/`, so
  * SvelteKit refuses to put them, or the engine's Node half they start, into
  * anything a browser receives. A console panel calls `slice()` in
  * `$lib/data/ledger` instead.

@@ -63,13 +63,11 @@
 		return 0;
 	}
 
-	/** The span the control is holding, always ending on the newest day the
-	 * ledger carries. There is no pan here and there was none on the panels
-	 * before they moved: the source table was reduced once per preset on the
-	 * server, and the browser has no ledger to re-reduce a panned span from. */
-	const viewport = $derived(
-		windowOfDays(data.feedDates, data.today, windowDays, data.console.today_anchor)
-	);
+	/** The span the control is holding, always ending on the newest published
+	 * day. There is no pan here and there was none on the panels before they
+	 * moved: the source table was reduced once per preset on the server, and the
+	 * browser has no ledger to re-reduce a panned span from. */
+	const viewport = $derived(windowOfDays(data.windowDay, windowDays, data.console.today_anchor));
 	const inWindow = $derived((date: string) => date >= viewport.start && date <= viewport.end);
 
 	/** The source table for the window in force. One was built per preset at
@@ -212,7 +210,9 @@
 
 	<!-- The article record is the one record this route reads when the site is
 	     built, and the cut-short table below is built on it. -->
-	<RecordNotes notes={data.recordNotes} />
+	<RecordNotes
+		notes={data.recordNotes[String(windowDays)] ?? data.recordNotes[String(data.console.default_window_days)] ?? []}
+	/>
 
 	<h2 class="console-h2">Sources we may ask, and what they yield</h2>
 
@@ -975,7 +975,7 @@
 			is read from the start and stopped there, so the end never reaches the machine. Sorted by how
 			many articles that cost each source. A source can carry several feeds, so this list and
 			"Feeds that failed" above do not name the same things. These days always end on the newest
-			day the ledger holds.
+			published day.
 		</p>
 
 		{#if !cuts.measured}

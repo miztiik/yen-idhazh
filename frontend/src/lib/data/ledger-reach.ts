@@ -1,8 +1,9 @@
 /**
  * How far does a ledger reach, read from its indexes and nothing else?
  *
- * A console route anchors its span on the data rather than on the clock, so it
- * needs the oldest and the newest day a ledger holds before it asks for a slice.
+ * A console route reads only the days of its window, which ends on the site's
+ * newest published day, so it learns from the indexes alone how far a ledger is
+ * packed and where its rows stop, before or instead of a slice.
  * `ledgerReach()` in `ledger.ts` answers with this module. It reads `daily.json`,
  * `monthly.json` and `yearly.json` at the same time, through the page keeper, so
  * a slice asked afterwards fetches none of them again; and it starts no engine,
@@ -11,10 +12,11 @@
  * - `ok`: `through` is how far the ledger is packed, the newest day any index
  *   names - the day a slice returns as its own `through`. `first` is the oldest
  *   day any index names, a month counting from its first day and a year from its
- *   1 January. `fault` is `index-missing` when there is no `monthly.json` or no
- *   `yearly.json`: `first` and `through` are then what the indexes that are
- *   there name, so a route anchored on them still draws every day the door can
- *   read.
+ *   1 January. `lastRows` is the newest period whose file holds rows, or null
+ *   when no entry holds one, so a route that reads only its window can say where
+ *   a record's rows stop. `fault` is `index-missing` when there is no
+ *   `monthly.json` or no `yearly.json`: `first`, `through` and `lastRows` are
+ *   then what the indexes that are there name.
  * - `quiet`: no index names a day yet.
  * - `missing`: there is no `daily.json`, so the ledger is not published. Its
  *   fault is `not-packed`.
@@ -30,21 +32,27 @@
  *
  * Each index is read the way a slice reads it, by `readIndexFrom()` in
  * `slice-reader.ts`, a fault's console line is the slice's own `faultLine()`,
- * and `first` and `through` are `firstNamed()` and `newestNamed()` in `slice.ts`,
- * so a slice and a reach never disagree about what an index says or print one
- * fault twice. Imports nothing tied to one environment, so a Node test loads it
- * as it is.
+ * and `first`, `through` and `lastRows` are `firstNamed()`, `newestNamed()` and
+ * `newestHeld()` in `slice.ts`, so a slice and a reach never disagree about what
+ * an index says or print one fault twice. Imports nothing tied to one
+ * environment, so a Node test loads it as it is.
  */
 
 import type { CompactEntry, IndexReading, Period } from './compact-index';
 import type { PageKeeper } from './page-keeper';
-import { firstNamed, newestNamed } from './slice';
+import { firstNamed, newestHeld, newestNamed, type HeldPeriod } from './slice';
 import { explainRefusal, faultLine, LOG_PREFIX, readIndexFrom } from './slice-reader';
 import { LEDGER_NAMES, SliceRequestError, type DateStamp, type LedgerFault, type LedgerName } from './slice-shapes';
 
 /** How far a ledger reaches, or which of three nothings it is. */
 export type LedgerReach =
-	| { state: 'ok'; first: DateStamp; through: DateStamp; fault: Extract<LedgerFault, 'index-missing'> | null }
+	| {
+			state: 'ok';
+			first: DateStamp;
+			through: DateStamp;
+			lastRows: HeldPeriod | null;
+			fault: Extract<LedgerFault, 'index-missing'> | null;
+	  }
 	| { state: 'quiet' }
 	| { state: 'missing'; fault: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreachable' };
@@ -95,5 +103,5 @@ export async function readReach(keeper: PageKeeper, ledger: LedgerName): Promise
 				`so it reaches back only to ${first}, the oldest day the other indexes name`
 		);
 	}
-	return { state: 'ok', first, through, fault };
+	return { state: 'ok', first, through, lastRows: newestHeld(days, months, years), fault };
 }

@@ -18,7 +18,7 @@ import { basename, join, relative, resolve } from 'node:path';
 import { publicFiles, stateFiles } from './publication';
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
 // where no Vite alias exists to resolve one.
-import { dayKey, toDay } from '../charts/viewport';
+import { dayKey, toDay, type TimeWindow } from '../charts/viewport';
 import { deskOf, orderByTime } from '../day-shape';
 import { settled } from '../feed-health';
 import { publishedVisual, refusedDrawing } from '../payload/drawing';
@@ -819,7 +819,7 @@ export interface FeedResult {
 	detail: string;
 }
 
-/** Feed results from the newest `days` packed days, one per feed per run, oldest first.
+/** Feed results in `window`, one per feed per run, oldest first.
  *
  * Read from the feed record's packed files through `feedHealthRows`, so it
  * stops at the newest packed day as the console's other packed records do. A
@@ -832,11 +832,8 @@ export interface FeedResult {
  * same rule, and doing it here once is what stops two panels disagreeing about
  * the same feed.
  */
-export async function feedResults(
-	days: number = LEDGER_WINDOW_DAYS,
-	root: string = STATE_ROOT
-): Promise<FeedResult[]> {
-	const found: FeedResult[] = (await feedHealthRows(days, root)).rows.map((row) => ({
+export async function feedResults(window: TimeWindow, root: string = STATE_ROOT): Promise<FeedResult[]> {
+	const found: FeedResult[] = (await feedHealthRows(window, root)).rows.map((row) => ({
 		runId: row.run_id ?? '',
 		date: row.date ?? '',
 		feedId: row.feed_id ?? '',
