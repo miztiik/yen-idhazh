@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-06
 
-**Thirty-two defects are open.** Four of them need evidence or a ruling before any code
+**Thirty defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -100,7 +100,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
-| 56 | A byte-range test counts a correct 304 as a failure | 1 | **OPEN - keeps failing, and has turned main's own checks red; the cause is settled; one test changes** |
+| 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (this PR) |
 | 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
@@ -206,7 +206,7 @@ that three specs share.
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
 different tests, and filed on 2026-10-04.
 
-## 56 - A byte-range test counts a correct 304 as a failure (OPEN)
+## 56 - A byte-range test counts a correct 304 as a failure (FIXED 2026-10-06)
 
 **A browser test of reading a year file by byte range keeps failing on a 304
 that its own setup makes correct.** "A year file whose ETag changed after the
@@ -249,11 +249,10 @@ it was the one failure that turned main's own checks red. The site is not
 wrong: Pages lets the browser keep an answer for 600 seconds, and 304 is the
 right answer to a browser checking its copy.
 
-**The next move is a worker's.** Only what the first read kept has to be out
-of date, so the test can let the browser keep answers for the site's 600
-seconds again before the second read starts. Every GET of the second read is
-then a 206, and the test still reads a file whose ETag changed. Level 1 - one
-test.
+**Fixed on 2026-10-06 by this PR.** The test sets the host back to Pages' 600
+seconds after its 2-second wait and before the second read starts, so only what
+the first read kept is stale and every GET of the second read is a 206. Level 1 -
+one test.
 
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
 different tests, and filed on 2026-10-04. The two later failures were added on
