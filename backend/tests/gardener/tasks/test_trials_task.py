@@ -124,6 +124,29 @@ def test_the_segments_and_traces_a_trial_run_really_writes_are_read(tmp_path: Pa
     assert new_segment.is_file()
 
 
+def test_a_c1_case_traces_root_dates_files_below_the_traces_folder(tmp_path: Path) -> None:
+    """A date-like case slug is outside the folder the task owns, so it cannot date a file."""
+    case = "case-2026-09-10"
+    root = tmp_path / ledger.STATE_DIRNAME / "pipeline-tests" / case / "traces"
+    old = root / "2026" / "06" / "12" / "40000000001-00.jsonl"
+    new = root / "2026" / "09" / "10" / "40000000002-00.jsonl"
+    old.parent.mkdir(parents=True, exist_ok=True)
+    new.parent.mkdir(parents=True, exist_ok=True)
+    old.write_text("{}\n", encoding="utf-8")
+    new.write_text("{}\n", encoding="utf-8")
+
+    outcome = run_task(
+        NAME,
+        tmp_path,
+        today=TODAY,
+        dry_run=False,
+        owns=[f"state/pipeline-tests/{case}/traces"],
+    )
+
+    assert outcome.taken == (f"state/pipeline-tests/{case}/traces/2026/06/12/40000000001-00.jsonl",)
+    assert new.is_file()
+
+
 def test_a_file_whose_path_spells_no_day_is_kept_rather_than_refused(tmp_path: Path) -> None:
     """Nothing reads a trial tree, so an odd name must not cost the whole pass."""
     stray = a_file(tmp_path, "feed-health/notes.txt")

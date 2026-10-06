@@ -247,10 +247,26 @@ def _resolved_root(absolute: Path) -> Path:
     return absolute.resolve()
 
 
-def _shown(state_dir: Path, built: Path) -> str:
-    """A path as it may leave the process: relative to the state root, POSIX (section 2)."""
+def _state_folder(root: Path) -> Path | None:
+    """The `state` folder that contains this root, or None for a synthetic test root."""
+    for candidate in (root, *root.parents):
+        if candidate.name == STATE_DIRNAME:
+            return candidate
+    return None
+
+
+def shown(state_dir: Path, built: Path) -> str:
+    """A path as it may leave the process: from its `state` folder, POSIX (section 2)."""
+    root = _resolved_root(state_dir.absolute())
+    target = built.resolve()
+    state_folder = _state_folder(root)
+    if state_folder is not None:
+        try:
+            return target.relative_to(state_folder.parent).as_posix()
+        except ValueError:
+            pass
     try:
-        below = os.path.relpath(built.resolve(), _resolved_root(state_dir.absolute()))
+        below = os.path.relpath(target, root)
     except ValueError:
         return built.name
     return PurePath(STATE_DIRNAME, below).as_posix()
@@ -270,7 +286,7 @@ def _under_the_two_roots(state_dir: Path, built: Path) -> Path:
         first = ()
     if not first or first[0] not in _THE_TWO_ROOTS:
         raise ValueError(
-            f"{_shown(state_dir, built)} is outside the two roots. Everything the ledger "
+            f"{shown(state_dir, built)} is outside the two roots. Everything the ledger "
             f"door writes sits under {STATE_DIRNAME}/{Tier.RAW.value}/ or "
             f"{STATE_DIRNAME}/{Tier.COMPACT.value}/, so a third root is refused rather "
             "than created"

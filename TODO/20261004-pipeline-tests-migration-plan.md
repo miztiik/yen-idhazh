@@ -1,8 +1,8 @@
 # Pipeline-test state nests under state/pipeline-tests, with a reusable migration tool
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-06
 **Level**: 5 for the approved root design; 2 for the first tooling phase.
-**Status**: Row 1 is done: the reusable migration tool is the package `backend/utilities/ledger_migration/`, run through `backend/utilities/migrate_to_parquet.py`. No committed data has moved. Rows 2 to 5 wait for the user's authorization.
+**Status**: Row 1 is done: the reusable migration tool is the package `backend/utilities/ledger_migration/`, run through `backend/utilities/migrate_to_parquet.py`. No committed data has moved. The user authorized rows 2 to 5 on 2026-10-06.
 
 ## 0. Operating contract
 
@@ -14,7 +14,7 @@ Table A - Scope and execution
 | A2 | Hard scope - in | Reusable preview, write, verify and retire operations; nested case roots; bounded readers; trial compaction; exact CSV conversion; producers, artifact validation, gardener consumers, fixtures and owning docs; deleting the four orphan trial span-rollup files (A4). |
 | A3 | Chosen strategy | Fowler: extend the existing migration tool and compaction engine. Keep case identity in separate roots, not in changed writer envelopes. |
 | A4 | Approved design | The user approved (2026-10-04) nested cases with both tiers and explicit trial compaction roots (C7, C8). The user ruled later the same day that span-rollup stays retired as #1189 retired it, with its producer, console reader, published folder, contract and registry entry: its eight orphan CSV files, left by runs that started before #1189 merged, are deleted unconverted (row 5 here and Plan 59), and no summary contract is restored. That ruling reverses the earlier approval to restore `SpanRollupRow`. Losing any other CSV cell is not approved (C11). |
-| A5 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP for rows 2 to 5 until the user authorizes them. |
+| A5 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. The user authorized rows 2 to 5 on 2026-10-06. |
 | A6 | First phase authorization | The user requested that the reusable tooling be built now. Its worker may change the migration utility, its focused helpers and tests, and its runbook. It must not move committed data. |
 | A7 | ESCALATE triggers | Pause only for: a persisted-contract change other than the approved C4, C7 and C8 shapes; a change to `WriterIdentity`, `unit_id` or a settlement key; enabling expiry or shortening any retention; a ledger a trial root can commit that no declaration covers; a writer or gardener run queued or running at data cutover; a source cell that cannot be preserved. |
 | A8 | Evidence | Plan 58 closed in pull request #1242. Its current implementation and [migration runbook](../docs/how-to/move-a-ledger-to-parquet.md), not the removed plan, are the reuse authority. |
@@ -59,7 +59,7 @@ Table D - PR phases
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Reusable migration operations ship | - | A | DONE #1265 | - | #1265 | phased-migration-tool |
-| D2 | 2 | Readers understand nested trial roots | 1 | B | PENDING | - | - | - |
+| D2 | 2 | Readers understand nested trial roots | 1 | B | DONE | pt-row-2 | - | Fowler |
 | D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | PENDING | - | - | - |
 | D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | PENDING | - | - | - |
 | D5 | 5 | Committed trial files move to the nested roots, and the orphan span summaries are deleted | 4 | E | PENDING | - | - | - |

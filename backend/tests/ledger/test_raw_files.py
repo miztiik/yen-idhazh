@@ -54,9 +54,7 @@ def a_pass(*, on: str = A_DAY, run: str = "1", before: int = 1000) -> VisualPrun
     )
 
 
-def filed(
-    state: Path, row: VisualPruneRow, *, attempt: int = 1, fmt: Format | None = None
-) -> Path:
+def filed(state: Path, row: VisualPruneRow, *, attempt: int = 1, fmt: Format | None = None) -> Path:
     """One pass through the door, under the identity its own run would carry."""
     (written,) = ledger.persist(
         state,
@@ -161,6 +159,25 @@ def test_a_file_filed_under_another_day_is_skipped_and_named(
     assert f"raw/visual-prunes/2026/09/07/{wrong.name}" in caplog.text
 
 
+def test_a_nested_state_root_warning_names_the_real_path(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A trial case root is shown from its containing `state/`, not as production."""
+    state = tmp_path / "state" / "pipeline-tests" / "case-2026-09-06"
+    written = filed(state, a_pass(on=A_DAY))
+    wrong = ledger.raw_path(state, WHICH, NEXT_DAY, uuid.UUID(written.stem))
+    wrong.parent.mkdir(parents=True)
+    written.rename(wrong)
+
+    with caplog.at_level("WARNING"):
+        assert ledger.list_raw_files(state, WHICH) == []
+
+    assert (
+        f"state/pipeline-tests/case-2026-09-06/raw/visual-prunes/2026/09/07/{wrong.name}"
+        in caplog.text
+    )
+
+
 # --- the settlement, over rows written out literally --------------------------------
 
 #: Two work units, spelled the way the door stamps a `unit_id` cell.
@@ -213,7 +230,9 @@ def test_settling_keeps_the_first_row_of_a_key_two_units_both_filed() -> None:
     assert ledger.settle_rows([[earlier], [later]], ledger.VISUAL_PRUNE_KEY) == [earlier]
 
 
-def an_item(unit: str, *, machine: bool, fetch_ms: int | None = None) -> ledger.StoredRow[ItemHealthRow]:
+def an_item(
+    unit: str, *, machine: bool, fetch_ms: int | None = None
+) -> ledger.StoredRow[ItemHealthRow]:
     """One item's health row, as a work shard (`machine`) or assemble's census filed it."""
     base = ItemHealthRow.model_validate_json(
         (CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json").read_text(encoding="utf-8")
@@ -278,6 +297,23 @@ def test_one_days_files_are_read_strictly_and_a_stray_is_refused_by_name(tmp_pat
     with pytest.raises(ValueError, match=r"raw/visual-prunes/2026/09/06/notes\.txt cannot be read"):
         ledger.read_day_files(tmp_path, WHICH, A_DAY)
     assert ledger.read_day_files(tmp_path, WHICH, NEXT_DAY) == []
+
+
+def test_a_nested_state_root_refusal_names_the_real_path(tmp_path: Path) -> None:
+    """Strict readers report the nested case root, not a false production path."""
+    state = tmp_path / "state" / "pipeline-tests" / "case-2026-09-06"
+    written = filed(state, a_pass())
+    stray = written.parent / "notes.txt"
+    stray.write_text("not a ledger file\n", encoding="ascii")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"state/pipeline-tests/case-2026-09-06/raw/visual-prunes/2026/09/06/"
+            r"notes\.txt cannot be read"
+        ),
+    ):
+        ledger.read_day_files(state, WHICH, A_DAY)
 
 
 def test_one_days_folder_names_each_file_it_cannot_read_beside_the_files_it_can(

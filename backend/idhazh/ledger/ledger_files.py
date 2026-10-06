@@ -111,11 +111,6 @@ class LedgerFiles:
         return next((source for source in self.sources if source.holds(day)), None)
 
 
-def _shown(state_dir: Path, path: Path) -> str:
-    """A path as it may leave the process: under `state/`, POSIX (CLAUDE.md section 2)."""
-    return f"{paths.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
-
-
 def _days_lost(entry: CompactEntry) -> list[str]:
     """The UTC days an entry records lost: the day itself for a `lost` day, else its `lost_days`."""
     return [entry.covers] if entry.state is EntryState.LOST else list(entry.lost_days)
@@ -147,13 +142,15 @@ def _index(
         index = CompactIndex.read(path)
     except (ValueError, StalePayloadError) as refusal:
         logger.warning(
-            "read a compact index as absent path=%s reason=%s", _shown(state_dir, path), refusal
+            "read a compact index as absent path=%s reason=%s",
+            paths.shown(state_dir, path),
+            refusal,
         )
         return None
     if (index.ledger, index.period) != (ledger, period):
         logger.warning(
             "read a compact index as absent path=%s reason=it names %s %s",
-            _shown(state_dir, path),
+            paths.shown(state_dir, path),
             index.ledger.value,
             index.period.value,
         )
@@ -181,7 +178,7 @@ def _indexes(
                     "a daily index has no %s index beside it fault=%s path=%s",
                     period.value,
                     LedgerFault.INDEX_MISSING,
-                    _shown(state_dir, path),
+                    paths.shown(state_dir, path),
                 )
     return yearly, monthly, daily
 
@@ -302,7 +299,7 @@ def list_ledger_files(
                 logger.warning(
                     "a compact index names a file that is not there fault=%s path=%s covers=%s",
                     LedgerFault.FILE_MISSING,
-                    _shown(
+                    paths.shown(
                         state_dir,
                         paths.compact_index_path(state_dir, ledger, period, registry=registry),
                     ),
@@ -360,7 +357,7 @@ def load_ledger_rows[C: Contract](
             "days no compact file holds are read from their raw files, if any are left "
             "fault=%s path=%s holes=%s",
             LedgerFault.DAY_MISSING,
-            _shown(
+            paths.shown(
                 state_dir,
                 paths.compact_index_path(state_dir, ledger, Period.DAILY, registry=registry),
             ),
@@ -374,7 +371,9 @@ def load_ledger_rows[C: Contract](
                 stored.append(load_stored([path], model=model))
             except ValueError as refusal:
                 logger.warning(
-                    "skipped a ledger file path=%s reason=%s", _shown(state_dir, path), refusal
+                    "skipped a ledger file path=%s reason=%s",
+                    paths.shown(state_dir, path),
+                    refusal,
                 )
     return [held.row for held in raw_files.settle_rows(stored, key)]
 
@@ -450,7 +449,11 @@ def _stored_or_skipped[C: Contract](
     try:
         return load_stored([path], model=model)
     except ValueError as refusal:
-        logger.warning("skipped a ledger file path=%s reason=%s", _shown(state_dir, path), refusal)
+        logger.warning(
+            "skipped a ledger file path=%s reason=%s",
+            paths.shown(state_dir, path),
+            refusal,
+        )
         return []
 
 
@@ -469,7 +472,7 @@ def _compact_rows[C: Contract](
         logger.warning(
             "a compact index names a file that is not there fault=%s path=%s covers=%s",
             LedgerFault.FILE_MISSING,
-            _shown(
+            paths.shown(
                 state_dir, paths.compact_index_path(state_dir, ledger, period, registry=registry)
             ),
             covers,

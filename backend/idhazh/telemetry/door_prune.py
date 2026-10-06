@@ -80,11 +80,6 @@ class _Change:
     freed: int
 
 
-def _shown(state_dir: Path, path: Path) -> str:
-    """`state/...`, POSIX, whatever root a caller handed in (CLAUDE.md section 2)."""
-    return f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
-
-
 def _days(since: str, until: str) -> list[str]:
     """Every UTC day from `since` to `until`, both named."""
     first, last = date.fromisoformat(since), date.fromisoformat(until)
@@ -191,10 +186,12 @@ def take_days(
             seen=outside + len(members),
             selected=len(members),
             taken=tuple(
-                _shown(state_dir, change.path) for change in done if change.data is None
+                ledger.paths.shown(state_dir, change.path) for change in done if change.data is None
             ),
             written=tuple(
-                _shown(state_dir, change.path) for change in done if change.data is not None
+                ledger.paths.shown(state_dir, change.path)
+                for change in done
+                if change.data is not None
             ),
             bytes_freed=sum(change.freed for change in done),
             stopped_because=because,
