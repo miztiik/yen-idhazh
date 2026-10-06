@@ -203,6 +203,8 @@ test('M10: non-run interactions keep every region box fixed', async ({ page, con
 	if (await page.locator('[data-shape-choice]').count()) await measure(() => page.locator('[data-shape-choice]').last().click());
 	if (await page.locator('summary').filter({ hasText: 'more' }).count()) {
 		await measure(() => page.locator('summary').filter({ hasText: 'more' }).first().click());
+		// The open list lies over the regions below it; a person closes it before pressing what it covers.
+		await measure(() => page.keyboard.press('Escape'));
 	}
 	await page.locator('.history-list summary').scrollIntoViewIfNeeded();
 	await measure(() => page.locator('.history-list summary').click());

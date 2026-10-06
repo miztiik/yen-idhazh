@@ -2,7 +2,7 @@
 	/** The Data explorer's strip of question chips: this browser's saved questions, then the
 	 * examples. From 640 px it is one line, so saving a question never makes it taller: the
 	 * chips that do not fit fold into `{n} more`. */
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import type { ExplorerExample } from '$lib/server/config';
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { KeptQuestion } from './keep';
@@ -29,7 +29,8 @@
 	let strip = $state<HTMLElement | null>(null);
 	let ruler = $state<HTMLElement | null>(null);
 	let widths = $state<StripWidths | null>(null);
-	let fontsReady = $state(0);
+	let rulerWidth = $state(0);
+	let fold = $state<HTMLDetailsElement | null>(null);
 	const available = $derived(examples.filter((example) => example.ledgers.every((ledger) => published.includes(ledger))));
 	const savedChips = $derived(saved.map((question) => ({ kind: 'saved' as const, id: question.id, title: question.name, item: question })));
 	const exampleChips = $derived(available.map((example) => ({ kind: 'example' as const, id: example.id, title: example.title, item: example })));
@@ -45,21 +46,63 @@
 		const sync = () => (phone = query.matches);
 		sync();
 		query.addEventListener('change', sync);
-		// A chip measured in the fallback face is the wrong width once the site's face arrives.
-		void document.fonts.ready.then(() => (fontsReady += 1));
 		return () => query.removeEventListener('change', sync);
 	});
 
 	// The ruler draws every chip, hidden and on one line, so each one's width is known
-	// before the strip decides which of them to show.
+	// before the strip decides which of them to show. Its own width changes when the
+	// site's face replaces the fallback, and that is when the chips are measured again.
 	$effect(() => {
 		void savedChips;
 		void exampleChips;
-		void fontsReady;
+		void rulerWidth;
 		if (ruler === null || strip === null) return;
 		const [savedLabel, examplesLabel, more, ...chips] = [...ruler.children].map((child) => child.getBoundingClientRect().width);
 		widths = { savedLabel, examplesLabel, more, chips, gap: parseFloat(getComputedStyle(strip).columnGap) || 0 };
 	});
+
+	// An open fold lies over the regions below it, so a press or a focus anywhere else
+	// closes it, and so does Escape, which hands focus back to its summary.
+	$effect(() => {
+		const details = fold;
+		if (details === null) return;
+		const outside = (event: Event) => {
+			if (details.open && !details.contains(event.target as Node)) details.open = false;
+		};
+		const escape = (event: KeyboardEvent) => {
+			if (event.key !== 'Escape' || !details.open) return;
+			const inside = details.contains(document.activeElement);
+			details.open = false;
+			if (inside) details.querySelector('summary')?.focus();
+		};
+		document.addEventListener('pointerdown', outside);
+		document.addEventListener('focusin', outside);
+		document.addEventListener('keydown', escape);
+		return () => {
+			document.removeEventListener('pointerdown', outside);
+			document.removeEventListener('focusin', outside);
+			document.removeEventListener('keydown', escape);
+		};
+	});
+
+	// A pick closes the list and leaves focus on its summary: in the editor, a phone's
+	// keyboard would rise over the question that was just loaded.
+	async function pickFolded(pick: () => void) {
+		pick();
+		if (fold !== null) fold.open = false;
+		await tick();
+		fold?.querySelector('summary')?.focus();
+	}
+
+	// Forget keeps the list open, so several can go in turn; focus moves to the nearest
+	// x left in it, then to the summary, then to the last chip on the line.
+	async function forgetFolded(question: KeptQuestion, index: number) {
+		onForget?.(question);
+		await tick();
+		const left = [...(fold?.querySelectorAll<HTMLButtonElement>('.folded .forget') ?? [])];
+		const chips = [...(strip?.querySelectorAll<HTMLButtonElement>(':scope > .example, :scope > .saved-chip > .example') ?? [])];
+		(left[Math.min(index, left.length - 1)] ?? fold?.querySelector('summary') ?? chips.at(-1))?.focus();
+	}
 </script>
 
 <div class="question-strip" aria-label="Example questions" bind:this={strip} bind:clientWidth={line}>
@@ -77,25 +120,25 @@
 		<button type="button" class="example" onclick={() => onPick(chip.item)}>{chip.title}</button>
 	{/each}
 	{#if folded.length > 0}
-		<details>
+		<details bind:this={fold}>
 			<summary>{folded.length} more</summary>
 			<div class="folded">
-				{#each folded as chip (`folded:${chip.kind}:${chip.id}`)}
+				{#each folded as chip, index (`folded:${chip.kind}:${chip.id}`)}
 					{#if chip.kind === 'saved'}
 						<span class="saved-chip">
-							<button type="button" class="example" onclick={() => onPickSaved?.(chip.item)}>
+							<button type="button" class="example" onclick={() => pickFolded(() => onPickSaved?.(chip.item))}>
 								<Icon id="saved" /> {chip.title}
 							</button>
-							<button type="button" class="forget" aria-label={`Forget ${chip.title}`} onclick={() => onForget?.(chip.item)}><Icon id="forget" /></button>
+							<button type="button" class="forget" aria-label={`Forget ${chip.title}`} onclick={() => forgetFolded(chip.item, index)}><Icon id="forget" /></button>
 						</span>
 					{:else}
-						<button type="button" class="example" onclick={() => onPick(chip.item)}>{chip.title}</button>
+						<button type="button" class="example" onclick={() => pickFolded(() => onPick(chip.item))}>{chip.title}</button>
 					{/if}
 				{/each}
 			</div>
 		</details>
 	{/if}
-	<div class="ruler" aria-hidden="true" bind:this={ruler}>
+	<div class="ruler" aria-hidden="true" bind:this={ruler} bind:clientWidth={rulerWidth}>
 		<span class="run-label">Saved</span>
 		<span class="run-label">Examples</span>
 		<span class="ruler-chip">{savedChips.length + exampleChips.length} more</span>

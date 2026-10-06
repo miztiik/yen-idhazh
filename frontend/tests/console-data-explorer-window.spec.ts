@@ -156,7 +156,8 @@ for (const view of [
 		await page.getByRole('button', { name: /^Save$/ }).click();
 		await page.getByLabel('Name', { exact: true }).fill('One more saved question');
 		await page.getByRole('button', { name: /^Keep$/ }).click();
-		await expect(strip.locator(':scope > .saved-chip .example').first()).toContainText('One more saved question');
+		// Saved questions come first; whether it fits the line depends on the face, so it is either there or in the fold.
+		await expect(strip.locator('.saved-chip .example', { hasText: 'One more saved question' })).toHaveCount(1);
 		const after = await read();
 		expect(after.spread, 'the strip is not one line after a save').toBeLessThanOrEqual(1);
 		expect(after.height).toBeCloseTo(before.height, 0);
@@ -254,45 +255,145 @@ test('only the Data explorer lifts the width cap and leaves the footer out', asy
 	expect(lifted).toBeCloseTo(1920, 0);
 });
 
+/** A question the test wrote that is too long for a link: 5,000 scattered CJK characters deflate to far more than the link may carry. */
+const UNLINKABLE = (() => {
+	let state = 7;
+	let out = '';
+	for (let index = 0; index < 5000; index += 1) {
+		state = (1664525 * state + 1013904223) >>> 0;
+		out += String.fromCharCode(0x4e00 + ((state >>> 8) % 0x5000));
+	}
+	return out;
+})();
+
 for (const view of [
 	{ width: 1440, height: 900 },
 	{ width: 390, height: 844 }
 ] as const) {
-	test(`Run, Save and Copy link stand next to each other in one group, at ${view.width}`, async ({ page }) => {
+	test(`Run, Save and Copy link stand next to each other in one group, and Run holds still in every state of it, at ${view.width}`, async ({ page, context }) => {
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 		await page.setViewportSize(view);
 		await openExplorer(page);
 		const group = page.locator('[data-explorer-actions]');
 		await expect(group).toHaveCount(1);
 		await expect(page.locator('[data-workbench-region="toolbar"] .run-button')).toHaveCount(0);
+		await page.locator('#explorer-sql').fill('SELECT 1 AS one');
 
 		const read = () => group.evaluate((node) => {
-			const region = (node.closest('[data-workbench-region="editor"]') as HTMLElement).getBoundingClientRect();
+			const box = (part: Element) => {
+				const rect = part.getBoundingClientRect();
+				return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+			};
+			const region = box(node.closest('[data-workbench-region="editor"]') as HTMLElement);
 			const root = document.documentElement;
 			const children = [...node.children] as HTMLElement[];
-			const middles = children.map((child) => child.getBoundingClientRect().top + child.getBoundingClientRect().height / 2);
 			return {
 				names: children.map((child) => child.getAttribute('aria-label') ?? (child.textContent ?? '').replace(/\s+/g, ' ').trim()),
-				spread: Math.max(...middles) - Math.min(...middles),
-				inside: region.left >= -0.5 && region.right <= root.clientWidth + 0.5 && root.scrollWidth <= root.clientWidth && children.every((child) => {
-					const box = child.getBoundingClientRect();
-					return box.left >= region.left - 0.5 && box.right <= region.right + 0.5;
-				})
+				boxes: children.map(box),
+				group: box(node),
+				region,
+				sideways: root.scrollWidth > root.clientWidth
 			};
 		});
+		type Read = Awaited<ReturnType<typeof read>>;
+		const spread = (boxes: Read['boxes']) => {
+			const middles = boxes.map((one) => (one.top + one.bottom) / 2);
+			return Math.max(...middles) - Math.min(...middles);
+		};
+		const apart = (boxes: Read['boxes']) => boxes.every((a, index) => boxes.slice(index + 1).every((b) =>
+			a.right <= b.left + 0.5 || b.right <= a.left + 0.5 || a.bottom <= b.top + 0.5 || b.bottom <= a.top + 0.5));
+		const inside = (state: Read) => !state.sideways && state.boxes.every((one) => one.left >= state.region.left - 0.5 && one.right <= state.region.right + 0.5);
+		const run = (state: Read) => state.boxes[state.names.indexOf('Run')];
 
 		const standing = await read();
 		expect(standing.names).toEqual(['Save', 'Copy link', 'Run']);
-		expect(standing.spread, 'the three buttons are not on one line').toBeLessThanOrEqual(1);
-		expect(standing.inside).toBe(true);
+		expect(spread(standing.boxes), 'the three buttons are not on one line').toBeLessThanOrEqual(1);
+		expect(inside(standing)).toBe(true);
 
-		// Naming a question changes the buttons to Run's left; Run stays the group's last button.
+		// Save hands focus to the name field with the suggestion selected. Keep, Cancel
+		// and Run take the line Save, Copy link and Run stood on; Run does not move.
 		await group.getByRole('button', { name: /^Save$/ }).click();
+		const field = group.getByLabel('Name', { exact: true });
+		await expect(field).toBeFocused();
+		await expect(field).toHaveValue('SELECT 1 AS one');
+		expect(await field.evaluate((node: HTMLInputElement) => node.selectionStart === 0 && node.selectionEnd === node.value.length)).toBe(true);
 		const naming = await read();
 		expect(naming.names).toEqual(['Name', 'Keep', 'Cancel', 'Run']);
-		expect(naming.spread, 'the naming field and its buttons are not on one line').toBeLessThanOrEqual(1);
-		expect(naming.inside).toBe(true);
+		expect(run(naming), 'Run moved when the naming state opened').toEqual(run(standing));
+		expect(spread(naming.boxes.slice(1)), 'Keep, Cancel and Run are not on one line').toBeLessThanOrEqual(1);
+		expect(apart(naming.boxes), 'two of the naming controls overlap').toBe(true);
+		expect(inside(naming)).toBe(true);
+		if (view.width >= 640) {
+			expect(spread(naming.boxes), 'the name field is not on the buttons\' line').toBeLessThanOrEqual(1);
+		} else {
+			// On a phone the name field takes a whole line of its own beneath the buttons.
+			expect(naming.boxes[0].top, 'the name field is not beneath the buttons').toBeGreaterThanOrEqual(run(naming).bottom - 0.5);
+			expect(naming.boxes[0].left).toBeCloseTo(naming.group.left, 0);
+			expect(naming.boxes[0].right).toBeCloseTo(naming.group.right, 0);
+		}
+
+		// Cancel and Keep both hand focus back to Save.
+		await group.getByRole('button', { name: /^Cancel$/ }).click();
+		await expect(group.getByRole('button', { name: /^Save$/ })).toBeFocused();
+		await group.getByRole('button', { name: /^Save$/ }).click();
+		await group.getByRole('button', { name: /^Keep$/ }).click();
+		await expect(group.getByRole('button', { name: /^Save$/ })).toBeFocused();
+		expect(run(await read())).toEqual(run(standing));
+
+		// A question too long for a link brings Copy question into the group; Run does not move.
+		await page.locator('#explorer-sql').fill(UNLINKABLE);
+		await group.getByRole('button', { name: /^Copy link$/ }).click();
+		await expect(group.getByRole('button', { name: /^Copy question$/ })).toBeVisible();
+		const linked = await read();
+		expect(linked.names).toEqual(['Save', 'Copy link', 'Copy question', 'Run']);
+		expect(run(linked), 'Run moved when Copy question appeared').toEqual(run(standing));
+		expect(apart(linked.boxes), 'two of the buttons overlap').toBe(true);
+		expect(inside(linked)).toBe(true);
 	});
 }
+
+test('the folded list closes on a press outside it, on Escape and after a pick, and stays open after Forget', async ({ page }) => {
+	await page.addInitScript((saved) => localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(saved)), SAVED);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page);
+	const strip = page.locator('[data-workbench-region="questions"] .question-strip');
+	const summary = strip.locator(':scope > details > summary');
+	const list = strip.locator(':scope > details .folded');
+
+	// A press outside the list closes it and still does what it pressed.
+	await summary.click();
+	await expect(list).toBeVisible();
+	await page.locator('.history-list summary').click();
+	await expect(list).toBeHidden();
+	await expect(page.locator('.history-list')).toHaveAttribute('open', '');
+
+	// Escape closes it and hands focus back to its summary.
+	await summary.click();
+	await expect(list).toBeVisible();
+	await list.locator('.example').first().focus();
+	await page.keyboard.press('Escape');
+	await expect(list).toBeHidden();
+	await expect(summary).toBeFocused();
+
+	// Forget leaves it open and moves focus to the nearest x left in it.
+	await summary.click();
+	const forgets = list.locator('.forget');
+	expect(await forgets.count(), 'eight long saved names leave more than one in the fold').toBeGreaterThan(1);
+	const gone = ((await list.locator('.saved-chip .example').first().textContent()) ?? '').trim();
+	await forgets.first().click();
+	await expect(list).toBeVisible();
+	await expect(strip.locator('.example', { hasText: gone })).toHaveCount(0);
+	await expect(forgets.first()).toBeFocused();
+
+	// A pick loads the question, closes the list and leaves focus on its summary, not in the editor.
+	const picked = list.locator('.saved-chip .example').first();
+	const number = /number (\d+) /.exec(((await picked.textContent()) ?? '').trim())?.[1];
+	expect(number).toBeDefined();
+	await picked.click();
+	await expect(list).toBeHidden();
+	await expect(summary).toBeFocused();
+	await expect(page.locator('#explorer-sql')).toHaveValue(`SELECT ${number} AS one`);
+});
 
 test('Ctrl+Enter in the editor runs the question', async ({ page }) => {
 	await openExplorer(page);

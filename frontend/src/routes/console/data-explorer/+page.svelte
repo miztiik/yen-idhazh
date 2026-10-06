@@ -1,6 +1,6 @@
 
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
@@ -67,6 +67,8 @@
 	let selectedShapeType = $state<ExplorerChartType | null>(null);
 	let saving = $state(false);
 	let draftName = $state('');
+	let nameField = $state<HTMLInputElement | null>(null);
+	let saveButton = $state<HTMLButtonElement | null>(null);
 	let answerOffscreen = $state(false);
 
 	const ledgers = $derived<RegistryLedger[]>(flattenRegistry(registry));
@@ -371,15 +373,26 @@
 		void replaceAddress();
 	}
 
-	function startSaving() {
+	// Save hands focus to the name field with the suggestion selected, so typing replaces it;
+	// Keep and Cancel hand it back to Save, so it never falls to the page.
+	async function startSaving() {
 		draftName = suggestedSaveName(sql, config.save_name_max_chars);
 		saving = true;
+		await tick();
+		nameField?.focus();
+		nameField?.select();
+	}
+
+	async function stopSaving() {
+		saving = false;
+		await tick();
+		saveButton?.focus();
 	}
 
 	function keepDraft() {
 		if (!draftName.trim()) return;
 		saveQuestion(draftName);
-		saving = false;
+		void stopSaving();
 	}
 
 	function forget(question: KeptQuestion) {
@@ -534,13 +547,13 @@
 						<label for="explorer-sql">DuckDB SQL</label>
 						<div class="editor-actions" data-explorer-actions>
 							{#if saving}
-								<label>Name <input bind:value={draftName} maxlength={config.save_name_max_chars} /></label>
+								<label>Name <input bind:this={nameField} bind:value={draftName} maxlength={config.save_name_max_chars} /></label>
 								<button type="button" onclick={keepDraft} disabled={!draftName.trim()}><Icon id="saved" /> Keep</button>
-								<button type="button" onclick={() => (saving = false)}>Cancel</button>
+								<button type="button" onclick={stopSaving}>Cancel</button>
 							{:else}
-								<button type="button" onclick={startSaving} disabled={!storageWorks || sql.trim() === ''}><Icon id="saved" /> Save</button>
+								<button type="button" bind:this={saveButton} onclick={startSaving} disabled={!storageWorks || sql.trim() === ''}><Icon id="saved" /> Save</button>
 								<button type="button" onclick={copyLink}><Icon id="share-link" /> Copy link</button>
-								{#if linkNotices.includes(LINK_TOO_LONG_NOTICE)}<button type="button" onclick={copyQuestion}><Icon id="copy" /> Copy question</button>{/if}
+								{#if linkNotices.includes(LINK_TOO_LONG_NOTICE)}<button type="button" class="copy-question" onclick={copyQuestion}><Icon id="copy" /> Copy question</button>{/if}
 							{/if}
 							<!-- Last, so nothing that changes to its left moves it. -->
 							<button type="button" class="run-button" aria-label={running ? 'Running' : 'Run'} aria-keyshortcuts="Control+Enter Meta+Enter" disabled={initializing} aria-disabled={initializing || running || selected.length === 0 || sql.trim() === ''} aria-busy={running} onclick={() => { if (!initializing && !running && selected.length > 0 && sql.trim() !== '') void run(); }}>
@@ -1009,6 +1022,14 @@
 			flex: 1 1 100%;
 			flex-wrap: wrap;
 			justify-content: flex-end;
+		}
+		/* Run holds its place at the end of the group's first line in every state: the
+		   name field and Copy question take a whole line of their own beneath it, so a
+		   wider face can never push Run down, and a name has the phone's full width. */
+		.editor-actions > label,
+		.editor-actions > .copy-question {
+			order: 1;
+			flex: 1 1 100%;
 		}
 	}
 </style>

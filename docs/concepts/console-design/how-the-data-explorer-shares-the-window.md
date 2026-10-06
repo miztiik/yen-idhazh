@@ -10,11 +10,11 @@ The Data explorer uses the whole browser window below the site header and the ro
 
 From 1024 px the workbench is two halves of the window's height. The top half asks: the span and the dates, the question chips, then three columns - the ledger rail, the editor with the status bar under it, and the column rail. Each rail takes one sixth of the width and never less than 12rem; the editor takes the rest. The bottom half answers: the answer table on the left and the chart on the right, each half the width. Each half keeps the smallest size its parts need - the editor at least `console.explorer_editor_lines_shown[1]` lines, the chart at least one chart's height - so a window too short for both makes the page scroll rather than cut a region off. Below 1024 px the regions stack in one column, the page scrolls, and the answer is one window tall.
 
-Run stands at the right end of the editor's heading line, after Save and Copy link, in one group of buttons. It is the group's last button, so naming a question - which turns Save and Copy link into a name field, Keep and Cancel - never moves it. Ctrl+Enter in the editor still runs the question.
+Run stands at the right end of the editor's heading line, after Save and Copy link, in one group of buttons. It is the group's last button, so naming a question - which turns Save and Copy link into a name field, Keep and Cancel - never moves it. Below 640 px the group stands on a line of its own; Run and the two buttons beside it hold the group's first line, and the name field or `Copy question` takes a whole line beneath them. Save puts focus in the name field with the suggested name selected, and Keep and Cancel put it back on Save. Ctrl+Enter in the editor still runs the question.
 
 The answer has a heading line of its own, one control tall: the word `Answer` at its start, and `Copy as JSON` and `Copy as table` at its end. The chart's heading line carries the word `Chart` and, when more than one shape fits the answer, the shape tiles; the line holds still and the drawing scrolls in its own box beneath it, so nothing passes under the tiles. What a copy did is said in the page's floating notice.
 
-From 640 px the question strip is one line beside the History and how-to links. It shows as many chips as fit, this browser's saved questions first and then the examples, at most `console.explorer_strip_shown[1]`, and folds the rest into `{n} more`, whose list opens under the strip. Saving a question therefore folds an example away instead of making the strip taller. Below 640 px the strip keeps its column of `console.explorer_strip_shown[0]` chips.
+From 640 px the question strip is one line beside the History and how-to links. It shows as many chips as fit, this browser's saved questions first and then the examples, at most `console.explorer_strip_shown[1]`, and folds the rest into `{n} more`, whose list opens under the strip. Saving a question therefore folds an example away instead of making the strip taller. The list closes on a press or a focus anywhere outside it, and that press still does what it pressed; Escape closes it too and puts focus back on `{n} more`. Picking a question from the list closes it and leaves focus on `{n} more`. Forget leaves it open and moves focus to the nearest Forget left in it. Below 640 px the strip keeps its column of `console.explorer_strip_shown[0]` chips.
 
 ## A workbench keeps its regions still
 
@@ -50,7 +50,11 @@ its line never moves when anything to its left changes, so naming a question
 moves nothing. The words `DuckDB SQL` give way first, cut short with an
 ellipsis, so the line never wraps after a click.
 
+**On a phone the name field takes a line of its own.** The page's text uses the system's own face, and faces differ in width. At 390 px Linux's wider face pushed Run alone onto a second line when a question was named, so Run moved; Windows' narrower face kept one line only by squeezing the name field to about 48 px, too small to type a name in. With the buttons on the first line and the field beneath them, Run holds still and the field has the phone's whole width with any face (Jony, 2026-10-06). **What it costs:** the editor moves down one line while a question is named on a phone, which is less than the phone's keyboard moves the page.
+
 **The question strip is one line.** Saving a question added a chip, and on a strip that wraps the chip pushed it onto a second line: at 1440 x 900 the editor, the rails and the status bar moved down 40 px, which breaks the rule that only a region's content changes. A line that folds what does not fit has one height whatever is saved (the executing owner, 2026-10-06).
+
+**The folded list closes itself.** While open it lies over the ledger rail and the editor, so a list that waits to be closed covers what a person reaches for next. After a pick, focus stays on `{n} more` rather than in the editor, because a phone's keyboard would rise over the question that was just loaded (Jony, 2026-10-06).
 
 **The copy buttons stand on a line one control tall.** They were 2.75rem
 buttons in a heading row one workbench control tall, which is 2rem with a
