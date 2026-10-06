@@ -1,6 +1,6 @@
 # Plan 59 - The ledgers left on CSV move to the door, and the CSV ledger code goes
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 **Level**: 5 (CLAUDE.md section 6): the plan teaches the door a folder of any depth, moves five committed ledgers onto it, renames a persisted field on two row contracts and moves committed data. Each row carries its own level below.
 
@@ -51,7 +51,7 @@ Table C - when to stop and ask
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The first upkeep run after feed health moved is read | - | A | PENDING | - | - | - |
+| 1 | The first upkeep run after feed health moved is read | - | A | DONE | p59-main-read | - | Fowler |
 | 2 | The parquet column mapper reads a fixed-choice field | - | A | DONE | p59-row-2 | - | Fowler |
 | 3 | The CSV code no ledger uses any more is deleted | Plan 61 "The council saves its run records through the ledger door"; pipeline-tests "Readers understand nested trial roots" | A | PENDING | - | - | - |
 | 4 | The judge's scored pairs and its metrics are saved through the door | 2, 3, 11 | B | PENDING | - | - | - |
@@ -158,6 +158,9 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 - **Files touched:** none, unless a late CSV file is found; then that file and `frontend/public/publication.json`.
 - **Acceptance gates:** the two readings above, quoted in the row's report.
 - **Oracle:** the gardener ledger's record for that run. It cannot settle a later run; Plan 60 owns the gardener's health.
+- **Readings, 2026-10-06:**
+  1. The first scheduled run after the merge, 37182327138 on 2026-10-04, failed in every compaction task, feed health's included, with the month fault "a month is not absorbed" that Plan 60 fixed. Nothing in it is particular to feed health. The next scheduled run, 37271019053 on 2026-10-05, filed this `compact-feed-health` record in the `gardener` ledger: `dry_run` false, `stopped_because` `exhausted`, no failure, and the month window 2025-06-01 to 2025-08-31 only reported, because `month_deletes_dry_run` is true. A dispatched run the same morning, 37286849600, packed 5 raw files live and freed 108463 bytes.
+  2. `migrate_to_parquet.py --check --ledger feed-health` over `state` and the three trial roots, months 2025-06 to 2026-10, printed `0 CSV file(s) left` and exited 0. No late CSV file was found, so nothing was migrated.
 
 **Decisions**
 
