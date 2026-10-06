@@ -20,6 +20,7 @@ import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { datedFirst, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
 import { windowDay } from '../src/lib/server/window-day';
 import { buildLedger, daysBefore, everyDay } from './support/ledger-lifecycle';
+import { publishedSite } from './support/published-site';
 import { serverCompiler } from './support/server-render';
 
 /**
@@ -637,24 +638,6 @@ test.describe('THE ORACLE for the Hardware note: a day the machine record lost r
 	});
 });
 
-/** A site under a fresh folder that published a digest on each of `published`: the
- *  publication list the build reads, and one day file each, as `frontend/public/` holds them. */
-function publishedSite(published: readonly string[]): { site: string; digest: string } {
-	const site = test.info().outputPath('site');
-	const entries = published.map((day) => {
-		const [year, month, date] = day.split('-');
-		const file = path.join(site, 'digest', year, month, date, 'digest.json');
-		mkdirSync(path.dirname(file), { recursive: true });
-		writeFileSync(file, JSON.stringify({ date: day, items: [] }));
-		return { root: 'public', path: `digest/${year}/${month}/${date}/digest.json`, bytes: 0, items: 0 };
-	});
-	writeFileSync(
-		path.join(site, 'publication.json'),
-		JSON.stringify({ version: '2026-10-01', changelog: [], dates: [...published], entries, total_bytes: 0, total_items: 0 })
-	);
-	return { site, digest: path.join(site, 'digest') };
-}
-
 test.describe('THE ORACLE: a console window ends on the site\'s newest published day, and reads only its own days', () => {
 	const PUBLISHED = '2030-06-15';
 
@@ -662,7 +645,7 @@ test.describe('THE ORACLE: a console window ends on the site\'s newest published
 		// Published on 14 and 15 Jun 2030. The machine record holds one row a day up to
 		// 6 May, 40 days before the newest published day, and is packed with empty days
 		// from 7 May to 14 Jun, the day before it.
-		const { digest } = publishedSite(['2030-06-14', PUBLISHED]);
+		const { digest } = publishedSite(test.info().outputPath('site'), { published: ['2030-06-14', PUBLISHED] });
 		const state = test.info().outputPath('state');
 		await buildLedger(state, {
 			ledger: 'host-fingerprint',

@@ -261,7 +261,10 @@ export async function load() {
 	// exactly as `Sources cut short most often` below it does. A pan asks a
 	// question about days the reduction was not taken over, and the browser has
 	// only the months it has fetched to re-take it from.
-	const costRows = telemetryRows(TELEMETRY_ROOT, widest).rows;
+	//
+	// Read over the widest window and nothing around it, so a projection row
+	// dated after the newest published day is in no window, as on every route.
+	const costRows = telemetryRows(TELEMETRY_ROOT, widestSpan).rows;
 	const itemCostByWindow: ItemCost[] = offered.map((span) => itemCost(costRows, span));
 	// One day record per date the window holds, read once at the widest preset and
 	// sliced per preset from that map. `charts` already names every published day,

@@ -2,7 +2,7 @@ import { expect, test, type Page } from './support/browser';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { grouped } from '../src/lib/charts/series';
-import { dayKey, monthsInWindow, panWindow, toDay, windowOfDays } from '../src/lib/charts/viewport';
+import { monthsInWindow, panWindow, windowOfDays } from '../src/lib/charts/viewport';
 import { shortDate } from '../src/lib/format';
 import { CUT_FLAG_MEANS_A_CUT_FROM } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
@@ -127,11 +127,11 @@ async function setWindow(page: Page, days: number) {
 	);
 }
 
-/** A telemetry corpus deliberately longer than the window, for the seed tests.
+/** A telemetry corpus deliberately longer than the window, for the read tests.
  *
  * The canary day carries two days, which is shorter than any window this knob
  * can hold. A window asserted against a corpus it cannot cut passes without
- * cutting anything, so the seed tests read this instead.
+ * cutting anything, so the telemetry read tests read this instead.
  */
 const TELEMETRY_FIXTURE = resolve(process.cwd(), 'tests', 'fixtures', 'telemetry');
 
@@ -828,25 +828,45 @@ test('a record too shallow for a rate says so instead of printing one', () => {
 	expect(withRest.clean.length + withRest.failed).toBe(withRest.checked);
 });
 
-test('the committed ledger is deeper than the cap, so the tail sentence has work to do', async () => {
-	// The canary cannot show a capped list, so the numbers the production build
-	// prints are pinned here off the ledger the production build reads. The
-	// click-through is the section-12 smoke.
-	const committed = await feedLedger(resolve(process.cwd(), '..'));
-	const real = recordByHand(committed);
-	expect(real.checked, 'no committed feed-health ledger - the read is broken').toBeGreaterThan(0);
-	expect(
-		real.broken.length,
-		'the committed ledger holds fewer failing feeds than the cap, so nothing is hidden'
-	).toBeGreaterThan(FEED_ROWS);
-	expect(real.runs).toBeGreaterThanOrEqual(MIN_ATTEMPTS);
-	expect(real.clean.length + real.broken.length).toBe(real.checked);
+test('a record with more failing feeds than the list draws is counted whole', () => {
+	// The canary cannot show a capped list, so a record deeper than the cap is
+	// written here, over five runs: twelve feeds that each failed once, in each of
+	// the four ways a read fails, two that never failed, one only ever rested and
+	// one only ever refused by its robots file. The page draws `feed_rows` of the
+	// twelve and counts the rest in its tail sentence; the count behind both is
+	// never capped.
+	const runs = ['2030-06-11', '2030-06-12', '2030-06-13', '2030-06-14', '2030-06-15'];
+	const record = (feedId: string, last: { outcome: string; items: number }): FeedRecord[] =>
+		runs.map((date, at) => ({
+			feedId,
+			date,
+			runId: `${date}-1`,
+			...(at === runs.length - 1 ? last : { outcome: 'ok', items: 9 })
+		}));
+	const failures = [
+		{ outcome: 'transient', items: 0 },
+		{ outcome: 'permanent', items: 0 },
+		{ outcome: 'blocked', items: 0 },
+		{ outcome: 'ok', items: 0 }
+	];
+	const failed = Array.from({ length: 12 }, (_, at) =>
+		record(`failing-${String(at + 1).padStart(2, '0')}`, failures[at % failures.length])
+	);
+	const rows: FeedRecord[] = [
+		...failed.flat(),
+		...record('clean-a', { outcome: 'ok', items: 9 }),
+		...record('clean-b', { outcome: 'ok', items: 4 }),
+		...runs.map((date) => ({ feedId: 'rested', date, runId: `${date}-1`, outcome: 'skipped', items: 0 })),
+		...runs.map((date) => ({ feedId: 'refused', date, runId: `${date}-1`, outcome: 'robots_denied', items: 0 }))
+	];
+	expect(FEED_ROWS, 'the cap reaches past this record, so it hides nothing').toBeLessThan(12);
 
-	const measured = reliability(committed);
-	expect(measured.clean).toEqual(real.clean);
-	expect(measured.checked).toBe(real.checked);
-	expect(measured.runs).toBe(real.runs);
-	expect(measured.failed).toBe(real.broken.length);
+	const measured = reliability(rows);
+	expect(measured.runs).toBe(5);
+	expect(measured.checked).toBe(14);
+	expect(measured.failed).toBe(12);
+	expect(measured.clean).toEqual(['clean-a', 'clean-b']);
+	expect(measured.ineligible).toEqual(['refused', 'rested']);
 });
 
 test('stage medians come from item health, not the score ledger', async ({ page }) => {
@@ -1399,54 +1419,33 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	expect(missing).toEqual([]);
 });
 
-test('the seed carries one window, however many months are committed', () => {
+test('a telemetry read holds exactly the window it is handed, however many months are committed', () => {
+	// The fixture holds one row a day from 1 May to 10 Jul 2026, in three month
+	// shards. The window ends a week before the newest row, as a console window
+	// does when the projection has run on past the newest published day.
 	const all = telemetryRows(TELEMETRY_FIXTURE);
-	const seeded = telemetryRows(TELEMETRY_FIXTURE, DEFAULT_WINDOW_DAYS);
-	const dates = all.rows.map((row) => row.date).sort();
-	const newest = dates.at(-1) as string;
-
-	// A corpus shorter than the window is windowed to itself, so everything
-	// below would pass with no window in the code at all. The fixture has to
-	// outlast the window or this test proves nothing.
-	expect(span(dates[0], newest)).toBeGreaterThan(DEFAULT_WINDOW_DAYS);
-
-	const cutoff = dayKey(new Date(toDay(newest).getTime() - (DEFAULT_WINDOW_DAYS - 1) * 86_400_000));
-	expect(all.rows.some((row) => row.date < cutoff)).toBe(true);
-	expect(seeded.rows.every((row) => row.date >= cutoff)).toBe(true);
-	expect(seeded.rows.length).toBeLessThan(all.rows.length);
-
-	// The seed still reaches the newest day, and still reads as the same table.
-	expect(seeded.rows.some((row) => row.date === newest)).toBe(true);
-	expect(seeded.columns).toEqual(all.columns);
-
-	// A window is a count of days, so it straddles a month boundary and reads
-	// two shards. Every older shard is skipped unread, which is the bound: two,
-	// however many months the pipeline has committed.
-	expect(monthsInWindow({ start: cutoff, end: newest }).length).toBeLessThanOrEqual(2);
-	expect(telemetryMonths(TELEMETRY_FIXTURE).length).toBeGreaterThan(
-		monthsInWindow({ start: cutoff, end: newest }).length
-	);
+	const read = telemetryRows(TELEMETRY_FIXTURE, { start: '2026-06-20', end: '2026-07-03' });
+	expect(all.rows.length).toBe(71);
+	expect(read.rows.map((row) => row.date)).toEqual(days('2026-06-20', 14));
+	// Still the same table. The window touches June and July, the two shards a
+	// read opens, however many months the pipeline has committed.
+	expect(read.columns).toEqual(all.columns);
+	expect(telemetryMonths(TELEMETRY_FIXTURE)).toEqual(['2026-05', '2026-06', '2026-07']);
+	expect(monthsInWindow({ start: '2026-06-20', end: '2026-07-03' })).toEqual(['2026-06', '2026-07']);
 });
 
-test('the days the seed drops stay on disk for a pan to reach', () => {
-	const seeded = telemetryRows(TELEMETRY_FIXTURE, DEFAULT_WINDOW_DAYS);
-	const dates = seeded.rows.map((row) => row.date).sort();
-	const back = panWindow(
-		{ start: dates[0], end: dates.at(-1) as string },
-		-DEFAULT_WINDOW_DAYS
-	);
+test('the days a window read leaves out stay on disk for a pan to reach', () => {
+	// Bounding the read must not put a day out of reach. The fortnight before the
+	// window is in a shard the browser can still fetch by name.
+	const opened = { start: '2026-06-20', end: '2026-07-03' };
+	const back = panWindow(opened, -14);
+	expect(back).toEqual({ start: '2026-06-06', end: '2026-06-19' });
+	expect(telemetryMonths(TELEMETRY_FIXTURE)).toContain('2026-06');
 
-	// Bounding the seed must not put a day out of reach. Every month the pan
-	// lands on is still a shard the browser can fetch by name.
-	const shards = telemetryMonths(TELEMETRY_FIXTURE);
-	expect(monthsInWindow(back).filter((month) => shards.includes(month)).length).toBeGreaterThan(0);
-
-	const older = telemetryRows(TELEMETRY_FIXTURE).rows.filter(
-		(row) => row.date >= back.start && row.date <= back.end
-	);
-	const seededIds = new Set(seeded.rows.map((row) => row.item_id));
-	expect(older.length).toBeGreaterThan(0);
-	expect(older.every((row) => !seededIds.has(row.item_id))).toBe(true);
+	const older = telemetryRows(TELEMETRY_FIXTURE, back).rows;
+	expect(older.map((row) => row.date)).toEqual(days('2026-06-06', 14));
+	const readIds = new Set(telemetryRows(TELEMETRY_FIXTURE, opened).rows.map((row) => row.item_id));
+	expect(older.filter((row) => readIds.has(row.item_id))).toEqual([]);
 });
 
 /** Open the daily figures.
