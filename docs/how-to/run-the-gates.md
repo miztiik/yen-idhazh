@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -162,7 +162,9 @@ so it retains the sufficiency checks without generating review pictures.
 For a design review, dispatch CI on the review branch with `panel_captures=true`.
 That run uploads the `panel-captures` artifact on a pass or a fail. Locally,
 prepare the canary build, then run
-`npx playwright test --project panels tests/panel-captures.spec.ts`.
+`npx playwright test --project=panels tests/panel-captures.spec.ts`. Keep the
+`=`: with a space, Playwright reads the spec's path as a second project name
+and runs nothing.
 Leave `SKIP_PANEL_CAPTURES` unset for that command. The
 pictures land in `frontend/test-results/panels/` as
 `<panel-id>--<width>--<theme>--<state>.png` - every width in light and the
