@@ -62,7 +62,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | #1229 | p55-r7-worker |
 | 8 | The Data explorer draws the workbench chrome | 6 | G | DONE | p55r8 | #1298 | p55-n1-worker |
 | 9 | Run moves nothing on the Data explorer | 8 | H | DONE | p55r9 | #1310 | p55-n2-worker |
-| 10 | The Data explorer reaches the reference's density | 9, 11, 12 | M | DONE | p55r10 | - | p55-redesign-worker |
+| 10 | The Data explorer reaches the reference's density | 9, 11, 12 | M | DONE | p55r10 | #1357 | p55-redesign-worker |
 | 11 | The column rail stops overlapping, and types and the chosen ledger show in colour | 9 | I | DONE | automatic-giggle | #1326 | Data explorer phase 1 colours |
 | 12 | The Data explorer fills the window, Run stands with Save and Copy link, and the copy buttons stand on the answer's heading line | 9, 11 | J | DONE | special-parakeet | #1336 | Data explorer phase 2 layout |
 | 13 | The explorer reads a column's type one way, and a NULL is no value in any chart | 11 | K | DONE | super-waddle | #1332 | Explorer types and nulls one way |
