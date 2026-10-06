@@ -1,7 +1,10 @@
-/** Which UTC instant does the engine's text for a date or a timestamp name, to the nanosecond?
+/** Which UTC instant, and so which UTC day, does the engine's text for a date or a timestamp name?
  *
- * The answer table sorts a date or a timestamp column by it. It is read from the text alone, so
- * the browser's time zone cannot change it (CLAUDE.md section 2).
+ * The answer table sorts a date or a timestamp column by the instant, to the nanosecond, and the
+ * date chart puts each row on its UTC day. Both are read from the text alone, so the browser's
+ * time zone cannot change them (CLAUDE.md section 2). The day the text prints is not always the
+ * UTC day: the engine prints a timestamp with a time zone in a whole-hour offset it takes from the
+ * page's zone, so on a page in Berlin 23:30 UTC prints as `00:30:00+01` on the next day.
  */
 
 /** A date or a timestamp as the engine prints it: the day, a time of day to the nanosecond, and
@@ -23,4 +26,17 @@ export function readUtcNanoseconds(text: string): bigint | null {
 	at.setUTCHours(Number(hour), Number(minute), Number(second) - offset);
 	const ms = at.getTime();
 	return Number.isNaN(ms) ? null : BigInt(ms) * 1_000_000n + BigInt(fraction.padEnd(9, '0'));
+}
+
+const NANOSECONDS_A_DAY = 86_400_000_000_000n;
+
+/** The UTC day, `YYYY-MM-DD`, of the instant a date or a timestamp names. `null` for text that
+ *  names no instant, and for a day outside the years 0000 to 9999, which that form cannot hold. */
+export function readUtcDay(text: string): string | null {
+	const at = readUtcNanoseconds(text);
+	if (at === null) return null;
+	// BigInt division rounds toward zero, so an instant before 1970 is moved down to its own day.
+	const days = at / NANOSECONDS_A_DAY - (at % NANOSECONDS_A_DAY < 0n ? 1n : 0n);
+	const day = new Date(Number(days) * 86_400_000).toISOString().slice(0, 10);
+	return /^\d{4}-\d\d-\d\d$/.test(day) ? day : null;
 }
