@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -89,6 +89,11 @@ a number is a whole number or a decimal, a date column is a date or a timestamp
 of any precision, `timestamp_ns` included, and a text column is text, `uuid` and
 `enum` included. A list of numbers is not a number, and a time of day is not a
 date.
+
+**A row's day is the UTC day of the instant its date or timestamp names**, not
+the day its text prints. The engine prints a timestamp with a time zone with an
+offset of its own, so `2026-10-06 00:30:00+01` is 23:30 UTC and falls on 5
+October.
 
 **A NULL is no value, never a zero.** The date chart breaks its line on a day
 whose number is NULL, as it does on a lost day, and the ranked, paired and spread
