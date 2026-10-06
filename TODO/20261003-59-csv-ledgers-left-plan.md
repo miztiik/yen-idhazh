@@ -61,7 +61,7 @@ Table C - when to stop and ask
 | 8 | The item health summary is saved through the door | 2, 3 | B | PENDING | - | - | - |
 | 9 | The committed judge rows move onto the door, and the old CSV files go | 7 | F | PENDING | - | - | - |
 | 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; Plan 61 "The old-row reader and the migrator's council entry are deleted"; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | PENDING | - | - | - |
-| 11 | The door files a ledger under a folder of any depth | - | A | PENDING | - | - | - |
+| 11 | The door files a ledger under a folder of any depth | - | A | DONE | p59-row-11 | - | Fowler |
 
 Cross-plan dependencies name the other plan's row by title. Re-check each title at dispatch.
 

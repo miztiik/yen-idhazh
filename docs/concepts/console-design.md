@@ -143,6 +143,10 @@ owner's carve-out for that one, 2026-08-30, on conditions this section holds:
 
 The Data explorer page is the exception to the console rule that translates ledger columns into prose. Its table prints column names, decimals, nulls and dates exactly as the engine returned them, because the operator writes the question and types those names back into the next one. Cells still render as text, never as links, images or HTML.
 
+**The page reads a column's type one way.** One function, `classifyType()` in `frontend/src/lib/console/explorer/type-family.ts`, puts the type name the engine prints into one family: a whole number, a decimal, a date, a timestamp, a time, an interval, true/false, text, bytes, a list or a struct, or other. A timestamp is any precision, `timestamp_s`, `timestamp_ms` and `timestamp_ns` included, with or without a time zone. Text includes `uuid` and `enum`, and bytes is a `blob`. A list or a struct is that whatever it holds, because `timestamp[]` is a list rather than a time, and a name no rule knows, such as `bit`, is other. The engine prints an alias by its own name, `INT` as `INTEGER`, so no alias is listed. The table prints and sorts a cell by its column's family, the chart chooses its shape from the answer's families ([the mark shapes](console-design/the-mark-shapes-a-panel-may-reach-for.md#when-nobody-wrote-the-panel-the-columns-choose-the-shape)), and the type label takes its family's colour (below).
+
+A whole number groups its digits from five digits up, so `2026` stays `2026`, and one longer than fifteen digits prints its exact digits. A decimal prints at most three places, and a non-zero one under 0.001 in e-notation. A date prints as `2026-10-02`, and a timestamp as `2026-10-02 08:24:32`, with milliseconds only when they are not zero. True/false prints `true` or `false`, a blob prints its size as `{n} bytes`, and a list or a struct prints its JSON text in the data font. Anything else prints the engine's text, and a NULL prints `null`. Numbers stand right-aligned. The first press on a column's name sorts a number or a day high to low and anything else A to Z, with NULLs last both ways. Only a number column draws in-cell bars, so text that holds digits draws none.
+
 ## A workbench keeps its regions still
 
 The Data explorer is a workbench. Pressing Run, copying text, saving a question, opening History, sorting a column or changing the chart changes only the content inside a region. The toolbar, question row, ledger rail, editor, status bar, column rail, answer region and chart region keep their boxes.
@@ -151,7 +155,7 @@ Long content scrolls inside the region that owns it. The SQL editor has a fixed 
 
 ## The Data explorer colours a type by its family, and marks a chosen ledger
 
-Every column type the page prints, in the column rail and under each header of the answer table, is in the data font at `--text-xs` and in the colour of its family. Text and numbers wear `--type-text` and `--type-number`, which are the editor's string and number colours, so one kind of value has one colour everywhere on the page. Dates and times wear `--type-time`, and true/false wears `--type-truth`. A list, a struct, a blob and a type no rule knows stay in the tertiary text colour. Whole numbers and decimals share a colour, as `42` and `3.14` do in the editor. The type is always printed in words, so the colour is a second signal and the page has no legend. One function decides the colour, `typeColour()` in `frontend/src/lib/console/explorer/type-colour.ts`: it returns the token, the label is painted with exactly that token, and the function tests for a list or a struct first, because `timestamp[]` is a list, not a time. In the answer header only the type word takes the colour; the note about the bars after it stays tertiary.
+Every column type the page prints, in the column rail and under each header of the answer table, is in the data font at `--text-xs` and in the colour of its family. Text and numbers wear `--type-text` and `--type-number`, which are the editor's string and number colours, so one kind of value has one colour everywhere on the page. Dates, timestamps, times and intervals wear `--type-time`, and true/false wears `--type-truth`. A list, a struct, a blob and a type no rule knows stay in the tertiary text colour. Whole numbers and decimals share a colour, as `42` and `3.14` do in the editor. The type is always printed in words, so the colour is a second signal and the page has no legend. The family comes from `classifyType()` (above), and `typeColour()` in `frontend/src/lib/console/explorer/type-colour.ts` maps it to a token: the label is painted with exactly that token, and a list of times takes the tertiary colour, because it is a list. In the answer header only the type word takes the colour; the note about the bars after it stays tertiary.
 
 The column rail prints each ledger's name once, as a heading that stays at the top of the list while that ledger's rows scroll, and each row prints only the column's own name. The full `ledger.column` name stays in the row's text for a screen reader and in its `title` for a hover. Rows are ordinary block flow with a 24 px minimum height: a long name or a long type wraps, the row grows, and nothing is cut short. A type that does not fit beside its name moves to its own line at the end of the row.
 
@@ -215,6 +219,13 @@ facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
 
 ## Design rationale
+
+**One classification of a column's type.** The table, the chart and the colours
+each read type names with lists of their own, and they disagreed about the same
+column: the chart drew no date chart for a `timestamp_ns` and counted a list of
+decimals as a number, and the table printed a `hugeint` as text. One function now
+decides, and each reader keeps only what it does with a family, so a type the
+engine adds is taught to the page once.
 
 **A colour per type family.** The operator writes the next question from the
 column rail, and one ledger can list more than a hundred columns. A colour per

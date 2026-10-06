@@ -143,6 +143,6 @@ frontend/public/assist/index/*.bin binary
 # `*.parquet binary` is last so it wins over `tests/fixtures/** text` above - a
 # parquet fixture converted as text would be a file no reader can open.
 state/**/*.parquet                -merge
-state/compact/*/index/*.json      -merge
-state/compact/*/*/watermark.json  -merge
+state/compact/**/index/*.json      -merge
+state/compact/**/*/watermark.json  -merge
 *.parquet                         binary
