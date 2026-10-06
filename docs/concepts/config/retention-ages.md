@@ -270,9 +270,9 @@ folded; the gardener loader refuses the pair otherwise.
 
 **What the `full-grain` series of `telemetry-aggregate` governs is the
 item-health ledger, and nothing else.** Past the window a month is summarised to
-one row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv` by the
-gardener's `telemetry-aggregate` task, which reads the month through the ledger
-door. The rows themselves go later, when the item-health compaction's
+one row per `(date, stage)` in `state/raw/item-health-summary/` by the gardener's
+`telemetry-aggregate` task, which reads the month through the ledger door and
+files the summary through the same door. The rows themselves go later, when the item-health compaction's
 `monthly_window` passes, so a month is always summarised before anything can take
 its rows. What survives is every count and every timing total; what goes is the
 per-item detail, which is what the console's failure list offers and no rate

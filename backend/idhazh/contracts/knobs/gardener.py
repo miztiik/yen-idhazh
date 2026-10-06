@@ -105,7 +105,8 @@ class GardenerConfig(Model):
         description=(
             "The most file content one shard may download for its tasks, in megabytes "
             "of 1024 * 1024 bytes. The code and config every shard checks out are not "
-            "counted. A shard over it still runs its tasks and lands its record, then "
+            "counted. A compaction takes only the periods whose files fit what is left "
+            "of it. A shard over it still runs its tasks and lands its record, then "
             "exits 1 naming what it downloaded, this ceiling and its three heaviest "
             "folders."
         ),
@@ -236,10 +237,11 @@ class _Declared(Model):
     appends_to: list[LedgerName] = Field(
         default_factory=list,
         description=(
-            "The ledgers this task files a report of its own into, through the ledger door: "
-            "one new raw file under the wake's day, dry run or not. Appending is not "
-            "owning. The door names each file afresh, so it cannot overwrite anything, and "
-            "the folder it lands in stays with whichever task owns it."
+            "The ledgers this task writes into through the ledger door without owning their "
+            "folders. A path in written is held to the row's date and lands only on a live "
+            "run. A path in appended is a report, held to the wake day, and lands dry run or "
+            "not. The door names each file afresh, so it cannot overwrite anything, and the "
+            "folder stays with whichever task owns it."
         ),
     )
     reads: list[RelPath] = Field(
@@ -519,7 +521,10 @@ class CompactionPolicy(_Declared):
     )
     max_raw_files_per_period: int = Field(
         ge=1,
-        description="The most raw files one period may be built from in one pass.",
+        description=(
+            "The most raw files one period may be built from in one pass. A day holding "
+            "more packs its oldest that many, and the rest wait for the next wake."
+        ),
     )
     compact_after_days: int = Field(
         ge=1,

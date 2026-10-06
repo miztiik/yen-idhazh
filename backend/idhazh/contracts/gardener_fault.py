@@ -24,3 +24,9 @@ class RecoveryNote(StrEnum):
     #: A period's own packed file was at its named path while no index entry
     #: named it, so the pass adopted the file as the period's record.
     INDEX_REBUILT = "index-rebuilt"
+    #: A file the pass could not read was moved under its ledger's set-aside
+    #: folder, and its period was packed from the rest and counts it.
+    SET_ASIDE = "set-aside"
+    #: A day held more raw files than one period is built from, so the pass
+    #: packed the oldest and left the rest for the next wake to take in.
+    CARRIED_OVER = "carried-over"

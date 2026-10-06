@@ -7,8 +7,11 @@ a test turns that off for itself only. Each oracle is named where it is
 checked: a compact file holds exactly what settling its raw files gives; after
 every pass the newest day the daily index names is the daily watermark; every
 date is read from exactly one file, and a day lost with its file is named in
-its closed month; a re-run that lands after its day was compacted replaces its
-first attempt; a re-run that lands after its month closed re-opens the month,
+its closed month; a file that cannot be read is moved under set-aside at its
+old path and counted, and the rest of its period packs; a day holding more raw
+files than one period is built from packs the most and leaves the rest for the
+next wake; a re-run that lands after its day was compacted replaces its first
+attempt; a re-run that lands after its month closed re-opens the month,
 which then holds what packing the late day first would have held; no pass
 writes a path it deletes; each month past the monthly window is dropped once,
 oldest first and at most `max_periods_per_run` a wake, by its listed paths and
@@ -380,30 +383,89 @@ def recorded(state_dir: Path, rows: list[CollectionPruneRow], *, attempt: int) -
     return written
 
 
-def test_a_raw_file_that_cannot_be_read_stops_its_day_and_is_never_deleted(tmp_path: Path) -> None:
+def test_a_raw_file_that_cannot_be_read_is_set_aside_and_the_rest_of_its_day_packs(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """THE ORACLE for an unreadable raw file: it sits under set-aside at its old path, counted.
+
+    The day's other file packs, the entry says one file was set aside, and the
+    pass goes on to the days after it.
+    """
     root = tmp_path / "checkout"
     written = filed(root, a_pass("2026-09-02"))
     stray = written.parent / "notes.txt"
     stray.write_text("not a ledger file\n", encoding="ascii")
 
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    assert compact_rows(root, Period.DAILY, "2026-09-02") == [a_pass("2026-09-02")]
+    moved = state(root) / "raw/visual-prunes/set-aside/raw/visual-prunes/2026/09/02/notes.txt"
+    assert moved.read_text(encoding="ascii") == "not a ledger file\n"
+    assert not stray.exists() and not written.exists()
+    entries = {entry.covers: entry for entry in CompactIndex.read(index_of(root, Period.DAILY)).entries}
+    assert (entries["2026-09-02"].state, entries["2026-09-02"].set_aside) == (EntryState.PACKED, 1)
+    assert recovered(caplog, "2026-09-02") == [f"note={RecoveryNote.SET_ASIDE}"]
+    assert watermark(root, Period.DAILY) == "2026-09-21", "the rest of the pass still ran"
+
+
+def test_a_file_moved_aside_is_taken_from_its_path_and_frees_no_byte(tmp_path: Path) -> None:
+    """A move keeps the file's bytes in git, so the record counts the delete and frees nothing.
+
+    The day held nothing else, so it is a day with no row that set one file aside.
+    """
+    root = tmp_path / "checkout"
+    folder = state(root) / "raw" / VISUALS.value / "2026" / "09" / "02"
+    folder.mkdir(parents=True)
+    (folder / "notes.txt").write_text("not a ledger file\n", encoding="ascii")
+
     outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
 
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-09-02")
-    assert watermark(root, Period.DAILY) is None, "the first day was refused, so nothing moved"
-    assert written.is_file() and stray.is_file()
+    assert outcome.taken == ("state/raw/visual-prunes/2026/09/02/notes.txt",)
+    assert "state/raw/visual-prunes/set-aside/raw/visual-prunes/2026/09/02/notes.txt" in (
+        outcome.written
+    )
+    assert outcome.bytes_freed == 0
+    entries = {entry.covers: entry for entry in CompactIndex.read(index_of(root, Period.DAILY)).entries}
+    assert entries["2026-09-02"] == CompactEntry(
+        covers="2026-09-02", rows=0, bytes=0, state=EntryState.EMPTY, set_aside=1
+    )
+    assert disjoint(outcome)
 
 
-def test_a_day_holding_more_raw_files_than_one_period_takes_is_refused_and_kept(
-    tmp_path: Path,
+def test_a_day_with_three_raw_files_past_its_most_packs_its_most_and_the_next_wake_the_rest(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """THE ORACLE for extra raw files: the first pass packs the most and ends at the ceiling.
+
+    The three files past it wait in the day's folder, the mark moves past the
+    day, and the next wake takes them in as it takes a re-run, and is done.
+    """
     root = tmp_path / "checkout"
-    kept = [filed(root, a_pass("2026-09-02", run=run)) for run in ("1", "2")]
+    runs = ("1", "2", "3", "4", "5", "6")
+    for run in runs:
+        filed(root, a_pass("2026-09-02", run=run))
 
-    outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31, max_raw_files_per_period=1)
+    with caplog.at_level(logging.WARNING):
+        first = compact(
+            root, date(2026, 9, 23), max_periods_per_run=31, max_raw_files_per_period=3
+        )
 
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-09-02")
-    assert all(path.is_file() for path in kept)
-    assert watermark(root, Period.DAILY) is None, "the first day was refused, so nothing moved"
+    assert (first.stopped_because, first.resume_from) == (StopReason.CEILING, "2026-09-02")
+    assert len(compact_rows(root, Period.DAILY, "2026-09-02")) == 3
+    assert len(ledger.list_raw_files(state(root), VISUALS, days={"2026-09-02"})) == 3
+    assert recovered(caplog, "2026-09-02") == [f"note={RecoveryNote.CARRIED_OVER}"]
+    assert watermark(root, Period.DAILY) == "2026-09-21", "the mark moved past the day"
+
+    second = compact(root, date(2026, 9, 23), max_periods_per_run=31, max_raw_files_per_period=3)
+
+    assert (second.stopped_because, second.resume_from) == (StopReason.EXHAUSTED, None)
+    assert sorted(row.run_id for row in compact_rows(root, Period.DAILY, "2026-09-02")) == [
+        f"2026-09-02-{run}" for run in runs
+    ]
+    assert ledger.list_raw_files(state(root), VISUALS, days={"2026-09-02"}) == []
+    assert disjoint(first) and disjoint(second)
 
 
 def test_a_paused_family_is_compacted_all_the_same(
@@ -541,23 +603,87 @@ def test_a_day_the_daily_index_lost_with_its_file_is_recorded_lost_and_its_month
     assert recovered(caplog, "2026-08-10") == [f"note={RecoveryNote.RECORDED_LOST}"]
 
 
-def test_a_month_whose_day_file_is_gone_is_refused_as_file_missing(
+def test_a_month_whose_index_names_a_day_file_the_tree_lacks_closes_with_that_day_lost(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The index names the day and the file is not there: absorbing would pack a month short."""
+    """THE ORACLE for a packed day file that is gone: no file to set aside, and the day is lost.
+
+    The month closes from its other day, listing the gone day in `lost_days`.
+    """
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-08-05"))
+    filed(root, a_pass("2026-08-20", run="2"))
     compact(root, date(2026, 10, 20), max_periods_per_run=100)
-    lost = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-05")
-    assert lost is not None
-    lost.unlink()
+    gone = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-05")
+    assert gone is not None
+    gone.unlink()
 
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         outcome = compact(root, date(2026, 10, 20), max_periods_per_run=100)
 
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-08")
-    assert watermark(root, Period.MONTHLY) is None
-    assert refusals(caplog, "month=2026-08") == [f"fault={ledger.LedgerFault.FILE_MISSING}"]
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    assert watermark(root, Period.MONTHLY) == "2026-08"
+    (august,) = CompactIndex.read(index_of(root, Period.MONTHLY)).entries
+    assert (august.state, august.lost_days, august.set_aside) == (
+        EntryState.PACKED,
+        ["2026-08-05"],
+        0,
+    )
+    assert compact_rows(root, Period.MONTHLY, "2026-08") == [a_pass("2026-08-20", run="2")]
+    assert recovered(caplog, "2026-08-05") == [f"note={RecoveryNote.RECORDED_LOST}"]
+
+
+def test_a_day_file_that_cannot_be_read_when_its_month_closes_is_set_aside_and_its_day_lost(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The file goes under set-aside at its old path, its day is lost, and the month counts it."""
+    root = tmp_path / "checkout"
+    filed(root, a_pass("2026-08-05"))
+    filed(root, a_pass("2026-08-20", run="2"))
+    compact(root, date(2026, 10, 20), max_periods_per_run=100)
+    broken = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-05")
+    assert broken is not None
+    broken.write_bytes(b"not a ledger file\n")
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, date(2026, 10, 20), max_periods_per_run=100)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    (august,) = CompactIndex.read(index_of(root, Period.MONTHLY)).entries
+    assert (august.state, august.lost_days, august.set_aside) == (
+        EntryState.PACKED,
+        ["2026-08-05"],
+        1,
+    )
+    assert compact_rows(root, Period.MONTHLY, "2026-08") == [a_pass("2026-08-20", run="2")]
+    moved = state(root) / "raw/visual-prunes/set-aside/compact/visual-prunes/daily/2026/08/05.parquet"
+    assert moved.read_bytes() == b"not a ledger file\n"
+    assert not broken.exists()
+    assert recovered(caplog, "2026-08-05") == [
+        f"note={RecoveryNote.SET_ASIDE}",
+        f"note={RecoveryNote.RECORDED_LOST}",
+    ]
+
+
+def test_a_day_taken_again_and_then_its_month_keep_the_count_of_files_set_aside(
+    tmp_path: Path,
+) -> None:
+    """A re-run re-takes the day and the month later closes; neither forgets the file moved aside."""
+    root = tmp_path / "checkout"
+    written = filed(root, a_pass("2026-08-05"))
+    (written.parent / "notes.txt").write_text("not a ledger file\n", encoding="ascii")
+    compact(root, date(2026, 9, 2), max_periods_per_run=100)
+    filed(root, a_pass("2026-08-05", run="2"))
+
+    compact(root, date(2026, 9, 2), max_periods_per_run=100)
+
+    entries = {entry.covers: entry for entry in CompactIndex.read(index_of(root, Period.DAILY)).entries}
+    assert (entries["2026-08-05"].rows, entries["2026-08-05"].set_aside) == (2, 1)
+
+    compact(root, date(2026, 10, 20), max_periods_per_run=100)
+
+    (august,) = CompactIndex.read(index_of(root, Period.MONTHLY)).entries
+    assert (august.rows, august.set_aside, august.lost_days) == (2, 1, [])
 
 
 def faults(caplog: pytest.LogCaptureFixture, naming: str, *, at: int = logging.WARNING) -> list[str]:
@@ -729,6 +855,34 @@ def test_a_re_opened_month_counts_once_against_the_cap(tmp_path: Path) -> None:
     assert not late.exists()
     assert waiting.is_file()
     assert watermark(root, Period.DAILY) == "2026-10-18"
+
+
+def test_a_late_file_that_cannot_be_read_is_set_aside_and_its_re_opened_month_counts_it(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The re-open settles the late file it can read and moves the other aside, counted."""
+    root = tmp_path / "checkout"
+    two_passes_into_october(root)
+    late = filed(root, a_pass("2026-08-15", run="9"))
+    stray = late.parent / "notes.txt"
+    stray.write_text("not a ledger file\n", encoding="ascii")
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, date(2026, 10, 21), max_periods_per_run=100)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    assert [row.date for row in compact_rows(root, Period.MONTHLY, "2026-08")] == [
+        "2026-08-05",
+        "2026-08-15",
+        "2026-08-20",
+    ]
+    (august,) = CompactIndex.read(index_of(root, Period.MONTHLY)).entries
+    assert (august.rows, august.set_aside) == (3, 1)
+    moved = state(root) / "raw/visual-prunes/set-aside/raw/visual-prunes/2026/08/15/notes.txt"
+    assert moved.read_text(encoding="ascii") == "not a ledger file\n"
+    assert not late.exists() and not stray.exists()
+    assert recovered(caplog, "2026-08") == [f"note={RecoveryNote.REOPENED_MONTH}"]
+    assert recovered(caplog, "2026-08-15") == [f"note={RecoveryNote.SET_ASIDE}"]
 
 
 def test_a_re_open_whose_month_file_is_gone_is_refused_as_file_missing(

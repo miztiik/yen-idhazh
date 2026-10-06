@@ -1,6 +1,6 @@
 """Where each ledger's file lives under `state/`, and never guessed.
 
-Two kinds of address, and nine builders in all. A ledger that files the way the
+Two kinds of address, and ten builders in all. A ledger that files the way the
 CSV trees do is read from `config/ledgers.json`, which is loaded and validated
 once, when this module loads, so a config that does not describe every ledger
 stops the build rather than a run four hundred seconds in. A ledger that goes
@@ -15,7 +15,7 @@ are built from one segment list so they cannot disagree. `tree_root` and
 `tree_relpath` are the same pair for the folder a reader walks: the one that
 holds every file of a ledger and nothing else.
 
-**Nothing the door writes is born outside the two roots.** Each of the five
+**Nothing the door writes is born outside the two roots.** Each of the six
 root builders refuses, by name, a path whose first folder under `state/` is
 neither `raw` nor `compact`, so a third root is a `ValueError` rather than a
 convention somebody forgot.
@@ -62,6 +62,9 @@ _THE_TWO_ROOTS: Final = frozenset(tier.value for tier in Tier)
 
 #: Where a compact period's listing sits inside a ledger.
 INDEX_DIRNAME: Final = "index"
+
+#: The folder under a ledger's raw root that holds every file a compaction could not read.
+SET_ASIDE_DIRNAME: Final = "set-aside"
 
 #: What each compact period's resume mark is called, inside that period's folder.
 WATERMARK_FILENAME: Final = "watermark.json"
@@ -312,6 +315,28 @@ def raw_path(
     year, month, day = _day_segments(date)
     built = raw_root(state_dir, ledger, registry=registry).joinpath(
         year, month, day, f"{file_id}.{fmt.value}"
+    )
+    return _under_the_two_roots(state_dir, built)
+
+
+def set_aside_path(
+    state_dir: Path, ledger: LedgerName, path: Path, *, registry: DoorRegistry | None = None
+) -> Path:
+    """Where a file a compaction could not read is moved: `raw/<folders>/set-aside/<its path>`.
+
+    `<its path>` is where the file sat, under `state/`, so two files moved aside
+    never meet and a person reads where each one came from. The folder is under
+    the raw root because the site copies only `compact/`, and no step names it,
+    so nothing reads a file there again or deletes it.
+    """
+    try:
+        inside = path.relative_to(state_dir)
+    except ValueError as refusal:
+        raise ValueError(
+            f"{path.name} is not under {STATE_DIRNAME}/, so it has no place to be set aside"
+        ) from refusal
+    built = raw_root(state_dir, ledger, registry=registry).joinpath(
+        SET_ASIDE_DIRNAME, *inside.parts
     )
     return _under_the_two_roots(state_dir, built)
 

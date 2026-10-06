@@ -26,7 +26,12 @@ from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.gardener.file_listing import FileListing, FileNotFetchedError, TreeEntry
+from idhazh.gardener.file_listing import (
+    FileListing,
+    FileNotFetchedError,
+    OverBudgetError,
+    TreeEntry,
+)
 from idhazh.gardener.ledger_marks import adopt, name_marks, read_marks
 from idhazh.gardener.period_inputs import paths_for_task
 
@@ -308,3 +313,59 @@ def test_a_file_whose_envelope_names_another_day_is_refused_and_never_adopted(
         "26.parquet sits where the visual-prunes daily file for 2026-09-26 goes, and its "
         "envelope says compact visual-prunes daily 2026-09-25, so it is not adopted"
     )
+
+
+def test_adopting_a_file_spends_the_shard_s_download_budget_and_stops_past_it(
+    tmp_path: Path,
+) -> None:
+    """Reading a day file's footer downloads its month's day files, so Rule R counts them too.
+
+    The two day files weigh 1,100 bytes against a budget of 1,000, so the
+    adoption is refused before the checkout widens, by a type a step stops at
+    for a later wake rather than reading as a refused file.
+    """
+    asked: list[Sequence[str]] = []
+    listing = FileListing.from_commit(
+        tmp_path,
+        [COMPACT],
+        [
+            TreeEntry(path=f"{COMPACT}/daily/2026/09/20.parquet", blob="1" * 40, size=600),
+            TreeEntry(path=f"{COMPACT}/daily/2026/09/21.parquet", blob="2" * 40, size=500),
+        ],
+        {},
+        paths=[f"{COMPACT}/daily/2026/09"],
+        widen=asked.append,
+        budget=1000,
+    )
+
+    with pytest.raises(OverBudgetError) as refused:
+        adopt(listing, state(tmp_path), WHICH, Period.DAILY, "2026-09-20")
+
+    assert (refused.value.needed, refused.value.budget) == (1100, 1000)
+    assert asked == []
+
+
+def test_marks_that_do_not_fit_what_is_left_of_the_budget_are_not_downloaded(
+    tmp_path: Path,
+) -> None:
+    """A pass whose marks do not fit takes nothing until a later wake."""
+    held = [shown(tmp_path, path) for path in name_marks(state(tmp_path), WHICH)]
+    asked: list[Sequence[str]] = []
+    listing = FileListing.from_commit(
+        tmp_path,
+        [COMPACT],
+        [
+            TreeEntry(path=path, blob=f"{number:040x}", size=100)
+            for number, path in enumerate(held, start=1)
+        ],
+        {},
+        paths=held,
+        widen=asked.append,
+        budget=599,
+    )
+
+    with pytest.raises(OverBudgetError) as refused:
+        read_marks(state(tmp_path), WHICH, listing)
+
+    assert refused.value.needed == 600
+    assert asked == []

@@ -7,14 +7,16 @@ named is refused rather than answered "not held"; `files_under` answers for all
 of a folder a step named or refuses, never for the named part of a folder read
 as the whole; a step that names a period as it runs is answered for it, and
 never handed back a file an earlier task deleted; a declared folder the commit
-does not hold answers empty; and a file the commit holds is never taken for a
+does not hold answers empty; a file the commit holds is never taken for a
 missing member - after the checkout is widened for it, it is on disk or the
-read fails.
+read fails; and what a fetch would download is read off the listing's own
+sizes, and a fetch past what is left of the shard's budget is refused before
+the checkout widens.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -23,6 +25,7 @@ import pytest
 from idhazh.gardener.file_listing import (
     FileListing,
     FileNotFetchedError,
+    OverBudgetError,
     PathNotNamedError,
     TreeEntry,
 )
@@ -414,3 +417,74 @@ def test_a_later_task_sees_what_an_earlier_one_deleted_and_wrote(tmp_path: Path)
     ]
     assert later.size_of("state/days/2026/09/03.csv") == 5
     assert listing.holds("state/days/2026/09/01.csv"), "the earlier listing changed"
+
+
+# --- what a fetch would download, held to the shard's budget -----------------------
+
+#: Two days the commit holds and the checkout lacks, 12 and 30 bytes.
+BUDGETED: Final = [
+    TreeEntry(path="state/days/2026/09/01.csv", blob="1" * 40, size=12),
+    TreeEntry(path="state/days/2026/09/02.csv", blob="2" * 40, size=30),
+]
+
+
+def a_budgeted_listing(
+    root: Path, widen: Callable[[Sequence[str]], None], *, budget: int
+) -> FileListing:
+    """A shard's listing of September's two days, with the most bytes the shard may download."""
+    return FileListing.from_commit(
+        root,
+        ["state/days"],
+        BUDGETED,
+        {},
+        paths=["state/days/2026/09"],
+        widen=widen,
+        budget=budget,
+    )
+
+
+def test_a_fetch_costs_each_listed_file_it_brings_once_and_nothing_already_on_disk(
+    tmp_path: Path,
+) -> None:
+    listing = a_budgeted_listing(tmp_path, lambda _: None, budget=100)
+
+    assert listing.cost(["state/days/2026/09"], beside=["state/days/2026/09/01.csv"]) == 42
+    on_disk = tmp_path / "state/days/2026/09/02.csv"
+    on_disk.parent.mkdir(parents=True)
+    on_disk.write_text("x" * 30, encoding="ascii")
+    assert listing.cost(["state/days/2026/09"]) == 12
+    assert listing.room() == 100
+
+
+def test_a_fetch_past_what_is_left_of_the_budget_is_refused_before_the_checkout_widens(
+    tmp_path: Path,
+) -> None:
+    """Refused by a type of its own: a step that refuses a file it cannot read must not catch it."""
+    asked: list[Sequence[str]] = []
+    listing = a_budgeted_listing(tmp_path, asked.append, budget=41)
+
+    with pytest.raises(OverBudgetError) as refused:
+        listing.fetch_within_budget(["state/days/2026/09"])
+
+    assert (refused.value.needed, refused.value.room, refused.value.budget) == (42, 41, 41)
+    assert not isinstance(refused.value, ValueError)
+    assert asked == []
+    assert listing.downloaded() == {"state/days": 0}
+
+
+def test_a_fetch_of_exactly_what_is_left_goes_ahead(tmp_path: Path) -> None:
+    """The widening is asked for; it brings nothing here, so the read then fails by name."""
+    asked: list[Sequence[str]] = []
+    listing = a_budgeted_listing(tmp_path, asked.append, budget=42)
+
+    with pytest.raises(FileNotFetchedError):
+        listing.fetch_within_budget(["state/days/2026/09"])
+
+    assert asked == [["state/days/2026/09"]]
+
+
+def test_a_listing_read_off_the_disk_answers_to_no_budget(tmp_path: Path) -> None:
+    listing = disk_listing(a_checkout(tmp_path), ["state/days"])
+
+    assert (listing.budget, listing.room()) == (None, None)
+    listing.fetch_within_budget(["state/days/2026/09"])

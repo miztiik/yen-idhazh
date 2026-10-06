@@ -32,8 +32,13 @@ def _ledger_reader_policy() -> RetentionPolicy:
             "lifecycle_status": "active",
             "dry_run": True,
             "max_deletes_per_run": None,
-            "owns": ["state/item-health-summary"],
-            "reads": ["state/compact/item-health", "state/raw/item-health"],
+            "owns": ["frontend/public/telemetry"],
+            "appends_to": ["item-health-summary"],
+            "reads": [
+                "state/compact/item-health",
+                "state/raw/item-health",
+                "state/raw/item-health-summary",
+            ],
             "window": {"unit": "months", "value": 14},
         }
     )
@@ -88,6 +93,11 @@ def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_not
     )
 
     assert _named(tmp_path, paths) == [
+        "frontend/public/telemetry/2026/09/20",
+        "frontend/public/telemetry/2026/09/20.csv",
+        "frontend/public/telemetry/2026/09/20.json",
+        "frontend/public/telemetry/2026/09/20.jsonl",
+        "frontend/public/telemetry/2026/09/20.parquet",
         "state/compact/item-health/daily/2026/09/20.json",
         "state/compact/item-health/daily/2026/09/20.parquet",
         "state/compact/item-health/daily/watermark.json",
@@ -98,11 +108,7 @@ def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_not
         "state/compact/item-health/yearly/2026/2026.json",
         "state/compact/item-health/yearly/2026/2026.parquet",
         "state/compact/item-health/yearly/watermark.json",
-        "state/item-health-summary/2026/09/20",
-        "state/item-health-summary/2026/09/20.csv",
-        "state/item-health-summary/2026/09/20.json",
-        "state/item-health-summary/2026/09/20.jsonl",
-        "state/item-health-summary/2026/09/20.parquet",
+        "state/raw/item-health-summary/2026/09/20",
         "state/raw/item-health/2026/09/20",
     ]
 
