@@ -8,33 +8,37 @@
  * a slice asked afterwards fetches none of them again; and it starts no engine,
  * because an index is JSON.
  *
- * - `ok`: `through` is the newest day `daily.json` names - the day a slice
- *   returns as its own `through`. `first` is the oldest day any index names, a
- *   month counting from its first day and a year from its 1 January. `fault` is
- *   `index-missing` when there is no `monthly.json` or no `yearly.json`: `first`
- *   is then the oldest day the indexes that are there name, so a route anchored
- *   on it still draws every day the door can read.
- * - `quiet`: `daily.json` names no day yet.
+ * - `ok`: `through` is how far the ledger is packed, the newest day any index
+ *   names - the day a slice returns as its own `through`. `first` is the oldest
+ *   day any index names, a month counting from its first day and a year from its
+ *   1 January. `fault` is `index-missing` when there is no `monthly.json` or no
+ *   `yearly.json`: `first` and `through` are then what the indexes that are
+ *   there name, so a route anchored on them still draws every day the door can
+ *   read.
+ * - `quiet`: no index names a day yet.
  * - `missing`: there is no `daily.json`, so the ledger is not published. Its
  *   fault is `not-packed`.
  * - `unreachable`: `daily.json` is one this build will not act on, or could not
  *   be read, and the console says why. It carries no day, because the reach asks
  *   for none, and no fault, because it reads no file an index names.
  *
- * `monthly.json` and `yearly.json` only move `first` back. An empty one says no
- * month, or no year, is packed yet. When this build will not act on one, the
- * reach is what the other indexes name, and the console says why.
+ * `monthly.json` and `yearly.json` move `first` back. The packing moves a closed
+ * month's days out of `daily.json`, so they give `through` only when `daily.json`
+ * names no day. An empty one says no month, or no year, is packed yet. When this
+ * build will not act on one, the reach is what the other indexes name, and the
+ * console says why.
  *
  * Each index is read the way a slice reads it, by `readIndexFrom()` in
  * `slice-reader.ts`, a fault's console line is the slice's own `faultLine()`,
- * and `first` is `firstNamed()` in `slice.ts`, so a slice and a reach never
- * disagree about what an index says or print one fault twice. Imports nothing
- * tied to one environment, so a Node test loads it as it is.
+ * and `first` and `through` are `firstNamed()` and `newestNamed()` in `slice.ts`,
+ * so a slice and a reach never disagree about what an index says or print one
+ * fault twice. Imports nothing tied to one environment, so a Node test loads it
+ * as it is.
  */
 
 import type { CompactEntry, IndexReading, Period } from './compact-index';
 import type { PageKeeper } from './page-keeper';
-import { firstNamed } from './slice';
+import { firstNamed, newestNamed } from './slice';
 import { explainRefusal, faultLine, LOG_PREFIX, readIndexFrom } from './slice-reader';
 import { LEDGER_NAMES, SliceRequestError, type DateStamp, type LedgerFault, type LedgerName } from './slice-shapes';
 
@@ -79,9 +83,11 @@ export async function readReach(keeper: PageKeeper, ledger: LedgerName): Promise
 		fault = 'index-missing';
 	}
 	const days = daily.index.entries;
-	if (days.length === 0) return { state: 'quiet' };
-	const through = days[days.length - 1].covers;
-	const first = firstNamed(days, entriesOf(monthly), entriesOf(yearly));
+	const months = entriesOf(monthly);
+	const years = entriesOf(yearly);
+	const through = newestNamed(days, months, years);
+	if (through === null) return { state: 'quiet' };
+	const first = firstNamed(days, months, years);
 	for (const [period, reading] of coarser) {
 		if (reading === null || !('refused' in reading)) continue;
 		keeper.warn(

@@ -72,7 +72,11 @@ export type LedgerFault = (typeof LEDGER_FAULTS)[number];
 export type SetAsideFiles = Readonly<Record<string, number>>;
 
 /** What the door hands a panel. `rows` is empty for every state but `ok`.
- *  `through` is the newest day `daily.json` names, or `null` before the first
+ *  `first` is the first day the answer covers: the span's own first day, or the
+ *  ledger's first day when the span starts before it. The days before a ledger
+ *  began are outside it, so the door cuts them and names the day it answered
+ *  from, rather than answering them as a fault. `through` is how far the ledger
+ *  is packed, the newest day any index names, or `null` before the first
  *  compaction, so a panel can say how far its data reaches. `lostDays` names
  *  the days in the span an index records lost - a daily entry `lost`, or a day
  *  in a month's or a year's `lost_days` - ascending: each has no record, so a panel
@@ -81,11 +85,10 @@ export type SetAsideFiles = Readonly<Record<string, number>>;
  *  panel can say its rows may be short. `fault` names the
  *  missing file behind a `missing` or an `unreachable`, and is `null` for an
  *  `unreachable` with another cause: an index this build will not act on, a file
- *  that did not arrive whole, an engine that could not answer, or a span that
- *  starts before the oldest day any index names. */
+ *  that did not arrive whole, or an engine that could not answer. */
 export type SliceResult =
-	| { state: 'ok'; rows: Row[]; through: DateStamp; lostDays: DateStamp[]; setAside: SetAsideFiles }
-	| { state: 'quiet'; rows: []; through: DateStamp | null; lostDays: DateStamp[]; setAside: SetAsideFiles }
+	| { state: 'ok'; rows: Row[]; first: DateStamp; through: DateStamp; lostDays: DateStamp[]; setAside: SetAsideFiles }
+	| { state: 'quiet'; rows: []; first: DateStamp; through: DateStamp | null; lostDays: DateStamp[]; setAside: SetAsideFiles }
 	| { state: 'missing'; rows: []; fault: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreachable'; rows: []; at: DateStamp; fault: Exclude<LedgerFault, 'not-packed'> | null };
 

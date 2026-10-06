@@ -7,7 +7,8 @@
  * each packed day and each closed month, written by the door's own query engine with
  * `COPY ... TO`. A
  * day the list leaves out is a hole. Each file holds `covers`, the UTC day a row was filed
- * under, as every packed file does, and `n`, the row's number within its day, from 1.
+ * under, and `date`, the same day in the cell a panel slice keeps its rows by, as every
+ * packed file does, and `n`, the row's number within its day, from 1.
  * Nothing here reads a committed fixture, so a test's expected values follow from what the
  * test built and nothing else.
  *
@@ -67,7 +68,7 @@ async function writeParquet(target: string, days: readonly [DateStamp, number][]
 	const to = target.replaceAll('\\', '/').replaceAll("'", "''");
 	const engine = await nodeEngine((specifier) => resolver.resolve(specifier), engineExtensionRepository());
 	await engine.rows(
-		`COPY (SELECT covers, CAST(unnest(generate_series(1, rows)) AS BIGINT) AS n FROM (VALUES ${values}) AS days(covers, rows) ORDER BY covers, n) TO '${to}' (FORMAT parquet)`,
+		`COPY (SELECT covers, covers AS "date", CAST(unnest(generate_series(1, rows)) AS BIGINT) AS n FROM (VALUES ${values}) AS days(covers, rows) ORDER BY covers, n) TO '${to}' (FORMAT parquet)`,
 		[]
 	);
 	return statSync(target).size;
