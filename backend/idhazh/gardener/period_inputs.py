@@ -22,6 +22,7 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import Grain
 from idhazh.gardener import ledger_marks, schedule
 
 _TRIAL_ROOT_PREFIX = "state/pipeline-tests-"
@@ -97,9 +98,7 @@ def _fold_window(policy: RetentionPolicy, today: date) -> tuple[str, str] | None
     return _fold_month_window(policy, today) or _fold_day_window(policy, today)
 
 
-def scheduled_range(
-    name: str, policy: TaskPolicy, today: date
-) -> tuple[str, str] | None:
+def scheduled_range(name: str, policy: TaskPolicy, today: date) -> tuple[str, str] | None:
     """The fixed period range this scheduled task may read, or none for a collection."""
     if isinstance(policy, CompactionPolicy):
         if isinstance(policy.monthly_window, MonthsWindow):
@@ -142,8 +141,7 @@ def periods_in_range(period_range: tuple[str, str]) -> tuple[tuple[date, ...], t
     ):
         raise ValueError("day range endpoints must be ordered YYYY-MM-DD dates")
     days = tuple(
-        start_day + timedelta(days=offset)
-        for offset in range((end_day - start_day).days + 1)
+        start_day + timedelta(days=offset) for offset in range((end_day - start_day).days + 1)
     )
     months = tuple(sorted({day.strftime("%Y-%m") for day in days}))
     return days, months
@@ -184,6 +182,13 @@ def _dated_paths(
     return paths
 
 
+def _trial_ledger_folder(root: Path, which: LedgerName) -> Path:
+    """One trial root's folder for a ledger, using the door prefix where it has one."""
+    if ledger.entry(which).grain is Grain.RAW_AND_COMPACT:
+        return root.joinpath(*ledger.door_folders(which))
+    return root / which.value
+
+
 def _trial_paths(
     root: Path, days: tuple[date, ...], months: tuple[str, ...], *, monthly: bool
 ) -> set[Path]:
@@ -200,12 +205,14 @@ def _trial_paths(
         suffix = Path(f"{day:%Y}/{day:%m}/{day:%d}")
         paths.add(root / "traces" / suffix)
         for which in LedgerName:
-            paths.add(root / which.value / suffix)
-            paths.add(root / "raw" / which.value / suffix)
-            paths.add(root / which.value / f"{day:%Y-%m}.csv")
+            folder = _trial_ledger_folder(root, which)
+            raw_folder = _trial_ledger_folder(root / "raw", which)
+            paths.add(folder / suffix)
+            paths.add(raw_folder / suffix)
+            paths.add(folder / f"{day:%Y-%m}.csv")
             for extension in (".csv", ".json", ".parquet"):
-                paths.add(root / which.value / suffix.with_suffix(extension))
-                paths.add(root / "raw" / which.value / suffix.with_suffix(extension))
+                paths.add(folder / suffix.with_suffix(extension))
+                paths.add(raw_folder / suffix.with_suffix(extension))
     return paths
 
 
@@ -284,22 +291,16 @@ def paths_for_task(
             )
         if isinstance(policy, CompactionPolicy):
             paths.update(
-                _ledger_paths(
-                    folder, repo_root, policy.ledger, days, months, monthly=monthly
-                )
+                _ledger_paths(folder, repo_root, policy.ledger, days, months, monthly=monthly)
             )
             continue
         if folder.startswith("state/raw/") or folder.startswith("state/compact/"):
-            try:
-                which = LedgerName(folder.removeprefix("state/raw/").removeprefix("state/compact/"))
-            except ValueError:
+            suffix = folder.removeprefix("state/raw/").removeprefix("state/compact/")
+            which = ledger.door_ledger_at(tuple(suffix.split("/")))
+            if which is None:
                 paths.update(_dated_paths(root, days, months, monthly=monthly))
             else:
-                paths.update(
-                    _ledger_paths(
-                        folder, repo_root, which, days, months, monthly=monthly
-                    )
-                )
+                paths.update(_ledger_paths(folder, repo_root, which, days, months, monthly=monthly))
             continue
         paths.update(_dated_paths(root, days, months, monthly=monthly))
     if isinstance(policy, RetentionPolicy) and policy.fold is not None:

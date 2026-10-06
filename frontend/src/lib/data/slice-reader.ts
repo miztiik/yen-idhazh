@@ -64,6 +64,7 @@ import { filesFor, firstNamed, type ChosenFile } from './slice';
 import { rowsFor } from './slice-query';
 import {
 	checkedRequest,
+	LEDGER_FOLDERS,
 	LEDGER_NAMES,
 	SliceRequestError,
 	type DateStamp,
@@ -74,20 +75,25 @@ import {
 	type SliceResult
 } from './slice-shapes';
 
+function ledgerFolder(ledger: LedgerName): string {
+	const folders: Partial<Record<LedgerName, string>> = LEDGER_FOLDERS;
+	return folders[ledger] ?? ledger;
+}
+
 /** Where one ledger's index for one period sits under the state root. */
 export function indexPath(ledger: LedgerName, period: Period): string {
-	return `compact/${ledger}/index/${period}.json`;
+	return `compact/${ledgerFolder(ledger)}/index/${period}.json`;
 }
 
 /** Where one raw day listing sits under the state root. */
 export function rawIndexPath(ledger: LedgerName, day: DateStamp): string {
-	return `raw/${ledger}/index/${day}.json`;
+	return `raw/${ledgerFolder(ledger)}/index/${day}.json`;
 }
 
 /** Where one raw writer file sits under the state root. */
 export function rawDataPath(ledger: LedgerName, day: DateStamp, name: string): string {
 	const [year, month, date] = day.split('-');
-	return `raw/${ledger}/${year}/${month}/${date}/${name}`;
+	return `raw/${ledgerFolder(ledger)}/${year}/${month}/${date}/${name}`;
 }
 
 /** Where one compact file sits under the state root, named for what it covers. */
@@ -98,7 +104,7 @@ export function dataPath(ledger: LedgerName, period: Period, covers: string): st
 		monthly: `monthly/${year}/${month}`,
 		yearly: `yearly/${year}/${year}`
 	};
-	return `compact/${ledger}/${named[period]}.parquet`;
+	return `compact/${ledgerFolder(ledger)}/${named[period]}.parquet`;
 }
 
 /** The version a data file is asked for under. A file is written once, so its
