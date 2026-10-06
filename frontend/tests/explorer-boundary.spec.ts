@@ -8,11 +8,9 @@ import svelteConfig from '../svelte.config.js';
 import { engineExtensionRepository, ledgerArchiveBaseUrl } from '../src/lib/server/config';
 import { chooseExplorerQuestion, runExplorer, tableRows } from './support/explorer-answer';
 import { buildLedger, everyDay, serveToPage } from './support/ledger-lifecycle';
-import { addonCache, startRangeHost, type RangeHost } from './support/range-host';
+import { addonCache, startRangeHost } from './support/range-host';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const repo = path.resolve(here, '..', '..');
-const fixture = path.join(repo, 'tests', 'fixtures', 'ledger-door', 'state');
 const source = path.join(here, 'support', 'explorer-page');
 const work = path.resolve(here, '..', 'test-results', 'explorer-boundary');
 const pageSource = path.join(work, 'source');
@@ -104,40 +102,42 @@ async function watchWorkerLog(page: Page, context: BrowserContext): Promise<stri
 
 test.describe('explorer boundary', () => {
 	test.describe.configure({ mode: 'serial' });
-	let host: RangeHost;
 
 	test.beforeAll(async () => {
 		rmSync(work, { recursive: true, force: true });
 		await buildPage();
-		host = await startRangeHost({ site: pageBuild, plain: { ext: addonCache(engineExtensionRepository()) }, data: { root: { dir: fixture } }, maxAge: 600 });
-	});
-
-	test.afterAll(async () => {
-		await host?.close();
 	});
 
 	test('the browser content policy refuses a statement fetch to an unlisted origin', async ({ page, context }) => {
-		// Playwright forwards console API calls from workers, but not worker log entries such as content-policy refusals.
-		const workerLog = await watchWorkerLog(page, context);
-		const external = watchExternal(context);
-		await page.goto(`${host.origin}/`);
-		await page.waitForFunction(() => window.explorerAsk !== undefined);
-		const answer = await page.evaluate(() => window.explorerAsk({
-			ledgers: ['host-fingerprint'],
-			from: '2026-09-01',
-			to: '2026-09-01',
-			sql: "SELECT * FROM read_csv('https://example.invalid/x.csv')",
-			maxChars: 500,
-			maxRows: 10,
-			maxFetchBytes: 100000000
-		}));
-		expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
-		await expect.poll(() => workerLog.join('\n')).toContain('connect-src');
-		const text = workerLog.join('\n');
-		expect(text).toContain('https://example.invalid/x.csv');
-		expect(external.length).toBeGreaterThan(0);
-		expect(external.every((request) => request.failed === 'csp')).toBe(true);
-		expect(external.every((request) => !request.responded)).toBe(true);
+		// The page reads host-fingerprint as this test builds it: one row on 15 Jun 2030, the day the statement asks for.
+		const root = test.info().outputPath('state');
+		await buildLedger(root, { ledger: 'host-fingerprint', pinned: '2030-06-15', days: everyDay(0, 0) });
+		const host = await startRangeHost({ site: pageBuild, plain: { ext: addonCache(engineExtensionRepository()) }, data: { root: { dir: root } }, maxAge: 600 });
+		try {
+			// Playwright forwards console API calls from workers, but not worker log entries such as content-policy refusals.
+			const workerLog = await watchWorkerLog(page, context);
+			const external = watchExternal(context);
+			await page.goto(`${host.origin}/`);
+			await page.waitForFunction(() => window.explorerAsk !== undefined);
+			const answer = await page.evaluate(() => window.explorerAsk({
+				ledgers: ['host-fingerprint'],
+				from: '2030-06-15',
+				to: '2030-06-15',
+				sql: "SELECT * FROM read_csv('https://example.invalid/x.csv')",
+				maxChars: 500,
+				maxRows: 10,
+				maxFetchBytes: 100000000
+			}));
+			expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
+			await expect.poll(() => workerLog.join('\n')).toContain('connect-src');
+			const text = workerLog.join('\n');
+			expect(text).toContain('https://example.invalid/x.csv');
+			expect(external.length).toBeGreaterThan(0);
+			expect(external.every((request) => request.failed === 'csp')).toBe(true);
+			expect(external.every((request) => !request.responded)).toBe(true);
+		} finally {
+			await host.close();
+		}
 	});
 });
 

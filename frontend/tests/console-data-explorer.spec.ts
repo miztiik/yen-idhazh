@@ -1,19 +1,21 @@
 
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { connectSources, assetBaseUrl, encoderOrigins, engineOrigins, archiveOrigins } from '../asset-base.js';
-import { COMPACT_INDEX_STAMP } from '../src/lib/data/compact-index';
+import { publishedWindowDays } from '../scripts/published-ledgers.mjs';
+import { daysBetween } from '../src/lib/data/slice';
 import { expect, test, type Page } from './support/browser';
-import { chooseExplorerQuestion, expectedAsk, expectedAskCost, EXPLORER_CANARY_DAY, openExplorer, runExplorer, tableRows } from './support/explorer-answer';
+import { chooseExplorerQuestion, expectAnswer, openExplorer, runExplorer, serveBuilt, tableRows } from './support/explorer-answer';
+import { buildLedger, everyDay, quietDays, serveArchiveToPage, serveToPage, siteCopy } from './support/ledger-lifecycle';
 import { encodeQuestion, explorerAddress, requestTargetBytes } from '../src/lib/console/explorer/address';
-import { consoleConfig, explorerConfig } from '../src/lib/server/config';
-import { shortDate } from '../src/lib/format';
+import { consoleConfig, explorerConfig, ledgerArchiveBaseUrl } from '../src/lib/server/config';
 import type { LedgerName } from '../src/lib/data/ledger';
 import { CONSOLE_CHROMES, consoleChromeOf } from '../src/lib/console/chrome';
 
+/** The UTC day every test here pins as the page's today. A built ledger's days count back from it. */
+const PINNED = '2030-06-15';
 const JOIN_LEDGERS = ['published', 'item-health'] as const satisfies readonly LedgerName[];
 const JOIN_SQL = 'SELECT \'published x item-health\' AS pair, CAST(count(*) AS VARCHAR) AS rows FROM "published" p, "item-health" h';
-const JOIN_FROM = '2026-08-07';
 
 function addDays(day: string, delta: number): string {
 	const date = new Date(`${day}T00:00:00Z`);
@@ -21,20 +23,21 @@ function addDays(day: string, delta: number): string {
 	return date.toISOString().slice(0, 10);
 }
 
-function dataLedger(pathname: string): string | null {
-	return pathname.match(/\/state\/(?:compact|raw)\/([^/]+)\//)?.[1] ?? null;
+/** The path under `state/` a request named, or null for a request outside a state tree. */
+function stateFile(url: string): string | null {
+	const pathname = new URL(url).pathname;
+	const at = pathname.indexOf('/state/');
+	return at === -1 ? null : pathname.slice(at + '/state/'.length);
 }
 
-function dataPathCoversDay(pathname: string, day: string): boolean {
-	const [year, month, date] = day.split('-');
-	return pathname.includes(`/daily/${year}/${month}/${date}.parquet`) ||
-		pathname.includes(`/monthly/${year}/${month}.parquet`) ||
-		pathname.includes(`/yearly/${year}/${year}.parquet`) ||
-		pathname.includes(`/raw/`) && pathname.includes(`/${year}/${month}/${date}/`);
-}
-
-function emptyIndex(ledger: LedgerName, period: string): string {
-	return JSON.stringify({ version: COMPACT_INDEX_STAMP, ledger, period, entries: [] });
+/** Every data file this page fetches from now on, by its path under `state/`, in arrival order. */
+function fetchedFiles(page: Page): string[] {
+	const fetched: string[] = [];
+	page.on('response', (response) => {
+		const file = stateFile(response.url());
+		if (file?.endsWith('.parquet')) fetched.push(file);
+	});
+	return fetched;
 }
 
 async function chooseOnly(page: Page, ledgers: readonly LedgerName[], sql: string) {
@@ -171,17 +174,17 @@ test('THE ORACLE: Data explorer puts the span and the dates in the toolbar, and 
 	await expect(page.locator('[data-workbench-region="editor"] [data-explorer-actions]').getByRole('button', { name: /^Run$/ })).toHaveCount(1);
 });
 
-test('THE ORACLE: before a run the column rail names the selected ledger\'s own columns', async ({ page }) => {
-	await openExplorer(page);
+test('THE ORACLE: before a run the column rail names the selected ledger\'s own columns', async ({ page, context }) => {
+	// A built ledger's files hold three columns: covers, date and n.
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(2, 0) });
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint"');
 	const rail = page.locator('[data-explorer-columns] li code');
-	const before = await rail.allTextContents();
-	expect(before.length, 'the rail names no column before a run').toBeGreaterThan(0);
-	expect(before.filter((name) => !name.startsWith('host-fingerprint.')), 'a rail entry not named for its ledger').toEqual([]);
+	await expect(rail).toHaveText(['host-fingerprint.covers', 'host-fingerprint.date', 'host-fingerprint.n']);
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
 	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Answer columns');
-	const after = await rail.allTextContents();
-	expect(new Set(before.map((name) => name.slice('host-fingerprint.'.length))), 'the rail before a run is not the ledger\'s columns').toEqual(new Set(after));
+	await expect(rail).toHaveText(['covers', 'date', 'n']);
 });
 
 test('THE ORACLE: the Data explorer fallback document carries the shipped content policy', () => {
@@ -193,239 +196,259 @@ test('THE ORACLE: the Data explorer fallback document carries the shipped conten
 });
 
 test('THE ORACLE: custom date inputs expose reach bounds and presets end today', async ({ page }) => {
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const from = page.getByRole('textbox', { name: 'From (UTC)' });
 	const to = page.getByRole('textbox', { name: 'To (UTC)' });
-	const today = await to.getAttribute('max');
-	if (today === null) throw new Error('To (UTC) has no max');
-	expect(await from.getAttribute('min')).toBe(addDays(today, 1 - explorerConfig().reach_days));
-	expect(await from.getAttribute('max')).toBe(today);
-	expect(await to.getAttribute('max')).toBe(today);
+	expect(await to.getAttribute('max'), 'the page does not take the pinned day as today').toBe(PINNED);
+	expect(await from.getAttribute('min')).toBe(addDays(PINNED, 1 - explorerConfig().reach_days));
+	expect(await from.getAttribute('max')).toBe(PINNED);
 	expect(await to.getAttribute('min')).toBe(await from.inputValue());
 
 	await page.locator('[data-window-preset="30"]').click();
-	await expect(to).toHaveValue(today);
-	await expect(from).toHaveValue(addDays(today, -29));
+	await expect(to).toHaveValue(PINNED);
+	await expect(from).toHaveValue(addDays(PINNED, -29));
 
-	await from.fill(today);
-	await expect(to).toHaveAttribute('min', today);
-	await to.fill(addDays(today, -10));
-	await expect(to).toHaveValue(today);
+	await from.fill(PINNED);
+	await expect(to).toHaveAttribute('min', PINNED);
+	await to.fill(addDays(PINNED, -10));
+	await expect(to).toHaveValue(PINNED);
 });
 
-test('THE ORACLE: with no archive prefix, an old custom span reads from the site\'s oldest day and says so', async ({ page }) => {
+test('THE ORACLE: with no archive prefix, an old custom span reads from the site\'s oldest day and says so', async ({ page, context }) => {
+	// published is built to begin 10 days before the pinned day, on 5 Jun 2030, with one row a day.
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(10, 0) });
 	await page.addInitScript(() => {
 		Object.defineProperty(globalThis, '__ARCHIVE_BASE_URL__', { value: '', configurable: true });
 	});
-	await openExplorer(page);
-	const from = addDays(EXPLORER_CANARY_DAY, 1 - explorerConfig().reach_days);
-	await chooseExplorerQuestion(page, ['published'], 'SELECT min("covers") AS first_day FROM "published"');
-	await page.getByRole('textbox', { name: 'From (UTC)' }).fill(from);
-	const { siteFrom } = await expectedAskCost(page, ['published'], from, EXPLORER_CANARY_DAY);
-	if (siteFrom === null) throw new Error(`this site holds published days from ${from}, so the span was not cut`);
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT min("covers") AS first_day, count(*) AS rows FROM "published"');
+	// 365 UTC days that end on the pinned day.
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2029-06-16');
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
 	const panel = page.locator('[data-console-panel-id="data-explorer-rows"]');
-	await expect(panel.locator('.answer-note')).toContainText(`Days before ${shortDate(siteFrom)} are not on this site.`);
+	await expect(panel.locator('.answer-note')).toContainText('Days before 5 Jun 2030 are not on this site.');
 	await expect(panel.locator('.warn')).toHaveCount(0);
-	const [[firstDay]] = await tableRows(page);
-	expect(firstDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-	expect(firstDay >= siteFrom, `the answer starts on ${firstDay}, before the site's ${siteFrom}`).toBe(true);
+	expect(await tableRows(page)).toEqual([['2030-06-05', '11']]);
 });
 
-test('THE ORACLE: a typed join matches the query door and the run cost matches the network', async ({ page }) => {
-	await openExplorer(page);
-	const columnFetches: string[] = [];
-	page.on('response', (response) => {
-		const url = response.url();
-		const pathname = new URL(url).pathname;
-		if (pathname.includes('/state/') && pathname.endsWith('.parquet')) columnFetches.push(pathname);
+test('THE ORACLE: the 14-day preset cuts a ledger that began 5 days ago at its first day, and reads only the last 14 days of one that began 4 years ago, asking the archive nothing', async ({ page, context }) => {
+	// host-fingerprint begins 5 days before the pinned day. seen begins 1,461 days, four years,
+	// before it, with every month before May 2030 closed, and its site copy is trimmed by the site
+	// build's own rule, so the archive holds its older days. The archive host serves the whole of
+	// both ledgers, as this test built them.
+	const archiveRoot = test.info().outputPath('archive');
+	const siteRoot = test.info().outputPath('site');
+	await buildLedger(archiveRoot, { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(5, 0) });
+	const closedMonths = [...new Set(daysBetween('2026-06-15', '2030-04-30').map((day) => day.slice(0, 7)))];
+	await buildLedger(archiveRoot, { ledger: 'seen', pinned: PINNED, days: everyDay(1461, 0), closedMonths });
+	for (const ledger of ['host-fingerprint', 'seen'] as const) {
+		siteCopy(archiveRoot, siteRoot, ledger, publishedWindowDays());
+		await serveToPage(context, siteRoot, ledger);
+	}
+	await serveArchiveToPage(context, archiveRoot);
+	const archive = ledgerArchiveBaseUrl();
+	const archiveAsked: string[] = [];
+	context.on('request', (request) => {
+		if (request.url().startsWith(`${archive}/`)) archiveAsked.push(request.url());
 	});
+	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
+
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT min("covers") AS first_day, count(*) AS rows FROM "host-fingerprint"');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['2030-06-10', '6']]);
+	await expect(note).toContainText('Days before 10 Jun 2030 are not on this site.');
+
+	const fetched = fetchedFiles(page);
+	await chooseExplorerQuestion(page, ['seen'], 'SELECT min("covers") AS first_day, count(*) AS rows FROM "seen"');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['2030-06-02', '14']]);
+	await expect(note).not.toContainText('are not on this site');
+	expect(fetched.sort()).toEqual(daysBetween('2030-06-02', PINNED).map((day) => `compact/seen/daily/${day.replaceAll('-', '/')}.parquet`));
+	expect(archiveAsked).toEqual([]);
+});
+
+test('THE ORACLE: a typed join counts the rows of two built ledgers, fetches only their files in the span, and the run cost matches the network', async ({ page, context }) => {
+	// In the 14 days that end on the pinned day, published holds 3 rows and item-health 2, so the
+	// join holds 6. Each also holds one row on a day before those 14.
+	await serveBuilt(context, test.info().outputPath('state'),
+		{ ledger: 'published', pinned: PINNED, days: [{ ago: 20, rows: 1 }, ...quietDays(19, 3), ...everyDay(2, 0)] },
+		{ ledger: 'item-health', pinned: PINNED, days: [{ ago: 30, rows: 1 }, ...quietDays(29, 6), { ago: 5, rows: 2 }] });
+	await openExplorer(page, PINNED);
+	const fetched = fetchedFiles(page);
 	await chooseExplorerQuestion(page, JOIN_LEDGERS, JOIN_SQL);
-	const fetchedLedgers = new Set(columnFetches.map((path) => path.match(/\/state\/(?:compact|raw)\/([^/]+)\//)?.[1]).filter(Boolean));
-	for (const ledger of JOIN_LEDGERS) expect(fetchedLedgers.has(ledger)).toBe(true);
 
 	const runResponses = new Map<string, Promise<number>>();
 	page.on('response', (response) => {
-		const url = response.url();
-		const pathname = new URL(url).pathname;
-		if (!pathname.includes('/state/') || !pathname.endsWith('.parquet')) return;
-		runResponses.set(url, response.body().then((body) => body.byteLength).catch(() => 0));
+		if (!stateFile(response.url())?.endsWith('.parquet')) return;
+		runResponses.set(response.url(), response.body().then((body) => body.byteLength).catch(() => 0));
 	});
 	await runExplorer(page);
-	const expected = await expectedAsk(page, {
-		ledgers: JOIN_LEDGERS,
-		from: JOIN_FROM,
-		to: EXPLORER_CANARY_DAY,
-		sql: JOIN_SQL,
-		maxChars: 5790,
-		maxRows: 1000,
-		maxFetchBytes: 64 * 1024 * 1024
-	});
-	expect(expected).toMatchObject({ state: 'ok' });
-	if (expected.state !== 'ok') return;
-	expect(await tableRows(page)).toEqual(expected.rows.map((row) => expected.columns.map((column) => String(row[column.name] ?? 'null'))));
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['published x item-health', '6']]);
+	expect(fetched.sort()).toEqual([
+		'compact/item-health/daily/2030/06/10.parquet',
+		'compact/published/daily/2030/06/13.parquet',
+		'compact/published/daily/2030/06/14.parquet',
+		'compact/published/daily/2030/06/15.parquet'
+	]);
+	// Choosing the ledgers read each one's newest day, so the run fetched the other two.
 	const line = page.locator('[data-explorer-action-line]');
-	expect(Number(await line.getAttribute('data-files'))).toBeGreaterThan(0);
-	expect(Number(await line.getAttribute('data-bytes'))).toBeGreaterThan(0);
+	await expect(line).toHaveAttribute('data-files', '2');
 	expect(Number(await line.getAttribute('data-bytes'))).toBe((await Promise.all([...runResponses.values()])).reduce((sum, bytes) => sum + bytes, 0));
 });
 
-test('THE ORACLE: choosing ledgers fetches one through day for each chosen ledger and no other data file', async ({ page }) => {
-	await openExplorer(page);
-	const asked: string[] = [];
-	page.on('response', (response) => {
-		const pathname = new URL(response.url()).pathname;
-		if (pathname.includes('/state/') && pathname.endsWith('.parquet')) asked.push(pathname);
-	});
+test('THE ORACLE: choosing ledgers fetches one through day for each chosen ledger and no other data file', async ({ page, context }) => {
+	// published's newest day is the pinned day, and item-health's is two days before it.
+	await serveBuilt(context, test.info().outputPath('state'),
+		{ ledger: 'published', pinned: PINNED, days: everyDay(3, 0) },
+		{ ledger: 'item-health', pinned: PINNED, days: everyDay(4, 2) });
+	await openExplorer(page, PINNED);
+	const fetched = fetchedFiles(page);
 	await chooseExplorerQuestion(page, JOIN_LEDGERS, JOIN_SQL);
-	const spanFrom = addDays(EXPLORER_CANARY_DAY, -13);
-	const cost = await expectedAskCost(page, JOIN_LEDGERS, spanFrom, EXPLORER_CANARY_DAY);
-	const byLedger = new Map<string, string[]>();
-	for (const pathname of asked) {
-		const ledger = dataLedger(pathname);
-		if (ledger !== null) byLedger.set(ledger, [...(byLedger.get(ledger) ?? []), pathname]);
-	}
-	expect(new Set(byLedger.keys())).toEqual(new Set(JOIN_LEDGERS));
-	for (const ledger of JOIN_LEDGERS) {
-		const through = cost.through[ledger];
-		expect(through, `${ledger} has no through day`).toBeDefined();
-		const paths = byLedger.get(ledger) ?? [];
-		expect(paths.length, `${ledger} fetched no column-description file`).toBeGreaterThan(0);
-		for (const pathname of paths) {
-			expect(dataPathCoversDay(pathname, through ?? ''), `${pathname} does not cover ${ledger}'s through day ${through}`).toBe(true);
-		}
-	}
+	expect(fetched.sort()).toEqual([
+		'compact/item-health/daily/2030/06/13.parquet',
+		'compact/published/daily/2030/06/15.parquet'
+	]);
 });
 
-test('THE ORACLE: every Data explorer answer state renders distinct words, tint and action', async ({ page, browser }) => {
+test('THE ORACLE: every Data explorer answer state renders distinct words, tint and action', async ({ page, browser, context }) => {
 	const seen = new Map<string, { text: string; tone: string; button: string }>();
 	const remember = (name: string, snap: { text: string; tone: string; button: string }) => {
 		const key = JSON.stringify(snap);
 		expect([...seen.entries()].find(([, value]) => JSON.stringify(value) === key)?.[0], `${name} duplicates another state`).toBeUndefined();
 		seen.set(name, snap);
 	};
+	const answer = (one: Page) => one.locator('[data-console-panel-id="data-explorer-rows"]');
 
-	remember('idle', await statePage(page, async (one) => openExplorer(one)));
+	// Each state comes from a ledger built for it: published holds the two days before the pinned
+	// day, candidate-models names no day at all, counterfactual-scores holds the pinned day, seen
+	// leaves out 13 Jun, two days before the pinned day, and feed-health, which this site does not
+	// publish, has no folder.
+	const root = test.info().outputPath('state');
+	await serveBuilt(context, root,
+		{ ledger: 'published', pinned: PINNED, days: everyDay(1, 0) },
+		{ ledger: 'candidate-models', pinned: PINNED, days: [] },
+		{ ledger: 'counterfactual-scores', pinned: PINNED, days: everyDay(0, 0) },
+		{ ledger: 'seen', pinned: PINNED, days: [...everyDay(3, 3), ...everyDay(1, 0)] });
+	await serveToPage(context, root, 'feed-health');
+
+	remember('idle', await statePage(page, async (one) => {
+		await openExplorer(one, PINNED);
+		await expect(answer(one).locator('[data-explorer-idle]')).toBeVisible();
+	}));
 
 	const engineContext = await browser.newContext({ serviceWorkers: 'block' });
 	try {
+		await serveToPage(engineContext, root, 'published');
 		const one = await engineContext.newPage();
 		await one.route(/duckdb.*(?:wasm|worker).*$/, (route) => route.abort());
-		await openExplorer(one, false);
+		await openExplorer(one, PINNED, { ready: false });
 		await chooseOnly(one, ['published'], 'SELECT count(*) AS rows FROM "published"');
 		await runExplorer(one);
-		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toBeVisible();
+		await expect(answer(one).locator('[data-state="unreachable"]')).toBeVisible();
 		remember('engine did not start', await answerSnapshot(one));
 	} finally {
 		await engineContext.close();
 	}
 
-	remember('loading', await statePage(page, async (one) => {
-		await openExplorer(one);
+	// The run fetches 14 Jun, the day choosing the ledger did not read, and that fetch waits until
+	// the picture is taken.
+	const loading = await context.newPage();
+	try {
+		await openExplorer(loading, PINNED);
+		await chooseExplorerQuestion(loading, ['published'], 'SELECT count(*) AS rows FROM "published"');
 		let release!: () => void;
 		const held = new Promise<void>((resolve) => { release = resolve; });
-		await one.route('**/state/**/*.parquet*', async (route) => {
+		await loading.route('**/state/**/*.parquet*', async (route) => {
 			await held;
-			await route.continue();
+			await route.fallback();
 		}, { times: 1 });
-		await one.getByRole('button', { name: /^Run$/ }).click();
-		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] .shimmer')).toBeVisible();
+		await loading.getByRole('button', { name: /^Run$/ }).click();
+		await expect(answer(loading).locator('[data-state="loading"]')).toBeVisible();
+		remember('loading', await answerSnapshot(loading));
 		release();
-	}));
+	} finally {
+		await loading.close();
+	}
 
 	remember('quiet', await statePage(page, async (one) => {
-		await openExplorer(one);
+		await openExplorer(one, PINNED);
 		await chooseExplorerQuestion(one, ['published'], 'SELECT * FROM "published" WHERE false');
 		await runExplorer(one);
-		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="quiet"]')).toBeVisible();
+		await expect(answer(one).locator('[data-state="quiet"]')).toBeVisible();
 	}));
 
 	remember('missing not published', await statePage(page, async (one) => {
-		await openExplorer(one);
+		await openExplorer(one, PINNED);
 		await chooseOnly(one, ['feed-health'], 'SELECT count(*) AS rows FROM "feed-health"');
 		await runExplorer(one);
-		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="missing"]')).toBeVisible();
+		await expect(answer(one).locator('[data-state="missing"]')).toContainText('feed-health');
 	}));
 
 	remember('missing no days yet', await statePage(page, async (one) => {
-		await one.route('**/state/compact/host-fingerprint/index/*.json', (route) => {
-			const period = new URL(route.request().url()).pathname.match(/\/index\/([^/.]+)\.json$/)?.[1] ?? 'daily';
-			return route.fulfill({ status: 200, contentType: 'application/json', body: emptyIndex('host-fingerprint', period) });
-		});
-		await openExplorer(one);
-		await chooseOnly(one, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
+		await openExplorer(one, PINNED);
+		await chooseOnly(one, ['candidate-models'], 'SELECT count(*) AS rows FROM "candidate-models"');
 		await runExplorer(one);
-		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="missing"]')).toBeVisible();
+		await expect(answer(one).locator('[data-state="missing"]')).toContainText('candidate-models');
 	}));
 
 	remember('unreachable file did not arrive', await statePage(page, async (one) => {
-		await openExplorer(one);
+		await openExplorer(one, PINNED);
 		await one.route('**/state/**/*.parquet*', (route) => route.abort());
 		await chooseOnly(one, ['counterfactual-scores'], 'SELECT count(*) AS rows FROM "counterfactual-scores"');
 		await runExplorer(one);
-		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toBeVisible();
+		await expect(answer(one).locator('[data-state="unreachable"]')).toContainText('counterfactual-scores for 2030-06-15');
 	}));
 
 	remember('unreachable gap', await statePage(page, async (one) => {
-		await openExplorer(one);
-		await one.route('**/state/**/*.parquet*', (route) => route.fulfill({ status: 404, body: '' }));
+		await openExplorer(one, PINNED);
 		await chooseOnly(one, ['seen'], 'SELECT count(*) AS rows FROM "seen"');
 		await runExplorer(one);
-		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toBeVisible();
+		await expect(answer(one).locator('[data-state="unreachable"]')).toContainText('seen for 2030-06-13');
 	}));
 
 	remember('refused', await statePage(page, async (one) => {
-		await openExplorer(one);
+		await openExplorer(one, PINNED);
 		await chooseExplorerQuestion(one, ['published'], 'SELECT 1; SELECT 2');
 		await runExplorer(one);
-		await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"]')).toBeVisible();
+		await expect(answer(one).locator('[data-state="refused"]')).toBeVisible();
 	}));
 
 	expect(seen.size).toBe(9);
 });
 
-test('THE ORACLE: every published example runs without refusal or unreachable state', async ({ page }) => {
-	await openExplorer(page);
-	const titles = await page.locator('.question-strip button.example').evaluateAll((buttons) => buttons.map((button) => button.textContent?.trim() ?? '').filter(Boolean) as string[]);
-	expect(titles.length).toBeGreaterThan(0);
-	for (const title of titles) {
-		await statePage(page, async (one) => {
-			await openExplorer(one);
-			// A chip that does not fit the strip's one line waits in its fold.
-			const chip = one.getByRole('button', { name: title });
-			if (!(await chip.isVisible())) await one.locator('.question-strip > details > summary').click();
-			await chip.click();
-			await expect(one.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
-			await runExplorer(one);
-			await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"], [data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toHaveCount(0);
-			await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-answer], [data-console-panel-id="data-explorer-rows"] [data-state="quiet"], [data-console-panel-id="data-explorer-rows"] [data-state="missing"]')).toHaveCount(1);
-		});
-	}
-});
-
-test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', async ({ page }) => {
-	await openExplorer(page);
-	await page.getByLabel('From (UTC)').fill(EXPLORER_CANARY_DAY);
-	await page.getByLabel('To (UTC)').fill(EXPLORER_CANARY_DAY);
-	await chooseOnly(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
+test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', async ({ page, context }) => {
+	// The page is opened on published alone, built with one day, so the one file it holds is that day's.
+	const root = test.info().outputPath('state');
+	await serveBuilt(context, root, { ledger: 'published', pinned: PINNED, days: [{ ago: 0, rows: 3 }] });
+	const size = String(statSync(join(root, 'compact', 'published', 'daily', '2030', '06', '15.parquet')).size);
+	await openExplorer(page, PINNED, { address: `?ledgers=published&from=${PINNED}&end=${PINNED}` });
+	await page.locator('#explorer-sql').fill('SELECT count(*) AS rows FROM "published"');
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['3']]);
 	const line = page.locator('[data-explorer-action-line]');
-	const held = Number(await line.getAttribute('data-held-bytes'));
+	await expect(line).toHaveAttribute('data-held-bytes', size);
 	await page.locator('#explorer-sql').fill('SELECT 1; SELECT 2');
 	await runExplorer(page);
-	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"]')).toBeVisible();
-	await expect.poll(async () => Number(await line.getAttribute('data-held-bytes'))).toBe(held);
+	await expectAnswer(page, 'refused');
+	await expect(line).toHaveAttribute('data-held-bytes', size);
 });
 
 test('THE ORACLE: Data explorer does not scroll sideways at phone width', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const width = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
 	expect(width.scroll).toBeLessThanOrEqual(width.client);
 });
 
 test('THE ORACLE: the browser refuses an origin outside connect-src', async ({ page }) => {
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const violated = page.evaluate(() => new Promise<string>((resolve) => {
 		document.addEventListener('securitypolicyviolation', (event) => resolve(event.violatedDirective), { once: true });
 		void fetch('https://example.invalid/x').catch(() => undefined);
@@ -434,25 +457,24 @@ test('THE ORACLE: the browser refuses an origin outside connect-src', async ({ p
 });
 
 
-test('THE ORACLE: hostile cell text stays plain in the real table', async ({ page }) => {
-	await openExplorer(page);
+test('THE ORACLE: hostile cell text stays plain in the real table', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], 'SELECT \'<script>alert(1)</script> https://example.invalid/x\' AS hostile FROM "published" LIMIT 1');
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
 	const table = page.locator('[data-explorer-answer]');
 	await expect(table).toContainText('<script>alert(1)</script> https://example.invalid/x');
 	await expect(table.locator('a, script, img')).toHaveCount(0);
 });
 
-test('THE ORACLE: a shared address fills the editor and does not run itself', async ({ page }) => {
-	const sql = 'SELECT attempt, count(*) AS rows FROM "published" GROUP BY attempt ORDER BY attempt';
+test('THE ORACLE: a shared address fills the editor and does not run itself', async ({ page, context }) => {
+	// published is built with 1, 2 and 3 rows on the three days that end on the pinned day.
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: [{ ago: 2, rows: 1 }, { ago: 1, rows: 2 }, { ago: 0, rows: 3 }] });
+	const sql = 'SELECT "covers", count(*) AS rows FROM "published" GROUP BY 1 ORDER BY 1';
 	const q = await encodeQuestion(sql);
-	const fetched: string[] = [];
-	page.on('response', (response) => {
-		const pathname = new URL(response.url()).pathname;
-		if (pathname.includes('/state/') && pathname.endsWith('.parquet')) fetched.push(pathname);
-	});
-	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
-	await page.goto(`/console/data-explorer/?ledgers=published&days=14&q=${q}`, { waitUntil: 'domcontentloaded' });
+	const fetched = fetchedFiles(page);
+	await openExplorer(page, PINNED, { address: `?ledgers=published&days=14&q=${q}` });
 	await expect(page.locator('#explorer-sql')).toHaveValue(sql);
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('This question came from a link');
 	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
@@ -460,17 +482,18 @@ test('THE ORACLE: a shared address fills the editor and does not run itself', as
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
 	await expect(page.locator('[data-explorer-columns]')).toContainText('published.');
-	expect(fetched.every((path) => dataLedger(path) === 'published' && dataPathCoversDay(path, EXPLORER_CANARY_DAY)), 'a shared link fetched a span file before Run').toBe(true);
+	expect(fetched, 'a shared link fetched more than the newest day before Run').toEqual(['compact/published/daily/2030/06/15.parquet']);
 	const beforeType = page.url();
 	await page.locator('#explorer-sql').fill(`${sql} `);
 	expect(page.url()).toBe(beforeType);
 	await runExplorer(page);
-	await expect(page.locator('[data-explorer-answer]')).toHaveCount(1);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['2030-06-13', '1'], ['2030-06-14', '2'], ['2030-06-15', '3']]);
 	expect(page.url()).not.toBe(beforeType);
 });
 
 test('THE ORACLE: link notices render on the page', async ({ page }) => {
-	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
+	await page.clock.setFixedTime(`${PINNED}T12:00:00Z`);
 	await page.goto('/console/data-explorer/?ledgers=published,unknown-ledger&days=365&q=not-valid-***', { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link named "unknown-ledger"');
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link asked for 365 days');
@@ -492,7 +515,8 @@ test('THE ORACLE: Copy link carries the question while the link fits console.exp
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	const limit = explorerConfig().link_max_bytes;
 	expect(limit, 'console.explorer_link_max_bytes does not reach the page').toBeGreaterThan(0);
-	await openExplorer(page);
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], 'SELECT 1 AS one');
 	const copyLink = page.getByRole('button', { name: /^Copy link$/ });
 	await copyLink.click();
@@ -528,88 +552,55 @@ test('THE ORACLE: Copy link carries the question while the link fits console.exp
 test('THE ORACLE: a link naming a day that does not exist shows the span notice, and the page still loads its ledgers', async ({ page }) => {
 	const thrown: string[] = [];
 	page.on('pageerror', (error) => thrown.push(error.message));
-	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
-	await page.goto(`/console/data-explorer/?ledgers=published&from=2026-08-32&end=${EXPLORER_CANARY_DAY}`, { waitUntil: 'domcontentloaded' });
+	await page.clock.setFixedTime(`${PINNED}T12:00:00Z`);
+	await page.goto(`/console/data-explorer/?ledgers=published&from=2026-08-32&end=${PINNED}`, { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-explorer-action-line]')).toContainText(
-		`The link asked for 2026-08-32 to ${EXPLORER_CANARY_DAY}, which is not a span this page can read, so it ends today.`
+		'The link asked for 2026-08-32 to 2030-06-15, which is not a span this page can read, so it ends today.'
 	);
 	await expect(page.locator('[data-ledger-name="published"] input')).toBeChecked({ timeout: 60_000 });
 	expect(thrown).toEqual([]);
 });
 
-test('THE ORACLE: a count by day names the day a ledger lost and the files it set aside, and draws no row for the lost day', async ({ page }) => {
-	// The canary packs every day whole, so the index is served as the packing writes a
-	// period it could not fill: the second-newest day with rows lost, and two files set
-	// aside from the newest. Only the index changes; the door reads the rest as served.
-	const marked: { lost?: string; setAside?: string } = {};
-	await page.route('**/state/compact/item-health/index/daily.json', async (route) => {
-		const response = await route.fetch();
-		const index = (await response.json()) as { entries: { covers: string; rows: number; bytes: number }[] };
-		const held = index.entries.filter((entry) => entry.rows > 0);
-		marked.lost = held.at(-2)?.covers;
-		marked.setAside = held.at(-1)?.covers;
-		await route.fulfill({
-			response,
-			json: {
-				...index,
-				entries: index.entries.map((entry) =>
-					entry.covers === marked.lost
-						? { ...entry, rows: 0, bytes: 0, state: 'lost' }
-						: entry.covers === marked.setAside
-							? { ...entry, set_aside: 2 }
-							: entry
-				)
-			}
-		});
+test('THE ORACLE: a count by day names the day a ledger lost and the files it set aside, and draws no row for the lost day', async ({ page, context }) => {
+	// item-health is built to lose 13 Jun 2030 and to set 2 files aside on 14 Jun.
+	await serveBuilt(context, test.info().outputPath('state'), {
+		ledger: 'item-health',
+		pinned: PINNED,
+		days: [{ ago: 4, rows: 2 }, { ago: 3, rows: 1 }, { ago: 2, state: 'lost' }, { ago: 1, rows: 3, setAside: 2 }, { ago: 0, rows: 1 }]
 	});
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['item-health'], 'SELECT "covers" AS day, count(*) AS rows FROM "item-health" GROUP BY 1 ORDER BY 1');
 	await runExplorer(page);
-	const { lost, setAside } = marked;
-	if (lost === undefined || setAside === undefined) throw new Error('the canary packs fewer than two item-health days with rows');
+	await expectAnswer(page, 'table');
 
+	const lost = 'There is no item-health record for 13 Jun 2030, so nothing from that day is in this answer. The record for that day was lost and could not be recovered; it was not a quiet day.';
 	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
-	await expect(note.locator('[data-explorer-gap="lost"][data-ledger="item-health"]')).toHaveText(
-		`There is no item-health record for ${shortDate(lost)}, so nothing from that day is in this answer. The record for that day was lost and could not be recovered; it was not a quiet day.`
-	);
+	await expect(note.locator('[data-explorer-gap="lost"][data-ledger="item-health"]')).toHaveText(lost);
 	await expect(note.locator('[data-explorer-gap="set-aside"][data-ledger="item-health"]')).toHaveText(
 		'2 item-health files were set aside unread when this data was packed, so this answer may be missing their rows. They wait in state/raw/item-health/set-aside/ for a person to read.'
 	);
-	const days = (await tableRows(page)).map(([day]) => day);
-	expect(days).toContain(setAside);
-	expect(days).not.toContain(lost);
+	expect(await tableRows(page)).toEqual([['2030-06-11', '2'], ['2030-06-12', '1'], ['2030-06-14', '3'], ['2030-06-15', '1']]);
 
 	// A span of nothing but the lost day is quiet, and the quiet answer names the day too.
-	await page.getByRole('textbox', { name: 'From (UTC)' }).fill(lost);
-	await page.getByRole('textbox', { name: 'To (UTC)' }).fill(lost);
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2030-06-13');
+	await page.getByRole('textbox', { name: 'To (UTC)' }).fill('2030-06-13');
 	await runExplorer(page);
-	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-state="quiet"] [data-explorer-gap="lost"]')).toHaveText(
-		`There is no item-health record for ${shortDate(lost)}, so nothing from that day is in this answer. The record for that day was lost and could not be recovered; it was not a quiet day.`
-	);
+	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-state="quiet"] [data-explorer-gap="lost"]')).toHaveText(lost);
 });
 
-test('THE ORACLE: a count by day across a lost day breaks its line there, and the strip prints no number for that day', async ({ page }) => {
-	// The index is served as the packing writes a day it lost: the second-newest day with rows.
-	const marked: { lost?: string } = {};
-	await page.route('**/state/compact/item-health/index/daily.json', async (route) => {
-		const response = await route.fetch();
-		const index = (await response.json()) as { entries: { covers: string; rows: number; bytes: number }[] };
-		marked.lost = index.entries.filter((entry) => entry.rows > 0).at(-2)?.covers;
-		await route.fulfill({
-			response,
-			json: { ...index, entries: index.entries.map((entry) => (entry.covers === marked.lost ? { ...entry, rows: 0, bytes: 0, state: 'lost' } : entry)) }
-		});
+test('THE ORACLE: a count by day across a lost day breaks its line there, and the strip prints no number for that day', async ({ page, context }) => {
+	// item-health is built to lose 14 Jun 2030, the day before the pinned day.
+	await serveBuilt(context, test.info().outputPath('state'), {
+		ledger: 'item-health',
+		pinned: PINNED,
+		days: [{ ago: 3, rows: 1 }, { ago: 2, rows: 2 }, { ago: 1, state: 'lost' }, { ago: 0, rows: 3 }]
 	});
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	// `covers` is stored as text, so the question casts it: a text day column is ranked, not drawn over time.
 	await chooseExplorerQuestion(page, ['item-health'], 'SELECT CAST("covers" AS DATE) AS day, count(*) AS rows FROM "item-health" GROUP BY 1 ORDER BY 1');
 	await runExplorer(page);
-	const { lost } = marked;
-	if (lost === undefined) throw new Error('the canary packs fewer than two item-health days with rows');
-	const days = (await tableRows(page)).map(([day]) => day);
-	expect(days, 'the lost day has a row in the answer').not.toContain(lost);
-	expect(days.filter((day) => day < lost).length, 'no day with rows comes before the lost day').toBeGreaterThan(0);
-	expect(days.filter((day) => day > lost).length, 'no day with rows comes after the lost day').toBeGreaterThan(0);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page), 'the answer is not the built days with rows').toEqual([['2030-06-12', '1'], ['2030-06-13', '2'], ['2030-06-15', '3']]);
 
 	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
 	const plot = panel.locator('[data-chart-type="dateSeries"]');
@@ -617,18 +608,20 @@ test('THE ORACLE: a count by day across a lost day breaks its line there, and th
 	const line = panel.locator('[data-date-series-marks="data-explorer-shape"] path');
 	await expect(line).toHaveCount(1);
 	expect((await line.getAttribute('d'))?.match(/M/g)?.length, 'the line joined the days either side of the lost day').toBe(2);
-	await expect(panel.locator('[data-readout-columns]')).toHaveAttribute('data-readout-columns', String(days.length + 1));
+	// Three days with rows, and the lost day between them.
+	await expect(panel.locator('[data-readout-columns]')).toHaveAttribute('data-readout-columns', '4');
 
 	// The lost day is the column before the newest: step onto it and read the strip.
 	await plot.focus();
 	await page.keyboard.press('End');
 	await page.keyboard.press('ArrowLeft');
-	await expect(panel.locator('[data-readout-day]')).toHaveText(lost);
+	await expect(panel.locator('[data-readout-day]')).toHaveText('2030-06-14');
 	await expect(panel.locator('[data-readout-row]')).toHaveText(['No number for this day']);
 });
 
-test('THE ORACLE: every chart case draws its type with a populated readout', async ({ page }) => {
-	await openExplorer(page);
+test('THE ORACLE: every chart case draws its type with a populated readout', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
 	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
 	// Each main figure is worded by plan section 2.11 rule 7 from the answer's own rows, so a
 	// figure that does not come from the data - a constant, a row count, the wrong column - fails.
@@ -641,6 +634,7 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 	for (const { type, lede, sql } of cases) {
 		await chooseExplorerQuestion(page, ['published'], sql);
 		await runExplorer(page);
+		await expectAnswer(page, 'table');
 		if (await page.locator(`[data-shape-choice="${type}"] input`).count()) {
 			await page.locator(`[data-shape-choice="${type}"] input`).check();
 		}
@@ -651,8 +645,9 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 		await expect(panel.locator('[title], title')).toHaveCount(0);
 	}
 
-	await chooseExplorerQuestion(page, ['published'], 'SELECT item_id FROM "published" LIMIT 1');
+	await chooseExplorerQuestion(page, ['published'], 'SELECT "covers" FROM "published" LIMIT 1');
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
 	const none = panel.locator('[data-shape-none]');
 	await expect(none).toContainText('Nothing here to draw');
 	const height = await none.boundingBox().then((box) => box?.height ?? 0);
@@ -661,7 +656,8 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 
 test('THE ORACLE: Save, recent runs and Markdown copy preserve text without running a saved question', async ({ page, context }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-	await openExplorer(page);
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
 	const sql = "SELECT 'header' AS label, '[x](https://example.invalid/a)|pipe\n`tick`' AS hostile FROM \"published\" LIMIT 1";
 	await chooseExplorerQuestion(page, ['published'], sql);
 	const beforeSave = page.url();
@@ -676,6 +672,7 @@ test('THE ORACLE: Save, recent runs and Markdown copy preserve text without runn
 	await expect(page.locator('[data-explorer-action-line]')).toHaveAttribute('data-files', beforeSavedPick ?? '');
 
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
 	await page.getByRole('button', { name: /^Copy as table$/ }).click();
 	await expect(page.locator('[data-notice]')).toContainText('Copied 1 row as a table.');
 	const copied = await page.evaluate(() => navigator.clipboard.readText());
@@ -703,7 +700,7 @@ test('THE ORACLE: browser storage is parsed against closed lists and saved overf
 	}, bad);
 	const logs: string[] = [];
 	page.on('console', (message) => logs.push(message.text()));
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await expect(page.locator('.saved-chip')).toHaveCount(0);
 	await page.locator('.history-list summary').click();
 	await expect(page.locator('.history-list button')).toHaveCount(0);

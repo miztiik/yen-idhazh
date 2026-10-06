@@ -860,6 +860,30 @@ Check these conditions before trusting browser evidence.
  do not label that image with the requested width. A hidden embedded page can
  also suspend animation-frame waits, so make it visible before relying on them.
 
+### A Data explorer test serves the data it checks
+
+A Data explorer browser test that runs a question serves the ledger it asks
+about. It builds that ledger with `frontend/tests/support/ledger-lifecycle.ts`,
+which writes the three indexes and real Parquet files through the query engine.
+It serves the ledger to the page with `serveBuilt` from
+`frontend/tests/support/explorer-answer.ts`, pins its own UTC day with
+`openExplorer(page, day)`, and writes out the rows, files and sentences it
+expects. Serving a built ledger also switches the page's writers' tier off,
+because a built ledger has no writer's files. The archive host stays blocked
+unless the test serves it a root it built, with `serveArchiveToPage`. No test
+works out its expected answer by running the query door again over the canary
+or the committed data (owner ruling, 2026-10-05). The canary keeps only the
+explorer checks that do not depend on what it holds: layout, notices and
+browser storage.
+
+**Find a test that depends on what the canary holds by moving the canary day.**
+Set `DATE` in `backend/utilities/build_canary_day.py` to a later day, run the
+specs with `npm run test:changed -- --spec <name>`, which builds the canary
+again from the edited file, then set `DATE` back. A test that turns red reads
+what the canary holds. The move is a measurement and is never committed.
+`test:changed` stops a browser run at its first failure, so to count every red
+test, run Playwright on the specs directly against that build.
+
 ## A chart has no plot until somebody scrolls to it
 
 `engine.ts` starts a chart from an `IntersectionObserver` that reaches one
