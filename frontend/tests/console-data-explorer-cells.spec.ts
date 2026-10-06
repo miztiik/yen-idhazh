@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { nextSort, numericBarShare, printCell, sortedRows, type PrintedCell } from '../src/lib/console/explorer/answer';
 import type { Column, Row } from '../src/lib/data/ledger';
+import { inZone } from './support/in-zone';
 
 test('THE ORACLE: cells print by engine column type, not by JavaScript value', () => {
 	const cases: [Column, Row[string], string][] = [
@@ -10,7 +11,8 @@ test('THE ORACLE: cells print by engine column type, not by JavaScript value', (
 		[{ name: 'items', type: 'BIGINT' }, '12000', '12,000'],
 		[{ name: 'share', type: 'DOUBLE' }, '0.12500', '0.125'],
 		[{ name: 'tiny', type: 'DOUBLE' }, '0.0000123', '1.23e-5'],
-		[{ name: 'day', type: 'DATE' }, '2026-10-03T00:00:00.000Z', '2026-10-03'],
+		[{ name: 'day', type: 'DATE' }, '0044-03-15 (BC)', '0044-03-15 (BC)'],
+		[{ name: 'far', type: 'DATE' }, '12345-01-01', '12345-01-01'],
 		[{ name: 'empty', type: 'VARCHAR' }, null, 'null']
 	];
 	for (const [column, value, expected] of cases) {
@@ -48,19 +50,13 @@ test('the first press sorts numbers and days high to low and everything else A t
 	expect(sortedRows([{ n: '9' }, { n: '10' }, { n: '2' }], [big], { column: 'n', direction: 'desc' })).toEqual([{ n: '10' }, { n: '9' }, { n: '2' }]);
 });
 
-/** Runs `check` with this process's clock in `zone`, then puts the starting zone back. Node
- *  reads `TZ` the moment it is set, and deleting it does not bring the old zone back. */
-function inZone(zone: string, check: () => void): void {
-	const variable = process.env.TZ;
-	const starting = Intl.DateTimeFormat().resolvedOptions().timeZone;
-	process.env.TZ = zone;
-	try {
-		check();
-	} finally {
-		process.env.TZ = variable ?? starting;
-		if (variable === undefined) delete process.env.TZ;
-	}
-}
+test('in a number column inf sorts above every number and -inf below it, and nan and -nan sort with the NULLs', () => {
+	const column = { name: 'ratio', type: 'DOUBLE' };
+	// The engine prints 1/0 as inf, -1/0 as -inf and 0/0 as -nan.
+	const rows: Row[] = [{ ratio: 'nan' }, { ratio: '2' }, { ratio: '-inf' }, { ratio: null }, { ratio: '10' }, { ratio: 'inf' }, { ratio: '-nan' }, { ratio: '-3' }];
+	expect(sortedRows(rows, [column], { column: 'ratio', direction: 'desc' }).map((row) => row.ratio)).toEqual(['inf', '10', '2', '-3', '-inf', 'nan', null, '-nan']);
+	expect(sortedRows(rows, [column], { column: 'ratio', direction: 'asc' }).map((row) => row.ratio)).toEqual(['-inf', '-3', '2', '10', 'inf', 'nan', null, '-nan']);
+});
 
 test('a timestamp with no zone sorts by its UTC instant when the run is in another time zone', () => {
 	const column = { name: 'at', type: 'TIMESTAMP' };

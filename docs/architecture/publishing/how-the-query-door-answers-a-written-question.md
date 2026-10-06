@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
@@ -29,6 +29,8 @@ SELECT COLUMNS(*)::VARCHAR FROM (
 ```
 
 The statement sits on its own lines so a final `--` comment cannot comment out the closing bracket. `EXPLAIN` runs without that wrap because DuckDB does not parse it there. `SUMMARIZE` and `DESCRIBE` do parse there. Every cell crosses back as text, so decimals, dates, lists and structs keep the engine's own spelling.
+
+**A timestamp with a time zone prints in UTC until the engine loads its time-zone add-on, and in a fixed zone it picks from the page's zone after that.** The engine downloads that add-on, ICU, the first time a statement needs it, such as one that reads `current_setting('TimeZone')`, and keeps it for the rest of the page's life. So the same question can print `+00` first and `+01` later. In Chromium with DuckDB-Wasm 1.5.4 on 2026-10-06, with the add-on loaded, a page in New York got `Etc/GMT+5` and printed `-05`, Berlin `Etc/GMT-1` and `+01`, India `Etc/GMT-5` and `+05`, and UTC `+00`: each zone's standard-time offset cut to whole hours, with no daylight saving. So on a page in Berlin, 23:30 UTC then prints as `00:30:00+01` on the next day. Every value carries its offset, so its UTC instant can be read back from the text.
 
 ## Writers' tier
 

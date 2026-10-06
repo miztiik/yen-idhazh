@@ -5,6 +5,7 @@ import { render } from 'svelte/server';
 
 import { chooseDateSeriesDays, chooseExplorerShape, chooseExplorerShapes, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
 import type { Column, Row } from '../src/lib/data/slice-shapes';
+import { inZone } from './support/in-zone';
 import { serverCompiler } from './support/server-render';
 
 const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -191,6 +192,19 @@ test('a timestamp answer sits on the date axis by its UTC day', () => {
 		['2026-08-18', null],
 		['2026-08-19', '8']
 	]);
+});
+
+test('a timestamp with a time zone sits on the date axis by its UTC day, not the day the engine printed', () => {
+	// On a page in India the engine prints a fixed +05, so 23:30 UTC on 16 Aug prints as 04:30 on 17 Aug.
+	inZone('Asia/Kolkata', () => {
+		expect(new Date('2026-08-17T00:00:00Z').getTimezoneOffset(), 'the run is not in India time').toBe(-330);
+		const columns: Column[] = [{ name: 'at', type: 'TIMESTAMP WITH TIME ZONE' }, { name: 'rows', type: 'BIGINT' }];
+		const rows: Row[] = [{ at: '2026-08-17 04:30:00+05', rows: '3' }, { at: '2026-08-17 06:00:00+05', rows: '5' }];
+		expect(chooseDateSeriesDays('at', rows, []).map(({ day, row }) => [day, row?.rows ?? null])).toEqual([['2026-08-16', '3'], ['2026-08-17', '5']]);
+		expect(shape(columns, rows)).toMatchObject({ kind: 'chart', type: 'dateSeries', mainFigure: { column: 'rows', value: 5, date: '2026-08-17' } });
+		// 23:00 UTC on the last day of 1969, an instant before 1970, stays on that day.
+		expect(chooseDateSeriesDays('at', [{ at: '1970-01-01 04:00:00+05', rows: '1' }], []).map(({ day }) => day)).toEqual(['1969-12-31']);
+	});
 });
 
 test('no-chart reasons follow the first matching documented case', () => {

@@ -11,6 +11,7 @@
     "compact-gardener",
     "compact-host-fingerprint",
     "compact-item-health",
+    "compact-item-health-summary",
     "compact-published",
     "compact-run-plan",
     "compact-seen",

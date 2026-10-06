@@ -56,9 +56,10 @@ commit.
 every file it wrote is checked, on a dry run too, because the check is over the
 selection rather than over what was deleted. A path outside is exit 2, and
 nothing is handed on to land. A collection task is checked on what it wrote
-alone: what it takes lives on GitHub, not in this repository. A report a task
-files through the ledger door, into a ledger its declaration `appends_to`, is
-held to that ledger and the wake's day instead, and it lands on a dry run too.
+alone: what it takes lives on GitHub, not in this repository. A raw file a task
+writes through the ledger door, into a ledger its declaration `appends_to`, is
+held to that ledger and its row date instead. A report filed on dry run lands
+through `appended`, and must be under the wake day.
 
 **One record per shard, always.** Every task adds its row, a dry run included,
 so a shard of nothing but dry runs still writes one file and still lands it.
@@ -81,7 +82,7 @@ import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Final
@@ -242,9 +243,7 @@ class _Ran:
     folded: closed_day_fold.Folded | None = None
 
 
-def _run_one(
-    name: str, held: registry.TaskModule, context: TaskContext, folders: Folders
-) -> _Ran:
+def _run_one(name: str, held: registry.TaskModule, context: TaskContext, folders: Folders) -> _Ran:
     """One task, timed, with any failure turned into the row that says so."""
     started = time.monotonic()
     failed = True
@@ -324,9 +323,35 @@ def _landed(ran: _Ran) -> tuple[set[str], set[str]]:
     return wrote, {*took, *replaced}
 
 
+def _append_path_for(ran: _Ran, appended: str, *, today: str | None = None) -> Path | None:
+    """The expected raw file for an append path, or None when it is not declared."""
+    context = ran.context
+    path = context.repo_root / appended
+    for which in context.policy.appends_to:
+        try:
+            root = ledger.raw_root(context.state_dir, which)
+            relative = path.relative_to(root)
+            year, month, day, filename = relative.parts
+            filed_on = today or date.fromisoformat(f"{year}-{month}-{day}").isoformat()
+            expected = ledger.raw_path(
+                context.state_dir,
+                which,
+                filed_on,
+                uuid.UUID(Path(filename).stem),
+                fmt=Format(Path(filename).suffix.removeprefix(".")),
+            )
+        except (ValueError, TypeError):
+            continue
+        if expected == path:
+            return expected
+    return None
+
+
 def _refuse_a_path_outside(ran: _Ran, tasks: Mapping[str, TaskPolicy]) -> None:
     owns = owner_of(ran.name, tasks)
-    outside = [path for path in _touched(ran) if not owns(path)]
+    outside = [
+        path for path in _touched(ran) if not owns(path) and _append_path_for(ran, path) is None
+    ]
     if outside:
         raise ShardRefusedError(
             f"{ran.name} touched {outside[0]}, which it does not own. Nothing is staged: a "
@@ -335,28 +360,13 @@ def _refuse_a_path_outside(ran: _Ran, tasks: Mapping[str, TaskPolicy]) -> None:
 
 
 def _refuse_an_append_outside(ran: _Ran, today: str) -> None:
-    """Every report a task filed is a fresh raw file of a ledger it declared, under the wake's day.
+    """Every append a task filed is a fresh raw file of a ledger it declared.
 
     Held the way the shard's own record is held, because it is the same kind of
     write: one new file the ledger door named, which can overwrite nothing.
     """
-    context = ran.context
     for appended in ran.outcome.appended:
-        path = context.repo_root / appended
-        for which in context.policy.appends_to:
-            try:
-                expected = ledger.raw_path(
-                    context.state_dir,
-                    which,
-                    today,
-                    uuid.UUID(path.stem),
-                    fmt=Format(path.suffix.removeprefix(".")),
-                )
-            except ValueError:
-                continue
-            if expected == path:
-                break
-        else:
+        if _append_path_for(ran, appended, today=today) is None:
             raise ShardRefusedError(
                 f"{ran.name} filed {appended}, which is not a report of a ledger it appends "
                 "to under today's day. Nothing is staged"
@@ -421,9 +431,7 @@ def history_tasks_among(names: Sequence[str], tasks: Mapping[str, TaskPolicy]) -
     ]
 
 
-def over_the_ceiling(
-    downloaded: Mapping[str, int], *, ceiling_mb: int, shard: int
-) -> str | None:
+def over_the_ceiling(downloaded: Mapping[str, int], *, ceiling_mb: int, shard: int) -> str | None:
     """What a shard over `max_downloaded_mb` says, naming its heaviest folders, or None when under.
 
     `downloaded` is what the shard's tasks downloaded under each folder it
@@ -518,9 +526,7 @@ def run(
         resolved = {
             name: folders_of(name, settings.tasks, repo_root, committed_folders) for name in names
         }
-        covered = {
-            name: listed_folders(settings.tasks[name], resolved[name]) for name in names
-        }
+        covered = {name: listed_folders(settings.tasks[name], resolved[name]) for name in names}
         period_ranges = {
             name: period_range
             if period_range is not None

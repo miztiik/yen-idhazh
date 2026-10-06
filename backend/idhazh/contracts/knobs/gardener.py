@@ -245,10 +245,11 @@ class _Declared(Model):
     appends_to: list[LedgerName] = Field(
         default_factory=list,
         description=(
-            "The ledgers this task files a report of its own into, through the ledger door: "
-            "one new raw file under the wake's day, dry run or not. Appending is not "
-            "owning. The door names each file afresh, so it cannot overwrite anything, and "
-            "the folder it lands in stays with whichever task owns it."
+            "The ledgers this task writes into through the ledger door without owning their "
+            "folders. A path in written is held to the row's date and lands only on a live "
+            "run. A path in appended is a report, held to the wake day, and lands dry run or "
+            "not. The door names each file afresh, so it cannot overwrite anything, and the "
+            "folder stays with whichever task owns it."
         ),
     )
     reads: list[RelPath] = Field(

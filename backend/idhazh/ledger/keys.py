@@ -30,6 +30,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
 )
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
@@ -69,6 +70,11 @@ FEED_HEALTH_KEY: Final = ("run_id", "feed_id")
 #: assemble writes the whole day's census afterwards, so both see the same item
 #: under the same run and the second one has nothing new to say.
 ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
+
+
+#: What makes two item-health summary rows the same record. One folded month
+#: keeps one total for one UTC day and one pipeline stage.
+ITEM_HEALTH_SUMMARY_KEY: Final = ("date", "stage")
 
 
 #: One machine a job, so four cells identify the host a job drew.
@@ -354,6 +360,7 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
     LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),
     LedgerName.ITEM_HEALTH: _DoorShape(ITEM_HEALTH_KEY, ItemHealthRow),
+    LedgerName.ITEM_HEALTH_SUMMARY: _DoorShape(ITEM_HEALTH_SUMMARY_KEY, ItemHealthSummaryRow),
     LedgerName.SUMMARY_QUALITY_EVALS: _DoorShape(OBSERVATION_KEY, EvalRow),
     LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
     LedgerName.COUNTERFACTUAL_SCORES: _DoorShape(COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow),

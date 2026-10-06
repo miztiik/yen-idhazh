@@ -1,5 +1,6 @@
 import type { Column, DateStamp, Row } from '../../data/slice-shapes';
 import { classifyType, isDay, isNumber, type TypeFamily } from './type-family';
+import { readUtcDay } from './utc-instant';
 
 export type ExplorerChartType = 'dateSeries' | 'rankedList' | 'pairedScatter' | 'distribution';
 
@@ -92,11 +93,9 @@ export function numericValue(row: Row, column: string): number | null {
 	return Number.isInteger(parsed) && !Number.isSafeInteger(parsed) ? null : parsed;
 }
 
-function dayValue(value: unknown): string | null {
-	if (typeof value !== 'string') return null;
-	const day = value.slice(0, 10);
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
-	return new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day ? day : null;
+/** The UTC day a date or a timestamp cell falls on, read from the instant its text names. */
+function dayValue(value: unknown): DateStamp | null {
+	return typeof value === 'string' ? readUtcDay(value) : null;
 }
 
 function hasSeveralRowsPerUtcDay(rows: readonly Row[], dateColumn: string): boolean {

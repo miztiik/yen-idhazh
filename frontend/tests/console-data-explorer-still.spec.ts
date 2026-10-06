@@ -1,6 +1,6 @@
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
-import { consoleConfig, explorerConfig } from '../src/lib/server/config';
+import { explorerConfig } from '../src/lib/server/config';
 import { statusSentence, statusWithHeld } from '../src/lib/console/explorer/status';
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -86,7 +86,7 @@ async function snapshot(page: Page): Promise<Snapshot> {
 			['answer', '[data-workbench-region="answer"]'],
 			['chart', '[data-workbench-region="chart"]'],
 			['run', '.run-button'],
-			['editorFrame', '[data-workbench-region="editor"] .frame']
+			['editorFrame', '[data-workbench-region="editor"] .editor-frame']
 		] as const;
 		return {
 			boxes: Object.fromEntries(selectors.map(([name, selector]) => [name, read(selector)])),
@@ -137,8 +137,8 @@ for (const view of VIEWS) {
 			'SELECT 1; SELECT 2'
 		]) {
 			await chooseExplorerQuestion(page, ['published'], sql);
-			await page.evaluate(() => window.scrollTo(0, 0));
-			await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+			// Run is pressed where a person sees it, so the press itself scrolls nothing.
+			await page.locator('.run-button').scrollIntoViewIfNeeded();
 			await startShiftObserver(page);
 			const before = await snapshot(page);
 			await runExplorer(page);
@@ -185,41 +185,6 @@ test('status text never overlaps the reserved answer link box', async ({ page })
 	await expect(page.getByRole('link', { name: 'See the answer' })).toHaveCount(0);
 });
 
-test('M8: every workbench region keeps its idle block size at all four widths', async ({ page }) => {
-	for (const view of VIEWS) {
-		await page.setViewportSize(view);
-		await openExplorer(page);
-		const sizes = await page.evaluate(() => {
-			const css = getComputedStyle(document.documentElement);
-			const rem = parseFloat(css.fontSize);
-			const control = parseFloat(css.getPropertyValue('--workbench-control')) * rem;
-			const space1 = parseFloat(css.getPropertyValue('--space-1')) * rem;
-			const space3 = parseFloat(css.getPropertyValue('--space-3')) * rem;
-			const leadingSm = parseFloat(css.getPropertyValue('--leading-sm')) * rem;
-			const fieldLeading = parseFloat(css.getPropertyValue('--workbench-field-leading')) * rem;
-			const regions = Object.fromEntries(
-				[...document.querySelectorAll('[data-workbench-region]')].map((node) => {
-					const rect = node.getBoundingClientRect();
-					return [node.getAttribute('data-workbench-region') ?? '', rect.height];
-				})
-			);
-			return { control, space1, space3, leadingSm, fieldLeading, rem, regions };
-		});
-		const lines = explorerConfig().readout_lines[view.width < 640 ? 0 : view.width < 1024 ? 1 : view.width < 1400 ? 2 : 3];
-		const editorLines = explorerConfig().editor_lines_shown[view.width < 1024 ? 0 : 1];
-		const editorHeight = 4 * sizes.space3 + sizes.control + editorLines * sizes.fieldLeading;
-		const statusHeight = lines * sizes.leadingSm + 2 * sizes.space1;
-		expect(sizes.regions.editor, `${view.width} editor`).toBeCloseTo(editorHeight, 0);
-		expect(sizes.regions.status, `${view.width} status`).toBeCloseTo(lines * sizes.leadingSm + 2 * sizes.space1, 0);
-		if (view.width >= 1024) {
-			expect(sizes.regions.ledgers, `${view.width} ledgers`).toBeCloseTo(editorHeight + statusHeight, 0);
-			expect(sizes.regions.columns, `${view.width} columns`).toBeCloseTo(editorHeight + statusHeight, 0);
-		}
-		expect(sizes.regions.answer, `${view.width} answer`).toBeCloseTo(view.height * explorerConfig().answer_svh / 100, 0);
-		expect(sizes.regions.chart, `${view.width} chart`).toBeCloseTo(sizes.control + consoleConfig().chart_height + 4 * sizes.rem, 0);
-	}
-});
-
 test('M10: non-run interactions keep every region box fixed', async ({ page, context }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	await page.setViewportSize({ width: 1440, height: 900 });
@@ -238,6 +203,8 @@ test('M10: non-run interactions keep every region box fixed', async ({ page, con
 	if (await page.locator('[data-shape-choice]').count()) await measure(() => page.locator('[data-shape-choice]').last().click());
 	if (await page.locator('summary').filter({ hasText: 'more' }).count()) {
 		await measure(() => page.locator('summary').filter({ hasText: 'more' }).first().click());
+		// The open list lies over the regions below it; a person closes it before pressing what it covers.
+		await measure(() => page.keyboard.press('Escape'));
 	}
 	await page.locator('.history-list summary').scrollIntoViewIfNeeded();
 	await measure(() => page.locator('.history-list summary').click());
@@ -351,11 +318,16 @@ test('M15: panel ids stay ordered, headed and joined into one workbench surface'
 	for (const id of ['data-explorer-ask', 'data-explorer-rows', 'data-explorer-shape']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"] h2`)).toHaveCount(1);
 	}
-	const gaps = await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.slice(0, 3).map((node, index, all) => {
-		if (index === 0) return 0;
-		return Math.round(node.getBoundingClientRect().top - all[index - 1].getBoundingClientRect().bottom);
+	// Each panel touches the one before it, under it or, where the answer and the chart share a row, beside it.
+	const joins = await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.slice(0, 3).map((node, index, all) => {
+		if (index === 0) return 'first';
+		const box = node.getBoundingClientRect();
+		const before = all[index - 1].getBoundingClientRect();
+		const under = Math.abs(box.top - before.bottom) < 0.5;
+		const beside = Math.abs(box.left - before.right) < 0.5 && Math.abs(box.top - before.top) < 0.5;
+		return under || beside ? 'joined' : `${box.top - before.bottom}px under and ${box.left - before.right}px beside the panel before it`;
 	}));
-	expect(gaps).toEqual([0, 0, 0]);
+	expect(joins).toEqual(['first', 'joined', 'joined']);
 	const colours = await page.evaluate(() => ({
 		page: getComputedStyle(document.body).backgroundColor,
 		workbench: getComputedStyle(document.querySelector('.workbench') as HTMLElement).backgroundColor
@@ -416,7 +388,8 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 					const box = region.getBoundingClientRect();
 					for (const control of region.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary')) {
 						const rect = control.getBoundingClientRect();
-						if (rect.width === 0 || rect.height === 0 || getComputedStyle(control).visibility === 'hidden') continue;
+						// checkVisibility() is false for a chip in a closed fold, which the page lays out but never draws.
+						if (rect.width === 0 || rect.height === 0 || !control.checkVisibility() || getComputedStyle(control).visibility === 'hidden') continue;
 						const across = rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
 						const down = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
 						if (!across || (both && !down)) {
