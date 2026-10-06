@@ -613,16 +613,22 @@ class FileListing:
             return None
         return self.checkout.budget - sum(self.checkout.added.values())
 
+    def lacking(
+        self, folders: Iterable[str | Path] = (), *, beside: Iterable[str | Path] = ()
+    ) -> dict[str, int]:
+        """The listed files fetching these would bring that the checkout lacks, with their sizes.
+
+        Read off the listing's own sizes, so a file two folders both bring is
+        named once and a file already on disk is not named.
+        """
+        _, absent = self._wanted(folders, beside)
+        return {path: self.sizes[path] for path in absent}
+
     def cost(
         self, folders: Iterable[str | Path] = (), *, beside: Iterable[str | Path] = ()
     ) -> int:
-        """How many bytes fetching these would download now, read off the listing's own sizes.
-
-        The listed files the fetch brings that the checkout lacks, each once, so
-        a file two folders both bring counts once and one on disk counts nothing.
-        """
-        _, absent = self._wanted(folders, beside)
-        return sum(self.sizes[path] for path in absent)
+        """How many bytes fetching these would download now: what `lacking` names, added up."""
+        return sum(self.lacking(folders, beside=beside).values())
 
     def fetch_within_budget(
         self, folders: Iterable[str | Path] = (), *, beside: Iterable[str | Path] = ()

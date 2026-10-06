@@ -403,18 +403,16 @@ class CompactTree:
         room, budget = self.listing.room(), self.listing.budget
         if room is None or budget is None:
             return list(periods), None
-        folders: list[Path] = []
-        beside: list[Path] = []
+        held: dict[str, int] = {}
         for position, covers in enumerate(periods):
             more = fetching(covers)
-            needed = self.listing.cost([*folders, *more.folders], beside=[*beside, *more.beside])
+            brought = self.listing.lacking(more.folders, beside=more.beside)
+            needed = sum({**held, **brought}.values())
             if needed and needed > room:
-                alone = self.listing.cost(more.folders, beside=more.beside)
                 return list(periods[:position]), self.stop_over_budget(
-                    covers, needed=alone, budget=budget
+                    covers, needed=sum(brought.values()), budget=budget
                 )
-            folders.extend(more.folders)
-            beside.extend(more.beside)
+            held.update(brought)
         return list(periods), None
 
     def fetch(self, fetches: Iterable[PeriodFetch]) -> None:

@@ -17,7 +17,7 @@ what a knob is at all is [../config.md](../config.md).
 | `attempts` | `6` | How many times one shard may try to push. If every try fails and main did not move, main refused the push, and the shard exits 3. If main moved, other writers are landing, and the shard warns and exits 0 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
 | `task_names` | Named list in the file | The declarations to read under `config/gardener/`. Empty means no tasks. Missing named files and repeated names are refused. |
-| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate. Its first reset is to about twice the largest `downloaded_bytes` the first thirty scheduled wakes record ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
+| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes. A shard checks out only its code and config, so this is the day and month folders its tasks read. A compaction takes only the periods that fit what is left of it and stops at `ceiling` at the first that does not, or fails by name on a period larger than the whole of it. A shard that downloads more anyway runs its tasks, lands its record and exits 1, because a task downloaded without choosing by the budget. The number is an estimate. Reset it from what the wakes that did not stop at it downloaded, because one that stopped at it records the budget rather than what it needed ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
 
 **`attempts` must be above `shards`.** Every shard of a wake pushes to one
 branch at once, so the last one to land has lost a race to every other shard
@@ -145,7 +145,7 @@ person reads holds every number a pass runs with.
 | 4 | `monthly_window` | How long a month file survives once its month is absorbed: `{unit: months, value}`, `{unit: days, value}` or `{unit: forever}` |
 | 5 | `monthly_keep_days` | How many whole days after a UTC year ends its month files are packed into one year file, kept for ever. `null` packs no year. Set, it needs a `monthly_window` of forever and at least `daily_keep_days` plus 32 |
 | 6 | `max_periods_per_run` | The most days, and separately the most months and the most years, one pass packs, and separately the most months past `monthly_window` it drops, oldest first |
-| 7 | `max_raw_files_per_period` | The most raw files one period is built from in one pass. A day holding more is refused and kept |
+| 7 | `max_raw_files_per_period` | The most raw files one period is built from in one pass. A day holding more packs its oldest that many, and the rest wait in its folder for the next wake |
 | 8 | `compact_after_days` | How many whole days after a UTC day ends before it may be packed, counted from 00:00 UTC on the day after it |
 | 9 | `prune_refusal` | Whether `idhazh telemetry prune` may take a range of days out of the ledger. `null` lets it; a sentence refuses the ledger, and the command prints that sentence as the reason. `compact-summary-quality-evals` gives one, because every eval row is kept for ever ([how the prune reads it](../../how-to/prune-a-collection.md)) |
 

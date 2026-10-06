@@ -55,7 +55,7 @@ Table A - what is out
 | 15 | Each old month is dropped once | 14 | D | DONE | redesigned-spoon | - | Plan 60 row 15 |
 | 16 | The shared window is gone | 15 | D | DONE | jubilant-waffle | - | Plan 60 row 16 |
 | 17 | A late file re-opens its month | 16 | D | DONE | curly-fiesta | - | Plan 60 row 17 |
-| 18 | An unreadable file is set aside, and extra files wait | 17 | D | PENDING | - | - | - |
+| 18 | An unreadable file is set aside, and extra files wait | 17 | D | DONE | special-succotash | - | Plan 60 row 18 |
 | 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | PENDING | - | - | - |
 | 20 | The record says what was recovered and why a pass stopped | 4, 11, 19 | E | PENDING | - | - | - |
 | 21 | Every gardener log line is one JSON event | 2, 20 | E | PENDING | - | - | - |
@@ -761,6 +761,15 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/test_ledger_marks.py` (found during execution (row 12 report), owner 2026-10-04)
   - `docs/architecture/publishing/ledger-compaction.md`
   - `docs/reference/repository-layout.md` (the set-aside folder)
+  - `backend/idhazh/gardener/tasks/_reopened_month.py` (a late raw file that cannot be read is set aside, and a late day's extra files wait; found during execution)
+  - `backend/idhazh/gardener/file_listing.py` (`budget`, `room`, `cost`, `fetch_within_budget` and `OverBudgetError`, with `cost` and `fetch` sharing one helper; found during execution, Fowler's ruling)
+  - `backend/utilities/gardener_publish.py` (passes `max_downloaded_mb` into the listing; found during execution, Fowler's ruling)
+  - `backend/idhazh/ledger/raw_files.py` (`read_day_folder`, which names each unreadable file beside the rest; found during execution)
+  - `backend/idhazh/ledger/paths.py` and `backend/idhazh/ledger/__init__.py` (`set_aside_path`; found during execution)
+  - `backend/idhazh/contracts/gardener_fault.py` (`RecoveryNote` gains `set-aside` and `carried-over`, log-only until row 20 persists the words; found at dispatch by the owner)
+  - `backend/idhazh/contracts/knobs/gardener.py` (the descriptions of `max_raw_files_per_period` and `max_downloaded_mb`; found during execution)
+  - `backend/tests/gardener/test_file_listing.py` and `backend/tests/ledger/test_raw_files.py` (found during execution)
+  - `docs/architecture/publishing/idhazh-gardener.md` and `docs/concepts/config/idhazh-gardener.md` (what the download ceiling now means, and how it is reset; found during execution, Fowler's ruling)
 - **Acceptance gates:** local: pytest on the test files above; ruff; mypy; `doc_load.py` on both pages. CI: the full suite.
 - **Oracle:**
   - A day with one unreadable raw file packs its other files. The bad file is under `set-aside/` at its old path, and the entry says `set_aside: 1`.
@@ -774,6 +783,13 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 1 | A set-aside file is moved, never deleted, under the raw tier, because the site copies only `state/compact/` | Plan author, 2026-10-04 |
 | 2 | Extra files are carried by the re-run span of row 13; there is no second mechanism | Plan author, 2026-10-04 |
 | 3 | The ceiling is applied when periods are chosen, from sizes the listing already holds | Plan author, 2026-10-04 |
+| 4 | C5's "larger than the size ceiling" is the shard's download budget, which is C8's case: nothing is set aside for its size, and no knob is added. A period larger than the whole budget is refused by name as `failed`, naming its bytes and `max_downloaded_mb`, because no wake could take it | Fowler, 2026-10-06 |
+| 5 | The compaction steps, Rule R and the marks take every download through one listing method that refuses past the budget; `fetch` stays as it is for the three other tasks that download, so the runner's check after the tasks stays, and its message now calls a shard over it a code defect. The publisher passes the budget into the listing | Fowler, 2026-10-06 |
+| 6 | The year step adopts its own unindexed file before it reads, or records lost, any month (follow-ups 4 and 5) | Fowler, 2026-10-06 |
+| 7 | A month no entry names in a ready year adopts its own file; with none, its days are recorded lost when nothing of it is left, and the year is refused as `day-missing` while a day file, a raw file or a daily entry of it remains (follow-up 6) | Fowler, 2026-10-06 |
+| 8 | A note names the period whose file was lost or moved. A month file costs its year every day of its month. Rule R comes before C13 at a month close too. Every month and year entry carries the `set_aside` of the periods it replaces | Fowler, 2026-10-06 |
+| 9 | A move is a delete of size 0 at the old path, so `bytes_freed` stays what the deletes free | Fowler, 2026-10-06 |
+| 10 | A day's extra raw files are the newest by the order settling uses (day, write instant, file id), so a carried file is newer than every packed one and the next wake settles the day as one pass would have; a file's name is not its write order | Worker, 2026-10-06, from `settle_rows` in `backend/idhazh/ledger/raw_files.py` |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
