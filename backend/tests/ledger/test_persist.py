@@ -28,6 +28,7 @@ from pydantic import Field, model_validator
 from idhazh import ledger
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, RunId, ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import (
@@ -62,6 +63,7 @@ LEDGER_OF: Final[dict[type[Contract], LedgerName]] = {
     FeedRetirementRow: LedgerName.FEED_RETIREMENTS,
     HostFingerprintRow: LedgerName.HOST_FINGERPRINT,
     EvalRow: LedgerName.SUMMARY_QUALITY_EVALS,
+    CouncilRunRecord: LedgerName.COUNCIL_RUN_RECORDS,
 }
 
 

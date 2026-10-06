@@ -55,7 +55,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L1 | Days before a ledger began are cut from the selected window | - | A | DONE #1327, carried under plan 60 (row L1, decision 5) | fantastic-fortnight | #1327 | L1 explorer starts at first day |
 | L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | DONE | ideal-barnacle | - | Plan 62 row l2 |
 | L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
-| L4 | A slice cuts only the days before a ledger began | L1 | B | PENDING | - | - | - |
+| L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | - | Plan 62 row l4 |
 | L5 | Console windows end on the site's newest published day | L4 | C | PENDING | - | - | - |
 | L7 | A published ledger that has not started | L1 | B | PENDING | - | - | - |
 | L8 | The archive's failures are named as the archive's | L1, L2, L4 | C | PENDING | - | - | - |
@@ -385,8 +385,11 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/src/lib/data/slice-shapes.ts` (`SliceResult` gains `first` on `ok` and `quiet`)
   - `frontend/src/lib/console/machine/PlatformMixPanel.svelte` (its clamp goes)
   - `frontend/src/lib/server/ledger-rows.ts` (its clamp goes)
+  - `frontend/src/lib/data/slice.ts` (found during execution: `firstNamed()` said `daily.json` names at least one day, which stops being true once the door reads the other two indexes when it names none)
+  - `frontend/tests/support/ledger-lifecycle.ts` (found during execution: a slice keeps rows by their `date` cell, and the builder wrote none, so no slice over a built root could return a row; the owner ruled the one-line fix, 2026-10-06, and L2 carries the same line)
   - `frontend/tests/ledger-lifecycle.spec.ts` (added by L1: the slice and reach cases of Table G, G4)
-  - `frontend/tests/ledger-door.spec.ts` (Table G, G6, and every case that compares a whole `ok` or `quiet` slice with `toEqual`)
+  - `frontend/tests/ledger-door.spec.ts` (Table G, G6, and every case that compares a whole `ok` or `quiet` slice with `toEqual`; found during execution: five more cases asserted the old answer for a span that starts before the first day, or for a `daily.json` that names no day while `monthly.json` names a month)
+  - `frontend/tests/ledger-rows.spec.ts` (found during execution: a comment said the door answers a day before the first packed day as a hole)
   - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec ledger-lifecycle.spec.ts --spec ledger-door.spec.ts --spec ledger-rows.spec.ts --spec platform-mix.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the panel page; the browser smoke of the console's machine page, whose platform panel reads a slice. CI: what `ciAnswer` selects, then every group on the merge push.
 - **Oracle:** in `ledger-lifecycle.spec.ts`, a ledger built to begin 5 days before the end of a 14-day slice. The answer covers those 5 days, names the first of them, and ends where it was asked to end (Table G, G4). It cannot settle how a panel draws the days before a record began; the panels' own specs and L5 own that.

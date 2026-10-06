@@ -599,7 +599,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	row_page: 50,
 	max_rows: 1000,
 	max_fetch_bytes: 67108864,
-	query_max_chars: 5790,
+	query_max_chars: 6939,
 	link_max_bytes: 8192,
 	reach_days: 365,
 	chart_min_rows: 3,

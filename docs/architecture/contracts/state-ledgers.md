@@ -27,6 +27,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
 | `state/raw/run-plan/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What plan did the day hand to its later stages? One row per plan execution | raw and compact | the named UTC day |
+| `state/raw/council-run-records/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which step ran for each hosted judge, how it ended and what it cost | raw and compact | the judged UTC day |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
 
@@ -39,6 +40,11 @@ from, which is older than the plan. Every later step names its run with
 the newest plan of the day can be the other run's. Without `--execution` a
 stage reads the newest plan of the day, which is right only where one process
 planned alone, as `idhazh run` does.
+
+The council save job files each judged date's run records through the ledger
+door. Each row names the step and part, while the envelope names the save job,
+attempt and council run. A retry therefore replaces the earlier attempt when
+the reader settles rows by `unit_id`.
 
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
