@@ -1,7 +1,7 @@
 <script lang="ts">
 	/** Draws a Data explorer answer with the chart type its columns can honestly support. */
 	import { onMount } from 'svelte';
-	import type { Column, Row } from '$lib/data/ledger';
+	import type { Column, DateStamp, Row } from '$lib/data/ledger';
 	import { tooFewSentence } from '$lib/console/waiting';
 	import { frame } from '$lib/charts/frame';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
@@ -14,10 +14,10 @@
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { rank } from '$lib/charts/rank';
 	import RankedList from '$lib/components/RankedList.svelte';
-	import { chooseExplorerShapes, type ExplorerShape, type ExplorerShapeBounds, type ExplorerChartType } from './shape';
+	import { chooseDateSeriesDays, chooseExplorerShapes, numericValue, type ExplorerShape, type ExplorerShapeBounds, type ExplorerChartType } from './shape';
 	import { printCell } from './answer';
 
-	let { columns, rows, bounds, height, selectedType = null }: { columns: readonly Column[]; rows: readonly Row[]; bounds: ExplorerShapeBounds; height: number; selectedType?: ExplorerChartType | null } = $props();
+	let { columns, rows, lostDays, bounds, height, selectedType = null }: { columns: readonly Column[]; rows: readonly Row[]; lostDays: readonly DateStamp[]; bounds: ExplorerShapeBounds; height: number; selectedType?: ExplorerChartType | null } = $props();
 	let drawing = $state<HTMLDivElement | null>(null);
 	let chartWidth = $state(760);
 
@@ -27,11 +27,6 @@
 	const note = $derived(noteFor(active));
 	const chartTokens = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
 
-	function value(row: Row, column: string): number | null {
-		const parsed = Number(row[column]);
-		return Number.isFinite(parsed) ? parsed : null;
-	}
-
 	function text(row: Row, column: string): string {
 		const spec = columns.find((one) => one.name === column) ?? { name: column, type: 'VARCHAR' };
 		return printCell(spec, row[column]).text;
@@ -39,17 +34,27 @@
 
 	function noteFor(next: ExplorerShape): string {
 		if (next.kind === 'none') return next.reason;
-		if (next.type === 'dateSeries') return `Drawn over time because the answer has a date column.`;
+		if (next.type === 'dateSeries') {
+			const why = `Drawn over time because the answer has a date column.`;
+			return next.rowsWithNoDay === 0 ? why : `${why} ${rowsWithNoDaySentence(next.rowsWithNoDay, next.dateColumn)}`;
+		}
 		if (next.type === 'rankedList') return `Drawn ranked because the answer has one text column and one number column.`;
 		if (next.type === 'pairedScatter') return `Drawn paired because the answer has two number columns.`;
 		return `Drawn as a spread because the answer has one number column.`;
+	}
+
+	/** The rows a date chart does not draw because their day is NULL, which the table prints as `null`. */
+	function rowsWithNoDaySentence(count: number, dateColumn: string): string {
+		return count === 1
+			? `1 row holds null in the column "${dateColumn}", so the chart does not draw it. It is in the table.`
+			: `${count} rows hold null in the column "${dateColumn}", so the chart does not draw them. They are in the table.`;
 	}
 
 	function lede(next: ExplorerShape): string {
 		if (next.kind === 'none') return 'No chart';
 		if (next.type === 'dateSeries') {
 			const main = next.mainFigure;
-			return main === null ? `${rows.length} UTC ${rows.length === 1 ? 'day' : 'days'}` : `${text({ [main.column]: main.value }, { name: main.column, type: 'DOUBLE' }.name)} ${main.column} on ${main.date}`;
+			return main === null ? `${next.days} UTC ${next.days === 1 ? 'day' : 'days'}` : `${text({ [main.column]: main.value }, { name: main.column, type: 'DOUBLE' }.name)} ${main.column} on ${main.date}`;
 		}
 		if (next.type === 'rankedList') return next.mainFigure === null ? `${rows.length} rows` : `${next.mainFigure.label}: ${text({ [next.mainFigure.column]: next.mainFigure.value }, next.mainFigure.column)} ${next.mainFigure.column}`;
 		if (next.type === 'pairedScatter') return next.mainFigure;
@@ -58,9 +63,13 @@
 
 	function tooFew(next: ExplorerShape): string | null {
 		if (next.kind === 'none' || !('tooFew' in next) || !next.tooFew) return null;
-		if (next.type === 'dateSeries') return tooFewSentence(rows.length, bounds.chartMinRows, 'UTC days');
-		if (next.type === 'pairedScatter') return tooFewSentence(rows.length, bounds.fleetMinRows, 'readings');
-		if (next.type === 'distribution') return tooFewSentence(rows.length, bounds.fleetMinRows, 'readings');
+		if (next.type === 'dateSeries') return tooFewSentence(next.days, bounds.chartMinRows, 'UTC days');
+		if (next.type === 'pairedScatter') {
+			return next.readings < bounds.fleetMinRows
+				? tooFewSentence(next.readings, bounds.fleetMinRows, 'readings')
+				: tooFewSentence(next.subjects, bounds.bandwidthMinKinds, 'subjects');
+		}
+		if (next.type === 'distribution') return tooFewSentence(next.readings, bounds.fleetMinRows, 'readings');
 		return null;
 	}
 
@@ -72,11 +81,11 @@
 			return { subject: text(row, next.dateColumn), facts: next.seriesColumns.map((column) => ({ label: column, value: text(row, column) })) };
 		}
 		if (next.type === 'rankedList') {
-			const row = [...rows].filter((candidate) => value(candidate, next.valueColumn) !== null).sort((left, right) => (value(right, next.valueColumn) ?? 0) - (value(left, next.valueColumn) ?? 0))[0];
+			const row = [...rows].filter((candidate) => numericValue(candidate, next.valueColumn) !== null).sort((left, right) => (numericValue(right, next.valueColumn) ?? 0) - (numericValue(left, next.valueColumn) ?? 0))[0];
 			return row ? { subject: text(row, next.labelColumn), facts: [{ label: next.valueColumn, value: text(row, next.valueColumn) }] } : null;
 		}
 		if (next.type === 'pairedScatter') {
-			const row = rows.find((candidate) => value(candidate, next.xColumn) !== null && value(candidate, next.yColumn) !== null);
+			const row = rows.find((candidate) => numericValue(candidate, next.xColumn) !== null && numericValue(candidate, next.yColumn) !== null);
 			if (!row) return null;
 			return {
 				subject: next.subjectColumn === null ? 'row 1' : text(row, next.subjectColumn),
@@ -86,7 +95,7 @@
 				]
 			};
 		}
-		const values = rows.map((row) => value(row, next.valueColumn)).filter((one): one is number => one !== null).sort((a, b) => a - b);
+		const values = rows.map((row) => numericValue(row, next.valueColumn)).filter((one): one is number => one !== null).sort((a, b) => a - b);
 		if (values.length === 0) return null;
 		return { subject: next.valueColumn, facts: [{ label: 'middle', value: String(values[Math.floor(values.length / 2)]) }] };
 	}
@@ -116,25 +125,26 @@
 		{#if active.type === 'dateSeries'}
 			{@const box = frame(chartWidth, height)}
 			{@const seriesColumns = active.seriesColumns}
-			{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: chartTokens[index] ?? '--chart-1', points: rows.map((row) => ({ date: text(row, active.dateColumn), value: value(row, column) })) })), { frame: box, density: 6, valueTicks: 4, padding: 0.25 })}
-			{@const dateReadout = readoutOf({ type: 'dateSeries', columns: dateGeometry?.dates ?? [], series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(--chart-${index + 1})`, values: (dateGeometry?.dates ?? []).map((day) => rows.find((row) => text(row, active.dateColumn) === day)).map((row) => row ? value(row, column) : null), format: (n) => text({ [column]: n }, column) })), notMeasured: 'Not a number', resting: 'last' })}
+			{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
+			{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: chartTokens[index] ?? '--chart-1', points: days.map(({ day, row }) => ({ date: day, value: row === null ? null : numericValue(row, column) })) })), { frame: box, density: 6, valueTicks: 4, padding: 0.25 })}
+			{@const dateReadout = readoutOf({ type: 'dateSeries', columns: days.map(({ day }) => day), series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(--chart-${index + 1})`, values: days.map(({ row }) => (row === null ? null : numericValue(row, column))), format: (n) => text({ [column]: n }, column) })), notMeasured: 'No number for this day', resting: 'last' })}
 			<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
 				<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={chartWidth} {height} readout={dateReadout} />
 			</div>
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else if active.type === 'rankedList'}
-			{@const ranked = rank(rows.map((row) => ({ key: text(row, active.labelColumn), value: value(row, active.valueColumn) ?? Number.NaN, row: { label: text(row, active.labelColumn), value: text(row, active.valueColumn) } })), active.rowsDrawn)}
-			<RankedList caption={`Ranked by ${active.valueColumn}`} {ranked} maxText={`${text({ [active.valueColumn]: ranked.max }, active.valueColumn)} ${active.valueColumn}`} unmeasuredNote="No rows carried a number to rank." emptyNote="No rows carried a number to rank." tail={active.moreRows > 0 ? `${active.moreRows} more rows are in the table.` : null} />
+			{@const ranked = rank(rows.map((row) => ({ key: text(row, active.labelColumn), value: numericValue(row, active.valueColumn) ?? Number.NaN, row: { label: text(row, active.labelColumn), value: text(row, active.valueColumn) } })), active.rowsDrawn)}
+			<RankedList caption={`Ranked by ${active.valueColumn}`} {ranked} maxText={`${text({ [active.valueColumn]: ranked.max }, active.valueColumn)} ${active.valueColumn}`} unmeasuredNote="No rows carried a number to rank." emptyNote="No rows carried a number to rank." tail={active.moreRows > 0 ? `${active.moreRows} more ${active.moreRows === 1 ? 'row is' : 'rows are'} in the table.` : null} />
 			{#if readout}<dl class="shape-readout" data-readout="data-explorer-shape" data-readout-shape="record"><dt data-readout-subject>{readout.subject}</dt>{#each readout.facts as fact}<div data-readout-row={fact.label}><dd>{fact.label}</dd><dd>{fact.value}</dd></div>{/each}</dl>{/if}
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else if active.type === 'pairedScatter'}
 			{@const box = frame(chartWidth, height)}
-			{@const points = rows.flatMap((row, index) => value(row, active.xColumn) === null || value(row, active.yColumn) === null ? [] : [{ label: active.subjectColumn === null ? `row ${index + 1}` : text(row, active.subjectColumn), x: value(row, active.xColumn) as number, y: value(row, active.yColumn) as number }])}
+			{@const points = rows.flatMap((row, index) => numericValue(row, active.xColumn) === null || numericValue(row, active.yColumn) === null ? [] : [{ label: active.subjectColumn === null ? `row ${index + 1}` : text(row, active.subjectColumn), x: numericValue(row, active.xColumn) as number, y: numericValue(row, active.yColumn) as number }])}
 			<PairedScatter geometry={pairedScatter(points, { frame: box, minRows: bounds.fleetMinRows, minSubjects: bounds.bandwidthMinKinds, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Paired: ${active.yColumn} against ${active.xColumn}`} width={chartWidth} {height} />
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else}
 			{@const box = frame(chartWidth, height)}
-			{@const values = rows.map((row) => value(row, active.valueColumn)).filter((one): one is number => one !== null)}
+			{@const values = rows.map((row) => numericValue(row, active.valueColumn)).filter((one): one is number => one !== null)}
 			<Distribution geometry={distribution(values, { frame: box, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} {height} />
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{/if}

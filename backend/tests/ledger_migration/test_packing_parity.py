@@ -17,7 +17,7 @@ from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.gardener import CompactionPolicy
-from idhazh.contracts.ledger_index import CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactIndex, EntryState, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
@@ -29,7 +29,6 @@ from utilities.ledger_migration import (
 from utilities.ledger_migration.identity import writer_identity
 
 from ._fixtures import (
-    FIRST,
     ITEM,
     MONTHS,
     OLD,
@@ -48,10 +47,11 @@ pytestmark = pytest.mark.contract
 class _Packed:
     """What packing left for one ledger, less what names who packed it and when.
 
-    Each daily file's path, row count, source count, content digest and rows
-    beside the identity their raw file gave them; the daily watermark's day; and
-    the raw days still waiting. A file's envelope also names
-    its writer and the instant it was written, which two writers never share.
+    Each daily entry: for a day with a file, the file's path, row count, source
+    count, content digest and rows beside the identity their raw file gave them;
+    for a day with no file, its state. The daily watermark's day; and the raw
+    days still waiting. A file's envelope also names its writer and the instant
+    it was written, which two writers never share.
     """
 
     daily: dict[str, tuple[object, ...]]
@@ -66,6 +66,10 @@ def _packed(state: Path, which: LedgerName) -> _Packed:
     daily: dict[str, tuple[object, ...]] = {}
     for entry in index.entries:
         found = ledger.compact_file(state, which, Period.DAILY, entry.covers)
+        if not entry.names_file:
+            assert found is None, f"{entry.covers} is {entry.state.value} and has a file"
+            daily[entry.covers] = (entry.state,)
+            continue
         assert found is not None and found.stat().st_size == entry.bytes
         envelope = ledger.read_envelope(found)
         stored = ledger.load_stored([found], model=model)
@@ -114,12 +118,13 @@ def test_packing_leaves_what_a_live_compaction_leaves_over_the_same_raw_files(
 
     Both trees get the same raw files: one a CSV day, filed under the
     migration's own writer. The declared compaction turned live then leaves the
-    same daily files, index and watermark, so a compaction turned on after the
-    move resumes from the right day. It takes two wakes where the migration takes
-    one pass, because its declared budget is eight days a wake and the
-    migration's is every day the rule admits: that changes when a day is packed,
-    never what it holds. A first packing starts on the first of the month, so
-    the days no CSV held are packed empty; yesterday and today stay raw.
+    same daily entries, files, index and watermark, so a compaction turned on
+    after the move resumes from the right day. It takes two wakes where the
+    migration takes one pass, because its declared budget is eight days a wake
+    and the migration's is every day the rule admits: that changes when a day is
+    packed, never what it holds. A first packing starts at the oldest raw day, so
+    no day before the 2nd is recorded, and a day no CSV held is an entry with no
+    file; yesterday and today stay raw.
     """
     today = date(2026, 9, 12)
     days = ("2026-09-02", "2026-09-05", "2026-09-10", "2026-09-11", "2026-09-12")
@@ -146,7 +151,9 @@ def test_packing_leaves_what_a_live_compaction_leaves_over_the_same_raw_files(
     assert [wake.stopped_because for wake in wakes] == [StopReason.CEILING, StopReason.EXHAUSTED]
     packed = _packed(migrated / "state", ITEM)
     assert packed == _packed(live / "state", ITEM)
-    assert list(packed.daily) == [f"2026-09-{number:02d}" for number in range(1, 11)]
+    assert list(packed.daily) == [f"2026-09-{number:02d}" for number in range(2, 11)]
+    with_a_file = [day for day, held in packed.daily.items() if held != (EntryState.EMPTY,)]
+    assert with_a_file == ["2026-09-02", "2026-09-05", "2026-09-10"]
     assert (packed.through, packed.raw) == ("2026-09-10", ["2026-09-11", "2026-09-12"])
 
 
@@ -178,13 +185,13 @@ def test_a_late_file_for_a_moved_day_is_folded_in_packed_again_and_proven(tmp_pa
     )
     (late,) = run_migration(state, ITEM)
 
-    assert first.packed == [FIRST, OLD]
+    assert first.packed == [OLD], "no day before the first raw day is packed"
     assert (again.days, again.filed, again.packed) == (0, 0, [])
     assert (late.days, late.filed, late.packed) == (1, 1, [OLD])
     held = ledger.load_days(state, ITEM, [OLD], model=ItemHealthRow)
     assert sorted(row.item_id for row in held) == ["ai-01", "ai-04"]
     index = CompactIndex.read(ledger.compact_index_path(state, ITEM, Period.DAILY))
-    assert {entry.covers: entry.rows for entry in index.entries} == {FIRST: 0, OLD: 2}
+    assert {entry.covers: entry.rows for entry in index.entries} == {OLD: 2}
     assert ledger.raw_days(state, ITEM) == [], "the day's new raw file was packed in"
     assert Watermark.read(ledger.watermark_path(state, ITEM, Period.DAILY)).through == OLD
     assert not csv_files.left(state, [ITEM], months=MONTHS)

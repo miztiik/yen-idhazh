@@ -1,6 +1,6 @@
 
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
@@ -24,7 +24,7 @@
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
 	import { fetchRegistry, flattenRegistry, type LedgerRegistry, type RegistryLedger } from '$lib/console/explorer/registry';
 	import type { ExplorerExample } from '$lib/server/config';
-	import { LEDGER_NAMES } from '$lib/data/slice-shapes';
+	import { isDay, LEDGER_NAMES } from '$lib/data/slice-shapes';
 	import Icon from '$lib/icons/Icon.svelte';
 
 	let { data } = $props();
@@ -61,12 +61,14 @@
 	let recentRuns = $state<RecentRun[]>([]);
 	let keepNotice = $state<string | null>(null);
 	let linkNotices = $state<string[]>([]);
-	let copiedLink = $state('');
+	let copyNotice = $state('');
 	let storageWorks = $state(true);
 	let storageNoticeDismissed = $state(false);
 	let selectedShapeType = $state<ExplorerChartType | null>(null);
 	let saving = $state(false);
 	let draftName = $state('');
+	let nameField = $state<HTMLInputElement | null>(null);
+	let saveButton = $state<HTMLButtonElement | null>(null);
 	let answerOffscreen = $state(false);
 
 	const ledgers = $derived<RegistryLedger[]>(flattenRegistry(registry));
@@ -75,7 +77,7 @@
 	const columnLabel = $derived(showAnswerColumns ? 'Answer columns' : 'Ledger columns');
 	const answerRows = $derived(result !== null && result.state === 'ok' ? (result.rows as Row[]) : []);
 	const answerColumns = $derived(result !== null && result.state === 'ok' ? result.columns : []);
-	const noticeText = $derived([keepNotice, copiedLink, !storageWorks && !storageNoticeDismissed ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
+	const noticeText = $derived([keepNotice, copyNotice, !storageWorks && !storageNoticeDismissed ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
 	const persistentNotice = $derived(!storageWorks && !storageNoticeDismissed);
 	const readoutLines = $derived(config.readout_lines[readoutBand] ?? config.readout_lines[0]);
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
@@ -248,7 +250,7 @@
 	}
 
 	function validStoredDay(value: unknown): DateStamp | null {
-		if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+		if (!isDay(value)) return null;
 		const min = minReachDay();
 		const max = todayUtc();
 		return value >= min && value <= max ? value : null;
@@ -325,7 +327,7 @@
 			ledgers: selected,
 			days: windowDays,
 			statement: sql,
-			maxBytes: 8192,
+			maxBytes: config.link_max_bytes,
 			from: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : fromDay,
 			end: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : toDay
 		});
@@ -338,18 +340,18 @@
 		await replaceAddress();
 		try {
 			await navigator.clipboard.writeText(location.href);
-			copiedLink = 'Copied the link. Opening it fills the editor and runs nothing.';
+			copyNotice = 'Copied the link. Opening it fills the editor and runs nothing.';
 		} catch {
-			copiedLink = 'This browser did not let the page write to the clipboard.';
+			copyNotice = 'This browser did not let the page write to the clipboard.';
 		}
 	}
 
 	async function copyQuestion() {
 		try {
 			await navigator.clipboard.writeText(sql);
-			copiedLink = 'Copied the question.';
+			copyNotice = 'Copied the question.';
 		} catch {
-			copiedLink = 'This browser did not let the page write to the clipboard.';
+			copyNotice = 'This browser did not let the page write to the clipboard.';
 		}
 	}
 
@@ -371,15 +373,26 @@
 		void replaceAddress();
 	}
 
-	function startSaving() {
+	// Save hands focus to the name field with the suggestion selected, so typing replaces it;
+	// Keep and Cancel hand it back to Save, so it never falls to the page.
+	async function startSaving() {
 		draftName = suggestedSaveName(sql, config.save_name_max_chars);
 		saving = true;
+		await tick();
+		nameField?.focus();
+		nameField?.select();
+	}
+
+	async function stopSaving() {
+		saving = false;
+		await tick();
+		saveButton?.focus();
 	}
 
 	function keepDraft() {
 		if (!draftName.trim()) return;
 		saveQuestion(draftName);
-		saving = false;
+		void stopSaving();
 	}
 
 	function forget(question: KeptQuestion) {
@@ -498,9 +511,9 @@
 	});
 </script>
 
-<Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copiedLink = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
+<Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copyNotice = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
 
-<div class="workbench" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px;--answer-size:${config.answer_svh}svh;--editor-lines:${editorLines};--readout-lines:${readoutLines}`}>
+<div class="workbench" style={`--idle-height:${data.console.chart_height}px;--editor-lines:${editorLines};--readout-lines:${readoutLines}`}>
 <Panel id="data-explorer-ask" title="Your question">
 	<div class="question-panel">
 		<div class="workbench-toolbar" data-workbench-region="toolbar">
@@ -515,11 +528,6 @@
 				<label>From (UTC)<input type="date" value={fromDay} min={minReachDay()} max={toDay < todayUtc() ? toDay : todayUtc()} oninput={(event) => changeFrom(event.currentTarget)} onchange={(event) => changeFrom(event.currentTarget)} /></label>
 				<label>To (UTC)<input type="date" value={toDay} min={fromDay > minReachDay() ? fromDay : minReachDay()} max={todayUtc()} oninput={(event) => changeTo(event.currentTarget)} onchange={(event) => changeTo(event.currentTarget)} /></label>
 			</div>
-			<button type="button" class="run-button" aria-label={running ? 'Running' : 'Run'} aria-keyshortcuts="Control+Enter Meta+Enter" disabled={initializing} aria-disabled={initializing || running || selected.length === 0 || sql.trim() === ''} aria-busy={running} onclick={() => { if (!initializing && !running && selected.length > 0 && sql.trim() !== '') void run(); }}>
-				<Icon id="query-run" />
-				<span class="run-words"><span class:hidden-word={running}>Run</span><span class:hidden-word={!running}>Running</span></span>
-				<span class="run-shortcut">Ctrl+Enter</span>
-			</button>
 		</div>
 		<div data-workbench-region="questions">
 			<QuestionStrip examples={config.examples} {published} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
@@ -538,16 +546,22 @@
 				<div data-workbench-region="editor">
 					<div class="editor-head">
 						<label for="explorer-sql"><Icon id="query-editor" /> DuckDB SQL</label>
-						<div class="editor-actions">
+						<div class="editor-actions" data-explorer-actions>
 							{#if saving}
-								<label>Name <input bind:value={draftName} maxlength={config.save_name_max_chars} /></label>
+								<label>Name <input bind:this={nameField} bind:value={draftName} maxlength={config.save_name_max_chars} /></label>
 								<button type="button" onclick={keepDraft} disabled={!draftName.trim()}><Icon id="saved" /> Keep</button>
-								<button type="button" onclick={() => (saving = false)}>Cancel</button>
+								<button type="button" onclick={stopSaving}>Cancel</button>
 							{:else}
-								<button type="button" onclick={startSaving} disabled={!storageWorks || sql.trim() === ''}><Icon id="saved" /> Save</button>
+								<button type="button" bind:this={saveButton} onclick={startSaving} disabled={!storageWorks || sql.trim() === ''}><Icon id="saved" /> Save</button>
 								<button type="button" onclick={copyLink}><Icon id="share-link" /> Copy link</button>
-								{#if linkNotices.includes(LINK_TOO_LONG_NOTICE)}<button type="button" onclick={copyQuestion}><Icon id="copy" /> Copy question</button>{/if}
+								{#if linkNotices.includes(LINK_TOO_LONG_NOTICE)}<button type="button" class="copy-question" onclick={copyQuestion}><Icon id="copy" /> Copy question</button>{/if}
 							{/if}
+							<!-- Last, so nothing that changes to its left moves it. -->
+							<button type="button" class="run-button" aria-label={running ? 'Running' : 'Run'} aria-keyshortcuts="Control+Enter Meta+Enter" disabled={initializing} aria-disabled={initializing || running || selected.length === 0 || sql.trim() === ''} aria-busy={running} onclick={() => { if (!initializing && !running && selected.length > 0 && sql.trim() !== '') void run(); }}>
+								<Icon id="query-run" />
+								<span class="run-words"><span class:hidden-word={running}>Run</span><span class:hidden-word={!running}>Running</span></span>
+								<span class="run-shortcut">Ctrl+Enter</span>
+							</button>
 						</div>
 					</div>
 					<QueryEditor value={sql} maxChars={config.query_max_chars} lines={editorLines} onInput={(value) => { sql = value; if (linkNotices.some((notice) => notice.includes('came from a link'))) linkNotices = []; }} onRun={run} />
@@ -565,7 +579,7 @@
 {#snippet shapeActions()}
 	{#if shapeChoices.length > 1}
 		<fieldset class="shape-actions">
-			<legend>Draw it as</legend>
+			<legend class="sr-only">Draw it as</legend>
 			<ChoiceTiles
 				name="explorer-shape"
 				items={shapeChoices.map((shape) => ({ value: shape.type, shown: shape.option, spoken: shape.option, icon: shape.icon }))}
@@ -585,9 +599,11 @@
 
 <Panel id="data-explorer-rows" title="The answer" wide>
 	<div class="answer-region" data-workbench-region="answer">
-		<div class="region-bar">
+		<div class="region-bar" data-explorer-answer-head>
+			<!-- Seen, not heard: the panel's hidden heading already names it. -->
+			<span class="region-label" aria-hidden="true">Answer</span>
 			{#if result !== null && result.state === 'ok'}
-				<CopyAnswer columns={answerColumns} rows={orderedRows.length > 0 ? orderedRows : answerRows} />
+				<CopyAnswer columns={answerColumns} rows={orderedRows.length > 0 ? orderedRows : answerRows} onMessage={(text) => (copyNotice = text)} />
 			{/if}
 		</div>
 	{#key running ? 'loading' : result?.state ?? 'idle'}
@@ -618,6 +634,7 @@
 <Panel id="data-explorer-shape" title="The answer, drawn" wide>
 	<div class="chart-region" data-workbench-region="chart">
 		<div class="region-bar">
+			<span class="region-label" aria-hidden="true">Chart</span>
 			{@render shapeActions()}
 		</div>
 	{#key running ? 'loading' : result?.state ?? 'idle'}
@@ -626,7 +643,7 @@
 		{:else if result === null}
 			<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
 		{:else if result.state === 'ok'}
-			<ShapePanel columns={result.columns} rows={result.rows as Row[]} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} />
+			<div class="chart-body"><ShapePanel columns={result.columns} rows={result.rows as Row[]} lostDays={result.gaps.flatMap((gap) => gap.lostDays)} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} /></div>
 		{:else if result.state === 'quiet'}
 			<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
 		{:else if result.state === 'refused'}
@@ -640,18 +657,18 @@
 </div>
 
 <style>
+	/* The workbench is a tool, so it has the whole window and no card edge: the
+	   strip's rule above it is its top edge, and a border at the window's edge
+	   would frame nothing. */
 	.workbench {
-		overflow: clip;
-		border: 1px solid var(--item-edge);
-		border-radius: var(--radius-lg);
+		overflow-x: clip;
 		background: var(--color-surface);
-		box-shadow: var(--shadow-sm);
 	}
 
 	.question-panel { display: grid; }
 	.workbench-toolbar {
 		display: grid;
-		grid-template-columns: auto minmax(18rem, 1fr) auto;
+		grid-template-columns: auto minmax(0, 1fr);
 		align-items: center;
 		gap: var(--space-2);
 		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
@@ -718,7 +735,13 @@
 		min-block-size: var(--workbench-control);
 	}
 
-	:global([data-workbench-region='questions'] .question-strip),
+	/* The strip takes the room the links leave and stays one line from 640 px, so a saved
+	   question folds an example away instead of making the row taller. */
+	:global([data-workbench-region='questions'] .question-strip) {
+		flex: 1 1 0;
+		min-inline-size: 0;
+	}
+
 	:global([data-workbench-region='questions'] .question-strip button) {
 		min-inline-size: 0;
 		max-inline-size: 100%;
@@ -726,8 +749,7 @@
 	}
 
 	.run-button {
-		display: grid;
-		grid-template-columns: auto auto auto;
+		display: flex;
 		gap: var(--space-2);
 		align-items: center;
 		border-color: var(--color-accent);
@@ -769,13 +791,15 @@
 		border-block-end: 1px solid var(--color-rule);
 	}
 
+	/* History's list hangs from this group's end, so nothing here may clip it. */
 	.question-links {
+		flex: none;
+		position: relative;
 		display: flex;
 		flex: 0 0 auto;
 		align-items: center;
 		gap: var(--space-2);
 		min-inline-size: 0;
-		overflow: hidden;
 	}
 
 	.how-to {
@@ -788,21 +812,19 @@
 
 	.question-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
 	.editor-stack { display: grid; align-content: start; }
-	.state, .answer-note { margin: 0; color: var(--color-text-secondary); }
+	.state, .answer-note { margin: 0; padding-inline: var(--space-3); color: var(--color-text-secondary); }
 	.gap-note { margin: var(--space-1) 0 0; }
 	.warn { color: var(--band-low); }
 	.answer-state { min-block-size: 0; block-size: 100%; display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); }
 	.answer-state pre { max-inline-size: 100%; overflow-x: auto; white-space: pre; font-family: var(--font-data); color: var(--code-string); }
 	.shimmer { background: linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-raised) 50%, var(--color-surface) 100%); }
-	.question-grid.wide { grid-template-columns: minmax(12rem, var(--rail)) minmax(0, 1fr) minmax(12rem, var(--rail)); }
-	.question-grid.wide > [data-workbench-region],
-	.editor-stack {
-		min-block-size: 100%;
-	}
+	.question-grid.wide { grid-template-columns: minmax(12rem, 1fr) minmax(0, 4fr) minmax(12rem, 1fr); grid-template-rows: 1fr; }
 
+	/* A region's content never sets its size: a long ledger list, a long
+	   question or a thousand rows scroll inside the region that holds them. */
 	[data-workbench-region='ledgers'],
 	[data-workbench-region='columns'] {
-		block-size: calc(4 * var(--space-3) + var(--workbench-control) + var(--editor-lines) * var(--workbench-field-leading) + var(--readout-lines) * var(--leading-sm) + 2 * var(--space-1));
+		contain: size;
 		min-block-size: 0;
 		overflow: auto;
 		border-inline-end: 1px solid var(--color-rule);
@@ -845,58 +867,152 @@
 		text-transform: uppercase;
 	}
 
+	/* One line: the words at its start are cut short before any button moves
+	   or wraps, because a heading line that wraps after a click moves the
+	   region under it. */
+	.editor-head > label,
+	.region-label {
+		flex: 0 1000 auto;
+		min-inline-size: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.region-bar {
+		padding-inline: var(--space-3);
+	}
+
+	.region-bar > :global(:not(.region-label)) {
+		flex: none;
+	}
+
 	.editor-actions {
 		display: flex;
-		align-items: end;
+		align-items: center;
 		gap: var(--space-2);
 	}
 
+	.editor-actions > :global(*) {
+		flex: none;
+	}
+
+	/* While a question is named, the name field is the one part of the group
+	   that gives way, so Keep, Cancel and Run keep their size and place. It
+	   starts from nothing and takes the room the buttons leave; the field's
+	   percentage width lets it shrink to its 3rem floor. */
+	.editor-actions > label {
+		flex: 1 1 0;
+	}
+
+	.editor-actions label input {
+		flex: 1 1 auto;
+		inline-size: 100%;
+		min-inline-size: 3rem;
+	}
+
 	.editor-actions button,
-	.region-bar :global(button) {
+	.region-bar :global(button),
+	.region-bar :global(.choice-tile) {
 		font-size: var(--text-sm);
 		font-weight: 400;
 		letter-spacing: normal;
 		text-transform: none;
 	}
 
+	.editor-actions .run-button {
+		font-weight: 600;
+	}
+
 	.answer-region {
-		block-size: var(--answer-size);
+		contain: size;
 		display: grid;
 		grid-template-rows: var(--workbench-control) auto minmax(0, 1fr);
+		border-block-start: 1px solid var(--color-rule);
+		background: var(--color-surface);
 	}
 
 	.answer-region > :global(.answer-state) {
 		grid-row: 2 / -1;
 	}
 
+	/* The heading line holds still and the drawing scrolls in its own box beneath it, so
+	   nothing the chart draws ever passes under the shape tiles. */
 	.chart-region {
-		block-size: calc(var(--workbench-control) + var(--idle-height) + 4rem);
+		contain: size;
 		display: grid;
-		grid-template-rows: var(--workbench-control) minmax(var(--idle-height), auto);
-		overflow: auto;
+		grid-template-rows: var(--workbench-control) minmax(0, 1fr);
+		overflow: clip;
+		border-block-start: 1px solid var(--color-rule);
+		background: var(--color-surface);
 	}
 
 	.chart-region > :global(.answer-state) {
 		block-size: 100%;
 	}
 
-	.shape-actions { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
-	.shape-actions legend { color: var(--color-text-tertiary); font-size: var(--text-xs); }
+	.chart-body {
+		min-block-size: 0;
+		overflow: auto;
+		padding: 0 var(--space-3) var(--space-3);
+	}
+
+	.shape-actions { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+	.shape-actions :global(.choice-tile) { min-block-size: var(--workbench-control); }
+
+	/* From the wide breakpoint the workbench fills the window: the question
+	   above, the answer and the chart side by side below, each half taking the
+	   share the other leaves. The value matches `frame.breakpoints_px[1]`, which
+	   a media query cannot read. */
+	@media (min-width: 1024px) {
+		/* `min-block-size: 0` hands the split to the two `1fr` rows: each half
+		   keeps its own smallest size, and only a window shorter than both
+		   together makes the page scroll. Left to its content, the box would ask
+		   for twice the larger half, because two equal rows size to their larger
+		   minimum. */
+		.workbench {
+			flex: 1 1 0;
+			min-block-size: 0;
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			grid-template-rows: 1fr 1fr;
+		}
+
+		.workbench > :global([data-console-panel-id='data-explorer-ask']) {
+			grid-column: 1 / -1;
+		}
+
+		.question-panel {
+			grid-template-rows: auto auto 1fr;
+		}
+
+		.editor-stack {
+			display: flex;
+			flex-direction: column;
+		}
+
+		.editor-stack > .state,
+		.editor-stack > :global([data-workbench-region='status']) {
+			flex: none;
+		}
+
+		[data-workbench-region='editor'] {
+			flex: 1 1 0;
+			display: grid;
+			grid-template-rows: auto 1fr;
+		}
+
+		.chart-region {
+			min-block-size: calc(var(--workbench-control) + var(--idle-height));
+			border-inline-start: 1px solid var(--color-rule);
+		}
+	}
+
+	/* Below it the regions stack in one column and the page scrolls: their
+	   smallest useful sizes add up to more than one screen. */
 	@media (max-width: 1023px) {
 		.workbench-toolbar {
-			grid-template-columns: minmax(0, 1fr) auto;
-		}
-		.date-fields {
-			grid-column: 1;
-			grid-row: 2;
-		}
-		.run-button {
-			grid-column: 2;
-			grid-row: 2;
-			min-inline-size: 5rem;
-		}
-		[data-workbench-region='questions'] {
-			flex-wrap: wrap;
+			grid-template-columns: minmax(0, 1fr);
 		}
 		.run-shortcut {
 			display: none;
@@ -928,23 +1044,49 @@
 		.rail-region:not([open]) > :global(.column-list) {
 			display: none;
 		}
+		.answer-region {
+			min-block-size: 100svh;
+		}
+		.chart-region {
+			block-size: calc(var(--workbench-control) + var(--idle-height) + 4rem);
+		}
 	}
 
 	@media (max-width: 639px) {
 		[data-workbench-region='questions'] {
+			flex-wrap: wrap;
 			align-items: stretch;
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) auto;
 		}
-		:global([data-workbench-region='questions'] .question-strip),
+		:global([data-workbench-region='questions'] .question-strip) {
+			inline-size: 100%;
+			flex-basis: 100%;
+		}
+		.question-links,
 		.how-to {
 			min-inline-size: 0;
+			inline-size: 100%;
+			flex-basis: 100%;
+		}
+		.how-to {
 			overflow: hidden;
 		}
-
-		.question-links {
-			display: contents;
+		.editor-head {
+			flex-wrap: wrap;
+		}
+		.editor-actions {
+			flex: 1 1 100%;
+			flex-wrap: wrap;
+			justify-content: flex-end;
+		}
+		/* Run holds its place at the end of the group's first line in every state: the
+		   name field and Copy question take a whole line of their own beneath it, so a
+		   wider face can never push Run down, and a name has the phone's full width. */
+		.editor-actions > label,
+		.editor-actions > .copy-question {
+			order: 1;
+			flex: 1 1 100%;
 		}
 	}
-
 </style>

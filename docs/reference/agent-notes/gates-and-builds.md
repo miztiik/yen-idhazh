@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-06
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -10,6 +10,14 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Read the first failure and which later checks did not run. A missing tool, interrupted process, cached failure or skipped test is not a pass.
 - Inspect an existing run before starting another. Use the launcher's `--status`; use `--fresh` only when an unchanged run must be repeated.
 - `node scripts/build-state.ts --complete` took 112.5 s on the shared Windows machine on 2026-10-03, so wait for it rather than calling it hung.
+- **`pytest -m contract -q` ends on a `FAILED` line with no count after it, which reads as a run that stopped; it finished, and the extra `-q` hid the count.**
+  `addopts` in `pyproject.toml` already carries `-q`, so one more is `-qq`, and
+  pytest 9.1.1 then drops the `N passed, M failed` line (2026-10-06). The tell
+  is the short test summary as the last output, with nothing after it. Leave
+  `-q` off:
+  ```powershell
+  .\.venv\Scripts\python.exe -m pytest -m contract
+  ```
 
 ## Running the gates
 
@@ -50,6 +58,17 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   cmd /c rmdir frontend\node_modules
   ```
 
+- **A logic spec that renders a component fails with `Cannot find package '$lib'` on its first run in a fresh worktree or a copy of a commit, then passes; the spec is fine, `.svelte-kit/` did not exist yet.**
+  `frontend/tsconfig.json` takes `$lib` from `.svelte-kit/tsconfig.json`, which
+  `npm ci` does not write. Playwright reads the paths when it starts; the run's
+  own `vitePreprocess` writes the file after that (2026-10-06, Node 24.12.0:
+  `console-data-explorer-shape.spec.ts` 1 failed and 7 did not run, then 25
+  passed). The tell is a `.svelte-kit` folder created during the failed run.
+  Write it first, from `frontend/`, where the Svelte config is:
+  ```powershell
+  npx svelte-kit sync
+  ```
+
 - **`test_page_ceilings` fails locally on an index ceiling while CI passes; the
   local zlib made the index larger, not the change.** On 2026-10-04 the Windows
   Python 3.14.2 here used zlib-ng 2.2.4 and compressed the candidate-models
@@ -58,6 +77,17 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   `ZLIB_VERSION` ending in `.zlib-ng`. Take this test's answer from CI:
   ```powershell
   python -c "import zlib; print(zlib.ZLIB_VERSION, getattr(zlib, 'ZLIBNG_VERSION', None))"
+  ```
+
+- **A logic spec that writes Parquet prints `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`, which reads as a crash; its tests passed.**
+  On 2026-10-05, on Windows with Node 24.12.0 and DuckDB-Wasm 1.33.1-dev57.0,
+  a Playwright worker that had written files with `COPY ... TO` printed this
+  libuv line while it shut down, after every result was reported, and the run
+  still ended `N passed` with exit 0. The door specs, which only read, print
+  nothing. The tell is the line arriving between results or at a worker
+  restart, never inside a test. Read the summary and the exit code:
+  ```powershell
+  node node_modules/@playwright/test/cli.js test --config playwright.logic.config.ts tests/ledger-lifecycle.spec.ts; "exit $LASTEXITCODE"
   ```
 
 ## Two heavy gates on one box
@@ -69,6 +99,16 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 
 - Use the canary, the fixed test-data build, for the browser suite; use the real build for published-site measurements. Verify which build is served.
 - Finish one build before starting another that writes the same output directory. Do not rebuild files while a preview or test is reading them.
+- **A browser run ends `Timed out waiting 120000ms from config.webServer` and runs no test; the build was refused as stale.**
+  The build record fingerprints Git's committed tree, the working diff and
+  untracked files, so any edit after `build:canary`, a doc or a plan
+  included, makes `verified-preview.ts` refuse the build, and Playwright
+  pipes that refusal away. The tell is the timeout with no test line before
+  it. Commit or revert the edit, then build again before the run:
+  ```powershell
+  git status --porcelain
+  npm run build:canary
+  ```
 
 ## Serving a build to measure it
 

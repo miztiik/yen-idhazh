@@ -105,7 +105,8 @@ class GardenerConfig(Model):
         description=(
             "The most file content one shard may download for its tasks, in megabytes "
             "of 1024 * 1024 bytes. The code and config every shard checks out are not "
-            "counted. A shard over it still runs its tasks and lands its record, then "
+            "counted. A compaction takes only the periods whose files fit what is left "
+            "of it. A shard over it still runs its tasks and lands its record, then "
             "exits 1 naming what it downloaded, this ceiling and its three heaviest "
             "folders."
         ),
@@ -199,6 +200,9 @@ SeriesWindow = Window
 DEFAULT_DAY_LOOKBACK_PERIODS: Final = 7
 #: Default number of earlier periods a scheduled month-grain pass also examines.
 DEFAULT_MONTH_LOOKBACK_PERIODS: Final = 2
+#: How many UTC days of its own record a collection task reads for its mark. A
+#: wake runs once a day, so a week finds the last pass after six missed wakes.
+DEFAULT_MARK_LOOKBACK_DAYS: Final = 7
 
 
 class _Declared(Model):
@@ -233,10 +237,11 @@ class _Declared(Model):
     appends_to: list[LedgerName] = Field(
         default_factory=list,
         description=(
-            "The ledgers this task files a report of its own into, through the ledger door: "
-            "one new raw file under the wake's day, dry run or not. Appending is not "
-            "owning. The door names each file afresh, so it cannot overwrite anything, and "
-            "the folder it lands in stays with whichever task owns it."
+            "The ledgers this task writes into through the ledger door without owning their "
+            "folders. A path in written is held to the row's date and lands only on a live "
+            "run. A path in appended is a report, held to the wake day, and lands dry run or "
+            "not. The door names each file afresh, so it cannot overwrite anything, and the "
+            "folder stays with whichever task owns it."
         ),
     )
     reads: list[RelPath] = Field(
@@ -398,6 +403,15 @@ class CollectionTaskPolicy(_Declared):
             "counts whole days back from the wake."
         )
     )
+    mark_lookback_days: int = Field(
+        default=DEFAULT_MARK_LOOKBACK_DAYS,
+        ge=1,
+        description=(
+            "How many UTC days of the gardener's record, today included, a pass reads "
+            "to find the day its last pass handled through. With no row in reach it "
+            "starts with no mark, which is correct and only slower."
+        ),
+    )
 
 
 #: How many days after a workflow run GitHub still lets it be re-run. A re-run
@@ -454,8 +468,10 @@ class CompactionPolicy(_Declared):
         default=None,
         ge=1,
         description=(
-            "How many earlier months a scheduled compaction pass checks beyond the month "
-            "that just expired. Defaults to two months."
+            "How many months before the month that holds the newest eligible day, the "
+            "newest day at least compact_after_days whole days past its end, a first pass "
+            "with no daily mark looks back over for its oldest raw day. Raw days older than "
+            "that stay raw. A named range replaces this look-back. Defaults to two months."
         ),
     )
     daily_keep_days: int = Field(
@@ -499,12 +515,16 @@ class CompactionPolicy(_Declared):
         ge=1,
         description=(
             "The most days, and separately the most months and the most years, one pass "
-            "compacts before it stops for the next wake."
+            "compacts, and separately the most months past monthly_window it drops, before "
+            "it stops for the next wake."
         ),
     )
     max_raw_files_per_period: int = Field(
         ge=1,
-        description="The most raw files one period may be built from in one pass.",
+        description=(
+            "The most raw files one period may be built from in one pass. A day holding "
+            "more packs its oldest that many, and the rest wait for the next wake."
+        ),
     )
     compact_after_days: int = Field(
         ge=1,
@@ -526,7 +546,7 @@ class CompactionPolicy(_Declared):
 
     @property
     def lookback_periods(self) -> int:
-        """The configured extra months a scheduled compaction pass examines."""
+        """How many months before the newest eligible day's month a first pass looks back over."""
         return self.lookback or DEFAULT_MONTH_LOOKBACK_PERIODS
 
     @model_validator(mode="after")

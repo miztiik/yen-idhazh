@@ -114,7 +114,6 @@
     "context_high_percentile": 95.0,
     "default_window_days": 21,
     "doubt_rows": 6,
-    "explorer_answer_svh": 61,
     "explorer_bar_spread_share": 0.6,
     "explorer_cell_max_ch": 41,
     "explorer_chart_min_rows": 4,
@@ -173,11 +172,11 @@
       }
     ],
     "explorer_history_max": 11,
+    "explorer_link_max_bytes": 8193,
     "explorer_max_fetch_bytes": 67108865,
     "explorer_max_rows": 1001,
     "explorer_notice_ms": 5001,
     "explorer_query_max_chars": 5777,
-    "explorer_rail_rem": 15.0,
     "explorer_rank_max": 31,
     "explorer_reach_days": 366,
     "explorer_readout_lines": [

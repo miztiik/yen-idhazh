@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 Three surfaces stand on a full console route: the strip - the route tabs and the
 days control on one row - the sentence under it that says how complete the
@@ -23,7 +23,13 @@ through `frontend/src/lib/console/chrome.ts`. Workbench chrome keeps `#console-t
 as a screen-reader heading and draws only the compact, non-sticky strip. It does
 not draw the completeness sentence, band, no-script note, span sentence, jump
 links or route carry line. The route must then draw its own span and Run controls
-inside its workbench toolbar.
+inside its workbench. Workbench chrome also gives the route the whole window:
+`app.css` lifts the console's width cap and leaves out the site footer for it,
+the section steps out of the frame's gutter while the header keeps it, and from
+1024 px the frame is the window's height, so the route's workbench fills what the
+header and the strip leave
+([how the Data explorer shares the window](../../concepts/console-design/how-the-data-explorer-shares-the-window.md)).
+No other route changes.
 
 Which panel sits on which route is [console.md](console.md); how any figure is
 allowed to read is
@@ -409,6 +415,9 @@ work below the first screen without adding a fact this route judges. The route
 declares the chrome as data from `console.explorer_chrome`; the layout does not
 infer it from the route name. What this removes is the global verdict while the
 operator is on the Data explorer; one tab press shows it on the other routes.
+Since 2026-10-05 it also removes the site footer from that route, so the
+workbench can reach the window's bottom edge (owner request, Jony's layout); the
+wordmark leads to the home page, whose footer carries the same links.
 
 **The days control rides the strip at every width, not only where the strip
 sticks.** One control in one place keeps the keyboard order, the screen-reader

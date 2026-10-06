@@ -43,12 +43,14 @@ def a_pass(
     stopped_because: StopReason,
     resume_from: str | None,
     taken: tuple[str, ...] = TAKEN,
+    handled_through: str | None = None,
 ) -> Pass:
     """A pass over workflow runs that took `taken` and stopped where it says.
 
     The counts agree with each other the way `one_at_a_time.take` keeps them: a
     member the pass stopped at was selected and not taken, and only a pass that
-    hit its ceiling has one.
+    hit its ceiling has one. `handled_through` is set on a pass that walked from
+    a mark.
     """
     return Pass(
         collection="workflow-runs",
@@ -63,6 +65,7 @@ def a_pass(
         bytes_freed=0,
         stopped_because=stopped_because,
         resume_from=resume_from,
+        handled_through=handled_through,
     )
 
 
@@ -95,6 +98,43 @@ def test_a_dry_run_that_failed_before_taking_a_member_says_nothing_is_gone() -> 
 
     assert "gone" not in "\n".join(said), "a dry run said a member is gone"
     assert not any(SETTING in line for line in said), "a dry run that took nothing named it"
+
+
+def test_a_dry_walk_past_its_ceiling_says_where_a_live_pass_would_stop_and_what_it_counted() -> None:
+    """It finished the day without naming the rest, so the next dry run starts after that day.
+
+    Telling a person to run it again would send them to a pass that starts on
+    the next day and never names the members this one counted.
+    """
+    said = report.lines(
+        a_pass(
+            dry_run=True,
+            stopped_because=StopReason.CEILING,
+            resume_from=NEXT,
+            handled_through="2026-07-06",
+        )
+    )
+
+    assert (
+        f"  the ceiling of 3 would stop a live pass at {NEXT}; the rest of that day was "
+        "counted, not listed, and the next pass starts after 2026-07-06"
+    ) in said
+    assert not any("run it again" in line for line in said)
+    assert "nothing was deleted" in said[-1]
+
+
+def test_a_live_walk_its_ceiling_stopped_says_it_stopped_there() -> None:
+    """A live pass deletes as it goes, so the next one meets the member it stopped at."""
+    said = report.lines(
+        a_pass(
+            dry_run=False,
+            stopped_because=StopReason.CEILING,
+            resume_from=NEXT,
+            handled_through="2026-07-05",
+        )
+    )
+
+    assert said[-1] == f"  the ceiling of 3 stopped this pass at {NEXT} - there is more, so run it again"
 
 
 @pytest.mark.parametrize(

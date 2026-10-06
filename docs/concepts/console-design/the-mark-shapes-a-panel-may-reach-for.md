@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-10-06
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -82,6 +82,44 @@ true story about those columns.
 | 3 | two number columns and at most one text column | `pairedScatter` |
 | 4 | one number column | `distribution` |
 | 5 | anything else | no chart, one neutral sentence |
+
+A column counts by its type's family
+([../console-design.md](../console-design.md#data-explorer-prints-the-engine-answer-as-written)):
+a number is a whole number or a decimal, a date column is a date or a timestamp
+of any precision, `timestamp_ns` included, and a text column is text, `uuid` and
+`enum` included. A list of numbers is not a number, and a time of day is not a
+date.
+
+**A row's day is the UTC day of the instant its date or timestamp names**, not
+the day its text prints. The engine prints a timestamp with a time zone with an
+offset of its own, so `2026-10-06 00:30:00+01` is 23:30 UTC and falls on 5
+October.
+
+**A day the chart cannot place stops the date chart, and the sentence names it.**
+The date axis holds days from year 1 to year 9999. A date column that holds
+`infinity`, a year past 9999 or a date `(BC)` draws no date chart, and the panel
+says which column holds which value, as the table prints it: `Nothing here to
+draw: the column "day" holds infinity, and the chart can show only days from
+year 1 to year 9999. Keep only those days in the question to draw it over time.`
+The operator can find that text in the table and filter it out (Reader,
+2026-10-06).
+
+**A NULL is no value, never a zero.** The date chart breaks its line on a day
+whose number is NULL, as it does on a lost day, and the ranked, paired and spread
+charts leave that row out. A floor counts the rows that carry a number, so a NULL
+can leave a chart too few to draw, and the too-few sentence names the floor it
+missed: readings, or for the paired chart, subjects. The paired chart's main
+figure counts the points it draws, and the ranked list's last line counts every
+row it did not draw.
+
+**A NULL day is no day, so the date chart leaves its row out and says so.** The
+chart draws every row with a day. Its floor, its main figure and the columns it
+calls too flat to draw count only those rows, and the note above the chart says
+how many it left out: `1 row holds null in the column "day", so the chart does
+not draw it. It is in the table.` A spread of the same answer needs no day, so it
+still draws those rows. A date column that holds only NULL draws nothing and says
+`Nothing here to draw: the column "day" holds only null. Give "day" a date in the
+question to draw it over time.` (Reader, 2026-10-06).
 
 The rule is strict because a generic query page can only know column types, not
 whether a number is good or bad. It never colours a cell as a verdict, never
@@ -543,6 +581,13 @@ names the floor from the value the panel passed in. `paired` applies its floor
 row by row and side by side, so one thin row draws nothing and says why while the
 rest still draw, and it is null only when every row missed. Authority: Fowler,
 Susan and Carmack, 2026-09-27.
+
+**A NULL is left out of a chart, not drawn as zero.** A zero that was really an
+absence is the one number nobody checks
+([../console-design.md](../console-design.md#a-console-figure-says-what-it-counts-in-words)):
+drawn, it pulls a line to the floor and puts a reading nobody took in a spread's
+lowest bin. A floor and a figure count what the chart draws, so the panel never
+claims more readings than it shows.
 
 ## See also
 

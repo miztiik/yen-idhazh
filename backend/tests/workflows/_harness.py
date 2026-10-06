@@ -20,7 +20,7 @@ from typing import Any, Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text, seed_publication_inventory
 from origin_template import copy_origin, template
 
 from idhazh import ledger, path_classes
@@ -139,6 +139,8 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     # The one that decides a published address. See the two tests that run the
     # step for what it accepts and what it now stops.
     ("digest.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+    # Blank plans the full day; a number lowers the run's crash guard to it.
+    ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
@@ -711,6 +713,7 @@ COMMIT_STAGED_PATHS: Final = {
     ],
     "assemble": [
         "frontend/public/digest",
+        "frontend/public/publication.json",
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
@@ -2127,6 +2130,7 @@ def _seed_digest_origin(root: Path, date: str) -> None:
         _write(seed / relative, "")
     for dirname in series.PUBLISHED_ROOTS:
         _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
+    seed_publication_inventory(seed / "frontend" / "public")
     _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
     _git(
         seed, env, "add", ".gitattributes", ".gitignore", "docs",

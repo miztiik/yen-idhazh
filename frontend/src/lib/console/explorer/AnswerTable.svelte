@@ -2,6 +2,7 @@
 <script lang="ts">
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { Column, Row } from '$lib/data/ledger';
+	import ColumnType from '$lib/console/explorer/ColumnType.svelte';
 	import { nextSort, numericBarShare, printCell, sortedRows, type SortSpec } from './answer';
 	let { columns, rows, capped = false, maxRows, pageSize, cellMaxCh, barSpreadShare, onOrderChange }: {
 		columns: readonly Column[]; rows: readonly Row[]; capped?: boolean; maxRows: number; pageSize: number; cellMaxCh: number; barSpreadShare: number; onOrderChange?: (rows: Row[]) => void;
@@ -31,7 +32,7 @@
 					<th aria-sort={sort.column === column.name ? (sort.direction === 'asc' ? 'ascending' : sort.direction === 'desc' ? 'descending' : 'none') : 'none'}>
 						<button type="button" onclick={() => (sort = nextSort(sort, column))}>
 							<span>{column.name}{#if sort.column === column.name && sort.direction === 'asc'} <Icon id="sort-ascending" />{:else if sort.column === column.name && sort.direction === 'desc'} <Icon id="sort-descending" />{/if}</span>
-							<small>{column.type.toLowerCase()}{#if bars.get(column.name) !== null}, full bar {printCell(column, bars.get(column.name) as never).text}{/if}</small>
+							<small><ColumnType type={column.type} />{#if bars.get(column.name) !== null}, full bar {printCell(column, bars.get(column.name) as never).text}{/if}</small>
 						</button>
 					</th>
 				{/each}
@@ -74,7 +75,7 @@
 	.row-number { position: sticky; inset-inline-start: 0; z-index: 3; inline-size: calc(4ch + 2 * var(--space-2)); color: var(--color-text-tertiary); font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: end; border-inline-end: 1px solid var(--color-rule-strong); }
 	th button { display: grid; gap: var(--space-1); border: 0; background: transparent; color: inherit; padding: 0; text-align: start; font: inherit; }
 	th span { font-family: var(--font-data); overflow-wrap: anywhere; }
-	th small { color: var(--color-text-tertiary); font-weight: 400; }
+	th small { color: var(--color-text-tertiary); font-size: var(--text-xs); font-weight: 400; }
 	td { max-inline-size: var(--cell-max); overflow-wrap: anywhere; }
 	td[data-kind='number'] { text-align: end; font-variant-numeric: tabular-nums; }
 	td[data-kind='null'] span { color: var(--color-text-tertiary); font-style: italic; }

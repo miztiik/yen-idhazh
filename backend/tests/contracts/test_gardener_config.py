@@ -125,8 +125,17 @@ LIVE_BY_DECISION: Final = {
     ("compact-host-fingerprint", "month_deletes_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
     ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
     ("compact-item-health", "month_deletes_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
+    ("compact-item-health-summary", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-published", "dry_run"): PACKED_ON_THE_MOVE,
     ("compact-seen", "dry_run"): PACKED_ON_THE_MOVE,
+    ("compact-summary-quality-evals", "dry_run"): (
+        "kumarsnaveen requested the stale console charts be fixed on 2026-10-04: "
+        "score panels read packed files only, so report-only packing leaves them frozen"
+    ),
+    ("compact-summary-quality-evals", "month_deletes_dry_run"): (
+        "the eval window keeps every month forever, so this switch drops no rows; "
+        "packing deletes only source files whose rows were preserved in a coarser file"
+    ),
     ("corpus-squash", "dry_run"): (
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
@@ -231,14 +240,31 @@ def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None
 
 
 def test_the_two_packing_tasks_the_person_turned_on_pack_a_month_31_days_after_it_ends() -> None:
-    """31 is the shortest wait no GitHub re-run can outlast; eval packing only reports."""
+    """31 is the shortest wait no GitHub re-run can outlast; evals keep their longer wait."""
     tasks = config.load_gardener().tasks
     for name in PACKED_LIVE:
         policy = tasks[name]
         assert isinstance(policy, CompactionPolicy), name
         assert (policy.dry_run, policy.daily_keep_days) == (False, GITHUB_RERUN_DAYS + 1), name
     evals = tasks["compact-summary-quality-evals"]
-    assert isinstance(evals, CompactionPolicy) and evals.dry_run
+    assert isinstance(evals, CompactionPolicy)
+    assert (evals.dry_run, evals.daily_keep_days) == (False, 45)
+
+
+@pytest.mark.parametrize(
+    "name",
+    (
+        "compact-item-health",
+        "compact-host-fingerprint",
+        "compact-summary-quality-evals",
+        "compact-feed-health",
+    ),
+)
+def test_every_console_record_packs_finished_days_on_each_wake(name: str) -> None:
+    """A packed-only consumer cannot refresh from a compaction that merely reports."""
+    policy = config.load_gardener().tasks[name]
+    assert isinstance(policy, CompactionPolicy)
+    assert (policy.dry_run, policy.compact_after_days) == (False, 1), name
 
 
 @pytest.mark.parametrize("name", PACKED_LIVE)
@@ -363,9 +389,7 @@ def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
 
 def test_task_names_must_be_unique() -> None:
     with pytest.raises(ValidationError, match="task_names repeats a task"):
-        GardenerConfig(
-            version="2026-09-27", task_names=("seen", "seen"), attempts=6, shards=5
-        )
+        GardenerConfig(version="2026-09-27", task_names=("seen", "seen"), attempts=6, shards=5)
 
 
 def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -> None:
@@ -410,9 +434,7 @@ def test_a_declaration_must_name_its_owned_folders(tmp_path: Path) -> None:
     del declaration["owns"]
     assert "owns" in refused(a_garden(tmp_path / "missing", traces=declaration))
     legacy = fixture("trials", owns_everything_else_under=["state"])
-    assert "owns_everything_else_under" in refused(
-        a_garden(tmp_path / "legacy", trials=legacy)
-    )
+    assert "owns_everything_else_under" in refused(a_garden(tmp_path / "legacy", trials=legacy))
 
 
 @pytest.mark.parametrize(
@@ -479,7 +501,7 @@ def test_the_census_summary_reads_both_folders_of_the_census_it_summarises() -> 
     """
     tasks = config.load_gardener().tasks
     census = tasks["compact-item-health"].owns or []
-    assert sorted(tasks["telemetry-aggregate"].reads) == sorted(census)
+    assert set(census) <= set(tasks["telemetry-aggregate"].reads)
 
 
 def test_a_file_named_as_owned_is_refused(tmp_path: Path) -> None:

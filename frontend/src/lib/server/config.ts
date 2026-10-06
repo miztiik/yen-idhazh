@@ -338,6 +338,7 @@ export interface ExplorerConfig {
 	max_rows: number;
 	max_fetch_bytes: number;
 	query_max_chars: number;
+	link_max_bytes: number;
 	reach_days: number;
 	chart_min_rows: number;
 	rank_max: number;
@@ -345,12 +346,10 @@ export interface ExplorerConfig {
 	history_max: number;
 	save_name_max_chars: number;
 	series_floor_share: number;
-	rail_rem: number;
 	readout_lines: [number, number, number, number];
 	notice_ms: number;
 	editor_lines_shown: [number, number];
 	strip_shown: [number, number];
-	answer_svh: number;
 	cell_max_ch: number;
 	bar_spread_share: number;
 	counter_from_share: number;
@@ -601,6 +600,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	max_rows: 1000,
 	max_fetch_bytes: 67108864,
 	query_max_chars: 5790,
+	link_max_bytes: 8192,
 	reach_days: 365,
 	chart_min_rows: 3,
 	rank_max: 30,
@@ -608,12 +608,10 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	history_max: 10,
 	save_name_max_chars: 40,
 	series_floor_share: 0.05,
-	rail_rem: 14,
 	readout_lines: [7, 3, 4, 3],
 	notice_ms: 6000,
-	editor_lines_shown: [8, 10],
+	editor_lines_shown: [8, 4],
 	strip_shown: [0, 6],
-	answer_svh: 60,
 	cell_max_ch: 40,
 	bar_spread_share: 0.5,
 	counter_from_share: 0.9,
@@ -1161,6 +1159,7 @@ export function explorerConfig(): ExplorerConfig {
 		max_rows: consoleBlock.explorer_max_rows ?? EXPLORER_DEFAULTS.max_rows,
 		max_fetch_bytes: consoleBlock.explorer_max_fetch_bytes ?? EXPLORER_DEFAULTS.max_fetch_bytes,
 		query_max_chars: consoleBlock.explorer_query_max_chars ?? EXPLORER_DEFAULTS.query_max_chars,
+		link_max_bytes: consoleBlock.explorer_link_max_bytes ?? EXPLORER_DEFAULTS.link_max_bytes,
 		reach_days: consoleBlock.explorer_reach_days ?? EXPLORER_DEFAULTS.reach_days,
 		chart_min_rows: consoleBlock.explorer_chart_min_rows ?? EXPLORER_DEFAULTS.chart_min_rows,
 		rank_max: consoleBlock.explorer_rank_max ?? EXPLORER_DEFAULTS.rank_max,
@@ -1169,12 +1168,10 @@ export function explorerConfig(): ExplorerConfig {
 		save_name_max_chars: consoleBlock.explorer_save_name_max_chars ?? EXPLORER_DEFAULTS.save_name_max_chars,
 		series_floor_share: consoleBlock.explorer_series_floor_share ?? EXPLORER_DEFAULTS.series_floor_share,
 		chrome: consoleBlock.explorer_chrome === 'console' ? 'console' : EXPLORER_DEFAULTS.chrome,
-		rail_rem: consoleBlock.explorer_rail_rem ?? EXPLORER_DEFAULTS.rail_rem,
 		readout_lines: (consoleBlock.explorer_readout_lines ?? EXPLORER_DEFAULTS.readout_lines) as [number, number, number, number],
 		notice_ms: consoleBlock.explorer_notice_ms ?? EXPLORER_DEFAULTS.notice_ms,
 		editor_lines_shown: (consoleBlock.explorer_editor_lines_shown ?? EXPLORER_DEFAULTS.editor_lines_shown) as [number, number],
 		strip_shown: (consoleBlock.explorer_strip_shown ?? EXPLORER_DEFAULTS.strip_shown) as [number, number],
-		answer_svh: consoleBlock.explorer_answer_svh ?? EXPLORER_DEFAULTS.answer_svh,
 		cell_max_ch: consoleBlock.explorer_cell_max_ch ?? EXPLORER_DEFAULTS.cell_max_ch,
 		bar_spread_share: consoleBlock.explorer_bar_spread_share ?? EXPLORER_DEFAULTS.bar_spread_share,
 		counter_from_share: consoleBlock.explorer_counter_from_share ?? EXPLORER_DEFAULTS.counter_from_share,
