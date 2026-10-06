@@ -356,8 +356,8 @@ test('THE ORACLE: every Data explorer answer state renders distinct words, tint 
 		await engineContext.close();
 	}
 
-	// The run fetches 14 Jun, the day choosing the ledger did not read, and that fetch waits until
-	// the picture is taken.
+	// The run fetches 14 Jun, the day choosing the ledger did not read. That fetch waits until the
+	// picture is taken and is then refused, so it never leaves the page.
 	const loading = await context.newPage();
 	try {
 		await openExplorer(loading, PINNED);
@@ -366,7 +366,7 @@ test('THE ORACLE: every Data explorer answer state renders distinct words, tint 
 		const held = new Promise<void>((resolve) => { release = resolve; });
 		await loading.route('**/state/**/*.parquet*', async (route) => {
 			await held;
-			await route.fallback();
+			await route.abort();
 		}, { times: 1 });
 		await loading.getByRole('button', { name: /^Run$/ }).click();
 		await expect(answer(loading).locator('[data-state="loading"]')).toBeVisible();
