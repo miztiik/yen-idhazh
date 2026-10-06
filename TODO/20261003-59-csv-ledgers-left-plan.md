@@ -58,7 +58,7 @@ Table C - when to stop and ask
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
 | 6 | The merge line's holdout score is saved through the door | 5 | D | PENDING | - | - | - |
 | 7 | The holdout marks are saved through the door | 6 | E | PENDING | - | - | - |
-| 8 | The item health summary is saved through the door | 2, 3 | B | PENDING | - | - | - |
+| 8 | The item health summary is saved through the door | 2 | B | DONE | p59-row-8 | - | Fowler |
 | 9 | The committed judge rows move onto the door, and the old CSV files go | 7 | F | PENDING | - | - | - |
 | 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; Plan 61 "The old-row reader and the migrator's council entry are deleted"; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | PENDING | - | - | - |
 | 11 | The door files a ledger under a folder of any depth | - | A | DONE | p59-row-11 | - | Fowler |
@@ -304,6 +304,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The summary moves with no month layout in the migrator: it has no committed file | Fowler, 2026-10-05 |
+| 2 | Runs before row 3: the dependency was a shared-file merge order, and row 3 waits on work outside this plan | Fowler, 2026-10-06 |
 
 ### Row #9 - The committed judge rows move onto the door, and the old CSV files go
 

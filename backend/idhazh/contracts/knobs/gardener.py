@@ -237,9 +237,9 @@ class _Declared(Model):
         default_factory=list,
         description=(
             "The ledgers this task files a report of its own into, through the ledger door: "
-            "one new raw file under the wake's day, dry run or not. Appending is not "
-            "owning. The door names each file afresh, so it cannot overwrite anything, and "
-            "the folder it lands in stays with whichever task owns it."
+            "one new raw file under the row's date, dry run or not. Appending is not owning. "
+            "The door names each file afresh, so it cannot overwrite anything, and the folder "
+            "it lands in stays with whichever task owns it."
         ),
     )
     reads: list[RelPath] = Field(

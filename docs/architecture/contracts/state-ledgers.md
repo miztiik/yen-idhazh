@@ -1,12 +1,12 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
 Three neighbours own the rest of the question. [schemas.md](schemas.md) owns the shape of a row and the rule that decides a grain. [../../concepts/partitions.md](../../concepts/partitions.md) owns what counts as a day file and a month name. [ledger-registry.md](ledger-registry.md) owns which ledgers exist, where each one sits, and the check that stops the build when the code and `config/ledgers.json` disagree. This page is the per-ledger answer: this ledger, this grain, this reason.
 
-Every ledger here is append-only except two that rewrite a whole file: `state/item-health-summary/` rewrites a month's summary, and `state/day-metrics/` rewrites one day's record when that day is corrected. The section on the first says why.
+Every ledger here is append-only except `state/day-metrics/`, which rewrites one day's record when that day is corrected. The item-health summary is derived from a whole month, but it is filed through the ledger door as raw daily summary rows and packed later.
 
 ## A ledger partitions only when its read carries a time window
 
@@ -22,7 +22,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/published/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Have we already run this? One file per assemble job | raw and compact | `collect.published_window_days` |
 | `state/raw/feed-health/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this source still working? One row per feed per run, one file per plan job | raw and compact | `HEALTH_WINDOW_DAYS` |
 | `state/raw/item-health/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did every planned item do? One row per planned item per run, one file per writer | raw and compact | the published projection, a month at a time |
-| `state/item-health-summary/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
+| `state/raw/item-health-summary/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What is left of an item-health month. One row per date and stage, filed through the ledger door | raw and compact | the folded month |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this address gone for good? One file per writer, under the day the address was retired | raw and compact | the whole tree |
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
@@ -62,11 +62,11 @@ Size it from the ceiling. A run plans at most `run.safety_ceiling_per_run` items
 
 The whole read holds one month's rows and the answer at a time, whatever the history holds. `backend/tests/test_ledger.py::test_load_published_costs_the_answer_and_not_the_file` doubles the months held and checks that the peak stays flat. The read times measured on 2026-09-08 were of the CSV day files this ledger no longer keeps, so they are not repeated here; git history holds them. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 
-## The item-health summary files by month because it summarises a month
+## The item-health summary keeps a month but files through the door
 
-`state/item-health-summary/<YYYY-MM>.csv` is what is left of an item-health month once the `full-grain` series of `config/gardener/telemetry-aggregate.json` has passed: one row per date and stage, folded by `retention.compact_month`.
+`state/raw/item-health-summary/` is what is left of an item-health month once the `full-grain` series of `config/gardener/telemetry-aggregate.json` has passed: one row per date and stage, folded by `retention.compact_month`, filed through `ledger.persist`, and packed later under `state/compact/item-health-summary/`.
 
-A day file of a month's totals is a shape nothing consumes, so it files by month. It is also the one ledger here that is rewritten rather than appended, because every row in it is derived from the days it summarises.
+The month is still the decision boundary: one raw file of this ledger in a month means that month has been summarised. The files are not rewritten in place. A second run sees the raw summary file and leaves the month alone.
 
 ## Why the two whole-read ledgers file by day anyway
 
