@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-06
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -411,12 +411,12 @@ the last day there was.
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
 | `payload.readDayShards`, `payload.dayShardFiles` | the shards of the newest `days` recorded days of a CSV day tree | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts days, never files** - see below |
-| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord` | the ledger's compact indexes, then the newest `days` packed days of the item-health, summary-quality-evals, feed-health or host-fingerprint ledger, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the same 91, counted back from the newest packed day that holds a row: when the newest packed days hold none, the reader reads as many earlier days to make up for them. `-1` reads every packed day, and a caller that passes it says why beside the call. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
-| `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same 91 |
+| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health or host-fingerprint ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
+| `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
 | `similarity-holdout.mergeLineHoldoutScore` | through `readDayShards`, over `state/content-similarity-judge/merge-line-holdout-scores/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
-| `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the day cover, for all three |
+| `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the window it is handed, for all three |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 

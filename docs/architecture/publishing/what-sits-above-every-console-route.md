@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 Three surfaces stand on a full console route: the strip - the route tabs and the
 days control on one row - the sentence under it that says how complete the
@@ -205,10 +205,11 @@ a colour change at the moment it sticks.
 
 ## The sentence under the strip dates the record
 
-Every chart on the console draws the newest days that exist rather than the last
-N days, so when the record stops a chart gains no gap at its right edge - it
-slides back in time and looks as full as it did the day before. The sentence
-under the strip is what tells a stopped pipeline from a quiet one:
+Every window on the console ends on the newest day the site published rather than
+on the reader's day, so when the pipeline stops publishing a chart gains no gap at
+its right edge - it holds the last window it drew and looks as full as it did the
+day before. The sentence under the strip is what tells a stopped pipeline from a
+quiet one:
 
 ```
 The latest run on this page finished at 18:23 UTC on Sunday 27 September. A run still going is not on this page yet.

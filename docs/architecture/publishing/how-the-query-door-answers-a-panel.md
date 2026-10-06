@@ -168,9 +168,9 @@ deploy re-packed or removed, and that the page had not read yet, answers
 `unreachable`, and the console says why - it arrived at a length its kept entry
 does not give, or it is not there, which is `file-missing`. A reload fixes both.
 
-**Why the index is kept rather than read again.** A console route anchors its
-span on a first and a newest day fixed for the page, and a panel that read a
-newer index than its neighbour would draw a different span beside it. Reading the
+**Why the index is kept rather than read again.** A console route draws one
+window for the page, and a panel that read a newer index than its neighbour would
+stop its rows on a different day beside it. Reading the
 index again before every slice would also put one more round trip in front of
 each one, where a cold load allows four serial round trips in all
 (`frontend/tests/console-cold-load.spec.ts`).
@@ -185,12 +185,16 @@ paths, and keeps the four-hop ceiling and every engine download in scope.
 
 ## How far a ledger reaches
 
-`ledgerReach(ledger)` answers the oldest and the newest day a ledger holds, so a
-route can anchor its span on the data rather than on the clock:
+`ledgerReach(ledger)` answers the oldest and the newest day a ledger holds, and
+where its rows stop, from its indexes alone. Every console window ends on the
+site's newest published day
+([the window](which-console-surfaces-follow-the-window-and-which-say-why-not.md#one-window-governs-the-page)),
+and a route reads exactly that window and no day before it, so the reach is how
+it learns where a record's rows stop when none of them is in the window:
 
 | # | Answer | When |
 | --- | --- | --- |
-| 1 | `ok`, with `first` and `through` | `through` is the newest day any index names, a month counting through its last UTC day and a year through 31 December: the same day a slice returns. `first` is the oldest day any index names, a month counting from its first day and a year from its 1 January. Its `fault` is `index-missing` when there is no `monthly.json` or no `yearly.json`, and `first` and `through` are then what the indexes that are there name |
+| 1 | `ok`, with `first`, `through` and `lastRows` | `through` is the newest day any index names, a month counting through its last UTC day and a year through 31 December: the same day a slice returns. `first` is the oldest day any index names, a month counting from its first day and a year from its 1 January. `lastRows` is the newest period whose file holds rows - a day, a month or a year, as the index names it, a day before a month before a year - or `null` when no entry holds a row. Its `fault` is `index-missing` when there is no `monthly.json` or no `yearly.json`, and `first`, `through` and `lastRows` are then what the indexes that are there name |
 | 2 | `quiet` | No index names a day yet |
 | 3 | `missing` | There is no `daily.json`, so the ledger is not published. Its fault is `not-packed` |
 | 4 | `unreachable` | `daily.json` is one this build will not act on, or could not be read. It carries no day, because the reach asks for none; the console says why |
@@ -662,6 +666,17 @@ while `monthly.json` names a month. Read from `daily.json` alone, such a ledger
 answered `quiet` with no `through`, as if nothing were packed. The door reads the
 other two indexes only then, so a short span still reads one index. Fowler,
 2026-10-05.
+
+**A console route reads exactly its window, and the reach says where a record's
+rows stop.** The build-time reader used to count its span back from the newest
+packed day and, when the newest packed days held no row, read further back until
+it found some, so a record that stopped writing still drew its last rows and its
+window moved into the past. Every window now ends on the site's newest published
+day (owner ruling of 2026-10-05), and the reader asks the door for that window
+and nothing earlier. Where the rows stop is a fact the indexes already hold, so
+the reach names it as `lastRows` and no day before the window is read. It is a
+period, not always a day: once a record's last rows are packed into a month or a
+year, the index knows only that month or year.
 
 ## See also
 

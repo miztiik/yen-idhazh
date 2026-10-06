@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-06
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -608,8 +608,8 @@ a fill value has to land in.
 Beneath the strip, the section leads with its own denominator: **how many feeds did not fail, out of how many the pipeline read, over how many runs** - 152 of 179 across 44 runs, measured 2026-09-03. Four broken feeds out of eight is a collapse and four out of two hundred is a Tuesday, and until this landed the page drew both identically. The clean feeds are NAMED behind a `<details>`, alphabetically, with no bars and no order, and the summary says why there is no order: a feed is read once a run, so every clean feed has the same record. Under `console.min_attempts_for_rate` runs the sentence prints the same counts and says the record is too shallow to read as reliability - two runs deep, "did not fail" means "did not fail twice". The rule is `reliability` in `frontend/src/lib/feed-health.ts`, reading the same `failing` the quarantine reads ([../sources/health.md](../sources/health.md)).
 
 **The sentence names its span, because a bounded read cannot prove "never".**
-The read behind it is `feedResults(shardDays(widest))` - the newest packed days
-of the feed record that the widest window preset can reach, and no further.
+The read behind it is `feedResults` over the widest window preset, which ends on
+the newest published day - the packed days of the feed record in it, and no further.
 "Never" claims every run there has been over a read that opens a bounded set of
 files, so it is a claim only a growing read could support (`CLAUDE.md` Guardrail
 #12, owner decision 2026-09-08). The sentence says the feeds "did not fail a

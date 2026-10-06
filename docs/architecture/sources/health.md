@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-06
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -572,9 +572,8 @@ cannot disagree about what a failure is. Three facts it settles:
  honouring its own `robots.txt` has not broken. It has not delivered either,
  which is the other half and the half that was missing.
 - **The span is the days the widest window preset reaches, and the sentence
- says so.** The console hands `reliability` the rows from
- `feedResults(shardDays(widest))`, the newest packed days a widest preset of
- 90 days reaches. The streak beside each feed is read over those same rows,
+ says so.** The console hands `reliability` the rows `feedResults` reads over
+ the widest window preset, the 90 days that end on the newest published day. The streak beside each feed is read over those same rows,
  because two spans in one section is the defect the shared window exists to
  remove. Until 2026-09-09 the sentence said the feeds "have never failed",
  which claims every run there has been over a read that opens a bounded set of
