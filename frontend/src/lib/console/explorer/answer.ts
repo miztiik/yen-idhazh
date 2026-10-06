@@ -54,14 +54,18 @@ export function printCell(column: Column, value: Row[string]): PrintedCell {
 	}
 }
 
+/** The engine prints an infinite double as `inf` or `-inf`, which `Number()` reads as NaN. */
+const INFINITE: ReadonlyMap<string, number> = new Map([['inf', Infinity], ['-inf', -Infinity]]);
+
 function comparable(column: Column, row: Row): string | number | bigint | null {
 	const value = row[column.name];
 	if (value === null || value === undefined) return null;
 	const text = rawText(value);
 	const family = classifyType(column.type);
 	if (isNumber(family)) {
-		const n = Number(text);
-		return Number.isFinite(n) ? n : text;
+		// `nan` and `-nan` name no number, so they sort with the NULLs.
+		const n = INFINITE.get(text) ?? Number(text);
+		return Number.isNaN(n) ? null : n;
 	}
 	if (isDay(family)) return readUtcNanoseconds(text);
 	return text.toLowerCase();

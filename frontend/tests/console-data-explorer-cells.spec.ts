@@ -50,6 +50,14 @@ test('the first press sorts numbers and days high to low and everything else A t
 	expect(sortedRows([{ n: '9' }, { n: '10' }, { n: '2' }], [big], { column: 'n', direction: 'desc' })).toEqual([{ n: '10' }, { n: '9' }, { n: '2' }]);
 });
 
+test('in a number column inf sorts above every number and -inf below it, and nan and -nan sort with the NULLs', () => {
+	const column = { name: 'ratio', type: 'DOUBLE' };
+	// The engine prints 1/0 as inf, -1/0 as -inf and 0/0 as -nan.
+	const rows: Row[] = [{ ratio: 'nan' }, { ratio: '2' }, { ratio: '-inf' }, { ratio: null }, { ratio: '10' }, { ratio: 'inf' }, { ratio: '-nan' }, { ratio: '-3' }];
+	expect(sortedRows(rows, [column], { column: 'ratio', direction: 'desc' }).map((row) => row.ratio)).toEqual(['inf', '10', '2', '-3', '-inf', 'nan', null, '-nan']);
+	expect(sortedRows(rows, [column], { column: 'ratio', direction: 'asc' }).map((row) => row.ratio)).toEqual(['-inf', '-3', '2', '10', 'inf', 'nan', null, '-nan']);
+});
+
 test('a timestamp with no zone sorts by its UTC instant when the run is in another time zone', () => {
 	const column = { name: 'at', type: 'TIMESTAMP' };
 	// New York's clocks skip from 02:00 to 03:00 on 2026-03-08, so its local time reads these two as one instant.
