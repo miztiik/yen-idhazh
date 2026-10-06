@@ -1,6 +1,7 @@
 
 import type { Column, Row } from '$lib/data/ledger';
 import { classifyType, isDay, isNumber } from './type-family';
+import { readUtcNanoseconds } from './utc-instant';
 
 export type SortDirection = 'asc' | 'desc' | null;
 export type SortSpec = { column: string; direction: SortDirection };
@@ -40,8 +41,6 @@ export function printCell(column: Column, value: Row[string]): PrintedCell {
 			const n = Number(text);
 			return Number.isFinite(n) ? { text: numberText(n), kind: 'number' } : { text, kind: 'text' };
 		}
-		case 'date':
-			return { text: text.slice(0, 10), kind: 'text' };
 		case 'timestamp':
 			return { text: text.replace('T', ' ').replace(/Z$/, '').replace(/\.000$/, ''), kind: 'text' };
 		case 'truth':
@@ -55,26 +54,8 @@ export function printCell(column: Column, value: Row[string]): PrintedCell {
 	}
 }
 
-/** A date or a timestamp as the engine prints it: the day, a time of day to the nanosecond, and
- *  the offset from UTC that a timestamp with a time zone carries. A `T` and a `Z` are read as
- *  ISO 8601 writes them. Text with no offset is UTC (CLAUDE.md section 2). */
-const DAY_TEXT = /^(\d{4,})-(\d\d)-(\d\d)(?:[ T](\d\d):(\d\d):(\d\d)(?:\.(\d{1,9}))?)?(?:Z|([+-])(\d\d)(?::(\d\d))?(?::(\d\d))?)?$/;
-
-/** Nanoseconds from 1970-01-01 00:00 UTC to the instant a date or a timestamp names, read from
- *  the engine's text, so neither the browser's time zone nor a millisecond clock changes the
- *  order. `null` for text that names no instant, such as `infinity` or a date `(BC)`. */
-function readUtcNanoseconds(text: string): bigint | null {
-	const part = DAY_TEXT.exec(text);
-	if (part === null) return null;
-	const [, year, month, day, hour = '0', minute = '0', second = '0', fraction = '', sign = '+', offsetHour = '0', offsetMinute = '0', offsetSecond = '0'] = part;
-	const offset = (sign === '-' ? -1 : 1) * ((Number(offsetHour) * 60 + Number(offsetMinute)) * 60 + Number(offsetSecond));
-	const at = new Date(0);
-	// Not `Date.UTC`, which reads a year below 100 as 1900 plus that year.
-	at.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
-	at.setUTCHours(Number(hour), Number(minute), Number(second) - offset);
-	const ms = at.getTime();
-	return Number.isNaN(ms) ? null : BigInt(ms) * 1_000_000n + BigInt(fraction.padEnd(9, '0'));
-}
+/** The engine prints an infinite double as `inf` or `-inf`, which `Number()` reads as NaN. */
+const INFINITE: ReadonlyMap<string, number> = new Map([['inf', Infinity], ['-inf', -Infinity]]);
 
 function comparable(column: Column, row: Row): string | number | bigint | null {
 	const value = row[column.name];
@@ -82,8 +63,9 @@ function comparable(column: Column, row: Row): string | number | bigint | null {
 	const text = rawText(value);
 	const family = classifyType(column.type);
 	if (isNumber(family)) {
-		const n = Number(text);
-		return Number.isFinite(n) ? n : text;
+		// `nan` and `-nan` name no number, so they sort with the NULLs.
+		const n = INFINITE.get(text) ?? Number(text);
+		return Number.isNaN(n) ? null : n;
 	}
 	if (isDay(family)) return readUtcNanoseconds(text);
 	return text.toLowerCase();
