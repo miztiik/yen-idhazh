@@ -1,4 +1,5 @@
-import type { Column, Row } from '../../data/slice-shapes';
+import type { Column, DateStamp, Row } from '../../data/slice-shapes';
+import { classifyType, isDay, isNumber, type TypeFamily } from './type-family';
 
 export type ExplorerChartType = 'dateSeries' | 'rankedList' | 'pairedScatter' | 'distribution';
 
@@ -45,6 +46,10 @@ export type PairedScatterShape = {
 	xColumn: string;
 	yColumn: string;
 	subjectColumn: string | null;
+	/** Rows with a number in both columns: the points drawn. */
+	readings: number;
+	/** Distinct subjects among those rows. */
+	subjects: number;
 	tooFew: boolean;
 	mainFigure: string;
 	comparison: string;
@@ -56,6 +61,8 @@ export type DistributionShape = {
 	option: 'Spread';
 	icon: 'shape-distribution';
 	valueColumn: string;
+	/** Rows with a number in the column: the values drawn. */
+	readings: number;
 	tooFew: boolean;
 	median: number | null;
 	mainFigure: string | null;
@@ -70,23 +77,15 @@ export type NoShape = {
 
 export type ExplorerShape = DateSeriesShape | RankedListShape | PairedScatterShape | DistributionShape | NoShape;
 
-const DATE_TYPES = new Set(['DATE', 'TIMESTAMP', 'TIMESTAMP WITH TIME ZONE', 'TIMESTAMPTZ']);
-const NUMERIC_TYPES = new Set(['TINYINT', 'SMALLINT', 'INTEGER', 'INT', 'BIGINT', 'HUGEINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT', 'FLOAT', 'DOUBLE', 'REAL', 'DECIMAL', 'NUMERIC']);
-const TEXT_TYPES = new Set(['VARCHAR', 'TEXT', 'STRING', 'UUID']);
-
-function normalizedType(column: Column): string {
-	return column.type.trim().replace(/\(.*/, '').toUpperCase();
+function columnsOf(columns: readonly Column[], holds: (family: TypeFamily) => boolean): string[] {
+	return columns.filter((column) => holds(classifyType(column.type))).map((column) => column.name);
 }
 
-function columnsOf(columns: readonly Column[], types: ReadonlySet<string>): string[] {
-	return columns.filter((column) => types.has(normalizedType(column))).map((column) => column.name);
-}
-
-/** A cell's number, or `null` when it holds none. The door returns every cell as text (plan
- *  section 2.5 rule 8), so a number column's cell arrives as `'8'` or `'1.5'`; a number is
- *  accepted too. Text that is not a finite number, and an integer past the safe range, is
- *  `null`: a missing reading is left out of a chart, never drawn as a zero. */
-function numericValue(row: Row, column: string): number | null {
+/** A cell's number, or `null` when it holds none. The door returns every cell as text and a
+ *  SQL NULL as `null`, so a number column's cell arrives as `'8'` or `'1.5'`; a number is
+ *  accepted too. A NULL, text that is not a finite number, and an integer past the safe range
+ *  are `null`: a missing reading is left out of a chart, never drawn as a zero. */
+export function numericValue(row: Row, column: string): number | null {
 	const value = row[column];
 	const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
 	if (!Number.isFinite(parsed)) return null;
@@ -127,9 +126,9 @@ function biggestRow(rows: readonly Row[], column: string): Row | undefined {
 }
 
 export function chooseExplorerShapes(columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): readonly ExplorerShape[] {
-	const dateColumns = columnsOf(columns, DATE_TYPES);
-	const numericColumns = columnsOf(columns, NUMERIC_TYPES);
-	const textColumns = columnsOf(columns, TEXT_TYPES);
+	const dateColumns = columnsOf(columns, isDay);
+	const numericColumns = columnsOf(columns, isNumber);
+	const textColumns = columnsOf(columns, (family) => family === 'text');
 	const shapes: ExplorerShape[] = [];
 
 	if (numericColumns.length === 0) {
@@ -215,9 +214,36 @@ function dateSeriesShape(dateColumn: string, numericColumns: readonly string[], 
 	};
 }
 
+/** One UTC day on the date chart's axis, and the answer's row for it: `null` on a lost day. */
+export type DateSeriesDay = { day: DateStamp; row: Row | null };
+
+/** The days the date chart draws, ascending: each UTC day the answer has a row for, and each day a
+ *  selected ledger lost that falls between the first and the last of them with no row of its own.
+ *
+ *  A lost day has no record, so it sits on the axis with no value and the line breaks there,
+ *  instead of joining the days either side as if it held data. Any other day without a row stays
+ *  off the axis, because the page cannot know what the question would make of a day with no rows.
+ *  A lost day before the first day or after the last stays off too, so it never lengthens the chart
+ *  or stands beside days the question left out; the note under the span line names every lost day
+ *  (Jony, 2026-10-05). */
+export function chooseDateSeriesDays(dateColumn: string, rows: readonly Row[], lostDays: readonly DateStamp[]): DateSeriesDay[] {
+	const byDay = new Map<DateStamp, Row>();
+	for (const row of rows) {
+		const day = dayValue(row[dateColumn]);
+		if (day !== null) byDay.set(day, row);
+	}
+	const drawn = [...byDay.keys()].sort();
+	if (drawn.length === 0) return [];
+	const first = drawn[0];
+	const last = drawn[drawn.length - 1];
+	const lost = lostDays.filter((day) => first < day && day < last && !byDay.has(day));
+	return [...new Set([...drawn, ...lost])].sort().map((day) => ({ day, row: byDay.get(day) ?? null }));
+}
+
 function rankedListShape(labelColumn: string, valueColumn: string, rows: readonly Row[], bounds: ExplorerShapeBounds): RankedListShape {
 	const leader = biggestRow(rows, valueColumn);
 	const value = firstNumber(leader, valueColumn);
+	const rowsDrawn = Math.min(rows.filter((row) => numericValue(row, valueColumn) !== null).length, bounds.rankMax);
 	return {
 		kind: 'chart',
 		type: 'rankedList',
@@ -225,8 +251,8 @@ function rankedListShape(labelColumn: string, valueColumn: string, rows: readonl
 		icon: 'shape-ranked',
 		labelColumn,
 		valueColumn,
-		rowsDrawn: Math.min(rows.length, bounds.rankMax),
-		moreRows: Math.max(0, rows.length - bounds.rankMax),
+		rowsDrawn,
+		moreRows: rows.length - rowsDrawn,
 		mainFigure: leader && value !== null ? { label: String(leader[labelColumn]), value, column: valueColumn } : null,
 		comparison: `each ${labelColumn} against the largest`
 	};
@@ -234,7 +260,8 @@ function rankedListShape(labelColumn: string, valueColumn: string, rows: readonl
 
 function pairedScatterShape(numericColumns: readonly string[], textColumns: readonly string[], rows: readonly Row[], bounds: ExplorerShapeBounds): PairedScatterShape {
 	const [xColumn, yColumn] = numericColumns;
-	const subjects = textColumns.length === 1 ? new Set(rows.map((row) => String(row[textColumns[0]]))).size : rows.length;
+	const drawn = rows.filter((row) => numericValue(row, xColumn) !== null && numericValue(row, yColumn) !== null);
+	const subjects = textColumns.length === 1 ? new Set(drawn.map((row) => String(row[textColumns[0]]))).size : drawn.length;
 	return {
 		kind: 'chart',
 		type: 'pairedScatter',
@@ -243,8 +270,10 @@ function pairedScatterShape(numericColumns: readonly string[], textColumns: read
 		xColumn,
 		yColumn,
 		subjectColumn: textColumns[0] ?? null,
-		tooFew: rows.length < bounds.fleetMinRows || subjects < bounds.bandwidthMinKinds,
-		mainFigure: `${rows.length} rows of ${yColumn} against ${xColumn}`,
+		readings: drawn.length,
+		subjects,
+		tooFew: drawn.length < bounds.fleetMinRows || subjects < bounds.bandwidthMinKinds,
+		mainFigure: `${drawn.length} rows of ${yColumn} against ${xColumn}`,
 		comparison: `${yColumn} against ${xColumn}`
 	};
 }
@@ -258,7 +287,8 @@ function distributionShape(valueColumn: string, rows: readonly Row[], bounds: Ex
 		option: 'Spread',
 		icon: 'shape-distribution',
 		valueColumn,
-		tooFew: rows.length < bounds.fleetMinRows,
+		readings: values.length,
+		tooFew: values.length < bounds.fleetMinRows,
 		median: middle,
 		mainFigure: middle === null ? null : `Half of ${valueColumn} is at or under ${middle}`,
 		comparison: `each band of ${valueColumn} against the share of rows at or below it`

@@ -52,7 +52,7 @@ Table C - when to stop and ask
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The first upkeep run after feed health moved is read | - | A | PENDING | - | - | - |
-| 2 | The parquet column mapper reads a fixed-choice field | - | A | PENDING | - | - | - |
+| 2 | The parquet column mapper reads a fixed-choice field | - | A | DONE | p59-row-2 | - | Fowler |
 | 3 | The CSV code no ledger uses any more is deleted | Plan 61 "The council saves its run records through the ledger door"; pipeline-tests "Readers understand nested trial roots" | A | PENDING | - | - | - |
 | 4 | The judge's scored pairs and its metrics are saved through the door | 2, 3, 11 | B | PENDING | - | - | - |
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |

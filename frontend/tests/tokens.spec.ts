@@ -38,10 +38,11 @@ const THEME_INDEPENDENT = /^--(space|text|leading|frame|measure|gutter|radius|du
  * through `--series-4` are aliases of the first four chart stops, kept so no
  * existing chart had to change in the row that widened the ramp - the stop they
  * point at is mirrored, and mirroring the alias too would be a second name for
- * one utility.
+ * one utility. The type colours are applied by one component from a column's
+ * type family, never by a class.
  */
 const NO_UTILITY =
-	/^--(gradient|dur|ease|series|source-swatch|shadow-focus|color-focus|chart-readout|color-surface-raised|color-surface-sunken|color-rule-strong|color-accent-strong|color-on-accent|radius-full)/;
+	/^--(gradient|dur|ease|series|type-|source-swatch|shadow-focus|color-focus|chart-readout|color-surface-raised|color-surface-sunken|color-rule-strong|color-accent-strong|color-on-accent|radius-full)/;
 
 function block(css: string, selector: string): string {
 	const start = css.indexOf(selector);
@@ -60,6 +61,12 @@ function valueOf(css: string, token: string): string {
 	const match = new RegExp(`^\\s*${token}\\s*:\\s*(#[0-9a-f]{6})`, 'm').exec(css);
 	expect(match, `${token} is no longer a plain hex value in this theme`).not.toBeNull();
 	return match![1];
+}
+
+/** The hex one token resolves to in one theme block, following `var(--other)` aliases there. */
+function resolvedIn(css: string, token: string): string {
+	const alias = new RegExp(`^\\s*${token}\\s*:\\s*var\\((--[a-z0-9-]+)\\)\\s*;`, 'm').exec(css);
+	return alias === null ? valueOf(css, token) : resolvedIn(css, alias[1]);
 }
 
 /** WCAG 2.2 relative luminance, written out rather than imported.
@@ -116,6 +123,22 @@ test.describe('the token layer', () => {
 			const ground = valueOf(css, '--code-ground');
 			for (const token of ['--code-text', '--code-keyword', '--code-string', '--code-number', '--code-comment']) {
 				expect(contrast(valueOf(css, token), ground), `${name} ${token} does not clear 4.5:1`).toBeGreaterThanOrEqual(4.5);
+			}
+		}
+	});
+
+	test('every type colour clears 4.5 to 1 on the surface it is printed on, in both themes', () => {
+		// The Data explorer prints a column's type on --color-surface in its
+		// family's colour, and a type in no family in the tertiary text colour.
+		// Two of the four are aliases of the editor's colours, so the check
+		// follows an alias to the hex it ends at in the same theme block.
+		for (const [name, css] of [['dark', block(TOKENS, BASE_SELECTOR)], ['light', block(TOKENS, OVERRIDE_SELECTOR)]] as const) {
+			const ground = valueOf(css, '--color-surface');
+			const types = declaredIn(css).filter((token) => token.startsWith('--type-'));
+			expect(types, `${name} no longer declares the four type colours`).toEqual(['--type-text', '--type-number', '--type-time', '--type-truth']);
+			for (const token of [...types, '--color-text-tertiary']) {
+				const ratio = contrast(resolvedIn(css, token), ground);
+				expect(ratio, `${name} ${token} reads ${ratio.toFixed(2)}:1 on ${ground}`).toBeGreaterThanOrEqual(4.5);
 			}
 		}
 	});

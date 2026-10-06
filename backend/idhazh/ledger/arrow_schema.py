@@ -13,7 +13,7 @@ import types
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
-from typing import Annotated, Any, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
@@ -68,6 +68,30 @@ _PLAIN: dict[type, ColumnType] = {
 }
 
 
+#: The value types a fixed-choice field may hold, and the scalar it is stored as.
+#: Exact types: a `bool` is an `int` and an enum member is its base type, and
+#: neither may hide inside a choice whose column would not say so.
+_LITERAL_SCALAR: dict[type, str] = {str: "string", int: "int64"}
+
+
+def _literal_scalar(annotation: Any, field_path: str) -> str | None:
+    """The scalar a fixed-choice field is stored as, or `None` when it is not one.
+
+    Every choice must have the same exact type from `_LITERAL_SCALAR`; any other
+    choice set is refused by its field path.
+    """
+    bare = _unwrapped(annotation)
+    if get_origin(bare) is not Literal:
+        return None
+    held = {type(value) for value in get_args(bare)}
+    if len(held) == 1 and (only := next(iter(held))) in _LITERAL_SCALAR:
+        return _LITERAL_SCALAR[only]
+    raise TypeError(
+        f"{field_path} is declared {annotation!r}, and a fixed choice that is not "
+        "all str or all int is unsupported"
+    )
+
+
 def _unwrapped(annotation: Any) -> Any:
     """The type under any `Annotated[...]` layers, whose metadata is a constraint."""
     while get_origin(annotation) is Annotated:
@@ -103,6 +127,9 @@ def logical_type_of(
         raise TypeError(
             f"{field_path} is declared {annotation!r}, which is only supported as a union member"
         )
+    literal = _literal_scalar(bare, field_path)
+    if literal is not None:
+        return LogicalType(kind="scalar", scalar=literal)
 
     origin = get_origin(bare)
     if origin in (Union, types.UnionType):
@@ -238,6 +265,9 @@ def _column_type(name: str, annotation: Any) -> tuple[ColumnType, bool]:
         held = get_args(bare)
         if len(held) == 2 and held[1] is Ellipsis and _is_a_string(held[0]):
             return ColumnType.STRING_LIST, nullable
+    literal = _literal_scalar(bare, name)
+    if literal is not None:
+        return ColumnType(literal), nullable
     if isinstance(bare, type):
         if bare in _PLAIN:
             return _PLAIN[bare], nullable

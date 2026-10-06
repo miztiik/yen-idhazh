@@ -610,7 +610,7 @@
     "visuals_rendered": 0
   },
   {
-    "addresses_considered": 10031,
+    "addresses_considered": 10048,
     "bands": {
       "high": 98,
       "low": 7,
@@ -646,8 +646,8 @@
       {"column": "summary_words","stat": {"count": 148,"maximum": 124.0,"minimum": 33.0,"p25": 58.0,"p50": 67.0,"p75": 90.0,"total": 10669.0}},
       {"column": "verbatim_run","stat": {"count": 148,"maximum": 0.45454545454545453,"minimum": 0.02,"p25": 0.07407407407407407,"p50": 0.10606060606060606,"p75": 0.15151515151515152,"total": 18.247197614861065}}
     ],
-    "items_failed": 92,
-    "items_planned": 240,
+    "items_failed": 172,
+    "items_planned": 320,
     "items_published": 148,
     "items_truncated": 0,
     "label_similarity": {
@@ -672,8 +672,8 @@
       "unattributed": 0,
       "unsupported_number": 1
     },
-    "revision": 3,
-    "runs": 3,
+    "revision": 4,
+    "runs": 4,
     "sources": [
       {"doubted": 0,"published": 2,"source_id": "abc-au-world","truncated": 0},
       {"doubted": 1,"published": 2,"source_id": "africanews","truncated": 0},
@@ -754,6 +754,42 @@
       "output_tokens": 192490,
       "prefill_ms": 32197055
     },
+    "version": "2026-09-29",
+    "visuals_rendered": 0
+  },
+  {
+    "addresses_considered": null,
+    "bands": {
+      "high": 0,
+      "low": 0,
+      "medium": 0
+    },
+    "date": "2026-10-06",
+    "determinism_violations": 0,
+    "extraction": null,
+    "extraction_suspect": 0,
+    "instruments": [],
+    "items_failed": 80,
+    "items_planned": 80,
+    "items_published": 0,
+    "items_truncated": 0,
+    "label_similarity": null,
+    "model_id": "qwen3-5-9b-q4-k-m",
+    "reasons": {
+      "faithfulness": 0,
+      "hedge_dropped": 0,
+      "lead_missing": 0,
+      "not_scored": 0,
+      "unattributed": 0,
+      "unsupported_number": 0
+    },
+    "revision": 1,
+    "runs": 1,
+    "sources": [],
+    "sources_present": 0,
+    "stage_timing": [],
+    "summaries_scored": 0,
+    "throughput": null,
     "version": "2026-09-29",
     "visuals_rendered": 0
   }

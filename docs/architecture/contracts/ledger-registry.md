@@ -65,7 +65,7 @@ A ledger that goes through the ledger door files under two roots rather than one
 | `content-similarity-judge/holdout-pairs.csv` | a person, by hand | `similarity/holdout.py`, `similarity-holdout.ts` | `merge=text` stops the push for a person | nothing: it stays CSV while a person edits it by hand |
 | `llm-council/shard-outcomes` | `council/session.py` | nothing yet | the union driver keeps both | `run_id` and `shard` |
 
-- **A fixed-choice field** is a field declared as `Literal[...]`, such as the judge's model name. The parquet column mapper, `ledger/arrow_schema.py`, refuses one until it learns a mapping for it.
+- **A fixed-choice field** is a field declared as `Literal[...]`, such as the judge's model name. The parquet column mapper, `ledger/arrow_schema.py`, stores one whose choices are all `str` as a string and all `int` as an int64 ([the column types](persistence.md#the-column-types)), so this is no longer a blocker.
 - **`run_id` and `shard`.** Every door file already records the `run_id` and `shard` of the job that wrote it, and a row field with either name takes the place of the door's cell. [The rule below](#the-rule-a-judge-ledger-follows-when-it-moves) settles both for the judge ledgers: `run_id` stays and means the council run, and `shard` is renamed in the change that moves its ledger.
 - **A whole-month file.** One writer rewrites `item-health-summary`'s month file on every run, and the migrator reads only the two day layouts. It needs a month layout, or a ruling that the ledger stays CSV.
 

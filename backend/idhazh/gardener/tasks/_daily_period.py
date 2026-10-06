@@ -5,10 +5,11 @@ the days after the daily mark, each `compact_after_days` whole days past its
 end, at most `max_periods_per_run` of them, or with no mark the days from where
 a first run starts. The step names what it reads of them - each day's raw
 folder and its day file, whichever format wrote it - and the same of the packed
-days a GitHub re-run may still write into. Then it takes days in order, each on
-its own: first each packed day that holds raw files again, then the new days,
-all against the one cap. A new day the index already names and no raw file
-holds keeps its entry as it is, and the mark moves past it.
+days a GitHub re-run may still write into. Then it works oldest first, against
+the one cap: first each closed month a raw file landed in, which it re-opens,
+then each packed day that holds raw files again, then the new days, each day on
+its own. A new day the index already names and no raw file holds keeps its
+entry as it is, and the mark moves past it.
 
 **A packed day that holds raw files again is taken again.** A GitHub re-run
 writes into the day its run first wrote, for up to thirty days, which is why
@@ -19,13 +20,19 @@ is rebuilt from its own file and the new raw files together, settled once -
 one file's rows per work unit, the last of its highest attempt, then the first
 row per key - so a re-run replaces its first attempt even when it filed fewer
 rows. A day recorded `empty` or `lost` has no file, so it is rebuilt from its
-raw files alone. The mark stays where it is. Raw files in a month already
-absorbed are refused by name and kept: `daily_keep_days` outlasts GitHub's
-re-run window, so no re-run can land there and a person decides what they are.
+raw files alone. The mark stays where it is.
 **A day whose entry says `packed` while its file is not there is refused**, as
 `file-missing`, and its raw files are kept: rebuilt from the re-run's files
 alone it would hold only the shards that ran again, and its index entry would
 call that smaller day complete.
+
+**A raw day in a month the monthly index names landed after its month closed,
+and the month re-opens** (`_reopened_month`): the month's rows and the late
+rows are settled the way a day taken again is. It counts once against the cap.
+One in a month past the keep line is the drop steps' instead (below). A raw day
+in a month the monthly mark is past that no monthly entry names is refused by
+name and kept, for a person: that month never closed, was dropped, or sits in a
+packed year, so there is no month to re-open.
 
 **A day with no row is an entry `empty` with no file.** The entry keeps the
 newest day the daily index names equal to the mark, so a reader tells a quiet
@@ -46,8 +53,11 @@ day no raw file is left in, and takes again a day whose raw files remain.
 by their listed paths: those in the months the drop step takes, and those a
 first run looked back over and did not take. Nothing of them is fetched or
 opened, so a file that cannot be read goes with its day. A window that only
-reports keeps them instead: it names their files for the record, and the step
-takes those days like any other.
+reports keeps them instead and names their files for the record. The step takes
+such a day like any other while its month is open, as a first run that starts
+before the line does. In a month already closed it leaves the day alone, live
+or not: the drop steps own it, and a re-open would write a month file the
+window deletes.
 """
 
 from __future__ import annotations
@@ -66,6 +76,7 @@ from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.gardener import ledger_marks, named_trees
+from idhazh.gardener.tasks import _reopened_month
 from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
 
 logger = logging.getLogger(__name__)
@@ -106,7 +117,7 @@ def drop(tree: CompactTree, months: Sequence[str], *, first_kept: str | None) ->
 
 
 def spare(tree: CompactTree, months: Sequence[str], *, first_kept: str | None) -> tuple[Stop, ...]:
-    """Every raw file a live drop would take is named and kept, for `compact` to take."""
+    """Every raw file a live drop would take is named and kept, for `compact` in an open month."""
     for _day, files in _past_the_line(tree, months, first_kept=first_kept):
         for path in files:
             tree.spare(path)
@@ -117,6 +128,20 @@ def _days_from(first: str, last: str) -> list[str]:
     """Every UTC day from `first` to `last`, both named."""
     start, end = date.fromisoformat(first), date.fromisoformat(last)
     return [(start + timedelta(days=step)).isoformat() for step in range((end - start).days + 1)]
+
+
+def _refused(
+    tree: CompactTree, day: str, why: str, fault: ledger.LedgerFault | None = None
+) -> Stop:
+    """A raw day the step does not take, said once by name. Its files are kept."""
+    logger.error(
+        "a raw day is not compacted, and its files are kept ledger=%s day=%s fault=%s reason=%s",
+        tree.ledger.value,
+        day,
+        fault or "none",
+        why,
+    )
+    return Stop(StopReason.FAILED, day)
 
 
 def _take[C: Contract](
@@ -134,15 +159,9 @@ def _take[C: Contract](
     Nothing is decided for a day that fails, and nothing is said of it.
     """
     try:
-        files = ledger.read_day_files(tree.state_dir, tree.ledger, day)
+        files = tree.raw_files(day, most=policy.max_raw_files_per_period)
     except ValueError as refusal:
         return str(refusal), None
-    if len(files) > policy.max_raw_files_per_period:
-        return (
-            f"it holds {len(files)} raw files and one period is built from at most "
-            f"{policy.max_raw_files_per_period}",
-            None,
-        )
     entry = tree.daily.get(day)
     if entry is not None and not files:
         _advance(tree, day, stamp=stamp, identity=identity)
@@ -242,55 +261,80 @@ def compact(
     choice: StepChoice,
     *,
     rerun_span: tuple[str, str] | None,
+    first_kept: str | None,
     stamp: str,
     identity: WriterIdentity,
 ) -> tuple[Stop, ...]:
-    """Take again each packed day that holds raw files, then the new days, oldest first, to the cap.
+    """Re-open each closed month raw files landed in, then take days again and new days, to the cap.
 
-    A choice an operator range refused stops here, at the day the range left
-    out, with nothing taken.
+    `first_kept` is the keep line, the oldest month the monthly window keeps,
+    or None when it keeps every month. A re-opened month counts once against
+    the cap, as a day does. A choice an operator range refused stops here, at
+    the day the range left out, with nothing taken.
     """
     if choice.stopped_because is StopReason.FAILED and choice.resume_from is not None:
-        logger.error(
-            "a raw day is not compacted, and its files are kept "
-            "ledger=%s day=%s fault=%s reason=%s",
-            tree.ledger.value,
-            choice.resume_from,
-            "none",
-            "the operator range leaves it out, and it is due before any day the range names. "
-            "Widen the range to include it",
+        return (
+            _refused(
+                tree,
+                choice.resume_from,
+                "the operator range leaves it out, and it is due before any day the range "
+                "names. Widen the range to include it",
+            ),
         )
-        return (Stop(StopReason.FAILED, choice.resume_from),)
     new = (
         [] if choice.first is None or choice.last is None else _days_from(choice.first, choice.last)
     )
     tree.name_days([*(_days_from(*rerun_span) if rerun_span is not None else []), *new])
     model, key = ledger.door_contract(tree.ledger), ledger.door_key(tree.ledger)
     stops: list[Stop] = []
+    closed: list[str] = []
     again: list[str] = []
     for day in tree.raw_days:
         if tree.daily_through is None or day > tree.daily_through:
             continue
-        if tree.monthly_through is not None and day[:7] <= tree.monthly_through:
-            logger.error(
-                "raw files sit in a month already absorbed, and are kept ledger=%s day=%s",
-                tree.ledger.value,
-                day,
+        month = day[:7]
+        if month in tree.monthly and month[:4] not in tree.yearly:
+            # A closed month past the keep line is the drop steps', live or only reported.
+            if (first_kept is None or month >= first_kept) and month not in closed:
+                closed.append(month)
+        elif tree.monthly_through is not None and month <= tree.monthly_through:
+            stops.append(
+                _refused(
+                    tree,
+                    day,
+                    "no monthly entry names its month and the monthly mark is past it: the "
+                    "month never closed, was dropped, or sits in a packed year, so there is "
+                    "no month to re-open",
+                )
             )
-            stops.append(Stop(StopReason.FAILED, day))
-            continue
-        again.append(day)
+        else:
+            again.append(day)
+    taken = 0
+    for month in closed:
+        if taken == policy.max_periods_per_run:
+            return (*stops, Stop(StopReason.CEILING, month))
+        refusal = _reopened_month.reopen(
+            tree,
+            month,
+            most=policy.max_raw_files_per_period,
+            model=model,
+            key=key,
+            identity=identity,
+        )
+        if refusal:
+            stops.extend(refusal)
+        else:
+            taken += 1
     days = again + new
     # Every day the budget can reach, fetched in one call before the first is read:
     # a day that fails costs nothing, so the ones waiting again may all fail first.
-    reached = days[: len(again) + policy.max_periods_per_run]
+    reached = days[: len(again) + policy.max_periods_per_run - taken]
     tree.listing.fetch(
         [
             *(tree.raw_day_folder(day) for day in reached),
             *sorted({tree.daily_month_folder(day[:7]) for day in reached if day in tree.daily}),
         ]
     )
-    taken = 0
     for day in days:
         if taken == policy.max_periods_per_run:
             stops.append(Stop(StopReason.CEILING, day))
@@ -298,16 +342,7 @@ def compact(
         fresh = tree.daily_through is None or day > tree.daily_through
         refused = _take(tree, policy, day, model=model, key=key, identity=identity, stamp=stamp)
         if refused is not None:
-            why, fault = refused
-            logger.error(
-                "a raw day is not compacted, and its files are kept "
-                "ledger=%s day=%s fault=%s reason=%s",
-                tree.ledger.value,
-                day,
-                fault or "none",
-                why,
-            )
-            stops.append(Stop(StopReason.FAILED, day))
+            stops.append(_refused(tree, day, *refused))
             if fresh:
                 break
             continue

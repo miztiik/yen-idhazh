@@ -2,6 +2,8 @@
 
 Task declarations own stable roots. The task's window chooses the periods below
 those roots, so neither a publisher nor a local run discovers older siblings.
+A compaction has no window: it is handed its ledger's marks alone, and each of
+its steps names the periods it chooses as it runs.
 """
 
 from __future__ import annotations
@@ -98,18 +100,14 @@ def _fold_window(policy: RetentionPolicy, today: date) -> tuple[str, str] | None
     return _fold_month_window(policy, today) or _fold_day_window(policy, today)
 
 
-def scheduled_range(name: str, policy: TaskPolicy, today: date) -> tuple[str, str] | None:
-    """The fixed period range this scheduled task may read, or none for a collection."""
-    if isinstance(policy, CompactionPolicy):
-        if isinstance(policy.monthly_window, MonthsWindow):
-            kept_from = month_partition.oldest_month_kept(today, policy.monthly_window.value)
-            months = month_partition.months_before(kept_from, policy.lookback_periods + 1)
-        else:
-            newest = _newest_eligible_month(today, policy.daily_keep_days)
-            months = month_partition.months_between(
-                _month_shift(newest, -policy.lookback_periods), newest
-            )
-        return months[0], months[-1]
+def scheduled_range(
+    name: str, policy: TaskPolicy, today: date
+) -> tuple[str, str] | None:
+    """The fixed period range this scheduled retention task may read, or None for any other kind.
+
+    A compaction has none: each of its steps chooses its own periods from its
+    ledger's marks.
+    """
     if not isinstance(policy, RetentionPolicy):
         return None
     if isinstance(policy.window, DaysWindow):
@@ -235,7 +233,6 @@ def _ledger_paths(
                 paths.add(root / month[:4] / month[5:7])
         else:
             for day in days:
-                stamp = day.isoformat()
                 paths.add(root / f"{day:%Y}" / f"{day:%m}" / f"{day:%d}")
         return paths
 
@@ -264,7 +261,15 @@ def paths_for_task(
     *,
     today: date,
 ) -> tuple[Path, ...]:
-    """The exact period roots this task may list, each one file or one named period."""
+    """The exact period roots this task may list, each one file or one named period.
+
+    A compaction lists its ledger's marks and nothing else, whatever the range:
+    each of its steps names the periods it chooses as it runs.
+    """
+    if isinstance(policy, CompactionPolicy):
+        return tuple(
+            sorted(ledger_marks.name_marks(repo_root / ledger.STATE_DIRNAME, policy.ledger))
+        )
     if period_range is None:
         return ()
     days, months = periods_in_range(period_range)
@@ -289,11 +294,6 @@ def paths_for_task(
                     monthly=False,
                 )
             )
-        if isinstance(policy, CompactionPolicy):
-            paths.update(
-                _ledger_paths(folder, repo_root, policy.ledger, days, months, monthly=monthly)
-            )
-            continue
         if folder.startswith("state/raw/") or folder.startswith("state/compact/"):
             suffix = folder.removeprefix("state/raw/").removeprefix("state/compact/")
             which = ledger.door_ledger_at(tuple(suffix.split("/")))

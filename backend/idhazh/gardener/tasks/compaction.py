@@ -13,18 +13,20 @@ shard lands all of them in one commit:
 3. every year chosen for this wake is packed into its year file, or into an
    entry with no file, where the declaration sets `monthly_keep_days`;
 4. every month chosen for this wake is closed into its month file;
-5. every day chosen for this wake is packed into its day file, after each packed
-   day that holds raw files again.
+5. every closed month a raw file landed in is re-opened, then every day chosen
+   for this wake is packed into its day file, after each packed day that holds
+   raw files again.
 
 **Each step chooses its own periods.** The months step 1 drops, the years step
 3 packs, the months step 4 closes and the days step 5 packs are chosen before
 any step runs, from the ledger's own indexes and marks and the wake's day
-(`_compaction_periods`), and logged once as `PeriodsChosen`; an operator range,
-or the months a migration names, limits that choice, and the window the planner
-names does not. A day step with no mark first has the months it looks back over
-named, because its first day is a raw day. Step 2 chooses nothing of its own:
-it takes the raw days past the keep line in the months step 1 drops and in
-those a first day run looked back over.
+(`_compaction_periods`), and logged once as `PeriodsChosen`. A range a person
+names, or the first and last month a migration packs, limits that choice. A
+scheduled wake names no range, and its listing holds nothing of the ledger but
+its marks until a step names what it chose. A day step with no mark first has
+the months it looks back over named, because its first day is a raw day. Step 2
+chooses nothing of its own: it takes the raw days past the keep line in the
+months step 1 drops and in those a first day run looked back over.
 
 **The monthly window has a switch of its own.** Steps 3 to 5 delete only files
 whose rows they have just written into a coarser file; the window's drops in
@@ -71,11 +73,11 @@ from idhazh.gardener.one_at_a_time import Pass
 KIND = TaskKind.COMPACTION
 
 
-def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
+def run(context: TaskContext) -> Pass:
     """Drop, or only name, the oldest months past the keep line; pack years and months; take days.
 
-    `months` are the months a migration names: no step takes anything outside
-    the first to the last of them.
+    `context.period_range` is the range a person named, or the first and last
+    month a migration packs: no step takes anything outside it.
     """
     import logging
     from datetime import UTC, datetime, time
@@ -106,10 +108,8 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
         producer=__name__.partition(".")[2],
         git_sha=context.git_sha,
     )
-    operator_range = (min(months), max(months)) if months else context.operator_range
-    if months is None and context.period_range is not None:
-        months = frozenset(month_partition.months_between(*context.period_range))
-    tree = CompactTree.read(context.state_dir, policy.ledger, context.listing, months=months)
+    operator_range = context.period_range
+    tree = CompactTree.read(context.state_dir, policy.ledger, context.listing)
     looked_back = _compaction_periods.first_run_months(
         tree, policy, now=now, operator_range=operator_range
     )
@@ -135,7 +135,13 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
         ),
         *_monthly_period.absorb(tree, chosen.months, stamp=stamp, identity=identity),
         *_daily_period.compact(
-            tree, policy, chosen.days, rerun_span=chosen.rerun_span, stamp=stamp, identity=identity
+            tree,
+            policy,
+            chosen.days,
+            rerun_span=chosen.rerun_span,
+            first_kept=first_kept,
+            stamp=stamp,
+            identity=identity,
         ),
     )
     tree.finish()
@@ -150,11 +156,11 @@ def run(context: TaskContext, *, months: frozenset[str] | None = None) -> Pass:
     stop = next((held for held in stops if held.because is StopReason.FAILED), None) or next(
         (held for held in stops if held.because is StopReason.CEILING), None
     )
-    if context.period_range is None:
+    if operator_range is None:
         date_range = None
         until = chosen.newest_eligible_day
     else:
-        date_range = month_partition.day_bounds(*context.period_range)
+        date_range = month_partition.day_bounds(*operator_range)
         until = date_range[1]
     outcome = Pass(
         collection=policy.ledger.value,

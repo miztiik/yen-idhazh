@@ -173,9 +173,11 @@ The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `
 | a `StrEnum` | string, never a dictionary column | as annotated |
 | an `IntEnum` | int64 | as annotated |
 | `tuple[str, ...]`, of `str` or any alias or `StrEnum` | list of string | as annotated |
+| a `Literal[...]` whose every choice is a plain `str` | string | as annotated |
+| a `Literal[...]` whose every choice is a plain `int` | int64 | as annotated |
 | anything else | a `TypeError` naming the field | - |
 
-A date stays a string: it is a stamp a person reads in a diff and in a path, and a second type would be a second spelling of one value. The tuple row is there for `FeedRetirementRow`, whose evidence is a tuple of run ids and a tuple of dates. An `IntEnum` - `ItemHealthRow`'s `tier` is one - stays its number, the value its JSON form already carries, so a query filters on the number a person reads in the contract.
+A date stays a string: it is a stamp a person reads in a diff and in a path, and a second type would be a second spelling of one value. The tuple row is there for `FeedRetirementRow`, whose evidence is a tuple of run ids and a tuple of dates. An `IntEnum` - `ItemHealthRow`'s `tier` is one - stays its number, the value its JSON form already carries, so a query filters on the number a person reads in the contract. A fixed choice, such as the judge's model name, is stored as its value. A choice set that mixes types, or holds a `bool`, `None` or an enum member, is refused by name: its column would not say what it holds.
 
 ## Swapping the engine
 

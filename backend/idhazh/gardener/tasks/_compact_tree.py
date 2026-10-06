@@ -20,8 +20,8 @@ folders it opens before it opens one. The drop, year, month and day steps
 choose their periods as they run, so each names what it reads of them first,
 through `name_drops`, `name_years`, `name_months` and `name_days`, and the
 listing then answers for them from the same commit. A day step with no mark
-looks back over months the planner did not name either, and the pass names
-those through `name_raw_months` before it chooses.
+looks back over months no step has named yet, and the pass names those through
+`name_raw_months` before it chooses.
 
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
 that lands the pass refuses a path on both lists, so one pass that did either
@@ -56,7 +56,7 @@ from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import ledger_marks, named_trees
 from idhazh.gardener.file_listing import FileListing
-from idhazh.ledger import StoredRow
+from idhazh.ledger import RawFile, StoredRow
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,6 @@ class CompactTree:
     raw_days: list[str]
     #: How many raw day folders the pass listed, before any step set a day aside.
     listed: int = 0
-    months: frozenset[str] | None = None
     #: The periods whose index the pass found on disk.
     indexed: frozenset[Period] = frozenset()
     changes: list[Change] = field(default_factory=list)
@@ -118,22 +117,19 @@ class CompactTree:
     pending_watermarks: dict[Period, Watermark] = field(default_factory=dict)
 
     @classmethod
-    def read(
-        cls,
-        state_dir: Path,
-        ledger_name: LedgerName,
-        listing: FileListing,
-        *,
-        months: frozenset[str] | None = None,
-    ) -> CompactTree:
+    def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
         """The three watermarks, the three indexes and the raw day folder names, read once."""
         marks = ledger_marks.read_marks(state_dir, ledger_name, listing)
-        raw_days = named_trees.raw_days(listing, state_dir, ledger_name)
+        # A wake names no raw folder: each step names the raw folders it reads.
+        raw_days = (
+            named_trees.raw_days(listing, state_dir, ledger_name)
+            if listing.saw_any_of(ledger.raw_root(state_dir, ledger_name))
+            else []
+        )
         return cls(
             state_dir=state_dir,
             ledger=ledger_name,
             listing=listing,
-            months=months,
             daily_through=marks.through[Period.DAILY],
             monthly_through=marks.through[Period.MONTHLY],
             yearly_through=marks.through[Period.YEARLY],
@@ -193,11 +189,11 @@ class CompactTree:
         )
 
     def name_months(self, months: Sequence[str]) -> None:
-        """Name what the month step reads of these months, and take in their raw days.
+        """Name what a step reads of these months, and take in their raw days.
 
         Each month's daily folder, raw folder and month file, whichever format
-        wrote it, are listed from the commit now: the month step chose them as
-        it ran.
+        wrote it, are listed from the commit now: the step chose them as it
+        ran.
         """
         self._name(
             [
@@ -281,6 +277,20 @@ class CompactTree:
         """One ledger file's rows beside their identity, read as the pass decides."""
         self.looked.add(path)
         return ledger.load_stored([path], model=model)
+
+    def raw_files(self, day: str, *, most: int) -> list[RawFile]:
+        """One day's raw files, oldest first, or a refusal saying why none of them may be taken.
+
+        A pass deletes what it read, so a file it cannot read refuses the day
+        rather than being skipped, and so does a day holding more than `most`
+        files, the most one period is built from.
+        """
+        files = ledger.read_day_files(self.state_dir, self.ledger, day)
+        if len(files) > most:
+            raise ValueError(
+                f"it holds {len(files)} raw files and one period is built from at most {most}"
+            )
+        return files
 
     def write(self, path: Path, data: bytes) -> None:
         """Decide to write one file whole."""
