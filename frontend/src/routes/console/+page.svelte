@@ -102,19 +102,15 @@
 
 	// svelte-ignore state_referenced_locally
 	let windowDays = $state(data.console.default_window_days);
-	/** Every day the pipeline published, newest last.
-	 *
-	 * The window anchors on this rather than on the telemetry, which no longer
-	 * crosses. It is the same set of days: `charts` holds one entry per published
-	 * day and already costs the page 2.5 KB, where the rows it would have been
-	 * taken from cost 3,334 KB (measured 2026-09-09, Intel Core i7-1265U).
-	 */
+	/** The day every window on this route ends on, the site's newest published
+	 * day. The server places it once, so the first viewport, every preset and
+	 * the reductions it took for each preset name the same days. */
 	// svelte-ignore state_referenced_locally
-	const publishedDates = data.charts.map((day) => day.date).sort();
+	const windowDay = data.windowDay;
 	/** The window the page opens on, computed once so the first viewport and the
 	 * first fetch agree on which months are wanted. */
 	// svelte-ignore state_referenced_locally
-	const opening = defaultWindow(publishedDates, data.today, data.console);
+	const opening = defaultWindow(windowDay, data.console);
 	/** The telemetry this session holds, as revision-owned month shards.
 	 *
 	 * **It starts empty and every row in it arrives by fetch.** The server used
@@ -264,7 +260,7 @@
 	 * quiet sentence, because widening is the only move an empty window offers. */
 	const widen = $derived(
 		wideningPreset(windowDays, presets, data.months, (days) =>
-			windowOfDays(publishedDates, data.today, days, data.console.today_anchor)
+			windowOfDays(windowDay, days, data.console.today_anchor)
 		)
 	);
 	/** What every waiting panel says. One sentence per state, written once, so
@@ -308,17 +304,18 @@
 
 	/** Set the span every windowed section reads.
 	 *
-	 * The window re-anchors on the newest day rather than keeping where a pan
-	 * left it, because "the last 30 days" is the question the preset asks.
+	 * The window goes back to ending on the newest published day rather than
+	 * keeping where a pan left it, because "the last 30 days" is the question the
+	 * preset asks.
 	 *
-	 * It anchors on the published days and not on the rows in hand. Anchoring on
+	 * It ends on the day the server placed and not on the rows in hand. Ending on
 	 * the rows would put the window wherever the fetch had got to, so the first
 	 * widen after opening the page would land on a different span from the same
 	 * widen a second later.
 	 */
 	function show(days: number, remember = true) {
 		windowDays = days;
-		viewport = windowOfDays(publishedDates, data.today, days, data.console.today_anchor);
+		viewport = windowOfDays(windowDay, days, data.console.today_anchor);
 		if (remember && typeof localStorage !== 'undefined') {
 			localStorage.setItem(WINDOW_KEY, String(days));
 		}
@@ -334,7 +331,7 @@
 	function monthsFor(days: number): number {
 		return monthsToLoad(
 			hold,
-			windowOfDays(publishedDates, data.today, days, data.console.today_anchor),
+			windowOfDays(windowDay, days, data.console.today_anchor),
 			data.months
 		).length;
 	}
@@ -396,7 +393,7 @@
 	 * cards can never cover two different sets of days. It follows the preset
 	 * rather than a pan for the same reason the reduction does. */
 	const extractionSpan = $derived(
-		windowOfDays(publishedDates, data.today, windowDays, data.console.today_anchor)
+		windowOfDays(windowDay, windowDays, data.console.today_anchor)
 	);
 	/** Whether the extractor's yield is falling, which is the direction the
 	 * cards' own lines tell the operator to read and the cards cannot show. */
@@ -680,7 +677,7 @@
 	<!-- Beside the line above, and for the same reason: the article and score
 	     records are read when the site is built, and every panel built on one
 	     of them is empty, or stops early, for one reason the record owns. -->
-	<RecordNotes notes={data.recordNotes} />
+	<RecordNotes notes={data.recordNotes[String(windowDays)] ?? data.recordNotes[String(data.console.default_window_days)] ?? []} />
 
 	<!-- One sentence, no chart. It is what stops this route hiding the panel on
 	     another route that explains its own numbers. -->
@@ -1083,7 +1080,7 @@
 				timed by the model itself. The rest failed before it saw them, or were kept without ever
 				being sent to it.
 			{/if}
-			Panning does not move these days: they always end on the newest day the ledger holds.
+			Panning does not move these days: they always end on the newest published day.
 		</p>
 
 		{#if cost.reading === null && cost.writing === null}

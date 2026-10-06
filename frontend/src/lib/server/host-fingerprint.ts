@@ -30,9 +30,10 @@
  */
 
 // Relative, not `$lib`: the browser suite loads this module in plain Node.
+import type { TimeWindow } from '../charts/viewport';
 import { sliceFromDisk } from './ledger-disk';
-import { datedFirst, newestRows, type LedgerTable } from './ledger-rows';
-import { LEDGER_WINDOW_DAYS, STATE_ROOT } from './payload';
+import { datedFirst, windowRows, type LedgerTable } from './ledger-rows';
+import { STATE_ROOT } from './payload';
 
 /** Which workflow job produced a row. `ServerJob` in `contracts/base.py`. */
 export const SERVER_JOB = [
@@ -187,18 +188,15 @@ function serverJob(cell: string | undefined): ServerJob | null {
 	return SERVER_JOB.find((job) => job === named) ?? null;
 }
 
-/** The newest `days` days of the machine record, as the text cells the counters
- * read, and how the read went.
+/** The machine record's rows in `window`, as the text cells the counters read, and
+ * how the read went.
  *
  * One row a job a run, as packed. The route reads it once and hands the rows to
  * `fingerprintsOf`, `machineRecordDays` and the counters, so the three cannot
  * answer over different days.
  */
-export async function machineRecord(
-	days: number = LEDGER_WINDOW_DAYS,
-	root: string = STATE_ROOT
-): Promise<LedgerTable> {
-	return newestRows(root, 'host-fingerprint', days, HOST_FINGERPRINT_COLUMNS, (start, end) =>
+export async function machineRecord(window: TimeWindow, root: string = STATE_ROOT): Promise<LedgerTable> {
+	return windowRows(root, 'host-fingerprint', window, HOST_FINGERPRINT_COLUMNS, (start, end) =>
 		sliceFromDisk(root, 'host-fingerprint', {
 			columns: [...datedFirst(HOST_FINGERPRINT_COLUMNS)],
 			from: start,

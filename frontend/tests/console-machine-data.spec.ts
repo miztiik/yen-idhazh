@@ -40,7 +40,7 @@ import {
 	type MachineLimits,
 	type MachineRun
 } from '../src/lib/server/machine-counters';
-import { canaryArticleRows, canaryMachineRows, CANARY_STATE, heldRows } from './support/canary-records';
+import { canaryArticleRows, canaryMachineRows, CANARY_STATE, canaryWindow, heldRows } from './support/canary-records';
 import { machineRecord } from '../src/lib/server/host-fingerprint';
 import { itemHealthRows } from '../src/lib/server/ledger-rows';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
@@ -602,13 +602,13 @@ test.describe('ledger readers respect the fixture root', () => {
 		const root = mkdtempSync(join(tmpdir(), 'idhazh-machine-root-'));
 		try {
 			for (const read of [machineRecord, itemHealthRows]) {
-				const fixture = await read(-1, CANARY_STATE);
+				const fixture = await read(canaryWindow(), CANARY_STATE);
 				expect(fixture.read.state).toBe('read');
 				expect(fixture.rows.length).toBeGreaterThan(0);
-				const empty = await read(-1, root);
+				const empty = await read(canaryWindow(), root);
 				expect(empty.rows).toEqual([]);
 				expect(empty.read.state).not.toBe('read');
-				const again = await read(-1, CANARY_STATE);
+				const again = await read(canaryWindow(), CANARY_STATE);
 				expect(again.rows).toEqual(fixture.rows);
 			}
 		} finally {

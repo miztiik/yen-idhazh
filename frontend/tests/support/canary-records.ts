@@ -8,9 +8,10 @@
  * in how the records are filed cannot leave it comparing the page against an
  * empty set, which is what a walk of the old day files would now do.
  *
- * `-1` reads every packed day. The canary is a fixture of fixed size rather than
- * a collection a run appends to, so the read costs the same on every run
- * (`CLAUDE.md` Guardrail #12).
+ * Each is read over the window the console's own server reads: the widest one its
+ * control offers, ending on the canary's newest published day. The canary is a
+ * fixture of fixed size rather than a collection a run appends to, so the read
+ * costs the same on every run (`CLAUDE.md` Guardrail #12).
  *
  * Each record is read once per worker and shared by every test that asks, and
  * it is read when a test first asks rather than when a spec loads, so a canary
@@ -19,11 +20,25 @@
  */
 
 import { resolve } from 'node:path';
+import { windowOfDays, type TimeWindow } from '../../src/lib/charts/viewport';
+import { consoleConfig } from '../../src/lib/server/config';
 import { machineRecord } from '../../src/lib/server/host-fingerprint';
 import { evalRows, itemHealthRows, type LedgerTable } from '../../src/lib/server/ledger-rows';
+import { windowDay } from '../../src/lib/server/window-day';
 
 /** The canary's state tree, beside the digest `build:canary` builds the site from. */
 export const CANARY_STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
+
+/** Every day a console route reads over the canary: the widest window the control
+ * offers, ending on the canary's newest published day, placed as the route places it. */
+export function canaryWindow(): TimeWindow {
+	const console = consoleConfig();
+	return windowOfDays(
+		windowDay(resolve(CANARY_STATE, '..', 'digest')),
+		Math.max(...console.window_presets),
+		console.today_anchor
+	);
+}
 
 let articles: Promise<LedgerTable> | null = null;
 let scores: Promise<LedgerTable> | null = null;
@@ -43,19 +58,19 @@ async function rowsOf(table: Promise<LedgerTable>, record: string): Promise<Reco
 
 /** Every article row the canary packed: one per planned item per run. */
 export function canaryArticleRows(): Promise<Record<string, string>[]> {
-	articles ??= itemHealthRows(-1, CANARY_STATE);
+	articles ??= itemHealthRows(canaryWindow(), CANARY_STATE);
 	return rowsOf(articles, 'article');
 }
 
 /** Every score row the canary packed: one per scored measurement. */
 export function canaryScoreRows(): Promise<Record<string, string>[]> {
-	scores ??= evalRows(-1, CANARY_STATE);
+	scores ??= evalRows(canaryWindow(), CANARY_STATE);
 	return rowsOf(scores, 'score');
 }
 
 /** Every machine row the canary packed: one per job per run. */
 export function canaryMachineRows(): Promise<Record<string, string>[]> {
-	machines ??= machineRecord(-1, CANARY_STATE);
+	machines ??= machineRecord(canaryWindow(), CANARY_STATE);
 	return rowsOf(machines, 'machine');
 }
 

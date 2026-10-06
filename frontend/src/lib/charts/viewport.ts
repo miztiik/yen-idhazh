@@ -58,7 +58,13 @@ export function monthsInWindow(window: TimeWindow): string[] {
 	return months;
 }
 
-/** A window of exactly `days` days, anchored where the config asks.
+/** A window of exactly `days` days, placed on `day` where the config asks.
+ *
+ * `day` is the one the caller hands over, never the newest date in some rows:
+ * every console route hands over the site's newest published day, so a record
+ * whose rows stop leaves its window empty rather than moving it back to its own
+ * last rows. With `right`, `day` is the window's last day; with `centre`, it sits
+ * in the middle, and the days after it are room for days not yet published.
  *
  * Exactly, even when the ledger holds fewer days than that. The window used to
  * shrink to fit the rows it found, which was invisible while nothing on the page
@@ -66,19 +72,13 @@ export function monthsInWindow(window: TimeWindow): string[] {
  * reads 90 while the charts draw 2 cannot be trusted about anything else, and
  * empty calendar space is the honest answer to "there is nothing there".
  */
-export function windowOfDays(
-	dates: string[],
-	today: string,
-	days: number,
-	anchor: TodayAnchor
-): TimeWindow {
-	const newest = [...dates].sort().at(-1) ?? today;
-	const end = anchor === 'right' ? newest : shift(newest, Math.floor((days - 1) / 2));
+export function windowOfDays(day: string, days: number, anchor: TodayAnchor): TimeWindow {
+	const end = anchor === 'right' ? day : shift(day, Math.floor((days - 1) / 2));
 	return { start: shift(end, -(days - 1)), end };
 }
 
-export function defaultWindow(dates: string[], today: string, config: ViewportConfig): TimeWindow {
-	return windowOfDays(dates, today, config.default_window_days, config.today_anchor);
+export function defaultWindow(day: string, config: ViewportConfig): TimeWindow {
+	return windowOfDays(day, config.default_window_days, config.today_anchor);
 }
 
 /** The next preset wider (`1`) or narrower (`-1`) than the span in force.
