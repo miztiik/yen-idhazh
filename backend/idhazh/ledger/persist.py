@@ -62,7 +62,7 @@ from idhazh.contracts.file_envelope import (
 )
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger import arrow_schema, filenames, json_lines, lifecycle
+from idhazh.ledger import arrow_schema, filenames, json_lines, lifecycle, paths
 from idhazh.ledger.arrow_schema import Column
 from idhazh.ledger.keys import DATE_CELL
 from idhazh.ledger.paths import compact_path, raw_path
@@ -322,6 +322,7 @@ def persist(
     covers: PeriodStamp,
     identity: WriterIdentity,
     fmt: Format | None = None,
+    registry: paths.DoorRegistry | None = None,
 ) -> list[Path]:
     """File these new rows under `state/raw/` and return where they went, one path per day.
 
@@ -378,7 +379,7 @@ def persist(
             compression=compression,
             written_at_ms=written_at_ms,
         )
-        built.append((raw_path(state_dir, ledger, day, name, fmt=chosen), data))
+        built.append((raw_path(state_dir, ledger, day, name, fmt=chosen, registry=registry), data))
     for target, data in built:
         atomic_write.write_atomic_bytes(target, data)
     return [target for target, _ in built]
@@ -432,6 +433,8 @@ def render_period[C: Contract](
     covers: PeriodStamp,
     identity: WriterIdentity,
     built_from: int,
+    fmt: Format | None = None,
+    registry: paths.DoorRegistry | None = None,
 ) -> PeriodFile:
     """One compact period's file, built in memory and written nowhere.
 
@@ -446,7 +449,8 @@ def render_period[C: Contract](
     _refuse_a_period_the_tier_cannot_take(covers, tier=Tier.COMPACT, period=period)
     _refuse_rows_outside_the_period(rows, model=model, ledger=ledger, covers=covers)
     knobs = _knobs()
-    compression = _compression(knobs.format, Tier.COMPACT, knobs)
+    chosen = knobs.format if fmt is None else fmt
+    compression = _compression(chosen, Tier.COMPACT, knobs)
     _, data = _rendered(
         _stored(rows),
         model=model,
@@ -456,11 +460,11 @@ def render_period[C: Contract](
         tier=Tier.COMPACT,
         period=period,
         built_from=built_from,
-        fmt=knobs.format,
+        fmt=chosen,
         compression=compression,
         written_at_ms=int(datetime.now(UTC).timestamp() * 1000),
     )
-    path = compact_path(state_dir, ledger, period, covers, fmt=knobs.format)
+    path = compact_path(state_dir, ledger, period, covers, fmt=chosen, registry=registry)
     return PeriodFile(path, data, len(rows))
 
 
@@ -474,6 +478,8 @@ def render_grouped_period[C: Contract](
     covers: PeriodStamp,
     identity: WriterIdentity,
     built_from: int,
+    fmt: Format | None = None,
+    registry: paths.DoorRegistry | None = None,
 ) -> PeriodFile:
     """One compact period's file built one group of rows at a time, and written nowhere.
 
@@ -486,7 +492,8 @@ def render_grouped_period[C: Contract](
     """
     _refuse_a_period_the_tier_cannot_take(covers, tier=Tier.COMPACT, period=period)
     knobs = _knobs()
-    compression = _compression(knobs.format, Tier.COMPACT, knobs)
+    chosen = knobs.format if fmt is None else fmt
+    compression = _compression(chosen, Tier.COMPACT, knobs)
     written_at_ms = int(datetime.now(UTC).timestamp() * 1000)
     digest = hashlib.sha256()
     counted = 0
@@ -509,13 +516,13 @@ def render_grouped_period[C: Contract](
             tier=Tier.COMPACT,
             period=period,
             built_from=built_from,
-            fmt=knobs.format,
+            fmt=chosen,
             compression=compression,
             written_at_ms=written_at_ms,
             content_sha256=digest.hexdigest(),
         )[1]
 
-    if knobs.format is Format.PARQUET:
+    if chosen is Format.PARQUET:
         from idhazh.ledger import parquet
 
         data = parquet.render_groups(
@@ -524,7 +531,7 @@ def render_grouped_period[C: Contract](
     else:
         whole = [cells for stored in checked() for cells in stored]
         data = json_lines.render(whole, envelope=envelope())
-    path = compact_path(state_dir, ledger, period, covers, fmt=knobs.format)
+    path = compact_path(state_dir, ledger, period, covers, fmt=chosen, registry=registry)
     return PeriodFile(path, data, counted)
 
 
@@ -538,6 +545,8 @@ def persist_period[C: Contract](
     covers: PeriodStamp,
     identity: WriterIdentity,
     built_from: int,
+    fmt: Format | None = None,
+    registry: paths.DoorRegistry | None = None,
 ) -> Path:
     """Write one compact period's file whole, and return where it went.
 
@@ -554,6 +563,8 @@ def persist_period[C: Contract](
         covers=covers,
         identity=identity,
         built_from=built_from,
+        fmt=fmt,
+        registry=registry,
     )
     atomic_write.write_atomic_bytes(built.path, built.data)
     return built.path
@@ -566,6 +577,7 @@ def render_renamed[C: Contract](
     *,
     model: type[C],
     ledger: LedgerName,
+    registry: paths.DoorRegistry | None = None,
 ) -> PeriodFile:
     """One ledger file built again under another ledger's name, and written nowhere.
 
@@ -631,9 +643,13 @@ def render_renamed[C: Contract](
             compression=envelope.compression,
         )
     if envelope.period is None:
-        path = raw_path(state_dir, ledger, envelope.covers, envelope.file_id, fmt=fmt)
+        path = raw_path(
+            state_dir, ledger, envelope.covers, envelope.file_id, fmt=fmt, registry=registry
+        )
     else:
-        path = compact_path(state_dir, ledger, envelope.period, envelope.covers, fmt=fmt)
+        path = compact_path(
+            state_dir, ledger, envelope.period, envelope.covers, fmt=fmt, registry=registry
+        )
     return PeriodFile(path, data, len(cells))
 
 

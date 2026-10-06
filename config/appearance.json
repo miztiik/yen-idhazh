@@ -148,7 +148,7 @@
     "explorer_notice_ms": 6000,
     "explorer_editor_lines_shown": [
       8,
-      10
+      4
     ],
     "explorer_examples": [
       {
@@ -200,14 +200,13 @@
     "explorer_max_fetch_bytes": 67108864,
     "explorer_max_rows": 1000,
     "explorer_query_max_chars": 5790,
+    "explorer_link_max_bytes": 8192,
     "explorer_reach_days": 365,
-    "explorer_rail_rem": 14,
     "explorer_row_page": 50,
     "explorer_strip_shown": [
       3,
       6
     ],
-    "explorer_answer_svh": 60,
     "explorer_chart_min_rows": 3,
     "explorer_rank_max": 30,
     "explorer_saved_max": 20,

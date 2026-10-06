@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -37,7 +37,7 @@ cannot change which tasks a wake plans.
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
 | 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each task's fixed UTC period window, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each retention task's fixed UTC period window and each compaction's ledger indexes and watermarks, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
 | 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
@@ -90,7 +90,7 @@ reads and does not own is declared under `reads`; asking about a folder it
 neither owns nor reads is refused rather than answered empty, and so is asking
 for every file under a folder no step named, nor a folder above it, rather than
 answered with the named periods inside it. A step that chooses its periods as
-it runs - the compaction's month step - names them first, and the shard lists
+it runs - every step of a compaction - names them first, and the shard lists
 them from the same commit then.
 
 **The plan is written twice.** The plan job runs before anything of ours is
@@ -249,7 +249,7 @@ one writer into an older day, and a compaction takes its file at the next wake
 | Exit | What it means | Retried |
 | --- | --- | --- |
 | 0 | every task ran and the record landed, or had already landed. Also 0, with a warning, when nothing landed because the shard's work is out of date: `main` changed one of its paths after the commit it ran on (`stale`), or every try failed and `main` moved after the last one (`lost`) | a `stale` or `lost` shard's work is done again at the next wake |
-| 1 | a task failed - its row says `failed` and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, and either way the record still landed; or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; a download over the ceiling goes on failing until a person acts |
+| 1 | a task failed - its row says `failed` and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, which a task that chooses its periods by the budget never does, so that is a code defect; either way the record still landed. Or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; a download over the ceiling goes on failing until a person fixes the task that passed it |
 | 2 | ownership or integrity: a module that cannot serve, a history task handed to the runner, a path outside what a task owns, a record outside the gardener's ledger, one record path with two sets of bytes, or a deletion of a file the commit did not list | never; a person fixes it |
 | 3 | `main` refused the push: every try failed, and `main` did not move after the last one (`refused`) | at the next wake |
 
@@ -299,24 +299,33 @@ The code folders every shard checks out - `config/`, `backend/` and `.github/` -
 are in neither: they are the same in every shard, and they grow with code rather
 than with what the pipeline keeps.
 
-**Over `max_downloaded_mb` the shard still runs its tasks and lands its record,
-then exits 1.** The number is an alarm, not a stop: the downloads are paid for
-by the time the number is known, and stopping would only stop the passes that
-make the tree lighter - a live task's deletes - and the dry-run rows a person
-reads before turning a task live. The message names the three folders the
-shard downloaded most under. `idhazh gardener run-task` starts no git process,
-so a hand run records both weights as empty and is never over.
+**A compaction takes only what fits what is left of `max_downloaded_mb`.**
+Each step reads its periods' sizes off the listing before anything is
+downloaded and stops at the first period that does not fit, at `ceiling` for a
+later wake, or `failed` by name when that period alone is larger than the
+whole budget ([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)).
+The shard's other tasks that download do not choose by the budget yet, so the
+check after its tasks stays: over `max_downloaded_mb` the shard still runs its
+tasks and lands its record, then exits 1, and the message calls it what it is,
+a code defect - a task downloaded without choosing by the budget. Stopping then
+would not save the downloads, which are paid for by the time the number is
+known, and would only stop the passes that make the tree lighter. The message
+names the three folders the shard downloaded most under. `idhazh gardener
+run-task` starts no git process, so a hand run records both weights as empty
+and is never over.
 
 **128 MB is the committed ceiling, and it is an estimate.** A megabyte here is
 1024 x 1024 bytes. A shard downloads only what its tasks read: the days and
 months a compaction packs, the months the census summary summarises. Measured
 on the development machine on 2026-09-30, a month of the eval ledger is 31
 files and 3.5 MB, so 128 leaves room for a compaction that catches up on
-several months at once. Move it to about twice the largest `downloaded_bytes`
-of the first thirty scheduled wakes. A month file sits in its year folder, so a
-step that reads one month file fetches every month file of that year beside it,
-up to twelve: a later row can move the month files into folders of their own if
-the readings show that cost.
+several months at once. Move it from what the wakes that did not stop at it
+downloaded: a compaction that stopped at `ceiling` because of the budget
+records the budget, not what it needed, so doubling the largest
+`downloaded_bytes` would raise the ceiling on every reset. A month file sits in
+its year folder, so a step that reads one month file fetches every month file
+of that year beside it, up to twelve: a later row can move the month files into
+folders of their own if the readings show that cost.
 
 ## The record
 
@@ -440,51 +449,88 @@ and the most a public repository allows (read 2026-10-05). So a run past the
 90-day line of `workflow-runs` has already lost its logs, and deleting it removes
 only the run itself from the Actions history.
 
-**`workflow-runs` reads only the runs past its line that no earlier pass
+**Each task reads only the members past its line that no earlier pass
 handled.** Its row in each record carries `handled_through`: the newest UTC day
-on or before which every run was handled - deleted, or on a dry run reported or
-counted. The next pass reads that day back from the gardener's own ledger, over
-the last `mark_lookback_days` UTC days, today included, and starts the day
+on or before which every member was handled - deleted, or on a dry run reported
+or counted. The next pass reads that day back from the gardener's own ledger,
+over the last `mark_lookback_days` UTC days, today included, and starts the day
 after. Only a row from a pass with the same `dry_run` counts, because a day a
 dry run reported is a day nothing deleted. A row with no mark is passed over,
-and of the rest the latest day wins. The declaration names
+and of the rest the latest day wins. Both declarations name
 `state/raw/gardener` and `state/compact/gardener` under `reads`, and the task
 names the days it reads before it fetches them, so the read is those days and
 no more - about 35 record files a week, 10 KB each.
 
-**One search a UTC day, from 00:00:00Z to 23:59:59Z, oldest day first.** Both
-ends carry `Z`, so GitHub never chooses which day is meant. One search returns
-at most 1,000 runs, so a day GitHub counts over that is searched again an hour
-at a time; an hour over it stops the pass, and its mark stays on the day before.
-GitHub's count for a search by date stops at 2,500: on 2026-10-05 the runs
-created on or before 2026-09-20 counted 2,500, where their days add up to 4,404.
-The walk compares a count only with 0 and with 1,000, so that stop changes
-nothing it decides.
-Each search is read from its last page back. GitHub lists the newest run first,
-and a run deleted from a page moves every later run up one place, so a pass
-that read front to back while deleting would step over runs it never read.
-Every run is still held to the line before it is taken, so GitHub's own filter
-is never what keeps a delete safe.
-
 **The mark moves a whole day at a time.** A live pass that its ceiling stops
 inside a day leaves the mark on the day before, and the next pass reads that day
 again for what is left. A dry run deletes nothing, so stopping inside a day would
-report the same runs at every wake: past its ceiling it counts the rest of that
-day without listing them, and its mark moves to that day. A run that arrives
-from an earlier day than one before it means the order failed: the pass goes
-on, and its mark stays where it started.
+report the same members at every wake: past its ceiling it counts the rest of
+that day without listing them, and its mark moves to that day. A member that
+arrives from an earlier day than one before it means the order failed: the pass
+goes on, and its mark stays where it started.
 
-**With no mark in reach, GitHub's answers say where the first walk starts.** No
-run is older than the repository, so a line before the day it was created
-leaves nothing to walk: the mark is the line, and no page of runs is read. On
-2026-10-04 the line was 2026-07-06, before the repository was created on
-2026-08-20. Its oldest run is from 2026-08-22, so the first run reaches the line
-on 2026-11-20. Once one does, the oldest day with a run is found by halving the
-days from the repository's first day to the line, one count of the runs created
-on or before a day a step - about 9 counts for a year of days - and the walk
-starts on that day.
+**The runs: one search a UTC day, from 00:00:00Z to 23:59:59Z, oldest day
+first.** Both ends carry `Z`, so GitHub never chooses which day is meant. One
+search returns at most 1,000 runs, so a day GitHub counts over that is searched
+again an hour at a time; an hour over it stops the pass, and its mark stays on
+the day before. GitHub's count for a search by date stops at 2,500: on
+2026-10-05 the runs created on or before 2026-09-20 counted 2,500, where their
+days add up to 4,404. The walk compares a count only with 0 and with 1,000, so
+that stop changes nothing it decides. Each search is read from its last page
+back. GitHub lists the newest run first, and a run deleted from a page moves
+every later run up one place, so a pass that read front to back while deleting
+would step over runs it never read. Every run is still held to the line before
+it is taken, so GitHub's own filter is never what keeps a delete safe.
 
-`workflow-artifacts` still lists every page of its collection at each wake.
+**With no mark in reach, GitHub's answers say where the first walk of the runs
+starts.** No run is older than the repository, so a line before the day it was
+created leaves nothing to walk: the mark is the line, and no page of runs is
+read. On 2026-10-04 the line was 2026-07-06, before the repository was created
+on 2026-08-20. Its oldest run is from 2026-08-22, so the first run reaches the
+line on 2026-11-20. Once one does, the oldest day with a run is found by halving
+the days from the repository's first day to the line, one count of the runs
+created on or before a day a step - about 9 counts for a year of days - and the
+walk starts on that day.
+
+**The artifacts: from the oldest end, a page at a time.** GitHub lists them by
+id, newest first, 100 to a page, and offers no search by day. So the first page
+is read only for its count, which names the last page, and the walk reads from
+the last page back: a delete then moves only artifacts already read. It stops
+at the first artifact created after the line. On 2026-10-05 GitHub held 1,613
+artifacts on 17 pages and the line fell inside the last one, so a pass read 3
+pages - the first, the last and the one before it - where reading every page
+took 17. A dry run deletes nothing, so as its mark moves on it reads from the
+last page up to its line. With no mark in reach, the first walk starts after
+the day before the repository was created: no artifact is older than that.
+
+**Each page is checked before any of its artifacts is taken.** The walk reads
+the next page before it hands on the one in hand, so a pass that ends inside a
+page never ends past a boundary nobody checked. It sorts each page by the
+instant its artifacts were created, and checks three things.
+
+- **Day order.** The oldest day on a page must be at or after the newest day on
+  every page read before it. When it is not, the walk logs that the order check
+  failed, reads every page, each once and still from the last back, and the mark
+  stays where it was.
+- **The count.** Each page's `total_count` must equal the first page's, less
+  the artifacts this pass deleted. An artifact made during the walk moves every
+  older one a place on, so one can slip onto a page already read while the order
+  still holds. When the count differs, the pass handles what it reads, and the
+  mark stays where it was.
+- **Where the list ends.** The last page must hold what is left of the first
+  page's count, and when it is full, the page after it is read and must be
+  empty; its artifacts are never handed on. GitHub's count for a search by date
+  stops at 2,500. The artifacts list is not a search, and its count was exact on
+  2026-10-05 - 17 pages held the 1,613 artifacts it named - but a count that
+  stopped short would start the walk in the middle of the list. When the list
+  does not end there, the pass handles what it reads, and the mark stays where it
+  was.
+
+Every artifact is still held to the line before it is taken, so a failed check
+costs completeness and never safety. Neither check sees an artifact made and
+another gone between two reads, which leave the count as it was. GitHub's own
+retention - 90 days in this repository, read on 2026-10-05 - deletes an
+artifact missed that way at most 60 days after the 30-day line.
 
 ## The compaction
 
@@ -671,6 +717,23 @@ written it (Fowler).
 pass that read front to back while deleting would move each next page past runs
 it never read, and once the mark passed their day nobody would read them again.
 Read from the end, a delete moves only runs already read (Fowler).
+
+**2026-10-05: the artifacts are read from the oldest end, and their order is
+checked by UTC day.** Reading every page front to back took 17 requests on
+2026-10-05, and a live pass that deleted while it read would step over
+artifacts it never read. Reading from the last page back, with a mark on the
+record as `workflow-runs` keeps one, read 3 pages that day (the owner,
+2026-10-04). The order was first to be checked by the instant each artifact was
+created. GitHub orders by id, and across the 1,613 artifacts it listed on
+2026-10-05 an id and its instant disagreed by up to 76 minutes: that check
+failed at 9 of the 16 page boundaries, so the walk would have read every page
+and kept its mark on about half of all wakes. Compared by UTC day, each page
+sorted by instant, all 16 held. The mark and the line are days, so the day is
+the order the walk relies on. A walk by id was rejected: 19 artifacts came after
+one from a later day, all in the half hour before one of 4 midnights, and each
+would have held the mark. A listing that may have missed a member says so
+through `listing_intact`, so the one rule that holds a mark stays in
+`one_at_a_time.take`, beside the check it already made on day order (Fowler).
 
 **2026-10-04: a stale shard lands nothing, and `main`'s tip tells a lost push
 from a refused one.** The publisher used to check only whether `main` held the

@@ -20,7 +20,7 @@
 
 import { base } from '$app/paths';
 import { fetchedBytes } from './fetched-bytes';
-import { readAsk, readAskCost, type RawListedThrough } from './ask-reader';
+import { readAsk, readAskCost, type ArchiveTier, type RawListedThrough } from './ask-reader';
 import { readReach, type LedgerReach } from './ledger-reach';
 import { pageKeeper, type PageKeeper } from './page-keeper';
 import { readSlice } from './slice-reader';
@@ -57,14 +57,16 @@ function archiveBaseUrl(): string {
 	return runtime === '' ? '' : __ARCHIVE_BASE_URL__;
 }
 
-function archiveKeeper(): PageKeeper | null {
+/** The archive, and how many UTC days of each ledger the site copy keeps, so the archive is
+ *  asked only for days the copy may have dropped; `null` when the page reads the site alone. */
+function archiveTier(): ArchiveTier | null {
 	const baseUrl = archiveBaseUrl();
 	if (!baseUrl) return null;
 	keptArchive ??= pageKeeper(
 		((source) => ({ index: source.index, data: source.data }))(fetchedBytes(baseUrl, (url, init) => fetch(url, init))),
 		openEngine
 	);
-	return keptArchive;
+	return { keeper: keptArchive, siteWindowDays: __SITE_WINDOW_DAYS__ };
 }
 
 /** Ask a committed ledger for the slice a panel draws. Columns and a date range
@@ -83,12 +85,12 @@ const rawListedThrough = (__RAW_LISTED_THROUGH__ ?? {}) as RawListedThrough;
 
 /** Run one read-only statement over chosen ledgers and days. */
 export function ask(options: AskOptions): Promise<AskResult> {
-	return readAsk(keeper(), archiveKeeper(), options, rawListedThrough);
+	return readAsk(keeper(), archiveTier(), options, rawListedThrough);
 }
 
 /** What a written question would fetch before it runs. */
 export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> {
-	return readAskCost(keeper(), archiveKeeper(), ledgers, from, to, rawListedThrough);
+	return readAskCost(keeper(), archiveTier(), ledgers, from, to, rawListedThrough);
 }
 
 /** Drop this page's query-door cache, so Refresh reads the registry and indexes anew. */

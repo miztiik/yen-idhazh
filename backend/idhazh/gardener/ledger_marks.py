@@ -10,7 +10,8 @@ listing left out. `read_marks` reads them.
 
 **A mark is fetched once, before it is read.** The index folder is fetched
 whole, and each watermark by itself, without the day, month or year folders
-beside it.
+beside it, inside what is left of the shard's download budget: marks that do
+not fit raise `OverBudgetError`, and the pass takes nothing until a later wake.
 
 **A mark this build cannot trust stops the pass rather than being read as
 absent.** A compaction that guessed where it had got to would rewrite, or
@@ -27,7 +28,9 @@ asks `adopt` for that path: a file there becomes the period's `packed` entry,
 its bytes from the listing and its rows and envelope from its footer. A file
 whose envelope names another ledger, period or day is refused by name and
 never adopted, because adopting it would put another period's rows under this
-one.
+one. Reading the footer downloads the files beside it, and that counts against
+the shard's download budget as a step's own periods do: past it, `adopt`
+raises `OverBudgetError` and the step stops at the period for a later wake.
 """
 
 from __future__ import annotations
@@ -105,10 +108,12 @@ def _read_one[M: Contract](
 def read_marks(state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> LedgerMarks:
     """The three watermarks and the three indexes, fetched and read once.
 
-    A watermark whose index the listing does not hold is refused as `index-missing`.
+    A watermark whose index the listing does not hold is refused as
+    `index-missing`. Marks that do not fit what is left of the shard's download
+    budget raise `OverBudgetError` before anything is downloaded.
     """
     named = name_marks(state_dir, ledger_name)
-    listing.fetch(
+    listing.fetch_within_budget(
         {index.parent for index in named.indexes.values()},
         beside=[mark for mark in named.watermarks.values() if listing.holds(mark)],
     )
@@ -144,14 +149,15 @@ def adopt(
 ) -> Adopted | None:
     """A period's own file, when no entry names it, and the `packed` entry it earns; else None.
 
-    The file is fetched with the files beside it, then read from its footer
-    alone. A file whose envelope names another ledger, period or day is refused
-    by name.
+    The file is fetched with the files beside it, inside what is left of the
+    shard's download budget, then read from its footer alone. A fetch past the
+    budget raises `OverBudgetError`. A file whose envelope names another
+    ledger, period or day is refused by name.
     """
     found = named_trees.compact_file(listing, state_dir, ledger_name, period, covers)
     if found is None:
         return None
-    listing.fetch(beside=[found])
+    listing.fetch_within_budget(beside=[found])
     footer = ledger.read_footer(found)
     said = footer.envelope
     if (said.tier, said.ledger, said.period, said.covers) != (

@@ -39,7 +39,9 @@ member was handled through, hands that day in as `mark`. The pass says on its
 record the newest day it handled whole, and the next pass starts after that.
 A dry run never stops part way through a day: it deletes nothing, so it would
 report the same members again on every wake. Past its ceiling it counts the
-rest of that day without naming them, and its mark moves to that day.
+rest of that day without naming them, and its mark moves to that day. A
+listing that can see it may have missed a member - pages that shifted under it,
+or an order it checks that broke - says so, and the mark stays where it was.
 
 **A refusal is by name, with a reason.** A collection missing from a vocabulary
 reads as an oversight; a collection refused with a sentence reads as a decision.
@@ -136,9 +138,14 @@ class Window:
         return not (self.until is not None and day > self.until)
 
 
+def _always_intact() -> bool:
+    """A listing that cannot see a gap of its own has none to report."""
+    return True
+
+
 @dataclass(frozen=True, slots=True)
 class Collection[Raw]:
-    """One collection, as three callables and a name.
+    """One collection, as three callables and a name, and a fourth that may report a gap.
 
     `Raw` is whatever the caller's listing yields - a page of JSON, a `Path`.
     This module never looks inside one: it passes it to the caller's own
@@ -150,12 +157,19 @@ class Collection[Raw]:
     deletes the thing it listed rather than rebuilding it from an id.
     Splitting the three is what makes a collection something a caller supplies
     rather than something this module has to know.
+
+    `listing_intact` says whether the listing, as far as it has been walked,
+    has yielded every member of each day it reached, in day order. A listing
+    that checks itself - pages counted against each other, an order it relies
+    on - turns it false when a check fails, and a walk from a mark then keeps its
+    mark. A listing that checks nothing leaves the default, which is always true.
     """
 
     name: str
     listing: Callable[[], Iterable[Raw]]
     describe: Callable[[Raw], Member]
     delete: Callable[[Raw], None]
+    listing_intact: Callable[[], bool] = _always_intact
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,10 +186,12 @@ class Pass:
     so `take` always leaves it empty; a task that writes a file of its own fills
     it, and the runner holds every path in it to what the task owns.
 
-    `appended` is the report files a task filed through the ledger door into a
-    ledger its declaration `appends_to`, on a dry run too. They are held to that
-    ledger rather than to what the task owns, and they land whatever `dry_run` says,
-    because a report is what a dry run is for.
+    `appended` is the raw report files a task filed through the ledger door into
+    a ledger its declaration `appends_to`, on a dry run too. They are held to
+    that ledger's wake-day folder rather than to what the task owns, and they land
+    whatever `dry_run` says, because a report is what a dry run is for. A task
+    that writes a non-report row through `appends_to` names it in `written`; dry
+    run reports that path without landing it.
 
     `handled_through` is the newest UTC day through which every member was
     handled, by this pass or the ones before it, on a pass that walked from a
@@ -262,15 +278,12 @@ def refuse_by_name(
     if name in allowed:
         return name
     if name in refused:
-        raise ValueError(
-            f"{name} is refused: {refused[name]}. This prunes {', '.join(allowed)}"
-        )
+        raise ValueError(f"{name} is refused: {refused[name]}. This prunes {', '.join(allowed)}")
     raise ValueError(
         f"a prune takes the name of a {noun}, not {name!r}. A path is never a "
         f"name here, because a deletion primitive that resolved its argument against "
         f"the file system is the one accident nobody can undo. This prunes "
-        f"{', '.join(allowed)}"
-        + (f"; {', '.join(refused)} are refused by name" if refused else "")
+        f"{', '.join(allowed)}" + (f"; {', '.join(refused)} are refused by name" if refused else "")
     )
 
 
@@ -313,7 +326,9 @@ def take[Raw](
     listing ends. A pass whose mark is already that day reads nothing. A member
     from an earlier day than one before it means the listing is out of order:
     the pass goes on, every member still held to the window, but which days are
-    whole can no longer be said, so the mark stays where the pass started.
+    whole can no longer be said, so the mark stays where the pass started. A
+    listing that reports a gap of its own through `listing_intact` keeps the
+    mark there too, whichever way the pass ends.
     """
     if ceiling is not None and ceiling < 0:
         raise ValueError(f"a ceiling is a count of members, not {ceiling}")
@@ -350,7 +365,7 @@ def take[Raw](
             bytes_freed=freed,
             stopped_because=because,
             resume_from=resume_from,
-            handled_through=through,
+            handled_through=through if collection.listing_intact() else mark,
         )
 
     if mark is not None and line is not None and mark >= line:

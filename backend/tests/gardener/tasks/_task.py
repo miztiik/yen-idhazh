@@ -4,8 +4,9 @@ Through the task's own module and the committed declaration, with only the
 knobs a test names changed - `dry_run`, the window, the ceiling - so a test
 exercises the task as it ships. The folders the task walks are worked out by
 the runner's own `folders_of`, from the tree the test built. The listing names
-those folders whole, or, for a test that asks for a wake, only the period paths
-the runner names for the window it schedules.
+those folders whole, or, for a test that asks for a wake, only the paths the
+runner names for a scheduled wake: a retention task's window, or a compaction's
+marks.
 """
 
 from __future__ import annotations
@@ -74,8 +75,9 @@ def context_for(
     """The context the runner would hand this task over `root`, with these knobs changed.
 
     With `wake`, it is what a scheduled wake hands it: the window the runner
-    schedules for `today`, and a listing that names only that window's period
-    paths, so a step that reads anything else has to name it first.
+    schedules for `today`, where the task has one, and a listing that names only
+    the paths the runner names for that wake, so a step that reads anything else
+    has to name it first.
     """
     if wake and period_range is not None:
         raise ValueError("a wake reads the window the runner schedules, not a named range")

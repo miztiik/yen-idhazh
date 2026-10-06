@@ -135,6 +135,12 @@ being published twice, so each is checked by name.
 Found on 2026-10-05 by plan 60's row 10 (#1307), whose `workflow-runs` task reads
 seven named days of the gardener's own record at every wake.
 
+Since #1335 a ledger's raw root can also hold a `set-aside/` folder, and the
+reads that walk a whole raw root - `ledger.raw_days`, `list_raw_files` and
+`named_trees.raw_days` - log it as a stray folder (plan 60's row 18 report).
+The fix above stops that warning in a read of named days, and a walk it keeps
+still logs it.
+
 ## 58 - A ledger test expects an order for two runs written in the same millisecond (OPEN)
 
 **A ledger test failed once because two runs of one day came back in the

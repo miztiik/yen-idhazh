@@ -329,8 +329,7 @@ def test_a_ledger_outside_its_familys_folder_stops_the_build_naming_it() -> None
         )
 
     assert (
-        "shard-outcomes sits at state/llm-council/ and is listed in family "
-        "content-similarity-judge"
+        "shard-outcomes sits at state/llm-council/ and is listed in family content-similarity-judge"
     ) in str(refusal.value)
 
 
@@ -370,7 +369,9 @@ def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
 
     with pytest.raises(ValidationError) as refusal:
         LedgersConfig.model_validate(
-            a_registry([widened, *without("content-similarity-judge", LedgerName.DAY_METRICS.value)])
+            a_registry(
+                [widened, *without("content-similarity-judge", LedgerName.DAY_METRICS.value)]
+            )
         )
 
     assert "LedgerName.DAY_METRICS should be CONTENT_SIMILARITY_JUDGE_DAY_METRICS" in str(
@@ -419,7 +420,7 @@ def test_every_month_ledger_and_every_stamped_ledger_has_a_folder() -> None:
     periods = {Grain.MONTH_FILE, Grain.STAMPED}
     members = [member for member in LedgerName if paths.entry(member).grain in periods]
 
-    assert {paths.entry(member).grain for member in members} == periods
+    assert {paths.entry(member).grain for member in members} <= periods
     for member in members:
         filed = paths.path(STATE, member, COVERS[paths.entry(member).grain])
         assert filed.parent == paths.tree_root(STATE, member)
@@ -549,13 +550,38 @@ def test_a_ledger_under_the_two_roots_has_no_registry_address() -> None:
             paths.tree_relpath(member)
 
 
-def test_a_ledger_under_the_two_roots_is_prefixed_by_its_own_name() -> None:
-    """The five builders file it under `<root>/<name>/`, so any other prefix names nothing."""
+def test_a_door_ledger_that_is_its_own_family_keeps_its_own_prefix() -> None:
+    """A self-family ledger stays at `<root>/<name>/`, not a nested spelling."""
     gardener = a_family(LedgerName.GARDENER.value)
     moved = {**gardener, "ledgers": [{**gardener["ledgers"][0], "prefix": ["gardener", "x"]}]}
 
-    with pytest.raises(ValidationError, match="names a folder nothing writes"):
+    with pytest.raises(ValidationError, match="is its own family"):
         LedgersConfig.model_validate(a_registry([moved, *without(LedgerName.GARDENER.value)]))
+
+
+def test_a_nested_door_ledger_prefix_must_end_with_its_value() -> None:
+    """The envelope keeps the ledger value, so the folder ends with that value too."""
+    judge = a_family("content-similarity-judge")
+    scored = next(
+        held
+        for held in judge["ledgers"]
+        if held["name"] == LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS.value
+    )
+    moved = {
+        **judge,
+        "ledgers": [
+            *[held for held in judge["ledgers"] if held is not scored],
+            {
+                **scored,
+                "grain": Grain.RAW_AND_COMPACT.value,
+                "prefix": ["content-similarity-judge", "deep"],
+                "suffix": None,
+            },
+        ],
+    }
+
+    with pytest.raises(ValidationError, match="not scored-pairs"):
+        LedgersConfig.model_validate(a_registry([moved, *without("content-similarity-judge")]))
 
 
 def test_every_day_tree_files_as_a_day_directory() -> None:

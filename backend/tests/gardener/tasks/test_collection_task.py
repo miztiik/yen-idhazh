@@ -4,23 +4,23 @@ Driven through the task's own module and the committed declarations, found the
 way the runner finds them, against answers GitHub really gave - the transport
 is the declared injection point, so nothing here touches the network
 (Guardrail #7). What a page becomes and how one member is deleted is tested
-beside the adapter; this holds the task to its declaration, and the runs task
-to the mark on its own record, filed through the ledger door under `tmp_path`.
+beside the adapter; this holds the task to its declaration, and each
+collection's walk to the mark on its own record, filed through the ledger door
+under `tmp_path`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pytest
-from conftest import FIXTURES_DIR
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.gardener import CollectionTaskPolicy, PrunableCollection
 from idhazh.contracts.ledger_name import LedgerName
@@ -30,14 +30,17 @@ from idhazh.gardener.tasks import collection
 from .._garden import named_task_modules
 from .._records import file_a_record
 from ..test_github_collections import (
+    ARTIFACT_PAGES,
     OVER_A_THOUSAND,
+    RECORDED_LINE,
     REPOSITORY,
     RUNS_BY_DAY,
     RecordedAnswers,
-    RecordedApi,
+    artifact_page,
     counted_through,
     day_search,
     fixture,
+    oldest_first,
     recorded,
 )
 from ._task import context_for, declared
@@ -54,13 +57,28 @@ ORACLE_WAKE: Final = date(2026, 10, 4)
 #: The wake whose ninety-day line is 2026-08-22, the oldest day with a run.
 OLDEST_RUN_WAKE: Final = date(2026, 11, 20)
 
-PAGES = FIXTURES_DIR / "github-collections"
+#: The day the artifacts were recorded. Thirty days back is 2026-09-05, which
+#: falls inside the last page: ten artifacts from 2026-08-22 to 2026-08-24.
+ARTIFACT_WAKE: Final = date(2026, 10, 5)
 
 #: A recorded transport for each collection, so the task can be run over every word.
-SERVED: Final[dict[PrunableCollection, Callable[[], RecordedApi | RecordedAnswers]]] = {
-    PrunableCollection.WORKFLOW_ARTIFACTS: lambda: RecordedApi(PAGES / "artifacts-page-1.json"),
+SERVED: Final[dict[PrunableCollection, Callable[[], RecordedAnswers]]] = {
+    PrunableCollection.WORKFLOW_ARTIFACTS: lambda: RecordedAnswers(
+        fixture(ARTIFACT_PAGES), repository=fixture(REPOSITORY)
+    ),
     PrunableCollection.WORKFLOW_RUNS: lambda: RecordedAnswers(repository=fixture(REPOSITORY)),
 }
+
+
+def file_an_artifacts_record(state: Path, *, on: str, **cells: Any) -> CollectionPruneRow:
+    """One record holding a row of the artifacts task, its line thirty days before `on`."""
+    line = (date.fromisoformat(on) - timedelta(days=30)).isoformat()
+    return file_a_record(state, on=on, task="workflow-artifacts", until=line, **cells)
+
+
+def the_oldest(count: int) -> tuple[str, ...]:
+    """The ids of the oldest artifacts GitHub listed, in the order they were created."""
+    return tuple(str(raw["id"]) for raw in oldest_first(4)[:count])
 
 
 def test_both_collections_ship_as_tasks_the_one_module_serves() -> None:
@@ -88,34 +106,108 @@ def test_every_collection_in_the_vocabulary_is_served_by_the_task(
     assert api.read_paths, "the task asked GitHub nothing for its collection"
 
 
-def test_a_dry_run_names_what_the_window_holds_and_deletes_nothing(tmp_path: Path) -> None:
-    """Thirty days back from 2026-09-18 is 2026-08-19, which the third artifact was made on."""
-    api = RecordedApi(PAGES / "artifacts-page-1.json")
+def test_a_first_walk_asks_the_repository_then_reads_the_last_page_and_one_more(
+    tmp_path: Path,
+) -> None:
+    """With no mark in reach, the walk starts after 2026-08-19, the day before the repository.
 
-    outcome = collection.run(context_for("workflow-artifacts", tmp_path, today=WAKE), api=api)
+    It reads page 1 for the count, page 4 and then page 3 to check it by, and
+    takes the ten artifacts the thirty-day line holds, oldest first. The walk
+    ran out at its line, so the mark moves to the line.
+    """
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), repository=fixture(REPOSITORY))
 
+    outcome = collection.run(
+        context_for("workflow-artifacts", tmp_path, today=ARTIFACT_WAKE), api=api
+    )
+
+    assert api.read_paths == ["", artifact_page(1), artifact_page(4), artifact_page(3)]
     assert api.removed == [], "a dry run called a delete"
     assert (outcome.collection, outcome.dry_run, outcome.until) == (
         "workflow-artifacts",
         True,
-        "2026-08-19",
+        RECORDED_LINE,
     )
-    assert outcome.taken == ("4529182634", "4529182700", "4529182755")
+    assert outcome.taken == the_oldest(10)
     assert outcome.written == (), "a collection task writes nothing into the repository"
-    assert (outcome.seen, outcome.stopped_because) == (4, StopReason.EXHAUSTED)
+    assert (outcome.seen, outcome.stopped_because, outcome.handled_through) == (
+        10,
+        StopReason.EXHAUSTED,
+        RECORDED_LINE,
+    )
 
 
-def test_a_live_pass_deletes_one_member_a_call_and_stops_at_the_ceiling(tmp_path: Path) -> None:
-    """The ceiling is the declaration's, and the next pass resumes at the member it stopped at."""
-    api = RecordedApi(PAGES / "artifacts-page-1.json")
+def test_a_walk_from_a_mark_passes_over_the_artifacts_its_mark_handled(tmp_path: Path) -> None:
+    """A dry pass handled through 2026-08-22, so the next takes only 2026-08-23 and 2026-08-24."""
+    file_an_artifacts_record(tmp_path / "state", on="2026-10-04", handled_through="2026-08-22")
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES))
+
+    outcome = collection.run(
+        context_for("workflow-artifacts", tmp_path, today=ARTIFACT_WAKE), api=api
+    )
+
+    assert api.read_paths == [artifact_page(1), artifact_page(4), artifact_page(3)]
+    assert outcome.taken == the_oldest(10)[6:]
+    assert outcome.handled_through == RECORDED_LINE
+
+
+def test_a_live_pass_its_ceiling_stops_inside_a_day_of_artifacts_keeps_the_day_before(
+    tmp_path: Path,
+) -> None:
+    """Seven go: six from 2026-08-22 and the first of 2026-08-23, so only 2026-08-22 is whole."""
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), repository=fixture(REPOSITORY))
     context = context_for(
-        "workflow-artifacts", tmp_path, today=WAKE, dry_run=False, max_deletes_per_run=2
+        "workflow-artifacts", tmp_path, today=ARTIFACT_WAKE, dry_run=False, max_deletes_per_run=7
     )
 
     outcome = collection.run(context, api=api)
 
-    assert api.removed == ["actions/artifacts/4529182634", "actions/artifacts/4529182700"]
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.CEILING, "4529182755")
+    assert api.removed == [f"actions/artifacts/{member}" for member in the_oldest(7)]
+    assert (outcome.stopped_because, outcome.resume_from) == (
+        StopReason.CEILING,
+        the_oldest(8)[-1],
+    )
+    assert outcome.handled_through == "2026-08-22"
+
+
+def test_a_page_out_of_order_sends_the_pass_through_every_page_and_keeps_its_mark(
+    tmp_path: Path,
+) -> None:
+    """Page 4's newest artifact moved past midnight, after artifacts page 3 holds.
+
+    The pass still takes the ten artifacts the line holds - the window keeps
+    every delete safe - but it cannot say which days are whole, so the next
+    pass starts from the same mark.
+    """
+    file_an_artifacts_record(tmp_path / "state", on="2026-10-04", handled_through="2026-08-21")
+    last = recorded(ARTIFACT_PAGES, artifact_page(4))
+    moved = next(raw for raw in last["artifacts"] if raw["id"] == 10336260332)
+    moved["created_at"] = "2026-09-15T00:05:00Z"
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), answering={artifact_page(4): last})
+
+    outcome = collection.run(
+        context_for("workflow-artifacts", tmp_path, today=ARTIFACT_WAKE), api=api
+    )
+
+    assert api.read_paths == [artifact_page(page) for page in (1, 4, 3, 2)]
+    assert (outcome.seen, outcome.taken) == (313, the_oldest(10))
+    assert outcome.handled_through == "2026-08-21"
+
+
+def test_a_count_that_grows_between_two_reads_keeps_the_mark(tmp_path: Path) -> None:
+    """Page 3 is read after one artifact was made, so one may have slipped onto page 4."""
+    file_an_artifacts_record(tmp_path / "state", on="2026-10-04", handled_through="2026-08-21")
+    second = recorded(ARTIFACT_PAGES, artifact_page(2))["artifacts"]
+    third = recorded(ARTIFACT_PAGES, artifact_page(3))["artifacts"]
+    pushed = {"total_count": 314, "artifacts": [second[-1], *third[:-1]]}
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), answering={artifact_page(3): pushed})
+
+    outcome = collection.run(
+        context_for("workflow-artifacts", tmp_path, today=ARTIFACT_WAKE), api=api
+    )
+
+    assert outcome.taken == the_oldest(10), "the pass handled what it read"
+    assert outcome.handled_through == "2026-08-21"
 
 
 # --- The runs, walked a UTC day at a time from the task's own mark ---------------

@@ -24,7 +24,9 @@ class StartReason(StrEnum):
 
     #: The period after the step's mark, the newest one it has finished.
     MARK = "mark"
-    #: The oldest period an index names, because the step has no mark yet.
+    #: The oldest period an index names: where a step with no mark yet starts,
+    #: and where the drop step always starts, because the monthly index is its
+    #: record of what is left to drop.
     OLDEST_INDEXED = "oldest-indexed"
     #: The oldest raw day in the months a first day run looks in, because the
     #: step has no mark yet.
@@ -34,7 +36,8 @@ class StartReason(StrEnum):
     #: starts at the oldest raw day the window keeps, or takes nothing.
     KEEP_LINE = "keep-line"
     #: An operator's range decided it: the range ends before the step's first
-    #: period, or it leaves out the period the step must take first.
+    #: period, it leaves out the period the step must take first, or it holds
+    #: no whole period at the step's grain.
     OPERATOR_RANGE = "operator-range"
     #: The ledger holds nothing for the step to start from.
     NONE = "none"
@@ -124,6 +127,12 @@ class PeriodsChosen(Model):
             "or None when it keeps every month."
         )
     )
+    newest_packable_year: YearStamp | None = Field(
+        description=(
+            "The newest UTC year at least `monthly_keep_days` whole days past its end, at "
+            "00:00 UTC on the wake's day. None when the declaration packs no year."
+        )
+    )
     cap: int = Field(
         ge=1, description="`max_periods_per_run`: the most periods one step takes on this wake."
     )
@@ -135,6 +144,20 @@ class PeriodsChosen(Model):
     )
     month_deletes_dry_run: bool = Field(
         description="Whether the monthly window's deletes only report on this wake."
+    )
+    drops: StepChoice | None = Field(
+        description=(
+            "The UTC months the drop step may take: the monthly entries older than the keep "
+            "line, oldest first, at most the cap, inside the operator range. The span counts "
+            "entries, so a month inside it that the index does not name is not taken. None "
+            "when the monthly window keeps every month."
+        )
+    )
+    years: StepChoice | None = Field(
+        description=(
+            "The UTC years the year step may pack. An operator range limits them to the whole "
+            "calendar years it holds. None when the declaration packs no year."
+        )
     )
     months: StepChoice = Field(description="The months the month step may close.")
     days: StepChoice = Field(
@@ -155,20 +178,39 @@ class PeriodsChosen(Model):
 
     @model_validator(mode="after")
     def _each_step_chooses_its_own_grain_and_every_span_runs_forward(self) -> Self:
-        """The month step chooses UTC months, the day step UTC days, and every span runs forward."""
+        """Each step chooses periods of its own grain, every span runs forward, and lines pair up.
+
+        A declaration that packs years has a year line and a year choice; one that
+        packs none has neither. A monthly window that drops months has a keep line
+        and a drop choice; one that keeps every month has neither.
+        """
+        if (self.newest_packable_year is None) != (self.years is None):
+            raise ValueError(
+                "a year line and a year choice come together: a declaration that packs years "
+                "has both, and one that packs none has neither"
+            )
+        if (self.keep_line is None) != (self.drops is None):
+            raise ValueError(
+                "a keep line and a drop choice come together: a monthly window that drops "
+                "months has both, and one that keeps every month has neither"
+            )
         spans = (("an operator range", self.operator_range), ("a re-run span", self.rerun_span))
         for named, span in spans:
             if span is not None and span[0] > span[1]:
                 raise ValueError(f"{named} runs forward: {span[0]} comes after {span[1]}")
-        for step, period, choice in (
-            ("month", Period.MONTHLY, self.months),
-            ("day", Period.DAILY, self.days),
+        for step, grain, period, choice in (
+            ("drop", "month", Period.MONTHLY, self.drops),
+            ("year", "year", Period.YEARLY, self.years),
+            ("month", "month", Period.MONTHLY, self.months),
+            ("day", "day", Period.DAILY, self.days),
         ):
+            if choice is None:
+                continue
             for stamp in (choice.first, choice.last, choice.resume_from):
                 if stamp is None:
                     continue
                 if not covers_fits(stamp, tier=Tier.COMPACT, period=period):
                     raise ValueError(
-                        f"the {step} step chose {stamp!r}, and it chooses UTC {step}s"
+                        f"the {step} step chose {stamp!r}, and it chooses UTC {grain}s"
                     )
         return self
