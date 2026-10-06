@@ -11,7 +11,8 @@ test('THE ORACLE: cells print by engine column type, not by JavaScript value', (
 		[{ name: 'items', type: 'BIGINT' }, '12000', '12,000'],
 		[{ name: 'share', type: 'DOUBLE' }, '0.12500', '0.125'],
 		[{ name: 'tiny', type: 'DOUBLE' }, '0.0000123', '1.23e-5'],
-		[{ name: 'day', type: 'DATE' }, '2026-10-03T00:00:00.000Z', '2026-10-03'],
+		[{ name: 'day', type: 'DATE' }, '0044-03-15 (BC)', '0044-03-15 (BC)'],
+		[{ name: 'far', type: 'DATE' }, '12345-01-01', '12345-01-01'],
 		[{ name: 'empty', type: 'VARCHAR' }, null, 'null']
 	];
 	for (const [column, value, expected] of cases) {

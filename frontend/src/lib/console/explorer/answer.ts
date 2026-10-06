@@ -41,8 +41,6 @@ export function printCell(column: Column, value: Row[string]): PrintedCell {
 			const n = Number(text);
 			return Number.isFinite(n) ? { text: numberText(n), kind: 'number' } : { text, kind: 'text' };
 		}
-		case 'date':
-			return { text: text.slice(0, 10), kind: 'text' };
 		case 'timestamp':
 			return { text: text.replace('T', ' ').replace(/Z$/, '').replace(/\.000$/, ''), kind: 'text' };
 		case 'truth':
