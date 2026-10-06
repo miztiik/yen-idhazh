@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-05
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -98,10 +98,8 @@ The console knobs are:
 - `console.explorer_max_rows`
 - `console.explorer_max_fetch_bytes`
 - `console.explorer_query_max_chars`
-- `console.explorer_rail_rem`
 - `console.explorer_editor_lines_shown`
 - `console.explorer_strip_shown`
-- `console.explorer_answer_svh`
 - `console.explorer_cell_max_ch`
 - `console.explorer_bar_spread_share`
 - `console.explorer_counter_from_share`
@@ -125,7 +123,7 @@ failures cost the most articles, and the feeds that failed at least once. Both
 state their tail in one sentence rather than offering more rows, because a
 ranking is read from the top and a tail is a number, not a page.
 
-The Data explorer route reads the `console.explorer_*` knobs. They bound the route chrome, the SQL editor, the row cap, the fetch ceiling, the fixed status-bar lines, the notice lifetime, the answer region and the example questions. `console.explorer_chrome` lets the route ask the layout for compact workbench chrome without the layout reading a route name. `console.explorer_editor_lines_shown` and `console.explorer_answer_svh` are fixed sizes: a long question, a long note or many answer rows scrolls inside its region instead of moving the page. `console.explorer_max_fetch_bytes` is 64 MiB. Measured 2026-10-04 on a local real build in Chromium with the CPU slowed 4x, on a shared i7-1265U laptop: a question fetching 9.9 MB (10,379,116 bytes, 138 files, six ledgers over 30 days) answered in 6,435 ms, 6,209 ms and 5,926 ms on the page clock; the wall times were 10,120 ms, 9,644 ms and 10,163 ms. No main-thread task passed 1 second - the three longest were 546 ms, 328 ms and 857 ms - so 64 MiB stands. The site holds only 22.5 MB today, so 64 MiB itself is untested until a ledger holds 90 days. The status bar prints the bytes the page keeper still holds, not the sum of every call's possible fetch cost, so a byte-range year file does not inflate the reload total.
+The Data explorer route reads the `console.explorer_*` knobs. They bound the route chrome, the SQL editor, the row cap, the fetch ceiling, the fixed status-bar lines, the notice lifetime and the example questions. `console.explorer_chrome` lets the route ask the layout for compact workbench chrome without the layout reading a route name. No knob sizes a region: the workbench fills the window, and each region takes its share of it ([how-the-data-explorer-shares-the-window.md](../console-design/how-the-data-explorer-shares-the-window.md)). `console.explorer_editor_lines_shown` is the fewest lines the SQL editor shows: below 1024 px the editor is exactly that tall, and from 1024 px it fills its share and never drops under it. A long question, a long note or many answer rows scroll inside their region instead of moving the page. `console.explorer_max_fetch_bytes` is 64 MiB. Measured 2026-10-04 on a local real build in Chromium with the CPU slowed 4x, on a shared i7-1265U laptop: a question fetching 9.9 MB (10,379,116 bytes, 138 files, six ledgers over 30 days) answered in 6,435 ms, 6,209 ms and 5,926 ms on the page clock; the wall times were 10,120 ms, 9,644 ms and 10,163 ms. No main-thread task passed 1 second - the three longest were 546 ms, 328 ms and 857 ms - so 64 MiB stands. The site holds only 22.5 MB today, so 64 MiB itself is untested until a ledger holds 90 days. The status bar prints the bytes the page keeper still holds, not the sum of every call's possible fetch cost, so a byte-range year file does not inflate the reload total.
 
 `window_presets` is the list of spans the console's window control offers, and
 one control sets the span for every section that follows it. Five presets rather

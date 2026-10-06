@@ -17,6 +17,7 @@ what the console may do with them.
 | [console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md) | How is the machine a run drew reported, and why is no rate pooled across two of them? |
 | [console-design/what-the-quality-and-source-panels-draw.md](console-design/what-the-quality-and-source-panels-draw.md) | How are the model's own figures and the sources' health drawn? |
 | [console-design/how-a-console-chart-gets-its-data.md](console-design/how-a-console-chart-gets-its-data.md) | Where do a panel's bytes come from, and what may it never do to get them? |
+| [console-design/how-the-data-explorer-shares-the-window.md](console-design/how-the-data-explorer-shares-the-window.md) | How do the Data explorer's regions share the window, and what holds still while you use them? |
 
 Three other pages meet here and do not overlap.
 [../architecture/publishing/console.md](../architecture/publishing/console.md)
@@ -142,12 +143,6 @@ owner's carve-out for that one, 2026-08-30, on conditions this section holds:
 ## Data explorer prints the engine answer as written
 
 The Data explorer page is the exception to the console rule that translates ledger columns into prose. Its table prints column names, decimals, nulls and dates exactly as the engine returned them, because the operator writes the question and types those names back into the next one. Cells still render as text, never as links, images or HTML.
-
-## A workbench keeps its regions still
-
-The Data explorer is a workbench. Pressing Run, copying text, saving a question, opening History, sorting a column or changing the chart changes only the content inside a region. The toolbar, question row, ledger rail, editor, status bar, column rail, answer region and chart region keep their boxes.
-
-Long content scrolls inside the region that owns it. The SQL editor has a fixed line count, the status bar reserves readout lines, the answer region has a fixed viewport share, and notices float over the page instead of entering the document flow. The column rail may show ledger columns before a run and answer columns after an answered or quiet run, but the rail's box and its inner scroller keep their size.
 
 ## The Data explorer colours a type by its family, and marks a chosen ledger
 

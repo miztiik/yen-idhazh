@@ -159,7 +159,7 @@ for (const view of [
 	});
 }
 
-test('THE ORACLE: Data explorer puts the span and Run in the workbench toolbar', async ({ page }) => {
+test('THE ORACLE: Data explorer puts the span and the dates in the toolbar, and Run beside Save and Copy link', async ({ page }) => {
 	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
 	const toolbar = page.locator('[data-workbench-region="toolbar"]');
 	await expect(toolbar).toHaveCount(1);
@@ -167,7 +167,8 @@ test('THE ORACLE: Data explorer puts the span and Run in the workbench toolbar',
 	await expect(toolbar.locator('[data-window-control]')).toHaveCount(1);
 	await expect(toolbar.getByRole('textbox', { name: 'From (UTC)' })).toHaveCount(1);
 	await expect(toolbar.getByRole('textbox', { name: 'To (UTC)' })).toHaveCount(1);
-	await expect(toolbar.getByRole('button', { name: /^Run$/ })).toHaveCount(1);
+	await expect(toolbar.getByRole('button', { name: /^Run$/ })).toHaveCount(0);
+	await expect(page.locator('[data-workbench-region="editor"] [data-explorer-actions]').getByRole('button', { name: /^Run$/ })).toHaveCount(1);
 });
 
 test('THE ORACLE: before a run the column rail names the selected ledger\'s own columns', async ({ page }) => {
@@ -625,7 +626,7 @@ test('THE ORACLE: Save, recent runs and Markdown copy preserve text without runn
 
 	await runExplorer(page);
 	await page.getByRole('button', { name: /^Copy as table$/ }).click();
-	await expect(page.locator('.copy-answer')).toContainText('Copied 1 row as a table.');
+	await expect(page.locator('[data-notice]')).toContainText('Copied 1 row as a table.');
 	const copied = await page.evaluate(() => navigator.clipboard.readText());
 	expect(copied).toContain('`label`');
 	expect(copied).toContain('``[x](https://example.invalid/a)\\|pipe `tick```');
