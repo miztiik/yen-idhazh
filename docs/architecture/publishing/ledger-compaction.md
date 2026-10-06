@@ -43,15 +43,15 @@ flowchart TB
     DROP["1 and 2. drop the oldest months past the keep line,<br/>at most max_periods_per_run, with their raw days,<br/>or only name those while month_deletes_dry_run is true"]
     YDONE{"a year chosen for this wake?<br/>after the yearly mark, monthly_keep_days<br/>since it ended, its next January closed"}
     YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
-    YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
+    YHOLE["a month no entry names whose days are still there:<br/>refused by name, exit 1"]
     PACK["3. plan year files, one row group a month,<br/>or an empty entry:<br/>indexes and deletes wait for the end of the pass"]
     MDONE{"a month chosen for this wake?<br/>after the monthly mark, daily_keep_days<br/>since it ended, its last day packed"}
     MWAIT["not yet, or a raw day still waits in it:<br/>the month waits for a later wake"]
     MREC["each day from the ledger's first:<br/>a day no index names is adopted<br/>from its own file, or listed lost"]
     ABSORB["4. plan month files, or an empty entry:<br/>indexes and deletes wait for the end of the pass"]
     DDUE{"a day chosen for this wake?<br/>after the daily mark, compact_after_days<br/>since it ended, at most max_periods_per_run"}
-    DHOLD["the day waits for a later wake:<br/>a run may still be writing, or the cap is used"]
-    TAKE["5. plan day files, or an empty entry,<br/>after each packed day a re-run wrote into:<br/>indexes and deletes wait for the end of the pass"]
+    DHOLD["the day waits for a later wake:<br/>a run may still be writing, or the cap or the budget is used"]
+    TAKE["5. re-open each closed month a re-run wrote into,<br/>then plan day files, or an empty entry,<br/>after each packed day a re-run wrote into:<br/>indexes and deletes wait for the end of the pass"]
     DRY{"dry_run?"}
     REPORT["report every path, land the record only<br/>the three report-only compactions"]
     LAND["land every write and delete<br/>in the shard's one commit"]
@@ -121,7 +121,7 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 | 2 | Drops, by their listed paths and unread, the raw days past the keep line in the months step 1 drops and in those a first day run looked back over. While the window only reports, names them and keeps them |
 | 3 | Packs every year chosen for this wake into its year file, or into an entry with no file, where the declaration sets `monthly_keep_days` |
 | 4 | Closes every month chosen for this wake into its month file, or into an entry with no file |
-| 5 | Packs every day chosen for this wake into its day file, or into an entry with no file, after each packed day that holds raw files again |
+| 5 | Re-opens each closed month that raw files landed in ([A late file](#a-late-file)), then packs every day chosen for this wake into its day file, or into an entry with no file, after each packed day that holds raw files again |
 
 **Every step chooses its own periods.** Before any step runs, the pass chooses
 the months step 1 may drop, the years step 3 may pack, the months step 4 may
@@ -129,8 +129,9 @@ close and the days step 5 may pack, from the ledger's own indexes and marks and
 the wake's UTC day, and logs the choice once as one `periods chosen` line, the
 JSON of `PeriodsChosen` (`backend/idhazh/contracts/gardener_events.py`). Step 2
 takes the raw days of the months step 1 chose, and of those a first day run
-looks back over ([A month past the window](#a-month-past-the-window)). No
-choice reads the fixed window the planner names for each task
+looks back over ([A month past the window](#a-month-past-the-window)). The
+listing a wake hands the pass names only the ledger's indexes and watermarks,
+so a step reads only the periods it names itself
 ([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
 
 **Drops first and days last, because no pass may write a path it deletes.** A
@@ -138,6 +139,19 @@ shard refuses a path it both wrote and deleted, so a pass that did either would
 stall every wake after it. In this order a year packs month files and a month
 absorbs day files that an earlier wake wrote, never one this pass wrote, and a
 period whose last part this pass writes is taken at the next wake.
+
+**A step takes only what fits the shard's download budget.** A shard may
+download at most `max_downloaded_mb` for all its tasks
+([idhazh-gardener.md](idhazh-gardener.md#what-a-shard-downloads)). Once a step
+has named its periods, it reads their files' sizes off the listing, takes the
+longest run, oldest first, whose download fits what is left, and stops at the
+first period that does not fit: `ceiling`, for a later wake with room, or
+`failed` by name, naming the period, its bytes and `max_downloaded_mb`, when
+that period alone is larger than the whole budget, because no wake could ever
+take it. Adopting a file no entry names counts against the budget too, and so
+do the marks: a pass whose marks do not fit takes nothing and ends `ceiling` at
+its index folder. A correct pass never passes the budget, so a shard over it is
+a code defect.
 
 **Every rule counts whole UTC days after a period's own end.** The pass measures
 from 00:00 UTC on the wake's own day, so every wake of one UTC day gets the same
@@ -187,11 +201,17 @@ own day file at its path is adopted, as a month adopts one
 ([A month](#a-month)): an index restored from an older commit can lose a day
 whose file is still there, and recording it empty would lose its rows.
 
-**A day that cannot be read whole is not taken.** A file that is not a ledger
-file, or that this build cannot read, stops its day, and so does a day holding
-more than `max_raw_files_per_period` files. Nothing of that day is deleted, the
-watermark stays before it, and the pass ends `failed` naming it, so the task
-exits 1. Every step the pass took before that day still lands.
+**A raw file that cannot be read is moved aside, and the rest of its day
+packs.** A file that is not a ledger file, or whose envelope or rows this build
+refuses, moves to the ledger's set-aside folder
+([A file that cannot be read](#a-file-that-cannot-be-read)), the day's entry
+counts it in `set_aside`, and the pass logs `note=set-aside` with the day. A day
+taken again keeps the count its entry had and adds to it. **A day holding more
+than `max_raw_files_per_period` readable files packs its oldest that many**, the
+order settling relies on. The rest stay in its folder, the mark moves past the
+day, the pass ends `ceiling` at it with `note=carried-over`, and the next wake
+takes them in as it takes a re-run (below). A day the step refuses keeps every
+file, and every step the pass took before that day still lands.
 
 **A re-run that lands after its day was compacted replaces its first attempt.**
 GitHub lets a failed job run again for 30 days, and the re-run writes into the
@@ -205,7 +225,8 @@ attempt 2 replace attempt 1 even when it filed fewer rows. The watermark does
 not move back. **A raw day at or below the mark is taken again however old it
 is**, in any month not yet closed: the month step holds such a month until the
 day is packed ([A month](#a-month)), so leaving it would hold the month for
-ever.
+ever. A raw day in a month already closed re-opens that month instead
+([A late file](#a-late-file)).
 
 **A first pass starts at the oldest raw day, never on the 1st of its month.** It
 looks for that day in the raw folders of the month that holds the newest due
@@ -253,13 +274,21 @@ ever `lost`; a month or a year lists its lost days. Each recovery is one log
 line naming its note and its period, and the note words are declared in
 `backend/idhazh/contracts/gardener_fault.py`.
 
-**A month's own file is never written over.** A month file at its path that no
-monthly entry names is the month's record when its days give no row, and the
-month takes its rows and no lost day. It is kept when it holds exactly the rows
-its days hold, which is what a pass that stopped before its indexes leaves. When
-the two differ, the month is refused by name and waits for a person. A day whose
-entry says `packed` while its file is not there is refused as `file-missing`,
-and the month waits.
+**A month's own file is looked for first, and never written over.** A month
+file at its path that no monthly entry names is the month's record when its
+days give no row, and the month takes its rows and no lost day: a day file
+missing beside it is not lost, because its rows are in that file. It is kept
+when it holds exactly the rows its days hold, which is what a pass that stopped
+before its indexes leaves. When the two differ, the month is refused by name and
+waits for a person.
+
+**With no such file, a day file the month cannot read, or that its entry names
+and the tree lacks, costs that day and not the month.** One that cannot be read
+is moved aside (`note=set-aside`), and one that is not there has nothing to
+move; either way its day goes into `lost_days` (`note=recorded-lost`), and the
+month closes from the rest. A month's entry counts in `set_aside` every file
+its days moved aside and every file it moved itself, so the count survives the
+days leaving the daily index.
 
 Month files follow the pass-wide write order described above. A pass that stops
 before the monthly index lands keeps all daily sources. Once that index names
@@ -279,10 +308,50 @@ When more than `max_periods_per_run` months are past the line at once, the
 oldest go first and the rest at the next wakes
 ([A month past the window](#a-month-past-the-window)).
 
-**Raw files that land in a month already absorbed are refused and kept.**
-`daily_keep_days` is at least 31, one day more than GitHub's 30-day re-run
-window, so no re-run can land there; a file that does is for a person to read.
-The rest of the pass still runs.
+## A late file
+
+**A raw file that lands in a month already closed re-opens that month.** A
+GitHub re-run writes into the day its run first wrote, up to 30 days later,
+and a month closes `daily_keep_days` after it ends. The day step meets the late
+day among the raw days it names and re-opens its month before it takes any
+day. A re-opened month counts once against `max_periods_per_run`, as a day
+does. The step names the month's file and raw folder first, so every late day
+of the month is taken in, and the month is written once.
+
+**The re-opened month holds what packing the late day first would have held.**
+Every row of a month file keeps the day its raw file covered, so the month's
+rows are split back into days. Each late day is settled as a day taken again is
+([A day](#a-day)): the month's rows of that day first, then the day's raw files
+oldest first, one file's rows per work unit and then one row per key, by the
+ledger's own key and preference in `backend/idhazh/ledger/keys.py`. The other
+days' rows do not change, and the month is joined again day by day in date
+order. The month file and its entry are written again, the late raw files are
+deleted, and the pass logs `note=reopened-month` with the month. A late day
+leaves the month's `lost_days`, because it now has a record. No mark moves. An
+`empty` month has no file, so its rows are the late rows alone. The re-open is
+`backend/idhazh/gardener/tasks/_reopened_month.py`.
+
+**A re-open that cannot finish keeps every file, and the pass ends `failed` at
+the month.** A `packed` entry whose month file is not there is refused as
+`fault=file-missing`: rebuilt from the late files alone, the month would hold
+only the days that ran again. The rest of the pass still runs. **A late raw
+file that cannot be read is moved aside**, as a day moves one, and the month's
+entry counts it; a late day whose files were all moved aside gives no record,
+so it stays in `lost_days`. A late day holding more raw files than
+`max_raw_files_per_period` gives its oldest, and the month re-opens again at
+the next wake for the rest, this pass ending `ceiling` at the month.
+
+| # | Where a raw day at or below the daily mark is | What the day step does |
+| --- | --- | --- |
+| 1 | A month the monthly index names, which the monthly window keeps | Re-opens the month, as above |
+| 2 | A month the monthly index names, past the keep line | Nothing. The drop steps own it: a live window deletes it unread with its month, and a window that only reports names it and keeps it ([A month past the window](#a-month-past-the-window)) |
+| 3 | A month the monthly mark is past that no monthly entry names | Refuses the day by name and keeps its files, for a person: the month never closed, was dropped, or sits in a packed year, so there is no month to re-open |
+| 4 | A month not yet closed | Takes the day again ([A day](#a-day)) |
+
+**A month inside a packed year never re-opens.** A year packs no earlier than
+`daily_keep_days` plus 32 days after its December ([A year](#a-year)), and a
+re-run lands within 30 days, so no re-run reaches one. A raw day there is row
+3 above.
 
 ## A year
 
@@ -311,17 +380,30 @@ The step names what it reads of its years - each year's month files and its own
 file - and the shard lists them from its commit then
 ([idhazh-gardener.md](idhazh-gardener.md#a-wake-in-order)).
 
-**A year is packed whole or not at all, and a month with no row does not stop
-it.** A year accounts for every month from January, or from the ledger's first
-month when the ledger began inside that year, so a month before a ledger began
-is never called missing. A month with a `packed` entry gives its file's rows,
-an `empty` month gives none, and every month's `lost_days` carry into the year's
-entry. A year whose months give no row is an `empty` entry with no file, unless
-its own file is at its path while no entry names it: that file is adopted
-(`note=index-rebuilt`), as a month adopts one ([A month](#a-month)). A month no
-index names is refused by name, the yearly watermark stays, and the task exits
-1. A year's file covers the whole year, so a reach that counts from the yearly
-index starts on its 1 January even when its first rows came later.
+**A year's own file is looked for first.** A year file at its path that no
+yearly entry names is adopted as the year (`note=index-rebuilt`): a shard lands
+a year file only in the commit that also indexes it and deletes its months, and
+a month inside a packed year never changes again, so the file holds exactly its
+months' rows. Its months' lost days and set-aside counts carry onto its entry,
+and their files go by their names, unread and never downloaded.
+
+**Otherwise a year is packed whole from its months, and a month with no row
+does not stop it.** A year accounts for every month from January, or from the
+ledger's first month when the ledger began inside that year, so a month before
+a ledger began is never called missing. A month with a `packed` entry gives its
+file's rows, an `empty` month gives none, and every month's `lost_days` and
+`set_aside` carry into the year's entry. A year whose months give no row is an
+`empty` entry with no file. A month file that cannot be read is moved aside
+(`note=set-aside`), and one its entry names that the tree lacks has nothing to
+move; either way every day of that month goes into the year's `lost_days`
+(`note=recorded-lost` with the month), because nothing else says which of its
+days held rows. A month no entry names adopts its own file when one is at its
+path. With none, when nothing of the month is left - no day file, no raw file,
+no daily entry - its days are recorded lost; while something is left, the month
+never closed, so the year is refused by name as `day-missing`, the yearly
+watermark stays, and the task exits 1. A year's file covers the whole year, so
+a reach that counts from the yearly index starts on its 1 January even when its
+first rows came later.
 
 **The earliest a year can go is `daily_keep_days` plus 32 days after it ends.**
 Its next January is absorbed `daily_keep_days` after that January ends, 31 days
@@ -333,8 +415,9 @@ the loader refuses one. At a `daily_keep_days` of 45, 2026 is packed on 19 March
 Year files follow the pass-wide write order described above.
 The month files are joined as they are and never settled, and the monthly
 watermark stays where it is. A pass that stopped before the yearly index leaves
-every month file, so the next wake packs that year again. A pass that stopped
-after it leaves a year the yearly index already names, so the next wake deletes
+every month file, so the next wake adopts the year file it finds at its path,
+or packs the year again when none is there. A pass that stopped after it leaves
+a year the yearly index already names, so the next wake deletes
 the month files still there by calendar month, even if the monthly index no
 longer names them, rewrites the monthly index and moves the
 watermark, and builds nothing; an `empty` year has no file of its own to look
@@ -372,6 +455,37 @@ back over and did not take, because it starts no earlier than the line
 ([A day](#a-day)). A raw file that cannot be read goes with the rest of its
 day, so no such file can stop a drop.
 
+## A file that cannot be read
+
+**A file a pass cannot read is moved aside, never deleted, and its period is
+packed from the rest.** It moves to `state/raw/<ledger>/set-aside/`, under its
+path below `state/`: a raw file to
+`state/raw/<ledger>/set-aside/raw/<ledger>/YYYY/MM/DD/<file>`, a day file to
+`state/raw/<ledger>/set-aside/compact/<ledger>/daily/YYYY/MM/DD.parquet`. The
+site copies only `state/compact/`, no step names the folder and the gardener
+never deletes from it, so a file there waits for a person, whom the console
+points at it when a period's `set_aside` is not 0
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)).
+The move writes the file's bytes at the new path and deletes the old one in the
+shard's one commit. Left in its day folder instead, the file would be read again
+on every wake for the 30 days a re-run may still write there.
+
+| # | What cannot be read | Met when | What the period records | Logged as |
+| --- | --- | --- | --- | --- |
+| 1 | A raw file | its day is packed or taken again, or a late file re-opens its month | the day's `set_aside`, or the month's on a re-open; the rest of the day packs | `note=set-aside` with the day |
+| 2 | A day file | its month closes | its day in the month's `lost_days`, and the file in the month's `set_aside` | `note=set-aside` and `note=recorded-lost` with the day |
+| 3 | A month file | its year packs | every day of its month in the year's `lost_days`, and the file in the year's `set_aside` | `note=set-aside` and `note=recorded-lost` with the month |
+
+A packed file that its index names and the tree lacks is met the same way when
+its month or year closes, with nothing to move. Every month and year entry
+counts in `set_aside` the files its days or months set aside, so no count is
+lost when a period closes. **Nothing is set aside for its size**: a file too
+large for what is left of the shard's download budget waits for a wake with
+room ([One pass, in order](#one-pass-in-order)), because moving it would need
+its bytes. A day file that cannot be read when a re-run is taken into it, and a
+month file that cannot be read when a late file re-opens it, still refuse their
+period by name and keep every file.
+
 ## The three indexes, and a file that is missing
 
 **A ledger's three indexes exist together.** Whatever writes one of
@@ -403,8 +517,8 @@ and the gardener's logs and the backend's own ledger reader print it as
 | --- | --- | --- | --- |
 | 1 | `not-packed` | `index/daily.json`: no day of the ledger is packed | A first pass writes all three indexes |
 | 2 | `index-missing` | `index/monthly.json` or `index/yearly.json`, while `index/daily.json` is there | Writes an empty one when no period of its kind was ever packed; stops the pass by name when that period's watermark says one was |
-| 3 | `file-missing` | A file an index names | Refuses the year it would pack, the month it would absorb, or the day it would take again, and keeps every file it would have read; a person restores the file from git history. An `empty` or `lost` entry names no file, so nothing is missing |
-| 4 | `day-missing` | A day between the first and the newest packed day that no index names | A month adopts the day's own file or lists the day lost ([A month](#a-month)); a year that would pack a month no index names refuses it |
+| 3 | `file-missing` | A file an index names | When a month or year closes, lists the missing file's days lost and closes the period ([A file that cannot be read](#a-file-that-cannot-be-read)). Refuses the day it would take again, or the month a late file would re-open, and keeps every file it would have read; a person restores the file from git history. An `empty` or `lost` entry names no file, so nothing is missing |
+| 4 | `day-missing` | A day between the first and the newest packed day that no index names | A month adopts the day's own file or lists the day lost ([A month](#a-month)). A year adopts a month's own file, or lists the month's days lost when nothing of it is left, and refuses the month while its days are still there ([A year](#a-year)) |
 
 **Four gaps are expected, and none of them is a fault**: a day newer than the
 newest packed day, an entry with `rows: 0`, an entry `empty` or `lost`, and an
@@ -421,9 +535,10 @@ compaction live is the list the live pass carries out.
 **The monthly window has a switch of its own, `month_deletes_dry_run`.** With
 it `true`, steps 1 and 2 name every file a live pass would drop at that wake -
 the month files and raw days of the months the drop step chose - and keep them,
-so the next wake names the same months again; steps 3 to 5 then pack those days
-and months like any other, as if the window kept every month, so a first pass
-may start before the keep line. `dry_run` still
+so the next wake names the same months again; steps 3 to 5 then pack every
+other period as if the window kept every month, so a first pass may start
+before the keep line, and a raw day left in a closed month past the line stays
+where it is ([A late file](#a-late-file)). `dry_run` still
 decides whether anything lands, so a dry run with the window reporting names
 what that live pass would do. With it `false`, a pass drops what the window no
 longer keeps, as above.
@@ -433,13 +548,17 @@ longer keeps, as above.
 every file the monthly window would have deleted that the pass kept because the
 window only reports, so `selected` minus `deleted` is what turning the window
 live would take at that wake. A raw file the pass packed is deleted either way,
-and is counted once. `bytes_freed` is never netted against the files it wrote:
+and is counted once. A file moved aside is deleted at its old path and written
+at its new one, so it is in `taken` and frees nothing in `bytes_freed`: its
+bytes stay in git. `bytes_freed` is never netted against the files it wrote:
 the net is `bytes_freed` minus the `bytes` of the index entries it wrote.
 `candidates_seen` counts every raw day folder it listed and every file it read,
 weighed or named, so a listing that grows while a compaction only reports shows
 in every row. `until` is the newest day that was due. A pass that used its
-budget stops `ceiling`, with `resume_from` naming the day, month or year the
-next pass starts at; one that refused a period stops `failed`, naming it.
+budget - the cap, a day's most raw files, or what is left of the shard's
+download budget - stops `ceiling`, with `resume_from` naming the day, month or
+year the next pass starts at; one that refused a period stops `failed`, naming
+it.
 
 ## Design rationale
 
@@ -480,13 +599,15 @@ way no such gap can open, so the rule went (Fowler and Carmack).
 re-run for 30 days, and the re-run writes into its first day, so a month absorbed
 sooner could still be reached by one. The 30 is declared once, as
 `GITHUB_RERUN_DAYS` in `backend/idhazh/contracts/knobs/gardener.py`, and the
-floor is derived from it. A raw file that lands in an absorbed month anyway is
-refused and kept for a person (Carmack and Fowler).
+floor is derived from it (Carmack and Fowler). A raw file that lands in an
+absorbed month anyway re-opens that month ([A late file](#a-late-file)).
 
 **The two ledgers packed live wait 31 days, not 45.** 31 is the
 shortest wait that still catches every re-run GitHub allows, and nothing needs
 the 14 days more that 45 waits. A shorter wait, such as 15 days, would need a
-month file rebuilt when a late re-run lands, which the packing refuses. The two
+month file rebuilt when a late re-run lands, which the packing could not do
+when this was decided; a late file now re-opens its month
+([A late file](#a-late-file)). The two
 declarations set 31, and the four that only report set 45.
 
 **A compaction's monthly window has a switch of its own.** Packing deletes only
@@ -638,6 +759,56 @@ of what is left to drop; Fowler's rulings, 2026-10-04 and 2026-10-05.
 | 1 | A separate file saying how far the drops have reached | A second record that can disagree with the index | A new persisted shape |
 | 2 | Keep looking at the three months just past the line | A month that slides past those three is never dropped | Nothing to build |
 | 3 | Drop every raw day past the line that the listing names | What goes would depend on how much the listing names, so a test over a whole folder would prove drops a scheduled wake never makes | Nothing to build |
+
+**2026-10-05: a late file re-opens its month.** A raw file in a month already
+closed used to stop its day as `failed`, with the file kept for a person, on
+every wake that named it. Now the month re-opens and is settled with the
+ledger's own key and preference, the rule day packing uses, so a re-opened
+month holds what packing the late day first would have held. A month past the
+keep line is the drop steps' instead: re-opening it would open a file the
+window has disowned, write a month file the window deletes, and let a file that
+cannot be read fail a pass that only reports. A month the monthly mark is past
+that no entry names has nothing to re-open, so its day is still refused: left
+raw, its rows would vanish from every reader once its year packs, and taken as
+a day, it would leave an entry no step ever clears. A re-opened month counts
+once against the cap, so a month is never half re-opened and never waits for
+ever. The owner's ruling, 2026-10-04, that a late file re-opens its month;
+Fowler's rulings, 2026-10-05.
+
+| # | Option | Why rejected | What it would cost to take |
+| --- | --- | --- | --- |
+| 1 | Fail the task and keep the late file | A red run until a person acts | Nothing to build |
+| 2 | Writers refuse to write into a closed month | The re-run's rows are lost, and every writer learns compaction state | Every writer changes |
+| 3 | Re-open a month past the keep line as well | A pass that only reports would change files the window deletes | Nothing more to build |
+| 4 | Count each late day against the cap | A month re-opened whole could overshoot the cap, or wait for ever when it holds more late days than the cap | A rule for a month that does not fit |
+
+**A file that cannot be read is moved aside, extra raw files wait, and a step
+takes only what fits the download budget.** Stopping at such a file, or at such
+a day, would turn the run red and wait for a person over a fault the gardener
+can record. The file moves rather than being
+deleted, and under the raw tier, because the site copies only `state/compact/`;
+left in its day folder, it would be read again on every wake for 30 days. Extra
+raw files wait for the re-run span the day step already names, so there is no
+second way a day is taken again. The budget is applied when a step takes its
+periods, from sizes the listing already holds, so a correct pass never passes
+it, and a shard over it is a defect to fix rather than a backlog to wait out.
+Only the compaction chooses by the budget so far: the other tasks that download
+still download what they read, and the shard's check after its tasks still
+catches one that passes it. "Too large" means too large for that budget, not a
+size of its own: no value for a per-file limit has been measured, and moving a
+file aside needs the very download it is too large for. A period larger than
+the whole budget fails by name, because `ceiling` would promise a later wake
+that never comes.
+
+**A year's own file is adopted before its months are read, and a month no entry
+names is adopted, recorded lost, or refused.** A year file is written only in
+the commit that indexes it and deletes its months, and a month inside a packed
+year never changes again, so a year file no entry names holds exactly its
+months' rows; comparing the two would read the whole year, which the build one
+month at a time exists to avoid. A month no entry names inside a ready year is
+behind the monthly mark, so no step returns to it. It is recorded lost only when
+nothing of it is left, because recording lost a month whose day or raw files
+are still there would hide their rows.
 
 **The `compact-summary-quality-evals` compaction packs the eval rows and never drops a month.** Every
 eval row is kept for ever and nothing summarises a month: the

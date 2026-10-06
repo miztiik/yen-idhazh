@@ -186,10 +186,12 @@ class Pass:
     so `take` always leaves it empty; a task that writes a file of its own fills
     it, and the runner holds every path in it to what the task owns.
 
-    `appended` is the report files a task filed through the ledger door into a
-    ledger its declaration `appends_to`, on a dry run too. They are held to that
-    ledger rather than to what the task owns, and they land whatever `dry_run` says,
-    because a report is what a dry run is for.
+    `appended` is the raw report files a task filed through the ledger door into
+    a ledger its declaration `appends_to`, on a dry run too. They are held to
+    that ledger's wake-day folder rather than to what the task owns, and they land
+    whatever `dry_run` says, because a report is what a dry run is for. A task
+    that writes a non-report row through `appends_to` names it in `written`; dry
+    run reports that path without landing it.
 
     `handled_through` is the newest UTC day through which every member was
     handled, by this pass or the ones before it, on a pass that walked from a
@@ -276,15 +278,12 @@ def refuse_by_name(
     if name in allowed:
         return name
     if name in refused:
-        raise ValueError(
-            f"{name} is refused: {refused[name]}. This prunes {', '.join(allowed)}"
-        )
+        raise ValueError(f"{name} is refused: {refused[name]}. This prunes {', '.join(allowed)}")
     raise ValueError(
         f"a prune takes the name of a {noun}, not {name!r}. A path is never a "
         f"name here, because a deletion primitive that resolved its argument against "
         f"the file system is the one accident nobody can undo. This prunes "
-        f"{', '.join(allowed)}"
-        + (f"; {', '.join(refused)} are refused by name" if refused else "")
+        f"{', '.join(allowed)}" + (f"; {', '.join(refused)} are refused by name" if refused else "")
     )
 
 

@@ -37,7 +37,7 @@ cannot change which tasks a wake plans.
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
 | 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each task's fixed UTC period window, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each retention task's fixed UTC period window and each compaction's ledger indexes and watermarks, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
 | 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
@@ -90,7 +90,7 @@ reads and does not own is declared under `reads`; asking about a folder it
 neither owns nor reads is refused rather than answered empty, and so is asking
 for every file under a folder no step named, nor a folder above it, rather than
 answered with the named periods inside it. A step that chooses its periods as
-it runs - the compaction's month step - names them first, and the shard lists
+it runs - every step of a compaction - names them first, and the shard lists
 them from the same commit then.
 
 **The plan is written twice.** The plan job runs before anything of ours is
@@ -249,7 +249,7 @@ one writer into an older day, and a compaction takes its file at the next wake
 | Exit | What it means | Retried |
 | --- | --- | --- |
 | 0 | every task ran and the record landed, or had already landed. Also 0, with a warning, when nothing landed because the shard's work is out of date: `main` changed one of its paths after the commit it ran on (`stale`), or every try failed and `main` moved after the last one (`lost`) | a `stale` or `lost` shard's work is done again at the next wake |
-| 1 | a task failed - its row says `failed` and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, and either way the record still landed; or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; a download over the ceiling goes on failing until a person acts |
+| 1 | a task failed - its row says `failed` and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, which a task that chooses its periods by the budget never does, so that is a code defect; either way the record still landed. Or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; a download over the ceiling goes on failing until a person fixes the task that passed it |
 | 2 | ownership or integrity: a module that cannot serve, a history task handed to the runner, a path outside what a task owns, a record outside the gardener's ledger, one record path with two sets of bytes, or a deletion of a file the commit did not list | never; a person fixes it |
 | 3 | `main` refused the push: every try failed, and `main` did not move after the last one (`refused`) | at the next wake |
 
@@ -299,24 +299,33 @@ The code folders every shard checks out - `config/`, `backend/` and `.github/` -
 are in neither: they are the same in every shard, and they grow with code rather
 than with what the pipeline keeps.
 
-**Over `max_downloaded_mb` the shard still runs its tasks and lands its record,
-then exits 1.** The number is an alarm, not a stop: the downloads are paid for
-by the time the number is known, and stopping would only stop the passes that
-make the tree lighter - a live task's deletes - and the dry-run rows a person
-reads before turning a task live. The message names the three folders the
-shard downloaded most under. `idhazh gardener run-task` starts no git process,
-so a hand run records both weights as empty and is never over.
+**A compaction takes only what fits what is left of `max_downloaded_mb`.**
+Each step reads its periods' sizes off the listing before anything is
+downloaded and stops at the first period that does not fit, at `ceiling` for a
+later wake, or `failed` by name when that period alone is larger than the
+whole budget ([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)).
+The shard's other tasks that download do not choose by the budget yet, so the
+check after its tasks stays: over `max_downloaded_mb` the shard still runs its
+tasks and lands its record, then exits 1, and the message calls it what it is,
+a code defect - a task downloaded without choosing by the budget. Stopping then
+would not save the downloads, which are paid for by the time the number is
+known, and would only stop the passes that make the tree lighter. The message
+names the three folders the shard downloaded most under. `idhazh gardener
+run-task` starts no git process, so a hand run records both weights as empty
+and is never over.
 
 **128 MB is the committed ceiling, and it is an estimate.** A megabyte here is
 1024 x 1024 bytes. A shard downloads only what its tasks read: the days and
 months a compaction packs, the months the census summary summarises. Measured
 on the development machine on 2026-09-30, a month of the eval ledger is 31
 files and 3.5 MB, so 128 leaves room for a compaction that catches up on
-several months at once. Move it to about twice the largest `downloaded_bytes`
-of the first thirty scheduled wakes. A month file sits in its year folder, so a
-step that reads one month file fetches every month file of that year beside it,
-up to twelve: a later row can move the month files into folders of their own if
-the readings show that cost.
+several months at once. Move it from what the wakes that did not stop at it
+downloaded: a compaction that stopped at `ceiling` because of the budget
+records the budget, not what it needed, so doubling the largest
+`downloaded_bytes` would raise the ceiling on every reset. A month file sits in
+its year folder, so a step that reads one month file fetches every month file
+of that year beside it, up to twelve: a later row can move the month files into
+folders of their own if the readings show that cost.
 
 ## The record
 

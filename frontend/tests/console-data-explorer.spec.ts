@@ -5,7 +5,7 @@ import { connectSources, assetBaseUrl, encoderOrigins, engineOrigins, archiveOri
 import { COMPACT_INDEX_STAMP } from '../src/lib/data/compact-index';
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, expectedAsk, expectedAskCost, EXPLORER_CANARY_DAY, openExplorer, runExplorer, tableRows } from './support/explorer-answer';
-import { encodeQuestion } from '../src/lib/console/explorer/address';
+import { encodeQuestion, explorerAddress, requestTargetBytes } from '../src/lib/console/explorer/address';
 import { consoleConfig, explorerConfig } from '../src/lib/server/config';
 import { shortDate } from '../src/lib/format';
 import type { LedgerName } from '../src/lib/data/ledger';
@@ -159,7 +159,7 @@ for (const view of [
 	});
 }
 
-test('THE ORACLE: Data explorer puts the span and Run in the workbench toolbar', async ({ page }) => {
+test('THE ORACLE: Data explorer puts the span and the dates in the toolbar, and Run beside Save and Copy link', async ({ page }) => {
 	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
 	const toolbar = page.locator('[data-workbench-region="toolbar"]');
 	await expect(toolbar).toHaveCount(1);
@@ -167,7 +167,8 @@ test('THE ORACLE: Data explorer puts the span and Run in the workbench toolbar',
 	await expect(toolbar.locator('[data-window-control]')).toHaveCount(1);
 	await expect(toolbar.getByRole('textbox', { name: 'From (UTC)' })).toHaveCount(1);
 	await expect(toolbar.getByRole('textbox', { name: 'To (UTC)' })).toHaveCount(1);
-	await expect(toolbar.getByRole('button', { name: /^Run$/ })).toHaveCount(1);
+	await expect(toolbar.getByRole('button', { name: /^Run$/ })).toHaveCount(0);
+	await expect(page.locator('[data-workbench-region="editor"] [data-explorer-actions]').getByRole('button', { name: /^Run$/ })).toHaveCount(1);
 });
 
 test('THE ORACLE: before a run the column rail names the selected ledger\'s own columns', async ({ page }) => {
@@ -390,7 +391,10 @@ test('THE ORACLE: every published example runs without refusal or unreachable st
 	for (const title of titles) {
 		await statePage(page, async (one) => {
 			await openExplorer(one);
-			await one.getByRole('button', { name: title }).click();
+			// A chip that does not fit the strip's one line waits in its fold.
+			const chip = one.getByRole('button', { name: title });
+			if (!(await chip.isVisible())) await one.locator('.question-strip > details > summary').click();
+			await chip.click();
 			await expect(one.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 			await runExplorer(one);
 			await expect(one.locator('[data-console-panel-id="data-explorer-rows"] [data-state="refused"], [data-console-panel-id="data-explorer-rows"] [data-state="unreachable"]')).toHaveCount(0);
@@ -473,6 +477,54 @@ test('THE ORACLE: link notices render on the page', async ({ page }) => {
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The question in this link could not be read');
 });
 
+/** A question of `count` scattered CJK characters. They deflate poorly, so its link grows with every one. */
+function scattered(count: number): string {
+	let state = 7;
+	let out = '';
+	for (let index = 0; index < count; index += 1) {
+		state = (1664525 * state + 1013904223) >>> 0;
+		out += String.fromCharCode(0x4e00 + ((state >>> 8) % 0x5000));
+	}
+	return out;
+}
+
+test('THE ORACLE: Copy link carries the question while the link fits console.explorer_link_max_bytes, and leaves it out one character past', async ({ page, context }) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	const limit = explorerConfig().link_max_bytes;
+	expect(limit, 'console.explorer_link_max_bytes does not reach the page').toBeGreaterThan(0);
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT 1 AS one');
+	const copyLink = page.getByRole('button', { name: /^Copy link$/ });
+	await copyLink.click();
+	await expect.poll(() => new URL(page.url()).searchParams.has('q')).toBe(true);
+	const shared = new URL(page.url());
+	const params = shared.searchParams;
+	const span = { ledgers: (params.get('ledgers') ?? '').split(',') as LedgerName[], days: Number(params.get('days')), from: params.get('from') ?? undefined, end: params.get('end') ?? undefined };
+	// The page's own link writer with no limit, so each question's link is sized as the page sizes it.
+	const linkFor = async (statement: string) => (await explorerAddress({ basePath: shared.pathname, ...span, statement })).href;
+	expect(await linkFor('SELECT 1 AS one'), 'the test does not write the link the page wrote').toBe(`${shared.pathname}${shared.search}`);
+	const bytes = async (statement: string) => requestTargetBytes(await linkFor(statement));
+	let fits = 1;
+	let over = 5000;
+	expect(await bytes(scattered(fits))).toBeLessThanOrEqual(limit);
+	expect(await bytes(scattered(over))).toBeGreaterThan(limit);
+	while (over - fits > 1) {
+		const middle = Math.floor((fits + over) / 2);
+		if ((await bytes(scattered(middle))) <= limit) fits = middle;
+		else over = middle;
+	}
+
+	await page.locator('#explorer-sql').fill(scattered(fits));
+	await copyLink.click();
+	await expect.poll(() => new URL(page.url()).searchParams.get('q'), 'the page left out a question whose link fits').toBe(await encodeQuestion(scattered(fits)));
+	await expect(page.getByRole('button', { name: /^Copy question$/ })).toHaveCount(0);
+
+	await page.locator('#explorer-sql').fill(scattered(over));
+	await copyLink.click();
+	await expect(page.getByRole('button', { name: /^Copy question$/ })).toBeVisible();
+	expect(new URL(page.url()).searchParams.has('q'), 'the page linked a question whose link is too long').toBe(false);
+});
+
 test('THE ORACLE: a link naming a day that does not exist shows the span notice, and the page still loads its ledgers', async ({ page }) => {
 	const thrown: string[] = [];
 	page.on('pageerror', (error) => thrown.push(error.message));
@@ -536,6 +588,45 @@ test('THE ORACLE: a count by day names the day a ledger lost and the files it se
 	);
 });
 
+test('THE ORACLE: a count by day across a lost day breaks its line there, and the strip prints no number for that day', async ({ page }) => {
+	// The index is served as the packing writes a day it lost: the second-newest day with rows.
+	const marked: { lost?: string } = {};
+	await page.route('**/state/compact/item-health/index/daily.json', async (route) => {
+		const response = await route.fetch();
+		const index = (await response.json()) as { entries: { covers: string; rows: number; bytes: number }[] };
+		marked.lost = index.entries.filter((entry) => entry.rows > 0).at(-2)?.covers;
+		await route.fulfill({
+			response,
+			json: { ...index, entries: index.entries.map((entry) => (entry.covers === marked.lost ? { ...entry, rows: 0, bytes: 0, state: 'lost' } : entry)) }
+		});
+	});
+	await openExplorer(page);
+	// `covers` is stored as text, so the question casts it: a text day column is ranked, not drawn over time.
+	await chooseExplorerQuestion(page, ['item-health'], 'SELECT CAST("covers" AS DATE) AS day, count(*) AS rows FROM "item-health" GROUP BY 1 ORDER BY 1');
+	await runExplorer(page);
+	const { lost } = marked;
+	if (lost === undefined) throw new Error('the canary packs fewer than two item-health days with rows');
+	const days = (await tableRows(page)).map(([day]) => day);
+	expect(days, 'the lost day has a row in the answer').not.toContain(lost);
+	expect(days.filter((day) => day < lost).length, 'no day with rows comes before the lost day').toBeGreaterThan(0);
+	expect(days.filter((day) => day > lost).length, 'no day with rows comes after the lost day').toBeGreaterThan(0);
+
+	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+	const plot = panel.locator('[data-chart-type="dateSeries"]');
+	await expect(plot).toHaveCount(1);
+	const line = panel.locator('[data-date-series-marks="data-explorer-shape"] path');
+	await expect(line).toHaveCount(1);
+	expect((await line.getAttribute('d'))?.match(/M/g)?.length, 'the line joined the days either side of the lost day').toBe(2);
+	await expect(panel.locator('[data-readout-columns]')).toHaveAttribute('data-readout-columns', String(days.length + 1));
+
+	// The lost day is the column before the newest: step onto it and read the strip.
+	await plot.focus();
+	await page.keyboard.press('End');
+	await page.keyboard.press('ArrowLeft');
+	await expect(panel.locator('[data-readout-day]')).toHaveText(lost);
+	await expect(panel.locator('[data-readout-row]')).toHaveText(['No number for this day']);
+});
+
 test('THE ORACLE: every chart case draws its type with a populated readout', async ({ page }) => {
 	await openExplorer(page);
 	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
@@ -586,7 +677,7 @@ test('THE ORACLE: Save, recent runs and Markdown copy preserve text without runn
 
 	await runExplorer(page);
 	await page.getByRole('button', { name: /^Copy as table$/ }).click();
-	await expect(page.locator('.copy-answer')).toContainText('Copied 1 row as a table.');
+	await expect(page.locator('[data-notice]')).toContainText('Copied 1 row as a table.');
 	const copied = await page.evaluate(() => navigator.clipboard.readText());
 	expect(copied).toContain('`label`');
 	expect(copied).toContain('``[x](https://example.invalid/a)\\|pipe `tick```');
@@ -626,4 +717,25 @@ test('THE ORACLE: browser storage is parsed against closed lists and saved overf
 	}
 	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toContainText('Saved "Saved 20". "Saved 0" was the oldest of 20 and is no longer kept.');
 	await expect(page.locator('.saved-chip .example')).toHaveCount(20);
+});
+
+test('THE ORACLE: a question kept with a day that is not on the calendar is dropped when the page reads browser storage', async ({ page }) => {
+	// Written as text, 2026-08-32 sorts inside the reach once August has ended, so the clock stands after it.
+	const kept = { id: 'not-a-day', name: 'Not a day', statement: 'SELECT 1', ledgers: ['published'], days: 14, from: '2026-08-32', end: '2026-09-01', updatedAt: '2026-09-01T00:00:00Z' };
+	await page.addInitScript((entry) => {
+		localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify([entry]));
+		localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify([{ ...entry, rows: 1, ms: 1, askedAt: '2026-09-01T00:00:00Z' }]));
+	}, kept);
+	const logs: string[] = [];
+	page.on('console', (message) => logs.push(message.text()));
+	await page.clock.setFixedTime('2026-09-01T12:00:00Z');
+	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
+	await expect(page.locator('.saved-chip')).toHaveCount(0);
+	await page.locator('.history-list summary').click();
+	await expect(page.locator('.history-list button')).toHaveCount(0);
+	expect(logs.filter((line) => line.startsWith('Data explorer storage'))).toEqual([
+		'Data explorer storage yen-idhazh:data-explorer:saved entry was invalid and was dropped.',
+		'Data explorer storage yen-idhazh:data-explorer:history entry was invalid and was dropped.'
+	]);
 });

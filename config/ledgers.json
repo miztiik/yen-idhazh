@@ -98,10 +98,10 @@
       "ledgers": [
         {
           "name": "item-health-summary",
-          "grain": "month",
+          "grain": "raw-and-compact",
           "prefix": ["item-health-summary"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         }
       ]
     },

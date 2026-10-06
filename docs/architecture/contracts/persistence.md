@@ -9,15 +9,15 @@ How a contract payload reaches disk under `state/raw/` and `state/compact/`, how
 Everything the door writes sits under one of two folders inside `state/`, and nothing else:
 
 ```
-state/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.parquet    many writers, each file written once
-state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet    one writer: what a compaction left
-state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet
-state/compact/<ledger>/yearly/<YYYY>/<YYYY>.parquet      only where the compaction packs years
-state/compact/<ledger>/index/<period>.json
-state/compact/<ledger>/<period>/watermark.json
+state/raw/<folders>/<YYYY>/<MM>/<DD>/<file_id>.parquet    many writers, each file written once
+state/compact/<folders>/daily/<YYYY>/<MM>/<DD>.parquet    one writer: what a compaction left
+state/compact/<folders>/monthly/<YYYY>/<MM>.parquet
+state/compact/<folders>/yearly/<YYYY>/<YYYY>.parquet      only where the compaction packs years
+state/compact/<folders>/index/<period>.json
+state/compact/<folders>/<period>/watermark.json
 ```
 
-`<ledger>` is always the `LedgerName` value. A **tier** is `raw` or `compact` - which root. A **period** is `daily`, `monthly` or `yearly` - how much time one compact file covers. The two words are never swapped.
+`<folders>` is the registry `prefix` for that ledger inside the door root. Today every door ledger's prefix is its `LedgerName` value, so the path bytes stay as they were. A nested family can later file, for example, under `content-similarity-judge/scored-pairs` while the file envelope still says `scored-pairs`. A **tier** is `raw` or `compact` - which root. A **period** is `daily`, `monthly` or `yearly` - how much time one compact file covers. The two words are never swapped.
 
 **A raw file carries a minted name; a compact file carries a date.** Raw has many writers that never coordinate, so the minted `<file_id>` is what stops two of them taking one path. A compact period has exactly one writer, so its path is the period it covers and a reader can compute the address.
 
@@ -83,7 +83,7 @@ The paths come back ascending by the day each file covers, never by path string.
 
 | Call | What it answers |
 | --- | --- |
-| `list_raw_files(state_dir, ledger, days=None)` | every file under `raw/<ledger>/<YYYY>/<MM>/<DD>/` whose envelope this build can read, oldest first; `days` names the only days to open |
+| `list_raw_files(state_dir, ledger, days=None)` | every file under `raw/<folders>/<YYYY>/<MM>/<DD>/` whose envelope this build can read, oldest first; `days` names the only days to open |
 | `read_day_files(state_dir, ledger, day)` | one day's files, oldest first, or a `ValueError` naming the first one it cannot read - for the compaction, which deletes what it read and so may not skip a file |
 | `raw_days(state_dir, ledger)` | which days have a raw folder holding something, from folder names alone |
 | `settle_rows(files, key)` | the current rows of a union, each file's rows passed on their own, oldest file first: one file's rows per `unit_id`, then the first row of each `key` |
@@ -97,7 +97,7 @@ The paths come back ascending by the day each file covers, never by path string.
 
 ## What an index entry says
 
-`state/compact/<ledger>/index/<period>.json` is a `CompactIndex`, declared in `backend/idhazh/contracts/ledger_index.py`: the ledger, the period, and one entry for each period the packing recorded, ascending by what it covers. One entry carries six fields.
+`state/compact/<folders>/index/<period>.json` is a `CompactIndex`, declared in `backend/idhazh/contracts/ledger_index.py`: the ledger, the period, and one entry for each period the packing recorded, ascending by what it covers. One entry carries six fields.
 
 | Field | What it says |
 | --- | --- |
@@ -173,9 +173,11 @@ The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `
 | a `StrEnum` | string, never a dictionary column | as annotated |
 | an `IntEnum` | int64 | as annotated |
 | `tuple[str, ...]`, of `str` or any alias or `StrEnum` | list of string | as annotated |
+| a `Literal[...]` whose every choice is a plain `str` | string | as annotated |
+| a `Literal[...]` whose every choice is a plain `int` | int64 | as annotated |
 | anything else | a `TypeError` naming the field | - |
 
-A date stays a string: it is a stamp a person reads in a diff and in a path, and a second type would be a second spelling of one value. The tuple row is there for `FeedRetirementRow`, whose evidence is a tuple of run ids and a tuple of dates. An `IntEnum` - `ItemHealthRow`'s `tier` is one - stays its number, the value its JSON form already carries, so a query filters on the number a person reads in the contract.
+A date stays a string: it is a stamp a person reads in a diff and in a path, and a second type would be a second spelling of one value. The tuple row is there for `FeedRetirementRow`, whose evidence is a tuple of run ids and a tuple of dates. An `IntEnum` - `ItemHealthRow`'s `tier` is one - stays its number, the value its JSON form already carries, so a query filters on the number a person reads in the contract. A fixed choice, such as the judge's model name, is stored as its value. A choice set that mixes types, or holds a `bool`, `None` or an enum member, is refused by name: its column would not say what it holds.
 
 ## Swapping the engine
 
