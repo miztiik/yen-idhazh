@@ -1,38 +1,219 @@
 {
   "addresses_considered": 6731,
   "bands": {
-    "high": 0,
+    "high": 1,
     "low": 0,
     "medium": 1
   },
   "date": "2026-10-06",
   "determinism_violations": 0,
   "extraction": {
-    "chartable": 1,
+    "chartable": 3,
     "chartable_charted": 0,
-    "chartable_published": 1,
-    "elements_found": 17,
-    "items": 1,
+    "chartable_published": 3,
+    "elements_found": 40,
+    "items": 3,
     "narrative": 0,
-    "span_integrity_pass": 1,
+    "span_integrity_pass": 3,
     "unclassified": 0
   },
   "extraction_suspect": 0,
-  "instruments": [],
+  "instruments": [
+    {
+      "column": "coherence",
+      "stat": {
+        "count": 2,
+        "maximum": 0.28180866978460895,
+        "minimum": 0.23291232860148403,
+        "p25": 0.23291232860148403,
+        "p50": 0.28180866978460895,
+        "p75": 0.28180866978460895,
+        "total": 0.514720998386093
+      }
+    },
+    {
+      "column": "compression",
+      "stat": {
+        "count": 2,
+        "maximum": 0.2195945945945946,
+        "minimum": 0.09399075500770417,
+        "p25": 0.09399075500770417,
+        "p50": 0.2195945945945946,
+        "p75": 0.2195945945945946,
+        "total": 0.3135853496022988
+      }
+    },
+    {
+      "column": "evidential_density",
+      "stat": {
+        "count": 2,
+        "maximum": 0.0,
+        "minimum": 0.0,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "total": 0.0
+      }
+    },
+    {
+      "column": "extractiveness",
+      "stat": {
+        "count": 2,
+        "maximum": 0.03225806451612903,
+        "minimum": 0.017241379310344827,
+        "p25": 0.017241379310344827,
+        "p50": 0.03225806451612903,
+        "p75": 0.03225806451612903,
+        "total": 0.04949944382647386
+      }
+    },
+    {
+      "column": "hhem",
+      "stat": {
+        "count": 2,
+        "maximum": 0.9201236367225647,
+        "minimum": 0.8994365930557251,
+        "p25": 0.8994365930557251,
+        "p50": 0.9201236367225647,
+        "p75": 0.9201236367225647,
+        "total": 1.8195602297782898
+      }
+    },
+    {
+      "column": "hhem_delta",
+      "stat": {
+        "count": 2,
+        "maximum": 0.0,
+        "minimum": 0.0,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "total": 0.0
+      }
+    },
+    {
+      "column": "hhem_full",
+      "stat": {
+        "count": 2,
+        "maximum": 0.9201236367225647,
+        "minimum": 0.8994365930557251,
+        "p25": 0.8994365930557251,
+        "p50": 0.9201236367225647,
+        "p75": 0.9201236367225647,
+        "total": 1.8195602297782898
+      }
+    },
+    {
+      "column": "score_ms",
+      "stat": {
+        "count": 2,
+        "maximum": 1589.0,
+        "minimum": 712.0,
+        "p25": 712.0,
+        "p50": 1589.0,
+        "p75": 1589.0,
+        "total": 2301.0
+      }
+    },
+    {
+      "column": "self_repetition",
+      "stat": {
+        "count": 2,
+        "maximum": 0.0,
+        "minimum": 0.0,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "total": 0.0
+      }
+    },
+    {
+      "column": "semantic_coverage",
+      "stat": {
+        "count": 2,
+        "maximum": 0.45,
+        "minimum": 0.45,
+        "p25": 0.45,
+        "p50": 0.45,
+        "p75": 0.45,
+        "total": 0.9
+      }
+    },
+    {
+      "column": "source_words",
+      "stat": {
+        "count": 2,
+        "maximum": 640.0,
+        "minimum": 291.0,
+        "p25": 291.0,
+        "p50": 640.0,
+        "p75": 640.0,
+        "total": 931.0
+      }
+    },
+    {
+      "column": "source_words_before_cap",
+      "stat": {
+        "count": 2,
+        "maximum": 640.0,
+        "minimum": 291.0,
+        "p25": 291.0,
+        "p50": 640.0,
+        "p75": 640.0,
+        "total": 931.0
+      }
+    },
+    {
+      "column": "speculative_density",
+      "stat": {
+        "count": 2,
+        "maximum": 0.009244992295839754,
+        "minimum": 0.0,
+        "p25": 0.0,
+        "p50": 0.009244992295839754,
+        "p75": 0.009244992295839754,
+        "total": 0.009244992295839754
+      }
+    },
+    {
+      "column": "summary_words",
+      "stat": {
+        "count": 2,
+        "maximum": 65.0,
+        "minimum": 61.0,
+        "p25": 61.0,
+        "p50": 65.0,
+        "p75": 65.0,
+        "total": 126.0
+      }
+    },
+    {
+      "column": "verbatim_run",
+      "stat": {
+        "count": 2,
+        "maximum": 0.06557377049180328,
+        "minimum": 0.06153846153846154,
+        "p25": 0.06153846153846154,
+        "p50": 0.06557377049180328,
+        "p75": 0.06557377049180328,
+        "total": 0.12711223203026484
+      }
+    }
+  ],
   "items_failed": 240,
-  "items_planned": 241,
-  "items_published": 1,
+  "items_planned": 243,
+  "items_published": 2,
   "items_truncated": 0,
   "label_similarity": {
     "encoder_ref": "all-minilm-l6-v2-quantized/2026-08-22",
     "nearest": {
-      "count": 1,
-      "maximum": 0.20273009181807056,
+      "count": 2,
+      "maximum": 0.2946946378593426,
       "minimum": 0.20273009181807056,
       "p25": 0.20273009181807056,
-      "p50": 0.20273009181807056,
-      "p75": 0.20273009181807056,
-      "total": 0.20273009181807056
+      "p50": 0.2946946378593426,
+      "p75": 0.2946946378593426,
+      "total": 0.49742472967741314
     },
     "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
   },
@@ -45,12 +226,12 @@
     "unattributed": 0,
     "unsupported_number": 0
   },
-  "revision": 4,
-  "runs": 4,
+  "revision": 5,
+  "runs": 5,
   "sources": [
     {
       "doubted": 1,
-      "published": 1,
+      "published": 2,
       "source_id": "straitstimes-business",
       "truncated": 0
     }
@@ -58,38 +239,38 @@
   "sources_present": 1,
   "stage_timing": [
     {
-      "max_ms": 933,
+      "max_ms": 971,
       "p50_ms": 933,
-      "p90_ms": 933,
+      "p90_ms": 963,
       "stage": "fetch",
-      "sum_ms": 933,
-      "timed": 1
+      "sum_ms": 2446,
+      "timed": 3
     },
     {
       "max_ms": 57,
-      "p50_ms": 57,
-      "p90_ms": 57,
+      "p50_ms": 54,
+      "p90_ms": 56,
       "stage": "extract",
-      "sum_ms": 57,
-      "timed": 1
+      "sum_ms": 155,
+      "timed": 3
     },
     {
       "max_ms": 739615,
-      "p50_ms": 739615,
-      "p90_ms": 739615,
+      "p50_ms": 736155,
+      "p90_ms": 738923,
       "stage": "summarize",
-      "sum_ms": 739615,
-      "timed": 1
+      "sum_ms": 2068772,
+      "timed": 3
     }
   ],
-  "summaries_scored": 0,
+  "summaries_scored": 2,
   "throughput": {
-    "cached_tokens": 5062,
-    "decode_ms": 311734,
-    "input_tokens": 8937,
-    "items": 1,
-    "output_tokens": 1478,
-    "prefill_ms": 427816
+    "cached_tokens": 14100,
+    "decode_ms": 893325,
+    "input_tokens": 24796,
+    "items": 3,
+    "output_tokens": 4266,
+    "prefill_ms": 1175227
   },
   "version": "2026-09-29",
   "visuals_rendered": 0
