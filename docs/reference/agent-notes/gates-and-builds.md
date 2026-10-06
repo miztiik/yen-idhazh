@@ -58,6 +58,17 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   cmd /c rmdir frontend\node_modules
   ```
 
+- **A logic spec that renders a component fails with `Cannot find package '$lib'` on its first run in a fresh worktree or a copy of a commit, then passes; the spec is fine, `.svelte-kit/` did not exist yet.**
+  `frontend/tsconfig.json` takes `$lib` from `.svelte-kit/tsconfig.json`, which
+  `npm ci` does not write. Playwright reads the paths when it starts; the run's
+  own `vitePreprocess` writes the file after that (2026-10-06, Node 24.12.0:
+  `console-data-explorer-shape.spec.ts` 1 failed and 7 did not run, then 25
+  passed). The tell is a `.svelte-kit` folder created during the failed run.
+  Write it first, from `frontend/`, where the Svelte config is:
+  ```powershell
+  npx svelte-kit sync
+  ```
+
 - **`test_page_ceilings` fails locally on an index ceiling while CI passes; the
   local zlib made the index larger, not the change.** On 2026-10-04 the Windows
   Python 3.14.2 here used zlib-ng 2.2.4 and compressed the candidate-models
