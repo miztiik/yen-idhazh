@@ -8,7 +8,8 @@ checked: a compact file holds exactly what settling its raw files gives; after
 every pass the newest day the daily index names is the daily watermark; every
 date is read from exactly one file, and a day lost with its file is named in
 its closed month; a re-run that lands after its day was compacted replaces its
-first attempt; no pass
+first attempt; a re-run that lands after its month closed re-opens the month,
+which then holds what packing the late day first would have held; no pass
 writes a path it deletes; each month past the monthly window is dropped once,
 oldest first and at most `max_periods_per_run` a wake, by its listed paths and
 unread; and a monthly window that only reports keeps every file it would drop,
@@ -603,17 +604,151 @@ def test_a_month_waits_one_wake_for_a_re_run_still_waiting_in_it(tmp_path: Path)
     ]
 
 
-def test_raw_files_that_land_in_a_month_already_absorbed_are_refused_and_kept(
+def test_a_raw_day_in_a_month_that_never_closed_is_refused_and_kept_and_never_re_opened(
     tmp_path: Path,
 ) -> None:
+    """July is before the ledger's first packed month and behind the monthly mark: nothing re-opens it.
+
+    The month has no entry to rewrite, so the day is refused by name and kept for
+    a person, as one in a month that was dropped or sits in a packed year is.
+    """
     root = tmp_path / "checkout"
     two_passes_into_october(root)
-    late = filed(root, a_pass("2026-08-15", run="9"))
+    stray = filed(root, a_pass("2026-07-10", run="9"))
 
     outcome = compact(root, date(2026, 10, 21), max_periods_per_run=100)
 
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-08-15")
+    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-07-10")
+    assert stray.is_file()
+    assert monthly_covers(root) == ["2026-08"]
+    assert watermark(root, Period.DAILY) == "2026-10-19", "the rest of the pass still ran"
+
+
+# --- a late file re-opens its month ------------------------------------------------
+
+
+def test_a_late_re_run_re_opens_its_month_and_the_month_holds_each_key_once_as_settled(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """THE ORACLE for a late file: the month holds what packing the late day first would have held.
+
+    August closes holding two work units' rows on one day. Then one unit's re-run
+    files into that day again under the same record keys, and fewer rows. The
+    next pass re-opens August: each key once, the re-run's one row in place of
+    its first attempt's two, the late file gone, and a new day of the pass packed.
+    """
+    root = tmp_path / "checkout"
+    day, first, second = "2026-08-20", "2026-08-20-17000000001", "2026-08-20-17000000002"
+    recorded(
+        state(root),
+        [
+            a_record("seen", run=first, attempt=1, on=day),
+            a_record("traces", run=first, attempt=1, on=day),
+        ],
+        attempt=1,
+    )
+    recorded(state(root), [a_record("seen", run=second, attempt=1, on=day)], attempt=1)
+    for _ in range(2):
+        compact(root, date(2026, 10, 20), task="compact-gardener", max_periods_per_run=100)
+    assert watermark(root, Period.MONTHLY, GARDENER) == "2026-08", "August is closed"
+    late = recorded(state(root), [a_record("seen", run=first, attempt=2, on=day)], attempt=2)
+    new = "2026-10-20"
+    recorded(state(root), [a_record("seen", run=f"{new}-17000000003", attempt=1, on=new)], attempt=1)
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, date(2026, 10, 22), task="compact-gardener", max_periods_per_run=100)
+
+    august = ledger.compact_file(state(root), GARDENER, Period.MONTHLY, "2026-08")
+    assert august is not None
+    rows = ledger.load([august], model=CollectionPruneRow)
+    assert [(row.run_id, row.task, row.attempt) for row in rows] == [
+        (second, "seen", 1),
+        (first, "seen", 2),
+    ]
+    index = ledger.compact_index_path(state(root), GARDENER, Period.MONTHLY)
+    (entry,) = CompactIndex.read(index).entries
+    assert (entry.covers, entry.state, entry.rows) == ("2026-08", EntryState.PACKED, 2)
+    assert not late.exists()
+    assert recovered(caplog, "2026-08") == [f"note={RecoveryNote.REOPENED_MONTH}"]
+    assert outcome.stopped_because is StopReason.EXHAUSTED and disjoint(outcome)
+    assert watermark(root, Period.MONTHLY, GARDENER) == "2026-08", "a re-open moves no mark"
+    assert watermark(root, Period.DAILY, GARDENER) == new, "the pass's new days still packed"
+    assert daily_covers(root, GARDENER)[-1] == new
+
+
+def test_a_wake_re_opens_a_closed_month_a_re_run_landed_in_and_a_lost_day_is_lost_no_more(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Under a wake's listing the re-open names what it reads, and the day it took is not lost.
+
+    September is closed by hand with 2026-09-25 recorded lost, as a ledger that
+    closes a month sooner than 30 days after it ends has it on 20 October. A
+    re-run then files into 2026-09-25, inside the days the day step names
+    because a re-run may still write there.
+    """
+    root = tmp_path / "checkout"
+    september = a_packed_month(root, "2026-09")
+    entry = CompactEntry(
+        covers="2026-09", rows=1, bytes=september.stat().st_size, lost_days=["2026-09-25"]
+    )
+    a_monthly_index(root, [entry], through="2026-09")
+    for period in (Period.DAILY, Period.YEARLY):
+        an_empty_index(root, period)
+    a_mark(root, Period.DAILY, "2026-10-18")
+    late = filed(root, a_pass("2026-09-25", run="9"))
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, date(2026, 10, 20), wake=True)
+
+    assert [row.date for row in compact_rows(root, Period.MONTHLY, "2026-09")] == [
+        "2026-09-05",
+        "2026-09-25",
+    ]
+    (reopened,) = CompactIndex.read(index_of(root, Period.MONTHLY)).entries
+    assert (reopened.rows, reopened.lost_days) == (2, [])
+    assert not late.exists()
+    assert recovered(caplog, "2026-09") == [f"note={RecoveryNote.REOPENED_MONTH}"]
+    assert outcome.stopped_because is StopReason.EXHAUSTED and disjoint(outcome)
+
+
+def test_a_re_opened_month_counts_once_against_the_cap(tmp_path: Path) -> None:
+    """With a cap of one, the re-open is taken, the new day waits, and the pass stops at its ceiling."""
+    root = tmp_path / "checkout"
+    two_passes_into_october(root)
+    late = filed(root, a_pass("2026-08-15", run="9"))
+    waiting = filed(root, a_pass("2026-10-19", run="8"))
+
+    outcome = compact(root, date(2026, 10, 21), max_periods_per_run=1)
+
+    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.CEILING, "2026-10-19")
+    assert [row.date for row in compact_rows(root, Period.MONTHLY, "2026-08")] == [
+        "2026-08-05",
+        "2026-08-15",
+        "2026-08-20",
+    ]
+    assert not late.exists()
+    assert waiting.is_file()
+    assert watermark(root, Period.DAILY) == "2026-10-18"
+
+
+def test_a_re_open_whose_month_file_is_gone_is_refused_as_file_missing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Rebuilt from the late file alone, the month would hold only the day that ran again."""
+    root = tmp_path / "checkout"
+    two_passes_into_october(root)
+    gone = ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-08")
+    assert gone is not None
+    gone.unlink()
+    late = filed(root, a_pass("2026-08-15", run="9"))
+
+    with caplog.at_level(logging.ERROR):
+        outcome = compact(root, date(2026, 10, 21), max_periods_per_run=100)
+
+    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-08")
     assert late.is_file()
+    assert ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-08") is None
+    assert refusals(caplog, "month=2026-08") == [f"fault={ledger.LedgerFault.FILE_MISSING}"]
     assert watermark(root, Period.DAILY) == "2026-10-19", "the rest of the pass still ran"
 
 
@@ -677,19 +812,29 @@ def test_a_pass_never_deletes_a_coarser_index_and_leaves_an_empty_one_as_it_is(
     assert daily_covers(root)[-1] == "2026-09-23"
 
 
-def a_year_mark(root: Path, year: str) -> None:
-    """The yearly watermark of a year already packed, and nothing else of it."""
+def a_mark(root: Path, period: Period, through: str) -> None:
+    """One watermark of a period already packed through `through`, and nothing else of it."""
     mark = Watermark(
         version=Watermark.schema_version(),
         ledger=VISUALS,
-        period=Period.YEARLY,
-        through=year,
+        period=period,
+        through=through,
         advanced_at="2026-03-20T00:41:00Z",
         run_id="2026-03-20-1",
     )
-    path = ledger.watermark_path(state(root), VISUALS, Period.YEARLY)
+    path = ledger.watermark_path(state(root), VISUALS, period)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(mark.to_json().encode("ascii"))
+
+
+def an_empty_index(root: Path, period: Period) -> None:
+    """One period's index with no entries."""
+    empty = CompactIndex(
+        version=CompactIndex.schema_version(), ledger=VISUALS, period=period, entries=[]
+    )
+    path = index_of(root, period)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(empty.to_json().encode("ascii"))
 
 
 @pytest.mark.parametrize("period", list(Period))
@@ -704,7 +849,7 @@ def test_an_index_its_watermark_says_was_packed_that_is_not_there_stops_the_pass
     elif period is Period.MONTHLY:
         a_month_file(root, "2026-01")
     else:
-        a_year_mark(root, "2025")
+        a_mark(root, Period.YEARLY, "2025")
     assert watermark(root, period) is not None
     index_of(root, period).unlink(missing_ok=True)
     before = files_under(root)
@@ -995,6 +1140,40 @@ def test_a_dry_run_whose_window_only_reports_names_what_that_live_pass_does(
     assert (dry.taken, dry.written, dry.selected) == (live.taken, live.written, live.selected)
 
 
+def test_a_raw_day_in_a_closed_month_past_the_keep_line_is_left_to_the_drop_steps(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A window that only reports names it and keeps it, and the day step neither re-opens nor refuses it.
+
+    The drop steps own every raw day in a closed month past the line: a live
+    window deletes it unread, and a window that only reports keeps it, as it
+    keeps the month file. Under a wake's listing the drop step names July's raw
+    folder, so the day step meets the stray at or below the daily mark.
+    """
+    root = tmp_path / "checkout"
+    months_past_the_window(root)
+    stray = filed(root, a_pass("2026-07-15", run="9"))
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(
+            root,
+            NOVEMBER_WAKE,
+            wake=True,
+            max_periods_per_run=200,
+            monthly_window=ONE_MONTH,
+            month_deletes_dry_run=True,
+            lookback=4,
+        )
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    assert stray.is_file()
+    assert outcome.selected - len(outcome.taken) == 4, "three month files and the stray kept"
+    assert compact_rows(root, Period.MONTHLY, "2026-07") == [a_pass("2026-07-05", run="2")]
+    assert recovered(caplog, "2026-07") == []
+    assert watermark(root, Period.DAILY) == "2026-11-14", "every due day is taken all the same"
+    assert disjoint(outcome)
+
+
 # --- each old month is dropped once ------------------------------------------------
 
 #: The first wake whose keep line is October 2025. On 16 December 2026 the newest
@@ -1034,10 +1213,7 @@ def old_months(root: Path) -> None:
             written.unlink()
     a_monthly_index(root, entries, through="2026-09")
     for period in (Period.DAILY, Period.YEARLY):
-        empty = CompactIndex(
-            version=CompactIndex.schema_version(), ledger=VISUALS, period=period, entries=[]
-        )
-        index_of(root, period).write_bytes(empty.to_json().encode("ascii"))
+        an_empty_index(root, period)
     for day in OLD_RAW_DAYS:
         held = filed(root, a_pass(day))
         if day == UNREADABLE_DAY:
