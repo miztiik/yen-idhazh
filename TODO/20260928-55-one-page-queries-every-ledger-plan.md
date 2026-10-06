@@ -63,11 +63,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 8 | The Data explorer draws the workbench chrome | 6 | G | DONE | p55r8 | #1298 | p55-n1-worker |
 | 9 | Run moves nothing on the Data explorer | 8 | H | DONE | p55r9 | #1310 | p55-n2-worker |
 | 10 | The Data explorer reaches the reference's density | 9, 11, 12 | M | PENDING | - | - | - |
-| 11 | The column rail stops overlapping, and types and the chosen ledger show in colour | 9 | I | DONE | automatic-giggle | - | Data explorer phase 1 colours |
-| 12 | The Data explorer fills the window, Run stands with Save and Copy link, and the copy buttons stand on the answer's heading line | 9, 11 | J | DONE | special-parakeet | - | Data explorer phase 2 layout |
-| 13 | The explorer reads a column's type one way, and a NULL is no value in any chart | 11 | K | DONE | super-waddle | - | Explorer types and nulls one way |
-| 14 | The answer table sorts a timestamp by its UTC instant, to the nanosecond | 13 | L | DONE | studious-tribble | - | Explorer timestamps sort in UTC |
-| 15 | A date prints whole, inf sorts in its place, and a timestamp with a time zone charts on its UTC day | 14 | M | DONE | fantastic-enigma | - | Explorer edge values print right |
+| 11 | The column rail stops overlapping, and types and the chosen ledger show in colour | 9 | I | DONE | automatic-giggle | #1326 | Data explorer phase 1 colours |
+| 12 | The Data explorer fills the window, Run stands with Save and Copy link, and the copy buttons stand on the answer's heading line | 9, 11 | J | DONE | special-parakeet | #1336 | Data explorer phase 2 layout |
+| 13 | The explorer reads a column's type one way, and a NULL is no value in any chart | 11 | K | DONE | super-waddle | #1332 | Explorer types and nulls one way |
+| 14 | The answer table sorts a timestamp by its UTC instant, to the nanosecond | 13 | L | DONE | studious-tribble | #1334 | Explorer timestamps sort in UTC |
+| 15 | A date prints whole, inf sorts in its place, and a timestamp with a time zone charts on its UTC day | 14 | M | DONE | fantastic-enigma | #1338 | Explorer edge values print right |
 
 **One pull request a row.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. **Row 11 was added on 2026-10-05, on the owner's ruling that day, and runs between rows 9 and 10**, because row 10 finishes the same two rails. **Row 12 was added the same day, on the owner's request that day, and runs between rows 11 and 10**, because row 10's density pass works inside the regions row 12 sizes. **Row 13 was added on 2026-10-05, from row 11's S7**: one type classification for the table, the chart and the colours, and a NULL that is no value in any chart. No row waits for an owner's answer (section 0, "Decided 2026-10-02").
 
@@ -1077,6 +1077,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
 - **Scope:** The workbench adopts the density tokens and region-specific type from Susan's table, finishes the rails and table rows, makes the chart use its measured width, and refreshes the judged-panel sufficiency drivers and captures after the layout is stable.
 - **M checks:** M7, M14, M18 and M19, and M8's D2 and D3. Measured on row 9 at 1440 x 900: the editor frame's top is at 315 px, 15 px past M7's 300. Above it stand the site header (88 px), the strip (33 px), the toolbar (53 px), the question row (97 px, its chips on two lines) and the editor head (44 px). Folding the chips onto one line with K6 brings the question row to D3's one row, about 52 px, which puts the frame's top near 270 px. **K6 is done by row 12.** Table D's D6 below 1024 px, where each rail is a 2.75rem summary, also lands here: row 9 keeps the rails as fixed scroll boxes at every width. The chart matches its region width, the judged answer and chart panels pass the sufficiency gates or carry rationale, and every font size inside `.workbench` stays on the declared scale.
+- **Made obsolete by #1336:** K6; the sentence that the rails are fixed scroll boxes at every width; and M7 at 1440 x 900, now met with the editor frame's top at 275 px.
 - **Specified in:** Jony's and Susan's redesign files, 2026-10-04; owner ruling 2026-10-04.
 
 ### Row #11 - The column rail stops overlapping, and types and the chosen ledger show in colour
