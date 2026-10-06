@@ -81,16 +81,24 @@ export function ledgerReach(ledger: LedgerName): Promise<LedgerReach> {
 	return readReach(keeper(), ledger);
 }
 
-const rawListedThrough = (__RAW_LISTED_THROUGH__ ?? {}) as RawListedThrough;
+/** The newest raw day the site build listed for each ledger: this build's `__RAW_LISTED_THROUGH__`.
+ *  A page script that sets `__RAW_LISTED_THROUGH__` to an object with no keys reads no writer's
+ *  file, as the browser tests that serve a ledger they built do, because a built ledger has no
+ *  writer's files; nothing on the page can name a day the build did not list. */
+function rawListedThrough(): RawListedThrough {
+	const runtime = (globalThis as typeof globalThis & { __RAW_LISTED_THROUGH__?: unknown }).__RAW_LISTED_THROUGH__;
+	const switchedOff = runtime !== null && typeof runtime === 'object' && Object.keys(runtime).length === 0;
+	return switchedOff ? {} : ((__RAW_LISTED_THROUGH__ ?? {}) as RawListedThrough);
+}
 
 /** Run one read-only statement over chosen ledgers and days. */
 export function ask(options: AskOptions): Promise<AskResult> {
-	return readAsk(keeper(), archiveTier(), options, rawListedThrough);
+	return readAsk(keeper(), archiveTier(), options, rawListedThrough());
 }
 
 /** What a written question would fetch before it runs. */
 export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> {
-	return readAskCost(keeper(), archiveTier(), ledgers, from, to, rawListedThrough);
+	return readAskCost(keeper(), archiveTier(), ledgers, from, to, rawListedThrough());
 }
 
 /** Drop this page's query-door cache, so Refresh reads the registry and indexes anew. */

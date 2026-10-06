@@ -53,7 +53,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | L1 | Days before a ledger began are cut from the selected window | - | A | DONE #1327, carried under plan 60 (row L1, decision 5) | fantastic-fortnight | #1327 | L1 explorer starts at first day |
-| L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | PENDING | - | - | - |
+| L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | DONE | ideal-barnacle | - | Plan 62 row l2 |
 | L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
 | L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | - | Plan 62 row l4 |
 | L5 | Console windows end on the site's newest published day | L4 | C | PENDING | - | - | - |
@@ -141,13 +141,13 @@ Table G - the tests. A G-number is Fowler's test number (his I7 is G7 here), so 
 | G18 | Rewrite H14 and H18, whose spans and file paths come from the canary day | L2 | End-to-end, `console` | H14: one built day file, of a size the test wrote, and the held bytes equal that size before and after a refused run. H18: before Run, the only data file fetched is the built newest-day file; after Run, the rows are the built rows | Dropping held files when a run is refused; a link that runs by itself |
 | G19 | Rewrite H19 and H20, which pin the canary day. H20 also prints that day in its expected sentence | L2 | End-to-end, `console` | The same notices, on a day each test pins | Changing a notice |
 | G20 | Rewrite H21 and H25, which take their lost day from canary data | L2 | End-to-end, `console` | A built ledger with a lost day and 2 set-aside files on written-out days: the two sentences show, no row exists for the lost day, and the chart line breaks there | Drawing the lost day as a zero |
-| G21 | Rewrite the tests that use a canary ledger only to carry a question: H6, H17, H22, H23, H26, H28, H30, H31, H34, H37, H39 and H40 | L2 | End-to-end | Each test chooses a built ledger, uses `range()` or `VALUES` where the rows do not matter, and first checks the answer state it needs. Today H26 never checks its states: on `main` three of its four questions end `unreachable` and it still passes (reasoned; it is not among the ten that fail) | Removing the state check |
-| G22 | Keep on the canary, each test pinning its own day once G7 lands: H1 to H5, H7, H8, H15, H16, H24, H27, H29, H32, H33, H35, H36 and H38 | L2 | End-to-end, `console` | They do not depend on content: the page renders, the layout holds, and nothing errors. H8 is the check that the presets end today (Table D, D2) | - |
-| G23 | Keep the specs `console-data-explorer-address`, `-gaps`, `-keep` and `-shape` (group `logic`) and `console-data-explorer-cells` (group `console`) | - | Unit | Their dates are values the tests wrote themselves | - |
+| G21 | Rewrite the tests that use a canary ledger only to carry a question: H6, H17, H22, H23, H26, H28, H30, H31, H34, H37, H39, H40, H44, H48, H50, H51, H61 and H62 | L2 | End-to-end | Each test chooses a built ledger, uses `range()` or `VALUES` where the rows do not matter, and first checks the answer state it needs. Today H26 never checks its states: on `main` three of its four questions end `unreachable` and it still passes (reasoned; it is not among the ten that fail) | Removing the state check |
+| G22 | Keep on the canary, each test pinning its own day once G7 lands: H1 to H5, H7, H8, H15, H16, H24, H27, H32, H33, H35, H36, H38, H45 to H47, H49 and H52 to H60. A test that opens the page with no clock reads no day, and stays as it is | L2 | End-to-end, `console` | They do not depend on content: the page renders, the layout holds, and nothing errors. H8 is the check that the presets end today (Table D, D2) | - |
+| G23 | Keep the specs `console-data-explorer-address`, `-cells`, `-gaps`, `-keep` and `-shape` (group `logic`) and `console-explorer-rails` (group `console`), and L1's browser test in `explorer-boundary.spec.ts`, which builds the root it reads: H63 to H104 | - | Unit and component; H104 end-to-end | Their dates and values are ones the tests wrote themselves | - |
 
 ### 2.5 The existing tests, one by one
 
-Table H - tests on `main` at 36fe716e0 that a row rewrites, deletes or keeps, by spec and title, with the line of Table G that decides each one. "Red" marks the ten that fail in run 37361239642.
+Table H - the data explorer's tests that a row rewrites, deletes or keeps, by spec and title, with the line of Table G that decides each one: those on `main` at 36fe716e0 (H1 to H43), and those in the explorer specs at L2's dispatch on 2026-10-06 that H1 to H43 do not name (H44 to H104). "Red" marks the ten that fail in run 37361239642.
 
 | # | Spec under `frontend/tests/` | Test title | Table G | Row | Red |
 | --- | --- | --- | --- | --- | --- |
@@ -155,12 +155,12 @@ Table H - tests on `main` at 36fe716e0 that a row rewrites, deletes or keeps, by
 | H2 | `console-data-explorer.spec.ts` | `THE ORACLE: console chrome resolves to console unless the route asks for workbench` | G22 | L2 | - |
 | H3 | `console-data-explorer.spec.ts` | `THE ORACLE: Data explorer asks for workbench chrome and the other routes keep console chrome` | G22 | L2 | - |
 | H4 | `console-data-explorer.spec.ts` | `THE ORACLE: the workbench strip is one compact row at ${view.width}` | G22 | L2 | - |
-| H5 | `console-data-explorer.spec.ts` | `THE ORACLE: Data explorer puts the span and Run in the workbench toolbar` | G22 | L2 | - |
+| H5 | `console-data-explorer.spec.ts` | `THE ORACLE: Data explorer puts the span and the dates in the toolbar, and Run beside Save and Copy link` (renamed by #1336) | G22 | L2 | - |
 | H6 | `console-data-explorer.spec.ts` | `THE ORACLE: before a run the column rail names the selected ledger's own columns` | G21 | L2 | - |
 | H7 | `console-data-explorer.spec.ts` | `THE ORACLE: the Data explorer fallback document carries the shipped content policy` | G22 | L2 | - |
 | H8 | `console-data-explorer.spec.ts` | `THE ORACLE: custom date inputs expose reach bounds and presets end today` | G22 | L2 | - |
 | H9 | `console-data-explorer.spec.ts` | `THE ORACLE: with no archive prefix, an old custom span reads from the site's oldest day and says so` | G8 | L2 | - |
-| H10 | `console-data-explorer.spec.ts` | `THE ORACLE: a typed join matches the query door and the run cost matches the network` | G14 | L2 | Red |
+| H10 | `console-data-explorer.spec.ts` | `THE ORACLE: a typed join counts the rows of two built ledgers, fetches only their files in the span, and the run cost matches the network` (renamed by L2; was `THE ORACLE: a typed join matches the query door and the run cost matches the network`) | G14 | L2 | Red |
 | H11 | `console-data-explorer.spec.ts` | `THE ORACLE: choosing ledgers fetches one through day for each chosen ledger and no other data file` | G15 | L2 | - |
 | H12 | `console-data-explorer.spec.ts` | `THE ORACLE: every Data explorer answer state renders distinct words, tint and action` | G16 | L2 | Red |
 | H13 | `console-data-explorer.spec.ts` | `THE ORACLE: every published example runs without refusal or unreachable state` | G17 | L2 | Red |
@@ -175,11 +175,11 @@ Table H - tests on `main` at 36fe716e0 that a row rewrites, deletes or keeps, by
 | H22 | `console-data-explorer.spec.ts` | `THE ORACLE: every chart case draws its type with a populated readout` | G21 | L2 | Red |
 | H23 | `console-data-explorer.spec.ts` | `THE ORACLE: Save, recent runs and Markdown copy preserve text without running a saved question` | G21 | L2 | Red |
 | H24 | `console-data-explorer.spec.ts` | `THE ORACLE: browser storage is parsed against closed lists and saved overflow names the drop` | G22 | L2 | - |
-| H25 | `console-data-explorer.spec.ts` (added by #1318, not on `main` yet) | `THE ORACLE: a count by day across a lost day breaks its line there, and the strip prints no number for that day` | G20 | L2 | - |
+| H25 | `console-data-explorer.spec.ts` (added by #1318) | `THE ORACLE: a count by day across a lost day breaks its line there, and the strip prints no number for that day` | G20 | L2 | - |
 | H26 | `console-data-explorer-still.spec.ts` | `Run moves nothing in answered, capped, quiet and refused states at ${view.width}px` | G21 | L2 | - |
 | H27 | `console-data-explorer-still.spec.ts` | `Copy link notice is fixed and moves no region` | G22 | L2 | - |
 | H28 | `console-data-explorer-still.spec.ts` | `status text never overlaps the reserved answer link box` | G21 | L2 | - |
-| H29 | `console-data-explorer-still.spec.ts` | `M8: every workbench region keeps its idle block size at all four widths` | G22 | L2 | - |
+| H29 | `console-data-explorer-still.spec.ts` (removed by #1336) | `M8: every workbench region keeps its idle block size at all four widths` | - | - | - |
 | H30 | `console-data-explorer-still.spec.ts` | `M10: non-run interactions keep every region box fixed` | G21 | L2 | Red |
 | H31 | `console-data-explorer-still.spec.ts` | `M11: status words stay in the reserved lines and never scroll sideways` | G21 | L2 | Red |
 | H32 | `console-data-explorer-still.spec.ts` | `M12: notices time out, pause on hover or focus, and close on the button` | G22 | L2 | - |
@@ -191,9 +191,70 @@ Table H - tests on `main` at 36fe716e0 that a row rewrites, deletes or keeps, by
 | H38 | `console-data-explorer-still.spec.ts` | `M17: keyboard order follows the visual order at desktop and phone widths` | G22 | L2 | - |
 | H39 | `console-readout.spec.ts`, inside `the readout is the default` | `THE ORACLE: the Data explorer shape panel declares its readout and has no native tooltip` | G21 | L2 | Red |
 | H40 | `explorer-boundary.spec.ts`, which reads `tests/fixtures/ledger-door/` | `the browser content policy refuses a statement fetch to an unlisted origin` | G21 | L2 | - |
-| H41 | `ledger-door.spec.ts` | `a span that starts before the oldest day any index names is unreachable, and no fault` | G6 | L4 | - |
+| H41 | `ledger-door.spec.ts` (deleted by L4, #1348) | `a span that starts before the oldest day any index names is unreachable, and no fault` | G6 | L4 | - |
 | H42 | `ledger-door.spec.ts` | `a date both packed and listed is read once, from its packed file` | - | L9 | - |
-| H43 | `ledger-door.spec.ts` | `a date in no tier is unreachable at that date, and with no archive the span starts at the site` | G5 | L1 | - |
+| H43 | `ledger-door.spec.ts` (deleted by L1, #1327) | `a date in no tier is unreachable at that date, and with no archive the span starts at the site` | G5 | L1 | - |
+| H44 | `console-data-explorer.spec.ts` | `THE ORACLE: Copy link carries the question while the link fits console.explorer_link_max_bytes, and leaves it out one character past` | G21 | L2 | - |
+| H45 | `console-data-explorer.spec.ts` | `THE ORACLE: a question kept with a day that is not on the calendar is dropped when the page reads browser storage` | G22 | L2 | - |
+| H46 | `console-data-explorer-window.spec.ts` | `the workbench reaches the window's right and bottom edges at ${view.width} x ${view.height}` | G22 | L2 | - |
+| H47 | `console-data-explorer-window.spec.ts` | `the regions tile a window that holds them, and the page does not scroll, at ${view.width} x ${view.height}` | G22 | L2 | - |
+| H48 | `console-data-explorer-window.spec.ts` | `a long list of a ledger's columns scrolls inside the column rail and never stretches the page, at ${view.width} x ${view.height}` | G21 | L2 | - |
+| H49 | `console-data-explorer-window.spec.ts` | `the question strip stays one line, folds the rest into "{n} more" and keeps every title whole, at ${view.width}` | G22 | L2 | - |
+| H50 | `console-data-explorer-window.spec.ts` | `the chart heading line holds still and the drawing scrolls in its own box beneath it` | G21 | L2 | - |
+| H51 | `console-data-explorer-window.spec.ts` | `a long answer and a long question scroll inside their own regions, and the page does not grow` | G21 | L2 | - |
+| H52 | `console-data-explorer-window.spec.ts` | `below the wide breakpoint the workbench runs edge to edge and the answer is one window tall, at ${view.width}` | G22 | L2 | - |
+| H53 | `console-data-explorer-window.spec.ts` | `only the Data explorer lifts the width cap and leaves the footer out` | G22 | L2 | - |
+| H54 | `console-data-explorer-window.spec.ts` | `Run, Save and Copy link stand next to each other in one group, and Run holds still in every state of it, at ${view.width}` | G22 | L2 | - |
+| H55 | `console-data-explorer-window.spec.ts` | `the folded list closes on a press outside it, on Escape and after a pick, and stays open after Forget` | G22 | L2 | - |
+| H56 | `console-data-explorer-window.spec.ts` | `Forget on a chip on the line moves focus to the nearest Forget left on the line` | G22 | L2 | - |
+| H57 | `console-data-explorer-window.spec.ts` | `Forget on the line moves focus to "{n} more" when no Forget is left on the line` | G22 | L2 | - |
+| H58 | `console-data-explorer-window.spec.ts` | `History opens its list in view, each line of it whole and inside the window, at ${view.width}` | G22 | L2 | - |
+| H59 | `console-data-explorer-window.spec.ts` | `History closes its list on Escape, on a press outside it and after a pick, as the folded list does` | G22 | L2 | - |
+| H60 | `console-data-explorer-window.spec.ts` | `the line that says the ledger list did not arrive starts where the editor heading starts` | G22 | L2 | - |
+| H61 | `console-data-explorer-window.spec.ts` | `Ctrl+Enter in the editor runs the question` | G21 | L2 | - |
+| H62 | `console-data-explorer-window.spec.ts` | `the copy buttons stand on the answer's heading line and overlap no other region, at ${view.width}` | G21 | L2 | - |
+| H63 | `console-data-explorer-shape.spec.ts` | `the five documented answer cases choose their chart type or neutral sentence` | G23 | - | - |
+| H64 | `console-data-explorer-shape.spec.ts` | `cells arrive as text, as the door returns them, and still give each chart its figures` | G23 | - | - |
+| H65 | `console-data-explorer-shape.spec.ts` | `a date answer with several rows on one UTC day draws no date chart and says why` | G23 | - | - |
+| H66 | `console-data-explorer-shape.spec.ts` | `a date column holding a day the chart cannot place draws no date chart and names the column and that day` | G23 | - | - |
+| H67 | `console-data-explorer-shape.spec.ts` | `a row whose day is NULL is left out of the date chart, and every figure counts only the rows with a day` | G23 | - | - |
+| H68 | `console-data-explorer-shape.spec.ts` | `a date column that holds only NULL draws no chart and says so` | G23 | - | - |
+| H69 | `console-data-explorer-shape.spec.ts` | `date charts draw four number columns and name columns that would draw flat` | G23 | - | - |
+| H70 | `console-data-explorer-shape.spec.ts` | `a lost day between the days an answer has rows for joins the date axis with no row` | G23 | - | - |
+| H71 | `console-data-explorer-shape.spec.ts` | `a lost day outside the answer's first and last day, or one the answer has a row for, adds no day` | G23 | - | - |
+| H72 | `console-data-explorer-shape.spec.ts` | `a timestamp answer sits on the date axis by its UTC day` | G23 | - | - |
+| H73 | `console-data-explorer-shape.spec.ts` | `a timestamp with a time zone sits on the date axis by its UTC day, not the day the engine printed` | G23 | - | - |
+| H74 | `console-data-explorer-shape.spec.ts` | `no-chart reasons follow the first matching documented case` | G23 | - | - |
+| H75 | `console-data-explorer-shape.spec.ts` | `an answer can qualify for more than one chart type for the operator switch` | G23 | - | - |
+| H76 | `console-data-explorer-shape.spec.ts` | `a timestamp of any precision is a day column, so a TIMESTAMP_NS day column draws over time` | G23 | - | - |
+| H77 | `console-data-explorer-shape.spec.ts` | `an enum names a ranked row, as text does` | G23 | - | - |
+| H78 | `console-data-explorer-shape.spec.ts` | `every whole number the engine prints is a number to the chart, and a list of numbers is not one` | G23 | - | - |
+| H79 | `console-data-explorer-shape.spec.ts` | `a NULL is no reading: the spread and paired floors, the paired figure and the ranked tail count only rows with a number` | G23 | - | - |
+| H80 | `console-data-explorer-shape.spec.ts`, inside `the chart panel draws a NULL as no value, never as zero` | `the ranked list leaves the NULL row out and says it is in the table` | G23 | - | - |
+| H81 | `console-data-explorer-shape.spec.ts`, inside `the chart panel draws a NULL as no value, never as zero` | `the paired chart draws no point for a row with a NULL` | G23 | - | - |
+| H82 | `console-data-explorer-shape.spec.ts`, inside `the chart panel draws a NULL as no value, never as zero` | `the spread chart counts no NULL among the readings in its bins` | G23 | - | - |
+| H83 | `console-data-explorer-shape.spec.ts`, inside `the chart panel draws a NULL as no value, never as zero` | `the date chart breaks its line at a day whose number is NULL` | G23 | - | - |
+| H84 | `console-data-explorer-shape.spec.ts`, inside `the chart panel draws a NULL as no value, never as zero` | `a floor counts readings, so a NULL can leave a chart too few to draw, and the sentence names the floor it missed` | G23 | - | - |
+| H85 | `console-data-explorer-shape.spec.ts`, inside `the chart panel draws a NULL as no value, never as zero` | `the date chart draws every row with a day, and its note says how many rows hold null in the day column` | G23 | - | - |
+| H86 | `console-data-explorer-shape.spec.ts`, inside `the chart panel draws a NULL as no value, never as zero` | `beside a row with no day, a NULL number still breaks the line on its own day and is still no reading in the spread` | G23 | - | - |
+| H87 | `console-data-explorer-shape.spec.ts`, inside `the chart panel draws a NULL as no value, never as zero` | `a date column that holds only NULL puts its sentence in the chart room and draws no chart` | G23 | - | - |
+| H88 | `console-data-explorer-cells.spec.ts` | `THE ORACLE: cells print by engine column type, not by JavaScript value` | G23 | - | - |
+| H89 | `console-data-explorer-cells.spec.ts` | `THE ORACLE: sorting is total, nulls stay last, and third press restores engine order` | G23 | - | - |
+| H90 | `console-data-explorer-cells.spec.ts` | `a cell prints by its column type family: every whole number groups, and a list or a struct is its JSON text` | G23 | - | - |
+| H91 | `console-data-explorer-cells.spec.ts` | `the first press sorts numbers and days high to low and everything else A to Z, by the column type family` | G23 | - | - |
+| H92 | `console-data-explorer-cells.spec.ts` | `in a number column inf sorts above every number and -inf below it, and nan and -nan sort with the NULLs` | G23 | - | - |
+| H93 | `console-data-explorer-cells.spec.ts` | `a timestamp with no zone sorts by its UTC instant when the run is in another time zone` | G23 | - | - |
+| H94 | `console-data-explorer-cells.spec.ts` | `timestamp_ns values a few nanoseconds apart sort in time order` | G23 | - | - |
+| H95 | `console-data-explorer-cells.spec.ts` | `a timestamp with a time zone sorts by its instant, not by the clock time it prints` | G23 | - | - |
+| H96 | `console-data-explorer-cells.spec.ts` | `a timestamp in a year below 1000 sorts as the year it prints` | G23 | - | - |
+| H97 | `console-data-explorer-cells.spec.ts` | `text that names no instant sorts last with the NULLs, and a year past what a Date holds does not stop the sort` | G23 | - | - |
+| H98 | `console-data-explorer-cells.spec.ts` | `a date column sorts as before: newest first on the first press, oldest first on the second, NULLs last` | G23 | - | - |
+| H99 | `console-data-explorer-cells.spec.ts` | `a column draws in-cell bars only when its type is a number, so text that holds digits draws none` | G23 | - | - |
+| H100 | `console-data-explorer-cells.spec.ts` | `THE ORACLE: the Data explorer route and explorer components never render cell text as HTML` | G23 | - | - |
+| H101 | `console-explorer-rails.spec.ts` | `a long column name wraps inside its row and never reaches the next one, and the whole name reaches a screen reader and a hover` | G23 | - | - |
+| H102 | `console-explorer-rails.spec.ts` | `in ${theme}, each type in the column rail and the answer header wears its family's token` | G23 | - | - |
+| H103 | `console-explorer-rails.spec.ts` | `in ${theme}, a chosen ledger's row is tinted with an accent edge, its words stay readable, and its focus ring shows` | G23 | - | - |
+| H104 | `explorer-boundary.spec.ts` (added by L1, #1327) | `days before a ledger began are cut from the selected window, the page names that day, and the archive host gets no request` | G23 | - | - |
 
 ### 2.6 Gates every row runs
 
@@ -260,6 +321,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/scripts/test-groups.ts` (names the new spec under `logic`)
   - `docs/how-to/run-the-gates.md`
   - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
+  - `frontend/tests/console-data-explorer-window.spec.ts` (found at dispatch by the owner: it calls `openExplorer`)
+  - `TODO/20261005-62-ledger-lifecycle-plan.md` (Table H, and Table G lines G21 to G23 that list it, brought up to date; found at dispatch by the owner)
+  - `docs/reference/agent-notes/gates-and-builds.md` (found during execution: on a busy box the preview start limit fails a fresh build, which reads as a stale one)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the groups it selects; the changed specs fall in `console`, `panels`, `publishing` and `logic`. Then `npm --prefix frontend run check`, and `doc_load.py` on the two pages. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push to `main`.
 - **Oracle:** a canary-day move (Table E, E10) over every spec that Table H names for this row. On the branch every one of them stays green. On the base commit the same move turns red the tests that read the canary, which is what lets this check fail. It cannot settle whether the explorer answers correctly over real published data, which no browser test reads.
 

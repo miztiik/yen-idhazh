@@ -43,6 +43,13 @@ packed day, up to the widest console preset. A day whose raw directory holds a
 non-parquet writer file is left unlisted and the build log names that file. A
 listing that is absent inside the listed range is a file gap, not an empty day.
 
+The build hands the page each ledger's newest listed day as
+`__RAW_LISTED_THROUGH__`. A page script that sets `__RAW_LISTED_THROUGH__` to
+an empty object reads no writer's file, as the browser tests that serve a
+ledger they built do: a built ledger has no writer's files, so the build's list
+would name days of the canary's. The shipped page sets nothing, and no page
+script can name a day the build did not list.
+
 ## Archive tier
 
 The archive is the committed repository, which holds every packed file a ledger still keeps. Data explorer reads it from `ledger.archive_base_url` in `config/idhazh.json`; the shipped value is `https://raw.githubusercontent.com/miztiik/yen-idhazh/main`.
