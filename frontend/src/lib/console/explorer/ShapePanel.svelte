@@ -31,17 +31,27 @@
 
 	function noteFor(next: ExplorerShape): string {
 		if (next.kind === 'none') return next.reason;
-		if (next.type === 'dateSeries') return `Drawn over time because the answer has a date column.`;
+		if (next.type === 'dateSeries') {
+			const why = `Drawn over time because the answer has a date column.`;
+			return next.rowsWithNoDay === 0 ? why : `${why} ${rowsWithNoDaySentence(next.rowsWithNoDay, next.dateColumn)}`;
+		}
 		if (next.type === 'rankedList') return `Drawn ranked because the answer has one text column and one number column.`;
 		if (next.type === 'pairedScatter') return `Drawn paired because the answer has two number columns.`;
 		return `Drawn as a spread because the answer has one number column.`;
+	}
+
+	/** The rows a date chart does not draw because their day is NULL, which the table prints as `null`. */
+	function rowsWithNoDaySentence(count: number, dateColumn: string): string {
+		return count === 1
+			? `1 row holds null in the column "${dateColumn}", so the chart does not draw it. It is in the table.`
+			: `${count} rows hold null in the column "${dateColumn}", so the chart does not draw them. They are in the table.`;
 	}
 
 	function lede(next: ExplorerShape): string {
 		if (next.kind === 'none') return 'No chart';
 		if (next.type === 'dateSeries') {
 			const main = next.mainFigure;
-			return main === null ? `${rows.length} UTC ${rows.length === 1 ? 'day' : 'days'}` : `${text({ [main.column]: main.value }, { name: main.column, type: 'DOUBLE' }.name)} ${main.column} on ${main.date}`;
+			return main === null ? `${next.days} UTC ${next.days === 1 ? 'day' : 'days'}` : `${text({ [main.column]: main.value }, { name: main.column, type: 'DOUBLE' }.name)} ${main.column} on ${main.date}`;
 		}
 		if (next.type === 'rankedList') return next.mainFigure === null ? `${rows.length} rows` : `${next.mainFigure.label}: ${text({ [next.mainFigure.column]: next.mainFigure.value }, next.mainFigure.column)} ${next.mainFigure.column}`;
 		if (next.type === 'pairedScatter') return next.mainFigure;
@@ -50,7 +60,7 @@
 
 	function tooFew(next: ExplorerShape): string | null {
 		if (next.kind === 'none' || !('tooFew' in next) || !next.tooFew) return null;
-		if (next.type === 'dateSeries') return tooFewSentence(rows.length, bounds.chartMinRows, 'UTC days');
+		if (next.type === 'dateSeries') return tooFewSentence(next.days, bounds.chartMinRows, 'UTC days');
 		if (next.type === 'pairedScatter') {
 			return next.readings < bounds.fleetMinRows
 				? tooFewSentence(next.readings, bounds.fleetMinRows, 'readings')
