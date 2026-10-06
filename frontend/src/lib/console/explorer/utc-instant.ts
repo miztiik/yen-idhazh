@@ -3,8 +3,9 @@
  * The answer table sorts a date or a timestamp column by the instant, to the nanosecond, and the
  * date chart puts each row on its UTC day. Both are read from the text alone, so the browser's
  * time zone cannot change them (CLAUDE.md section 2). The day the text prints is not always the
- * UTC day: the engine prints a timestamp with a time zone in a whole-hour offset it takes from the
- * page's zone, so on a page in Berlin 23:30 UTC prints as `00:30:00+01` on the next day.
+ * UTC day: once the engine has loaded its time-zone add-on, it prints a timestamp with a time zone
+ * in a whole-hour offset it takes from the page's zone, so on a page in Berlin 23:30 UTC prints as
+ * `00:30:00+01` on the next day.
  */
 
 /** A date or a timestamp as the engine prints it: the day, a time of day to the nanosecond, and
