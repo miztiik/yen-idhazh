@@ -177,7 +177,8 @@ def _finish(tree: CompactTree, year: str) -> tuple[Stop, ...]:
     """Finish a year the yearly index already names: its entry stands, its month files go.
 
     An `empty` year has no file of its own to look for, and a `packed` one whose
-    file is not there is refused as `file-missing`.
+    file is not there is refused as `file-missing`. The month files go by their
+    names, so none of them is downloaded.
     """
     if (
         tree.yearly[year].names_file
@@ -193,7 +194,6 @@ def _finish(tree: CompactTree, year: str) -> tuple[Stop, ...]:
             f"{where.name} names it and no yearly file holds it",
             ledger.LedgerFault.FILE_MISSING,
         )
-    tree.listing.fetch([tree.monthly_year_folder(year)])
     for month in months_of(year):
         found = named_trees.compact_file(
             tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
