@@ -87,6 +87,7 @@ from idhazh.ledger.paths import (
     raw_root,
     registry_entries,
     relpath,
+    set_aside_path,
     tree_relpath,
     tree_root,
     watermark_path,
@@ -106,11 +107,13 @@ from idhazh.ledger.persist import (
     render_renamed,
 )
 from idhazh.ledger.raw_files import (
+    DayFolder,
     RawFile,
     list_raw_files,
     load_current_rows,
     raw_days,
     read_day_files,
+    read_day_folder,
     settle_rows,
 )
 from idhazh.ledger.rows import (
@@ -161,6 +164,7 @@ __all__ = [  # noqa: RUF022
     "raw_root",
     "registry_entries",
     "relpath",
+    "set_aside_path",
     "tree_relpath",
     "tree_root",
     "watermark_path",
@@ -178,11 +182,13 @@ __all__ = [  # noqa: RUF022
     "render_period",
     "render_renamed",
     # raw_files.py: which raw files hold a ledger's current rows, and what they are.
+    "DayFolder",
     "RawFile",
     "list_raw_files",
     "load_current_rows",
     "raw_days",
     "read_day_files",
+    "read_day_folder",
     "settle_rows",
     # ledger_files.py: which files - yearly, monthly, daily or raw - hold a ledger's current rows.
     "LedgerFiles",

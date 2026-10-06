@@ -46,6 +46,11 @@ folders of the packed days a GitHub re-run may still write into, from
 `GITHUB_RERUN_DAYS` days before the wake to the mark, and each day it takes
 again counts against the same cap.
 
+**A span is the most a step takes, never a promise.** Sizes are not known here,
+because the choice lists nothing; once a step has named its periods it takes
+only those whose files fit what is left of the shard's download budget, and
+stops at the first that does not (`CompactTree.fit_to_budget`).
+
 **An operator range limits the choice and never makes a step skip a period.**
 A range that ends before the step's first period leaves nothing to take. A
 range that starts after it, while that first period is ready, is refused at
@@ -91,7 +96,7 @@ def choose(
         daily_mark=tree.daily_through,
         monthly_mark=tree.monthly_through,
         yearly_mark=tree.yearly_through,
-        newest_eligible_day=_newest_due(policy, now=now),
+        newest_eligible_day=newest_due(policy, now=now),
         newest_closable_month=schedule.newest_eligible_month(
             now=now, after_days=policy.daily_keep_days
         ),
@@ -130,11 +135,11 @@ def first_run_months(
         return []
     if operator_range is not None:
         return month_partition.months_between(*operator_range)
-    newest = _newest_due(policy, now=now)[:7]
+    newest = newest_due(policy, now=now)[:7]
     return month_partition.months_between(shift(newest, -policy.lookback_periods), newest)
 
 
-def _newest_due(policy: CompactionPolicy, *, now: datetime) -> str:
+def newest_due(policy: CompactionPolicy, *, now: datetime) -> str:
     """The newest UTC day at least `compact_after_days` whole days past its end, at `now`."""
     return schedule.newest_eligible(now=now, after_days=policy.compact_after_days).isoformat()
 
@@ -339,7 +344,7 @@ def _days(
     return _span(
         start,
         why,
-        _newest_due(policy, now=now),
+        newest_due(policy, now=now),
         bounds=None if operator_range is None else month_partition.day_bounds(*operator_range),
         cap=policy.max_periods_per_run,
         after=_day_after,
