@@ -592,7 +592,8 @@ jobs:
             --date ${{ needs.plan.outputs.date }}
         run: >-
           python backend/utilities/commit_and_push.py
-          frontend/public/digest frontend/public/telemetry frontend/public/assist/index
+          frontend/public/digest frontend/public/publication.json
+          frontend/public/telemetry frontend/public/assist/index
           frontend/public/source-health.json frontend/public/console
           frontend/public/run-days frontend/public/day-metrics
           frontend/public/machine

@@ -5,10 +5,17 @@ finds it, live over trees built under `tmp_path` through the ledger door: the
 twelve month files of 2026, the January of 2027 that lets 2026 be packed, and
 the indexes and watermarks a compaction leaves beside them. The declaration
 ships `dry_run: true` and packs no year, and each test turns on what it needs
-for itself only. Each oracle is named where it is checked: every row the month
-files held reads back from the year file, one row group a month; a second pass
-changes nothing; a pass that stopped part way is finished by the next with no
-row lost or read twice; and a ledger that does not pack years keeps its month
+for itself only. Each oracle is named where it is checked: a scheduled wake
+packs a year on the day its wait ends and not the day before, naming the months
+it reads itself; every row the month files held reads back from the year file,
+one row group a month; a month with no row adds none, and every month's lost
+days carry into its year; a year with no row is an entry with no file; a year
+file no entry names is adopted before any month is read; a month no entry
+names is adopted from its own file, or its days are recorded lost when nothing
+of it is left; a month file that is gone or cannot be read costs its year that
+month's days, the second moved under set-aside and counted; a second
+pass changes nothing; a pass that stopped part way is finished by the next with
+no row lost or read twice; and a ledger that does not pack years keeps its month
 files byte for byte.
 
 Nothing here reads the committed `state/` or a clock the test did not set
@@ -30,17 +37,19 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState, Watermark
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener import schedule
 from idhazh.gardener.one_at_a_time import Pass
-from idhazh.gardener.tasks import _yearly_period
+from idhazh.gardener.tasks import _compaction_periods, _yearly_period
 from idhazh.gardener.tasks._compact_tree import CompactTree
 from idhazh.ledger import StoredRow
 
 from ._task import context_for, run_task
+from .test_compaction import recovered
 
 pytestmark = pytest.mark.contract
 
@@ -52,6 +61,17 @@ MONTHS_OF_2026: Final = [f"2026-{number:02d}" for number in range(1, 13)]
 #: 77 days is `daily_keep_days` 45 plus 32, and 2027-03-20 is 78 days after 2026 ended.
 TODAY: Final = date(2027, 3, 20)
 PACKS: Final[dict[str, Any]] = {"monthly_window": {"unit": "forever"}, "monthly_keep_days": 77}
+
+#: The smallest waits the declaration contract allows: a month closes 31 days
+#: after it ends, and a year 63 days after, `daily_keep_days` plus 32.
+SMALLEST: Final[dict[str, Any]] = {
+    "daily_keep_days": 31,
+    "monthly_window": {"unit": "forever"},
+    "monthly_keep_days": 63,
+}
+
+#: 2026 ends at 00:00 UTC on 1 January 2027, and 63 days later is 5 March.
+READY: Final = date(2027, 3, 5)
 
 #: The compaction's own identity, which every compact file's envelope names.
 COMPACTION: Final = WriterIdentity(
@@ -145,15 +165,19 @@ def a_mark(root: Path, period: Period, through: str) -> None:
     path.write_bytes(mark.to_json().encode("ascii"))
 
 
-def a_finished_year(tmp_path: Path, *, today: date = TODAY, january: bool = True) -> Path:
-    """A checkout whose ledger holds 2026 as twelve month files, and 2027's January if asked.
+def a_finished_year(
+    tmp_path: Path, *, today: date = TODAY, january: bool = True, first: str = MONTHS_OF_2026[0]
+) -> Path:
+    """A checkout whose ledger holds 2026 as month files from `first`, and 2027's January if asked.
 
     The daily watermark stands on the newest day a pass on `today` would take,
     beside a daily index that names no day, so the only work a pass finds is the
     year's and the months'. A pass refuses a watermark whose index is not there.
     """
     root, scratch = tmp_path / "checkout", tmp_path / "scratch"
-    months = MONTHS_OF_2026 + (["2027-01"] if january else [])
+    months = [month for month in MONTHS_OF_2026 if month >= first] + (
+        ["2027-01"] if january else []
+    )
     for month in months:
         a_month_file(root, scratch, month)
     index_entries(
@@ -185,6 +209,37 @@ def compact(root: Path, today: date, **knobs: Any) -> Pass:
 def covers(root: Path, period: Period) -> list[str]:
     path = ledger.compact_index_path(state(root), VISUALS, period)
     return [entry.covers for entry in CompactIndex.read(path).entries] if path.is_file() else []
+
+
+def yearly(root: Path) -> list[CompactEntry]:
+    """The yearly index's entries, oldest first."""
+    return CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.YEARLY)).entries
+
+
+def recorded(
+    root: Path, *, quiet: tuple[str, ...] = (), lost: dict[str, list[str]] | None = None
+) -> None:
+    """Rewrite the monthly index the way the month step records a month since entries had a state.
+
+    Each `quiet` month held no row, so its entry is `empty` and its file goes.
+    Each month `lost` names lists those days as recorded lost.
+    """
+    path = ledger.compact_index_path(state(root), VISUALS, Period.MONTHLY)
+    entries = []
+    for entry in CompactIndex.read(path).entries:
+        month = entry.covers
+        if month in quiet:
+            month_file(root, month).unlink()
+        entries.append(
+            CompactEntry(
+                covers=month,
+                rows=0 if month in quiet else entry.rows,
+                bytes=0 if month in quiet else entry.bytes,
+                state=EntryState.EMPTY if month in quiet else EntryState.PACKED,
+                lost_days=(lost or {}).get(month, []),
+            )
+        )
+    index_entries(root, Period.MONTHLY, entries)
 
 
 def watermark(root: Path, period: Period) -> str | None:
@@ -307,6 +362,161 @@ def test_a_window_that_only_reports_packs_a_year_as_a_live_one_does(tmp_path: Pa
     assert [watermark(root, Period.YEARLY) for root in trees] == ["2026", "2026"]
 
 
+# --- which years a wake packs, and what a year records -----------------------------
+
+
+@pytest.mark.parametrize(("today", "packed"), [(date(2027, 3, 4), False), (READY, True)])
+def test_a_scheduled_wake_packs_a_year_the_day_its_wait_ends_and_not_the_day_before(
+    tmp_path: Path, today: date, packed: bool
+) -> None:
+    """2026 ended at 00:00 UTC on 1 January 2027, and 63 days later is 5 March.
+
+    A wake's listing names only the ledger's marks, so the year step names the
+    months it reads itself. January 2027 is old enough to close on both days,
+    which is why the monthly index holds it.
+    """
+    root = a_finished_year(tmp_path, today=today)
+
+    outcome = compact(root, today, wake=True, **SMALLEST)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    assert (watermark(root, Period.YEARLY) == "2026") is packed
+    assert (ledger.compact_file(state(root), VISUALS, Period.YEARLY, "2026") is not None) is packed
+    assert covers(root, Period.MONTHLY) == (
+        ["2027-01"] if packed else [*MONTHS_OF_2026, "2027-01"]
+    )
+
+
+def test_a_ledger_that_began_in_may_packs_its_first_year_from_may(tmp_path: Path) -> None:
+    """The months before a ledger's first are not missing, so nothing is asked of them."""
+    root = a_finished_year(tmp_path, today=READY, first="2026-05")
+    kept = [month for month in MONTHS_OF_2026 if month >= "2026-05"]
+    held = [
+        row
+        for month in kept
+        for row in ledger.load_stored([month_file(root, month)], model=VisualPruneRow)
+    ]
+
+    outcome = compact(root, READY, wake=True, **SMALLEST)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    year = ledger.compact_file(state(root), VISUALS, Period.YEARLY, "2026")
+    assert year is not None
+    assert ledger.load_stored([year], model=VisualPruneRow) == held
+    assert pyarrow.parquet.read_metadata(year).num_row_groups == len(kept)
+    assert covers(root, Period.MONTHLY) == ["2027-01"]
+
+
+@pytest.mark.parametrize("wake", [False, True], ids=["whole-listing", "wake-listing"])
+def test_a_month_with_no_row_adds_none_and_every_month_s_lost_days_carry_into_its_year(
+    tmp_path: Path, wake: bool
+) -> None:
+    """A month closed with no row is an entry with no file, never a missing file."""
+    root = a_finished_year(tmp_path, today=READY)
+    quiet = ("2026-02", "2026-07")
+    recorded(
+        root,
+        quiet=quiet,
+        lost={"2026-02": ["2026-02-10"], "2026-09": ["2026-09-03", "2026-09-30"]},
+    )
+    kept = [month for month in MONTHS_OF_2026 if month not in quiet]
+    held = [
+        row
+        for month in kept
+        for row in ledger.load_stored([month_file(root, month)], model=VisualPruneRow)
+    ]
+
+    outcome = compact(root, READY, wake=wake, **SMALLEST)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    year = ledger.compact_file(state(root), VISUALS, Period.YEARLY, "2026")
+    assert year is not None
+    assert ledger.load_stored([year], model=VisualPruneRow) == held
+    assert pyarrow.parquet.read_metadata(year).num_row_groups == len(kept)
+    (entry,) = yearly(root)
+    assert (entry.state, entry.rows, entry.lost_days) == (
+        EntryState.PACKED,
+        len(held),
+        ["2026-02-10", "2026-09-03", "2026-09-30"],
+    )
+    assert covers(root, Period.MONTHLY) == ["2027-01"]
+
+
+def test_a_year_whose_months_hold_no_row_is_an_empty_entry_with_no_file(tmp_path: Path) -> None:
+    root = a_finished_year(tmp_path, today=READY)
+    recorded(root, quiet=tuple(MONTHS_OF_2026), lost={"2026-03": ["2026-03-14"]})
+
+    outcome = compact(root, READY, **SMALLEST)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    assert yearly(root) == [
+        CompactEntry(
+            covers="2026", rows=0, bytes=0, state=EntryState.EMPTY, lost_days=["2026-03-14"]
+        )
+    ]
+    assert ledger.compact_file(state(root), VISUALS, Period.YEARLY, "2026") is None
+    assert covers(root, Period.MONTHLY) == ["2027-01"]
+    assert watermark(root, Period.YEARLY) == "2026", "a year with no row moves the mark too"
+
+
+def test_a_year_whose_months_hold_no_row_adopts_its_own_file_when_one_is_at_its_path(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An index restored from an older commit can name a year's months while its file holds them.
+
+    Recorded `empty`, the year would hide every row its file holds, so the file
+    is adopted, and the days its months list as lost stay lost.
+    """
+    root = a_finished_year(tmp_path, today=READY)
+    rows = [
+        row
+        for month in MONTHS_OF_2026
+        for row in ledger.load_stored([month_file(root, month)], model=VisualPruneRow)
+    ]
+    own = ledger.persist_period(
+        state(root),
+        rows,
+        model=VisualPruneRow,
+        ledger=VISUALS,
+        period=Period.YEARLY,
+        covers="2026",
+        identity=COMPACTION,
+        built_from=len(MONTHS_OF_2026),
+    )
+    before = own.read_bytes()
+    recorded(root, quiet=tuple(MONTHS_OF_2026), lost={"2026-03": ["2026-03-14"]})
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, READY, **SMALLEST)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    assert yearly(root) == [
+        CompactEntry(
+            covers="2026", rows=len(rows), bytes=len(before), lost_days=["2026-03-14"]
+        )
+    ]
+    assert recovered(caplog, "2026") == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert own.read_bytes() == before
+    assert covers(root, Period.MONTHLY) == ["2027-01"]
+
+
+def test_an_indexed_empty_year_finishes_without_a_file_to_look_for(tmp_path: Path) -> None:
+    """A pass that stopped after the yearly index landed left the year's months indexed."""
+    root = a_finished_year(tmp_path, today=READY)
+    recorded(root, quiet=tuple(MONTHS_OF_2026))
+    index_entries(
+        root,
+        Period.YEARLY,
+        [CompactEntry(covers="2026", rows=0, bytes=0, state=EntryState.EMPTY)],
+    )
+
+    outcome = compact(root, READY, **SMALLEST)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    assert (covers(root, Period.YEARLY), covers(root, Period.MONTHLY)) == (["2026"], ["2027-01"])
+    assert watermark(root, Period.YEARLY) == "2026"
+
+
 # --- a pass that stopped part way ------------------------------------------------
 
 
@@ -326,9 +536,11 @@ def test_a_pass_that_stopped_part_way_is_finished_by_the_next_with_no_row_lost_o
     assert isinstance(policy, CompactionPolicy)
     tree = CompactTree.read(context.state_dir, VISUALS, context.listing)
     now = datetime.combine(TODAY, time.min, tzinfo=UTC)
+    chosen = _compaction_periods.choose(tree, policy, now=now, operator_range=None)
+    assert chosen.years is not None
 
     stops = _yearly_period.absorb(
-        tree, policy, now=now, stamp="2027-03-20T00:41:00Z", identity=COMPACTION
+        tree, chosen.years, stamp="2027-03-20T00:41:00Z", identity=COMPACTION
     )
 
     assert stops == ()
@@ -397,12 +609,9 @@ def test_a_year_waits_for_its_wait_and_for_its_next_january(
     assert (ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-06") is None) is packed
 
 
-def test_a_year_missing_a_month_is_refused_by_name_and_nothing_moves(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    root = a_finished_year(tmp_path)
+def without_june(root: Path) -> None:
+    """Rewrite the monthly index without June's entry, as an index restored from an older commit."""
     kept = [month for month in [*MONTHS_OF_2026, "2027-01"] if month != "2026-06"]
-    month_file(root, "2026-06").unlink()
     index_entries(
         root,
         Period.MONTHLY,
@@ -410,6 +619,48 @@ def test_a_year_missing_a_month_is_refused_by_name_and_nothing_moves(
             CompactEntry(covers=month, rows=2, bytes=month_file(root, month).stat().st_size)
             for month in kept
         ],
+    )
+
+
+def test_a_year_missing_a_month_with_nothing_of_it_left_records_its_days_lost(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """No entry, no month file, no day file and no raw file: June's rows are gone, and 2026 packs."""
+    root = a_finished_year(tmp_path)
+    month_file(root, "2026-06").unlink()
+    without_june(root)
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, TODAY, **PACKS)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    (entry,) = yearly(root)
+    assert (entry.covers, entry.state, entry.rows) == ("2026", EntryState.PACKED, 22)
+    assert entry.lost_days == days("2026-06-01", "2026-06-30")
+    assert recovered(caplog, "2026-06") == [f"note={RecoveryNote.RECORDED_LOST}"]
+    assert covers(root, Period.MONTHLY) == ["2027-01"]
+
+
+def test_a_year_missing_a_month_whose_raw_day_is_still_there_is_refused_and_nothing_moves(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A raw file in June says June never closed, so its days are not lost: a person decides."""
+    root = a_finished_year(tmp_path)
+    month_file(root, "2026-06").unlink()
+    without_june(root)
+    ledger.persist(
+        state(root),
+        [a_pass("2026-06-10")],
+        ledger=VISUALS,
+        covers="2026-06-10",
+        identity=WriterIdentity(
+            run_id="2026-06-10-1",
+            attempt=1,
+            job=ServerJob.RUN_TASKS,
+            shard=0,
+            producer="gardener.tasks.visual_prune",
+            git_sha="a" * 40,
+        ),
     )
     before = files_under(root)
 
@@ -420,6 +671,122 @@ def test_a_year_missing_a_month_is_refused_by_name_and_nothing_moves(
     assert "monthly.json does not name 2026-06" in caplog.text
     assert f"fault={ledger.LedgerFault.DAY_MISSING}" in caplog.text
     assert files_under(root) == before
+
+
+def test_a_month_no_entry_names_is_adopted_from_its_own_file_into_its_year(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """June's file is at its path while no entry names it, so its rows go into 2026 and none is lost."""
+    root = a_finished_year(tmp_path)
+    without_june(root)
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, TODAY, **PACKS)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    (entry,) = yearly(root)
+    assert (entry.rows, entry.lost_days) == (24, [])
+    assert recovered(caplog, "2026-06") == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-06") is None
+
+
+def test_a_month_file_its_entry_names_that_is_gone_costs_its_year_that_month_s_days(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """THE ORACLE for a packed month file that is gone when its year closes: no file to set aside."""
+    root = a_finished_year(tmp_path)
+    month_file(root, "2026-06").unlink()
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, TODAY, **PACKS)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    (entry,) = yearly(root)
+    assert (entry.rows, entry.set_aside) == (22, 0)
+    assert entry.lost_days == days("2026-06-01", "2026-06-30")
+    assert recovered(caplog, "2026-06") == [f"note={RecoveryNote.RECORDED_LOST}"]
+
+
+def test_a_month_file_that_cannot_be_read_is_set_aside_and_its_year_counts_every_file(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """June's file moves under set-aside, its days are lost, and the year adds March's count to it."""
+    root = a_finished_year(tmp_path)
+    broken = month_file(root, "2026-06")
+    broken.write_bytes(b"not a ledger file\n")
+    months = [*MONTHS_OF_2026, "2027-01"]
+    index_entries(
+        root,
+        Period.MONTHLY,
+        [
+            CompactEntry(
+                covers=month,
+                rows=2,
+                bytes=month_file(root, month).stat().st_size,
+                set_aside=2 if month == "2026-03" else 0,
+            )
+            for month in months
+        ],
+    )
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, TODAY, **PACKS)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    (entry,) = yearly(root)
+    assert (entry.rows, entry.set_aside) == (22, 3)
+    assert entry.lost_days == days("2026-06-01", "2026-06-30")
+    moved = state(root) / "raw/visual-prunes/set-aside/compact/visual-prunes/monthly/2026/06.parquet"
+    assert moved.read_bytes() == b"not a ledger file\n"
+    assert not broken.exists()
+    assert recovered(caplog, "2026-06") == [
+        f"note={RecoveryNote.SET_ASIDE}",
+        f"note={RecoveryNote.RECORDED_LOST}",
+    ]
+
+
+@pytest.mark.parametrize("months_kept", [True, False], ids=["months-kept", "months-gone"])
+def test_a_year_file_no_entry_names_is_adopted_before_any_month_is_read_or_called_lost(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, months_kept: bool
+) -> None:
+    """A year file holds exactly its months' rows, so it is adopted first and never written over.
+
+    With the month files still there they go by name; with them gone, which
+    their packed entries would otherwise call lost, no day is lost.
+    """
+    root = a_finished_year(tmp_path)
+    rows = [
+        row
+        for month in MONTHS_OF_2026
+        for row in ledger.load_stored([month_file(root, month)], model=VisualPruneRow)
+    ]
+    own = ledger.persist_period(
+        state(root),
+        rows,
+        model=VisualPruneRow,
+        ledger=VISUALS,
+        period=Period.YEARLY,
+        covers="2026",
+        identity=COMPACTION,
+        built_from=len(MONTHS_OF_2026),
+    )
+    before = own.read_bytes()
+    if not months_kept:
+        for month in MONTHS_OF_2026:
+            month_file(root, month).unlink()
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, TODAY, **PACKS)
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
+    assert yearly(root) == [CompactEntry(covers="2026", rows=24, bytes=len(before))]
+    assert own.read_bytes() == before
+    assert recovered(caplog, "2026") == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert recovered(caplog, "2026-06") == []
+    gone = [ledger.compact_file(state(root), VISUALS, Period.MONTHLY, m) for m in MONTHS_OF_2026]
+    assert gone == [None] * len(MONTHS_OF_2026)
+    assert covers(root, Period.MONTHLY) == ["2027-01"]
+    assert disjoint(outcome)
 
 
 def test_a_year_file_over_github_s_large_file_line_is_refused_and_its_months_kept(

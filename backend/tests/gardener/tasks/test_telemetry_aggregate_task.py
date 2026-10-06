@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
-from typing import Final
+from pathlib import Path, PurePosixPath
+from typing import Any, Final
 
 import pytest
 from conftest import seed_item_health
@@ -34,7 +34,7 @@ from retention._trees import (
 
 from idhazh import config, ledger, month_partition
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
-from idhazh.contracts.item_health_summary import percentile
+from idhazh.contracts.item_health_summary import ItemHealthSummaryRow, percentile
 from idhazh.contracts.knobs.gardener import MonthsWindow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.retention import compact_month, month_shards, oldest_month_kept
@@ -78,6 +78,7 @@ def pruned(
         if aggregate_months is None
         else {"unit": "months", "value": aggregate_months}
     )
+    knobs: dict[str, Any] = {} if lookback is None else {"lookback": lookback}
     outcome = run_task(
         NAME,
         state.parent,
@@ -86,12 +87,21 @@ def pruned(
         window=full,
         series={"full-grain": full, "public-copy": full, "aggregate": aggregate},
         period_range=period_range,
-        **({"lookback": lookback} if lookback is not None else {}),
+        **knobs,
     )
     copies = f"{public_telemetry.DEFAULT_PUBLIC_ROOT.relative_to(config.REPO_ROOT).as_posix()}/"
-    summaries = f"{ledger.tree_relpath(LedgerName.ITEM_HEALTH_SUMMARY)}/"
+    summaries = f"{ledger.raw_root(state, LedgerName.ITEM_HEALTH_SUMMARY).relative_to(state.parent).as_posix()}/"
     return Folded(
-        folded=tuple(Path(path).stem for path in outcome.written),
+        folded=tuple(
+            sorted(
+                {
+                    f"{parts[3]}-{parts[4]}"
+                    for path in outcome.written
+                    for parts in [PurePosixPath(path).parts]
+                    if path.startswith(summaries) and len(parts) >= 6
+                }
+            )
+        ),
         public_deleted=tuple(Path(p).stem for p in outcome.taken if p.startswith(copies)),
         hard_deleted=tuple(Path(p).stem for p in outcome.taken if p.startswith(summaries)),
         dry_run=outcome.dry_run,
@@ -100,12 +110,15 @@ def pruned(
 
 
 def summary_stems(state: Path) -> list[str]:
-    return sorted(
-        path.stem
-        for path in month_shards(
-            ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY),
-            months_back(TODAY, HISTORY_MONTHS),
-        )
+    return sorted({day[:7] for day in ledger.raw_days(state, LedgerName.ITEM_HEALTH_SUMMARY)})
+
+
+def summary_rows(state: Path, month: str) -> list[ItemHealthSummaryRow]:
+    return ledger.load_days(
+        state,
+        LedgerName.ITEM_HEALTH_SUMMARY,
+        ledger.month_days(month),
+        model=ItemHealthSummaryRow,
     )
 
 
@@ -172,10 +185,9 @@ def test_the_fold_loses_no_total(tmp_path: Path) -> None:
 
     assert set(result.folded) == set(doomed)
     for month, text in doomed.items():
-        target = ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, month)
-        assert totals_from_aggregate(ledger.load_item_health_summary(target)) == (
-            totals_from_shard([text])
-        ), f"{month} lost a total in the fold"
+        assert totals_from_aggregate(summary_rows(state, month)) == totals_from_shard([text]), (
+            f"{month} lost a total in the fold"
+        )
 
 
 def test_an_operator_range_folds_only_the_named_months(tmp_path: Path) -> None:
@@ -251,7 +263,7 @@ def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
     assert result.dry_run is True
     assert result.folded, "it still has to report what it would have done"
     assert after == before
-    assert not (ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)).exists()
+    assert not (ledger.raw_root(state, LedgerName.ITEM_HEALTH_SUMMARY)).exists()
 
 
 def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
@@ -271,18 +283,16 @@ def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
     assert summary_stems(state) == written
 
 
-def test_a_hard_delete_takes_the_aggregate_only_after_the_fold_has_had_it(tmp_path: Path) -> None:
-    """The escape hatch, for the day the owner wants the bytes back."""
+def test_the_aggregate_series_no_longer_deletes_the_summary_raw_files(tmp_path: Path) -> None:
+    """The summary is now governed by its compaction, whose window keeps every month."""
     state = a_state_tree(tmp_path)
     pruned(state, lookback=HISTORY_MONTHS)
     before = summary_stems(state)
 
     result = pruned(state, aggregate_months=16, lookback=HISTORY_MONTHS)
 
-    boundary = oldest_month_kept(TODAY, 16)
-    assert sorted(result.hard_deleted) == [stem for stem in before if stem < boundary]
-    assert result.hard_deleted, "a threshold inside the fixture has to remove something"
-    assert summary_stems(state) == [stem for stem in before if stem >= boundary]
+    assert result.hard_deleted == ()
+    assert summary_stems(state) == before
 
 
 def test_the_window_is_counted_in_months_and_not_in_thirty_day_steps() -> None:
@@ -316,7 +326,9 @@ def test_the_task_summarises_the_expired_month_and_not_the_month_beside_it(
     kept_day = f"{keep_from}-09"
     assert expired_day[:7] < keep_from <= kept_day[:7], "the fixture must straddle the boundary"
     for day in (expired_day, kept_day):
-        seed_item_health(state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)])
+        seed_item_health(
+            state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)]
+        )
     expired_text = census_text(state, expired_day[:7])
     before = census_files(state)
 
@@ -326,14 +338,13 @@ def test_the_task_summarises_the_expired_month_and_not_the_month_beside_it(
     assert summary_stems(state) == [expired_day[:7]], "the month inside the window was summarised"
     assert census_files(state) == before, "the pass deleted or rewrote a census file"
     assert item_health_months(state) == [expired_day[:7], kept_day[:7]]
-    target = ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, expired_day[:7])
-    assert totals_from_aggregate(ledger.load_item_health_summary(target)) == (
-        totals_from_shard([expired_text])
+    assert totals_from_aggregate(summary_rows(state, expired_day[:7])) == totals_from_shard(
+        [expired_text]
     )
 
 
 def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:
-    directory = ledger.tree_root(tmp_path / "state", LedgerName.ITEM_HEALTH_SUMMARY)
+    directory = tmp_path / "frontend" / "public" / "telemetry"
     directory.mkdir(parents=True)
     for stem in ("2025-01", *NOT_MONTHS, *OTHER_STRAYS):
         (directory / f"{stem}.csv").write_text("header\n", encoding="utf-8")
@@ -401,7 +412,7 @@ def test_a_dry_run_names_the_copy_it_would_take_and_leaves_it(tmp_path: Path) ->
 
     planned = pruned(state, dry_run=True)
     done = pruned(state)
-
+    assert planned.public_deleted == done.public_deleted
     assert planned.public_deleted == done.public_deleted
     assert planned.folded == done.folded
     assert {path.name for path in month_shards(public, all_months)} == set(before) - {
@@ -432,7 +443,7 @@ def test_a_checkout_that_holds_no_summary_yet_still_writes_its_first(tmp_path: P
     the compaction would later delete the month's rows with nothing kept of them.
     """
     state = a_state_tree(tmp_path)
-    assert not ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY).exists()
+    assert not ledger.raw_root(state, LedgerName.ITEM_HEALTH_SUMMARY).exists()
 
     result = pruned(state)
 
@@ -456,7 +467,14 @@ def test_a_fold_that_cannot_be_read_back_leaves_the_browser_copy(
         if month < oldest_month_kept(TODAY, full_grain_months())
     ]
     assert doomed, "the fixture has to reach past the window or this proves nothing"
-    monkeypatch.setattr(ledger, "load_item_health_summary", lambda _path: [])
+    original = ledger.load_days
+
+    def unreadable_summary(*args: Any, **kwargs: Any) -> list[Any]:
+        if len(args) > 1 and args[1] is LedgerName.ITEM_HEALTH_SUMMARY:
+            return []
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(ledger, "load_days", unreadable_summary)
 
     with pytest.raises(ValueError, match="did not read back"):
         pruned(state)

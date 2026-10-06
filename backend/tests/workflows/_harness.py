@@ -20,7 +20,7 @@ from typing import Any, Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text, seed_publication_inventory
 from origin_template import copy_origin, template
 
 from idhazh import ledger, path_classes
@@ -69,7 +69,6 @@ RUNS_MAY_OVERLAP: Final = frozenset({"digest.yml"})
 EXPECTED_WORKFLOWS: Final = {
     "backfill.yml": ("Vector backfill", frozenset({"workflow_dispatch"})),
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
-    "compaction-profile.yml": ("Compaction profile", frozenset({"workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
@@ -714,6 +713,7 @@ COMMIT_STAGED_PATHS: Final = {
     ],
     "assemble": [
         "frontend/public/digest",
+        "frontend/public/publication.json",
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
@@ -2130,6 +2130,7 @@ def _seed_digest_origin(root: Path, date: str) -> None:
         _write(seed / relative, "")
     for dirname in series.PUBLISHED_ROOTS:
         _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
+    seed_publication_inventory(seed / "frontend" / "public")
     _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
     _git(
         seed, env, "add", ".gitattributes", ".gitignore", "docs",

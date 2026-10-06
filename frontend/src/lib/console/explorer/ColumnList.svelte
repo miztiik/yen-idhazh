@@ -1,7 +1,10 @@
 
 <script lang="ts">
 	import type { Column } from '$lib/data/ledger';
+	import ColumnType from '$lib/console/explorer/ColumnType.svelte';
+	import { groupColumns } from '$lib/console/explorer/column-groups';
 	let { columns, label }: { columns: readonly Column[]; label: string } = $props();
+	const groups = $derived(groupColumns(columns));
 </script>
 
 <div class="column-list" data-explorer-columns>
@@ -9,20 +12,31 @@
 	{#if columns.length === 0}
 		<p>No columns are known yet.</p>
 	{:else}
-		<ul>
-			{#each columns as column (column.name)}
-				<li><code>{column.name}</code><span>{column.type.toLowerCase()}</span></li>
+		<div class="column-box" data-explorer-column-box>
+			<!-- Keyed: a group for another ledger is new elements, not the old ones moved, and a moved element is a layout shift. -->
+			{#each groups as group, index (`${index}-${group.ledger}`)}
+				<div class="column-group">
+					{#if group.ledger !== null}<h4>{group.ledger}</h4>{/if}
+					<ul>
+						{#each group.columns as column (column.name)}
+							<li title={column.name}><code>{#if group.ledger !== null}<span class="sr-only">{group.ledger}.</span>{/if}{#each column.shown.split(/(?<=_)/) as part, index}{#if index > 0}<wbr />{/if}{part}{/each}</code><ColumnType type={column.type} /></li>
+						{/each}
+					</ul>
+				</div>
 			{/each}
-		</ul>
+		</div>
 	{/if}
 </div>
 
 <style>
-	.column-list { display: grid; gap: var(--space-3); align-content: start; }
+	.column-list { block-size: 100%; min-block-size: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-3); overflow: hidden; }
 	h3 { margin: 0; font-size: var(--text-sm); }
 	p { margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm); }
-	ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); max-block-size: 28rem; overflow: auto; }
-	li { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-rule); border-radius: var(--radius-md); }
-	code { font-family: var(--font-data); color: var(--code-keyword); overflow-wrap: anywhere; }
-	span { color: var(--color-text-tertiary); font-size: var(--text-xs); }
+	/* Positioned, so the hidden screen-reader spans in its rows scroll with the list instead of escaping it and stretching the page. */
+	.column-box { position: relative; block-size: 100%; min-block-size: 0; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; }
+	h4 { position: sticky; inset-block-start: 0; z-index: 1; margin: 0; background: var(--color-surface); font-family: var(--font-data); font-size: inherit; font-weight: 600; }
+	ul { list-style: none; margin: 0; padding: 0; }
+	li { min-block-size: var(--workbench-row); display: flex; flex-wrap: wrap; align-items: first baseline; column-gap: var(--space-2); padding-inline: var(--space-3); }
+	code { min-inline-size: 0; padding-inline-start: 2ch; text-indent: -2ch; font-family: var(--font-data); color: var(--color-text); overflow-wrap: anywhere; }
+	li > :global(.column-type) { margin-inline-start: auto; }
 </style>

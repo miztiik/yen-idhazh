@@ -269,7 +269,7 @@ def test_a_settled_row_is_kept_whole_and_a_cell_only_the_dropped_row_held_is_nam
 
 
 def test_one_days_files_are_read_strictly_and_a_stray_is_refused_by_name(tmp_path: Path) -> None:
-    """The compaction deletes what it read, so a file it cannot read stops the day."""
+    """A reader that deletes what it read may not skip a file, so one it cannot read stops it."""
     written = filed(tmp_path, a_pass())
     assert [one.path for one in ledger.read_day_files(tmp_path, WHICH, A_DAY)] == [written]
     stray = written.parent / "notes.txt"
@@ -278,6 +278,23 @@ def test_one_days_files_are_read_strictly_and_a_stray_is_refused_by_name(tmp_pat
     with pytest.raises(ValueError, match=r"raw/visual-prunes/2026/09/06/notes\.txt cannot be read"):
         ledger.read_day_files(tmp_path, WHICH, A_DAY)
     assert ledger.read_day_files(tmp_path, WHICH, NEXT_DAY) == []
+
+
+def test_one_days_folder_names_each_file_it_cannot_read_beside_the_files_it_can(
+    tmp_path: Path,
+) -> None:
+    """The compaction moves a file it cannot read aside, so its read names that file and goes on."""
+    written = filed(tmp_path, a_pass())
+    stray = written.parent / "notes.txt"
+    stray.write_text("not a ledger file\n", encoding="ascii")
+
+    found = ledger.read_day_folder(tmp_path, WHICH, A_DAY)
+
+    assert [one.path for one in found.files] == [written]
+    assert [path for path, _why in found.unreadable] == [stray]
+    assert ledger.read_day_folder(tmp_path, WHICH, NEXT_DAY) == ledger.DayFolder(
+        files=[], unreadable=[]
+    )
 
 
 def test_the_days_a_ledger_holds_raw_files_for(tmp_path: Path) -> None:

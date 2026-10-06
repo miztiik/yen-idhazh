@@ -121,7 +121,7 @@ The shapes, and where each one lives once written:
 | `FeedRetirementRow` | `feed-retirement-row` | one row of `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/`, in the file its writer owns, filed under the day the address was retired |
 | `ItemHealthRow` | `item-health-row` | one row of `state/raw/item-health/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/item-health/` |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
-| `ItemHealthSummaryRow` | `item-health-summary-row` | one row of `state/item-health-summary/<YYYY-MM>.csv`, rewritten whole |
+| `ItemHealthSummaryRow` | `item-health-summary-row` | one row of `state/raw/item-health-summary/<YYYY>/<MM>/<DD>/`, filed through the ledger door and packed later under `state/compact/item-health-summary/` |
 | `DayMetrics` | `day-metrics` | `state/day-metrics/<YYYY>/<MM>/<DD>.json`, one whole document per published day, rewritten when that day is corrected |
 | `StorySimilarityPair` | `story-similarity-pair` | one appended row of `state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` - one borderline pair, what it scored, what a judge said in both orders, and the instrument that said it. The same shape holds the day's draw under `backend/var/council/<date>/selection/<judge>/` before a judging unit reads it |
 | `StorySimilarityDistribution` | `story-similarity-distribution` | the whole of `state/content-similarity-judge/score-distribution.json`, rewritten - a fixed row of slots and three counts each, so the fit reads one file of a size that never changes (Guardrail #12) |
@@ -139,7 +139,7 @@ The shapes, and where each one lives once written:
 
 `state/` holds row-ledger contracts and whole-document contracts. Which ledgers a later run reads back, and what each answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
-`ItemHealthSummaryRow` describes a derived row: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored. What decides when a month is folded is the `full-grain` series of `config/gardener/telemetry-aggregate.json`, and its deletion safeguards are in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
+`ItemHealthSummaryRow` describes a derived row. The row is derived from the item-health month it replaces, and it is filed through the ledger door under the row's own date. What decides when a month is folded is the `full-grain` series of `config/gardener/telemetry-aggregate.json`, and a raw file of this ledger in that month is what stops a second fold.
 
 `DayMetrics` is a document rather than a row: it is a whole-day fact, not a per-row one. A run writes one `state/day-metrics/<YYYY>/<MM>/<DD>.json` per published day - the day's counts and sums stored directly, and each median, distinct count or ranked list stored as the day's own value plus whatever lets a reader combine days in a defined way, because a percentile cannot be re-added into a window's percentile. It nests by year and month to mirror the published digest-day layout, and it is never a running total: a correction rewrites the whole record for that day. The console reads it back instead of walking every score, item-health, feed-health and published-day row for a figure that never changes once the day is frozen (Guardrail #12). It was authored as a contract in row 21 of the constant-cost-reads plan (#486), written by the producer in row 22 (#489), and read by the console reducers in rows 23 and 24 (#500, #501).
 
@@ -211,7 +211,7 @@ mirrors the digest tree its rows are derived from.
 | `state/raw/seen/` and `state/compact/seen/` | a raw file per write by day, packed into day and month files | how old is this address? | yes, `collect.seen_window_days`, and `ledger.load_days` opens only the days it names. The loader refuses a compaction that keeps fewer days than that window ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
 | `state/raw/feed-health/` and `state/compact/feed-health/` | a raw file per write by day, packed into day and month files | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS`, and `ledger.load_days` opens only the newest days it names |
 | `state/raw/item-health/` and `state/compact/item-health/` | a raw file per write by day, packed into day and month files | what did every planned item do? | yes - the console pans a window (`default_window_days` 14), and `ledger.load_days` opens only the days it names |
-| `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
+| `state/raw/item-health-summary/` and `state/compact/item-health-summary/` | a raw file per write by day, packed into day and month files | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it is filed under each summary row's date, while the month remains the fold decision |
 | `state/raw/published/` and `state/compact/published/` | a raw file per write by day, packed into day, month and year files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today and opens one month at a time |
 | `state/raw/summary-quality-evals/` and `state/compact/summary-quality-evals/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; every row is kept for ever and nothing summarises a month ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
@@ -435,6 +435,18 @@ keeps days expanded, and puts sources, instruments and stage timings on one
 line each. The state day-metrics writer is unchanged. Existing helper callers
 keep their layout. All three producers preserve fields, values and stamps;
 older layouts load normally and take the new layout when rewritten.
+
+The published run-days month encoder keeps days expanded and puts runs on one
+line each. `SourceHealthView` puts each source, including its nested history,
+on one line. `ConsoleBand` puts routes and runs on one line each.
+`PublicationInventory` puts file entries and changelog records on one line
+each. `VisualData` puts chart marks on one line each and keeps the encoding
+expanded. These producer layouts change no fields, values or version stamps.
+
+`DigestRunFragment` puts each story and topic planning record on one line.
+Run metadata, failed-item ids and embeddings keep their expanded layout.
+The assemble stage uses this contract's writer for every new fragment.
+Existing fragments remain readable and are not rewritten in bulk.
 
 **The layout is held still by a test, because nothing else can hold it.** Every layout parses to the same payload, so a hand edit that indents one record across ten lines is invisible to a schema and to every reader. `backend/tests/contracts/test_curated_registries.py` asserts the committed bytes are what the contract's own writer produces, and separately counts the record lines in the file - the first catches a drifting edit, the second catches the day the writer itself changes shape. Both are parametrized over one mapping, so a fourth curated registry is one entry rather than a fourth pair of tests. A field is spelled out even when it holds its default, so what a curator reads is what the model holds.
 

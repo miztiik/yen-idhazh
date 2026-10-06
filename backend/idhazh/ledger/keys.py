@@ -30,6 +30,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
 )
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
@@ -69,6 +70,11 @@ FEED_HEALTH_KEY: Final = ("run_id", "feed_id")
 #: assemble writes the whole day's census afterwards, so both see the same item
 #: under the same run and the second one has nothing new to say.
 ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
+
+
+#: What makes two item-health summary rows the same record. One folded month
+#: keeps one total for one UTC day and one pipeline stage.
+ITEM_HEALTH_SUMMARY_KEY: Final = ("date", "stage")
 
 
 #: One machine a job, so four cells identify the host a job drew.
@@ -130,6 +136,11 @@ MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 #: counted the fresh ones - two descriptions of one day with nothing able to
 #: tell them apart.
 STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key", "judged_by_run_id")
+
+
+#: What makes two metrics rows the same record while the CSV ledger still spells
+#: the split unit `shard`. The row that moves the ledger renames that field.
+CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "shard")
 
 
 #: What makes two retirement rows the same record. The address and nothing else:
@@ -288,8 +299,7 @@ class _TreeShape(NamedTuple):
 #: What settles two rows of one day tree, and the contract that reads one. A
 #: declared table rather than a rule a reader re-derives: the key is a fact about
 #: the ledger and a second copy of it is how two readers start disagreeing.
-_TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
-}
+_TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {}
 
 
 def _refuse_outside_day_trees(ledger: LedgerName) -> None:
@@ -350,6 +360,7 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
     LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),
     LedgerName.ITEM_HEALTH: _DoorShape(ITEM_HEALTH_KEY, ItemHealthRow),
+    LedgerName.ITEM_HEALTH_SUMMARY: _DoorShape(ITEM_HEALTH_SUMMARY_KEY, ItemHealthSummaryRow),
     LedgerName.SUMMARY_QUALITY_EVALS: _DoorShape(OBSERVATION_KEY, EvalRow),
     LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
     LedgerName.COUNTERFACTUAL_SCORES: _DoorShape(COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow),

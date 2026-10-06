@@ -32,7 +32,7 @@ Install the package, and the faithfulness extra if you want scores:
 
 ```
 python -m pip install -e ".[dev]"
-python -m pip install -e ".[faithfulness]" # transformers + torch, hundreds of MB
+python -m pip install -e ".[faithfulness]" # current Transformers 5 + torch, hundreds of MB
 ```
 
 Get the runtime and the weights per

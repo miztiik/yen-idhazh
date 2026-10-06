@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-05
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -287,7 +287,10 @@ staged tree.
   any of the three packed indexes names: a day as itself, a month through its
   last UTC day and a year through 31 December. A period is copied whole when it
   overlaps that span, so a month or year can make the oldest reachable day older
-  than 90 days, and nothing older than that overlapping period is named.
+  than 90 days, and nothing older than that overlapping period is named. The
+  rule is one function, `frontend/src/lib/data/site-window.ts`, and the Data
+  explorer reads it too, so it asks the archive only for days the copy may have
+  dropped ([the archive tier](how-the-query-door-answers-a-written-question.md#archive-tier)).
 - **Raw days after the newest packed day are listed for the site only.** The
    build checks at most the same 90 UTC days after each ledger's newest packed
    day, writes one `RawDayIndex` under `state/raw/<ledger>/index/<day>.json` for

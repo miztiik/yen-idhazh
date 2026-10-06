@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-05
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -210,7 +210,7 @@ delegated, because they tell you the branch is wrong before CI has finished
 installing:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check.
+.\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_<the module you changed>.py
 ```
@@ -245,12 +245,52 @@ One exception where local is still the only place to run it. A published-site
 change needs the browser smoke in `CLAUDE.md` section 12, which is a real
 browser on your machine.
 
+### Run a new test against the base commit
+
+A row's new test has to fail on the base commit before its pass on the branch
+means anything ([execute-a-plan.md](execute-a-plan.md)). Run it in a copy of
+that commit outside this checkout, never by stashing or resetting the checkout
+(`CLAUDE.md` section 8). Copy in every test file the change touched, and remove
+the copy afterwards:
+
+```powershell
+$python = (Resolve-Path .\.venv\Scripts\python.exe).Path
+$copy = New-Item -ItemType Directory -Path (Join-Path $env:TEMP 'base-commit')
+git archive --format=tar <base-commit> backend config tests pyproject.toml | tar -x -C $copy
+Copy-Item backend\tests\<folder>\test_<changed>.py (Join-Path $copy 'backend\tests\<folder>')
+Push-Location $copy; & $python -m pytest -n 0 backend/tests/<folder>/test_<changed>.py; Pop-Location
+Remove-Item -Recurse -Force $copy
+```
+
+**Keep `pyproject.toml` in the copy.** Its `pythonpath = ["backend"]` is what
+makes pytest import the copy's code. Without it pytest takes a folder above the
+copy as its root and imports this checkout's code through the editable install,
+so the new test passes on "the base commit" while it ran the branch. Measured
+2026-10-05: one new test failed with the file in the copy and passed without it.
+The tell is a `rootdir:` line in the output naming a folder outside the copy;
+the copy's own `-q` hides that line when its settings were read.
+
+**A canary build in the copy needs more of the tree.** Add `frontend` and the
+root `.gitignore` to the archive, run `git init` and commit the copy, and point
+`frontend\node_modules` at an installed one with a directory junction
+(`New-Item -ItemType Junction`); remove the junction with `cmd /c rmdir` before
+the copy, so the removal never reaches the folder it points at. The site build
+fingerprints its inputs through git: with no `.gitignore` its own output counts
+as an input, and it ends with "Build inputs changed during compilation". Run
+`build_canary_day.py` from the copy's root with `PYTHONPATH` set to the copy's
+`backend`, and `build-canary.mjs` from its `frontend` with `IDHAZH_PYTHON` set
+to an installed interpreter, so the copy's code is what packs. Compare entries
+and names, not bytes, and leave out two clocks: the name of each raw file the
+canary writes after packing holds the time of its write, and each watermark's
+`advanced_at` the time of its pass, so both differ between any two builds of
+one commit.
+
 ## Set up the backend environment
 
 Python 3.12, 3.13 or 3.14. CI installs 3.12.
 
 ```powershell
-python -m venv.venv
+python -m venv .venv
 .\.venv\Scripts\python.exe -c "import sys; print(sys.version)"
 .\.venv\Scripts\python.exe -m ensurepip --upgrade
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
@@ -422,7 +462,7 @@ make this slower.
 Run all three from the repository root. Each must be clean.
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check.
+.\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest
 ```
@@ -439,7 +479,7 @@ inline shell, because a `run:` body is a string inside YAML rather than a file;
 the contract tests in `backend/tests/workflows/` execute the real steps instead
 ([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#nothing-lints-a-run-body)).
 
-**`ruff format` is not a gate.** `ruff format --check.` reports dozens of files
+**`ruff format` is not a gate.** `ruff format --check .` reports dozens of files
 it would rewrite, all of them
 pre-existing. That count is deliberately written as a magnitude rather than a
 figure: it tracks how much Python the repository holds, so an exact number here
@@ -739,7 +779,11 @@ component's own directory, so a relative import inside it resolves from
 `frontend/test-results/` and finds nothing, while a `$lib/...` import still
 resolves. Write the component's imports through `$lib` and hand it its data as
 props; `frontend/tests/support/server-render.ts` compiles a component with its
-children, pointing each child's import at the child's compiled copy. The
+children, pointing each child's import at the child's compiled copy. A
+build-time constant is missing there too: `Icon.svelte` reads
+`__ICON_STROKE_PX__`, which `vite.config.ts` defines from
+`iconsConfig().stroke_px`, so a spec that renders it sets that global the same
+way first, or `render` throws `ReferenceError`. The
 alternative is a route that exists only to host a test, and that route ships to
 a reader.
 
