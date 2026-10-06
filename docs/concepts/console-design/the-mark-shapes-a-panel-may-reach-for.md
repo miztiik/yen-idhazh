@@ -95,6 +95,15 @@ the day its text prints. The engine prints a timestamp with a time zone with an
 offset of its own, so `2026-10-06 00:30:00+01` is 23:30 UTC and falls on 5
 October.
 
+**A day the chart cannot place stops the date chart, and the sentence names it.**
+The date axis holds days from year 1 to year 9999. A date column that holds
+`infinity`, a year past 9999, a date `(BC)` or a NULL draws no date chart, and
+the panel says which column holds which value, as the table prints it: `Nothing
+here to draw: the column "day" holds infinity, and the chart can show only days
+from year 1 to year 9999. Keep only those days in the question to draw it over
+time.` The operator can find that text in the table and filter it out (Reader,
+2026-10-06).
+
 **A NULL is no value, never a zero.** The date chart breaks its line on a day
 whose number is NULL, as it does on a lost day, and the ranked, paired and spread
 charts leave that row out. A floor counts the rows that carry a number, so a NULL

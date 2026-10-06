@@ -67,12 +67,14 @@
 		await closeAfterPick(fold);
 	}
 
-	// Forget keeps the list open, so several can go in turn; focus moves to the nearest
-	// x left in it, then to the summary, then to the last chip on the line.
-	async function forgetFolded(question: KeptQuestion, index: number) {
+	// Forget moves focus to the nearest x left where it was pressed - on the line, or in the
+	// list, which stays open so several can go in turn - then to the summary, then to the last
+	// chip on the line, so focus never falls to the page.
+	async function forget(question: KeptQuestion, index: number, place: 'line' | 'fold') {
 		onForget?.(question);
 		await tick();
-		const left = [...(fold?.querySelectorAll<HTMLButtonElement>('.folded .forget') ?? [])];
+		const forgets = place === 'fold' ? fold?.querySelectorAll<HTMLButtonElement>('.folded .forget') : strip?.querySelectorAll<HTMLButtonElement>(':scope > .saved-chip > .forget');
+		const left = [...(forgets ?? [])];
 		const chips = [...(strip?.querySelectorAll<HTMLButtonElement>(':scope > .example, :scope > .saved-chip > .example') ?? [])];
 		(left[Math.min(index, left.length - 1)] ?? fold?.querySelector('summary') ?? chips.at(-1))?.focus();
 	}
@@ -80,12 +82,12 @@
 
 <div class="question-strip" aria-label="Example questions" bind:this={strip} bind:clientWidth={line}>
 	{#if visibleSaved.length > 0}<span class="run-label">Saved</span>{/if}
-	{#each visibleSaved as chip (`${chip.kind}:${chip.id}`)}
+	{#each visibleSaved as chip, index (`${chip.kind}:${chip.id}`)}
 		<span class="saved-chip">
 			<button type="button" class="example" onclick={() => onPickSaved?.(chip.item)}>
 				<Icon id="saved" /> {chip.title}
 			</button>
-			<button type="button" class="forget" aria-label={`Forget ${chip.title}`} onclick={() => onForget?.(chip.item)}><Icon id="forget" /></button>
+			<button type="button" class="forget" aria-label={`Forget ${chip.title}`} onclick={() => forget(chip.item, index, 'line')}><Icon id="forget" /></button>
 		</span>
 	{/each}
 	{#if visibleExamples.length > 0}<span class="run-label">Examples</span>{/if}
@@ -102,7 +104,7 @@
 							<button type="button" class="example" onclick={() => pickFolded(() => onPickSaved?.(chip.item))}>
 								<Icon id="saved" /> {chip.title}
 							</button>
-							<button type="button" class="forget" aria-label={`Forget ${chip.title}`} onclick={() => forgetFolded(chip.item, index)}><Icon id="forget" /></button>
+							<button type="button" class="forget" aria-label={`Forget ${chip.title}`} onclick={() => forget(chip.item, index, 'fold')}><Icon id="forget" /></button>
 						</span>
 					{:else}
 						<button type="button" class="example" onclick={() => pickFolded(() => onPick(chip.item))}>{chip.title}</button>

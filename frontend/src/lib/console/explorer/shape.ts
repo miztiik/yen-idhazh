@@ -73,7 +73,7 @@ export type DistributionShape = {
 export type NoShape = {
 	kind: 'none';
 	reason: string;
-	code: 'no-number' | 'several-rows-per-day' | 'too-many-numbers' | 'too-many-text-columns' | 'no-fit';
+	code: 'no-number' | 'unplaceable-day' | 'several-rows-per-day' | 'too-many-numbers' | 'too-many-text-columns' | 'no-fit';
 };
 
 export type ExplorerShape = DateSeriesShape | RankedListShape | PairedScatterShape | DistributionShape | NoShape;
@@ -98,15 +98,18 @@ function dayValue(value: unknown): DateStamp | null {
 	return typeof value === 'string' ? readUtcDay(value) : null;
 }
 
+/** The first cell in a date column that falls on no UTC day from year 1 to 9999, as the engine
+ *  printed it and the table shows it, or `null` when every row falls on such a day. `infinity`, a
+ *  year past 9999, a date `(BC)` and a NULL, which the table prints as `null`, are such cells. */
+function firstUnplaceableDay(rows: readonly Row[], dateColumn: string): string | null {
+	const row = rows.find((one) => dayValue(one[dateColumn]) === null);
+	if (row === undefined) return null;
+	const value = row[dateColumn];
+	return value === null || value === undefined ? 'null' : String(value);
+}
+
 function hasSeveralRowsPerUtcDay(rows: readonly Row[], dateColumn: string): boolean {
-	const days = new Set<string>();
-	for (const row of rows) {
-		const day = dayValue(row[dateColumn]);
-		if (day === null) return true;
-		if (days.has(day)) return true;
-		days.add(day);
-	}
-	return false;
+	return new Set(rows.map((row) => dayValue(row[dateColumn]))).size < rows.length;
 }
 
 function median(values: readonly number[]): number | null {
@@ -136,6 +139,14 @@ export function chooseExplorerShapes(columns: readonly Column[], rows: readonly 
 
 	if (dateColumns.length === 1 && numericColumns.length > 0) {
 		const dateColumn = dateColumns[0];
+		const unplaceable = firstUnplaceableDay(rows, dateColumn);
+		if (unplaceable !== null) {
+			return [{
+				kind: 'none',
+				code: 'unplaceable-day',
+				reason: `Nothing here to draw: the column "${dateColumn}" holds ${unplaceable}, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.`
+			}];
+		}
 		if (hasSeveralRowsPerUtcDay(rows, dateColumn)) {
 			return [{
 				kind: 'none',

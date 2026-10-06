@@ -5,7 +5,7 @@ import { connectSources, assetBaseUrl, encoderOrigins, engineOrigins, archiveOri
 import { COMPACT_INDEX_STAMP } from '../src/lib/data/compact-index';
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, expectedAsk, expectedAskCost, EXPLORER_CANARY_DAY, openExplorer, runExplorer, tableRows } from './support/explorer-answer';
-import { encodeQuestion } from '../src/lib/console/explorer/address';
+import { encodeQuestion, explorerAddress, requestTargetBytes } from '../src/lib/console/explorer/address';
 import { consoleConfig, explorerConfig } from '../src/lib/server/config';
 import { shortDate } from '../src/lib/format';
 import type { LedgerName } from '../src/lib/data/ledger';
@@ -475,6 +475,54 @@ test('THE ORACLE: link notices render on the page', async ({ page }) => {
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link named "unknown-ledger"');
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link asked for 365 days');
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The question in this link could not be read');
+});
+
+/** A question of `count` scattered CJK characters. They deflate poorly, so its link grows with every one. */
+function scattered(count: number): string {
+	let state = 7;
+	let out = '';
+	for (let index = 0; index < count; index += 1) {
+		state = (1664525 * state + 1013904223) >>> 0;
+		out += String.fromCharCode(0x4e00 + ((state >>> 8) % 0x5000));
+	}
+	return out;
+}
+
+test('THE ORACLE: Copy link carries the question while the link fits console.explorer_link_max_bytes, and leaves it out one character past', async ({ page, context }) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	const limit = explorerConfig().link_max_bytes;
+	expect(limit, 'console.explorer_link_max_bytes does not reach the page').toBeGreaterThan(0);
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT 1 AS one');
+	const copyLink = page.getByRole('button', { name: /^Copy link$/ });
+	await copyLink.click();
+	await expect.poll(() => new URL(page.url()).searchParams.has('q')).toBe(true);
+	const shared = new URL(page.url());
+	const params = shared.searchParams;
+	const span = { ledgers: (params.get('ledgers') ?? '').split(',') as LedgerName[], days: Number(params.get('days')), from: params.get('from') ?? undefined, end: params.get('end') ?? undefined };
+	// The page's own link writer with no limit, so each question's link is sized as the page sizes it.
+	const linkFor = async (statement: string) => (await explorerAddress({ basePath: shared.pathname, ...span, statement })).href;
+	expect(await linkFor('SELECT 1 AS one'), 'the test does not write the link the page wrote').toBe(`${shared.pathname}${shared.search}`);
+	const bytes = async (statement: string) => requestTargetBytes(await linkFor(statement));
+	let fits = 1;
+	let over = 5000;
+	expect(await bytes(scattered(fits))).toBeLessThanOrEqual(limit);
+	expect(await bytes(scattered(over))).toBeGreaterThan(limit);
+	while (over - fits > 1) {
+		const middle = Math.floor((fits + over) / 2);
+		if ((await bytes(scattered(middle))) <= limit) fits = middle;
+		else over = middle;
+	}
+
+	await page.locator('#explorer-sql').fill(scattered(fits));
+	await copyLink.click();
+	await expect.poll(() => new URL(page.url()).searchParams.get('q'), 'the page left out a question whose link fits').toBe(await encodeQuestion(scattered(fits)));
+	await expect(page.getByRole('button', { name: /^Copy question$/ })).toHaveCount(0);
+
+	await page.locator('#explorer-sql').fill(scattered(over));
+	await copyLink.click();
+	await expect(page.getByRole('button', { name: /^Copy question$/ })).toBeVisible();
+	expect(new URL(page.url()).searchParams.has('q'), 'the page linked a question whose link is too long').toBe(false);
 });
 
 test('THE ORACLE: a link naming a day that does not exist shows the span notice, and the page still loads its ledgers', async ({ page }) => {
