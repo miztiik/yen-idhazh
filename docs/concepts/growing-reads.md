@@ -403,7 +403,7 @@ the last day there was.
 | `payload.loadManifests` | one `run.json` a day in range | its caller's `windowDays` |
 | `payload.publishedItems` | one day payload a day in range | its caller's `windowDays` |
 | `payload.publishedCharts` | one day payload a day in range | its caller's `windowDays` |
-| `payload.telemetryRows` | the telemetry shards the span touches | its caller's `windowDays` |
+| `payload.telemetryRows` | the telemetry shards the window touches, and only the rows inside it | the window its caller hands over: the console's home page hands over its widest preset, which ends on the site's newest published day |
 
 ### A cover that is not a clock
 

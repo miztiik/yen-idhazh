@@ -371,9 +371,11 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/tests/ledger-rows.spec.ts` (Table G, G10)
   - `frontend/tests/ledger-lifecycle.spec.ts` (added by L1: the window cases of Table G, G4)
   - `frontend/tests/console-window.spec.ts` (pins that `windowOfDays` ends on the newest date it is handed; not in Fowler's list)
-  - `frontend/tests/console.spec.ts` (calls `windowOfDays`; not in Fowler's list)
+  - `frontend/tests/console.spec.ts` (calls `windowOfDays`; not in Fowler's list. Found during execution: its committed-ledger test read every packed day of the committed archive through the `-1` that is gone, and is written out on a record the test builds; its two telemetry-read tests take a written-out window)
+  - `frontend/tests/console-item-cost.spec.ts` (found during execution: its two window oracles re-derived each figure from the canary's projection over a window that ended on the projection's own newest row, and failed once the console's window ended on the newest published day. They are one oracle on a site the test builds, with written-out answers - Table C, C2)
+  - `frontend/tests/support/published-site.ts` (new; found during execution: the published site a test builds - digest days, telemetry shards and the publication list that names them - shared by the oracles in `ledger-rows.spec.ts` and `console-item-cost.spec.ts`)
   - each console spec that assumes a window ends on a record's own last day. Nobody has counted them: run the console group on the L5 branch, and add each failing spec here before editing it
-  - `frontend/src/lib/server/payload.ts` (found at dispatch by the owner: `feedResults` takes the window; `latestDate()` is unchanged)
+  - `frontend/src/lib/server/payload.ts` (found at dispatch by the owner: `feedResults` takes the window; `latestDate()` is unchanged. Found during execution: `telemetryRows` reads exactly the window it is handed, where it ran back from the projection's own newest row)
   - `frontend/src/lib/server/window-day.ts` (new; found during execution: the one place the day every console window ends on is read, `latestDate()` or the build's UTC day)
   - `frontend/src/lib/console/RecordNotes.svelte` (found during execution: the quietest line for the day packing has not reached, decision 4)
   - `frontend/src/routes/console/machine/+page.svelte` (found during execution: picks the open window's notes)

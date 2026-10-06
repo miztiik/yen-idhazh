@@ -165,8 +165,9 @@ none of their dates.
 The server used to concatenate every committed month and inline all of it, so the
 console document grew for as long as the pipeline ran - a reader downloaded four
 months to look at thirty days, and would have downloaded a year by next summer.
-It reads `console.default_window_days` back from the newest day on record now,
-which is the window the viewport opens on, so the two cannot disagree.
+It reads only the window it is handed now: the widest preset, which ends on the
+newest published day as every other console window does, so the read and the
+windows cannot disagree.
 
 Measured 2026-08-26 on one Windows dev machine, against four months of real row
 volume - the committed August shard (2,000 rows, 171 KB) plus three copies of it
@@ -192,14 +193,17 @@ Two consequences worth stating, because both are the reason this is safe:
  are one arrow key away rather than gone. That fetch path already existed and
  was dead code: with every month in the seed, there was never a month left to
  fetch.
-- **The cutoff is anchored on the newest committed day, never on the build
- clock.** Anchored on today, a corpus that stopped last month would seed an
+- **The read ends on the newest published day, never on the build clock.**
+ Anchored on the build clock, a pipeline that stopped last month would draw an
  empty console - the page would go blank precisely when the pipeline broke,
- which is when an operator needs it.
+ which is when an operator needs it. Run back from the projection's own newest
+ row instead, a projection holding a day after the newest published day cuts
+ the oldest day off the widest window.
 
-The read is bounded too. A window is a count of days, so it straddles a month
-boundary and reads two shards at worst; every older shard is skipped unopened,
-however many the repository has accumulated (`CLAUDE.md` Guardrail #12).
+The read is bounded too. A window is a count of days, so it straddles month
+boundaries and opens one shard for each month it touches - four at most for a
+90-day window. Every other shard is skipped unopened, however many the
+repository has accumulated (`CLAUDE.md` Guardrail #12).
 
 ## Design rationale
 
