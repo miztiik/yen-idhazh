@@ -1,88 +1,88 @@
 {
-  "addresses_considered": 6731,
+  "addresses_considered": 10069,
   "bands": {
-    "high": 1,
-    "low": 0,
-    "medium": 1
+    "high": 52,
+    "low": 4,
+    "medium": 17
   },
   "date": "2026-10-06",
   "determinism_violations": 0,
   "extraction": {
-    "chartable": 3,
+    "chartable": 32,
     "chartable_charted": 0,
-    "chartable_published": 3,
-    "elements_found": 40,
-    "items": 3,
-    "narrative": 0,
-    "span_integrity_pass": 3,
-    "unclassified": 0
+    "chartable_published": 29,
+    "elements_found": 1159,
+    "items": 77,
+    "narrative": 13,
+    "span_integrity_pass": 77,
+    "unclassified": 32
   },
   "extraction_suspect": 0,
   "instruments": [
     {
       "column": "coherence",
       "stat": {
-        "count": 2,
-        "maximum": 0.28180866978460895,
-        "minimum": 0.23291232860148403,
-        "p25": 0.23291232860148403,
-        "p50": 0.28180866978460895,
-        "p75": 0.28180866978460895,
-        "total": 0.514720998386093
+        "count": 73,
+        "maximum": 0.6172908148124824,
+        "minimum": 0.06493284064576524,
+        "p25": 0.23646401402225567,
+        "p50": 0.3262299627322816,
+        "p75": 0.4033565592041671,
+        "total": 23.23781278483564
       }
     },
     {
       "column": "compression",
       "stat": {
-        "count": 2,
-        "maximum": 0.2195945945945946,
-        "minimum": 0.09399075500770417,
-        "p25": 0.09399075500770417,
-        "p50": 0.2195945945945946,
-        "p75": 0.2195945945945946,
-        "total": 0.3135853496022988
+        "count": 73,
+        "maximum": 1.0,
+        "minimum": 0.031604538087520256,
+        "p25": 0.09494949494949495,
+        "p50": 0.15365853658536585,
+        "p75": 0.26778242677824265,
+        "total": 17.155632687213867
       }
     },
     {
       "column": "evidential_density",
       "stat": {
-        "count": 2,
-        "maximum": 0.0,
+        "count": 73,
+        "maximum": 0.013888888888888888,
         "minimum": 0.0,
         "p25": 0.0,
         "p50": 0.0,
-        "p75": 0.0,
-        "total": 0.0
+        "p75": 0.002652519893899204,
+        "total": 0.1332751936534895
       }
     },
     {
       "column": "extractiveness",
       "stat": {
-        "count": 2,
-        "maximum": 0.03225806451612903,
-        "minimum": 0.017241379310344827,
-        "p25": 0.017241379310344827,
-        "p50": 0.03225806451612903,
-        "p75": 0.03225806451612903,
-        "total": 0.04949944382647386
+        "count": 73,
+        "maximum": 0.5,
+        "minimum": 0.0,
+        "p25": 0.05405405405405406,
+        "p50": 0.13559322033898305,
+        "p75": 0.2028985507246377,
+        "total": 11.091883960164273
       }
     },
     {
       "column": "hhem",
       "stat": {
-        "count": 2,
-        "maximum": 0.9201236367225647,
-        "minimum": 0.8994365930557251,
-        "p25": 0.8994365930557251,
-        "p50": 0.9201236367225647,
-        "p75": 0.9201236367225647,
-        "total": 1.8195602297782898
+        "count": 73,
+        "maximum": 0.9866983890533447,
+        "minimum": 0.00958404503762722,
+        "p25": 0.8753160238265991,
+        "p50": 0.9444288611412048,
+        "p75": 0.9620317220687866,
+        "total": 63.9381980355829
       }
     },
     {
       "column": "hhem_delta",
       "stat": {
-        "count": 2,
+        "count": 73,
         "maximum": 0.0,
         "minimum": 0.0,
         "p25": 0.0,
@@ -94,31 +94,31 @@
     {
       "column": "hhem_full",
       "stat": {
-        "count": 2,
-        "maximum": 0.9201236367225647,
-        "minimum": 0.8994365930557251,
-        "p25": 0.8994365930557251,
-        "p50": 0.9201236367225647,
-        "p75": 0.9201236367225647,
-        "total": 1.8195602297782898
+        "count": 73,
+        "maximum": 0.9866983890533447,
+        "minimum": 0.00958404503762722,
+        "p25": 0.8753160238265991,
+        "p50": 0.9444288611412048,
+        "p75": 0.9620317220687866,
+        "total": 63.9381980355829
       }
     },
     {
       "column": "score_ms",
       "stat": {
-        "count": 2,
-        "maximum": 1589.0,
-        "minimum": 712.0,
-        "p25": 712.0,
-        "p50": 1589.0,
-        "p75": 1589.0,
-        "total": 2301.0
+        "count": 73,
+        "maximum": 14149.0,
+        "minimum": 129.0,
+        "p25": 535.0,
+        "p50": 868.0,
+        "p75": 2080.0,
+        "total": 151464.0
       }
     },
     {
       "column": "self_repetition",
       "stat": {
-        "count": 2,
+        "count": 73,
         "maximum": 0.0,
         "minimum": 0.0,
         "p25": 0.0,
@@ -130,147 +130,435 @@
     {
       "column": "semantic_coverage",
       "stat": {
-        "count": 2,
-        "maximum": 0.45,
-        "minimum": 0.45,
+        "count": 73,
+        "maximum": 0.8,
+        "minimum": 0.15,
         "p25": 0.45,
-        "p50": 0.45,
-        "p75": 0.45,
-        "total": 0.9
+        "p50": 0.55,
+        "p75": 0.65,
+        "total": 39.15555555555556
       }
     },
     {
       "column": "source_words",
       "stat": {
-        "count": 2,
-        "maximum": 640.0,
-        "minimum": 291.0,
-        "p25": 291.0,
-        "p50": 640.0,
-        "p75": 640.0,
-        "total": 931.0
+        "count": 73,
+        "maximum": 3099.0,
+        "minimum": 59.0,
+        "p25": 232.0,
+        "p50": 412.0,
+        "p75": 803.0,
+        "total": 46512.0
       }
     },
     {
       "column": "source_words_before_cap",
       "stat": {
-        "count": 2,
-        "maximum": 640.0,
-        "minimum": 291.0,
-        "p25": 291.0,
-        "p50": 640.0,
-        "p75": 640.0,
-        "total": 931.0
+        "count": 73,
+        "maximum": 3099.0,
+        "minimum": 59.0,
+        "p25": 232.0,
+        "p50": 412.0,
+        "p75": 803.0,
+        "total": 46512.0
       }
     },
     {
       "column": "speculative_density",
       "stat": {
-        "count": 2,
-        "maximum": 0.009244992295839754,
+        "count": 73,
+        "maximum": 0.019230769230769232,
         "minimum": 0.0,
         "p25": 0.0,
-        "p50": 0.009244992295839754,
-        "p75": 0.009244992295839754,
-        "total": 0.009244992295839754
+        "p50": 0.0027247956403269754,
+        "p75": 0.006349206349206349,
+        "total": 0.2927517026589654
       }
     },
     {
       "column": "summary_words",
       "stat": {
-        "count": 2,
-        "maximum": 65.0,
-        "minimum": 61.0,
+        "count": 73,
+        "maximum": 137.0,
+        "minimum": 35.0,
         "p25": 61.0,
-        "p50": 65.0,
-        "p75": 65.0,
-        "total": 126.0
+        "p50": 66.0,
+        "p75": 77.0,
+        "total": 5238.0
       }
     },
     {
       "column": "verbatim_run",
       "stat": {
-        "count": 2,
-        "maximum": 0.06557377049180328,
-        "minimum": 0.06153846153846154,
-        "p25": 0.06153846153846154,
-        "p50": 0.06557377049180328,
-        "p75": 0.06557377049180328,
-        "total": 0.12711223203026484
+        "count": 73,
+        "maximum": 0.34328358208955223,
+        "minimum": 0.024793388429752067,
+        "p25": 0.06493506493506493,
+        "p50": 0.09523809523809523,
+        "p75": 0.13793103448275862,
+        "total": 8.134558076847796
       }
     }
   ],
-  "items_failed": 240,
-  "items_planned": 243,
-  "items_published": 2,
+  "items_failed": 249,
+  "items_planned": 323,
+  "items_published": 73,
   "items_truncated": 0,
   "label_similarity": {
     "encoder_ref": "all-minilm-l6-v2-quantized/2026-08-22",
     "nearest": {
-      "count": 2,
-      "maximum": 0.2946946378593426,
-      "minimum": 0.20273009181807056,
-      "p25": 0.20273009181807056,
-      "p50": 0.2946946378593426,
-      "p75": 0.2946946378593426,
-      "total": 0.49742472967741314
+      "count": 73,
+      "maximum": 0.3962092543950415,
+      "minimum": 0.05110845034810139,
+      "p25": 0.16624416927851277,
+      "p50": 0.22969671012664628,
+      "p75": 0.2761814458430726,
+      "total": 16.140472088762607
     },
     "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
   },
   "model_id": "qwen3-5-9b-q4-k-m",
   "reasons": {
-    "faithfulness": 0,
-    "hedge_dropped": 0,
+    "faithfulness": 12,
+    "hedge_dropped": 6,
     "lead_missing": 0,
     "not_scored": 1,
     "unattributed": 0,
-    "unsupported_number": 0
+    "unsupported_number": 2
   },
-  "revision": 5,
-  "runs": 5,
+  "revision": 6,
+  "runs": 6,
   "sources": [
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "abc-au-world",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "ars-technica-ai",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "bbc-business",
+      "truncated": 0
+    },
     {
       "doubted": 1,
       "published": 2,
+      "source_id": "bbc-tech",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "bbc-world",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "bleepingcomputer",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 2,
+      "source_id": "business-today-in",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "cgtn-business",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 2,
+      "source_id": "cgtn-china",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "cna-business",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "cna-world",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 2,
+      "source_id": "databricks-blog",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "deccan-chronicle",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "economic-times",
+      "truncated": 0
+    },
+    {
+      "doubted": 2,
+      "published": 2,
+      "source_id": "electrek",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 2,
+      "source_id": "euronews",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "fastcompany-tech",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "fed-press",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "free-press-journal",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "google-research-blog",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "guardian-ai",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "guardian-world",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 2,
+      "source_id": "hindustan-times",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "huggingface-blog",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "ibm-research-blog",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "india-today",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "inside-climate-news",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 2,
+      "source_id": "japan-times",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "livemint",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "marktechpost",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "mongabay",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "mongabay-india",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 2,
+      "source_id": "nber-new",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "nist-news",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "oilprice",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "pv-magazine",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "pytorch-blog",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 2,
+      "source_id": "semafor",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "solar-quarter",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 4,
       "source_id": "straitstimes-business",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "techcrunch-ai",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "techpolicy-ai",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "the-hindu-national",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "thehindu-biz",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "thehindu-business",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "toi-india",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "toi-top",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "voxdev",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "zdnet-ai",
       "truncated": 0
     }
   ],
-  "sources_present": 1,
+  "sources_present": 49,
   "stage_timing": [
     {
-      "max_ms": 971,
-      "p50_ms": 933,
-      "p90_ms": 963,
+      "max_ms": 2826,
+      "p50_ms": 560,
+      "p90_ms": 1308,
       "stage": "fetch",
-      "sum_ms": 2446,
-      "timed": 3
+      "sum_ms": 57966,
+      "timed": 83
     },
     {
-      "max_ms": 57,
-      "p50_ms": 54,
-      "p90_ms": 56,
+      "max_ms": 285,
+      "p50_ms": 51,
+      "p90_ms": 107,
       "stage": "extract",
-      "sum_ms": 155,
-      "timed": 3
+      "sum_ms": 5242,
+      "timed": 83
     },
     {
-      "max_ms": 739615,
-      "p50_ms": 736155,
-      "p90_ms": 738923,
+      "max_ms": 1350625,
+      "p50_ms": 376362,
+      "p90_ms": 821800,
       "stage": "summarize",
-      "sum_ms": 2068772,
-      "timed": 3
+      "sum_ms": 35507676,
+      "timed": 76
     }
   ],
-  "summaries_scored": 2,
+  "summaries_scored": 73,
   "throughput": {
-    "cached_tokens": 14100,
-    "decode_ms": 893325,
-    "input_tokens": 24796,
-    "items": 3,
-    "output_tokens": 4266,
-    "prefill_ms": 1175227
+    "cached_tokens": 459824,
+    "decode_ms": 19121436,
+    "input_tokens": 602516,
+    "items": 74,
+    "output_tokens": 86362,
+    "prefill_ms": 13725752
   },
   "version": "2026-09-29",
   "visuals_rendered": 0
