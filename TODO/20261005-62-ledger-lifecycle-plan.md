@@ -191,7 +191,7 @@ Table H - the data explorer's tests that a row rewrites, deletes or keeps, by sp
 | H38 | `console-data-explorer-still.spec.ts` | `M17: keyboard order follows the visual order at desktop and phone widths` | G22 | L2 | - |
 | H39 | `console-readout.spec.ts`, inside `the readout is the default` | `THE ORACLE: the Data explorer shape panel declares its readout and has no native tooltip` | G21 | L2 | Red |
 | H40 | `explorer-boundary.spec.ts`, which reads `tests/fixtures/ledger-door/` | `the browser content policy refuses a statement fetch to an unlisted origin` | G21 | L2 | - |
-| H41 | `ledger-door.spec.ts` | `a span that starts before the oldest day any index names is unreachable, and no fault` | G6 | L4 | - |
+| H41 | `ledger-door.spec.ts` (deleted by L4, #1348) | `a span that starts before the oldest day any index names is unreachable, and no fault` | G6 | L4 | - |
 | H42 | `ledger-door.spec.ts` | `a date both packed and listed is read once, from its packed file` | - | L9 | - |
 | H43 | `ledger-door.spec.ts` (deleted by L1, #1327) | `a date in no tier is unreachable at that date, and with no archive the span starts at the site` | G5 | L1 | - |
 | H44 | `console-data-explorer.spec.ts` | `THE ORACLE: Copy link carries the question while the link fits console.explorer_link_max_bytes, and leaves it out one character past` | G21 | L2 | - |
