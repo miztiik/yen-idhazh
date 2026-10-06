@@ -172,6 +172,7 @@
       }
     ],
     "explorer_history_max": 11,
+    "explorer_link_max_bytes": 8193,
     "explorer_max_fetch_bytes": 67108865,
     "explorer_max_rows": 1001,
     "explorer_notice_ms": 5001,

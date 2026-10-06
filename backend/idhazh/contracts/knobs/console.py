@@ -531,6 +531,16 @@ class ConsoleConfig(Model):
             "measured GitHub Pages request target with every ledger selected."
         ),
     )
+    explorer_link_max_bytes: int = Field(
+        default=8192,
+        ge=1,
+        description=(
+            "Most bytes a Data explorer link may hold, its path and query together, and "
+            "still carry the question; a longer link carries the ledgers and the days "
+            "only. The value comes from docs/reference/benchmarks/address-length-on-pages.md: "
+            "GitHub Pages answered a request target of 8,192 bytes and refused 8,193."
+        ),
+    )
     explorer_reach_days: int = Field(
         default=365,
         ge=1,

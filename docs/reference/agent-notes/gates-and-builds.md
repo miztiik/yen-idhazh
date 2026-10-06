@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -10,6 +10,14 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Read the first failure and which later checks did not run. A missing tool, interrupted process, cached failure or skipped test is not a pass.
 - Inspect an existing run before starting another. Use the launcher's `--status`; use `--fresh` only when an unchanged run must be repeated.
 - `node scripts/build-state.ts --complete` took 112.5 s on the shared Windows machine on 2026-10-03, so wait for it rather than calling it hung.
+- **`pytest -m contract -q` ends on a `FAILED` line with no count after it, which reads as a run that stopped; it finished, and the extra `-q` hid the count.**
+  `addopts` in `pyproject.toml` already carries `-q`, so one more is `-qq`, and
+  pytest 9.1.1 then drops the `N passed, M failed` line (2026-10-06). The tell
+  is the short test summary as the last output, with nothing after it. Leave
+  `-q` off:
+  ```powershell
+  .\.venv\Scripts\python.exe -m pytest -m contract
+  ```
 
 ## Running the gates
 

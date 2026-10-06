@@ -128,6 +128,38 @@ test('a date answer with several rows on one UTC day draws no date chart and say
 	});
 });
 
+test('a date column holding a day the chart cannot place draws no date chart and names the column and that day', () => {
+	const held: [string | null, string][] = [
+		['infinity', 'Nothing here to draw: the column "day" holds infinity, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'],
+		['-infinity', 'Nothing here to draw: the column "day" holds -infinity, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'],
+		['12345-01-01', 'Nothing here to draw: the column "day" holds 12345-01-01, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'],
+		['0044-03-15 (BC)', 'Nothing here to draw: the column "day" holds 0044-03-15 (BC), and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'],
+		[null, 'Nothing here to draw: the column "day" holds null, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.']
+	];
+	for (const [day, reason] of held) {
+		expect(shape([
+			{ name: 'day', type: 'DATE' },
+			{ name: 'items', type: 'INTEGER' }
+		], [
+			{ day: '2026-10-01', items: '1' },
+			{ day, items: '2' },
+			{ day: '2026-10-03', items: '3' }
+		]), String(day)).toEqual({ kind: 'none', code: 'unplaceable-day', reason });
+	}
+
+	expect(shape([
+		{ name: 'at', type: 'TIMESTAMP WITH TIME ZONE' },
+		{ name: 'items', type: 'INTEGER' }
+	], [
+		{ at: '2026-10-01 00:00:00+00', items: '1' },
+		{ at: 'infinity', items: '2' }
+	])).toEqual({
+		kind: 'none',
+		code: 'unplaceable-day',
+		reason: 'Nothing here to draw: the column "at" holds infinity, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'
+	});
+});
+
 test('date charts draw four number columns and name columns that would draw flat', () => {
 	const result = shape([
 		{ name: 'day', type: 'DATE' },
