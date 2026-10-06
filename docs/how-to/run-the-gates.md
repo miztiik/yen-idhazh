@@ -314,7 +314,7 @@ Two extras are declared. Install only what you need:
 | Extra | Pulls | When |
 | --- | --- | --- |
 | `dev` | `ruff`, `mypy`, `pytest`, `PyYAML` | always - this is the gate set |
-| `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it downgrades `tokenizers` |
+| `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it uses the current `tokenizers` range |
 
 `faithfulness` is the heavy one, and it is the only one a gate does not need. No
 test imports it. Spans need no extra at all: the sink writes a JSON line with the
