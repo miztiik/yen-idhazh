@@ -93,7 +93,7 @@
       "qwen3-5-9b-q4-k-m"
     ],
     "published_charts": 0,
-    "published_items": 214,
+    "published_items": 223,
     "runs": [
       {"charts_drafted": 0,"decided": 0,"decision_ms": null,"failed": 80,"n": 1,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37392388734","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T00:08:57Z","status": "partial","succeeded": 0},
       {"charts_drafted": 0,"decided": 0,"decision_ms": null,"failed": 80,"n": 2,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37362367001","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T07:10:31Z","status": "partial","succeeded": 0},
@@ -102,9 +102,10 @@
       {"charts_drafted": 0,"decided": 2,"decision_ms": 0,"failed": 0,"n": 5,"planned": 2,"prefiltered": 0,"run_id": "2026-10-06-37430995191","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T07:39:49Z","status": "partial","succeeded": 2},
       {"charts_drafted": 11,"decided": 71,"decision_ms": 7,"failed": 9,"n": 6,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37440340354","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T09:04:16Z","status": "partial","succeeded": 71},
       {"charts_drafted": 19,"decided": 70,"decision_ms": 6,"failed": 10,"n": 7,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37470278323","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T13:23:05Z","status": "partial","succeeded": 70},
-      {"charts_drafted": 20,"decided": 71,"decision_ms": 6,"failed": 9,"n": 8,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37498717802","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T16:49:50Z","status": "partial","succeeded": 71}
+      {"charts_drafted": 20,"decided": 71,"decision_ms": 6,"failed": 9,"n": 8,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37498717802","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T16:49:50Z","status": "partial","succeeded": 71},
+      {"charts_drafted": 2,"decided": 9,"decision_ms": 0,"failed": 1,"n": 9,"planned": 10,"prefiltered": 0,"run_id": "2026-10-06-37530779260","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T21:01:28Z","status": "partial","succeeded": 9}
     ],
-    "site_bytes": 38865425,
+    "site_bytes": 38888429,
     "site_files": 92,
     "version": "2026-09-09"
   }
