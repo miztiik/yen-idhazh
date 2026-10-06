@@ -1,6 +1,6 @@
 # Plan 62 - Ledgers that start, pause, resume and stop
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 **Level**: 3 (CLAUDE.md section 6). L1 and L5 cross a boundary: L1 joins the site build to the data explorer, and L5 changes how every console route places its window. No row changes a persisted shape, and Table C, C1 stops any row that would.
 
@@ -15,7 +15,7 @@ Table A - operating contract
 | # | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Ledgers start, pause, resume and stop. Since #1309 a ledger's index starts on its first raw day, but the readers treat a day before a ledger began as a day that is missing: the data explorer asks the archive for it and then reports a fault. The tests hid this until #1309, because the canary began every ledger on the 1st of a month and the browser answer key read other inputs than the page. Now ten browser tests fail on `main` (run 37361239642, 2026-10-05). This plan makes every reader and every test treat each stage of a ledger's life as normal |
-| A2 | Hard scope - in | - The data explorer leaves out a ledger's days before its first day and names that day, and it asks the archive only for days the site copy trimmed (L1).<br>- Every data explorer browser test serves data it built and checks written-out results. The canary keeps only the checks that do not depend on what it holds (L2).<br>- The real compaction is tested on each lifecycle state, and the states get a page of their own (L3).<br>- A panel slice leaves out the days before a ledger began and names its first day. How far a ledger is packed comes from all three indexes (L4).<br>- Every console window ends on the site's newest published day, reads exactly that window, and says when a record's rows stop (L5).<br>- A published ledger that has no compact folder yet does not stop the site build (L7).<br>- When the archive does not answer for trimmed days, the explorer answers the site's days and names the archive (L8).<br>- Console specs outside the explorer that read canary content serve the data they check (L9) |
+| A2 | Hard scope - in | - The data explorer leaves out a ledger's days before its first day and names that day, and it asks the archive only for days the site copy trimmed (L1).<br>- Every data explorer browser test serves data it built and checks written-out results. The canary keeps only the checks that do not depend on what it holds (L2).<br>- The real compaction is tested on each lifecycle state, and the states get a page of their own (L3).<br>- A panel slice leaves out the days before a ledger began and names its first day. How far a ledger is packed comes from all three indexes (L4).<br>- Every console window ends on the site's newest published day, reads exactly that window, and says when a record's rows stop (L5).<br>- A published ledger that has no compact folder yet does not stop the site build (L7).<br>- When the archive does not answer for trimmed days, the explorer answers the site's days and names the archive (L8).<br>- Console specs outside the explorer that read canary content serve the data they check (L9).<br>- When a chosen ledger's newest named day holds no rows, the data explorer's column rail still lists its columns (L10) |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
 | A5 | Chosen strategy | Change the readers and the tests, never the data: no persisted shape changes, a day before a ledger began is outside the ledger and never a fault, every window ends on a day that no ledger can move, and every test serves the data it checks. Fowler, 2026-10-05, on the owner's rulings of the same day |
@@ -53,13 +53,14 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | L1 | Days before a ledger began are cut from the selected window | - | A | DONE #1327, carried under plan 60 (row L1, decision 5) | fantastic-fortnight | #1327 | L1 explorer starts at first day |
-| L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | DONE | ideal-barnacle | - | Plan 62 row l2 |
+| L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | DONE | ideal-barnacle | #1351 | Plan 62 row l2 |
 | L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
-| L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | - | Plan 62 row l4 |
+| L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | #1348 | Plan 62 row l4 |
 | L5 | Console windows end on the site's newest published day | L4 | C | PENDING | - | - | - |
 | L7 | A published ledger that has not started | L1 | B | PENDING | - | - | - |
-| L8 | The archive's failures are named as the archive's | L1, L2, L4 | C | PENDING | - | - | - |
+| L8 | The archive's failures are named as the archive's | L1, L2, L4, L5 | C | PENDING | - | - | - |
 | L9 | Console specs outside the explorer serve the data they check | L2 | C | PENDING | - | - | - |
+| L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | PENDING | - | - | - |
 
 ## 2. Shared declarations
 
@@ -494,6 +495,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #L8 - The archive's failures are named as the archive's
 
 - **Scope:** When the archive does not answer for trimmed days, the explorer answers the site's days and says that the older days are in the archive, which did not answer. A 404 on the archive's index is no longer worded as "not on this site yet". Level 2.
+- **Follow-ups:**
+  - L2 (#1351) added `serveArchiveToPage` to `frontend/tests/support/ledger-lifecycle.ts`. With `siteCopy` and `serveToPage` from the same file, and `publishedWindowDays()` from `frontend/scripts/published-ledgers.mjs`, a test serves a trimmed site and its archive. A test that leaves the archive unserved finds it blocked by `frontend/tests/support/browser.ts`; found during execution (row L2 report), owner 2026-10-06.
 - **Files touched:**
   - `frontend/src/lib/data/ask-reader.ts`
   - `frontend/src/lib/data/slice-shapes.ts`
@@ -525,6 +528,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #L9 - Console specs outside the explorer serve the data they check
 
 - **Scope:** Every console spec outside the explorer that reads canary content, and every console reader test that computes its expected answer from a fixture, serves a root it built and checks written-out values. The row starts with an inventory taken when it is dispatched. Level 2.
+- **Follow-ups:**
+  - The inventory's canary-day move must move the canary's day by at least 42 days, on the base and on the branch. `item-health` and `host-fingerprint` keep 41 canary days, so a 36-day move does not clear a pinned window; found during execution (row L2 report), owner 2026-10-06.
+  - `npm run test:changed` stops at the first browser failure, so to count every red test, run Playwright directly. The new section in `docs/how-to/run-the-gates.md` says how; found during execution (row L2 report), owner 2026-10-06.
 - **Inventory**, the row's first step, before any edit:
   1. A canary-day move (Table E, E10) over the `console` and `panels` groups. Every spec with a test that turns red, other than the explorer specs of Table H, joins the inventory.
   2. A reading of each `logic` spec whose name starts with `console-` or `ledger-`, for a test that computes its expected value by running a reader over the canary or a committed fixture, or that copies a fixture made for other questions. Each one joins the inventory. Two are known now (Files touched).
@@ -550,3 +556,29 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- | --- | --- |
 | 1 | L6: a named list of canary producers buys the console test group on each pull request that touches one, with a test that each listed path exists, in `frontend/scripts/test-scope.ts`, `frontend/scripts/tests/test-scope.test.mjs` and `docs/how-to/run-the-gates.md` (Fowler's option K2) | A stop-gap spent on tests that Table D, D3 says must change, which would need a removal condition. This row removes its reason | Up to about 10 CI minutes on each such pull request (estimate: the browser job of run 37361239642 ran its tests in 9.9 minutes), and a list of producer paths to keep in step with the code | Fowler, 2026-10-05; the owner approved the phase list without it (Table D, D4) |
 | 2 | Run the console group on every pull request (Fowler's option K3) | Every pull request pays for tests that only a producer change needs | About 10 CI minutes on every pull request, by the same estimate | Fowler, 2026-10-05 |
+
+### Row #L10 - The column rail describes a ledger whose newest day holds no rows
+
+- **Scope:** When a chosen ledger's newest named day is `empty` (Table F, F4, F6 and F7) or `lost` (F5), the data explorer's column rail still lists that ledger's columns. Level 2.
+- **Files touched** (each path checked on `main` at ea1878cdc; search again once decision 1 is ruled):
+  - `frontend/src/routes/console/data-explorer/+page.svelte` (the rail describes each chosen ledger from `cost.through`, its newest named day)
+  - `frontend/src/lib/data/ask-reader.ts` (`readAsk` answers `quiet` for a span that holds no file before it uses the empty view: a `LIMIT 0` view over the ledger's newest file)
+  - `frontend/tests/ledger-lifecycle.spec.ts` (the reader's case, on a root that Table G, G1 builds)
+  - `frontend/tests/console-data-explorer.spec.ts` (the Oracle)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec ledger-lifecycle.spec.ts --spec console-data-explorer.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of the data explorer. CI: the pull request runs the console specs; every group runs on the merge push.
+- **Oracle:** in `console-data-explorer.spec.ts`, on a root the test builds (Table D, D3): a ledger whose newest two named days are `empty` and whose day before them is `packed` lists its columns in the rail. On `main` the rail lists no column for it, which is what lets this check fail. It cannot settle a ledger whose newest day that holds rows is older than the selected window; whether the rail reads such a day is decision 1.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Open: which day the rail describes when a chosen ledger's newest named day holds no rows (the newest day that holds rows, found from the indexes, or the empty view), and whether the rail may read a day older than the selected window | To be ruled at dispatch (Fowler) |
+| 2 | L10 waits for L8, because L8 edits `ask-reader.ts`, `+page.svelte` and the written-question page | Found during execution (row L2 report), owner 2026-10-06 |
+| 3 | Level 2: what the rail lists changes for one kind of ledger, and every explorer question reads through `ask-reader.ts` | Found during execution (row L2 report), owner 2026-10-06 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today: the rail describes each chosen ledger from its newest named day | When that day holds no rows, the rail lists no column for the ledger | Nothing to build, and no column in the rail for a ledger whose newest day was quiet or lost, or whose writer is paused or stopped | Found during execution (row L2 report), owner 2026-10-06 |
