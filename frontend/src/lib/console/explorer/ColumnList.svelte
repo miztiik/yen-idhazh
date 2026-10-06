@@ -32,7 +32,8 @@
 	.column-list { block-size: 100%; min-block-size: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-3); overflow: hidden; }
 	h3 { margin: 0; font-size: var(--text-sm); }
 	p { margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm); }
-	.column-box { block-size: 100%; min-block-size: 0; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; }
+	/* Positioned, so the hidden screen-reader spans in its rows scroll with the list instead of escaping it and stretching the page. */
+	.column-box { position: relative; block-size: 100%; min-block-size: 0; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; }
 	h4 { position: sticky; inset-block-start: 0; z-index: 1; margin: 0; background: var(--color-surface); font-family: var(--font-data); font-size: inherit; font-weight: 600; }
 	ul { list-style: none; margin: 0; padding: 0; }
 	li { min-block-size: var(--workbench-row); display: flex; flex-wrap: wrap; align-items: first baseline; column-gap: var(--space-2); padding-inline: var(--space-3); }

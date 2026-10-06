@@ -147,13 +147,20 @@
 		padding-inline: var(--space-5);
 	}
 
+	/* Under workbench chrome a panel is a region of one tool: no card of its
+	   own, and its body fills whatever share of the window the page gives it. */
 	:global([data-console-chrome='workbench']) .panel-block {
+		display: grid;
 		margin-top: 0;
 		padding: 0;
 		border: 0;
 		border-radius: 0;
 		box-shadow: none;
 		background: transparent;
+	}
+
+	:global([data-console-chrome='workbench']) .panel-body {
+		display: grid;
 	}
 
 	:global([data-console-chrome='workbench']) .panel-head {

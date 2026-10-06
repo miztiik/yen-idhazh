@@ -14,13 +14,13 @@ Data explorer reads the ledgers that `config/ledgers.json` declares and `config/
 2. Choose one or more ledgers.
 3. Choose `From (UTC)` and `To (UTC)`. The inputs accept the reader's UTC day and the 364 UTC days before it by default.
 4. Write one read-only DuckDB statement. Use the selected ledger names as quoted table names, for example `"host-fingerprint"`.
-5. Press Run.
+5. Press Run, at the right end of the editor's heading line beside Save and Copy link, or press Ctrl+Enter in the editor.
 
 The page never runs a question from a link by itself. A shared link fills the editor and waits for Run.
 
 ## What a result means
 
-The answer table prints every cell as text. It never turns a cell into a link, image, fetch address or style. The chart panel draws only shapes the answer can support. If no chart fits, the table is still the answer.
+The answer table prints every cell as text. It never turns a cell into a link, image, fetch address or style. The chart panel draws only shapes the answer can support. If no chart fits, the table is still the answer. `Copy as JSON` and `Copy as table`, at the right end of the answer's heading line, put the answer on the clipboard.
 
 Under the line that says which days were read, the answer names what each selected ledger is missing in those days. A day whose record was lost has no rows in the answer; it was not a quiet day. The date chart breaks its line at such a day rather than joining the days either side. A file the packing set aside unread may hold rows the answer lacks; the line says how many files and which folder holds them, `state/raw/<ledger>/set-aside/`, for a person to read.
 
