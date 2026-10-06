@@ -5,8 +5,8 @@ CSV trees do is read from `config/ledgers.json`, which is loaded and validated
 once, when this module loads, so a config that does not describe every ledger
 stops the build rather than a run four hundred seconds in. A ledger that goes
 through the door in `ledger/persist.py` files under `state/raw/` or
-`state/compact/`, and those two roots have one fixed grammar, so their five
-builders need no registry entry to answer.
+`state/compact/`, and those two roots have one fixed grammar under the
+registry prefix for that ledger.
 
 The registry's four builders come in two pairs. `path` and `relpath` are the
 same address in the two forms this project uses - a `Path` for local I/O, a
@@ -20,10 +20,9 @@ root builders refuses, by name, a path whose first folder under `state/` is
 neither `raw` nor `compact`, so a third root is a `ValueError` rather than a
 convention somebody forgot.
 
-**A ledger the registry lists as `raw-and-compact` has no registry address.**
+**A ledger the registry lists as `raw-and-compact` has no single state address.**
 Its files sit under the two roots and are named by their grammar, so the four
-registry builders refuse it by name and point at the four that can build it,
-rather than hand back a CSV address nothing writes.
+registry builders refuse it by name and point at the four that can build it.
 
 Nothing here globs `state/`. A walk would cost more every day, and it cannot tell
 a retired ledger from one that has never run (Guardrail #12).
@@ -36,6 +35,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from collections.abc import Mapping
 from functools import cache
 from pathlib import Path, PurePath
 from typing import Final
@@ -92,14 +92,26 @@ _CONFIG: Final[LedgersConfig] = _load(config.DEFAULT_CONFIG_DIR)
 
 #: Every ledger in one table, whichever family lists it. An address is a fact
 #: about one ledger, so no builder here needs to know the family.
+DoorRegistry = Mapping[LedgerName, LedgerEntry]
+
 _REGISTRY: Final[dict[LedgerName, LedgerEntry]] = {
     held.name: held for family in _CONFIG.families for held in family.ledgers
 }
 
 
-def entry(ledger: LedgerName) -> LedgerEntry:
+def _registry(registry: DoorRegistry | None) -> DoorRegistry:
+    """The caller's fixture registry, or the committed one this build loaded."""
+    return _REGISTRY if registry is None else registry
+
+
+def entry(ledger: LedgerName, *, registry: DoorRegistry | None = None) -> LedgerEntry:
     """One ledger's registry row: its grain and where it sits."""
-    return _REGISTRY[ledger]
+    return _registry(registry)[ledger]
+
+
+def registry_entries(config: LedgersConfig) -> dict[LedgerName, LedgerEntry]:
+    """The lookup table path builders need, from any validated registry payload."""
+    return {held.name: held for family in config.families for held in family.ledgers}
 
 
 def claimed_roots() -> frozenset[str]:
@@ -125,10 +137,26 @@ def _no_registry_address(held: LedgerEntry) -> ValueError:
     """The refusal a ledger that files under the two roots gets from a registry builder."""
     return ValueError(
         f"{held.name} files by {held.grain.value}: its files sit under "
-        f"{STATE_DIRNAME}/{RAW_DIRNAME}/ and {STATE_DIRNAME}/{COMPACT_DIRNAME}/ and are "
-        "named by their own grammar, so the registry holds no single address for it. "
+        f"{STATE_DIRNAME}/{RAW_DIRNAME}/ and {STATE_DIRNAME}/{COMPACT_DIRNAME}/, inside "
+        "the registry prefix and named by their own grammar, so the registry holds no "
+        "single address for it. "
         "Ask raw_path, compact_path, compact_index_path or watermark_path"
     )
+
+
+def door_folders(ledger: LedgerName, *, registry: DoorRegistry | None = None) -> tuple[str, ...]:
+    """The folder a door path uses inside `raw/` and `compact/`, from the registry."""
+    return entry(ledger, registry=registry).prefix
+
+
+def door_ledger_at(
+    folders: tuple[str, ...], *, registry: DoorRegistry | None = None
+) -> LedgerName | None:
+    """The door ledger filed at these folders inside one root, or None."""
+    for name, held in _registry(registry).items():
+        if held.grain is Grain.RAW_AND_COMPACT and held.prefix == folders:
+            return name
+    return None
 
 
 def _segments(held: LedgerEntry, covers: str | None) -> tuple[str, ...]:
@@ -254,14 +282,16 @@ def _day_segments(date: str) -> tuple[str, str, str]:
     return date[:4], date[5:7], date[8:10]
 
 
-def raw_root(state_dir: Path, ledger: LedgerName) -> Path:
-    """The folder that holds every raw file of one ledger: `raw/<ledger>/`.
+def raw_root(state_dir: Path, ledger: LedgerName, *, registry: DoorRegistry | None = None) -> Path:
+    """The folder that holds every raw file of one ledger: `raw/<folders>/`.
 
     What a reader walks to find the days a ledger has files for. `raw_path` is
     built from it, so the folder a reader walks and the files a writer puts in
     it cannot disagree about where the ledger sits.
     """
-    return _under_the_two_roots(state_dir, state_dir.joinpath(RAW_DIRNAME, ledger.value))
+    return _under_the_two_roots(
+        state_dir, state_dir.joinpath(RAW_DIRNAME, *door_folders(ledger, registry=registry))
+    )
 
 
 def raw_path(
@@ -271,15 +301,18 @@ def raw_path(
     file_id: uuid.UUID,
     *,
     fmt: Format = Format.PARQUET,
+    registry: DoorRegistry | None = None,
 ) -> Path:
-    """Where one writer's file for one day sits: `raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>`.
+    """Where one writer's file for one day sits: `raw/<folders>/<YYYY>/<MM>/<DD>/<file_id>`.
 
     Many writers file into one day, and the minted `file_id` is what keeps two of
     them off one path. The suffix is the format's own, so a JSON-lines file is
     `<file_id>.json`.
     """
     year, month, day = _day_segments(date)
-    built = raw_root(state_dir, ledger).joinpath(year, month, day, f"{file_id}.{fmt.value}")
+    built = raw_root(state_dir, ledger, registry=registry).joinpath(
+        year, month, day, f"{file_id}.{fmt.value}"
+    )
     return _under_the_two_roots(state_dir, built)
 
 
@@ -290,6 +323,7 @@ def compact_path(
     covers: str,
     *,
     fmt: Format = Format.PARQUET,
+    registry: DoorRegistry | None = None,
 ) -> Path:
     """Where one compact period's file sits, named for what it covers.
 
@@ -308,24 +342,40 @@ def compact_path(
         )
     *folders, leaf = covers.split("-")
     built = state_dir.joinpath(
-        COMPACT_DIRNAME, ledger.value, period.value, *(folders or [leaf]), f"{leaf}.{fmt.value}"
+        COMPACT_DIRNAME,
+        *door_folders(ledger, registry=registry),
+        period.value,
+        *(folders or [leaf]),
+        f"{leaf}.{fmt.value}",
     )
     return _under_the_two_roots(state_dir, built)
 
 
-def compact_index_path(state_dir: Path, ledger: LedgerName, period: Period) -> Path:
-    """Where the listing of one compact period sits: `compact/<ledger>/index/<period>.json`."""
+def compact_index_path(
+    state_dir: Path, ledger: LedgerName, period: Period, *, registry: DoorRegistry | None = None
+) -> Path:
+    """Where the listing of one compact period sits: `compact/<folders>/index/<period>.json`."""
     built = state_dir.joinpath(
-        COMPACT_DIRNAME, ledger.value, INDEX_DIRNAME, f"{period.value}{_JSON_SUFFIX}"
+        COMPACT_DIRNAME,
+        *door_folders(ledger, registry=registry),
+        INDEX_DIRNAME,
+        f"{period.value}{_JSON_SUFFIX}",
     )
     return _under_the_two_roots(state_dir, built)
 
 
-def watermark_path(state_dir: Path, ledger: LedgerName, period: Period) -> Path:
-    """Where one compact period's resume mark sits: `compact/<ledger>/<period>/watermark.json`.
+def watermark_path(
+    state_dir: Path, ledger: LedgerName, period: Period, *, registry: DoorRegistry | None = None
+) -> Path:
+    """Where one compact period's resume mark sits: `compact/<folders>/<period>/watermark.json`.
 
     It records the newest period this roll-up has looked at, including one that
     held nothing, which is the one fact no listing of the tree can recover.
     """
-    built = state_dir.joinpath(COMPACT_DIRNAME, ledger.value, period.value, WATERMARK_FILENAME)
+    built = state_dir.joinpath(
+        COMPACT_DIRNAME,
+        *door_folders(ledger, registry=registry),
+        period.value,
+        WATERMARK_FILENAME,
+    )
     return _under_the_two_roots(state_dir, built)

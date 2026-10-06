@@ -62,10 +62,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | #1229 | p55-r7-worker |
 | 8 | The Data explorer draws the workbench chrome | 6 | G | DONE | p55r8 | #1298 | p55-n1-worker |
 | 9 | Run moves nothing on the Data explorer | 8 | H | DONE | p55r9 | #1310 | p55-n2-worker |
-| 10 | The Data explorer reaches the reference's density | 9, 11, 12 | L | PENDING | - | - | - |
+| 10 | The Data explorer reaches the reference's density | 9, 11, 12 | M | PENDING | - | - | - |
 | 11 | The column rail stops overlapping, and types and the chosen ledger show in colour | 9 | I | DONE | automatic-giggle | - | Data explorer phase 1 colours |
 | 12 | The Data explorer fills the window, Run stands with Save and Copy link, and the copy buttons stand on the answer's heading line | 9, 11 | J | DONE | special-parakeet | - | Data explorer phase 2 layout |
 | 13 | The explorer reads a column's type one way, and a NULL is no value in any chart | 11 | K | DONE | super-waddle | - | Explorer types and nulls one way |
+| 14 | The answer table sorts a timestamp by its UTC instant, to the nanosecond | 13 | L | DONE | studious-tribble | - | Explorer timestamps sort in UTC |
 
 **One pull request a row.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. **Row 11 was added on 2026-10-05, on the owner's ruling that day, and runs between rows 9 and 10**, because row 10 finishes the same two rails. **Row 12 was added the same day, on the owner's request that day, and runs between rows 11 and 10**, because row 10's density pass works inside the regions row 12 sizes. **Row 13 was added on 2026-10-05, from row 11's S7**: one type classification for the table, the chart and the colours, and a NULL that is no value in any chart. No row waits for an owner's answer (section 0, "Decided 2026-10-02").
 
@@ -1142,7 +1143,24 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | 5 | **The counts follow what is drawn.** The spread and paired floors count readings, the paired subjects count only rows with both numbers, and the too-few sentence prints the count the floor checked | Fowler, 2026-10-05 |
   | 6 | **Tests test what the page does, never what the data holds** | Owner, 2026-10-05 |
 
-- **Not in this row:** the table sorts a timestamp by `Date.parse()` of its text, which reads a timestamp with no zone in the browser's own time zone and keeps only milliseconds. The order holds except around a daylight-saving change, and two `timestamp_ns` values less than a millisecond apart keep the engine's order. Comparing the engine's own text would keep UTC and every digit; it is its own pull request.
+- **Not in this row:** the table sorted a timestamp by `Date.parse()` of its text, which read a timestamp with no zone in the browser's own time zone and kept only milliseconds. The order held except around a daylight-saving change, and two `timestamp_ns` values less than a millisecond apart kept the engine's order. Row 14 fixed it: the table sorts by the UTC instant it reads from the engine's own text, to the nanosecond.
+
+### Row #14 - The answer table sorts a timestamp by its UTC instant, to the nanosecond
+
+- **Scope:** row 13's "Not in this row". `answer.ts` sorts a date or a timestamp by the instant its text names, read from the engine's own text as nanoseconds from 1970-01-01 00:00 UTC, in place of `Date.parse()`. A timestamp with no zone is UTC, and a timestamp with a time zone moves to UTC by the offset it prints. The column's family still comes from `classifyType()` and `isDay()`, and no cell prints differently. `sortedRows()` reads each row's key once, not on every comparison.
+- **What a reader sees change:** in a browser outside UTC, two timestamps on either side of a daylight-saving change sort in time order. Two `timestamp_ns` values less than a millisecond apart sort in time order, not in the engine's order. A timestamp in a year below 1000 sorts as that year; `Date.parse()` read `0044` as 2044. Text that names no instant, such as `infinity`, sorts last with the NULLs. A date column sorts as before.
+- **Files touched:** `frontend/src/lib/console/explorer/answer.ts`; `frontend/tests/console-data-explorer-cells.spec.ts`, `frontend/scripts/test-groups.ts`; `docs/concepts/console-design.md`.
+- **Checks:** every expected value is a literal on rows the test writes. One case sets the run's zone to `America/New_York` through `process.env.TZ`, checks that the zone took, and sorts `2026-03-08 02:30:00` and `2026-03-08 03:30:00` both ways: New York's clocks skip from 02:00 to 03:00 that night, so `Date.parse()` gave the two one number. The others sort three `timestamp_ns` values one to three nanoseconds apart; timestamps with a time zone across New York's November change and a half-hour offset; the years 44, 1066 and 2026; `infinity`, `-infinity` and a year past what a JavaScript `Date` holds, among a NULL; and a date column with a NULL. The New York, nanosecond, year and `infinity` cases fail on e8b0eefe9, each for the reason it names; the time-zone and date cases pass there and hold the new code to the old order. The cells spec opens no page, so it moves from the console group to the logic group and runs with no build.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **A day's key is nanoseconds from 1970-01-01 UTC as a `bigint`, not a padded text.** It is exact for every year a JavaScript `Date` holds and needs no width rule; a text key is right only while six padding widths stay right | Fowler, 2026-10-06 |
+  | 2 | **Text that names no instant sorts with the NULLs**: `infinity`, `-infinity`, a date the engine prints with `(BC)`, and a year past what a `Date` holds. A `bigint` and a text do not compare in a stable order, so such a value cannot keep its text as its key. Fixed keys for `infinity` and `-infinity` wait until an operator meets one | Fowler, 2026-10-06 |
+  | 3 | **The cells spec runs in the logic group**, moved in its own commit before the fix, because it opens no page | Fowler, 2026-10-06 |
+  | 4 | **Tests test what the page does, never what the data holds** | Owner, 2026-10-05 |
+
+- **Not in this row:** three faults found while writing it, each its own pull request. `printCell()` cuts a date to ten characters, so `12345-01-01` prints as `12345-01-0` and `0044-03-15 (BC)` prints as a year AD. The engine prints an infinite or undefined double as `inf`, `-inf` or `nan`; a number column keeps that text as its key beside number keys, the two compare false both ways, and that column's order is not defined. `shape.ts`'s `dayValue()` takes a timestamp's first ten characters as its day, so a timestamp with a time zone printed with an offset other than `+00` falls on its printed day, not its UTC day. DuckDB-Wasm printed such a value in the machine's own zone in Node (`TimeZone` was `Etc/GMT-1`, 2026-10-06); the zone it uses in a browser was not checked.
 
 ## Dependent plans
 

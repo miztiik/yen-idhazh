@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -146,7 +146,7 @@ The Data explorer page is the exception to the console rule that translates ledg
 
 **The page reads a column's type one way.** One function, `classifyType()` in `frontend/src/lib/console/explorer/type-family.ts`, puts the type name the engine prints into one family: a whole number, a decimal, a date, a timestamp, a time, an interval, true/false, text, bytes, a list or a struct, or other. A timestamp is any precision, `timestamp_s`, `timestamp_ms` and `timestamp_ns` included, with or without a time zone. Text includes `uuid` and `enum`, and bytes is a `blob`. A list or a struct is that whatever it holds, because `timestamp[]` is a list rather than a time, and a name no rule knows, such as `bit`, is other. The engine prints an alias by its own name, `INT` as `INTEGER`, so no alias is listed. The table prints and sorts a cell by its column's family, the chart chooses its shape from the answer's families ([the mark shapes](console-design/the-mark-shapes-a-panel-may-reach-for.md#when-nobody-wrote-the-panel-the-columns-choose-the-shape)), and the type label takes its family's colour (below).
 
-A whole number groups its digits from five digits up, so `2026` stays `2026`, and one longer than fifteen digits prints its exact digits. A decimal prints at most three places, and a non-zero one under 0.001 in e-notation. A date prints as `2026-10-02`, and a timestamp as `2026-10-02 08:24:32`, with milliseconds only when they are not zero. True/false prints `true` or `false`, a blob prints its size as `{n} bytes`, and a list or a struct prints its JSON text in the data font. Anything else prints the engine's text, and a NULL prints `null`. Numbers stand right-aligned. The first press on a column's name sorts a number or a day high to low and anything else A to Z, with NULLs last both ways. Only a number column draws in-cell bars, so text that holds digits draws none.
+A whole number groups its digits from five digits up, so `2026` stays `2026`, and one longer than fifteen digits prints its exact digits. A decimal prints at most three places, and a non-zero one under 0.001 in e-notation. A date prints as `2026-10-02`, and a timestamp as `2026-10-02 08:24:32`, with milliseconds only when they are not zero. True/false prints `true` or `false`, a blob prints its size as `{n} bytes`, and a list or a struct prints its JSON text in the data font. Anything else prints the engine's text, and a NULL prints `null`. Numbers stand right-aligned. The first press on a column's name sorts a number or a day high to low and anything else A to Z, with NULLs last both ways. A day sorts by the UTC instant that its text names, to the nanosecond, whatever the browser's time zone is. A timestamp with no zone is UTC, and a timestamp with a zone moves to UTC by the offset that it prints. Text that names no instant, such as `infinity`, sorts with the NULLs. Only a number column draws in-cell bars, so text that holds digits draws none.
 
 ## The Data explorer colours a type by its family, and marks a chosen ledger
 
