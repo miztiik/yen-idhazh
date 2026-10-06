@@ -327,7 +327,7 @@
 			ledgers: selected,
 			days: windowDays,
 			statement: sql,
-			maxBytes: 8192,
+			maxBytes: config.link_max_bytes,
 			from: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : fromDay,
 			end: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : toDay
 		});
@@ -774,13 +774,14 @@
 		border-block-end: 1px solid var(--color-rule);
 	}
 
+	/* History's list hangs from this group's end, so nothing here may clip it. */
 	.question-links {
 		flex: none;
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
 		min-inline-size: 0;
-		overflow: hidden;
 	}
 
 	.how-to {
@@ -793,8 +794,7 @@
 
 	.question-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
 	.editor-stack { display: grid; align-content: start; }
-	.state, .answer-note { margin: 0; color: var(--color-text-secondary); }
-	.answer-note { padding-inline: var(--space-3); }
+	.state, .answer-note { margin: 0; padding-inline: var(--space-3); color: var(--color-text-secondary); }
 	.gap-note { margin: var(--space-1) 0 0; }
 	.warn { color: var(--band-low); }
 	.answer-state { min-block-size: 0; block-size: 100%; display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); }
@@ -1013,6 +1013,8 @@
 			min-inline-size: 0;
 			inline-size: 100%;
 			flex-basis: 100%;
+		}
+		.how-to {
 			overflow: hidden;
 		}
 		.editor-head {

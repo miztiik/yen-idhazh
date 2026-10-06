@@ -21,6 +21,10 @@ export type DateSeriesShape = {
 	seriesColumns: readonly string[];
 	omittedColumns: readonly string[];
 	flatColumns: readonly { name: string; share: number; largestColumn: string }[];
+	/** UTC days the answer has a row for: the days the floor counts. */
+	days: number;
+	/** Rows whose day is NULL: the chart does not draw them, and its note says how many. */
+	rowsWithNoDay: number;
 	tooFew: boolean;
 	mainFigure: { column: string; value: number; date: string } | null;
 	comparison: string;
@@ -73,7 +77,7 @@ export type DistributionShape = {
 export type NoShape = {
 	kind: 'none';
 	reason: string;
-	code: 'no-number' | 'several-rows-per-day' | 'too-many-numbers' | 'too-many-text-columns' | 'no-fit';
+	code: 'no-number' | 'unplaceable-day' | 'no-day' | 'several-rows-per-day' | 'too-many-numbers' | 'too-many-text-columns' | 'no-fit';
 };
 
 export type ExplorerShape = DateSeriesShape | RankedListShape | PairedScatterShape | DistributionShape | NoShape;
@@ -98,15 +102,17 @@ function dayValue(value: unknown): DateStamp | null {
 	return typeof value === 'string' ? readUtcDay(value) : null;
 }
 
+/** The first value in a date column that falls on no UTC day from year 1 to 9999, as the engine
+ *  printed it and the table shows it, or `null` when every value falls on such a day. `infinity`, a
+ *  year past 9999 and a date `(BC)` are such values. A NULL is not: it is no day at all, so the date
+ *  chart leaves its row out instead. */
+function firstUnplaceableDay(rows: readonly Row[], dateColumn: string): string | null {
+	const value = rows.map((row) => row[dateColumn]).find((one) => one !== null && one !== undefined && dayValue(one) === null);
+	return value === undefined ? null : String(value);
+}
+
 function hasSeveralRowsPerUtcDay(rows: readonly Row[], dateColumn: string): boolean {
-	const days = new Set<string>();
-	for (const row of rows) {
-		const day = dayValue(row[dateColumn]);
-		if (day === null) return true;
-		if (days.has(day)) return true;
-		days.add(day);
-	}
-	return false;
+	return new Set(rows.map((row) => dayValue(row[dateColumn]))).size < rows.length;
 }
 
 function median(values: readonly number[]): number | null {
@@ -136,14 +142,31 @@ export function chooseExplorerShapes(columns: readonly Column[], rows: readonly 
 
 	if (dateColumns.length === 1 && numericColumns.length > 0) {
 		const dateColumn = dateColumns[0];
-		if (hasSeveralRowsPerUtcDay(rows, dateColumn)) {
+		const unplaceable = firstUnplaceableDay(rows, dateColumn);
+		if (unplaceable !== null) {
+			return [{
+				kind: 'none',
+				code: 'unplaceable-day',
+				reason: `Nothing here to draw: the column "${dateColumn}" holds ${unplaceable}, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.`
+			}];
+		}
+		const datedRows = rows.filter((row) => dayValue(row[dateColumn]) !== null);
+		const rowsWithNoDay = rows.length - datedRows.length;
+		if (datedRows.length === 0 && rowsWithNoDay > 0) {
+			return [{
+				kind: 'none',
+				code: 'no-day',
+				reason: `Nothing here to draw: the column "${dateColumn}" holds only null. Give "${dateColumn}" a date in the question to draw it over time.`
+			}];
+		}
+		if (hasSeveralRowsPerUtcDay(datedRows, dateColumn)) {
 			return [{
 				kind: 'none',
 				code: 'several-rows-per-day',
 				reason: 'Nothing here to draw: the answer has several rows a UTC day. Group by day in the question to draw it over time.'
 			}];
 		}
-		shapes.push(dateSeriesShape(dateColumns[0], numericColumns, rows, bounds));
+		shapes.push(dateSeriesShape(dateColumn, numericColumns, datedRows, rowsWithNoDay, bounds));
 	}
 
 	if (numericColumns.length === 1 && textColumns.length === 1 && rows.every((row) => (numericValue(row, numericColumns[0]) ?? 0) >= 0)) {
@@ -182,10 +205,12 @@ export function chooseExplorerShape(columns: readonly Column[], rows: readonly R
 	return chooseExplorerShapes(columns, rows, bounds)[0];
 }
 
-function dateSeriesShape(dateColumn: string, numericColumns: readonly string[], rows: readonly Row[], bounds: ExplorerShapeBounds): DateSeriesShape {
+/** The date chart's figures, read from the rows it draws: `datedRows` each have a day. A row whose
+ *  day is NULL moves no figure, and only its count is kept, for the note. */
+function dateSeriesShape(dateColumn: string, numericColumns: readonly string[], datedRows: readonly Row[], rowsWithNoDay: number, bounds: ExplorerShapeBounds): DateSeriesShape {
 	const largestByColumn = new Map<string, number>();
 	for (const column of numericColumns) {
-		largestByColumn.set(column, Math.max(0, ...rows.map((row) => numericValue(row, column) ?? 0)));
+		largestByColumn.set(column, Math.max(0, ...datedRows.map((row) => numericValue(row, column) ?? 0)));
 	}
 	const largestColumn = [...largestByColumn.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? numericColumns[0];
 	const largestValue = largestByColumn.get(largestColumn) ?? 0;
@@ -196,7 +221,7 @@ function dateSeriesShape(dateColumn: string, numericColumns: readonly string[], 
 		.filter((column) => !usable.includes(column))
 		.map((name) => ({ name, share: largestValue === 0 ? 0 : (largestByColumn.get(name) ?? 0) / largestValue, largestColumn }));
 	const firstSeries = seriesColumns[0] ?? numericColumns[0];
-	const latest = [...rows].sort((left, right) => String(right[dateColumn]).localeCompare(String(left[dateColumn])))[0];
+	const latest = [...datedRows].sort((left, right) => String(right[dateColumn]).localeCompare(String(left[dateColumn])))[0];
 	const value = firstNumber(latest, firstSeries);
 	return {
 		kind: 'chart',
@@ -207,7 +232,9 @@ function dateSeriesShape(dateColumn: string, numericColumns: readonly string[], 
 		seriesColumns,
 		omittedColumns,
 		flatColumns,
-		tooFew: rows.length < bounds.chartMinRows,
+		days: datedRows.length,
+		rowsWithNoDay,
+		tooFew: datedRows.length < bounds.chartMinRows,
 		mainFigure: latest && value !== null ? { column: firstSeries, value, date: dayValue(latest[dateColumn]) ?? String(latest[dateColumn]) } : null,
 		comparison: `${firstSeries} on each day against the other days in the span`
 	};

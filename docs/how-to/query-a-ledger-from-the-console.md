@@ -1,6 +1,6 @@
 # Query a ledger from the Data explorer console
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 Use the Data explorer page when the console has the data you need but no purpose-built panel answers your question.
 
@@ -28,7 +28,7 @@ The action line prices the next run before it fetches data. A wide span can be r
 
 ## Share or keep a question
 
-Copy link stores the chosen ledgers, the custom dates and the compressed question when it fits the measured request-target limit. A preset span that ends today keeps `days`; a custom span uses `from` and `end`.
+Copy link stores the chosen ledgers, the custom dates and the compressed question when the link fits `console.explorer_link_max_bytes`, the measured request-target limit. A longer link carries the ledgers and the days only, and `Copy question` appears beside Copy link. A preset span that ends today keeps `days`; a custom span uses `from` and `end`.
 
 Save keeps the question in this browser. A question saved before custom dates existed opens ending on the reader's UTC day.
 

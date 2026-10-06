@@ -395,6 +395,125 @@ test('the folded list closes on a press outside it, on Escape and after a pick, 
 	await expect(page.locator('#explorer-sql')).toHaveValue(`SELECT ${number} AS one`);
 });
 
+/** A question saved in this browser under a name the test wrote. */
+function kept(id: string, name: string, index: number) {
+	return { id, name, statement: `SELECT ${index + 1} AS one`, ledgers: ['published'], days: 14, updatedAt: `2026-08-20T0${index}:00:00Z` };
+}
+
+test('Forget on a chip on the line moves focus to the nearest Forget left on the line', async ({ page }) => {
+	// Three short names, which stand on a 1440 px line with any face.
+	const saved = ['Kept one', 'Kept two', 'Kept three'].map((name, index) => kept(`line-${index + 1}`, name, index));
+	await page.addInitScript((entries) => localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(entries)), saved);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page);
+	const line = page.locator('[data-workbench-region="questions"] .question-strip > .saved-chip > .example');
+	await expect(line).toHaveText(['Kept one', 'Kept two', 'Kept three']);
+
+	// The first goes, and focus moves to the Forget of the chip that took its place.
+	await page.getByRole('button', { name: 'Forget Kept one', exact: true }).click();
+	await expect(line).toHaveText(['Kept two', 'Kept three']);
+	await expect(page.getByRole('button', { name: 'Forget Kept two', exact: true })).toBeFocused();
+
+	// The last on the line goes, and focus moves back to the one before it.
+	await page.getByRole('button', { name: 'Forget Kept three', exact: true }).click();
+	await expect(line).toHaveText(['Kept two']);
+	await expect(page.getByRole('button', { name: 'Forget Kept two', exact: true })).toBeFocused();
+});
+
+test('Forget on the line moves focus to "{n} more" when no Forget is left on the line', async ({ page }) => {
+	// Forty wide letters are longer than the strip at 768 px with any face, so that question waits in the fold.
+	const saved = [kept('short', 'Kept', 0), kept('wide', 'W'.repeat(40), 1)];
+	await page.addInitScript((entries) => localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(entries)), saved);
+	await page.setViewportSize({ width: 768, height: 1024 });
+	await openExplorer(page);
+	const strip = page.locator('[data-workbench-region="questions"] .question-strip');
+	await expect(strip.locator(':scope > .saved-chip > .example')).toHaveText(['Kept']);
+
+	await page.getByRole('button', { name: 'Forget Kept', exact: true }).click();
+	await expect(strip.locator(':scope > .saved-chip')).toHaveCount(0);
+	await expect(strip.locator(':scope > details > summary')).toBeFocused();
+});
+
+/** Two runs this browser asked, written by the test. */
+const RUNS = [
+	{ id: 'run-1', statement: 'SELECT 1 AS one', ledgers: ['published'], days: 14, rows: 1, ms: 12, askedAt: '2026-08-20T09:00:00Z' },
+	{ id: 'run-2', statement: 'SELECT 2 AS two', ledgers: ['published'], days: 14, rows: 2, ms: 34, askedAt: '2026-08-20T10:00:00Z' }
+];
+
+for (const view of [
+	{ width: 390, height: 844 },
+	{ width: 640, height: 900 },
+	{ width: 1440, height: 900 }
+] as const) {
+	test(`History opens its list in view, each line of it whole and inside the window, at ${view.width}`, async ({ page }) => {
+		await page.addInitScript((runs) => localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify(runs)), RUNS);
+		await page.setViewportSize(view);
+		await openExplorer(page);
+		await page.locator('.history-list summary').click();
+		const menu = page.locator('.history-list .history-menu');
+		await expect(menu.getByRole('button')).toHaveCount(2);
+		const seen = await menu.evaluate((node) => [node.querySelector('.storage'), ...node.querySelectorAll('button')].map((part) => {
+			const element = part as HTMLElement;
+			// Scroll the page only, never a box around the list, so a box that clips it still does.
+			scrollTo(0, scrollY + element.getBoundingClientRect().top - innerHeight / 2);
+			const box = element.getBoundingClientRect();
+			const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+			return { inside: box.left >= 0 && box.right <= innerWidth, shown: hit !== null && element.contains(hit) };
+		}));
+		expect(seen, 'a line of the opened list is clipped, covered or outside the window').toEqual([
+			{ inside: true, shown: true },
+			{ inside: true, shown: true },
+			{ inside: true, shown: true }
+		]);
+	});
+}
+
+test('History closes its list on Escape, on a press outside it and after a pick, as the folded list does', async ({ page }) => {
+	await page.addInitScript((runs) => localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify(runs)), RUNS);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page);
+	const history = page.locator('.history-list');
+	const summary = history.locator('summary');
+	const editor = page.locator('#explorer-sql');
+
+	// Escape closes it and hands focus back to History.
+	await summary.click();
+	await expect(history).toHaveAttribute('open', '');
+	await history.getByRole('button').first().focus();
+	await page.keyboard.press('Escape');
+	await expect(history).not.toHaveAttribute('open');
+	await expect(summary).toBeFocused();
+
+	// A press outside closes it and still does what it pressed.
+	await summary.click();
+	await expect(history).toHaveAttribute('open', '');
+	await editor.click();
+	await expect(history).not.toHaveAttribute('open');
+	await expect(editor).toBeFocused();
+
+	// A pick loads that run's question, closes the list and leaves focus on History, not in the editor.
+	await summary.click();
+	await history.getByRole('button').nth(1).click();
+	await expect(history).not.toHaveAttribute('open');
+	await expect(summary).toBeFocused();
+	await expect(editor).toHaveValue('SELECT 2 AS two');
+});
+
+test('the line that says the ledger list did not arrive starts where the editor heading starts', async ({ page }) => {
+	await page.route('**/config/ledgers.json', (route) => route.fulfill({ status: 404, body: '' }));
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	const line = page.locator('.editor-stack > .state');
+	await expect(line).toHaveText('config/ledgers.json did not arrive (404)', { timeout: 60_000 });
+	const starts = await line.evaluate((node) => {
+		const words = document.createRange();
+		words.selectNodeContents(node);
+		const label = document.querySelector('.editor-head > label') as HTMLElement;
+		return { words: words.getBoundingClientRect().left, label: label.getBoundingClientRect().left };
+	});
+	expect(starts.words, 'the line has no side padding, so its words touch the column edge').toBeCloseTo(starts.label, 0);
+});
+
 test('Ctrl+Enter in the editor runs the question', async ({ page }) => {
 	await openExplorer(page);
 	await chooseExplorerQuestion(page, ['published'], 'SELECT 42 AS answer');

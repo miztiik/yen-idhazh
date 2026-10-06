@@ -66,6 +66,12 @@ Evaluator identity is pinned. `HHEM_REVISION` is a full immutable commit, and
 `scorer_version` carries both observations. A scorer that has not loaded cannot
 name its weights and fails instead of minting a plausible identity.
 
+Transformers 5 keeps the evaluator current without moving the evaluator's
+weights. The pinned HHEM revision contains older remote model code, so
+`backend/idhazh/evals/hhem.py` adapts its old tied-embedding name to the
+current loader contract. The adapter changes no weights, inputs, or score
+calculation.
+
 ### The two source word counts are one counter, before and after the cap
 
 `source_words_before_cap` is `Article.source_word_count`, the words in the
