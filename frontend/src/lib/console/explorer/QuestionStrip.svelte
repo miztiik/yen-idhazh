@@ -6,6 +6,7 @@
 	import type { ExplorerExample } from '$lib/server/config';
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { KeptQuestion } from './keep';
+	import { closeAfterPick, closesWhenLeft } from './floating-list';
 	import { chipsThatFit, type StripWidths } from './strip-fit';
 	let {
 		examples,
@@ -61,37 +62,9 @@
 		widths = { savedLabel, examplesLabel, more, chips, gap: parseFloat(getComputedStyle(strip).columnGap) || 0 };
 	});
 
-	// An open fold lies over the regions below it, so a press or a focus anywhere else
-	// closes it, and so does Escape, which hands focus back to its summary.
-	$effect(() => {
-		const details = fold;
-		if (details === null) return;
-		const outside = (event: Event) => {
-			if (details.open && !details.contains(event.target as Node)) details.open = false;
-		};
-		const escape = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape' || !details.open) return;
-			const inside = details.contains(document.activeElement);
-			details.open = false;
-			if (inside) details.querySelector('summary')?.focus();
-		};
-		document.addEventListener('pointerdown', outside);
-		document.addEventListener('focusin', outside);
-		document.addEventListener('keydown', escape);
-		return () => {
-			document.removeEventListener('pointerdown', outside);
-			document.removeEventListener('focusin', outside);
-			document.removeEventListener('keydown', escape);
-		};
-	});
-
-	// A pick closes the list and leaves focus on its summary: in the editor, a phone's
-	// keyboard would rise over the question that was just loaded.
 	async function pickFolded(pick: () => void) {
 		pick();
-		if (fold !== null) fold.open = false;
-		await tick();
-		fold?.querySelector('summary')?.focus();
+		await closeAfterPick(fold);
 	}
 
 	// Forget keeps the list open, so several can go in turn; focus moves to the nearest
@@ -120,7 +93,7 @@
 		<button type="button" class="example" onclick={() => onPick(chip.item)}>{chip.title}</button>
 	{/each}
 	{#if folded.length > 0}
-		<details bind:this={fold}>
+		<details bind:this={fold} use:closesWhenLeft>
 			<summary>{folded.length} more</summary>
 			<div class="folded">
 				{#each folded as chip, index (`folded:${chip.kind}:${chip.id}`)}
