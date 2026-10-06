@@ -15,7 +15,7 @@ export async function openExplorer(page: Page, waitReady = true) {
 	await page.clock.setFixedTime(`${EXPLORER_CANARY_DAY}T12:00:00Z`);
 	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toBeVisible();
-	await expect(page.locator('[data-ledger-name]').first()).toBeVisible();
+	await expect(page.locator('[data-ledger-name]').first().or(page.locator('[data-workbench-region="ledgers"] summary'))).toBeVisible();
 	if (waitReady) await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 }
 
@@ -29,6 +29,9 @@ export async function runExplorer(page: Page) {
 }
 
 export async function chooseExplorerQuestion(page: Page, ledgers: readonly LedgerName[], sql: string) {
+	if (await page.locator('[data-workbench-region="ledgers"]:not([open]) summary').count()) {
+		await page.locator('[data-workbench-region="ledgers"] summary').click();
+	}
 	while (await page.locator('[data-ledger-name] input:checked').count() > 0) {
 		await page.locator('[data-ledger-name] input:checked').first().click();
 	}

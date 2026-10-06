@@ -21,7 +21,7 @@
 
 <div class="ledger-list">
 	<div class="rail-head">
-		<h3>Ledgers</h3>
+		<h3><Icon id="ledgers" /> Ledgers</h3>
 		<button type="button" onclick={onRefresh} disabled={refreshing}><Icon id="list-refresh" /> {refreshing ? 'Refreshing' : 'Refresh'}</button>
 	</div>
 	<label class="filter">Filter <input value={filter} oninput={(event) => onFilter(event.currentTarget.value)} /></label>
@@ -39,13 +39,13 @@
 <style>
 	.ledger-list { display: grid; gap: var(--space-3); align-content: start; }
 	.rail-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-	h3 { margin: 0; font-size: var(--text-sm); }
+	h3 { margin: 0; display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-tertiary); font-size: var(--text-xs); font-weight: 600; letter-spacing: var(--tracking-label); text-transform: uppercase; }
 	button { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); padding: var(--space-1) var(--space-2); }
 	.filter { display: grid; gap: var(--space-1); font-size: var(--text-xs); color: var(--color-text-secondary); }
 	.filter input { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-bg); color: var(--color-text); padding: var(--space-2); }
 	.ledger-options { display: grid; align-content: start; max-block-size: 100%; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; padding-inline-end: var(--space-1); }
-	.ledger { min-block-size: var(--workbench-control); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-2); align-items: center; padding-inline: var(--space-3); background: var(--color-surface); }
-	.ledger small { grid-column: 2; color: var(--color-text-tertiary); }
+	.ledger { min-block-size: var(--workbench-control); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-2); align-items: center; padding-inline: var(--space-3); background: var(--color-surface); font-family: var(--font-data); font-size: var(--text-xs); line-height: var(--leading-xs); }
+	.ledger small { grid-column: 2; color: var(--color-text-tertiary); font-size: var(--text-xs); overflow-wrap: anywhere; }
 	.ledger small.late { color: var(--color-text); }
 	.ledger[data-published='no'] { opacity: 0.72; }
 </style>

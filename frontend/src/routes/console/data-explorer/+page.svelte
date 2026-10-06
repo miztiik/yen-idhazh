@@ -529,14 +529,15 @@
 			</div>
 		</div>
 		<div class="question-grid" class:wide>
-			<div data-workbench-region="ledgers">
+			<details data-workbench-region="ledgers" class="rail-region" open={wide}>
+				<summary>Ledgers: {selected.length}</summary>
 				<LedgerList ledgers={ledgers} selected={selected} {published} through={cost.through} spanFrom={fromDay} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
-			</div>
+			</details>
 			<div class="editor-stack">
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}
 				<div data-workbench-region="editor">
 					<div class="editor-head">
-						<label for="explorer-sql">DuckDB SQL</label>
+						<label for="explorer-sql"><Icon id="query-editor" /> DuckDB SQL</label>
 						<div class="editor-actions">
 							{#if saving}
 								<label>Name <input bind:value={draftName} maxlength={config.save_name_max_chars} /></label>
@@ -553,9 +554,10 @@
 				</div>
 				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href={answerLink} files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} {heldBytes} />
 			</div>
-			<div data-workbench-region="columns">
+			<details data-workbench-region="columns" class="rail-region" open={wide}>
+				<summary>{columnLabel} ({columns.length})</summary>
 				<ColumnList columns={columns} label={columnLabel} />
-			</div>
+			</details>
 		</div>
 	</div>
 </Panel>
@@ -657,6 +659,20 @@
 		border-block-end: 1px solid var(--color-rule);
 	}
 
+	:global([data-workbench-region='toolbar'] [data-window-control] button) {
+		border-radius: 0;
+	}
+
+	:global([data-workbench-region='toolbar'] [data-window-control] button:first-child) {
+		border-start-start-radius: var(--radius-md);
+		border-end-start-radius: var(--radius-md);
+	}
+
+	:global([data-workbench-region='toolbar'] [data-window-control] button:last-child) {
+		border-start-end-radius: var(--radius-md);
+		border-end-end-radius: var(--radius-md);
+	}
+
 	.date-fields {
 		display: flex;
 		flex-wrap: wrap;
@@ -744,6 +760,7 @@
 
 	[data-workbench-region='questions'] {
 		display: flex;
+		flex-wrap: nowrap;
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-2);
@@ -754,6 +771,7 @@
 
 	.question-links {
 		display: flex;
+		flex: 0 0 auto;
 		align-items: center;
 		gap: var(--space-2);
 		min-inline-size: 0;
@@ -789,6 +807,20 @@
 		overflow: auto;
 		border-inline-end: 1px solid var(--color-rule);
 		padding: var(--space-3);
+	}
+
+	.rail-region > summary {
+		display: none;
+		min-block-size: var(--workbench-control);
+		align-items: center;
+		padding-inline: var(--space-3);
+		color: var(--color-text);
+		font-size: var(--text-sm);
+		list-style: none;
+	}
+
+	.rail-region > summary::-webkit-details-marker {
+		display: none;
 	}
 
 	[data-workbench-region='columns'] {
@@ -871,22 +903,47 @@
 		}
 		[data-workbench-region='ledgers'],
 		[data-workbench-region='columns'] {
+			block-size: var(--workbench-control);
+			padding: 0;
+			overflow: visible;
 			border-inline: 0;
 			border-block: 1px solid var(--color-rule);
+		}
+
+		.rail-region > summary {
+			display: flex;
+		}
+
+		.rail-region[open] {
+			block-size: calc(var(--workbench-control) + var(--editor-lines) * var(--workbench-field-leading) + 2 * var(--space-3));
+			overflow: auto;
+		}
+
+		.rail-region[open] > :global(.ledger-list),
+		.rail-region[open] > :global(.column-list) {
+			padding: var(--space-3);
+		}
+
+		.rail-region:not([open]) > :global(.ledger-list),
+		.rail-region:not([open]) > :global(.column-list) {
+			display: none;
 		}
 	}
 
 	@media (max-width: 639px) {
 		[data-workbench-region='questions'] {
 			align-items: stretch;
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto;
 		}
 		:global([data-workbench-region='questions'] .question-strip),
-		.question-links,
 		.how-to {
 			min-inline-size: 0;
-			inline-size: 100%;
-			flex-basis: 100%;
 			overflow: hidden;
+		}
+
+		.question-links {
+			display: contents;
 		}
 	}
 

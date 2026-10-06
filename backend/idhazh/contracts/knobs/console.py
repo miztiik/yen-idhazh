@@ -607,7 +607,7 @@ class ConsoleConfig(Model):
         ),
     )
     explorer_strip_shown: tuple[int, int] = Field(
-        default=(3, 6),
+        default=(0, 6),
         description="Example chips shown before the rest fold at phone and wider widths.",
     )
     explorer_answer_svh: int = Field(
@@ -882,10 +882,10 @@ class ConsoleConfig(Model):
         ):
             raise ValueError("console.explorer_editor_lines_shown must be ascending and positive")
         if (
-            self.explorer_strip_shown[0] < 1
+            self.explorer_strip_shown[0] < 0
             or self.explorer_strip_shown[0] > self.explorer_strip_shown[1]
         ):
-            raise ValueError("console.explorer_strip_shown must be ascending and positive")
+            raise ValueError("console.explorer_strip_shown must be ascending and non-negative")
         return self
 
     @model_validator(mode="after")

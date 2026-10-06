@@ -197,27 +197,100 @@ test('M8: every workbench region keeps its idle block size at all four widths', 
 			const space3 = parseFloat(css.getPropertyValue('--space-3')) * rem;
 			const leadingSm = parseFloat(css.getPropertyValue('--leading-sm')) * rem;
 			const fieldLeading = parseFloat(css.getPropertyValue('--workbench-field-leading')) * rem;
+			const space2 = parseFloat(css.getPropertyValue('--space-2')) * rem;
 			const regions = Object.fromEntries(
 				[...document.querySelectorAll('[data-workbench-region]')].map((node) => {
 					const rect = node.getBoundingClientRect();
 					return [node.getAttribute('data-workbench-region') ?? '', rect.height];
 				})
 			);
-			return { control, space1, space3, leadingSm, fieldLeading, rem, regions };
+			return { control, space1, space2, space3, leadingSm, fieldLeading, rem, regions };
 		});
 		const lines = explorerConfig().readout_lines[view.width < 640 ? 0 : view.width < 1024 ? 1 : view.width < 1400 ? 2 : 3];
 		const editorLines = explorerConfig().editor_lines_shown[view.width < 1024 ? 0 : 1];
 		const editorHeight = 4 * sizes.space3 + sizes.control + editorLines * sizes.fieldLeading;
 		const statusHeight = lines * sizes.leadingSm + 2 * sizes.space1;
+		const oneControlRow = sizes.control + 2 * sizes.space1;
+		expect(sizes.regions.toolbar, `${view.width} toolbar`).toBeCloseTo(view.width >= 1024 ? oneControlRow : 2 * sizes.control + sizes.space2 + 2 * sizes.space1, 0);
+		expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(view.width >= 640 ? oneControlRow : 2 * sizes.control + sizes.space2 + 2 * sizes.space1, 0);
 		expect(sizes.regions.editor, `${view.width} editor`).toBeCloseTo(editorHeight, 0);
 		expect(sizes.regions.status, `${view.width} status`).toBeCloseTo(lines * sizes.leadingSm + 2 * sizes.space1, 0);
 		if (view.width >= 1024) {
 			expect(sizes.regions.ledgers, `${view.width} ledgers`).toBeCloseTo(editorHeight + statusHeight, 0);
 			expect(sizes.regions.columns, `${view.width} columns`).toBeCloseTo(editorHeight + statusHeight, 0);
+		} else {
+			expect(sizes.regions.ledgers, `${view.width} ledgers summary`).toBeCloseTo(sizes.control, 0);
+			expect(sizes.regions.columns, `${view.width} columns summary`).toBeCloseTo(sizes.control, 0);
 		}
 		expect(sizes.regions.answer, `${view.width} answer`).toBeCloseTo(view.height * explorerConfig().answer_svh / 100, 0);
 		expect(sizes.regions.chart, `${view.width} chart`).toBeCloseTo(sizes.control + consoleConfig().chart_height + 4 * sizes.rem, 0);
 	}
+});
+
+test('M7: the editor frame starts in the top third on desktop and tablet', async ({ page }) => {
+	for (const view of [{ width: 1440, height: 900 }, { width: 1024, height: 768 }] as const) {
+		await page.setViewportSize(view);
+		await openExplorer(page);
+		const top = await page.locator('[data-workbench-region="editor"] .frame').evaluate((node) => node.getBoundingClientRect().top);
+		expect(top, `${view.width} editor frame top`).toBeLessThanOrEqual(300);
+	}
+});
+
+test('M14: the chart draws at the region content width and keeps its height on resize', async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page);
+	await chooseExplorerQuestion(page, ['published'], "SELECT DATE '2026-08-18' AS day, 3 AS rows UNION ALL SELECT DATE '2026-08-19', 5 UNION ALL SELECT DATE '2026-08-20', 8");
+	await runExplorer(page);
+	const reading = async () => page.evaluate(() => {
+		const region = document.querySelector('[data-workbench-region="chart"]') as HTMLElement;
+		const style = getComputedStyle(region);
+		const contentWidth = Math.floor(region.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+		const plot = region.querySelector('[data-chart-type]') as HTMLElement | SVGElement | null;
+		const plotBox = plot?.getBoundingClientRect();
+		const regionBox = region.getBoundingClientRect();
+		return { contentWidth, plotWidth: Math.floor(plotBox?.width ?? 0), regionHeight: regionBox.height };
+	});
+	const wide = await reading();
+	expect(wide.plotWidth).toBe(wide.contentWidth);
+	await page.setViewportSize({ width: 1024, height: 768 });
+	const narrow = await reading();
+	expect(narrow.plotWidth).toBe(narrow.contentWidth);
+	expect(narrow.plotWidth).not.toBe(wide.plotWidth);
+	expect(narrow.regionHeight).toBeCloseTo(wide.regionHeight, 0);
+});
+
+test('M19: workbench text stays on the declared type scale', async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page);
+	const offScale = await page.locator('.workbench').evaluate((root) => {
+		const css = getComputedStyle(document.documentElement);
+		const rem = parseFloat(css.fontSize);
+		const allowed = [
+			['--text-xs', '--leading-xs'],
+			['--text-sm', '--leading-sm'],
+			['--text-base', '--leading-base'],
+			['--text-xl', '--leading-xl']
+		].map(([size, leading]) => ({
+			size: parseFloat(css.getPropertyValue(size)) * rem,
+			leading: parseFloat(css.getPropertyValue(leading)) * rem
+		}));
+		const failures: string[] = [];
+		const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+		for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+			if ((text.textContent ?? '').trim() === '') continue;
+			const element = text.parentElement;
+			if (element === null) continue;
+			const style = getComputedStyle(element);
+			if (style.visibility === 'hidden' || style.display === 'none') continue;
+			const size = parseFloat(style.fontSize);
+			const leading = parseFloat(style.lineHeight);
+			if (!allowed.some((pair) => Math.abs(pair.size - size) < 0.2 && Math.abs(pair.leading - leading) < 0.2)) {
+				failures.push(`${(text.textContent ?? '').trim().slice(0, 32)}: ${size}/${leading}`);
+			}
+		}
+		return failures;
+	});
+	expect(offScale).toEqual([]);
 });
 
 test('M10: non-run interactions keep every region box fixed', async ({ page, context }) => {

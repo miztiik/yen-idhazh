@@ -612,7 +612,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	readout_lines: [7, 3, 4, 3],
 	notice_ms: 6000,
 	editor_lines_shown: [8, 10],
-	strip_shown: [3, 6],
+	strip_shown: [0, 6],
 	answer_svh: 60,
 	cell_max_ch: 40,
 	bar_spread_share: 0.5,

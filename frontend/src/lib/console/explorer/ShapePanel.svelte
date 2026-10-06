@@ -1,5 +1,6 @@
 <script lang="ts">
 	/** Draws a Data explorer answer with the chart type its columns can honestly support. */
+	import { onMount } from 'svelte';
 	import type { Column, Row } from '$lib/data/ledger';
 	import { tooFewSentence } from '$lib/console/waiting';
 	import { frame } from '$lib/charts/frame';
@@ -17,6 +18,8 @@
 	import { printCell } from './answer';
 
 	let { columns, rows, bounds, height, selectedType = null }: { columns: readonly Column[]; rows: readonly Row[]; bounds: ExplorerShapeBounds; height: number; selectedType?: ExplorerChartType | null } = $props();
+	let drawing = $state<HTMLDivElement | null>(null);
+	let chartWidth = $state(760);
 
 	const shapes = $derived(chooseExplorerShapes(columns, rows, bounds));
 	const choices = $derived(shapes.filter((shape) => shape.kind === 'chart'));
@@ -87,6 +90,17 @@
 		if (values.length === 0) return null;
 		return { subject: next.valueColumn, facts: [{ label: 'middle', value: String(values[Math.floor(values.length / 2)]) }] };
 	}
+
+	onMount(() => {
+		if (drawing === null) return;
+		const sync = () => {
+			if (drawing !== null) chartWidth = Math.max(1, Math.floor(drawing.getBoundingClientRect().width));
+		};
+		const observer = new ResizeObserver(sync);
+		observer.observe(drawing);
+		sync();
+		return () => observer.disconnect();
+	});
 </script>
 
 <div class="shape-panel" style={`--shape-height:${height}px`}>
@@ -98,13 +112,14 @@
 	{:else}
 		<p class="shape-lede" data-lede>{lede(active)}</p>
 		{@const readout = readoutFor(active)}
+		<div class="shape-drawing" bind:this={drawing}>
 		{#if active.type === 'dateSeries'}
-			{@const box = frame(760, height)}
+			{@const box = frame(chartWidth, height)}
 			{@const seriesColumns = active.seriesColumns}
 			{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: chartTokens[index] ?? '--chart-1', points: rows.map((row) => ({ date: text(row, active.dateColumn), value: value(row, column) })) })), { frame: box, density: 6, valueTicks: 4, padding: 0.25 })}
 			{@const dateReadout = readoutOf({ type: 'dateSeries', columns: dateGeometry?.dates ?? [], series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(--chart-${index + 1})`, values: (dateGeometry?.dates ?? []).map((day) => rows.find((row) => text(row, active.dateColumn) === day)).map((row) => row ? value(row, column) : null), format: (n) => text({ [column]: n }, column) })), notMeasured: 'Not a number', resting: 'last' })}
 			<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
-				<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={760} {height} readout={dateReadout} />
+				<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={chartWidth} {height} readout={dateReadout} />
 			</div>
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else if active.type === 'rankedList'}
@@ -113,16 +128,17 @@
 			{#if readout}<dl class="shape-readout" data-readout="data-explorer-shape" data-readout-shape="record"><dt data-readout-subject>{readout.subject}</dt>{#each readout.facts as fact}<div data-readout-row={fact.label}><dd>{fact.label}</dd><dd>{fact.value}</dd></div>{/each}</dl>{/if}
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else if active.type === 'pairedScatter'}
-			{@const box = frame(760, height)}
+			{@const box = frame(chartWidth, height)}
 			{@const points = rows.flatMap((row, index) => value(row, active.xColumn) === null || value(row, active.yColumn) === null ? [] : [{ label: active.subjectColumn === null ? `row ${index + 1}` : text(row, active.subjectColumn), x: value(row, active.xColumn) as number, y: value(row, active.yColumn) as number }])}
-			<PairedScatter geometry={pairedScatter(points, { frame: box, minRows: bounds.fleetMinRows, minSubjects: bounds.bandwidthMinKinds, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Paired: ${active.yColumn} against ${active.xColumn}`} width={760} {height} />
+			<PairedScatter geometry={pairedScatter(points, { frame: box, minRows: bounds.fleetMinRows, minSubjects: bounds.bandwidthMinKinds, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Paired: ${active.yColumn} against ${active.xColumn}`} width={chartWidth} {height} />
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else}
-			{@const box = frame(760, height)}
+			{@const box = frame(chartWidth, height)}
 			{@const values = rows.map((row) => value(row, active.valueColumn)).filter((one): one is number => one !== null)}
-			<Distribution geometry={distribution(values, { frame: box, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={760} {height} />
+			<Distribution geometry={distribution(values, { frame: box, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} {height} />
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{/if}
+		</div>
 	{/if}
 </div>
 
@@ -130,6 +146,12 @@
 	.shape-panel {
 		display: grid;
 		gap: var(--space-3);
+		min-inline-size: 0;
+	}
+
+	.shape-drawing {
+		min-inline-size: 0;
+		overflow: auto;
 	}
 
 	.shape-note,

@@ -70,7 +70,8 @@
 	tbody tr:nth-child(even) td,
 	tbody tr:nth-child(even) th { background: var(--tint-neutral); }
 	thead th { position: sticky; inset-block-start: 0; z-index: 2; }
-	.row-number { position: sticky; inset-inline-start: 0; z-index: 3; inline-size: calc(4ch + var(--space-3) + var(--space-5)); color: var(--color-text-tertiary); font-family: var(--font-data); border-inline-end: 1px solid var(--color-rule-strong); }
+	thead th { background: var(--color-surface-raised); border-block-end: 1px solid var(--color-rule-strong); }
+	.row-number { position: sticky; inset-inline-start: 0; z-index: 3; inline-size: calc(4ch + 2 * var(--space-2)); color: var(--color-text-tertiary); font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: end; border-inline-end: 1px solid var(--color-rule-strong); }
 	th button { display: grid; gap: var(--space-1); border: 0; background: transparent; color: inherit; padding: 0; text-align: start; font: inherit; }
 	th span { font-family: var(--font-data); overflow-wrap: anywhere; }
 	th small { color: var(--color-text-tertiary); font-weight: 400; }
@@ -82,5 +83,5 @@
 	.show-more { min-block-size: var(--workbench-control); display: flex; justify-content: space-between; gap: var(--space-3); align-items: center; padding-inline: var(--space-3); }
 	.show-more p { margin: 0; color: var(--color-text-secondary); }
 	.show-more button { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); padding: var(--space-2) var(--space-3); }
-	@media (min-width: 640px) { tbody td:first-of-type, thead th:nth-child(2) { position: sticky; inset-inline-start: calc(4ch + var(--space-3) + var(--space-5)); z-index: 2; border-inline-end: 1px solid var(--color-rule-strong); } }
+	@media (min-width: 640px) { tbody td:first-of-type, thead th:nth-child(2) { position: sticky; inset-inline-start: calc(4ch + 2 * var(--space-2)); z-index: 2; border-inline-end: 1px solid var(--color-rule-strong); } }
 </style>
