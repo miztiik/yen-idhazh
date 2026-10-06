@@ -56,7 +56,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | PENDING | - | - | - |
 | L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
 | L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | - | Plan 62 row l4 |
-| L5 | Console windows end on the site's newest published day | L4 | C | PENDING | - | - | - |
+| L5 | Console windows end on the site's newest published day | L4 | C | DONE | solid-potato | - | Plan 62 row l5 |
 | L7 | A published ledger that has not started | L1 | B | PENDING | - | - | - |
 | L8 | The archive's failures are named as the archive's | L1, L2, L4 | C | PENDING | - | - | - |
 | L9 | Console specs outside the explorer serve the data they check | L2 | C | PENDING | - | - | - |
@@ -373,9 +373,20 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/tests/console-window.spec.ts` (pins that `windowOfDays` ends on the newest date it is handed; not in Fowler's list)
   - `frontend/tests/console.spec.ts` (calls `windowOfDays`; not in Fowler's list)
   - each console spec that assumes a window ends on a record's own last day. Nobody has counted them: run the console group on the L5 branch, and add each failing spec here before editing it
+  - `frontend/src/lib/server/payload.ts` (found at dispatch by the owner: `feedResults` takes the window; `latestDate()` is unchanged)
+  - `frontend/src/lib/server/window-day.ts` (new; found during execution: the one place the day every console window ends on is read, `latestDate()` or the build's UTC day)
+  - `frontend/src/lib/console/RecordNotes.svelte` (found during execution: the quietest line for the day packing has not reached, decision 4)
+  - `frontend/src/routes/console/machine/+page.svelte` (found during execution: picks the open window's notes)
+  - `frontend/src/lib/server/ledger-disk.ts`, `frontend/src/lib/feed-health.ts` (found during execution: comments that said a reader anchors on the newest packed day)
+  - `frontend/src/lib/server/machine-counters.ts` (found during execution: `hostRows` and `loadMachineCounters` take the window)
+  - `frontend/src/lib/server/model-work.ts` (found during execution: `sourceCuts` ended its window on its own newest row; it takes the route's window)
+  - `frontend/tests/ledger-door.spec.ts` (found during execution: the reach's `ok` answer names `lastRows`)
+  - `frontend/tests/support/canary-records.ts`, `frontend/tests/console-machine-data.spec.ts`, `frontend/tests/console-voices-feeds.spec.ts` (found during execution: `-1`, every packed day, is gone; they read the window the console's server reads over the canary, which holds the same days. They still read canary content: L9's inventory keeps them)
+  - `frontend/tests/console-voices-sources.spec.ts`, `frontend/tests/one-pass-reductions.spec.ts` (found during execution: `sourceCuts` takes a written-out window; the golden output is unchanged)
   - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
   - `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md`
   - `docs/concepts/config/appearance.md`
+  - `docs/architecture/publishing/console-payloads.md`, `docs/concepts/growing-reads.md`, `docs/architecture/publishing/what-sits-above-every-console-route.md`, `docs/architecture/publishing/console-truncation.md`, `docs/architecture/publishing/what-the-pipelines-route-draws.md`, `docs/architecture/publishing/console-machine.md`, `docs/architecture/sources/health.md`, `docs/concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md`, `docs/architecture/publishing/telemetry-series.md` (found during execution: each said a window or a read ends on the newest day a ledger holds)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec ledger-rows.spec.ts --spec ledger-lifecycle.spec.ts --spec console-window.spec.ts --spec console.spec.ts`, then `--group console`; `npm --prefix frontend run check`; ruff, mypy and the backend tests that `test:changed -- --list` selects for `console.py`; `doc_load.py` on the three pages; the browser smoke of the console's home, judgement, machine, model and voices routes. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push.
 - **Oracle:** in `ledger-rows.spec.ts`, on a site the test builds, a record whose rows stop 40 days before the newest published day. The window ends on that published day, nothing before the window's start is read, and the note names the record's last day (Table G, G10). It cannot settle how the days that packing has not reached look at a panel's right edge; Jony and Susan rule on that (decision 4).
 
