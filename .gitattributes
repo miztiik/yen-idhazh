@@ -136,13 +136,12 @@ frontend/public/assist/index/*.bin binary
 *.wasm binary
 
 # The two roots the ledger door files under. Every data file there has one
-# writer and is written once, and every index and watermark is rewritten whole
-# by one writer, so a text merge of any of them could only splice two writers'
+# writer and is written once, and every index is rewritten whole by one
+# writer, so a text merge of any of them could only splice two writers'
 # bytes into a file neither wrote: `-merge` stops the push and asks.
 # Path-anchored, so a generic name elsewhere in the repository cannot match.
 # `*.parquet binary` is last so it wins over `tests/fixtures/** text` above - a
 # parquet fixture converted as text would be a file no reader can open.
 state/**/*.parquet                -merge
 state/compact/**/index/*.json      -merge
-state/compact/**/*/watermark.json  -merge
 *.parquet                         binary

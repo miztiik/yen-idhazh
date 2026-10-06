@@ -1,10 +1,10 @@
 """What one ledger's compact periods hold as a compaction pass finds them, and what it changes.
 
-A pass reads the three watermarks, the three period indexes and the names of the
-raw day folders once, then decides period by period what to write and what to
-delete. File decisions are `Change` records; indexes and watermarks stay
-pending until `finish` serializes each final value once. The resulting order
-is data, indexes from coarsest to finest, deletions, then watermarks.
+A pass reads the three period indexes and the names of the raw day folders
+once, works out from the indexes how far each period is packed, then decides
+period by period what to write and what to delete. File decisions are `Change`
+records; indexes stay pending until `finish` serializes each final value once.
+The resulting order is data, indexes from coarsest to finest, then deletions.
 Nothing touches the disk until
 `apply`, which a dry run never calls. So a dry run and a live run make the same
 decisions from the same reads, and the list a dry run reports is the list a
@@ -12,16 +12,24 @@ live run carries out, file for file. A file a monthly window would delete while
 that window only reports is no change at all: the pass names it with `spare`,
 so the record can count it, and keeps it.
 
+**The marks are worked out from the indexes, and then only move forward.** The
+daily, monthly and yearly marks are worked out (`ledger_marks.work_out_marks`)
+when the tree is built, and again after an absent index is rebuilt from the
+files at its named paths, before any step runs (`_absent_indexes`). After that
+each step moves its mark forward as it finishes a period, and nothing moves one
+back: the drop step taking months out of the monthly index moves no mark.
+
 **Names come from the task's listing, and content is fetched before it is
 read.** The raw day folders, which compact files exist and what
-each weighs are all read off the listing. The watermarks and the indexes are
-fetched once, before they are read, and each step fetches the day or month
+each weighs are all read off the listing. The indexes are fetched once, before
+they are read, and each step fetches the day or month
 folders it opens before it opens one. The drop, year, month and day steps
 choose their periods as they run, so each names what it reads of them first,
 through `name_drops`, `name_years`, `name_months` and `name_days`, and the
 listing then answers for them from the same commit. A day step with no mark
 looks back over months no step has named yet, and the pass names those through
-`name_raw_months` before it chooses.
+`name_raw_months` before it chooses. An absent index is rebuilt from files the
+rebuild names through `name_period_files`.
 
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
 that lands the pass refuses a path on both lists, so one pass that did either
@@ -45,15 +53,16 @@ in one download. The first period that does not fit stops the step
 name when the period alone is larger than the whole budget, which only a person
 can raise.
 
-The watermarks and the indexes are read by `ledger_marks`, which stops the pass
-on one this build cannot trust, rather than read it as absent, and says why.
+The indexes are read by `ledger_marks`, which stops the pass on one this build
+cannot trust, rather than read it as absent, and says why.
 
 **A ledger's three indexes exist together.** Whatever writes one writes each of
-the others the ledger has none of yet, and those are empty: a period with no
-watermark was never packed, so an empty list is the truth about it. A reader
-that finds `index/daily.json` can then tell a lost `index/monthly.json` or
-`index/yearly.json` from a period never packed, and asks for no file that is not
-there.
+the others the ledger has none of yet. Each of those holds what the rebuild of
+an absent index found at that period's named paths, which is nothing when no
+file was there, so an empty list is the truth about it as far as those paths
+reach. A reader that finds `index/daily.json` can then tell a lost
+`index/monthly.json` or `index/yearly.json` from a period never packed, and
+asks for no file that is not there.
 """
 
 from __future__ import annotations
@@ -69,7 +78,7 @@ from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.gardener_fault import RecoveryNote
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import ledger_marks, named_trees
 from idhazh.gardener.file_listing import FileListing, OverBudgetError
@@ -159,10 +168,6 @@ class CompactTree:
     #: The files under the folders the compaction owns, which is where every
     #: name the pass decides from comes from.
     listing: FileListing
-    #: The newest day, month and year compacted, or None when that period never has been.
-    daily_through: str | None
-    monthly_through: str | None
-    yearly_through: str | None
     #: Each period's index, by what each entry covers.
     daily: dict[str, CompactEntry]
     monthly: dict[str, CompactEntry]
@@ -180,11 +185,19 @@ class CompactTree:
     #: the window only reports. It is not a change, so `apply` never sees it.
     spares: list[Path] = field(default_factory=list)
     pending_indexes: set[Period] = field(default_factory=set)
-    pending_watermarks: dict[Period, Watermark] = field(default_factory=dict)
+    #: The newest day, month and year packed, or None when nothing of that period
+    #: is: worked out from the entries (`work_out_marks`), then moved forward by
+    #: the steps as they finish periods.
+    daily_through: str | None = field(init=False)
+    monthly_through: str | None = field(init=False)
+    yearly_through: str | None = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.work_out_marks()
 
     @classmethod
     def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
-        """The three watermarks, the three indexes and the raw day folder names, read once."""
+        """The three indexes and the raw day folder names, read once, and the marks they give."""
         marks = ledger_marks.read_marks(state_dir, ledger_name, listing)
         # A wake names no raw folder: each step names the raw folders it reads.
         raw_days = (
@@ -196,9 +209,6 @@ class CompactTree:
             state_dir=state_dir,
             ledger=ledger_name,
             listing=listing,
-            daily_through=marks.through[Period.DAILY],
-            monthly_through=marks.through[Period.MONTHLY],
-            yearly_through=marks.through[Period.YEARLY],
             daily=dict(marks.entries[Period.DAILY]),
             monthly=dict(marks.entries[Period.MONTHLY]),
             yearly=dict(marks.entries[Period.YEARLY]),
@@ -206,6 +216,19 @@ class CompactTree:
             listed=len(raw_days),
             indexed=marks.indexed,
         )
+
+    def work_out_marks(self) -> None:
+        """Set each mark to what the entries the pass holds now say, as `ledger_marks` works it out.
+
+        Called when the tree is built and after an absent index is rebuilt,
+        before any step runs; after that only the steps move a mark.
+        """
+        through = ledger_marks.work_out_marks(
+            {Period.DAILY: self.daily, Period.MONTHLY: self.monthly, Period.YEARLY: self.yearly}
+        )
+        self.daily_through = through[Period.DAILY]
+        self.monthly_through = through[Period.MONTHLY]
+        self.yearly_through = through[Period.YEARLY]
 
     def raw_day_folder(self, day: str) -> Path:
         """The raw folder one UTC day's writer files sit in."""
@@ -284,6 +307,20 @@ class CompactTree:
         A day step with no mark looks back over them for its oldest raw day.
         """
         self._name([], months=months)
+
+    def name_period_files(self, period: Period, covers: Sequence[str]) -> None:
+        """Name these periods' own files, whichever format wrote each, and no raw folder.
+
+        An absent index is rebuilt from the files at these names
+        (`_absent_indexes`), which are listed from the commit now.
+        """
+        self._name(
+            [
+                ledger.compact_path(self.state_dir, self.ledger, period, each, fmt=fmt)
+                for each in covers
+                for fmt in Format
+            ]
+        )
 
     def name_days(self, days: Sequence[str]) -> None:
         """Name what the day step reads of these days, and take in each that holds raw files.
@@ -480,9 +517,9 @@ class CompactTree:
 
         Each other period's index is written with it when the ledger has none yet
         so a ledger never holds one index
-        without the others. A period with no index has no watermark either -
-        `read_marks` refuses that pair - so what the pass holds for it is nothing,
-        and the index says so.
+        without the others. An absent index was rebuilt from the files at its
+        named paths before any step ran, so what the pass holds for it is what
+        that rebuild found, nothing when no file was there, and the index says so.
         """
         self.pending_indexes.add(period)
         self.pending_indexes.update(set(Period) - self.indexed)
@@ -499,40 +536,16 @@ class CompactTree:
         path = ledger.compact_index_path(self.state_dir, self.ledger, period)
         self.write(path, index.to_json().encode("ascii"))
 
-    def write_watermark(
-        self, period: Period, *, through: str, advanced_at: str, run_id: str
-    ) -> None:
-        """Keep the final watermark for one write after indexes and source deletions."""
-        mark = Watermark(
-            version=Watermark.schema_version(),
-            ledger=self.ledger,
-            period=period,
-            through=through,
-            advanced_at=advanced_at,
-            run_id=run_id,
-        )
-        self.pending_watermarks[period] = mark
-
     def finish(self) -> None:
-        """Plan data, final indexes, source deletions, then final watermarks, once per pass."""
+        """Plan data, final indexes, then source deletions, once per pass."""
         writes = [change for change in self.changes if change.data is not None]
         deletes = [change for change in self.changes if change.data is None]
         indexes_start = len(self.changes)
         for period in (Period.YEARLY, Period.MONTHLY, Period.DAILY):
             if period in self.pending_indexes:
                 self.write_index(period)
-        watermarks_start = len(self.changes)
-        for period, mark in self.pending_watermarks.items():
-            path = ledger.watermark_path(self.state_dir, self.ledger, period)
-            self.write(path, mark.to_json().encode("ascii"))
-        self.changes = [
-            *writes,
-            *self.changes[indexes_start:watermarks_start],
-            *deletes,
-            *self.changes[watermarks_start:],
-        ]
+        self.changes = [*writes, *self.changes[indexes_start:], *deletes]
         self.pending_indexes.clear()
-        self.pending_watermarks.clear()
 
     def apply(self) -> None:
         """Carry out every change in the order it was decided. A dry run never calls this.

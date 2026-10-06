@@ -381,16 +381,45 @@ def test_a_month_settles_only_beside_a_window_that_keeps_whole_months(
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
-    GardenerConfig(version="2026-09-27", task_names=(), attempts=6, shards=5)
+    GardenerConfig(
+        version="2026-09-27", task_names=(), attempts=6, shards=5, first_ledger_year="2026"
+    )
     with pytest.raises(ValidationError, match="attempts is 5 and shards is 5"):
-        GardenerConfig(version="2026-09-27", task_names=(), attempts=5, shards=5)
+        GardenerConfig(
+            version="2026-09-27", task_names=(), attempts=5, shards=5, first_ledger_year="2026"
+        )
 
 
 def test_task_names_must_be_unique() -> None:
     with pytest.raises(ValidationError, match="task_names repeats a task"):
         GardenerConfig(
-            version="2026-09-27", task_names=("seen", "seen"), attempts=6, shards=5
+            version="2026-09-27",
+            task_names=("seen", "seen"),
+            attempts=6,
+            shards=5,
+            first_ledger_year="2026",
         )
+
+
+@pytest.mark.parametrize(
+    ("given", "refusal"),
+    [(None, "missing"), ("26", "string_pattern_mismatch"), (2026, "string_type")],
+    ids=["left-out", "two-digits", "a-number"],
+)
+def test_a_first_ledger_year_that_is_not_a_four_digit_utc_year_is_refused_by_name(
+    given: str | int | None, refusal: str
+) -> None:
+    """A rebuilt index looks for year and month files from it, so no year is assumed for it."""
+    payload: dict[str, Any] = {"version": "2026-10-06", "task_names": [], "attempts": 6, "shards": 5}
+    if given is not None:
+        payload["first_ledger_year"] = given
+
+    with pytest.raises(ValidationError) as refused_payload:
+        GardenerConfig.model_validate(payload)
+
+    assert [(error["type"], error["loc"]) for error in refused_payload.value.errors()] == [
+        (refusal, ("first_ledger_year",))
+    ]
 
 
 def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -> None:

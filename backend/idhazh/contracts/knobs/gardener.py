@@ -2,7 +2,8 @@
 
 Two shapes, and they answer one question at two sizes. `GardenerConfig` is
 `config/idhazh_gardener.json`: how many shards a wake splits into, how many
-times a shard may try to land its record, and how much one shard may download.
+times a shard may try to land its record, how much one shard may download, and
+the first year a ledger can hold.
 `TaskPolicy` is one file under `config/gardener/`: one task, what it owns and
 what it only reads, how far back it keeps, and whether it may delete at all.
 
@@ -34,7 +35,7 @@ from typing import Annotated, Final, Literal, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import DateStamp, Model, RelPath, Slug
+from idhazh.contracts.base import DateStamp, Model, RelPath, Slug, YearStamp
 from idhazh.contracts.ledger_name import LedgerName
 
 
@@ -109,6 +110,13 @@ class GardenerConfig(Model):
             "of it. A shard over it still runs its tasks and lands its record, then "
             "exits 1 naming what it downloaded, this ceiling and its three heaviest "
             "folders."
+        ),
+    )
+    first_ledger_year: YearStamp = Field(
+        description=(
+            "The UTC year, as YYYY, from which a compaction looks for year and month files "
+            "when one of a ledger's indexes is absent and is rebuilt from the files at their "
+            "named paths. No ledger holds a row from before it."
         ),
     )
 

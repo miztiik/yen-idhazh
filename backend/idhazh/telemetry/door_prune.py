@@ -18,7 +18,7 @@ day of the range a ceiling left.
 1. it deletes the days' raw files;
 2. it rebuilds each daily, monthly and yearly file that holds a row of them,
    once, without their rows - a file whose every row goes stays as an empty
-   file, so no index and no watermark has a hole;
+   file, so no index has a hole;
 3. it rewrites each index that names a rebuilt file, in the bytes the
    compaction writes an index in. The rebuilt file's entry takes the file's
    new row count and size and keeps every other field as it was, so the days
@@ -27,7 +27,7 @@ day of the range a ceiling left.
 Deletes first, so a day the pass has not finished still holds a row in a
 compact file, or its index still says it does, and the same command takes it
 again; then each file before its index, as the compaction orders them. No
-watermark moves: no period was compacted.
+compaction mark moves: every index names the periods it named before.
 
 **No file is ever half-written, and the same command finishes a pass that
 stopped.** Each write is whole, through `atomic_write`, and each delete is one

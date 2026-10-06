@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -271,8 +271,8 @@ site only, and they keep the same `CompactIndex` shape. The committed registry
 `frontend/scripts/published-ledgers.mjs` decides which ledger files are in that
 staged tree.
 
-- **The trimmed indexes are the list.** No directory is walked, so the gardener's
-  watermark, a raw day and any file no trimmed index names stay off the site with
+- **The trimmed indexes are the list.** No directory is walked, so a raw day and
+  any file no trimmed index names stay off the site with
   no list of things to leave out. A file whose entry has `rows: 0` is copied too,
   so every entry resolves, although the door never asks for one. An entry
   `empty` or `lost` names no file, so nothing is copied for it and nothing is

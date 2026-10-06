@@ -56,7 +56,7 @@ Table A - what is out
 | 16 | The shared window is gone | 15 | D | DONE | jubilant-waffle | - | Plan 60 row 16 |
 | 17 | A late file re-opens its month | 16 | D | DONE | curly-fiesta | - | Plan 60 row 17 |
 | 18 | An unreadable file is set aside, and extra files wait | 17 | D | DONE | special-succotash | - | Plan 60 row 18 |
-| 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | PENDING | - | - | - |
+| 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | DONE | legendary-fortnight | - | Plan 60 row 19 |
 | 20 | The record says what was recovered and why a pass stopped | 4, 11, 19 | E | PENDING | - | - | - |
 | 21 | Every gardener log line is one JSON event | 2, 20 | E | PENDING | - | - | - |
 | 22 | A person reads a shard at a glance | 21 | E | PENDING | - | - | - |
@@ -801,6 +801,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Scope:** Each mark is worked out from the three indexes (section 2.2), and an absent index is rebuilt from named paths by Rule L. The `Watermark` contract and every committed `state/compact/<ledger>/<period>/watermark.json` are deleted (Table D, D4), so a watermark without its index can no longer happen (Table C, C9), and `index-missing` can no longer stop a pass (C14). Level 5.
 - **Follow-ups:**
   - Delete the first-run case in `_compaction_periods._days` that starts at the oldest day a daily index names when no daily mark is beside it (Table B, B7). Once the daily mark is worked out from the indexes, an index that names a day always gives a mark, so the case can no longer happen; found during execution (row 13 report, Fowler 2026-10-04), owner 2026-10-05.
+  - A ledger with monthly entries and no monthly watermark made the month step start at its oldest entry, and that step then adopted again a month the drop step had removed in the same pass. A monthly mark worked out from the index removes the case, and a test pins it; found during execution (row 15 report, Fowler), owner 2026-10-06.
+  - `backend/tests/gardener/test_period_inputs.py` named the three watermark files for each compaction task; they go there; found during execution (row 16 report), owner 2026-10-06.
 - **Files touched** (from a search for `watermark` in any case, `daily_through`, `monthly_through` and `yearly_through`, 2026-10-04, after #1267 merged; search again at dispatch, `TODO/` and `state/compact/` included. The benchmark record of what a compaction pass costs describes the pass it measured, and it stays as it is, as do the matches that mean another thing, such as a stream's `highWaterMark`):
   - `.gitattributes` (its `-merge` line for `state/compact/*/*/watermark.json`)
   - `config/idhazh_gardener.json` (`first_ledger_year`, Table D, D5)
@@ -810,7 +812,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/ledger/paths.py`
   - `backend/idhazh/ledger/__init__.py`
   - `backend/idhazh/ledger/day_removal.py` (its docstring names the watermark)
-  - `backend/idhazh/gardener/ledger_marks.py` (Rule L)
+  - `backend/idhazh/gardener/ledger_marks.py` (`work_out_marks`, and `adopt`, which Rule L calls; Rule L's places and order are in `_absent_indexes.py` below; found during execution, Fowler's ruling)
   - `backend/idhazh/gardener/tasks/_compact_tree.py`
   - `backend/idhazh/gardener/tasks/_compaction_periods.py` (the first-run case that starts at the oldest indexed day; found during execution (row 13 report), owner 2026-10-05)
   - `backend/idhazh/gardener/tasks/_daily_period.py`
@@ -853,19 +855,35 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `TODO/20260930-57-upkeep-tasks-switch-on-plan.md` (its row "The eval ledger is packed live, and every scores window stays forever" reads its oracle from a watermark file)
   - `TODO/20261004-pipeline-tests-migration-plan.md` (its lines C2, C13 and I2, and its row "Readers understand nested trial roots", name the watermark builders, paths and files)
   - every committed `state/compact/<ledger>/<period>/watermark.json`
+  - `backend/idhazh/gardener/tasks/_absent_indexes.py` (new: Rule L names the places, fetches each index's files in one download and adopts what it finds; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/context.py` and `backend/idhazh/gardener/runner.py` (`TaskContext.first_ledger_year`, filled from the gardener config; found during execution, Fowler's ruling)
+  - `backend/utilities/ledger_migration/packing.py`, `backend/utilities/ledger_migration/phases.py`, `backend/utilities/build_canary_day.py` and `backend/utilities/corpus_history.py` (each builds a `TaskContext`, so each passes `first_ledger_year`; found during execution)
+  - `backend/tests/gardener/tasks/_task.py` (its context carries `first_ledger_year`; found during execution)
+  - `backend/tests/gardener/tasks/_marks.py` and `backend/tests/gardener/tasks/test_absent_indexes.py` (new; found during execution)
+  - `backend/tests/gardener/test_sparse_shard.py` and `docs/how-to/run-the-gates.md` (found by the search at dispatch)
+  - Left as they are: `TODO/20260928-55-one-page-queries-every-ledger-plan.md` names a closed plan's row title, and `TODO/20261003-59-csv-ledgers-left-plan.md` names the watermark builder in its row 11, which is `DONE`, and in its declaration D11; both record what was done and decided then (found by the search at dispatch)
 - **Acceptance gates:** local: pytest on the test files above that the selector lists, `-m contract` included, and the specs it lists; ruff; mypy; `doc_load.py`. CI: the full suite.
-- **Oracle:** for the committed indexes of every compaction ledger, read once at dispatch and written into the test as literals, the marks worked out from the indexes equal the `through` of each committed watermark file. A ledger with an index and no watermark resumes where its index ends. Integration under `tmp_path`, built with the helpers in `backend/tests/gardener/tasks/_task.py`: with `index/daily.json` removed and the day files kept, the pass rebuilds the index from named paths, notes `index-rebuilt` and deletes nothing. It cannot settle a watermark that was already wrong; this oracle would show it as a mismatch, and that mismatch is reported, not forced to agree.
+- **Oracle:** once at dispatch, before the files were deleted, a one-off script compared the marks worked out from the committed indexes of every compaction ledger with the `through` of each committed watermark file: all 9 were equal on 2026-10-06. It is not a test, because a test never computes its answer from committed data (the owner's testing ruling, 2026-10-05). The tests are built under `tmp_path` with the helpers in `backend/tests/gardener/tasks/_task.py`, with literal expected values. A ledger with an index and no watermark resumes where its index ends. With `index/daily.json` removed and the day files kept, the pass rebuilds the index from named paths, notes `index-rebuilt` and deletes nothing. It cannot settle a watermark that was already wrong; the comparison would show it as a mismatch, and that mismatch is reported, not forced to agree.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Design the fault out instead of recovering from it: the indexes already say what each watermark says, once every empty period has an entry (rows 12 to 14) | The owner, 2026-10-04 (recovery theme); shape by plan author |
 | 2 | Reader before writer: steps read marks from the indexes, then the files and the contract go, in this one row, because nothing outside the gardener reads a watermark (the site works out `through` from `daily.json`) | Plan author, 2026-10-04 |
 | 3 | Rules R and L (section 2.2): an absent index is rebuilt from named paths, so `index-missing` can no longer stop a pass and the watermarks can go. Every read stays bounded: at most 31 named paths a month, and the yearly part grows by one a year (row 14, decision 3). A ledger whose daily mark stalled for longer than B7's look-back keeps older day files out of a rebuilt index (Table A, A8) | Fowler review, 2026-10-04 (ESCALATE trigger 6) |
+| 4 | `first_ledger_year` is a `YYYY` string with no default, so the loader refuses a config that leaves it out, and every `TaskContext` carries it from the loader | Fowler, 2026-10-06 |
+| 5 | Rule L is its own module, `tasks/_absent_indexes.py`. It rebuilds every absent index, coarsest first, before any step runs, and fetches each index's files in one download inside the shard's budget, so a rebuild larger than the whole budget fails by name. `ledger_marks` keeps `adopt` and gains `work_out_marks` | Fowler, 2026-10-06 |
+| 6 | The tree works out its marks when it is read and again after each rebuilt index; within a pass the steps only move them forward, so a month the drop step removes never moves the monthly mark back | Fowler, 2026-10-06 |
+| 7 | An operator range never narrows Rule L's places, because a rebuilt index is written whole and no later pass looks again. A monthly window whose deletes only report is searched as a window kept for ever, from the January after the newest yearly entry; those places grow by twelve a year until a year is packed, and a pass reads them only when an index is absent | Fowler, 2026-10-06 |
+| 8 | A file at a Rule L place whose envelope names another ledger or period fails the task by name; nothing is guessed | Fowler, 2026-10-06 |
+| 9 | A pass on a person's machine cut between its indexes and its deletes is no longer finished by the next pass: `_finish` goes from the month and year steps, and the page says to restore `state/compact/` and `state/raw/` from git. A runner lands a whole shard in one commit, so `main` never holds that state. The owner may overturn this | Fowler, 2026-10-06 |
+| 10 | `compact_root(state_dir, ledger, period)` names a period's folder and `compact_path` is built from it; `watermark_path` goes. The compaction reads no wall clock once the watermark's stamp is gone, and the benchmark stops counting `write_watermark` | Fowler, 2026-10-06 |
+| 11 | `LedgerFault.INDEX_MISSING` stays: the console and the ledger reader still name a missing index; only the compaction no longer stops on it | Fowler, 2026-10-06 |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep the watermarks, and rebuild a missing index from the files the marks name | Two records that can disagree, plus a repair path for that | A bounded rebuild per ledger | Plan author, 2026-10-04 |
 | 2 | Keep failing with `index-missing` | Manual work | Nothing to build | The owner, 2026-10-04 (recovery theme) |
+| 3 | Each pass also lists the newest closed periods' folders for the files a cut local pass left | Every wake pays a listing for a fault only a local run can cause | A bounded listing every wake, and code that deletes what it finds | Fowler, 2026-10-06 |
 
 ### Row #20 - The record says what was recovered and why a pass stopped
 

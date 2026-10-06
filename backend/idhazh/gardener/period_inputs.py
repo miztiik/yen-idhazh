@@ -223,7 +223,7 @@ def _ledger_paths(
     *,
     monthly: bool,
 ) -> set[Path]:
-    """Named ledger periods plus compact indexes and watermarks."""
+    """Named ledger periods plus compact indexes."""
     paths: set[Path] = set()
     state_dir = repo_root / ledger.STATE_DIRNAME
     root = repo_root / folder

@@ -310,7 +310,7 @@ def held_months(listing: FileListing, state_dir: Path, which: LedgerName) -> lis
     months = {day[:7] for day in raw_days(listing, state_dir, which)}
     shapes = {Period.DAILY: 3, Period.MONTHLY: 2, Period.YEARLY: 2}
     for period, depth in shapes.items():
-        folder = ledger.watermark_path(state_dir, which, period).parent
+        folder = ledger.compact_root(state_dir, which, period)
         for parts in _below(listing, folder):
             if len(parts) != depth:
                 continue

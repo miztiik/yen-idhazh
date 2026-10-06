@@ -36,7 +36,7 @@ function coversIn(index: string): string[] {
 	return (JSON.parse(index).entries as { covers: string }[]).map((entry) => entry.covers);
 }
 
-/** A whole ledger: all indexes, every file they name, the watermark beside them and a stray file. */
+/** A whole ledger: all indexes, every file they name, and a stray file no index names. */
 function aWholeLedger(ledger: string): Record<string, string> {
 	return {
 		[`compact/${ledger}/index/daily.json`]: anIndex(ledger, 'daily', ['2026-09-01', '2026-09-02']),
@@ -46,7 +46,6 @@ function aWholeLedger(ledger: string): Record<string, string> {
 		[`compact/${ledger}/daily/2026/09/02.parquet`]: 'PAR1',
 		[`compact/${ledger}/monthly/2026/08.parquet`]: 'PAR1',
 		[`compact/${ledger}/yearly/2025/2025.parquet`]: 'PAR1',
-		[`compact/${ledger}/daily/watermark.json`]: '{}\n',
 		[`compact/${ledger}/daily/2026/09/03.parquet`]: 'PAR1'
 	};
 }

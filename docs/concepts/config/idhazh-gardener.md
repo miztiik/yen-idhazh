@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -13,11 +13,12 @@ what a knob is at all is [../config.md](../config.md).
 
 | Knob | Committed | What it decides |
 | --- | --- | --- |
-| `version` | `2026-10-03` | The UTC day this file's shape last changed |
+| `version` | `2026-10-06` | The UTC day this file's shape last changed |
 | `attempts` | `6` | How many times one shard may try to push. If every try fails and main did not move, main refused the push, and the shard exits 3. If main moved, other writers are landing, and the shard warns and exits 0 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
 | `task_names` | Named list in the file | The declarations to read under `config/gardener/`. Empty means no tasks. Missing named files and repeated names are refused. |
 | `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes. A shard checks out only its code and config, so this is the day and month folders its tasks read. A compaction takes only the periods that fit what is left of it and stops at `ceiling` at the first that does not, or fails by name on a period larger than the whole of it. A shard that downloads more anyway runs its tasks, lands its record and exits 1, because a task downloaded without choosing by the budget. The number is an estimate. Reset it from what the wakes that did not stop at it downloaded, because one that stopped at it records the budget rather than what it needed ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
+| `first_ledger_year` | `"2026"` | The UTC year, as `YYYY`, from which a compaction looks for year and month files when one of a ledger's indexes is absent and is rebuilt from the files at their named paths ([ledger-compaction.md](../../architecture/publishing/ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)). No path from before it is named, because no ledger holds a row from before it: the repository was created on 2026-08-20. Required, with no default, so the loader refuses a file that leaves it out |
 
 **`attempts` must be above `shards`.** Every shard of a wake pushes to one
 branch at once, so the last one to land has lost a race to every other shard

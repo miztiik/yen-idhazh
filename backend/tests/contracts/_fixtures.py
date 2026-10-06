@@ -158,9 +158,6 @@ FIXTURE_FILES: Final = (
     "visual-prune-row/fuse-tripped.json",
     "visual-prune-row/policy-off.json",
     "watchlist/seeded.json",
-    "watermark/a-daily-watermark.json",
-    "watermark/a-monthly-watermark.json",
-    "watermark/a-yearly-watermark.json",
 )
 
 #: The three blocks `AppearanceConfig` re-exposes, as (the key

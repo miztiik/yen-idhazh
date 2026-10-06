@@ -21,8 +21,8 @@ emptied exactly, and a delete that fails on the third file of four.
 A ledger on the ledger door is a target too, of its own kind. Its days sit in
 raw files and in daily, monthly and yearly files that hold other days as well,
 so its property is about rows rather than files: no row of a day the range
-names is left, every other day reads back the same rows, and every index and
-watermark still loads. Those trees are built through the door and the shipped
+names is left, every other day reads back the same rows, and every index still
+loads. Those trees are built through the door and the shipped
 compaction (`ledger/_every_tier.py`), and whether a ledger on the door is a
 target at all is its compaction declaration's `prune_refusal`.
 """
@@ -40,6 +40,7 @@ from typing import Final
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health
+from gardener.tasks._marks import marks_on_disk
 from ledger._every_tier import (
     CENSUS,
     FILED_DAYS,
@@ -54,7 +55,7 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.telemetry import door_prune, prune
@@ -637,14 +638,6 @@ def indexes(state: Path) -> dict[Period, list[CompactEntry]]:
     }
 
 
-def watermarks(state: Path) -> dict[Period, str]:
-    """Where each period of the census stands, each read whole, so one that cannot load fails here."""
-    return {
-        period: Watermark.read(ledger.watermark_path(state, CENSUS, period)).through
-        for period in Period
-    }
-
-
 def compaction_of(tasks: Mapping[str, TaskPolicy], which: LedgerName) -> CompactionPolicy:
     """The one compaction declaration of a ledger."""
     (found,) = [
@@ -676,12 +669,12 @@ def test_a_range_taken_out_of_a_ledger_on_the_door_takes_its_rows_and_no_other(
 
     The range reaches into a year file, a month file, two daily files and a raw
     day, so each kind of file is rebuilt or deleted, and the year file and the raw
-    days each keep a day outside it. Every index and watermark still loads, no
-    day reads as a hole, and no watermark moves, because nothing was compacted.
+    days each keep a day outside it. Every index still loads, no day reads as a
+    hole, and no mark the indexes give moves, because nothing was compacted.
     """
     state = a_copy(every_tier, tmp_path / "checkout")
     before = census_by_day(state)
-    marks = watermarks(state)
+    marks = marks_on_disk(state, CENSUS)
     assert set(before) == set(FILED_DAYS), "the built census is not the one this test reads"
 
     outcome = prune_range(
@@ -698,7 +691,7 @@ def test_a_range_taken_out_of_a_ledger_on_the_door_takes_its_rows_and_no_other(
         day: rows for day, rows in before.items() if not SINCE <= day <= UNTIL
     }
     assert set(indexes(state)) == set(Period)
-    assert watermarks(state) == marks, "a prune moved a watermark"
+    assert marks_on_disk(state, CENSUS) == marks, "a prune moved a mark"
     assert ledger.list_ledger_files(state, CENSUS).holes == ()
     assert ledger.list_raw_files(state, CENSUS, days=[RAW_DAYS[0]]) == []
     assert outcome.removed and outcome.rewritten and outcome.bytes_freed > 0

@@ -19,8 +19,10 @@ shard lands all of them in one commit:
 
 **Each step chooses its own periods.** The months step 1 drops, the years step
 3 packs, the months step 4 closes and the days step 5 packs are chosen before
-any step runs, from the ledger's own indexes and marks and the wake's day
-(`_compaction_periods`), and logged once as `PeriodsChosen`. A range a person
+any step runs, from the ledger's own indexes and the marks worked out from
+them, and the wake's day (`_compaction_periods`), and logged once as
+`PeriodsChosen`. An index that is not there is first rebuilt from the files at
+its named paths (`_absent_indexes`). A range a person
 names, or the first and last month a migration packs, limits that choice. A
 scheduled wake names no range, and its listing holds nothing of the ledger but
 its marks until a step names what it chose. A day step with no mark first has
@@ -64,8 +66,11 @@ weighed, so the listing's growth while a compaction stays dry shows in each
 record. A day, month or year refused ends the pass `failed` at that period, and
 the task exits 1 while every other step it took still lands; a budget running
 out ends it at `ceiling` - the cap, a day's most raw files, or what is left of
-the shard's download budget. A pass whose marks do not fit that budget takes
-nothing and ends `ceiling` at its index folder.
+the shard's download budget. A pass whose marks, or the files an absent index
+is rebuilt from, do not fit that budget takes nothing and ends `ceiling` at its
+index folder, or `failed` there when they alone are larger than the whole
+budget. The compaction reads no clock: every age is counted from the wake's
+UTC day.
 """
 
 from __future__ import annotations
@@ -93,6 +98,7 @@ def run(context: TaskContext) -> Pass:
     from idhazh.contracts.knobs.gardener import CompactionPolicy
     from idhazh.gardener.file_listing import OverBudgetError
     from idhazh.gardener.tasks import (
+        _absent_indexes,
         _compaction_periods,
         _daily_period,
         _monthly_period,
@@ -104,7 +110,6 @@ def run(context: TaskContext) -> Pass:
     if not isinstance(policy, CompactionPolicy):
         raise ValueError(f"the compaction task was handed a {policy.kind} declaration")
     now = datetime.combine(context.today, time.min, tzinfo=UTC)
-    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     identity = WriterIdentity(
         run_id=context.run_id,
         attempt=context.attempt,
@@ -126,6 +131,13 @@ def run(context: TaskContext) -> Pass:
 
     try:
         tree = CompactTree.read(context.state_dir, policy.ledger, context.listing)
+        _absent_indexes.rebuild(
+            tree,
+            policy,
+            now=now,
+            operator_range=operator_range,
+            first_ledger_year=context.first_ledger_year,
+        )
     except OverBudgetError as spent:
         marks = ledger.compact_index_path(context.state_dir, policy.ledger, Period.DAILY).parent
         held = stop_over_budget(
@@ -166,16 +178,15 @@ def run(context: TaskContext) -> Pass:
         *(
             ()
             if chosen.years is None
-            else _yearly_period.absorb(tree, chosen.years, stamp=stamp, identity=identity)
+            else _yearly_period.absorb(tree, chosen.years, identity=identity)
         ),
-        *_monthly_period.absorb(tree, chosen.months, stamp=stamp, identity=identity),
+        *_monthly_period.absorb(tree, chosen.months, identity=identity),
         *_daily_period.compact(
             tree,
             policy,
             chosen.days,
             rerun_span=chosen.rerun_span,
             first_kept=first_kept,
-            stamp=stamp,
             identity=identity,
         ),
     )

@@ -1,6 +1,6 @@
 # Move a ledger to Parquet
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-06
 
 How do I move one ledger from CSV to the ledger door without losing a row?
 
@@ -112,7 +112,7 @@ not a promise of identical file ids or bytes after a new write.
 
 List only trial roots that hold this ledger. A root other than the repository's `state/` is written raw and is never packed. The state root runs the declared compaction task over only the named months, with packing live and its monthly deletion window in report-only mode. The migrator repeats that task until a pass writes and deletes no selected period. Year packing requires all twelve months of that year to be named. Include a ledger with no CSV in the selected months when it still needs those months' existing raw or compact files packed.
 
-The listing names the selected months' raw and daily folders, their monthly and yearly files, and the fixed index and watermark files, whether each is there or not, and weighs what it finds under them. It never discovers other years or months, and a question about a path it did not name stops the pass. A gap after the daily watermark is refused: include the intervening months instead of advancing the watermark past unprocessed days. Monthly and yearly watermarks cannot skip older periods that still need packing. Name those months too; a completed indexed period outside the selection remains untouched.
+The listing names the selected months' raw and daily folders, their monthly and yearly files, and the three index files, whether each is there or not, and weighs what it finds under them. It never discovers other years or months, and a question about a path it did not name stops the pass. A gap after the daily mark, the newest day the indexes give, is refused: include the intervening months instead of moving the mark past unprocessed days. The monthly and yearly marks cannot skip older periods that still need packing either. Name those months too; a completed indexed period outside the selection remains untouched.
 
 The migrator reads each layout it declares: a day tree, `YYYY/MM/DD/*.csv`, or a shared day file, `YYYY/MM/DD.csv`. A row with a date must name the day in its path. A row without a date uses the day in its path. Any other layout or invalid row stops the run. The migrator reads back every named day through the ledger door and compares every cell with the planned rows. It deletes no CSV in any root until every day in every root passes.
 

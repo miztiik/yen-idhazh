@@ -557,6 +557,7 @@ def run(
                 git_sha=git_sha,
                 owned_folders=resolved[name].walk,
                 listing=listing.within(covered[name]),
+                first_ledger_year=settings.config.first_ledger_year,
                 period_range=period_ranges[name],
             )
             done = _run_one(name, bound[name], context, resolved[name])
