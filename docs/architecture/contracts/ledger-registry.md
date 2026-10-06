@@ -45,7 +45,7 @@ Because the extension is data on the entry, a builder cannot emit the wrong one.
 
 A ledger that goes through the ledger door files under two roots rather than one: what a writer wrote under `state/raw/`, and what compaction left under `state/compact/` ([persistence.md](persistence.md)). Its grain is `raw-and-compact`, the sixth. `gardener` is the first ledger born at it, `feed-retirements` and `visual-prunes` moved to it on 2026-09-28, `item-health`, `summary-quality-evals` and `host-fingerprint` followed through a one-time migration ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)), and `counterfactual-scores` and `candidate-models` moved after them, then `seen` and `published`, and `feed-health` last. `run-plan` is the plan-stage handoff ledger and has no older CSV shape.
 
-**For this grain the `prefix` is the path inside each of the two roots.** Everywhere else it is the path from `state/`, but `["gardener"]` means `state/raw/gardener/` and `state/compact/gardener/`. The family check still passes, because the prefix still opens on the family's name, and the registry refuses any other prefix, because the root builders file the ledger under its own name.
+**For this grain the `prefix` is the path inside each of the two roots.** Everywhere else it is the path from `state/`, but `["gardener"]` means `state/raw/gardener/` and `state/compact/gardener/`. The prefix starts with the family name and ends with the ledger's own value. A ledger that is its own family keeps `[<value>]`; a ledger inside a family may have any number of folders between the family and the value. The registry refuses a door ledger whose folder sits inside another door ledger's folder, because a walk of the outer ledger's raw days would read the inner ledger's files.
 
 **The four builders above refuse the grain by name.** `path`, `relpath`, `tree_root` and `tree_relpath` each answer with an error that names the ledger and points at the ones that build its addresses: `raw_path`, `compact_path`, `compact_index_path` and `watermark_path`, with `raw_root` for the folder a reader walks. So nothing reads or writes a moved ledger at its old CSV address by accident. `ledger_families.py` counts the named files under each root on a line of its own.
 
@@ -58,14 +58,13 @@ A ledger that goes through the ledger door files under two roots rather than one
 | Ledger under `state/` | Writer, under `backend/idhazh/` | What reads its rows, besides upkeep: backend under `backend/idhazh/`, console under `frontend/src/lib/server/` | Two writers on one file | What blocks its move |
 | --- | --- | --- | --- | --- |
 | `item-health-summary` | `gardener/tasks/telemetry_aggregate.py` | nothing yet | cannot happen: one writer rewrites a month whole | a whole-month file |
-| `content-similarity-judge/scored-pairs` | `stages/count_verdicts.py` | `stages/set_merge_line.py` | the union driver keeps both | the nested folder name; three fixed-choice fields; `run_id` and `shard` |
-| `content-similarity-judge/fitted-thresholds` | `stages/set_merge_line.py` | `stages/set_merge_line.py`, `similarity/applied.py`, `similarity-ledger.ts` | the union driver keeps both | the nested folder name; two fixed-choice fields; `run_id` |
-| `content-similarity-judge/metrics` | `stages/count_verdicts.py` | nothing yet | the union driver keeps both | the nested folder name; two fixed-choice fields; `run_id` and `shard` |
-| `content-similarity-judge/merge-line-holdout-scores` | `stages/score_merge_line_holdout.py` | `similarity-holdout.ts` | the union driver keeps both | the nested folder name; one fixed-choice field; `run_id` |
+| `content-similarity-judge/scored-pairs` | `stages/count_verdicts.py` | `stages/set_merge_line.py` | the union driver keeps both | three fixed-choice fields; `run_id` and `shard` |
+| `content-similarity-judge/fitted-thresholds` | `stages/set_merge_line.py` | `stages/set_merge_line.py`, `similarity/applied.py`, `similarity-ledger.ts` | the union driver keeps both | two fixed-choice fields; `run_id` |
+| `content-similarity-judge/metrics` | `stages/count_verdicts.py` | nothing yet | the union driver keeps both | two fixed-choice fields; `run_id` and `shard` |
+| `content-similarity-judge/merge-line-holdout-scores` | `stages/score_merge_line_holdout.py` | `similarity-holdout.ts` | the union driver keeps both | one fixed-choice field; `run_id` |
 | `content-similarity-judge/holdout-pairs.csv` | a person, by hand | `similarity/holdout.py`, `similarity-holdout.ts` | `merge=text` stops the push for a person | nothing: it stays CSV while a person edits it by hand |
-| `llm-council/shard-outcomes` | `council/session.py` | nothing yet | the union driver keeps both | the nested folder name; `run_id` and `shard` |
+| `llm-council/shard-outcomes` | `council/session.py` | nothing yet | the union driver keeps both | `run_id` and `shard` |
 
-- **The nested folder name.** These ledgers sit one folder below their family, as in `content-similarity-judge/scored-pairs`. The door files a ledger under its own name, `raw/<ledger>/`, and the registry refuses any other prefix for the `raw-and-compact` grain, so it needs a rule for a nested name first.
 - **A fixed-choice field** is a field declared as `Literal[...]`, such as the judge's model name. The parquet column mapper, `ledger/arrow_schema.py`, stores one whose choices are all `str` as a string and all `int` as an int64 ([the column types](persistence.md#the-column-types)), so this is no longer a blocker.
 - **`run_id` and `shard`.** Every door file already records the `run_id` and `shard` of the job that wrote it, and a row field with either name takes the place of the door's cell. [The rule below](#the-rule-a-judge-ledger-follows-when-it-moves) settles both for the judge ledgers: `run_id` stays and means the council run, and `shard` is renamed in the change that moves its ledger.
 - **A whole-month file.** One writer rewrites `item-health-summary`'s month file on every run, and the migrator reads only the two day layouts. It needs a month layout, or a ruling that the ledger stays CSV.
@@ -116,7 +115,9 @@ The check runs when the config loads, so each of these stops the build with the 
 | lists a ledger whose prefix does not start with its family's name | the ledger would sit in one folder and take another folder's status |
 | gives any ledger, a flat file included, no prefix at all | its files would sit loose at the top of `state/`, in no family's folder. `feed-retirements.csv` was the one exception, named for its stem, until it moved under `state/raw/` |
 | holds a member whose Python name is not spelled from its family and its value | a Python name that says something the value does not is a second name a reader has to learn - the rule is in the section on typed names above |
-| gives a `raw-and-compact` ledger a prefix other than its own name | the root builders file it under its own name, so any other prefix names a folder nothing writes |
+| gives a `raw-and-compact` ledger a prefix that does not start with its family and end with its value | the door writes under the prefix but the envelope still carries the ledger value, so both ends are load-bearing |
+| gives a `raw-and-compact` ledger that is its own family any prefix other than `[<value>]` | a self-family ledger has no folder between the family and the value |
+| gives a `raw-and-compact` ledger a prefix inside another door ledger's prefix | the outer ledger's raw-day walk would read the inner ledger's files |
 
 The first row is what the registry is for. The claim used to be a hand-written Python set, and a ledger somebody forgot to add to it was a production directory the trial sweep quietly emptied. It is now a build that will not start.
 
