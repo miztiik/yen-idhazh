@@ -77,8 +77,10 @@ Only the eight layouts in `CSV_LEDGERS` are supported: `item-health`,
 `counterfactual-scores`, `candidate-models`, `feed-health`, `seen` and
 `published`. This tool does not migrate `span-rollup` or an undeclared CSV
 layout. Moving another shape requires its own contract and reader design first.
-Family-nested prefixes such as `content-similarity-judge/scored-pairs` and
-month files such as `item-health-summary` are not supported yet.
+Family-nested prefixes such as `content-similarity-judge/scored-pairs` are
+supported by the door, but this migrator still does not move committed files at
+that depth. `item-health-summary` moved without a migrator entry because no
+committed file existed.
 
 Both CSV layouts refuse a filled cell under an unknown heading, a value with
 no heading, and conflicting filled values under an old heading and its current

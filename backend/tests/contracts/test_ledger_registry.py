@@ -420,7 +420,7 @@ def test_every_month_ledger_and_every_stamped_ledger_has_a_folder() -> None:
     periods = {Grain.MONTH_FILE, Grain.STAMPED}
     members = [member for member in LedgerName if paths.entry(member).grain in periods]
 
-    assert {paths.entry(member).grain for member in members} == periods
+    assert {paths.entry(member).grain for member in members} <= periods
     for member in members:
         filed = paths.path(STATE, member, COVERS[paths.entry(member).grain])
         assert filed.parent == paths.tree_root(STATE, member)
