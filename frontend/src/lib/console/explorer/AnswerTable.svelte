@@ -68,6 +68,7 @@
 	.table-box { block-size: 100%; min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; padding-inline: 0 !important; border-block: 1px solid var(--color-rule); background: var(--color-surface); }
 	table { border-collapse: separate; border-spacing: 0; min-inline-size: 100%; font-size: var(--text-xs); line-height: var(--leading-xs); }
 	th, td { padding: var(--space-1) var(--space-2); text-align: start; vertical-align: top; background: var(--color-surface); }
+	tbody th, tbody td { block-size: var(--workbench-row); }
 	tbody tr:nth-child(even) td,
 	tbody tr:nth-child(even) th { background: var(--tint-neutral); }
 	thead th { position: sticky; inset-block-start: 0; z-index: 2; }

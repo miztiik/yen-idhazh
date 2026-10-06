@@ -303,6 +303,7 @@ async function explorerNothing(page: Page, id: string, state: Nothing, theme: Th
 	if (state === 'unreachable') await page.route('**/state/**/*.parquet*', (route) => route.abort());
 	await openExplorer(page);
 	if (state === 'loading') {
+		await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"', false);
 		let release!: () => void;
 		const held = new Promise<void>((resolve) => { release = resolve; });
 		await page.route('**/state/**/*.parquet*', async (route) => {
@@ -322,7 +323,7 @@ async function explorerNothing(page: Page, id: string, state: Nothing, theme: Th
 		state === 'refused' ? 'SELECT 1; SELECT 2' :
 		'SELECT count(*) AS rows FROM "published"';
 	const ledgers = state === 'missing' ? (['feed-health'] as const) : (['published'] as const);
-	await chooseExplorerQuestion(page, ledgers, sql);
+	await chooseExplorerQuestion(page, ledgers, sql, false);
 	await runExplorer(page);
 	const panel = page.locator(`[data-console-panel-id="${id}"]`);
 	await expect(panel.locator(state === 'refused' ? '[data-state="refused"]' : `[data-state="${state}"]`)).toHaveCount(1);

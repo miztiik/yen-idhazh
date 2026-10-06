@@ -662,7 +662,12 @@
 	   would frame nothing. */
 	.workbench {
 		overflow-x: clip;
+		background: var(--color-bg);
+	}
+
+	.workbench > :global([data-console-panel-id]) {
 		background: var(--color-surface);
+		min-block-size: 0;
 	}
 
 	.question-panel { display: grid; }
@@ -680,12 +685,32 @@
 		border-radius: 0;
 	}
 
+	:global([data-workbench-region='toolbar'] [data-window-control] .choice-tiles) {
+		gap: 0;
+	}
+
+	:global([data-workbench-region='toolbar'] [data-window-control] .choice-tile) {
+		min-block-size: var(--workbench-control);
+		min-inline-size: var(--workbench-control);
+		border-radius: 0;
+	}
+
 	:global([data-workbench-region='toolbar'] [data-window-control] button:first-child) {
 		border-start-start-radius: var(--radius-md);
 		border-end-start-radius: var(--radius-md);
 	}
 
+	:global([data-workbench-region='toolbar'] [data-window-control] .choice-tile:first-child) {
+		border-start-start-radius: var(--radius-md);
+		border-end-start-radius: var(--radius-md);
+	}
+
 	:global([data-workbench-region='toolbar'] [data-window-control] button:last-child) {
+		border-start-end-radius: var(--radius-md);
+		border-end-end-radius: var(--radius-md);
+	}
+
+	:global([data-workbench-region='toolbar'] [data-window-control] .choice-tile:last-child) {
 		border-start-end-radius: var(--radius-md);
 		border-end-end-radius: var(--radius-md);
 	}
@@ -740,6 +765,7 @@
 	:global([data-workbench-region='questions'] .question-strip) {
 		flex: 1 1 0;
 		min-inline-size: 0;
+		margin-block: 0;
 	}
 
 	:global([data-workbench-region='questions'] .question-strip button) {
@@ -1071,6 +1097,10 @@
 		}
 		.how-to {
 			overflow: hidden;
+		}
+		.date-fields {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 		.editor-head {
 			flex-wrap: wrap;

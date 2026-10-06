@@ -62,7 +62,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | #1229 | p55-r7-worker |
 | 8 | The Data explorer draws the workbench chrome | 6 | G | DONE | p55r8 | #1298 | p55-n1-worker |
 | 9 | Run moves nothing on the Data explorer | 8 | H | DONE | p55r9 | #1310 | p55-n2-worker |
-| 10 | The Data explorer reaches the reference's density | 9, 11, 12 | M | PENDING | - | - | - |
+| 10 | The Data explorer reaches the reference's density | 9, 11, 12 | M | DONE | p55r10 | - | p55-redesign-worker |
 | 11 | The column rail stops overlapping, and types and the chosen ledger show in colour | 9 | I | DONE | automatic-giggle | #1326 | Data explorer phase 1 colours |
 | 12 | The Data explorer fills the window, Run stands with Save and Copy link, and the copy buttons stand on the answer's heading line | 9, 11 | J | DONE | special-parakeet | #1336 | Data explorer phase 2 layout |
 | 13 | The explorer reads a column's type one way, and a NULL is no value in any chart | 11 | K | DONE | super-waddle | #1332 | Explorer types and nulls one way |
@@ -539,7 +539,7 @@ Every value below is a knob (Guardrail #6), in `config/appearance.json` with its
 | `console.explorer_readout_lines` | 9 | **New** | `[7, 3, 4, 3]` | The lines the status bar reserves, per frame band. Text past that scrolls inside the fixed bar. |
 | `console.explorer_notice_ms` | 9 | **New** | `6000`, **an estimate** | A notice that answers a press stays for about 6 seconds; hover or focus holds it. A notice that arrives with the page stays until closed. |
 | `console.explorer_editor_lines_shown` | 9 | **Replaces `console.explorer_editor_lines`** | `[8, 10]` | The editor is exactly this many visible lines, below 1024 px and from 1024 px. A longer question scrolls inside. |
-| `console.explorer_strip_shown` | 4 | **New** | `[3, 6]` | How many chips the question strip shows before the rest fold into a `<details>` labelled `{n} more` (section 2.16 rule 3): the first value below `frame.breakpoints_px[0]` (640 px), where each chip fills its own row, and the second from 640 px. Jony, 2026-10-02 |
+| `console.explorer_strip_shown` | 4, 10 | **New; phone value moved by row 10** | `[0, 6]` | How many chips the question strip shows before the rest fold into a `<details>`: below `frame.breakpoints_px[0]` (640 px), every chip folds into `Questions ({n})`; from 640 px, at most six stand in line and the rest fold into `{n} more`. Jony and Susan, 2026-10-04 |
 | `console.explorer_answer_svh` | 9 | **Replaces `console.explorer_table_max_vh`** | `60` | The answer region's fixed height, in percent of the small viewport height. Rows, notes and non-answer states scroll inside it instead of changing page geometry. |
 | `console.explorer_cell_max_ch` | 4 | **New** | `40` | The width, in characters, at which a text cell wraps (section 2.11, answer-panel rule 4). Jony, 2026-10-02 |
 | `console.explorer_bar_spread_share` | 4 | **New** | `0.5` | A column draws in-cell bars only when its smallest value is at most this share of its largest (section 2.11, answer-panel rule 6). Fowler, 2026-10-02 |
