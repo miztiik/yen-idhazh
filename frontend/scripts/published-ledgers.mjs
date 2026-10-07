@@ -23,14 +23,13 @@
  * **A ledger not packed yet is left out; a missing index stops the build; a
  * missing data file does not.** A published ledger with no compact folder has not
  * been packed yet, which is how every ledger starts: nothing is copied for it, the
- * build log names it, and the browser's query door answers `missing`, which the
- * console words as not packed yet. A ledger with a compact folder but not all
- * three indexes is published wrongly, and a 404 would be the only sign of it,
- * because the browser asks for a ledger's indexes before anything else. A data
- * file an index names and the tree lacks is one lost day: the rest is copied, the
- * build log names the file and the fix, and the browser's query door answers
- * `unreachable` for a span that reaches it - degrade, do not fail (CLAUDE.md
- * section 1a).
+ * build log names it, and the browser's query door answers `missing` for it. A
+ * ledger with a compact folder but not all three indexes is published wrongly,
+ * and a 404 would be the only sign of it, because the browser asks for a
+ * ledger's indexes before anything else. A data file an index names and the tree
+ * lacks is one lost day: the rest is copied, the build log names the file and the
+ * fix, and the browser's query door answers `unreachable` for a span that reaches
+ * it - degrade, do not fail (CLAUDE.md section 1a).
  *
  * **Every path is built from checked parts.** A ledger name is lower-case words
  * joined by hyphens, and a `covers` value is a UTC day, month or year in digits, or

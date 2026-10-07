@@ -297,10 +297,10 @@ staged tree.
   goes on.** Every ledger starts that way. The copy checks one named path,
   `state/compact/<ledger>/`, stages nothing for that ledger and prints one line
   in the build log that names it. The door then finds no `daily.json` and
-  answers `missing`: a panel says the record is not packed yet, and the Data
-  explorer says the ledger has no days on this site yet. A compact folder
-  deleted by accident reads the same way, and that log line is the only sign of
-  it.
+  answers `missing`: the route's note says the record is not packed yet, and
+  the Data explorer says the ledger has no days on this site yet. A compact
+  folder deleted by accident reads the same way, and that log line is the only
+  sign of it.
 - **A published ledger with some of its indexes but not all three stops the
   build**, which names the ledger and each missing index. A browser asks for a
   ledger's indexes before anything else, so a 404 there would be the only sign
