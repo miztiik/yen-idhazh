@@ -12,6 +12,7 @@ from conftest import FIXTURES_DIR
 from ._garden import COMMITTED_FILES
 
 # Recorded from c8251c596, before the owner approved finite yearly retention.
+# Its registry omits the retired llm-council family; retention declarations stay unchanged.
 PRE_YEARLY_CONFIG: Final = FIXTURES_DIR / "gardener" / "pre-yearly-retention" / "config"
 
 

@@ -265,10 +265,10 @@ def chosen_on(caplog: pytest.LogCaptureFixture) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("wake", [False, True], ids=["whole-listing", "wake-listing"])
-def test_an_empty_ledger_initializes_indexes_and_ends_empty(
+def test_an_empty_ledger_initializes_indexes_and_ends_done(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, wake: bool
 ) -> None:
-    """The gardener's own ledger, live, before any run has filed a row: there is nothing to work on."""
+    """Before any row is filed, the live expiry policy completes its index initialization."""
     root = tmp_path / "checkout"
     state(root).mkdir(parents=True)
 
@@ -289,7 +289,7 @@ def test_an_empty_ledger_initializes_indexes_and_ends_empty(
     chosen = chosen_on(caplog)
     assert (chosen["days"], chosen["months"]) == ({"start": "none"}, {"start": "none"})
     assert "rerun_span" not in chosen
-    assert report.classify(outcome) is TaskOutcome.EMPTY
+    assert report.classify(outcome) is TaskOutcome.DONE
 
 
 def test_after_every_pass_the_daily_index_names_every_due_day_a_quiet_one_included(

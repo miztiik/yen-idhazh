@@ -520,6 +520,9 @@ An established compact tree with yearly pruning enabled must have
 the index from git before retrying: surviving files cannot reconstruct which
 years were deliberately deleted. With yearly pruning enabled, a new ledger
 with no compact tree initializes all three indexes, even when it has no rows.
+A live pass that writes these indexes ends `done`, not `empty`: initialization
+is completed work. Idle-outcome tests disable yearly pruning so they test
+the idle reason without also initializing expiry metadata.
 A corrupt index stops the pass, never reads as empty.
 Indexes and deletions land together in the shard's one commit.
 
@@ -537,7 +540,9 @@ CSV migration uses the same existing-folder check as the runner and the
 canary builder. It does not relax retention checks: a current finite policy
 cannot perform a lossless migration from a forever CSV reader. Historical
 migration tests use the recorded pre-expiry config, not the current policy,
-and a separate test proves that the current policy refuses that reader.
+with retired ledger families removed from the fixture registry. Its old
+retention declarations stay unchanged. A separate test proves that the current
+policy refuses that reader.
 
 An operator range may expire only whole years and cannot skip an older indexed
 year. Otherwise its progress mark could hide retained entries.
