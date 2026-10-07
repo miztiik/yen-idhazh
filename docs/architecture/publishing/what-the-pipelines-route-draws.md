@@ -196,9 +196,9 @@ on it is something an item waits on - and the scorer reads a summary the model
 has already finished, so nothing waits on it. A fourth line there would read as a
 fourth constraint on the run. It is on the Summaries route instead, under `What
 one summary cost`, beside the cost of writing the summary it checks. An empty
-cell is one fewer item timed, never a zero; a zero is the value the column
-defaulted to before it was written, and it is counted as untimed for the same
-reason.
+cell is one fewer item timed, never a zero. A zero is a reading: the stage
+finished inside the clock's own resolution, so it counts as timed and draws as
+an open dot on the baseline.
 
 The axis, the three marks a missing number can take and the model-change rule
 are [console-charts.md](console-charts.md)'s, because the throughput chart beside
