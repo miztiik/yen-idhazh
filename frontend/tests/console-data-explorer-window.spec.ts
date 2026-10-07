@@ -129,7 +129,7 @@ for (const view of [
 
 test('a selected ledger named in the link opens inside the visible ledger list, not by scrolling the page', async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page, '2026-08-20', { address: '?ledgers=published&days=14' });
+	await openExplorer(page, '2026-08-20', { address: '?ledgers=published&days=14', ready: false });
 	const reading = await page.evaluate(() => {
 		const root = document.documentElement;
 		const list = document.querySelector<HTMLElement>('[data-workbench-region="ledgers"] .ledger-options');

@@ -61,6 +61,7 @@
 	.filter input { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-bg); color: var(--color-text); padding: var(--space-2); }
 	.ledger-options { display: grid; align-content: start; max-block-size: 100%; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; padding-inline-end: var(--space-1); }
 	.ledger { min-block-size: var(--workbench-control); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-2); align-items: center; padding-inline: var(--space-3); border-inline-start: 3px solid transparent; background: var(--color-surface); cursor: pointer; font-family: var(--font-data); font-size: var(--text-xs); line-height: var(--leading-xs); }
+	.ledger input { margin: 0; }
 	.ledger small { grid-column: 2; color: var(--color-text-tertiary); }
 	.ledger[data-published='no'] span { color: var(--color-text-secondary); }
 	.ledger[data-chosen='yes'] { border-inline-start-color: var(--color-accent); background: var(--tint-accent); }
