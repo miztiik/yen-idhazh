@@ -7,14 +7,13 @@ import { bandShares } from '../src/lib/charts/frame';
 import { readoutCapStyle } from '../src/lib/charts/readout';
 import { stacked } from '../src/lib/charts/stacked';
 import {
-	countersWithoutScores,
 	measurementOff,
 	recordDestroyed,
 	recordingNotes,
 	recordingStarted,
 	sampledAt,
-	scoresWithoutCounters,
 	type OfferedWindow,
+	type RecordingNotes,
 	type RecordRead
 } from '../src/lib/console/recording';
 import { daysBetween, type HeldPeriod } from '../src/lib/data/slice';
@@ -259,11 +258,20 @@ test.describe('what the recording was doing, in fixed words', () => {
 	});
 
 	test('the two one-sided days each name which instrument answered', () => {
-		expect(countersWithoutScores()).toBe(
-			'The machine ran and we timed it. Nothing scored the summaries, so this day has no quality figure.'
+		const facts = {
+			enabled: true,
+			recorded: ['2026-08-29'],
+			window: ['2026-08-28', '2026-08-29'],
+			reads: [begun('2026-08-01', '2026-08-29')],
+			from: '2026-08-28',
+			open: over('2026-08-28', '2026-08-29'),
+			coveredElsewhere: ['2026-08-28', '2026-08-29']
+		};
+		expect(recordingNotes({ ...facts, missing: 'scores' }).coveredElsewhere).toBe(
+			'There are no quality figures for 28 Aug 2026. The machine ran and we timed it, but nothing scored the summaries.'
 		);
-		expect(scoresWithoutCounters()).toBe(
-			"The summaries were scored, but the server's own counters were not written down for this day. The speed figures here come from the summariser, not the server."
+		expect(recordingNotes({ ...facts, missing: 'server-counters' }).coveredElsewhere).toBe(
+			'No server figures were written down for 28 Aug 2026. The speed figures for that day come from the summariser, not the server.'
 		);
 	});
 
@@ -409,13 +417,14 @@ test.describe('what the recording was doing, in fixed words', () => {
 			window: ['2026-08-28', '2026-08-29'],
 			reads: [begun('2026-08-01', '2026-08-29')],
 			from: '2026-08-28',
-			coveredElsewhere: ['2026-08-28', '2026-08-29']
+			coveredElsewhere: ['2026-08-28', '2026-08-29'],
+			missing: 'server-counters' as const
 		};
-		expect(recordingNotes({ ...facts, open: over('2026-08-28', '2026-08-29') }).scoresOnly).toBe(
-			scoresWithoutCounters()
+		expect(recordingNotes({ ...facts, open: over('2026-08-28', '2026-08-29') }).coveredElsewhere).toBe(
+			'No server figures were written down for 28 Aug 2026. The speed figures for that day come from the summariser, not the server.'
 		);
 		// A day another instrument covered outside the window is not this window's to name.
-		expect(recordingNotes({ ...facts, open: over('2026-08-29', '2026-08-29') }).scoresOnly).toBeNull();
+		expect(recordingNotes({ ...facts, open: over('2026-08-29', '2026-08-29') }).coveredElsewhere).toBeNull();
 	});
 
 	test('a day that published and kept no row is a loss, not a quiet day', () => {
@@ -531,6 +540,150 @@ test.describe('what the recording was doing, in fixed words', () => {
 			open: over('2026-09-17', '2026-09-17')
 		});
 		expect(notes.sampled).toBeNull();
+	});
+
+	test.describe("THE ORACLE: a one-sided line names only the days the article record alone answered for, in Reader's words", () => {
+		/** The 14-day window from 23 Sep to 6 Oct 2026. The article record timed a run on every day of it. */
+		const FORTNIGHT = daysBetween('2026-09-23', '2026-10-06');
+		const WINDOW = over('2026-09-23', '2026-10-06');
+		/** Every day of the window but `days`. */
+		const except = (...days: string[]): string[] => FORTNIGHT.filter((day) => !days.includes(day));
+		/** Every line the notes print, whichever field holds it, so a line is checked absent by what
+		 *  the page would say rather than by where it sits. */
+		const printed = (notes: RecordingNotes): string[] =>
+			Object.values(notes).filter((line): line is string => line !== null);
+		/** Both records read whole, packed as far as 6 Oct 2026. They began on 1 Aug, before the
+		 *  days handed here, so no started line prints. */
+		const BOTH = [begun('2026-08-01', '2026-10-06'), begun('2026-08-01', '2026-10-06')];
+
+		/** Summaries: the scorer, handed only the window's days, with the days it scored. */
+		const scorer = (recorded: readonly string[], read: RecordRead, open: OfferedWindow = WINDOW, enabled = true) =>
+			recordingNotes({
+				enabled,
+				recorded,
+				window: FORTNIGHT,
+				reads: [read],
+				from: WINDOW.start,
+				open,
+				figures: 'quality figures',
+				coveredElsewhere: FORTNIGHT,
+				missing: 'scores'
+			});
+
+		/** Hardware: the server's counters, drawn from the machine and the article records, with the
+		 *  days they hold a run of. */
+		const counters = (recorded: readonly string[], open: OfferedWindow = WINDOW, reads: RecordRead[] = BOTH) =>
+			recordingNotes({
+				enabled: true,
+				recorded,
+				window: FORTNIGHT,
+				reads,
+				from: WINDOW.start,
+				open,
+				coveredElsewhere: FORTNIGHT,
+				missing: 'server-counters'
+			});
+
+		test('a day the score record lost is a day the scorer ran, so no line says nothing scored it', () => {
+			// Scored on every day but 3 Oct 2026, which the score record recorded lost. The record
+			// note names that day; this line has nothing to add.
+			expect(printed(scorer(except('2026-10-03'), begun('2026-08-01', '2026-10-06', ['2026-10-03'])))).toEqual([]);
+		});
+
+		test('two days nothing scored are named in one line, and never called this day', () => {
+			const lines = printed(scorer(except('2026-10-01', '2026-10-03'), begun('2026-08-01', '2026-10-06')));
+			expect(lines).toEqual([
+				'There are no quality figures for 1 Oct and 3 Oct 2026. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+			expect(lines.join(' ')).not.toContain('this day');
+		});
+
+		test('on Hardware a day with articles and no counters says where its speed figures came from, and claims no score', () => {
+			// The article record holds 2 Oct 2026, the machine record holds no counters row for it,
+			// and Hardware reads no score row for its line at all.
+			const lines = printed(counters(except('2026-10-02')));
+			expect(lines).toEqual([
+				'No server figures were written down for 2 Oct 2026. The speed figures for that day come from the summariser, not the server.'
+			]);
+			expect(lines.join(' ')).not.toContain('scored');
+		});
+
+		test('a day the missing record has not packed yet, or a record that did not read, gets no line', () => {
+			// The score record is packed as far as 4 Oct 2026, so nothing is known yet of 5 and 6 Oct.
+			expect(printed(scorer(except('2026-10-05', '2026-10-06'), begun('2026-08-01', '2026-10-04')))).toEqual([]);
+			// The counters draw on two records, and the one packed less far decides.
+			const behind = [begun('2026-08-01', '2026-10-04'), begun('2026-08-01', '2026-10-06')];
+			expect(printed(counters(except('2026-10-05', '2026-10-06'), WINDOW, behind))).toEqual([]);
+			expect(printed(scorer([], { state: 'not-packed' }))).toEqual([]);
+			expect(printed(scorer([], { state: 'unreadable', at: '2026-10-01', fault: 'file-missing' }))).toEqual([]);
+		});
+
+		test('a day the started line counts is said there, once', () => {
+			// The score record began on 25 Sep 2026, inside the read, and the scorer first scored on
+			// 26 Sep. 23 to 25 Sep had a run before it started; 2 Oct had a run it did not score.
+			const lines = printed(
+				recordingNotes({
+					enabled: true,
+					recorded: daysBetween('2026-09-26', '2026-10-06').filter((day) => day !== '2026-10-02'),
+					window: FORTNIGHT,
+					reads: [begun('2026-09-25', '2026-10-06')],
+					from: WINDOW.start,
+					open: WINDOW,
+					figures: 'quality figures',
+					coveredElsewhere: FORTNIGHT,
+					missing: 'scores'
+				})
+			);
+			expect(lines).toEqual([
+				'Recording started on 26 Sep 2026. Earlier in this window, 3 days had a run but no quality figures.',
+				'There are no quality figures for 2 Oct 2026. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+		});
+
+		test('while measurement is off, the off line speaks for the days after the newest one recorded', () => {
+			// Switched off after 30 Sep 2026, and the record packed on through 6 Oct with no rows.
+			// Before the switch the scorer missed 27 Sep, a gap only this line names.
+			const stopped = (covers: string): RecordRead => ({
+				state: 'read',
+				through: '2026-10-06',
+				first: '2026-08-01',
+				lastRows: { period: 'daily', covers },
+				lostDays: [],
+				setAside: {}
+			});
+			const recorded = daysBetween('2026-09-23', '2026-09-30').filter((day) => day !== '2026-09-27');
+			expect(measurementOff({ enabled: false, recorded, read: stopped('2026-09-30'), open: WINDOW, offered: [WINDOW] })).toBe(
+				'Measurement is off. Nothing has been recorded since 30 Sep 2026. Turn it on in config/idhazh.json.'
+			);
+			expect(printed(scorer(recorded, stopped('2026-09-30'), WINDOW, false))).toEqual([
+				'There are no quality figures for 27 Sep 2026. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+			// Nothing recorded in the window: the off line speaks for every day of it.
+			expect(printed(scorer([], stopped('2026-09-10'), WINDOW, false))).toEqual([]);
+		});
+
+		test("every day on screen takes the window's own words, and one day never needs a second", () => {
+			const lastDay = over('2026-10-06', '2026-10-06');
+			expect(printed(scorer(except('2026-10-06'), begun('2026-08-01', '2026-10-06'), lastDay))).toEqual([
+				'There are no quality figures for this one day. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+			expect(printed(counters(except('2026-10-06'), lastDay))).toEqual([
+				'No server figures were written down for this one day. The speed figures here come from the summariser, not the server.'
+			]);
+			// No counters on any of the 7 days from 30 Sep 2026.
+			expect(printed(counters(daysBetween('2026-09-23', '2026-09-29'), over('2026-09-30', '2026-10-06')))).toEqual([
+				'No server figures were written down for these 7 days. The speed figures here come from the summariser, not the server.'
+			]);
+			expect(printed(counters(except('2026-10-01', '2026-10-03')))).toEqual([
+				'No server figures were written down for 1 Oct and 3 Oct 2026. The speed figures for those days come from the summariser, not the server.'
+			]);
+			// Consecutive days are one run of dates.
+			expect(
+				printed(scorer(except('2026-09-24', '2026-09-25', '2026-09-26'), begun('2026-08-01', '2026-10-06')))
+			).toEqual([
+				'There are no quality figures for 24 Sep to 26 Sep 2026. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+		});
 	});
 });
 

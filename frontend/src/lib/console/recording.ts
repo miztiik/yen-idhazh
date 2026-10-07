@@ -14,9 +14,10 @@
  * measurement exists and learns why it has no answer today.
  *
  * The strings are fixed - Susan chose the first of them on 2026-08-30, Reader
- * and Jony chose the words of the "Measurement is off" line on 2026-10-07, and
- * Reader those of the "Recording started" line the same day - and only the
- * dates, counts and names inside them are computed.
+ * and Jony chose the words of the "Measurement is off" line and of the two lines
+ * for days only the article record answered for on 2026-10-07, and Reader those
+ * of the "Recording started" line the same day - and only the dates, counts and
+ * names inside them are computed.
  * **A date that is not true is worse than no date**, so every one of them is
  * derived from the ledger that is missing rather than typed here.
  *
@@ -102,20 +103,28 @@ export function sampledAt(rate: number): string | null {
 	return `${measured}. These figures count the runs we measured and are not scaled up to stand for the rest.`;
 }
 
-/** The day the machine was timed and nothing scored what it wrote. */
-export function countersWithoutScores(): string {
-	return 'The machine ran and we timed it. Nothing scored the summaries, so this day has no quality figure.';
-}
+/** Which figures the days only the article record answered for are missing: the
+ * scorer's on Summaries, the server's own counters on Hardware. */
+export type MissingFigures = 'scores' | 'server-counters';
 
-/** The day the summaries were scored and the server wrote no counters.
+/** The line for the days in the open window that only the article record answered for.
  *
- * The state most committed days are in, and the reason the sentence names where
- * the speed figures come from instead: the summariser's own clock and the
- * server's own clock are two instruments, and a page that let a reader think it
- * had the second one would be quoting the wrong denominator.
+ * It names the days and never counts them, because a name says where to look.
+ * Where every day on screen is one of them, it names them with the window's own
+ * words. On Hardware it says where the speed figures come from instead: the
+ * summariser's own clock and the server's own clock are two instruments, and a
+ * page that let a reader think it had the second one would be quoting the wrong
+ * denominator. It claims nothing about scores there, because Hardware draws no
+ * quality figure.
  */
-export function scoresWithoutCounters(): string {
-	return "The summaries were scored, but the server's own counters were not written down for this day. The speed figures here come from the summariser, not the server.";
+function coveredElsewhereSentence(missing: MissingFigures, days: readonly string[], open: OfferedWindow): string {
+	const every = days.length === open.days;
+	const named = every ? nameSpan(open.days) : namedDays(days);
+	if (missing === 'scores') {
+		return `There are no quality figures for ${named}. The machine ran and we timed it, but nothing scored the summaries.`;
+	}
+	const where = every ? 'here' : days.length === 1 ? 'for that day' : 'for those days';
+	return `No server figures were written down for ${named}. The speed figures ${where} come from the summariser, not the server.`;
 }
 
 /** Recording that began after the window opened.
@@ -181,11 +190,15 @@ export function recordDestroyed(lost: readonly LostDay[]): string | null {
 export interface RecordingNotes {
 	sampled: string | null;
 	startedMidWindow: string | null;
-	scoresOnly: string | null;
+	/** The days the article record answered for and this instrument did not, named
+	 * only where its own records could have answered; null where there are none. */
+	coveredElsewhere: string | null;
 	recordDestroyed: string | null;
 }
 
-export interface RecordingFacts {
+/** What one instrument's notes are worked out from, apart from the days only
+ * another record answered for. */
+interface InstrumentFacts {
 	/** The toggle in `config/idhazh.json` that governs this instrument. */
 	enabled: boolean;
 	/** Its sample rate, 1.0 where it measures everything. Omitted by an
@@ -205,13 +218,20 @@ export interface RecordingFacts {
 	from: string;
 	/** The window the notes are for. */
 	open: OfferedWindow;
-	/** Days another instrument answered for that this one did not. */
-	coveredElsewhere?: readonly string[];
 	/** Days that published articles and that this instrument kept no row of. */
 	lost?: readonly LostDay[];
 	/** What the days before the first recorded one have none of. */
 	figures?: string;
 }
+
+/** The days the article record answered for, and which figures the days this
+ * instrument did not answer for are missing. Both or neither: the line has no
+ * default words. */
+type CoveredElsewhereFacts =
+	| { coveredElsewhere: readonly string[]; missing: MissingFigures }
+	| { coveredElsewhere?: never; missing?: never };
+
+export type RecordingFacts = InstrumentFacts & CoveredElsewhereFacts;
 
 /** What the recording was doing over the open window, from what the route read.
  *
@@ -240,13 +260,43 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	const known = whole ? (ran[0] ?? null) : null;
 	const first = known !== null && shown(known) ? known : null;
 	const before = first === null ? 0 : facts.window.filter((date) => shown(date) && date < first).length;
-	const elsewhere = (facts.coveredElsewhere ?? []).filter((date) => shown(date) && !recorded.includes(date));
+	const elsewhere = coveredElsewhereDays(facts, new Set(ran), first);
 	return {
 		sampled: facts.enabled ? sampledAt(facts.rate ?? 1) : null,
 		startedMidWindow: recordingStarted(first, before, facts.figures),
-		scoresOnly: elsewhere.length === 0 ? null : scoresWithoutCounters(),
+		coveredElsewhere:
+			facts.missing === undefined || elsewhere.length === 0
+				? null
+				: coveredElsewhereSentence(facts.missing, elsewhere, open),
 		recordDestroyed: recordDestroyed(lost.filter((day) => shown(day.date)))
 	};
+}
+
+/** The days the open window shows that only the article record answered for.
+ *
+ * Only days the missing record could have answered: a day it holds or recorded
+ * lost is a day the instrument ran, a day after the earliest day its reads are
+ * packed through is not packed yet, and a record that did not read answers
+ * nothing, so then there are none. Each day is said once: the started line
+ * speaks for the days before `first`, the instrument's first day where the
+ * window shows it, and while measurement is off the off line speaks for the days
+ * after the newest one recorded.
+ */
+function coveredElsewhereDays(facts: RecordingFacts, ran: ReadonlySet<string>, first: string | null): string[] {
+	const { reads, open } = facts;
+	const packed = reads.flatMap((read) => (read.state === 'read' ? [read.through] : []));
+	if (packed.length === 0 || packed.length < reads.length) return [];
+	const through = packed.reduce((earliest, day) => (day < earliest ? day : earliest));
+	const newest = [...facts.recorded].sort().at(-1);
+	return [...new Set(facts.coveredElsewhere ?? [])].filter(
+		(date) =>
+			date >= open.start &&
+			date <= open.end &&
+			date <= through &&
+			!ran.has(date) &&
+			(first === null || date > first) &&
+			(facts.enabled || (newest !== undefined && date < newest))
+	);
 }
 
 /** How a build-time read of one packed record went.
