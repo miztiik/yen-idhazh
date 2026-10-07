@@ -165,10 +165,13 @@ sampled instrument on purpose, and naming them would call the sample a gap.
 **A chart that cannot show a setup change says so, and never that nothing
 changed.** On Hardware two charts mark the days the pipeline that writes the
 summaries changed. A day's marker comes from the run record, which names what
-each run ran, and for the days before it did, from the score record's rows. So
-when the score record has not been packed yet or did not load, a chart loses a
-marker only on a day the window shows that had a run and that no run record
-names. Those two charts then say, after the sentence about the dashed rule,
+each run ran, and for the days before it did, from the score record's rows,
+which carry no digest after that. So when the score record has not been packed
+yet or did not load, a chart loses a marker only on a day the window shows that
+had a run, that no run record names, and that comes before the run record first
+named what ran: a later day that published nothing has no marker with the read
+or without it. Those two charts then say, after the sentence about the dashed
+rule,
 which days, why - in the record notes' own words for each fault - and that the
 chart shows every change on the other days: `This chart cannot show whether the
 setup changed on 8 Sep to 12 Sep 2026, because the score record has not been

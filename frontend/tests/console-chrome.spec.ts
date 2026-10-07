@@ -908,9 +908,9 @@ test.describe('what the recording was doing, in fixed words', () => {
 			});
 
 			test('one day, and every day on screen, read as such', () => {
-				// The manifests name every day with a run but 4 Jun.
-				expect(lost({ state: 'not-packed' }, offered(14), RAN, RAN.filter((day) => day !== '2030-06-04'))).toBe(
-					`This chart cannot show whether the setup changed on 4 Jun 2030, because the score record has not been packed yet. That is a step not yet run.${others}`
+				// The manifests name every day with a run from 3 Jun: 2 Jun is the one day left.
+				expect(lost({ state: 'not-packed' }, offered(14), RAN, daysBetween('2030-06-03', '2030-06-14'))).toBe(
+					`This chart cannot show whether the setup changed on 2 Jun 2030, because the score record has not been packed yet. That is a step not yet run.${others}`
 				);
 				// A run on every day of the window and no manifest: there are no other days.
 				expect(lost({ state: 'not-packed' }, offered(7), daysBetween('2030-06-09', '2030-06-15'), [])).toBe(
@@ -918,6 +918,26 @@ test.describe('what the recording was doing, in fixed words', () => {
 				);
 				expect(lost({ state: 'not-packed' }, offered(1), ['2030-06-15'], [])).toBe(
 					'This chart cannot show whether the setup changed on this one day, because the score record has not been packed yet. That is a step not yet run.'
+				);
+			});
+
+			test('a day with no manifest after the manifests began is not the score record\'s to lose', () => {
+				// Shaped like the real records: runs on 8 to 20 Sep 2026, run manifests from 13 Sep, and
+				// none on 19 Sep, a day that published nothing. From 13 Sep the score rows carry no
+				// digest, so the read costs 19 Sep nothing, with it or without it.
+				const ran = daysBetween('2026-09-08', '2026-09-20');
+				const manifests = listManifestDays(
+					daysBetween('2026-09-13', '2026-09-20')
+						.filter((date) => date !== '2026-09-19')
+						.map((date) => ({ date, records: [{ inputs: { model: 'test-model' } }] }))
+				);
+				const open = over('2026-09-06', '2026-09-20');
+				expect(lost({ state: 'not-packed' }, open, ran, manifests)).toBe(
+					`This chart cannot show whether the setup changed on 8 Sep to 12 Sep 2026, because the score record has not been packed yet. That is a step not yet run.${others}`
+				);
+				// No manifest names any day: every day with a run is the score record's to lose.
+				expect(lost({ state: 'not-packed' }, open, ran, [])).toBe(
+					`This chart cannot show whether the setup changed on 8 Sep to 20 Sep 2026, because the score record has not been packed yet. That is a step not yet run.${others}`
 				);
 			});
 

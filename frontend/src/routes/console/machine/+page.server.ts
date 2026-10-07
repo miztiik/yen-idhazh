@@ -310,11 +310,12 @@ export async function load() {
 	// questions about one record, and two reads of it could answer them off two
 	// different day lists.
 	const manifests = loadManifests(undefined, widest);
-	// The score record is read here only for the change markers on the days no
-	// run manifest identifies: the score rows carried the pipeline's digest
-	// before the manifests named what each run ran. Once the widest read holds
-	// none of those days, this read can go. Its state is kept beside its rows, so
-	// a chart that loses a marker to a read that did not read can say so.
+	// The score record is read here only for the change markers on the days
+	// before the run manifests began naming what ran: until then the score rows
+	// carried the pipeline's digest, and they carry none after. Once the widest
+	// read holds none of those days, this read can go. Its state is kept beside
+	// its rows, so a chart that loses a marker to a read that did not read can
+	// say so.
 	const scores = await evalRows(readSpan);
 	const identified = listManifestDays(manifests);
 

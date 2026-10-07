@@ -693,7 +693,9 @@ export interface MissingMarkerFacts {
 	read: RecordRead;
 	/** Every day the route has a run on. */
 	ran: readonly string[];
-	/** The days a run manifest identifies, whose marker needs no score row. */
+	/** The days a run manifest identifies, whose marker needs no score row. The
+	 * first of them is the day the manifests began naming what ran, after which
+	 * the score rows carry no digest. */
 	identified: readonly string[];
 	/** The window the line is for. */
 	open: OfferedWindow;
@@ -715,21 +717,37 @@ function missingMarkerCause(read: Exclude<RecordRead, { state: 'read' }>): [caus
 /** The line for a chart whose change markers a score read that did not read cost it.
  *
  * A day's marker comes from a run manifest where one names what ran, and
- * otherwise from the score rows, which carried the pipeline's digest before the
- * manifests did. So a score read that did not read costs a marker only on a day
- * the open window shows that had a run and that no manifest identifies, and the
- * line names exactly those days; where there are none, or the read went, it is
- * null. A chart without a rule then says this instead of saying nothing
- * changed, which would claim days the page cannot see. Where every day on
- * screen is one of them, the line uses the window's own words and leaves out
- * the other days, because there are none. Reader chose the words and Jony the
- * place, on both charts that draw the markers, on 2026-10-07.
+ * otherwise from the score rows, which carried the pipeline's digest until the
+ * manifests began naming what ran and carry none after. So a score read that
+ * did not read costs a marker only on a day the open window shows that had a
+ * run, that no manifest identifies, and that comes before the first day a
+ * manifest identifies; where no manifest identifies a day, every such day
+ * counts. A later day with a run and no manifest - a day that published nothing
+ * - has no marker with the read or without it, so the line never blames the
+ * read for it. The line names exactly those days; where there are none, or the
+ * read went, it is null. A chart without a rule then says this instead of
+ * saying nothing changed, which would claim days the page cannot see. Where
+ * every day on screen is one of them, the line uses the window's own words and
+ * leaves out the other days, because there are none. Reader chose the words and
+ * Jony the place, on both charts that draw the markers, on 2026-10-07.
+ *
+ * One case it cannot see: a day before the changeover run again later gets a
+ * manifest, which reads as the changeover itself, so the days after it drop
+ * from the line. Only the score rows could tell the two apart, and they are
+ * what did not read.
  */
 export function describeMissingMarkers(facts: MissingMarkerFacts): string | null {
 	const { read, open } = facts;
 	if (read.state === 'read') return null;
 	const identified = new Set(facts.identified);
-	const days = [...new Set(facts.ran)].filter((day) => day >= open.start && day <= open.end && !identified.has(day));
+	const changeover = [...identified].sort()[0];
+	const days = [...new Set(facts.ran)].filter(
+		(day) =>
+			day >= open.start &&
+			day <= open.end &&
+			!identified.has(day) &&
+			(changeover === undefined || day < changeover)
+	);
 	if (days.length === 0) return null;
 	const every = days.length === open.days;
 	const [cause, kind] = missingMarkerCause(read);
