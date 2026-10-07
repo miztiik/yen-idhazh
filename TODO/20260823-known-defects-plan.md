@@ -76,7 +76,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
 | 23 | The canary day records no settings, so nothing renders the rules that say a setting moved | 2 | **OPEN - the pure module is tested; the page is not** |
 | 24 | `failed_field` costs a cell on every row and answers nobody | 5 | **OPEN - draw it or migrate it out** |
-| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | CLOSED 2026-10-04 - owner ruled to drop the column; Plan 61 Row 2 removed it |
+| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | CLOSED 2026-10-04 - the council record rationale ([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant)) keeps machine details out of each row |
 | 26 | The settlement-key check reads one constant twice, so it cannot see a key lose a cell | 2 | **OPEN - every keyed ledger is exposed** |
 | 27 | The decode stamp excludes the grammar but not the schema | 3 | **OPEN - changing it moves every summariser digest** |
 | 28 | The one-at-a-time guard tells the operator the wrong verb | 1 | **OPEN - about four lines across three call sites** |
@@ -958,8 +958,10 @@ rejected recording the machine per shard, on the grounds that the digest
 pipeline already characterises the same runner pool and the probe wants 1.9 GiB
 on a job whose two processes already hold up to 9.02 GiB in 16 GB.
 
-The owner ruled on 2026-10-04 to drop the column. Plan 61 Row 2 removes it from
-the replacement contract and refuses a filled legacy cell during migration.
+The council record rationale
+([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant))
+keeps machine details out of each row. The replacement contract refuses a
+filled legacy cell during migration.
 
 Found 2026-09-21, while the council's own record was being built.
 
