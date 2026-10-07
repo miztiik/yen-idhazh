@@ -152,7 +152,9 @@ def test_no_ledger_that_failed_on_2026_10_04_is_offered_a_month_before_it_began(
     assert later.start is StartReason.OLDEST_INDEXED
 
 
-@pytest.mark.parametrize(("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)])
+@pytest.mark.parametrize(
+    ("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)]
+)
 def test_a_month_may_close_45_whole_days_after_it_ends(today: date, closes: bool) -> None:
     """September ends at 00:00 UTC on 1 October, and 45 days later is 15 November."""
     chosen = _compaction_periods.choose(
@@ -172,8 +174,12 @@ def test_the_daily_mark_must_reach_a_month_s_last_day() -> None:
     """A mark on 30 September closes September; one on 29 September does not."""
     policy = policy_of(TASK)
 
-    reached = months_chosen(marks(VISUALS, days("2026-09-01", "2026-09-30")), policy, date(2026, 12, 1))
-    short = months_chosen(marks(VISUALS, days("2026-09-01", "2026-09-29")), policy, date(2026, 12, 1))
+    reached = months_chosen(
+        marks(VISUALS, days("2026-09-01", "2026-09-30")), policy, date(2026, 12, 1)
+    )
+    short = months_chosen(
+        marks(VISUALS, days("2026-09-01", "2026-09-29")), policy, date(2026, 12, 1)
+    )
 
     assert (reached.first, reached.last) == ("2026-09", "2026-09")
     assert short.first is None
@@ -190,7 +196,9 @@ def test_the_cap_cuts_the_span_and_names_where_the_next_wake_starts() -> None:
 
 
 def test_the_span_starts_after_the_monthly_mark() -> None:
-    tree = marks(VISUALS, days("2026-09-01", "2026-10-31"), monthly=("2026-08",), monthly_through="2026-08")
+    tree = marks(
+        VISUALS, days("2026-09-01", "2026-10-31"), monthly=("2026-08",), monthly_through="2026-08"
+    )
 
     choice = months_chosen(tree, policy_of(TASK), date(2027, 1, 1))
 
@@ -219,7 +227,9 @@ def test_an_operator_range_limits_the_span_and_never_skips_a_ready_month(
     expected: tuple[str | None, str | None, StopReason | None, str | None],
 ) -> None:
     """A range that leaves out the month the step must close first is refused at that month."""
-    tree = marks(VISUALS, days("2026-09-01", "2026-11-30"), monthly=("2026-08",), monthly_through="2026-08")
+    tree = marks(
+        VISUALS, days("2026-09-01", "2026-11-30"), monthly=("2026-08",), monthly_through="2026-08"
+    )
 
     choice = months_chosen(tree, policy_of(TASK), today, operator=operator)
 
@@ -262,13 +272,17 @@ def test_new_days_run_from_the_day_after_the_mark_to_the_cap() -> None:
 
 
 def test_new_days_end_at_the_newest_due_day() -> None:
-    choice = days_chosen(marks(VISUALS, days(FIRST_DAY, "2026-09-28")), policy_of(TASK), FAILED_WAKE)
+    choice = days_chosen(
+        marks(VISUALS, days(FIRST_DAY, "2026-09-28")), policy_of(TASK), FAILED_WAKE
+    )
 
     assert (choice.first, choice.last, choice.stopped_because) == ("2026-09-29", "2026-10-02", None)
 
 
 def test_a_mark_on_the_newest_due_day_offers_no_new_day() -> None:
-    choice = days_chosen(marks(VISUALS, days(FIRST_DAY, "2026-10-02")), policy_of(TASK), FAILED_WAKE)
+    choice = days_chosen(
+        marks(VISUALS, days(FIRST_DAY, "2026-10-02")), policy_of(TASK), FAILED_WAKE
+    )
 
     assert (choice.start, choice.first, choice.stopped_because) == (StartReason.MARK, None, None)
 
@@ -345,7 +359,9 @@ def test_a_first_run_starts_no_earlier_than_the_keep_line_while_month_deletes_ar
     )
     tree = marks(VISUALS, [], raw_days=("2026-08-12", "2026-09-03"))
 
-    chosen = _compaction_periods.choose(tree, policy, now=at(date(2026, 11, 16)), operator_range=None)
+    chosen = _compaction_periods.choose(
+        tree, policy, now=at(date(2026, 11, 16)), operator_range=None
+    )
 
     assert chosen.keep_line == "2026-09"
     assert (chosen.days.start, chosen.days.first) == (start, first)
@@ -381,15 +397,23 @@ def test_an_operator_range_limits_the_new_days_and_never_skips_a_due_one(
         ("2026-09-16", None, ("2026-09-04", "2026-09-16")),
         ("2026-09-03", None, None),
         (None, None, None),
-        ("2026-10-02", ("2026-09", "2026-09"), ("2026-09-04", "2026-09-30")),
+        ("2026-10-02", ("2026-09", "2026-09"), ("2026-09-01", "2026-09-30")),
+        ("2026-09-03", ("2026-09", "2026-09"), ("2026-09-01", "2026-09-03")),
         ("2026-09-16", ("2026-10", "2026-10"), None),
     ],
-    ids=["to-the-mark", "mark-older-than-the-span", "no-mark", "inside-a-range", "range-after"],
+    ids=[
+        "to-the-mark",
+        "mark-older-than-the-span",
+        "no-mark",
+        "inside-a-range",
+        "historical-range",
+        "range-after",
+    ],
 )
 def test_the_re_run_span_runs_from_thirty_days_before_the_wake_to_the_mark(
     through: str | None, operator: tuple[str, str] | None, span: tuple[str, str] | None
 ) -> None:
-    """GitHub lets a run be re-run for 30 days, and a re-run writes into its first day."""
+    """Scheduled wakes look back 30 days; an explicit range reaches older imports."""
     tree = marks(VISUALS, days("2026-09-01", through) if through is not None else [])
 
     chosen = _compaction_periods.choose(
@@ -397,6 +421,34 @@ def test_the_re_run_span_runs_from_thirty_days_before_the_wake_to_the_mark(
     )
 
     assert chosen.rerun_span == span
+
+
+def test_an_explicit_range_packs_an_import_older_than_the_scheduled_window(tmp_path: Path) -> None:
+    root = tmp_path / "checkout"
+    held = {day: quiet(day) for day in days(FIRST_DAY, "2026-09-30")}
+    held["2026-09-19"] = a_packed_day(root, "2026-09-19")
+    an_index(root, VISUALS, Period.DAILY, [held[day] for day in sorted(held)])
+    an_index(root, VISUALS, Period.MONTHLY, [])
+    an_index(root, VISUALS, Period.YEARLY, [])
+    a_daily_mark(root, VISUALS, "2026-09-30")
+    imported = a_pass("2026-09-19", run="2", before=222)
+    raw = filed(root, imported)
+    wake = date(2026, 11, 1)
+    scheduled = _compaction_periods.choose(
+        marks(VISUALS, days(FIRST_DAY, "2026-09-30")),
+        policy_of(TASK),
+        now=at(wake),
+        operator_range=None,
+    )
+    assert scheduled.rerun_span is None
+
+    outcome = compact(root, wake, period_range=("2026-09", "2026-09"))
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED
+    assert not raw.exists()
+    packed = ledger.compact_file(state(root), VISUALS, Period.DAILY, imported.date)
+    assert packed is not None
+    assert imported in ledger.load([packed], model=VisualPruneRow)
 
 
 # --- the year step's choice: unit cases over literal marks -------------------------
@@ -795,7 +847,9 @@ ROWS_ON: Final = ("2026-09-12", "2026-09-20", "2026-09-25")
 
 
 @pytest.mark.parametrize("name", sorted(FAILED_ON_2026_10_04))
-def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(tmp_path: Path, name: str) -> None:
+def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(
+    tmp_path: Path, name: str
+) -> None:
     """A wake's listing names only each ledger's marks, and the month step names what it chooses."""
     first, last = FAILED_ON_2026_10_04[name]
     policy = policy_of(name)
@@ -811,7 +865,9 @@ def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(tmp_path: Path
     assert watermark(root, Period.MONTHLY, policy.ledger) is None
 
 
-@pytest.mark.parametrize(("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)])
+@pytest.mark.parametrize(
+    ("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)]
+)
 def test_a_ledger_from_the_12th_closes_september_on_the_15th_of_november_from_its_first_day(
     tmp_path: Path, today: date, closes: bool
 ) -> None:
@@ -905,7 +961,9 @@ def test_a_month_with_no_row_is_an_empty_entry_with_no_file(tmp_path: Path) -> N
 
     compact(root, date(2026, 11, 15))
 
-    assert september(root) == CompactEntry(covers="2026-09", rows=0, bytes=0, state=EntryState.EMPTY)
+    assert september(root) == CompactEntry(
+        covers="2026-09", rows=0, bytes=0, state=EntryState.EMPTY
+    )
     assert ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-09") is None
     assert daily_september(root) == []
 
@@ -939,7 +997,9 @@ def test_an_indexed_empty_month_finishes_without_a_file_to_look_for(tmp_path: Pa
 
 def a_month_file(root: Path, rows_on: tuple[str, ...]) -> Path:
     """September's own month file at its path, built from these days' rows, named by no entry."""
-    raws = [filed(root / "scratch", a_pass(day, run=str(number))) for number, day in enumerate(rows_on)]
+    raws = [
+        filed(root / "scratch", a_pass(day, run=str(number))) for number, day in enumerate(rows_on)
+    ]
     return ledger.persist_period(
         state(root),
         ledger.load_stored(raws, model=VisualPruneRow),

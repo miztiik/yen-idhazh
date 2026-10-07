@@ -341,6 +341,14 @@ proof remain outstanding. If a compact index already covers the day, the
 normal reader may continue to serve the compact file until a later compaction
 includes the raw arrival.
 
+An explicit `--from` and `--to` month range includes historical raw arrivals
+behind the daily mark, even when they are outside the normal 30-day rerun
+window. Scheduled wakes keep that window unchanged. The explicit pass still
+uses the existing period cap, download budget and guarded gardener publication.
+If another writer changes an output path, the stale pass lands nothing; run
+the named pass again on current main. A distinct raw file that arrives after
+the pass read its inputs survives and needs a subsequent packing pass.
+
 **A re-open that cannot finish keeps every file, and the pass ends `failed` at
 the month.** A `packed` entry whose month file is not there is refused as
 `fault=file-missing`: rebuilt from the late files alone, the month would hold
