@@ -72,7 +72,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | DONE | supreme-journey | #1367 | Plan 62 row l16 |
 | L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | DONE | probable-umbrella | #1374 | Plan 62 row l17 |
 | L18 | The console home reads each day payload once | L13 | F | PENDING | - | - | - |
-| L19 | console-mark-parity's skipped test checks data it builds | L13 | F | PENDING | - | - | - |
+| L19 | console-mark-parity's skipped test checks data it builds | L13 | F | DONE | super-spork | - | Plan 62 row l19 |
 | L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | #1371 | Plan 62 row l20 |
 | L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
 | L22 | Summaries' one-sided lines say what is true | L16 | F | DONE | fuzzy-meme | - | Plan 62 row l22 |
@@ -982,7 +982,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (found by a search on `main` at 3f6440edb for `test.skip` in the spec, for `data-swap-domain`, and for the helpers that build and render a swap in `console-model-panels.spec.ts`):
   - `frontend/tests/console-mark-parity.spec.ts` (the case skips where the canary holds no model change; the file's header and the `optional` field's comment say why)
   - `frontend/tests/console-model-panels.spec.ts` (`swapFixture()` builds a swap from rows the test writes, and `renderSwap()` renders `SwapDots.svelte` on it; both move to the support file, decision 2)
-  - `frontend/tests/support/model-swap.ts` (new: the swap both specs build and render; decision 2)
+  - `frontend/tests/support/model-swap.ts` (new: the swap both specs build and render; decision 2. It also holds `BANDS`, which the run-length tests in `console-model-panels.spec.ts` share with the swap, and `buildSwap()`, which builds the swap that stands for the other window; found during execution)
   - Left as it is: `frontend/src/lib/components/SwapDots.svelte`, which publishes `data-swap-domain` and which the case renders
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-mark-parity.spec.ts --spec console-model-panels.spec.ts`; `npm --prefix frontend run check`. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `console-mark-parity.spec.ts`, on a swap the test builds (Table D, D3): `SwapDots.svelte`, rendered at the spec's two widths, `WIDE` and `NARROW`, publishes the same `data-swap-domain` and the same marks at both, and a swap built from other rows, standing for the other window, publishes an extent too. The case never skips. It cannot settle the live resize, because a server render draws once; that stays with the other five charts, which draw on the canary.
