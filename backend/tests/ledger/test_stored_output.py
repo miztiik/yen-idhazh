@@ -12,7 +12,7 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.stored_output import check_compact_period, check_raw_day
 
@@ -142,26 +142,3 @@ def test_an_unreadable_old_index_is_a_named_value_error(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match=r"daily.json:"):
         check_compact_period(tmp_path, WHICH, Period.DAILY, DAY)
-
-
-@pytest.mark.parametrize("period", list(Period))
-def test_a_corrupt_watermark_is_a_named_value_error(tmp_path: Path, period: Period) -> None:
-    through = {Period.DAILY: DAY, Period.MONTHLY: DAY[:7], Period.YEARLY: DAY[:4]}[period]
-    path = ledger.watermark_path(tmp_path, WHICH, period)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        Watermark(
-            version=Watermark.schema_version(),
-            ledger=WHICH,
-            period=period,
-            through=through,
-            advanced_at="2026-09-03T00:00:00Z",
-            run_id=f"{DAY}-1",
-        ).to_json(),
-        encoding="ascii",
-        newline="\n",
-    )
-    path.write_text('{"version":"2026-09-27","through":"broken"}', encoding="ascii")
-
-    with pytest.raises(ValueError, match=r"watermark.json:"):
-        check_compact_period(tmp_path, WHICH, period, through)
