@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from idhazh import config, ledger
+from idhazh import config
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -66,20 +66,64 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
             )
         # Validated, because model_copy(update=...) is not: a misspelt key there would be
         # kept beside the real one, and the declaration's own month deletes would run.
-        declared[name] = CompactionPolicy.model_validate(
-            {**policy.model_dump(), "dry_run": False, "month_deletes_dry_run": True}
-        )
+        declared[name] = packing_policy(policy)
     return declared
 
 
-def packs_here(state_dir: Path, config_dir: Path) -> bool:
-    """Whether this root is the state tree the declarations in `config_dir` govern.
+def packing_policy(policy: CompactionPolicy) -> CompactionPolicy:
+    """Pack live while keeping every monthly deletion report-only."""
+    return CompactionPolicy.model_validate(
+        {**policy.model_dump(), "dry_run": False, "month_deletes_dry_run": True}
+    )
 
-    Only `state/` beside `config/` is packed. Any other root - a trial run's tree
-    inside it - is filed raw: nothing reads a packed trial root, and the trials
-    task empties it.
-    """
-    return state_dir.resolve() == (config_dir.parent / ledger.STATE_DIRNAME).resolve()
+
+def policies_for_roots(
+    which: Sequence[LedgerName],
+    roots: Sequence[Path],
+    config_dir: Path,
+) -> dict[Path, dict[LedgerName, CompactionPolicy | None]]:
+    """Select each explicitly governed root after requiring every production declaration."""
+    production = declared(which, config_dir)
+    tasks = config.load_gardener(config_dir).tasks
+    config_root = config_dir.parent.resolve()
+    selected: dict[Path, dict[LedgerName, CompactionPolicy | None]] = {}
+    for state_dir in roots:
+        try:
+            root_name = state_dir.resolve().relative_to(config_root).as_posix()
+        except ValueError:
+            root_name = ""
+        selected[state_dir] = {}
+        for name in which:
+            if root_name == "state":
+                selected[state_dir][name] = production[name]
+                continue
+            trial = tasks.get(f"compact-trial-{name.value}")
+            if isinstance(trial, CompactionPolicy) and root_name in trial.state_roots:
+                root_owns = [
+                    folder for folder in trial.owns if folder.startswith(f"{root_name}/")
+                ]
+                selected[state_dir][name] = CompactionPolicy.model_validate(
+                    {
+                        **packing_policy(trial).model_dump(),
+                        "owns": root_owns,
+                        "state_roots": [root_name],
+                    }
+                )
+            else:
+                selected[state_dir][name] = None
+    return selected
+
+
+def packs_here(state_dir: Path, config_dir: Path) -> bool:
+    """Whether any compaction declaration names this root for packing."""
+    try:
+        root_name = state_dir.resolve().relative_to(config_dir.parent.resolve()).as_posix()
+    except ValueError:
+        return False
+    return any(
+        isinstance(policy, CompactionPolicy) and root_name in policy.state_roots
+        for policy in config.load_gardener(config_dir).tasks.values()
+    )
 
 
 def pack(
@@ -87,6 +131,7 @@ def pack(
     which: LedgerName,
     identity: WriterIdentity,
     *,
+    repo_root: Path,
     policy: CompactionPolicy,
     today: date,
     months: Sequence[str],
@@ -98,7 +143,6 @@ def pack(
     and `--to` would be. `first_ledger_year` is `config/idhazh_gardener.json`'s,
     which a pass that rebuilds an absent index looks from.
     """
-    repo_root = state_dir.parent
     context = f"{label_path(state_dir)}: {which.value}"
     written: list[str] = []
     deleted: list[str] = []
