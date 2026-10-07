@@ -257,7 +257,7 @@ the copy afterwards:
 
 ```powershell
 $python = (Resolve-Path .\.venv\Scripts\python.exe).Path
-$copy = New-Item -ItemType Directory -Path (Join-Path $env:TEMP 'base-commit')
+$copy = New-Item -ItemType Directory -Path (Join-Path (Get-Item $env:TEMP).FullName 'base-commit')
 git archive --format=tar <base-commit> backend config tests pyproject.toml | tar -x -C $copy
 Copy-Item backend\tests\<folder>\test_<changed>.py (Join-Path $copy 'backend\tests\<folder>')
 Push-Location $copy; & $python -m pytest -n 0 backend/tests/<folder>/test_<changed>.py; Pop-Location
@@ -281,10 +281,14 @@ fingerprints its inputs through git: with no `.gitignore` its own output counts
 as an input, and it ends with "Build inputs changed during compilation". Run
 `build_canary_day.py` from the copy's root with `PYTHONPATH` set to the copy's
 `backend`, and `build-canary.mjs` from its `frontend` with `IDHAZH_PYTHON` set
-to an installed interpreter, so the copy's code is what packs. Compare entries
-and names, not bytes, and leave out the one clock: the name of each raw file
-the canary writes after packing holds the time of its write, so it differs
-between any two builds of one commit.
+to an installed interpreter, so the copy's code is what packs. Name the copy by
+the long form of `TEMP`, as the block above does. Where `TEMP` is a short 8.3
+name, with a `~1` in it, the canary's telemetry step compares that spelling
+with the long one Python resolves for the repository root, and stops with
+`ValueError: ... is not in the subpath of ...` (2026-10-07, Windows, Python
+3.14.2). Compare entries and names, not bytes, and leave out the one clock: the
+name of each raw file the canary writes after packing holds the time of its
+write, so it differs between any two builds of one commit.
 
 ## Set up the backend environment
 
