@@ -4,13 +4,14 @@
  * A test names a ledger, pins a UTC day, and lists the ledger's days counted back from it,
  * each packed with a number of rows, empty or lost. `buildLedger` writes what the gardener's
  * compaction leaves for those days: the three compact indexes, and one real Parquet file for
- * each packed day and each closed month, written by the door's own query engine with
- * `COPY ... TO`. A
- * day the list leaves out is a hole. Each file holds `covers`, the UTC day a row was filed
- * under, and `date`, the same day in the cell a panel slice keeps its rows by, as every
- * packed file does, and `n`, the row's number within its day, from 1. A test may choose more
- * columns, each with one value every row holds, typed by that value. A packed day or a lost
- * one may name how many of its writer's files the packing set aside unread.
+ * each packed day and each closed month that holds a row, written by the door's own query
+ * engine with `COPY ... TO`. A packed day may hold no row, as the compaction once packed a
+ * quiet day: its file holds every column and no row. A day the list leaves out is a hole.
+ * Each file holds `covers`, the UTC day a row was filed under, and `date`, the same day in
+ * the cell a panel slice keeps its rows by, as every packed file does, and `n`, the row's
+ * number within its day, from 1. A test may choose more columns, each with one value every
+ * row holds, typed by that value. A packed day or a lost one may name how many of its
+ * writer's files the packing set aside unread.
  * Nothing here reads a committed fixture, so a test's expected values follow from what the
  * test built and nothing else.
  *
@@ -30,9 +31,9 @@ import type { Fetcher } from '../../src/lib/data/fetched-bytes';
 import type { DateStamp, LedgerName } from '../../src/lib/data/slice-shapes';
 import { engineExtensionRepository, ledgerArchiveBaseUrl } from '../../src/lib/server/config';
 
-/** One day of a built ledger, `ago` days before the pinned day: a packed day holds `rows` rows, an
- *  `empty` day held none, and a `lost` day lost its rows. A packed day and a lost one may have set
- *  `setAside` of their writer's files aside unread. */
+/** One day of a built ledger, `ago` days before the pinned day: a packed day holds `rows` rows,
+ *  0 or more, an `empty` day held none, and a `lost` day lost its rows. A packed day and a lost
+ *  one may have set `setAside` of their writer's files aside unread. */
 export type BuiltDay =
 	| { ago: number; rows: number; setAside?: number }
 	| { ago: number; state: 'empty' }
@@ -94,7 +95,8 @@ function literal(value: BuiltCell): string {
 }
 
 /** Write `rows` rows for each day into one Parquet file at `target`, through this process's own
- *  query engine, every row holding each chosen column's value, and return the file's size. */
+ *  query engine, every row holding each chosen column's value, and return the file's size. A day of
+ *  0 rows adds none, and a file of no row still holds every column. */
 async function writeParquet(
 	target: string,
 	days: readonly [DateStamp, number][],
@@ -136,7 +138,7 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 	for (const day of built.days) {
 		const covers = daysBefore(built.pinned, day.ago);
 		if (named.has(covers)) throw new Error(`${built.ledger} names ${covers} twice`);
-		if ('rows' in day && !(Number.isInteger(day.rows) && day.rows > 0)) throw new Error(`${covers} is packed with ${day.rows} rows`);
+		if ('rows' in day && !(Number.isInteger(day.rows) && day.rows >= 0)) throw new Error(`${covers} is packed with ${day.rows} rows`);
 		const setAside = setAsideOf(day).set_aside;
 		if (setAside !== undefined && !(Number.isInteger(setAside) && setAside > 0)) throw new Error(`${covers} set ${setAside} files aside`);
 		named.set(covers, day);
@@ -170,7 +172,8 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 		// A month counts every file its days set aside.
 		const setAside = inMonth.reduce((sum, covers) => sum + (setAsideOf(named.get(covers)!).set_aside ?? 0), 0);
 		const setAsideFiles = setAside > 0 ? { set_aside: setAside } : {};
-		if (packed.length === 0) {
+		// A month that holds no row packs as `empty`, with no file, as the compaction packs one.
+		if (packed.every(([, rows]) => rows === 0)) {
 			monthly.push({ covers: month, rows: 0, bytes: 0, state: 'empty', ...lostDays });
 			continue;
 		}
