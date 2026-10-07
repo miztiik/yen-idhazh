@@ -7,7 +7,7 @@ a test turns that off for itself only. Each oracle is named where it is
 checked: a compact file holds exactly what settling its raw files gives; after
 every pass the daily index names every due day, a quiet one included, so the
 next pass starts the day after it; an index that is not there is rebuilt from
-the files at its named paths and nothing is deleted; every
+the files of its periods and nothing is deleted; every
 date is read from exactly one file, and a day lost with its file is named in
 its closed month; a file that cannot be read is moved under set-aside at its
 old path and counted, and the rest of its period packs; a day holding more raw
@@ -1029,16 +1029,16 @@ def test_a_catch_up_pass_never_writes_a_path_it_deletes(tmp_path: Path) -> None:
     assert mark(root, Period.MONTHLY) == "2026-08"
 
 
-def a_packed_month(root: Path, month: str) -> Path:
-    """One month's own file, packed from one row filed on its 5th."""
-    raw = filed(root / "scratch", a_pass(f"{month}-05"))
+def a_packed_file(root: Path, period: Period, covers: str, day: str) -> Path:
+    """One period's own file, packed from one row filed on `day`."""
+    raw = filed(root / "scratch", a_pass(day))
     return ledger.persist_period(
         state(root),
         ledger.load_stored([raw], model=VisualPruneRow),
         model=VisualPruneRow,
         ledger=VISUALS,
-        period=Period.MONTHLY,
-        covers=month,
+        period=period,
+        covers=covers,
         identity=WriterIdentity(
             run_id="2026-02-15-1",
             attempt=1,
@@ -1049,6 +1049,11 @@ def a_packed_month(root: Path, month: str) -> Path:
         ),
         built_from=1,
     )
+
+
+def a_packed_month(root: Path, month: str) -> Path:
+    """One month's own file, packed from one row filed on its 5th."""
+    return a_packed_file(root, Period.MONTHLY, month, f"{month}-05")
 
 
 def a_month_file(root: Path, month: str) -> Path:

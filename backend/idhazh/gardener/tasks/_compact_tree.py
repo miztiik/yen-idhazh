@@ -15,7 +15,7 @@ so the record can count it, and keeps it.
 **The marks are worked out from the indexes, and then only move forward.** The
 daily, monthly and yearly marks are worked out (`ledger_marks.work_out_marks`)
 when the tree is built, and again after an absent index is rebuilt from the
-files at its named paths, before any step runs (`_absent_indexes`). After that
+files of its periods, before any step runs (`_absent_indexes`). After that
 each step moves its mark forward as it finishes a period, and nothing moves one
 back: the drop step taking months out of the monthly index moves no mark.
 
@@ -28,8 +28,9 @@ choose their periods as they run, so each names what it reads of them first,
 through `name_drops`, `name_years`, `name_months` and `name_days`, and the
 listing then answers for them from the same commit. A day step with no mark
 looks back over months no step has named yet, and the pass names those through
-`name_raw_months` before it chooses. An absent index is rebuilt from files the
-rebuild names through `name_period_files`.
+`name_raw_months` before it chooses. An absent index is rebuilt from the files
+in the year folders the rebuild names through `name_year_folders`, one folder
+a year.
 
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
 that lands the pass refuses a path on both lists, so one pass that did either
@@ -58,9 +59,9 @@ cannot trust, rather than read it as absent, and says why.
 
 **A ledger's three indexes exist together.** Whatever writes one writes each of
 the others the ledger has none of yet. Each of those holds what the rebuild of
-an absent index found at that period's named paths, which is nothing when no
-file was there, so an empty list is the truth about it as far as those paths
-reach. A reader that finds `index/daily.json` can then tell a lost
+an absent index found for its periods, which is nothing when no file was there,
+so an empty list is the truth about it as far as those periods reach. A reader
+that finds `index/daily.json` can then tell a lost
 `index/monthly.json` or `index/yearly.json` from a period never packed, and
 asks for no file that is not there.
 """
@@ -308,18 +309,21 @@ class CompactTree:
         """
         self._name([], months=months)
 
-    def name_period_files(self, period: Period, covers: Sequence[str]) -> None:
-        """Name these periods' own files, whichever format wrote each, and no raw folder.
+    def name_year_folders(self, period: Period, covers: Sequence[str]) -> None:
+        """Name the folder of each year these periods fall in, and no raw folder.
 
-        An absent index is rebuilt from the files at these names
-        (`_absent_indexes`), which are listed from the commit now.
+        An absent index is rebuilt from the files of these periods
+        (`_absent_indexes`). Naming one folder a year, rather than each
+        period's file, keeps the paths a rebuild names to one more a year;
+        every file inside each is listed from the commit now.
         """
         self._name(
-            [
-                ledger.compact_path(self.state_dir, self.ledger, period, each, fmt=fmt)
-                for each in covers
-                for fmt in Format
-            ]
+            sorted(
+                {
+                    ledger.compact_root(self.state_dir, self.ledger, period) / each[:4]
+                    for each in covers
+                }
+            )
         )
 
     def name_days(self, days: Sequence[str]) -> None:
@@ -517,8 +521,8 @@ class CompactTree:
 
         Each other period's index is written with it when the ledger has none yet
         so a ledger never holds one index
-        without the others. An absent index was rebuilt from the files at its
-        named paths before any step ran, so what the pass holds for it is what
+        without the others. An absent index was rebuilt from the files of its
+        periods before any step ran, so what the pass holds for it is what
         that rebuild found, nothing when no file was there, and the index says so.
         """
         self.pending_indexes.add(period)

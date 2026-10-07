@@ -21,8 +21,8 @@ shard lands all of them in one commit:
 3 packs, the months step 4 closes and the days step 5 packs are chosen before
 any step runs, from the ledger's own indexes and the marks worked out from
 them, and the wake's day (`_compaction_periods`), and logged once as
-`PeriodsChosen`. An index that is not there is first rebuilt from the files at
-its named paths (`_absent_indexes`). A range a person
+`PeriodsChosen`. An index that is not there is first rebuilt from the files of
+its periods, found in one named folder a year (`_absent_indexes`). A range a person
 names, or the first and last month a migration packs, limits that choice. A
 scheduled wake names no range, and its listing holds nothing of the ledger but
 its marks until a step names what it chose. A day step with no mark first has

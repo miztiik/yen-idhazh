@@ -115,8 +115,8 @@ class GardenerConfig(Model):
     first_ledger_year: YearStamp = Field(
         description=(
             "The UTC year, as YYYY, from which a compaction looks for year and month files "
-            "when one of a ledger's indexes is absent and is rebuilt from the files at their "
-            "named paths. No ledger holds a row from before it."
+            "when one of a ledger's indexes is absent and is rebuilt from the files in the "
+            "year folders it names. No ledger holds a row from before it."
         ),
     )
 

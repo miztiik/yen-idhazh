@@ -1,6 +1,6 @@
 # Plan 60 - The gardener chooses its own work and recovers on its own
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-07
 
 **Level**: 5 (CLAUDE.md section 6). Rows 8, 10, 19 and 20 change persisted contracts (section 2.4). The owner approved each shape on 2026-10-04.
 
@@ -32,7 +32,7 @@ Table A - what is out
 | A5 | Listing switched-off declarations in the plan job | A paused task does not appear in the run log | A request for it |
 | A6 | A console panel for the recovery notes | The notes reach the record and the shard summary (row 22), but not the console | Row 28 publishes the gardener ledger; then Jony and Susan rule on the panel |
 | A7 | Backend folds telling a lost day from a quiet day | A count over a lost day reads as zero activity, not as unknown | `LedgerFiles` in `backend/idhazh/ledger/ledger_files.py` carries the gaps to each fold: a Level 3 row |
-| A8 | Rule L looking further back than its named places (section 2.2) | A ledger whose daily mark stalled for longer than B7's look-back keeps its older day files out of a rebuilt index | Looking back to `first_ledger_year` on every rebuild. That read grows with time (Guardrail #12), so it needs the owner's exception |
+| A8 | Rule L looking further back than its named places (section 2.2) | A ledger whose daily mark stalled for longer than B7's look-back keeps its older day files out of a rebuilt index | Starting a daily rebuild with no monthly mark at January of `first_ledger_year`. Rule L names one folder a year (row 19, decision 7), so that adds one folder a year, inside decision 3's bound, and needs no exception: a Level 2 row |
 | A9 | The gardener's other tasks choosing by the download budget | `telemetry_aggregate`, `closed_day_fold` and `collection_mark` still fetch through `FileListing.fetch`, so two fetch paths stay: `fetch`, and the compaction's `fetch_within_budget` | A row after row 18 that makes those three choose by the budget, then makes `fetch` itself refuse past the budget and deletes `fetch_within_budget` (Fowler, row 18 report) |
 
 ## 1. Status Reckoner
@@ -91,7 +91,7 @@ Table B - each step
 | B6 | Pack days | The day after the daily mark | New days up to the earlier of the mark plus the cap and the newest eligible day. Also packed days inside the 30-day re-run span that hold new raw files; they count against the cap. A raw file in a closed month re-opens it (Table C, C3). A re-opened month counts once against the cap, and the step re-opens months before it takes any day (Fowler, row 17 report). A day with no row is an entry `empty` with no file | The raw folders and the packed day files of the new days and of the re-run span. Rule R and the re-take read the day files (Fowler, 2026-10-04) |
 | B7 | First run: no daily mark | The oldest raw day in the raw month folders from the newest eligible month minus `lookback` months to the newest eligible month, or in the operator range. Never before the keep line when month deletes are live. A daily index with no mark beside it, which a pass cut before its mark landed leaves, starts it at the index's oldest day when that is older; row 19 deletes this case (Fowler, 2026-10-04) | As B6. An indexed day with no raw file keeps its entry, and the mark moves past it. With no raw day, nothing; the outcome is `empty` | Those raw month folders |
 
-Every read has a fixed size (Guardrail #12). A pass names at most: the three indexes, plus the three watermarks until row 19; for each step, the cap times that step's periods; and, only when an index file is absent, the paths Rule L names (section 2.2). Each count comes from config or the calendar. Rule L's yearly paths grow by one a year, as the yearly index does (row 14, decision 3). Step B3, which dropped the retired raw listings, went with #1267 (row 25).
+Every read has a fixed size (Guardrail #12). A pass names at most: the three indexes, plus the three watermarks until row 19; for each step, the cap times that step's periods; and, only when an index file is absent, the paths Rule L names (section 2.2). Each count comes from config or the calendar. Rule L names one folder a year for each index it rebuilds, so its count grows by at most one a year (row 19, decision 7). Step B3, which dropped the retired raw listings, went with #1267 (row 25).
 
 ### 2.2 The marks
 
@@ -108,8 +108,8 @@ An entry can be gone while its packed file is still there, for example after an 
 - **Rule R (row 12).** Before a pass records a period `empty` or `lost`, it looks for that period's own packed file at its named path (`FileListing.name`). If the file is there, the pass adopts it as `packed`: its bytes from the listing, and its rows from the Parquet footer, inside the download budget left. It adds the recovery note `index-rebuilt` for that period. The rule lives in `backend/idhazh/gardener/ledger_marks.py`, whose first sentence already covers which packed files exist.
 - **Rule L (row 19).** When an index file is absent, the pass looks only at named places, coarsest period first, and adopts each file it finds as Rule R does. A place with no file writes nothing.
   - Yearly: each year from `first_ledger_year` (Table D, D5) to the newest year old enough to pack.
-  - Monthly: the months of a finite window. For a forever window, each month from the January after the newest yearly entry, or from January of `first_ledger_year` when there is none.
-  - Daily: each day from the month after the monthly mark to the newest eligible day, or, with no monthly entry, from the first month step B7 starts from. At most 31 paths a month.
+  - Monthly: the months of a finite window. For a window that keeps every month - a forever window, or one whose deletes only report - each month from the January after the newest yearly entry, or from January of `first_ledger_year` when there is none.
+  - Daily: each day from the month after the monthly mark to the newest eligible day, or, with no monthly entry, from the first month step B7 starts from. Each index is searched in one folder a year.
 
 ### 2.3 Recovery instead of failure
 
@@ -875,7 +875,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 4 | `first_ledger_year` is a `YYYY` string with no default, so the loader refuses a config that leaves it out, and every `TaskContext` carries it from the loader | Fowler, 2026-10-06 |
 | 5 | Rule L is its own module, `tasks/_absent_indexes.py`. It rebuilds every absent index, coarsest first, before any step runs, and fetches each index's files in one download inside the shard's budget, so a rebuild larger than the whole budget fails by name. `ledger_marks` keeps `adopt` and gains `work_out_marks` | Fowler, 2026-10-06 |
 | 6 | The tree works out its marks when it is read and again after each rebuilt index; within a pass the steps only move them forward, so a month the drop step removes never moves the monthly mark back | Fowler, 2026-10-06 |
-| 7 | An operator range never narrows Rule L's places, because a rebuilt index is written whole and no later pass looks again. A monthly window whose deletes only report is searched as a window kept for ever, from the January after the newest yearly entry; those places grow by twelve a year until a year is packed, and a pass reads them only when an index is absent | Fowler, 2026-10-06 |
+| 7 | Rule L names one folder a year for each index it rebuilds: `daily/<YYYY>`, `monthly/<YYYY>` or `yearly/<YYYY>` under the ledger's compact folder, once for each year the periods it looks for fall in. Git lists every file inside, and the pass adopts only the files of those periods. So a rebuild names at most one more folder each year, inside decision 3's bound, and needs no exception. A window that keeps every month - kept for ever, or deletes that only report - is searched from the January after the newest yearly entry, or January of `first_ledger_year`, so no month a person has not approved deleting is hidden. Its rebuild downloads up to twelve more month files each year, the rows one packed year file holds. An operator range never narrows where the rebuild looks, because a rebuilt index is written whole and no later pass looks again. A pass reads these folders only when an index is absent | Fowler, 2026-10-07, replacing Fowler, 2026-10-06 |
 | 8 | A file at a Rule L place whose envelope names another ledger or period fails the task by name; nothing is guessed | Fowler, 2026-10-06 |
 | 9 | A pass on a person's machine cut between its indexes and its deletes is no longer finished by the next pass: `_finish` goes from the month and year steps, and the page says to restore `state/compact/` and `state/raw/` from git. A runner lands a whole shard in one commit, so `main` never holds that state. The owner may overturn this | Fowler, 2026-10-06 |
 | 10 | `compact_root(state_dir, ledger, period)` names a period's folder and `compact_path` is built from it; `watermark_path` goes. The compaction reads no wall clock once the watermark's stamp is gone, and the benchmark stops counting `write_watermark` | Fowler, 2026-10-06 |

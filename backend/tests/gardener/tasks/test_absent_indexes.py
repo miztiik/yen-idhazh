@@ -1,10 +1,12 @@
 """Where does a compaction look when one of a ledger's indexes is absent, and what does it adopt?
 
 The unit cases ask `_absent_indexes` which periods it looks at, over indexes
-written here as literals and a wake's day the test sets. The integration cases
-run the shipped compaction over a ledger built under `tmp_path` with the
-helpers in `_task.py`: an index is removed and the files it named are kept, as
-a restore from an older commit or a deleted file leaves them. Nothing reads the
+written here as literals and a wake's day the test sets. The naming cases
+rebuild a ledger built under `tmp_path` over a wake's listing and read which
+folders the rebuild named: one a year. The integration cases run the shipped
+compaction over a ledger built under `tmp_path` with the helpers in
+`_task.py`: an index is removed and the files it named are kept, as a restore
+from an older commit or a deleted file leaves them. Nothing reads the
 committed `state/` or a clock the test did not set (CLAUDE.md sections 2 and 13).
 """
 
@@ -14,7 +16,7 @@ import logging
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, time
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pytest
 
@@ -28,10 +30,12 @@ from idhazh.gardener.file_listing import FileListing, OverBudgetError, TreeEntry
 from idhazh.gardener.tasks import _absent_indexes
 from idhazh.gardener.tasks._compact_tree import CompactTree
 
-from ._task import declared
+from ._task import context_for, declared
 from .test_compaction import (
     VISUALS,
     a_month_file,
+    a_packed_file,
+    a_packed_month,
     a_pass,
     an_index,
     compact,
@@ -202,7 +206,12 @@ def test_the_files_an_absent_index_is_rebuilt_from_are_fetched_in_one_call_insid
     sizes = {entry.path: entry.size for entry in entries if entry.size is not None}
 
     def lister(paths: Sequence[str]) -> dict[str, int]:
-        return {path: size for path, size in sizes.items() if path in paths}
+        """Every file at or under each named path, as `git ls-tree -r` lists it."""
+        return {
+            path: size
+            for path, size in sizes.items()
+            if any(path == named or path.startswith(f"{named}/") for named in paths)
+        }
 
     asked: list[Sequence[str]] = []
     listing = FileListing.from_commit(
@@ -237,6 +246,82 @@ def test_the_files_an_absent_index_is_rebuilt_from_are_fetched_in_one_call_insid
 
     assert (refused.value.needed, refused.value.budget) == (1100, 1000)
     assert asked == []
+
+
+# --- what it names: one folder a year --------------------------------------------
+
+
+def rebuilt(root: Path, wake: date, **changed: Any) -> tuple[CompactTree, list[str]]:
+    """A wake's tree after its absent indexes are rebuilt, and every path the rebuild named."""
+    context = context_for(TASK, root, today=wake, wake=True, dry_run=False, **changed)
+    policy = context.policy
+    assert isinstance(policy, CompactionPolicy)
+    tree = CompactTree.read(context.state_dir, VISUALS, context.listing)
+    before = set(tree.listing.named)
+    _absent_indexes.rebuild(
+        tree, policy, now=at(wake), operator_range=None, first_ledger_year=FIRST_YEAR
+    )
+    return tree, sorted(set(tree.listing.named) - before)
+
+
+@pytest.mark.parametrize(
+    ("wake", "months", "years"),
+    [
+        (date(2027, 12, 16), ["2026-01", "2027-10"], ["2026", "2027"]),
+        (date(2028, 12, 16), ["2026-01", "2027-10", "2028-10"], ["2026", "2027", "2028"]),
+    ],
+    ids=["a-wake-in-2027", "a-year-later"],
+)
+def test_a_monthly_rebuild_of_a_window_that_only_reports_names_one_folder_a_year(
+    tmp_path: Path, wake: date, months: list[str], years: list[str]
+) -> None:
+    """Every month the window keeps is found, and a year later the rebuild names one folder more.
+
+    A window whose deletes only report keeps every month, so the rebuild looks
+    from January of the first ledger year. It names each year's month folder
+    once, not each month's file, so a year adds one named path, not twelve.
+    """
+    root = tmp_path / "checkout"
+    for month in months:
+        a_packed_month(root, month)
+    an_index(root, Period.DAILY, [])
+    an_index(root, Period.YEARLY, [])
+
+    tree, named = rebuilt(root, wake, month_deletes_dry_run=True)
+
+    assert named == [f"{COMPACT}/monthly/{year}" for year in years]
+    assert sorted(tree.monthly) == months
+
+
+def test_a_daily_rebuild_names_the_folder_of_each_year_its_days_fall_in(tmp_path: Path) -> None:
+    """The days after an October monthly mark run across New Year, so two folders are named."""
+    root = tmp_path / "checkout"
+    for day in ("2026-12-31", "2027-01-02"):
+        a_packed_file(root, Period.DAILY, day, day)
+    an_index(
+        root,
+        Period.MONTHLY,
+        [CompactEntry(covers="2026-10", rows=0, bytes=0, state=EntryState.EMPTY)],
+    )
+    an_index(root, Period.YEARLY, [])
+
+    tree, named = rebuilt(root, date(2027, 1, 20))
+
+    assert named == [f"{COMPACT}/daily/2026", f"{COMPACT}/daily/2027"]
+    assert sorted(tree.daily) == ["2026-12-31", "2027-01-02"]
+
+
+def test_a_yearly_rebuild_names_one_folder_a_year_from_the_first_ledger_year(
+    tmp_path: Path,
+) -> None:
+    """On 4 March 2028 the year 2027 is old enough to pack, so 2026 and 2027 are each named once."""
+    root = tmp_path / "checkout"
+    an_index(root, Period.DAILY, [])
+    an_index(root, Period.MONTHLY, [])
+
+    _tree, named = rebuilt(root, date(2028, 3, 4), **PACKS_YEARS)
+
+    assert named == [f"{COMPACT}/yearly/2026", f"{COMPACT}/yearly/2027"]
 
 
 # --- what a pass does with an absent index: integration --------------------------
@@ -306,6 +391,34 @@ def test_an_absent_monthly_index_is_rebuilt_from_its_month_files(
     assert august.is_file()
     assert (outcome.written, outcome.taken) == ((monthly.relative_to(root).as_posix(),), ())
     assert outcome.stopped_because is StopReason.EXHAUSTED
+
+
+def test_an_absent_monthly_index_of_a_window_that_only_reports_is_rebuilt_with_every_month_it_keeps(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """January 2026 is past the 13-month window, but nobody approved deleting it, so it is found too.
+
+    On 16 December 2027 the newest month old enough to close is October 2027,
+    and the days after it are quiet, so the pass writes the rebuilt index alone.
+    """
+    root = tmp_path / "checkout"
+    kept = {month: a_packed_month(root, month) for month in ("2026-01", "2027-10")}
+    held = {month: path.read_bytes() for month, path in kept.items()}
+    an_index(root, Period.DAILY, quiet_days("2027-11-01", "2027-12-14"))
+    an_index(root, Period.YEARLY, [])
+    monthly = index_of(root, Period.MONTHLY)
+
+    with caplog.at_level(logging.WARNING):
+        outcome = compact(root, date(2027, 12, 16), wake=True, month_deletes_dry_run=True)
+
+    assert [
+        (entry.covers, entry.state, entry.rows) for entry in CompactIndex.read(monthly).entries
+    ] == [("2026-01", EntryState.PACKED, 1), ("2027-10", EntryState.PACKED, 1)]
+    for month in kept:
+        assert recovered(caplog, month) == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert outcome.taken == ()
+    assert outcome.written == (monthly.relative_to(root).as_posix(),)
+    assert {month: path.read_bytes() for month, path in kept.items()} == held
 
 
 def test_a_file_at_a_looked_at_path_whose_envelope_names_another_day_stops_the_pass_by_name(

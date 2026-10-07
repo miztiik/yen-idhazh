@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -509,16 +509,16 @@ that writes a day. A ledger whose declaration packs no year still has an empty
 `yearly.json`, because the console reads all three together
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-far-a-ledger-reaches)).
 
-**An index that is not there is rebuilt from the files at its named paths
-before any step runs.** Read as empty, it would be written again naming only
-what this pass packs, and every period packed before would drop out of sight.
-So the pass rebuilds each absent index, coarsest first, from a bounded list of
-named paths, and adopts each file it finds as a step adopts its own file: a
+**An index that is not there is rebuilt from the files of its periods before
+any step runs.** Read as empty, it would be written again naming only what this
+pass packs, and every period packed before would drop out of sight. So the pass
+rebuilds each absent index, coarsest first, from the files of a bounded list of
+periods, and adopts each file it finds as a step adopts its own file: a
 `packed` entry, its bytes from the listing and its rows from the file's footer,
 logged `note=index-rebuilt` with the period
-(`backend/idhazh/gardener/tasks/_absent_indexes.py`). A path with no file adds
+(`backend/idhazh/gardener/tasks/_absent_indexes.py`). A period with no file adds
 nothing. The marks are worked out again after each index, because the next
-one's paths start where the coarser rebuild left them.
+one's periods start where the coarser rebuild left them.
 
 | # | Absent index | Where the pass looks |
 | --- | --- | --- |
@@ -526,24 +526,31 @@ one's paths start where the coarser rebuild left them.
 | 2 | `monthly.json` | Each month old enough to close, from the keep line when the monthly window's deletes are live; from the January after the newest yearly entry, or January of `first_ledger_year`, when the window keeps every month or its deletes only report |
 | 3 | `daily.json` | Each due day from the month after the monthly mark; with no monthly mark, from the month a first pass looks back to, or the first month of an operator range when that is earlier |
 
+**The pass names one folder a year, not each period's file.** For each index
+it rebuilds, it names `daily/<YYYY>`, `monthly/<YYYY>` or `yearly/<YYYY>`
+under the ledger's compact folder, once for each year the periods in the table
+fall in, and git lists every file inside: at most 366 day files, 12 month files
+or one year file a year in each format. The pass adopts only the files of the
+periods in the table. So a rebuild names at most one more folder each year
+(CLAUDE.md Guardrail #12). A window that keeps every month downloads up to
+twelve more month files each year, the same rows one packed year file holds.
+
 **An operator range never narrows where the rebuild looks**, because a rebuilt
 index is written whole and no later pass looks again once it exists. Each
 index's files are fetched in one call inside what is left of the shard's
 download budget, so a rebuild that does not fit takes nothing and ends
 `ceiling` at the index folder, or `failed` there when it alone is larger than
-the whole budget. A file at a named path whose envelope names another ledger or
-period stops the pass by name: adopting it would put another period's rows
+the whole budget. A file at a period's path whose envelope names another ledger
+or period stops the pass by name: adopting it would put another period's rows
 under this one.
 
 **What a rebuild cannot see.** A quiet day, month or year has no file, so a
 rebuilt index cannot name it; a quiet day then reads as a hole, and its month
 records it lost when it closes, because nothing says any more that it held no
-row. A day file older than the daily paths stays out of the rebuilt index, as
-does a month file before the keep line of a window whose deletes are live.
-Looking further back would grow the read with time (CLAUDE.md Guardrail #12).
-The yearly paths grow by one a year, as the yearly index does, and the monthly
-paths of a window that keeps every month by twelve a year until a year is
-packed; a pass reads them only when it finds an index absent.
+row. A day file older than the days in the table stays out of the rebuilt
+index, as does a month file before the keep line of a window whose deletes are
+live. Looking further back would grow the read with time (CLAUDE.md Guardrail
+#12). A pass reads these folders only when it finds an index absent.
 
 **A missing file has one of four names**, declared once as `LEDGER_FAULTS` in
 `frontend/src/lib/data/slice-shapes.ts`. The backend's copy is `LedgerFault` in
@@ -556,8 +563,8 @@ and the gardener's logs and the backend's own ledger reader print it as
 
 | # | Name | What is missing | What the gardener does |
 | --- | --- | --- | --- |
-| 1 | `not-packed` | `index/daily.json`: no day of the ledger is packed | Rebuilds it from the day files at its named paths, before any step runs ([above](#the-three-indexes-and-a-file-that-is-missing)); a first pass, which finds none, writes all three indexes |
-| 2 | `index-missing` | `index/monthly.json` or `index/yearly.json`, while `index/daily.json` is there | Rebuilds it from the files at its named paths before any step runs, and writes it with the others, empty when no file was there |
+| 1 | `not-packed` | `index/daily.json`: no day of the ledger is packed | Rebuilds it from the day files of its periods, before any step runs ([above](#the-three-indexes-and-a-file-that-is-missing)); a first pass, which finds none, writes all three indexes |
+| 2 | `index-missing` | `index/monthly.json` or `index/yearly.json`, while `index/daily.json` is there | Rebuilds it from the files of its periods before any step runs, and writes it with the others, empty when no file was there |
 | 3 | `file-missing` | A file an index names | When a month or year closes, lists the missing file's days lost and closes the period ([A file that cannot be read](#a-file-that-cannot-be-read)). Refuses the day it would take again, or the month a late file would re-open, and keeps every file it would have read; a person restores the file from git history. An `empty` or `lost` entry names no file, so nothing is missing |
 | 4 | `day-missing` | A day between the first and the newest packed day that no index names | A month adopts the day's own file or lists the day lost ([A month](#a-month)). A year adopts a month's own file, or lists the month's days lost when nothing of it is left, and refuses the month while its days are still there ([A year](#a-year)) |
 
@@ -878,6 +885,23 @@ overturn.
 | 1 | Keep the watermarks, and rebuild a missing index from the files the marks name | Two records that can disagree, and a repair path for when they do | A bounded rebuild per ledger |
 | 2 | Keep failing with `index-missing` | A red run and manual work for a fault the gardener can recover | Nothing to build |
 | 3 | Each pass also lists the newest closed periods' folders for files a stopped local pass left | Every wake pays a listing for a fault only a local run can cause | A bounded listing every wake, and code that deletes what it finds |
+
+**2026-10-07: a rebuild names one folder a year, so it needs no exception.**
+Named one path per period, the rebuild of a window that keeps every month named
+twelve more paths each year, beyond the bound the owner approved on 2026-10-04:
+at most 31 named paths a month, and the yearly part one more a year. A rebuild
+that hides no kept month has to read each kept month's own file, so no design
+reads fewer files; what can be bounded is what it names. So it names each
+year's folder once, and git lists the files inside. Its downloads are what a
+packed year costs: one year's rows a year. If the owner counts that bound in
+files downloaded instead, option 4 below is the next move. Fowler, 2026-10-07.
+
+| # | Option | Why rejected | What it would cost to take |
+| --- | --- | --- | --- |
+| 1 | List `monthly/` itself, then name the months in the year folders found | The same downloads, through a new listing question that reads a folder that grows | A listing question for git and for disk |
+| 2 | Stop by name while a window's deletes only report | Brings back `index-missing` as a red run for a fault the gardener can recover | Nothing to build |
+| 3 | Look only inside the window | Hides months nobody approved deleting, and no later pass drops them | Nothing to build |
+| 4 | Adopt one year folder a wake | Every wake pays a check for a rare fault, and each older year stays hidden until its own wake | A check every wake, and the most code |
 
 **The `compact-summary-quality-evals` compaction packs the eval rows and never drops a month.** Every
 eval row is kept for ever and nothing summarises a month: the
