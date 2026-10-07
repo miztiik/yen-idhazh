@@ -19,7 +19,6 @@ import {
 	latestDate,
 	loadManifests,
 	publishedCharts,
-	publishedItems,
 	telemetryRows,
 	TELEMETRY_ROOT
 } from '$lib/server/payload';
@@ -105,7 +104,10 @@ export async function load() {
 		}))
 	}));
 
-	const charts = chartDays(manifests, publishedCharts(undefined, widest));
+	// Each day payload of the widest window, opened once: the articles card, the
+	// chart table and the cost panel all take their counts from this read.
+	const visuals = publishedCharts(undefined, widest);
+	const charts = chartDays(manifests, visuals);
 	const flow = chartFlow(charts);
 	// The cost section is reduced here, once per span the control offers, and it
 	// is the reason those eight columns were published at all.
@@ -185,8 +187,12 @@ export async function load() {
 		// Articles per published day, read from the same tree `site_bytes` measures.
 		// The denominator of the console's per-article cost, and the numerator's own
 		// corpus - a count taken from anywhere else divides one tree's bytes by
-		// another tree's articles.
-		publishedItems: Object.fromEntries(publishedItems(undefined, widest)),
+		// another tree's articles. Taken from the map `charts` was built from, not
+		// from `charts`: a day whose payload did not load is left out here, where
+		// `charts` gives it no articles.
+		publishedItems: Object.fromEntries(
+			[...visuals].map(([date, counts]) => [date, counts.items] as const)
+		),
 		charts,
 		// The three glance charts and the flow diagram are drawn in the browser,
 		// from arrays that already cross. The server drew them here until

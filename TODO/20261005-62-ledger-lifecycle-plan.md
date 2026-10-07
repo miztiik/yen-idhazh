@@ -71,7 +71,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L15 | The held-part note says what its own two figures show | L13 | E | DONE | fuzzy-goggles | #1368 | Plan 62 row l15 |
 | L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | DONE | supreme-journey | #1367 | Plan 62 row l16 |
 | L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | DONE | probable-umbrella | #1374 | Plan 62 row l17 |
-| L18 | The console home reads each day payload once | L13 | F | PENDING | - | - | - |
+| L18 | The console home reads each day payload once | L13 | F | DONE | fluffy-carnival | - | Plan 62 row l18 |
 | L19 | console-mark-parity's skipped test checks data it builds | L13 | F | DONE | super-spork | #1391 | Plan 62 row l19 |
 | L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | #1371 | Plan 62 row l20 |
 | L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
@@ -948,16 +948,16 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 ### Row #L18 - The console home reads each day payload once
 
-- **Scope:** The console home opens each published day's payload once, through `publishedCharts`, and the articles card takes each day's count from that read, so `publishedItems` goes and the route opens half as many day payloads at build time. Level 2.
+- **Scope:** The console home opens each published day's payload once, through `publishedCharts`, and the articles card takes each day's count from that read, so `publishedItems` goes and the route opens half as many day payloads at build time. Level 2. Found during execution: the "Articles published" card already drew its counts from `charts`, which `publishedCharts` feeds. The `publishedItems` key feeds the cost panel "What one more article costs" and its horizon sentence, so those are the counts that now come from the one read.
 - **Files touched** (found by a search on `main` at 3f6440edb for `publishedItems`, the name this row deletes):
   - `frontend/src/lib/server/payload.ts` (`publishedItems` goes; the comment on `publishedCharts` says it is bounded the way `publishedItems` is)
   - `frontend/src/routes/console/+page.server.ts` (imports both readers, hands the page `publishedItems(undefined, widest)`, and hands `chartDays` the map `publishedCharts(undefined, widest)` returns)
-  - `frontend/tests/console-published.spec.ts` (imports `publishedItems`; row L14's test "the articles a day published are read off its own payload, over the days the cover reaches"; the comment in "THE ORACLE: the articles card counts what the chart table says each day published" names the two readers)
+  - `frontend/tests/console-published.spec.ts` (imports `publishedItems`; row L14's test "the articles a day published are read off its own payload, over the days the cover reaches"; the comment in "THE ORACLE: the articles card counts what the chart table says each day published" names the two readers. Found during execution: that comment was already false on `main`, because the card and the table both draw `charts`)
   - `frontend/tests/console.spec.ts` (not found by the search: the test of `publishedCharts`, "a visual that never drew is a visual and is not a published chart", beside which row L14's days and windows move; decision 4)
   - `docs/concepts/growing-reads.md` (the `payload.publishedItems` line of its table of reads)
   - `docs/architecture/publishing/console-payloads.md` (the `Published items` line names `publishedItems` as the reader it replaces, and a paragraph names three reads off the run-day row)
   - `docs/architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md` (says a route walks `DIGEST_ROOT` the way `publishedItems` does)
-  - `backend/idhazh/contracts/console_payloads.py` (the entry whose reader is `payload.ts publishedItems()`; decision 5)
+  - `backend/idhazh/contracts/console_payloads.py` (the entry whose reader is `payload.ts publishedItems()`; decision 5. Found during execution: the entry stays, because the run-day row still carries the article count, and its reader now names `payload.ts publishedCharts()`)
   - `backend/idhazh/contracts/public_run_day.py` and `backend/idhazh/telemetry/publish/run_days.py` (each module's docstring names three reads; decision 5)
   - Left as they are: `frontend/src/routes/console/+page.svelte`, which reads the key the route keeps (decision 3); `frontend/tests/empty-day.spec.ts`, whose helper of the same name reads the canary day and imports nothing from `payload.ts`; `TODO/20260926-52-fifty-panels-move-and-six-projections-go-plan.md`, `TODO/20260906-data-growth-research.md` and row L14 of this plan, which record what was true when each was written
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-published.spec.ts --spec console.spec.ts`; `npm --prefix frontend run check`; ruff, mypy and the backend tests that `test:changed -- --list` selects for the three Python files; `doc_load.py` on the three pages; the browser smoke of the console's home route. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push.

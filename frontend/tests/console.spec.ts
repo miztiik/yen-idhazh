@@ -1579,6 +1579,46 @@ test('a visual that never drew is a visual and is not a published chart', () => 
 	expect(publishedCharts(digest, 1)).toEqual(new Map([['2030-06-15', { items: 4, charts: 2 }]]));
 });
 
+test('the articles a day published are read off its own payload, over the days the cover reaches', () => {
+	// Three published days: 4 articles on 13 Jun 2030, none on the 14th and 2 on the
+	// 15th. A day that published nothing is a count of 0, never a missing day. A cover
+	// of two days reaches back from the newest published day to the 14th, so the 13th
+	// is never opened. The console home's cost panel takes its article counts from
+	// this read, so these are the counts it divides by.
+	const counts: [string, number][] = [
+		['2030-06-13', 4],
+		['2030-06-14', 0],
+		['2030-06-15', 2]
+	];
+	const { digest } = publishedSite(test.info().outputPath('site'), {
+		published: counts.map(([date]) => date)
+	});
+	for (const [date, count] of counts) {
+		const [year, month, day] = date.split('-');
+		writeFileSync(
+			join(digest, year, month, day, 'digest.json'),
+			JSON.stringify({
+				date,
+				items: Array.from({ length: count }, (_, at) => ({ item_id: `${date}-${at + 1}`, visual: null }))
+			})
+		);
+	}
+
+	expect(publishedCharts(digest, 3)).toEqual(
+		new Map([
+			['2030-06-15', { items: 2, charts: 0 }],
+			['2030-06-14', { items: 0, charts: 0 }],
+			['2030-06-13', { items: 4, charts: 0 }]
+		])
+	);
+	expect(publishedCharts(digest, 2)).toEqual(
+		new Map([
+			['2030-06-15', { items: 2, charts: 0 }],
+			['2030-06-14', { items: 0, charts: 0 }]
+		])
+	);
+});
+
 test('no console route reads the word router to an operator', async ({ page }) => {
 	// `router` named this pipeline stage until 2026-09-05, and CLAUDE.md section
 	// 0b bars a subsystem word from a string a person reads. The word is gone from

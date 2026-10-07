@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -402,7 +402,6 @@ the last day there was.
 | `payload.publishedDates` | the day directories the window reaches, newest first, then stops | `ARCHIVE_WINDOW_DAYS`, 90 |
 | `payload.latestDate` | the first entry of the above | the same 90, and it only needs the first |
 | `payload.loadManifests` | one `run.json` a day in range | its caller's `windowDays` |
-| `payload.publishedItems` | one day payload a day in range | its caller's `windowDays` |
 | `payload.publishedCharts` | one day payload a day in range | its caller's `windowDays` |
 | `payload.telemetryRows` | the telemetry shards the window touches, and only the rows inside it | the window its caller hands over: the console's home page hands over its widest preset, which ends on the site's newest published day |
 

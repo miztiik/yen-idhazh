@@ -1058,36 +1058,10 @@ export function loadManifests(
 	return found;
 }
 
-/** Articles each published day carries, from the day payload itself.
- *
- * The denominator of the site's per-article cost, and it is read from the same
- * tree the numerator is: `site_bytes` measures `frontend/public/digest/`, and
- * so does this. Taking the count off a run manifest instead would divide the
- * bytes of one tree by somebody else's articles the first time a run planned
- * items it did not publish - which is the lesson
- * `backend/idhazh/site_weight.py` already wrote down about its own pairing.
- *
- * One day payload open a day inside `windowDays`, and none outside it. This is
- * the most expensive of the archive reads - a day payload is hundreds of
- * kilobytes where a manifest is two - so it is the one the cover buys the most
- * on (`CLAUDE.md` Guardrail #12).
- */
-export function publishedItems(
-	root: string = DIGEST_ROOT,
-	windowDays: number = ARCHIVE_WINDOW_DAYS
-): Map<string, number> {
-	const found = new Map<string, number>();
-	for (const date of publishedDates(root, windowDays)) {
-		const day = loadDay(date, root);
-		if (day === null) continue;
-		found.set(date, day.items.length);
-	}
-	return found;
-}
-
 /** What one published day put on a page: its items, and the charts among them. */
 export interface DayVisuals {
-	/** Every item the day published. The denominator of the chart coverage rule. */
+	/** Every item the day published. The denominator of the chart coverage rule
+	 * and of the per-article cost. */
 	items: number;
 	/** Charts a reader can actually see. */
 	charts: number;
@@ -1101,11 +1075,18 @@ export interface DayVisuals {
  * chart.
  *
  * The item count rides along rather than costing a second pass: chart drawing's
- * second threshold is a share of what the day published, and the day payload is
- * already open here.
+ * second threshold is a share of what the day published, the console's
+ * per-article cost divides by it, and the day payload is already open here.
+ * That cost divides the bytes `site_bytes` measured under
+ * `frontend/public/digest/` by articles counted off the same tree. A count off a
+ * run manifest would divide one tree's bytes by somebody else's articles the
+ * first time a run planned items it did not publish - the lesson
+ * `backend/idhazh/site_weight.py` already wrote down about its own pairing.
  *
- * Bounded the same way `publishedItems` is, and for the same reason: no console
- * panel can draw a day older than the widest preset (`CLAUDE.md` Guardrail #12).
+ * One day payload open a day inside `windowDays`, and none outside it: no
+ * console panel can draw a day older than the widest preset. A day payload is
+ * hundreds of kilobytes where a manifest is two, so this is the read the cover
+ * buys the most on (`CLAUDE.md` Guardrail #12).
  */
 export function publishedCharts(
 	root: string = DIGEST_ROOT,

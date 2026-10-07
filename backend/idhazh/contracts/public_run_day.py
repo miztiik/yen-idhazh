@@ -1,10 +1,11 @@
 """What one published day did, as the console is allowed to read it.
 
-Three of the console's reads open the same two files per day and reduce both to
-counts: `loadManifests` reads `run.json`, and `publishedItems` and
-`publishedCharts` each walk `digest.json` for a length. This is the one row that
-carries all three answers, written to `frontend/public/run-days/<YYYY-MM>.json`
-so the console fetches a month of days instead of opening a day payload apiece.
+Two of the console's reads open the same two files per day and reduce both to
+counts: `loadManifests` reads `run.json`, and `publishedCharts` walks
+`digest.json` for two lengths, the articles and the charts among them. This is
+the one row that carries all three answers, written to
+`frontend/public/run-days/<YYYY-MM>.json` so the console fetches a month of days
+instead of opening a day payload apiece.
 
 Folding the three is not a shortcut. They share a key, a window and a producer,
 and a day payload is hundreds of kilobytes where these counts are two lines - so

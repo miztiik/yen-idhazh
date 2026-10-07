@@ -22,7 +22,7 @@ Every path below is under `frontend/public/`. Every shape is a contract under `b
 | Telemetry rows | `payload.ts` `telemetryRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
 | Item health | `ledger-rows.ts` `itemHealthRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
 | Run manifests | `payload.ts` `loadManifests` | `run-days/<YYYY-MM>.json` | `public-run-day` |
-| Published items | `payload.ts` `publishedItems` | `run-days/<YYYY-MM>.json` | `public-run-day` |
+| Published items | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Published charts | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Day metrics | `payload.ts` `dayMetrics` | `day-metrics/<YYYY-MM>.json` | `day-metrics` |
 | Machine counters | `machine-counters.ts` `loadMachineCounters` | `machine/<YYYY-MM>.csv` | `machine-shard-row` |
@@ -46,12 +46,13 @@ staged into `frontend/static/` and never reaches the build. A
 `page_weight.payload_ceilings_bytes` key naming it would therefore match nothing
 and fail the bundle gate.
 
-**Eleven datasets, eight schemas.** Three console reads answer off the run-day row
-and two off the telemetry shard. That is not a shortcut: `loadManifests`,
-`publishedItems` and `publishedCharts` share a key, a window and a producer, and
-two of them open a day payload of hundreds of kilobytes to take one integer out
-of it. `itemHealthRows` reads the census the telemetry shard already projects,
-so a second projection of it would be two schemas for one row.
+**Eleven datasets, eight schemas.** Three console datasets answer off the run-day
+row and two off the telemetry shard. That is not a shortcut: `loadManifests` and
+`publishedCharts` share a key, a window and a producer, and `publishedCharts`
+opens a day payload of hundreds of kilobytes to take two integers out of it -
+the articles the day published and the charts among them. `itemHealthRows`
+reads the census the telemetry shard already projects, so a second projection
+of it would be two schemas for one row.
 
 ### The run timeline is a second cut of the census, and that is the point
 

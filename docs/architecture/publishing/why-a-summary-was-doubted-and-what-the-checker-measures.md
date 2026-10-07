@@ -1,6 +1,6 @@
 # Why a summary was doubted, and what the checker measures
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-07
 
 `/console/model/` answers what the model wrote, how long it took, and what it got
 wrong. Four panels are on this page: the five reasons a summary was doubted, the
@@ -21,7 +21,7 @@ often the checker stopped; this says which check failed.
 decided by `verdict` and written onto the published item by `assemble.build_day`.
 The eval ledger's 35 columns carry the inputs a reason is decided from - `hhem`,
 `coverage`, `unsupported_numbers`, `hedge_dropped` - and the band, and no reason
-column at all. So the route walks `DIGEST_ROOT` the way `publishedItems` already
+column at all. So the route walks `DIGEST_ROOT` the way `publishedCharts` already
 does for the Pipelines route, and what ships is one count per reason per day
 rather than the payloads. Re-deriving the reason from the ledger's inputs was
 refused: it puts a second copy of `verdict` in a second language, and the day the
