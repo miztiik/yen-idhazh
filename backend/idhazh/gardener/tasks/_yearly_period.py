@@ -101,14 +101,14 @@ def _counted(tree: CompactTree, year: str) -> list[str]:
 
 
 def _refused(
-    tree: CompactTree, year: str, why: str, fault: ledger.LedgerFault | None = None
+    tree: CompactTree, year: str, why: str, ledger_fault: ledger.LedgerFault | None = None
 ) -> tuple[Stop, ...]:
     """A year that cannot be packed, said once by name. The yearly mark stays where it is."""
     logger.error(
         "a year is not packed ledger=%s year=%s fault=%s reason=%s",
         tree.ledger.value,
         year,
-        fault or "none",
+        ledger_fault or "none",
         why,
     )
     return (Stop(StopReason.FAILED, year),)

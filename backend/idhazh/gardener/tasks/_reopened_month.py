@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 
 def _kept(
-    tree: CompactTree, month: str, why: str, fault: ledger.LedgerFault | None = None
+    tree: CompactTree, month: str, why: str, ledger_fault: ledger.LedgerFault | None = None
 ) -> tuple[Stop, ...]:
     """A closed month that is not re-opened, said once by name. Its late raw files are kept."""
     logger.error(
@@ -57,7 +57,7 @@ def _kept(
         "ledger=%s month=%s fault=%s reason=%s",
         tree.ledger.value,
         month,
-        fault or "none",
+        ledger_fault or "none",
         why,
     )
     return (Stop(StopReason.FAILED, month),)

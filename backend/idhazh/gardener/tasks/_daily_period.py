@@ -142,14 +142,14 @@ def _days_from(first: str, last: str) -> list[str]:
 
 
 def _refused(
-    tree: CompactTree, day: str, why: str, fault: ledger.LedgerFault | None = None
+    tree: CompactTree, day: str, why: str, ledger_fault: ledger.LedgerFault | None = None
 ) -> Stop:
     """A raw day the step does not take, said once by name. Its files are kept."""
     logger.error(
         "a raw day is not compacted, and its files are kept ledger=%s day=%s fault=%s reason=%s",
         tree.ledger.value,
         day,
-        fault or "none",
+        ledger_fault or "none",
         why,
     )
     return Stop(StopReason.FAILED, day)

@@ -211,14 +211,14 @@ def _waiting(tree: CompactTree, month: str) -> bool:
 
 
 def _refused(
-    tree: CompactTree, month: str, why: str, fault: ledger.LedgerFault | None = None
+    tree: CompactTree, month: str, why: str, ledger_fault: ledger.LedgerFault | None = None
 ) -> tuple[Stop, ...]:
     """A month that cannot be absorbed, said once by name. The monthly mark stays where it is."""
     logger.error(
         "a month is not absorbed ledger=%s month=%s fault=%s reason=%s",
         tree.ledger.value,
         month,
-        fault or "none",
+        ledger_fault or "none",
         why,
     )
     return (Stop(StopReason.FAILED, month),)
