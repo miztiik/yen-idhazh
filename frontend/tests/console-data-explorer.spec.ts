@@ -272,6 +272,43 @@ test('THE ORACLE: the 14-day preset cuts a ledger that began 5 days ago at its f
 	expect(archiveAsked).toEqual([]);
 });
 
+test('THE ORACLE: when the repository host does not answer for the days the site dropped, the answer reads the site\'s days and names the ledger in the warning colour', async ({ page, context }) => {
+	// seen begins 120 days before the pinned day, on 15 Feb 2030, with one row a day and February,
+	// March and April closed. The site copy keeps the 90 days to 15 Jun 2030, from 18 Mar, so it keeps
+	// March whole as one month file and drops February: the site's first day for seen is 1 Mar 2030.
+	// The archive host is left unserved, so tests/support/browser.ts refuses every request to it.
+	expect(publishedWindowDays(), 'the days written out below are for a site copy that keeps 90 days').toBe(90);
+	const root = test.info().outputPath('state');
+	const siteRoot = test.info().outputPath('site');
+	await buildLedger(root, { ledger: 'seen', pinned: PINNED, days: everyDay(120, 0), closedMonths: ['2030-02', '2030-03', '2030-04'] });
+	siteCopy(root, siteRoot, 'seen', publishedWindowDays());
+	await serveToPage(context, siteRoot, 'seen');
+	const archive = ledgerArchiveBaseUrl();
+	const archiveAsked = new Set<string>();
+	const archiveAnswered: string[] = [];
+	context.on('request', (request) => {
+		if (request.url().startsWith(`${archive}/`)) archiveAsked.add(request.url());
+	});
+	context.on('response', (response) => {
+		if (response.url().startsWith(`${archive}/`)) archiveAnswered.push(response.url());
+	});
+
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['seen'], 'SELECT min("covers") AS first_day, count(*) AS rows FROM "seen"');
+	// 365 UTC days that end on the pinned day.
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2029-06-16');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['2030-03-01', '107']]);
+	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
+	await expect(note.locator('.warn[data-explorer-unanswered]')).toHaveText(
+		'Days of the seen record before 1 Mar 2030 are not in this answer, because this page could not read them from the repository. Press Refresh, then Run, to try again.'
+	);
+	await expect(note).not.toContainText('are not on this site');
+	expect([...archiveAsked]).toEqual([`${archive}/state/compact/seen/index/daily.json`]);
+	expect(archiveAnswered).toEqual([]);
+});
+
 test('THE ORACLE: a typed join counts the rows of two built ledgers, fetches only their files in the span, and the run cost matches the network', async ({ page, context }) => {
 	// In the 14 days that end on the pinned day, published holds 3 rows and item-health 2, so the
 	// join holds 6. Each also holds one row on a day before those 14.

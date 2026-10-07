@@ -209,9 +209,17 @@ export type AskRefusal =
  *  aside unread. An answer names only a ledger that is missing either. */
 export type SpanGap = { ledger: LedgerName; lostDays: readonly DateStamp[]; setAside: SetAsideFiles };
 
+/** Days of one selected ledger that this answer could not read: every day before `before`, the
+ *  ledger's first day on this site, where its answer starts. Only the archive, the committed
+ *  repository, is read around this way: when it cannot be read for the days the site copy dropped,
+ *  whether its host did not answer, a file was not there, an index could not be read or a file
+ *  arrived at the wrong size, the ledger is read from the site's days alone. Such a ledger's start
+ *  is named here, never in `siteFrom`. A run-time answer, never persisted. */
+export type UnansweredDays = { tier: 'archive'; ledger: LedgerName; before: DateStamp };
+
 export type AskResult =
-	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[]; siteFrom: DateStamp | null; gaps: readonly SpanGap[] }
-	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; siteFrom: DateStamp | null; gaps: readonly SpanGap[] }
+	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[]; siteFrom: DateStamp | null; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
+	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; siteFrom: DateStamp | null; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
 	| { state: 'missing'; ledger: LedgerName }
 	| { state: 'unreachable'; ledger: LedgerName | null; at: DateStamp | null; fault: AskFault }
 	| { state: 'refused'; because: AskRefusal };

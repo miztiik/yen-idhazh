@@ -58,7 +58,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | #1348 | Plan 62 row l4 |
 | L5 | Console windows end on the site's newest published day | L4 | C | DONE | solid-potato | - | Plan 62 row l5 |
 | L7 | A published ledger that has not started | L1 | B | PENDING | - | - | - |
-| L8 | The archive's failures are named as the archive's | L1, L2, L4, L5 | C | PENDING | - | - | - |
+| L8 | The archive's failures are named as the archive's | L1, L2, L4, L5 | C | DONE | jubilant-dollop | - | Plan 62 row l8 |
 | L9 | Console specs outside the explorer serve the data they check | L2 | C | PENDING | - | - | - |
 | L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | PENDING | - | - | - |
 
@@ -513,6 +513,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched:**
   - `frontend/src/lib/data/ask-reader.ts`
   - `frontend/src/lib/data/slice-shapes.ts`
+  - `frontend/src/lib/data/slice-reader.ts` (found during execution: `explainShortfall` is exported, so the archive's console line for a file that did not arrive whole uses the slice's own words)
   - `frontend/src/lib/console/waiting.ts`
   - `frontend/src/routes/console/data-explorer/+page.svelte`
   - `frontend/tests/support/ledger-lifecycle.ts` (added by L1)

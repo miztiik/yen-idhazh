@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { windowOfDays, type TimeWindow } from '../src/lib/charts/viewport';
 import { recordNotes } from '../src/lib/console/recording';
 import { readAsk } from '../src/lib/data/ask-reader';
@@ -34,6 +36,31 @@ const locate = (specifier: string): string => resolver.resolve(specifier);
 /** A page that has read nothing yet, reading from `prefix` through `fetcher`. */
 function aPage(fetcher: Fetcher, prefix = SITE): PageKeeper {
 	return pageKeeper(fetchedBytes(prefix, fetcher), () => nodeEngine(locate, engineExtensionRepository()));
+}
+
+/** A host that does not answer, as a blocked or unreachable one does not: every request throws,
+ *  and the path under `state/` of each request is kept, in order. */
+function unanswering(prefix: string): { fetcher: Fetcher; asked: string[] } {
+	const asked: string[] = [];
+	const fetcher: Fetcher = async (url) => {
+		asked.push(url.slice(`${prefix}/state/`.length));
+		throw new TypeError('Failed to fetch');
+	};
+	return { fetcher, asked };
+}
+
+/** What `work` returned, and every line it printed with `console.warn`, where a page keeper prints. */
+async function warnings<T>(work: () => Promise<T>): Promise<{ result: T; warned: string[] }> {
+	const warned: string[] = [];
+	const original = console.warn;
+	console.warn = (...parts: unknown[]) => {
+		warned.push(parts.map(String).join(' '));
+	};
+	try {
+		return { result: await work(), warned };
+	} finally {
+		console.warn = original;
+	}
 }
 
 function question(from: string, to: string, sql: string): AskOptions {
@@ -126,7 +153,7 @@ test.describe('days before a ledger began are cut from the selected window', () 
 		const archived = aPage(archive.fetcher, ARCHIVE);
 		try {
 			const answer = await readAsk(site, { keeper: archived, siteWindowDays: 10 }, question('2030-05-17', PINNED, FIRST_DAY_AND_ROWS), {});
-			expect(answer).toMatchObject({ state: 'ok', siteFrom: '2030-05-26', rows: [{ first_day: '2030-05-26', rows: '21' }] });
+			expect(answer).toMatchObject({ state: 'ok', siteFrom: '2030-05-26', unanswered: [], rows: [{ first_day: '2030-05-26', rows: '21' }] });
 			expect(archive.asked.filter((one) => !one.endsWith('.parquet')).sort()).toEqual(INDEXES);
 			expect(parquetAsked(archive.asked).sort()).toEqual(daysBetween('2030-05-26', '2030-06-05').map((day) => `compact/${LEDGER}/daily/${day.replaceAll('-', '/')}.parquet`));
 		} finally {
@@ -230,6 +257,122 @@ test.describe('days before a ledger began are cut from the selected window', () 
 			expect(archive.asked).toEqual([]);
 		} finally {
 			await site.release();
+		}
+	});
+});
+
+/** A ledger built to begin 20 days before the pinned day, 26 May 2030, with one row a day, and the
+ *  site's copy of it trimmed to 10 days, 6 to 15 Jun 2030: the repository's part is 26 May to 5 Jun. */
+async function trimmedLedger(): Promise<{ root: string; siteRoot: string }> {
+	const root = test.info().outputPath('state');
+	await buildLedger(root, { ledger: LEDGER, pinned: PINNED, days: everyDay(20, 0) });
+	const siteRoot = test.info().outputPath('site');
+	siteCopy(root, siteRoot, LEDGER, 10);
+	return { root, siteRoot };
+}
+
+/** How an answer names the ledger built by `trimmedLedger` when the repository cannot give it the
+ *  days before its first day on this site. */
+const UNREAD_BEFORE_SITE = { tier: 'archive', ledger: LEDGER, before: '2030-06-06' } as const;
+/** How a console line about the repository ends. */
+const SITE_ALONE = 'so the question reads this ledger from this site alone';
+
+test.describe('when the repository cannot give the days the site copy dropped, the answer reads the site\'s days and names the ledger', () => {
+	const unreadIndexes = [
+		{
+			repository: 'whose host does not answer',
+			host: () => unanswering(ARCHIVE),
+			line: `[ledger] ${LEDGER} 2030-05-17 to 2030-06-05: the repository's daily.json cannot be read: it could not be fetched (Failed to fetch), ${SITE_ALONE}`
+		},
+		{
+			repository: 'that holds no index for the ledger',
+			host: () => servedFrom(test.info().outputPath('repository'), ARCHIVE),
+			line: `[ledger] ${LEDGER} 2030-05-17 to 2030-06-05: the repository's daily.json is not there, ${SITE_ALONE}`
+		}
+	];
+	for (const one of unreadIndexes) {
+		test(`a repository ${one.repository}: a 30-day window reads the site's 10 days, names the ledger with its first day on this site, and asks the repository nothing more`, async () => {
+			const { siteRoot } = await trimmedLedger();
+			const repository = one.host();
+			const site = servedFrom(siteRoot, SITE);
+			const page = aPage(site.fetcher);
+			try {
+				const { result, warned } = await warnings(() =>
+					readAsk(page, { keeper: aPage(repository.fetcher, ARCHIVE), siteWindowDays: 10 }, question('2030-05-17', PINNED, FIRST_DAY_AND_ROWS), {})
+				);
+				expect(result).toMatchObject({ state: 'ok', siteFrom: null, unanswered: [UNREAD_BEFORE_SITE], rows: [{ first_day: '2030-06-06', rows: '10' }] });
+				expect(repository.asked).toEqual([`compact/${LEDGER}/index/daily.json`]);
+				expect(parquetAsked(site.asked).sort()).toEqual(daysBetween('2030-06-06', PINNED).map(dayFile));
+				expect(warned).toEqual([one.line]);
+			} finally {
+				await page.release();
+			}
+		});
+	}
+
+	test('a file the repository\'s index names is not there: the files of it that did arrive are dropped, the site\'s days are fetched once, and the ledger is named', async () => {
+		const { root, siteRoot } = await trimmedLedger();
+		rmSync(join(root, 'compact', LEDGER, 'daily', '2030', '05', '30.parquet'));
+		const repository = servedFrom(root, ARCHIVE);
+		const site = servedFrom(siteRoot, SITE);
+		const page = aPage(site.fetcher);
+		const archived = aPage(repository.fetcher, ARCHIVE);
+		try {
+			const { result, warned } = await warnings(() => readAsk(page, { keeper: archived, siteWindowDays: 10 }, question('2030-05-17', PINNED, FIRST_DAY_AND_ROWS), {}));
+			expect(result).toMatchObject({
+				state: 'ok',
+				siteFrom: null,
+				unanswered: [UNREAD_BEFORE_SITE],
+				rows: [{ first_day: '2030-06-06', rows: '10' }],
+				read: { files: 10, alreadyHeld: 0 }
+			});
+			expect(parquetAsked(repository.asked).sort()).toEqual(daysBetween('2030-05-26', '2030-06-05').map(dayFile));
+			expect(parquetAsked(site.asked).sort()).toEqual(daysBetween('2030-06-06', PINNED).map(dayFile));
+			expect(warned).toEqual([`[ledger] ${LEDGER} 2030-05-17 to 2030-06-15: the repository's ${dayFile('2030-05-30')} is not there, ${SITE_ALONE}`]);
+		} finally {
+			await page.release();
+			await archived.release();
+		}
+	});
+
+	test('a window wholly before the site\'s first day, from a repository whose host does not answer: the answer is quiet, fetches no data file, and names the ledger', async () => {
+		const { siteRoot } = await trimmedLedger();
+		const site = servedFrom(siteRoot, SITE);
+		const page = aPage(site.fetcher);
+		try {
+			const { result } = await warnings(() =>
+				readAsk(page, { keeper: aPage(unanswering(ARCHIVE).fetcher, ARCHIVE), siteWindowDays: 10 }, question('2030-05-17', '2030-05-31', FIRST_DAY_AND_ROWS), {})
+			);
+			expect(result).toMatchObject({ state: 'quiet', siteFrom: null, unanswered: [UNREAD_BEFORE_SITE] });
+			expect(parquetAsked(site.asked)).toEqual([]);
+		} finally {
+			await page.release();
+		}
+	});
+
+	test('two ledgers, and the repository has lost a file of one: that one is read from the site alone and named, and the other keeps the repository\'s days', async () => {
+		// Both are built as `trimmedLedger` builds one, and the repository has lost 30 May of host-fingerprint.
+		const root = test.info().outputPath('state');
+		const siteRoot = test.info().outputPath('site');
+		for (const ledger of [LEDGER, 'seen'] as const) {
+			await buildLedger(root, { ledger, pinned: PINNED, days: everyDay(20, 0) });
+			siteCopy(root, siteRoot, ledger, 10);
+		}
+		rmSync(join(root, 'compact', LEDGER, 'daily', '2030', '05', '30.parquet'));
+		const site = aPage(servedFrom(siteRoot, SITE).fetcher);
+		const archived = aPage(servedFrom(root, ARCHIVE).fetcher, ARCHIVE);
+		const both = `SELECT (SELECT min(covers) FROM "${LEDGER}") AS fingerprint_from, (SELECT count(*) FROM "${LEDGER}") AS fingerprint_rows, (SELECT min(covers) FROM "seen") AS seen_from, (SELECT count(*) FROM "seen") AS seen_rows`;
+		try {
+			const { result } = await warnings(() => readAsk(site, { keeper: archived, siteWindowDays: 10 }, { ...question('2030-05-17', PINNED, both), ledgers: [LEDGER, 'seen'] }, {}));
+			expect(result).toMatchObject({
+				state: 'ok',
+				siteFrom: '2030-05-26',
+				unanswered: [UNREAD_BEFORE_SITE],
+				rows: [{ fingerprint_from: '2030-06-06', fingerprint_rows: '10', seen_from: '2030-05-26', seen_rows: '21' }]
+			});
+		} finally {
+			await site.release();
+			await archived.release();
 		}
 	});
 });
