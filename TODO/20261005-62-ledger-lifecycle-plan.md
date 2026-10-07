@@ -57,7 +57,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | L1 | Days before a ledger began are cut from the selected window | - | A | DONE #1327, carried under plan 60 (row L1, decision 5) | fantastic-fortnight | #1327 | L1 explorer starts at first day |
 | L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | DONE | ideal-barnacle | #1351 | Plan 62 row l2 |
-| L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
+| L3 | Lifecycle states at the producers | L1 | B | DONE | super-waffle | - | Plan 62 row l3 |
 | L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | #1348 | Plan 62 row l4 |
 | L5 | Console windows end on the site's newest published day | L4 | C | DONE | solid-potato | #1353 | Plan 62 row l5 |
 | L7 | A published ledger that has not started | L1 | B | DONE | expert-pancake | #1370 | Plan 62 row l7 |
