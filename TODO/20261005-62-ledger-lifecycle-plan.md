@@ -1,6 +1,6 @@
 # Plan 62 - Ledgers that start, pause, resume and stop
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 **Level**: 3 (CLAUDE.md section 6). L1 and L5 cross a boundary: L1 joins the site build to the data explorer, and L5 changes how every console route places its window. No row changes a persisted shape, and Table C, C1 stops any row that would.
 
@@ -15,7 +15,7 @@ Table A - operating contract
 | # | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Ledgers start, pause, resume and stop. Since #1309 a ledger's index starts on its first raw day, but the readers treat a day before a ledger began as a day that is missing: the data explorer asks the archive for it and then reports a fault. The tests hid this until #1309, because the canary began every ledger on the 1st of a month and the browser answer key read other inputs than the page. Now ten browser tests fail on `main` (run 37361239642, 2026-10-05). This plan makes every reader and every test treat each stage of a ledger's life as normal |
-| A2 | Hard scope - in | - The data explorer leaves out a ledger's days before its first day and names that day, and it asks the archive only for days the site copy trimmed (L1).<br>- Every data explorer browser test serves data it built and checks written-out results. The canary keeps only the checks that do not depend on what it holds (L2).<br>- The real compaction is tested on each lifecycle state, and the states get a page of their own (L3).<br>- A panel slice leaves out the days before a ledger began and names its first day. How far a ledger is packed comes from all three indexes (L4).<br>- Every console window ends on the site's newest published day, reads exactly that window, and says when a record's rows stop (L5).<br>- A published ledger that has no compact folder yet does not stop the site build (L7).<br>- When the archive does not answer for trimmed days, the explorer answers the site's days and names the archive (L8).<br>- Console specs outside the explorer that read canary content serve the data they check (L9).<br>- When a chosen ledger's newest named day holds no rows, the data explorer's column rail still lists its columns (L10) |
+| A2 | Hard scope - in | - The data explorer leaves out a ledger's days before its first day and names that day, and it asks the archive only for days the site copy trimmed (L1).<br>- Every data explorer browser test serves data it built and checks written-out results. The canary keeps only the checks that do not depend on what it holds (L2).<br>- The real compaction is tested on each lifecycle state, and the states get a page of their own (L3).<br>- A panel slice leaves out the days before a ledger began and names its first day. How far a ledger is packed comes from all three indexes (L4).<br>- Every console window ends on the site's newest published day, reads exactly that window, and says when a record's rows stop (L5).<br>- A published ledger that has no compact folder yet does not stop the site build (L7).<br>- When the archive does not answer for trimmed days, the explorer answers the site's days and names the archive (L8).<br>- Console specs outside the explorer that read canary content serve the data they check (L9).<br>- When a chosen ledger's newest named day holds no rows, the data explorer's column rail still lists its columns (L10).<br>- The "Measurement is off" line names no day outside the window, and says that nothing has been recorded at all only for a record that never held a row (L11).<br>- The data explorer's span sentences count the days read, give every date its year, and name each ledger with its own first day (L12).<br>- The console specs that still work their answer out from the canary, or write out its figures, serve the data they check (L13) |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
 | A5 | Chosen strategy | Change the readers and the tests, never the data: no persisted shape changes, a day before a ledger began is outside the ledger and never a fault, every window ends on a day that no ledger can move, and every test serves the data it checks. Fowler, 2026-10-05, on the owner's rulings of the same day |
@@ -34,6 +34,9 @@ Table B - what is out
 | B5 | Showing a family's `paused` or `retired` status on a console surface | An operator sees no sign of it. The explorer already parses the status (`frontend/src/lib/console/explorer/registry.ts`) and shows nothing from it. No family is paused or retired today | Reader and Jony rule whether and where it shows; then a Level 1 row |
 | B6 | A test that each published explorer example names only columns its ledger has | No test catches an example that names a column its ledger lacks; it fails when an operator runs it. Table G, G17 checks the statement, the ledgers and the preset only | A contract-tier row that reads each example's columns against its ledger's row contract (CLAUDE.md section 13) |
 | B7 | Specs outside the console that compute their answer from data, such as `frontend/tests/ledger-ranges.spec.ts`, which takes its expected slice from the disk reader | They break Table D, D3 until a row rewrites them, and a producer change can still turn one red after a merge | L9's inventory, run over the `reader`, `archive`, `publishing` and `model-search` groups, as a row of its own |
+| B8 | Panels that mark the days packing has not reached. Susan and Jony accept a hairline outline on bar and strip panels. Two points are open: whether a panel whose whole window is not packed shows one line ("6 Oct 2026 is not packed yet.") or nothing, and whether line-chart readouts say "not packed yet" | On bar and strip panels those days look like quiet days, and only the route's note says otherwise: the `behind` note, or the quietest line when packing is one day short. The design rationale of `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md` records the gap | An owner decision on the two open points, then a Level 1 row with Susan's, Jony's and Reader's rulings (row L5's report) |
+| B9 | Naming a hole in the archive's indexes as the archive's (since L8 the explorer calls the archive the repository) | The hole stays `day-missing`, and the page says "No file on this site holds {ledger} for {day}.", which blames the site | A Level 2 row that puts the tier on the `unreachable` answer in `frontend/src/lib/data/slice-shapes.ts`. That is a field of the run-time answer, not a persisted shape, so Table C, C1 does not fire (row L8's report) |
+| B10 | Listing the columns of a published ledger that has no file on the site: `candidate-models` once its September 2026 month packs as `empty`, with no file, and a ledger whose writer's last rows are older than the days the site copy keeps (Table E, E4) | The column rail lists no column for such a ledger | A row of its own when the first family is paused or retired. Reading the archive for such a ledger costs 3 index reads and 1 whole file (row L10's report; Fowler, 2026-10-07) |
 
 ### ESCALATE triggers
 
@@ -56,11 +59,14 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | DONE | ideal-barnacle | #1351 | Plan 62 row l2 |
 | L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
 | L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | #1348 | Plan 62 row l4 |
-| L5 | Console windows end on the site's newest published day | L4 | C | DONE | solid-potato | - | Plan 62 row l5 |
+| L5 | Console windows end on the site's newest published day | L4 | C | DONE | solid-potato | #1353 | Plan 62 row l5 |
 | L7 | A published ledger that has not started | L1 | B | PENDING | - | - | - |
-| L8 | The archive's failures are named as the archive's | L1, L2, L4, L5 | C | DONE | jubilant-dollop | - | Plan 62 row l8 |
-| L9 | Console specs outside the explorer serve the data they check | L2 | C | DONE | special-robot | - | Plan 62 row l9 |
-| L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | DONE | redesigned-spork | - | Plan 62 row l10 |
+| L8 | The archive's failures are named as the archive's | L1, L2, L4, L5 | C | DONE | jubilant-dollop | #1358 | Plan 62 row l8 |
+| L9 | Console specs outside the explorer serve the data they check | L2 | C | DONE | special-robot | #1361 | Plan 62 row l9 |
+| L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | DONE | redesigned-spork | #1360 | Plan 62 row l10 |
+| L11 | The "Measurement is off" line names only a day that is on screen | L5 | D | PENDING | - | - | - |
+| L12 | The data explorer's span sentences say what each ledger read | L10 | D | PENDING | - | - | - |
+| L13 | The remaining console specs check data they build | L9 | D | PENDING | - | - | - |
 
 ## 2. Shared declarations
 
@@ -617,3 +623,102 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 1 | As today: the rail describes each chosen ledger from its newest named day | When that day holds no rows, the rail lists no column for the ledger | Nothing to build, and no column in the rail for a ledger whose newest day was quiet or lost, or whose writer is paused or stopped | Found during execution (row L2 report), owner 2026-10-06 |
 | 2 | Describe from the newest day that holds rows, found from the indexes: a second day for each ledger on `SpanCost`, and the page asks `DESCRIBE` over it | A second rule for "the newest file", which disagrees with the empty view because it skips a file with 0 rows | No new door call, and no column for `candidate-models`, whose packed files hold 0 rows | Fowler, 2026-10-07 |
 | 3 | `readAsk` answers a `DESCRIBE` over a span with no file from the empty views | `DESCRIBE` becomes a special case inside the quiet rule, and a third rule is needed so that a ledger with no file does not answer `missing`, whose words are false for it (Table B, B4) | No page change, and an operator's own `DESCRIBE` over a quiet span would answer its columns too | Fowler, 2026-10-07 |
+
+### Row #L11 - The "Measurement is off" line names only a day that is on screen
+
+- **Scope:** When measurement is off, the "Measurement is off" line on the Hardware and Summaries routes names no day outside the window, and says that nothing has been recorded at all only for a record that never held a row. Level 1.
+- **Files touched** (each path checked on `main` at 0d61b9b49; the two `+page.server.ts` files found by a search for "Measurement is off", and the two `+page.svelte` files by a search for `recording.off`):
+  - `frontend/src/lib/console/recording.ts` (`measurementOff` names the newest recorded day that `recordingNotes` is handed, and says "Nothing has been recorded at all" when it is handed none)
+  - `frontend/src/routes/console/machine/+page.server.ts` (Hardware: hands `recordingNotes` the days each window recorded, so a window that starts after the record's rows hands it none)
+  - `frontend/src/routes/console/model/+page.server.ts` (Summaries: hands `recordingNotes` the scored days of the widest window, once, so the day the line names can be outside the open window)
+  - `frontend/src/routes/console/machine/+page.svelte` (prints the line)
+  - `frontend/src/routes/console/model/+page.svelte` (prints the line)
+  - `frontend/tests/console-chrome.spec.ts` (pins both wordings of the line)
+  - `frontend/tests/ledger-rows.spec.ts` (the Oracle, beside Table G, G10, which builds the same site)
+  - `docs/concepts/console-design.md` (the lines with fixed wording, and the rule that quotes `Measurement is off`)
+  - `docs/architecture/publishing/console-payloads.md` (a record whose route prints the line gets no second note)
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec ledger-rows.spec.ts --spec console-chrome.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the two pages; the browser smoke of the console's Hardware and Summaries routes. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push.
+- **Oracle:** in `ledger-rows.spec.ts`, on a site the test builds (Table D, D3): a record with measurement off whose rows stop 40 days before the newest published day. For each window the route offers, the line names no day outside that window and does not say "Nothing has been recorded at all". A record that never held a row still says so. It cannot settle the words, which Reader and Jony choose (decision 1); the test pins the words they choose.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Reader and Jony choose the line's words for both cases (CLAUDE.md section 14) | To be ruled at dispatch (Reader and Jony) |
+| 2 | No owner ruling set today's words: #310 shipped them as the observability plan recorded them, under Susan's authority (#304) | The owner, 2026-10-07; the record is #304 |
+| 3 | The header of `recording.ts` says "the owner wrote the first of them on 2026-08-30", and the test group "what the recording was doing, in the owner words" in `console-chrome.spec.ts` says the same. The row corrects both | Plan author, 2026-10-07, from #304 and #310 |
+| 4 | L11 waits for L5: since #1353 every window ends on the newest published day and reads only its own days, which is what makes the line false for a record whose rows stop before the window | The owner, 2026-10-07 |
+| 5 | Level 1: the words of one line and the facts that two routes hand it; a wrong version shows on those two routes | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | The line says "Nothing has been recorded at all" of a record whose rows stop before the window, which is false, and "so the figures below stop on that day" can name a day that is not on screen | Nothing to build, and a false line on two routes whenever measurement has been off for longer than the open window | Row L5's report; the owner, 2026-10-07 |
+
+### Row #L12 - The data explorer's span sentences say what each ledger read
+
+- **Scope:** The sentences under a data explorer answer count the days that were read, give every date its year, and name each ledger with its own first day, so that each sentence is true for every ledger the answer read. Level 2.
+- **Files touched** (each path checked on `main` at 0d61b9b49):
+  - `frontend/src/routes/console/data-explorer/+page.svelte` ("Read from {n} UTC days, {from} to {to}." takes `n` from `spanDays()`, the days asked, and prints the first date with no year)
+  - `frontend/src/lib/console/waiting.ts` (`explorerSiteFromSentence`: "Days before {day} are not on this site.", which names no ledger)
+  - `frontend/src/lib/data/ask-reader.ts` (if the answer carries each ledger's first day: it keeps only the earliest of the ledgers' `siteFrom` days)
+  - `frontend/src/lib/data/slice-shapes.ts` (found by a search for `siteFrom`: `siteFrom` on `SpanCost` and on the `ok` and `quiet` answers)
+  - `frontend/tests/ledger-lifecycle.spec.ts` (the reader's cases, on roots Table G, G1 builds)
+  - `frontend/tests/ledger-door.spec.ts` (found by a search for `siteFrom`)
+  - `frontend/tests/console-data-explorer.spec.ts` (pins the sentence)
+  - `frontend/tests/explorer-boundary.spec.ts` (found by a search for the sentence: pins it)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
+  - `docs/how-to/query-a-ledger-from-the-console.md` (found by a search for the sentence: quotes it)
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec ledger-lifecycle.spec.ts --spec ledger-door.spec.ts --spec console-data-explorer.spec.ts --spec explorer-boundary.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the two pages; the browser smoke of the data explorer. CI: the pull request runs the console specs; every group runs on the merge push.
+- **Oracle:** on ledgers the test builds (Table D, D3): two ledgers with different first days, both inside the window. The answer names each ledger with its own first day, the sentence counts the days read, and both of its dates carry their year. It cannot settle a ledger whose first day only the archive holds, because both of the Oracle's ledgers begin on the site.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Reader chooses the words of the span sentences (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 2 | If the answer carries each ledger's first day, that is a field of the run-time answer in `slice-shapes.ts`, as `unanswered` is since L8, and not a persisted shape, so Table C, C1 does not fire | Plan author, 2026-10-07, from row L8, decision 2 |
+| 3 | L12 waits for L10, because L10 edited `+page.svelte`, `ask-reader.ts`, `ledger-lifecycle.spec.ts`, `console-data-explorer.spec.ts` and the written-question page | The owner, 2026-10-07 |
+| 4 | Level 2: the sentences under every explorer answer change, and every explorer question reads through `ask-reader.ts` | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | "Read from {n} UTC days" counts the days asked, not the days read. Its first date has no year ("16 Jun to 15 Jun 2030"). "Days before {day} are not on this site." names no ledger, and since L1 the cut is per ledger, so for two ledgers that began on different days it is false for one of them | Nothing to build. Every answer prints its first date with no year, and an answer that cuts a ledger counts days it did not read and can name a first day that is false for another ledger | Reader, row L8's report; the owner, 2026-10-07 |
+
+### Row #L13 - The remaining console specs check data they build
+
+- **Scope:** Every console spec that still works its answer out from the canary, or writes out a canary figure, serves a root it built and checks written-out values. The row starts with an inventory taken when it is dispatched. Level 2.
+- **Inventory**, the row's first step, before any edit:
+  1. A canary content change: one value in one row that `backend/utilities/build_canary_day.py` writes, with the canary's day left as it is, over the `console` and `panels` groups. Like a canary-day move (Table E, E10), it is a measurement, never a commit. Run Playwright directly, as row L9's follow-ups say, so that every red test is counted.
+  2. Every test the change turns red joins the row, except the panel captures in `frontend/tests/panel-captures.spec.ts`, which picture the canary on purpose.
+  3. The change that starts the row writes every spec that joined into Files touched, with each test's title.
+- **Files touched** (each path checked on `main` at 0d61b9b49; the rest come from the inventory):
+  - `frontend/tests/support/canary-records.ts` (12 console specs outside L9's inventory still read it; row L9's report. It goes once none does)
+  - `frontend/tests/console-article-cost.spec.ts`, `frontend/tests/console-disk-reads.spec.ts`, `frontend/tests/console-doubt.spec.ts`, `frontend/tests/console-machine-panels.spec.ts`, `frontend/tests/console-memory-board.spec.ts`, `frontend/tests/console-model-instruments.spec.ts`, `frontend/tests/console-model-panels.spec.ts`, `frontend/tests/console-model-rule.spec.ts`, `frontend/tests/console-shard-board.spec.ts`, `frontend/tests/console-timings.spec.ts`, `frontend/tests/console-voices-sources.spec.ts` and `frontend/tests/console-window.spec.ts` (the 12 specs: each works its answer out from the canary through `canary-records.ts`, so the canary-day move left it green, and neither step of L9's inventory named it)
+  - `frontend/tests/console.spec.ts` (11 tests write out canary figures: feed names, timing medians and throughput rates. They read no canary file, so the canary-day move left them green; row L9's report)
+  - `frontend/src/routes/console/+page.server.ts` (`chartDays` and `cutsByRun` move out: a `+page.server.ts` may export nothing else, so they cannot have logic tests where they are; row L9's report)
+  - a new module under `frontend/src/lib/server/` that `chartDays` and `cutsByRun` move to, named at dispatch for the question it answers (CLAUDE.md section 1a)
+  - `frontend/scripts/test-groups.ts` (names a new spec under `logic`, if the row adds one)
+  - `frontend/tests/console-item-cost.spec.ts` (under L9, its test "the share is printed and never drawn as a trend, and the page says why" dropped its canary premise check, that the held part of a prompt has not started moving; decision 4)
+- **Acceptance gates:** local: the inventory's canary content change, repeated on the branch; `npm --prefix frontend run test:changed -- --list`, then the groups it selects; `npm --prefix frontend run check`; the browser smoke of the console's home route, whose build code moves. CI: what `ciAnswer` selects, then every group on the merge push.
+- **Oracle:** after the row, the same canary content change turns no spec in the `console` and `panels` groups red, except the panel captures. It cannot settle a test that works its answer out from the canary, because the change moves its answer and its expected value together; that is why the 12 specs are named from row L9's report and not by the change.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The inventory is a canary content change, not a canary-day move: a day move changes dates and no figures, so neither step of L9's inventory finds a test that writes out a canary figure | Row L9's report; the owner, 2026-10-07 |
+| 2 | The panel captures stay on the canary, because they picture it on purpose | The owner, 2026-10-07, as for row L9 |
+| 3 | `chartDays` and `cutsByRun` move out of the route in a structural commit of its own, with no behaviour change, before any test reads them | Row L9's report; the owner, 2026-10-07 |
+| 4 | The premise that the item-cost share test dropped is a fact about the data, so no test holds it again (Table D, D3). CLAUDE.md section 13 sends such a check to the producer or to an operator utility; Fowler rules which at dispatch | Plan author, 2026-10-07 |
+| 5 | Level 2: tests, and one move of two functions out of the console's home route with no behaviour change | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | A canary-day move, as row L9's inventory took | It changes dates, not figures, so it finds none of the 11 tests in `console.spec.ts` and none of the 12 specs | No new step, and a row that misses the tests it exists for | Row L9's report; the owner, 2026-10-07 |
+| 2 | As today: the 12 specs keep reading the canary through `canary-records.ts` | `canary-records.ts` reads the canary through the readers that the page's server calls - `itemHealthRows`, `evalRows` and `machineRecord` - so each spec compares the page with an answer computed from data (Table D, D3) | Nothing to build, and a fault in one of those readers moves the page and the expected answer together, so no test turns red | The owner, 2026-10-05 (Table D, D3) |

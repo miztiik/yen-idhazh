@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
-**Thirty defects are open.** Four of them need evidence or a ruling before any code
+**Thirty-one defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -36,7 +36,8 @@ settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
 57 is the fourth that needs evidence, because one stall is not enough to find
 its cause. Defect 59 was filed on 2026-10-05 by plan 60's row 10: reading named
 days of a ledger that the ledger door files lists every raw day folder the ledger
-holds.
+holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
+explorer fetches each chosen ledger's three indexes twice.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -104,6 +105,29 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
+| 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | **OPEN - find the two callers, then share one read** |
+
+## 60 - On open, the data explorer fetches each chosen ledger's three indexes twice (OPEN)
+
+**When the data explorer opens, it fetches each chosen ledger's three indexes
+twice.** Plan 62's row L10 saw it on 2026-10-07, on the live site and on a
+local build, both before and after its own change (#1360). An index is fetched
+with `cache: 'no-store'` (`frontend/src/lib/data/fetched-bytes.ts`), so the
+second read is a request of its own, not a copy the browser kept. The likely
+cause, an estimate from reading the page and not measured, is two callers that
+each read the indexes: `updateCostAndColumns` in
+`frontend/src/routes/console/data-explorer/+page.svelte` asks for the window's
+cost (`askCost`), then for each ledger's columns, through `askColumns` since
+#1360 and through a `DESCRIBE` sent to `ask` before it.
+
+**Doing nothing costs three extra small requests for each chosen ledger, every
+time the page opens.** What the page shows is not wrong.
+
+**The next move is a worker's: find the two callers and share one read.**
+Level 1 - the reads of one page, and a wrong version shows on that page at
+once.
+
+Found by plan 62's row L10 (#1360), and filed on 2026-10-07.
 
 ## 59 - Reading named days of a door ledger lists every raw day folder the ledger holds (OPEN)
 
