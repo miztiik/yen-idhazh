@@ -53,9 +53,10 @@
 	let result = $state<AskResult | null>(null);
 	let orderedRows = $state<Row[]>([]);
 	let ledgerColumns = $state<Column[]>([]);
-	let showAnswerColumns = $state(false);
 	let runSpan = $state<{ from: DateStamp; to: DateStamp } | null>(null);
 	let wide = $state(false);
+	let ledgersOpen = $state(false);
+	let columnsOpen = $state(false);
 	let readoutBand = $state(0);
 	let savedQuestions = $state<KeptQuestion[]>([]);
 	let recentRuns = $state<RecentRun[]>([]);
@@ -73,8 +74,7 @@
 
 	const ledgers = $derived<RegistryLedger[]>(flattenRegistry(registry));
 	const selectedPublished = $derived(selected.filter((name) => published.includes(name)));
-	const columns = $derived(showAnswerColumns && result !== null && 'columns' in result ? result.columns : ledgerColumns);
-	const columnLabel = $derived(showAnswerColumns ? 'Answer columns' : 'Ledger columns');
+	const columnLabel = $derived('Ledger columns');
 	const answerRows = $derived(result !== null && result.state === 'ok' ? (result.rows as Row[]) : []);
 	const answerColumns = $derived(result !== null && result.state === 'ok' ? result.columns : []);
 	const noticeText = $derived([keepNotice, copyNotice, !storageWorks && !storageNoticeDismissed ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
@@ -172,7 +172,6 @@
 	}
 	function toggle(name: LedgerName) {
 		selected = selected.includes(name) ? selected.filter((one) => one !== name) : [...selected, name];
-		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function pick(example: ExplorerExample) {
@@ -182,7 +181,6 @@
 		toDay = todayUtc();
 		fromDay = addDays(toDay, 1 - days);
 		sql = example.sql;
-		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function pickSaved(question: KeptQuestion) {
@@ -190,7 +188,6 @@
 		if (question.from !== undefined && question.end !== undefined) setSpan(question.from, question.end);
 		else setWindow(presets.includes(question.days) ? question.days : windowDays);
 		sql = question.statement;
-		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function pickRun(run: RecentRun) {
@@ -198,7 +195,6 @@
 		if (run.from !== undefined && run.end !== undefined) setSpan(run.from, run.end);
 		else setWindow(presets.includes(run.days) ? run.days : windowDays);
 		sql = run.statement;
-		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function setWindow(days: number) {
@@ -442,7 +438,6 @@
 			lastMs = Math.round(performance.now() - started);
 			result = answer;
 			selectedShapeType = null;
-			showAnswerColumns = answer.state === 'ok' || answer.state === 'quiet';
 			heldBytes = pageHeldBytes();
 			if ((answer.state === 'ok' || answer.state === 'quiet') && 'read' in answer) {
 				lastMs = answer.read.ms;
@@ -471,12 +466,20 @@
 		ready = true;
 		setWindow(data.console.default_window_days);
 		const query = matchMedia(`(min-width: ${data.frame.breakpoints_px[1]}px)`);
+		let previousWide = query.matches;
 		const sync = () => {
 			wide = query.matches;
+			if (wide !== previousWide) {
+				ledgersOpen = wide;
+				columnsOpen = wide;
+				previousWide = wide;
+			}
 			const width = window.innerWidth;
 			readoutBand = width < data.frame.breakpoints_px[0] ? 0 : width < data.frame.breakpoints_px[1] ? 1 : width < data.frame.breakpoints_px[2] ? 2 : 3;
 		};
 		sync();
+		ledgersOpen = wide;
+		columnsOpen = wide;
 		query.addEventListener('change', sync);
 		addEventListener('resize', sync);
 		const answerRegion = document.querySelector('[data-workbench-region="answer"]');
@@ -537,7 +540,7 @@
 			</div>
 		</div>
 		<div class="question-grid" class:wide>
-			<details data-workbench-region="ledgers" class="rail-region" open={wide}>
+			<details data-workbench-region="ledgers" class="rail-region" bind:open={ledgersOpen}>
 				<summary>Ledgers: {selected.length}</summary>
 				<LedgerList ledgers={ledgers} selected={selected} {published} through={cost.through} spanFrom={fromDay} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
 			</details>
@@ -568,9 +571,9 @@
 				</div>
 				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href={answerLink} files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} {heldBytes} />
 			</div>
-			<details data-workbench-region="columns" class="rail-region" open={wide}>
-				<summary>{columnLabel} ({columns.length})</summary>
-				<ColumnList columns={columns} label={columnLabel} />
+			<details data-workbench-region="columns" class="rail-region" bind:open={columnsOpen}>
+				<summary>{columnLabel} ({ledgerColumns.length})</summary>
+				<ColumnList columns={ledgerColumns} label={columnLabel} />
 			</details>
 		</div>
 	</div>

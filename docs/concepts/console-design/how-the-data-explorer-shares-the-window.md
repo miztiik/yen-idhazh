@@ -20,7 +20,7 @@ From 640 px the question strip is one line beside the History and how-to links. 
 
 The Data explorer is a workbench. Pressing Run, copying text, saving a question, opening History, sorting a column or changing the chart changes only the content inside a region. The toolbar, question row, ledger rail, editor, status bar, column rail, answer region and chart region keep their boxes.
 
-Long content scrolls inside the region that owns it. The SQL editor shows at least a set number of lines, the status bar reserves readout lines, and notices float over the page instead of entering the document flow. No region takes its size from its content, so a long question, a long note or a thousand rows never move the regions around them. The column rail may show ledger columns before a run and answer columns after an answered or quiet run, but the rail's box and its inner scroller keep their size.
+Long content scrolls inside the region that owns it. The SQL editor shows at least a set number of lines, the status bar reserves readout lines, and notices float over the page instead of entering the document flow. No region takes its size from its content, so a long question, a long note or a thousand rows never move the regions around them. The column rail always shows the selected ledgers' columns; a run does not change it. The answer's own columns stay visible in the answer table's typed header.
 
 ## Design rationale
 

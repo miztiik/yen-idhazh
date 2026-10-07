@@ -77,7 +77,7 @@ for (const view of [
 	});
 }
 
-/** A question whose answer has `count` columns, each named under a ledger, so the column rail lists them as that ledger's. */
+/** A question whose answer has `count` columns; the column rail still lists the selected ledger's own columns. */
 function prefixedColumns(count: number): string {
 	return `SELECT ${Array.from({ length: count }, (_, index) => `${index + 1} AS "published.c${String(index + 1).padStart(2, '0')}"`).join(', ')}`;
 }
@@ -86,21 +86,20 @@ for (const view of [
 	{ width: 1440, height: 900 },
 	{ width: 1920, height: 1080 }
 ] as const) {
-	test(`a long list of a ledger's columns scrolls inside the column rail and never stretches the page, at ${view.width} x ${view.height}`, async ({ page, context }) => {
+	test(`a wide answer does not stretch the column rail or the page, at ${view.width} x ${view.height}`, async ({ page, context }) => {
 		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
 		await chooseExplorerQuestion(page, ['published'], prefixedColumns(80));
 		await runExplorer(page);
 		await expectAnswer(page, 'table');
-		await expect(page.locator('[data-explorer-columns] li')).toHaveCount(80);
+		await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Ledger columns');
+		await expect(page.locator('[data-explorer-columns] li code')).toHaveText(['published.covers', 'published.date', 'published.n']);
 		const at = await page.evaluate(() => {
-			const list = document.querySelector('[data-explorer-column-box]') as HTMLElement;
 			const root = document.documentElement;
-			return { scrollHeight: root.scrollHeight, listScrolls: list.scrollHeight > list.clientHeight };
+			return { scrollHeight: root.scrollHeight };
 		});
-		expect(at.listScrolls, 'the 80 columns did not scroll inside the rail').toBe(true);
-		expect(at.scrollHeight, 'the column list stretched the page').toBe(view.height);
+		expect(at.scrollHeight, 'the wide answer stretched the page').toBe(view.height);
 	});
 }
 

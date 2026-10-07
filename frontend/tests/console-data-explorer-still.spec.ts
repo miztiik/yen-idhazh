@@ -417,26 +417,26 @@ test('storage notice dismissal does not re-enable storage-backed controls', asyn
 	await expect(page.locator('.history-list')).toContainText('Nothing asked in this browser yet.');
 });
 
-test('M13: B2 column rail text flips without changing either rail box', async ({ page, context }) => {
-	await serveBuilt(context, test.info().outputPath('state'),
-		{ ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(0, 0) },
-		{ ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
-	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page, PINNED);
-	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint" LIMIT 1');
-	await page.waitForTimeout(500);
-	const rail = '[data-workbench-region="columns"]';
-	const outer = await box(page, rail);
-	const inner = await box(page, '[data-explorer-column-box]');
-	await runExplorer(page);
-	await expectAnswer(page, 'table');
-	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Answer columns');
-	closeInlineBox(outer, await box(page, rail));
-	closeInlineBox(inner, await box(page, '[data-explorer-column-box]'));
-	await page.locator('[data-ledger-name="published"] input').check();
-	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Ledger columns');
-	closeInlineBox(outer, await box(page, rail));
-	closeInlineBox(inner, await box(page, '[data-explorer-column-box]'));
+test('M13: B1 column rail text is identical before and after Run', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(0, 0) });
+	for (const view of [{ width: 1440, height: 900 }, { width: 390, height: 844 }] as const) {
+		await page.setViewportSize(view);
+		await openExplorer(page, PINNED);
+		await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint" LIMIT 1');
+		const rail = '[data-workbench-region="columns"]';
+		if (await page.locator(`${rail}:not([open]) summary`).count()) await page.locator(`${rail} summary`).click();
+		await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Ledger columns');
+		await expect(page.locator('[data-explorer-columns] li code')).toHaveText(['host-fingerprint.covers', 'host-fingerprint.date', 'host-fingerprint.n']);
+		const beforeText = await page.locator('[data-explorer-columns]').innerText();
+		const outer = await box(page, rail);
+		const inner = await box(page, '[data-explorer-column-box]');
+		await runExplorer(page);
+		await expectAnswer(page, 'table');
+		await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Ledger columns');
+		expect(await page.locator('[data-explorer-columns]').innerText()).toBe(beforeText);
+		closeBox(outer, await box(page, rail));
+		closeBox(inner, await box(page, '[data-explorer-column-box]'));
+	}
 });
 
 test('M15: panel ids stay ordered, headed and joined into one workbench surface', async ({ page }) => {

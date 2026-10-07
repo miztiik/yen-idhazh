@@ -174,17 +174,19 @@ test('THE ORACLE: Data explorer puts the span and the dates in the toolbar, and 
 	await expect(page.locator('[data-workbench-region="editor"] [data-explorer-actions]').getByRole('button', { name: /^Run$/ })).toHaveCount(1);
 });
 
-test('THE ORACLE: before a run the column rail names the selected ledger\'s own columns', async ({ page, context }) => {
+test('THE ORACLE: the column rail always names the selected ledger\'s own columns', async ({ page, context }) => {
 	// A built ledger's files hold three columns: covers, date and n.
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(2, 0) });
 	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint"');
 	const rail = page.locator('[data-explorer-columns] li code');
+	const before = await page.locator('[data-explorer-columns]').innerText();
 	await expect(rail).toHaveText(['host-fingerprint.covers', 'host-fingerprint.date', 'host-fingerprint.n']);
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
-	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Answer columns');
-	await expect(rail).toHaveText(['covers', 'date', 'n']);
+	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Ledger columns');
+	await expect(rail).toHaveText(['host-fingerprint.covers', 'host-fingerprint.date', 'host-fingerprint.n']);
+	expect(await page.locator('[data-explorer-columns]').innerText()).toBe(before);
 });
 
 test('THE ORACLE: the Data explorer fallback document carries the shipped content policy', () => {
