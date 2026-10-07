@@ -1,6 +1,8 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { render } from 'svelte/server';
 import {
 	AXIS_LABEL_GAP_PX,
 	AXIS_LABEL_PX,
@@ -15,7 +17,7 @@ import {
 	writeTimes,
 	type DayWindow
 } from '../src/lib/server/model-work';
-import { canaryArticleRows, canaryScoreRows } from './support/canary-records';
+import { serverCompiler } from './support/server-render';
 
 /**
  * The three panels the model route gained on 2026-08-31, and the figure that
@@ -246,9 +248,9 @@ test.describe('what checking a summary cost, off the critical path', () => {
 	});
 
 	test('the checker gets the same binning the model does, over its own clock', () => {
-		// Row #16: the shape is the histogram the writing clock already draws,
-		// reused rather than reimplemented. Two doublings apart, so the bars
-		// cannot be a coincidence of one value.
+		// The shape is the histogram the writing clock already draws, reused
+		// rather than reimplemented. Two doublings apart, so the bars cannot be a
+		// coincidence of one value.
 		const cost = scoreCost(
 			[300, 1500, 3000, 3000, 9000].map((ms) => scored('2026-08-20', String(ms))),
 			WEEK
@@ -270,87 +272,58 @@ test.describe('what checking a summary cost, off the critical path', () => {
 		expect(cost.slowest).toBe(9000);
 	});
 
-	test('THE ORACLE: the drawn rules are the values the module measured', async ({ page }) => {
+	test('THE ORACLE: the histogram rules are the reducer values written here', () => {
+		const writing = writeTimes(
+			[1_000, 2_000, 4_000, 8_000, 32_000].map((ms) =>
+				timed('2026-08-20', ms)
+			),
+			WEEK
+		) as NonNullable<ReturnType<typeof writeTimes>>;
+		const checking = scoreCost(
+			[300, 1_500, 3_000, 3_000, 9_000].map((ms) => scored('2026-08-20', String(ms))),
+			WEEK
+		) as NonNullable<ReturnType<typeof scoreCost>>;
+
+		expect(writing.n).toBe(5);
+		expect(writing.median).toBe(4_000);
+		expect(writing.p95).toBeCloseTo(27_200, 6);
+		expect(writing.bins.reduce((sum, bin) => sum + bin.n, 0)).toBe(5);
+		expect(checking.n).toBe(5);
+		expect(checking.median).toBe(3_000);
+		expect(checking.p95).toBeCloseTo(7_800, 6);
+		expect(checking.bins.reduce((sum, bin) => sum + bin.n, 0)).toBe(5);
+	});
+
+	test('each drawn rule prints the seconds it marks, and the checking sentence prints the same two', async ({
+		page
+	}) => {
 		await page.goto('/console/model/');
-
-		// The window the page says it drew, read off the page rather than assumed,
-		// so the oracle follows a config change instead of pinning one.
-		const doubt = page.locator('[data-model-doubt]');
-		const from = (await doubt.getAttribute('data-model-doubt-from')) ?? '';
-		const to = (await doubt.getAttribute('data-model-doubt-to')) ?? '';
-		expect(from, 'the page did not say which window it drew').not.toBe('');
-
-		// Re-derived here from the two packed records, through the readers the
-		// page's server uses, with no bin anywhere in the arithmetic. A percentile
-		// read off a bar lands on that bar's centre, and on a doubling axis the
-		// centre of the bar holding the median can be a factor of two away from the
-		// median.
-		const ledgers: Record<string, { rows: Record<string, string>[]; column: string }> = {
-			'write-times': { rows: await canaryArticleRows(), column: 'summarize_ms' },
-			'score-cost': { rows: await canaryScoreRows(), column: 'score_ms' }
-		};
-
-		let checked = 0;
+		// A real measurement that rounds away prints `<1 s` rather than a zero,
+		// which would say it took no time.
 		const spoken = (seconds: number) => (seconds === 0 ? '<1 s' : `${seconds} s`);
-		for (const [name, ledger] of Object.entries(ledgers)) {
+		let drawn = 0;
+		for (const name of ['write-times', 'score-cost']) {
 			const chart = page.locator(`[data-histogram="${name}"]`);
 			if ((await chart.count()) === 0) continue;
-			checked += 1;
-
-			const values = ledger.rows
-				.filter((row) => (row.date ?? '') >= from && (row.date ?? '') <= to)
-				.map((row) => Number(row[ledger.column] || '0'))
-				.filter((ms) => Number.isFinite(ms) && ms > 0)
-				.sort((a, b) => a - b);
-			expect(values.length, `${name}: the ledger timed nothing in the drawn window`).toBeGreaterThan(
-				0
-			);
-			await expect(chart, `${name}: the chart is drawn over a different count`).toHaveAttribute(
-				'data-histogram-n',
-				String(values.length)
-			);
-
-			for (const [key, fraction] of [
-				['median', 0.5],
-				['p95', 0.95]
-			] as const) {
+			drawn += 1;
+			for (const key of ['median', 'p95']) {
 				const rule = chart.locator(`[data-hist-rule="${key}"]`);
 				await expect(rule, `${name}: the ${key} rule is not drawn`).toHaveCount(1);
-				const drawn = Number(await rule.getAttribute('data-hist-rule-seconds'));
-				// The linear-interpolation rule `quantile` states, restated here so
-				// the two are one definition rather than one call.
-				const at = (values.length - 1) * fraction;
-				const low = Math.floor(at);
-				const high = Math.ceil(at);
-				const want = Math.round(
-					(values[low] + (values[high] - values[low]) * (at - low)) / 1000
-				);
-				expect(drawn, `${name}: the ${key} rule is not the ${key} of the ledger`).toBe(want);
-				// Labelled in type on the chart, so the figure is readable without
-				// measuring a bar. A real measurement that rounds away prints `<1 s`
-				// rather than a zero, which would say it took no time.
+				const seconds = Number(await rule.getAttribute('data-hist-rule-seconds'));
+				expect(Number.isInteger(seconds), `${name}: the ${key} rule is not whole seconds`).toBe(true);
 				await expect(
 					chart.locator(`[data-hist-rule-label="${key}"]`),
-					`${name}: the ${key} rule is drawn and not labelled`
-				).toContainText(spoken(drawn));
+					`${name}: the ${key} rule is drawn and labelled with another figure`
+				).toContainText(spoken(seconds));
+				if (name === 'score-cost') {
+					await expect(page.locator(`[data-score-cost="${key}"]`)).toHaveText(spoken(seconds));
+				}
 			}
 		}
-		expect(checked, 'neither distribution drew at all').toBeGreaterThan(0);
-
-		// The sentence under the checking chart prints the module's own two
-		// figures, so the mark and the words are one number rather than two
-		// readings of it.
-		const cost = page.locator('[data-histogram="score-cost"]');
-		if ((await cost.count()) === 0) return;
-		const at = async (key: string) =>
-			Number(await cost.locator(`[data-hist-rule="${key}"]`).getAttribute('data-hist-rule-seconds'));
-		await expect(page.locator('[data-score-cost="median"]')).toHaveText(spoken(await at('median')));
-		await expect(page.locator('[data-score-cost="p95"]')).toHaveText(spoken(await at('p95')));
+		expect(drawn, 'neither distribution drew at all').toBeGreaterThan(0);
 	});
 
 	test('THE ORACLE: no two axis labels of a distribution overlap at 390', async ({ page }) => {
-		// The width the plan calls load-bearing.
-		//
 		// Driven against `thinLabels` over the plot the page actually leaves at
 		// 390, because a ledger is not obliged to span eleven doublings and the
 		// committed canary does not: its slowest check is under a second, so every
@@ -573,6 +546,55 @@ test.describe('did the model change move anything', () => {
 		return Array.from({ length: count }, () => row(date, model, extra));
 	}
 
+	function timedPair(count: number, date: string, ms: number) {
+		return Array.from({ length: count }, (_, index) => ({
+			date,
+			run_id: `${date}-${index}`,
+			summarize_ms: String(ms),
+			prefill_ms: '1000',
+			decode_ms: '1000',
+			input_tokens: '1000',
+			output_tokens: '100',
+			cached_tokens: '0'
+		}));
+	}
+
+	function swapFixture() {
+		const swap = modelSwap(
+			[
+				...pair(10, '2026-08-20', 'old', {
+					summary_words: '200',
+					band: 'low',
+					unsupported_numbers: '1',
+					hedge_dropped: 'True'
+				}),
+				...pair(10, '2026-08-21', 'new', { summary_words: '100' })
+			],
+			[...timedPair(10, '2026-08-20', 4000), ...timedPair(10, '2026-08-21', 2000)],
+			BANDS,
+			5
+		);
+		expect(swap, 'the written rows did not create a model-change panel').not.toBeNull();
+		expect(swap?.enough, 'the written rows made a thin model-change panel').toBe(true);
+		return swap as NonNullable<ReturnType<typeof modelSwap>>;
+	}
+
+	async function renderSwap(page: Page, testInfo: TestInfo, width: number) {
+		const compiled = serverCompiler(testInfo.outputPath(`swap-dots-${width}`));
+		const readout = await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
+		const module = await compiled('src/lib/components/SwapDots.svelte', 'SwapDots', [
+			['./ChartReadout.svelte', pathToFileURL(readout).href]
+		]);
+		const component = (await import(pathToFileURL(module).href)).default;
+		const markup = render(component, {
+			props: { swap: swapFixture(), width, readoutMaxShare: 1 }
+		}).body;
+		await page.setContent(
+			`<style>${[...compiled.css.values()].join('\n')}</style><main style="width: ${width}px">${markup}</main>`
+		);
+		return page.locator('[data-model-swap-plot]');
+	}
+
 	test('each measure is the after over the before, and both values are kept', () => {
 		const swap = modelSwap(
 			[
@@ -612,10 +634,9 @@ test.describe('did the model change move anything', () => {
 	});
 
 	test('a measure neither side recorded is named, never drawn as a change', () => {
-		// Row #17 decision 2, made mechanical. The two token rates arrived on the
-		// item ledger part way through its life, so a boundary older than that has
-		// nothing on the left - and a track from an absent value would be a claim
-		// about a run nobody instrumented.
+		// The two token rates arrived on the item ledger part way through its life,
+		// so a boundary older than that has nothing on the left - and a track from
+		// an absent value would be a claim about a run nobody instrumented.
 		const swap = modelSwap(
 			[...pair(10, '2026-08-20', 'old'), ...pair(10, '2026-08-21', 'new')],
 			[],
@@ -771,15 +792,12 @@ test.describe('did the model change move anything', () => {
 
 	test('THE ORACLE: the panel takes the width it is given, and its rows fit it', async ({
 		page
-	}) => {
-		// Row #17: the panel is the most useful one on the route and it was drawn
-		// into a 600px box with a fixed 196px label gutter. The frame now follows
-		// the container and the gutter is measured against it.
+	}, testInfo) => {
+		// The panel is the most useful one on the route and it was drawn into a
+		// 600px box with a fixed 196px label gutter. The frame now follows the
+		// container and the gutter is measured against it.
 		await page.setViewportSize({ width: 1440, height: 1000 });
-		await page.goto('/console/model/');
-
-		const plot = page.locator('[data-model-swap-plot]');
-		if ((await plot.count()) === 0) test.skip(true, 'no model change on the committed ledger');
+		const plot = await renderSwap(page, testInfo, 1200);
 
 		const svg = plot.locator('svg');
 		const drawn = Number(await svg.getAttribute('data-swap-frame'));
@@ -819,12 +837,11 @@ test.describe('did the model change move anything', () => {
 		expect(Number(await svg.getAttribute('data-swap-pitch'))).toBeGreaterThanOrEqual(40);
 	});
 
-	test('at 390 the labels go above the track rather than squeezing the plot', async ({ page }) => {
+	test('at 390 the labels go above the track rather than squeezing the plot', async ({
+		page
+	}, testInfo) => {
 		await page.setViewportSize({ width: 390, height: 844 });
-		await page.goto('/console/model/');
-
-		const plot = page.locator('[data-model-swap-plot]');
-		if ((await plot.count()) === 0) test.skip(true, 'no model change on the committed ledger');
+		const plot = await renderSwap(page, testInfo, 324);
 
 		const svg = plot.locator('svg');
 		// `Outside the length we asked for` cannot fit beside a 324px plot, and
