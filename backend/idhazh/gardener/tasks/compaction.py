@@ -137,6 +137,7 @@ def run(context: TaskContext) -> Pass:
             now=now,
             operator_range=operator_range,
             first_ledger_year=context.first_ledger_year,
+            owned_folders=context.owned_folders,
         )
     except OverBudgetError as spent:
         marks = ledger.compact_index_path(context.state_dir, policy.ledger, Period.DAILY).parent

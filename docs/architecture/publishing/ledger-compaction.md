@@ -535,6 +535,11 @@ periods in the table. So a rebuild names at most one more folder each year
 (CLAUDE.md Guardrail #12). A window that keeps every month downloads up to
 twelve more month files each year, the same rows one packed year file holds.
 
+**A ledger with no compact folder is not searched.** Before any task runs, the
+runner reads which of a task's declared folders the commit holds. When it does
+not hold `state/compact/<ledger>`, no file was ever packed there, so the pass
+reads nothing for an absent index, and its first live pass writes all three.
+
 **An operator range never narrows where the rebuild looks**, because a rebuilt
 index is written whole and no later pass looks again once it exists. Each
 index's files are fetched in one call inside what is left of the shard's
@@ -894,7 +899,10 @@ that hides no kept month has to read each kept month's own file, so no design
 reads fewer files; what can be bounded is what it names. So it names each
 year's folder once, and git lists the files inside. Its downloads are what a
 packed year costs: one year's rows a year. If the owner counts that bound in
-files downloaded instead, option 4 below is the next move. Fowler, 2026-10-07.
+files downloaded instead, option 4 below is the next move. A ledger whose
+compact folder the commit lacks has packed nothing, so its rebuild reads
+nothing: the dry-run ledgers no longer pay three listings each wake to find no
+file. Fowler, 2026-10-07.
 
 | # | Option | Why rejected | What it would cost to take |
 | --- | --- | --- | --- |

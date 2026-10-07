@@ -55,6 +55,9 @@ TASK: Final = "compact-visual-prunes"
 #: The ledger's compact folder, as a repository path.
 COMPACT: Final = "state/compact/visual-prunes"
 
+#: The ledger's raw folder, as a repository path.
+RAW: Final = "state/raw/visual-prunes"
+
 #: The first year a ledger can hold, as `config/idhazh_gardener.json` says it.
 FIRST_YEAR: Final = "2026"
 
@@ -242,6 +245,7 @@ def test_the_files_an_absent_index_is_rebuilt_from_are_fetched_in_one_call_insid
             now=at(date(2026, 9, 4)),
             operator_range=None,
             first_ledger_year=FIRST_YEAR,
+            owned_folders=(COMPACT,),
         )
 
     assert (refused.value.needed, refused.value.budget) == (1100, 1000)
@@ -259,7 +263,12 @@ def rebuilt(root: Path, wake: date, **changed: Any) -> tuple[CompactTree, list[s
     tree = CompactTree.read(context.state_dir, VISUALS, context.listing)
     before = set(tree.listing.named)
     _absent_indexes.rebuild(
-        tree, policy, now=at(wake), operator_range=None, first_ledger_year=FIRST_YEAR
+        tree,
+        policy,
+        now=at(wake),
+        operator_range=None,
+        first_ledger_year=FIRST_YEAR,
+        owned_folders=context.owned_folders,
     )
     return tree, sorted(set(tree.listing.named) - before)
 
@@ -322,6 +331,52 @@ def test_a_yearly_rebuild_names_one_folder_a_year_from_the_first_ledger_year(
     _tree, named = rebuilt(root, date(2028, 3, 4), **PACKS_YEARS)
 
     assert named == [f"{COMPACT}/yearly/2026", f"{COMPACT}/yearly/2027"]
+
+
+def a_tree_that_names_nothing(root: Path) -> CompactTree:
+    """A ledger with no index, over a listing with no lister: any naming at all is refused."""
+    return CompactTree(
+        state_dir=state(root),
+        ledger=VISUALS,
+        listing=FileListing.from_paths(root, [], folders=[COMPACT, RAW]),
+        daily={},
+        monthly={},
+        yearly={},
+        raw_days=[],
+    )
+
+
+def rebuild_on_16_december_2027(tree: CompactTree, *, owned_folders: Sequence[str]) -> None:
+    _absent_indexes.rebuild(
+        tree,
+        policy_of(),
+        now=at(date(2027, 12, 16)),
+        operator_range=None,
+        first_ledger_year=FIRST_YEAR,
+        owned_folders=owned_folders,
+    )
+
+
+def test_a_ledger_whose_compact_folder_the_commit_lacks_is_not_searched(tmp_path: Path) -> None:
+    """No file was ever packed under a folder the commit lacks, so the rebuild names nothing."""
+    tree = a_tree_that_names_nothing(tmp_path)
+
+    rebuild_on_16_december_2027(tree, owned_folders=(RAW,))
+
+    assert (tree.listing.named, tree.pending_indexes) == ((), set())
+
+
+def test_a_ledger_whose_compact_folder_the_commit_holds_is_searched(tmp_path: Path) -> None:
+    """The same ledger with its compact folder held names its first month folder, and is refused."""
+    tree = a_tree_that_names_nothing(tmp_path)
+
+    with pytest.raises(ValueError) as refused:
+        rebuild_on_16_december_2027(tree, owned_folders=(RAW, COMPACT))
+
+    assert str(refused.value) == (
+        f"{COMPACT}/monthly/2026 cannot be named now: this listing was built from named "
+        "files and has no lister to list more"
+    )
 
 
 # --- what a pass does with an absent index: integration --------------------------

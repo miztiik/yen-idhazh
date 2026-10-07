@@ -33,6 +33,12 @@ it looks for. So a rebuild names at most one more folder each year (CLAUDE.md
 Guardrail #12), and a window that keeps every month downloads up to twelve more
 month files each year, the rows one packed year file holds.
 
+**A ledger with no compact folder is not searched.** Before any task runs, the
+runner reads which of a task's declared folders the commit holds, and hands
+them to the task. When it does not hold the ledger's compact folder, no file
+was ever packed there, so the rebuild names nothing and reads nothing; the
+pass's first live run writes all three indexes.
+
 **An operator range never narrows where the rebuild looks.** A rebuilt index is
 written whole, and no later pass looks again once it exists, so a period a
 range left out now would be left out of every read for ever.
@@ -57,11 +63,11 @@ wake's day (CLAUDE.md section 2).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from pathlib import Path
 
-from idhazh import month_partition
+from idhazh import ledger, month_partition
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
@@ -78,12 +84,19 @@ def rebuild(
     now: datetime,
     operator_range: tuple[str, str] | None,
     first_ledger_year: str,
+    owned_folders: Collection[str],
 ) -> None:
     """Rebuild each index the pass did not find from the files of its periods, coarsest first.
 
-    The marks are worked out again after each period, because the next one's
-    paths start where the coarser rebuild left them.
+    `owned_folders` is what the runner read of the commit before any task ran.
+    When it does not hold the ledger's compact folder, nothing was ever packed
+    there, so the rebuild looks nowhere. The marks are worked out again after
+    each period, because the next one's periods start where the coarser
+    rebuild left them.
     """
+    folder = ledger.compact_folder(tree.state_dir, tree.ledger)
+    if folder.relative_to(tree.state_dir.parent).as_posix() not in owned_folders:
+        return
     if Period.YEARLY not in tree.indexed:
         _adopt(
             tree,
