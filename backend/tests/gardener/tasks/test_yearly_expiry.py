@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -18,11 +19,12 @@ from idhazh.contracts.knobs.gardener import (
 )
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.gardener.one_at_a_time import Pass
+from idhazh.gardener.tasks import compaction
 from idhazh.gardener.tasks._yearly_expiry import expires_at
 from idhazh.telemetry.door_prune import take_days
 
 from ._marks import marks_on_disk
-from ._task import context_for, run_task
+from ._task import context_for
 from .test_compaction_years import (
     COMPACTION,
     TASK,
@@ -55,20 +57,19 @@ def indexed_years(root: Path, years: tuple[str, ...]) -> dict[str, Path]:
 
 
 def run(root: Path, today: date = date(2030, 1, 1), **changed: object) -> Pass:
-    return run_task(
-        TASK,
-        root,
-        today=today,
-        wake=True,
-        **{
+    context = context_for(TASK, root, today=today, wake=True)
+    policy = CompactionPolicy.model_validate(
+        {
+            **context.policy.model_dump(mode="json"),
             "dry_run": False,
             "monthly_window": {"unit": "forever"},
             "monthly_keep_days": 93,
             "yearly_keep_months": 36,
             "yearly_prune_enable": True,
             **changed,
-        },
+        }
     )
+    return compaction.run(replace(context, policy=policy))
 
 
 def test_exact_calendar_expiry_uses_year_end_and_utc() -> None:
@@ -186,6 +187,23 @@ def test_corrupt_index_is_not_guessed_empty(tmp_path: Path) -> None:
     assert paths["2026"].exists()
 
 
+def test_authoritative_legacy_tree_onboards_only_with_pruning_explicitly_disabled(
+    tmp_path: Path,
+) -> None:
+    """A trusted pre-expiry tree may rebuild its missing index before enabling deletion."""
+    root = a_finished_year(tmp_path)
+    index = ledger.compact_index_path(state(root), VISUALS, Period.YEARLY)
+    index.unlink()
+    with pytest.raises(ValueError, match=r"index/yearly\.json is missing"):
+        run(root, date(2027, 4, 5))
+    run(root, date(2027, 4, 5), yearly_prune_enable=False)
+    held = CompactIndex.read(index)
+    assert held.expired_through is None
+    assert [entry.covers for entry in held.entries] == ["2026"]
+    run(root, date(2027, 4, 5))
+    assert CompactIndex.read(index) == held
+
+
 def test_recovery_never_adopts_expired_months(tmp_path: Path) -> None:
     indexed_years(tmp_path, ("2026",))
     run(tmp_path)
@@ -206,9 +224,16 @@ def test_old_indexes_migrate_and_expiry_only_belongs_to_yearly() -> None:
     assert held.expired_through is None
     for period in (Period.DAILY, Period.MONTHLY):
         with pytest.raises(ValueError, match="may not set expired_through"):
-            CompactIndex(ledger=VISUALS, period=period, entries=[], expired_through="2026")
+            CompactIndex(
+                version=CompactIndex.schema_version(),
+                ledger=VISUALS,
+                period=period,
+                entries=[],
+                expired_through="2026",
+            )
     with pytest.raises(ValueError, match="at or before expired_through"):
         CompactIndex(
+            version=CompactIndex.schema_version(),
             ledger=VISUALS,
             period=Period.YEARLY,
             entries=[CompactEntry(covers="2026", rows=0, bytes=0, state=EntryState.EMPTY)],

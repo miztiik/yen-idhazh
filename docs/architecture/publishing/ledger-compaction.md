@@ -504,6 +504,16 @@ with no compact tree initializes all three indexes, even when it has no rows.
 A corrupt index stops the pass, never reads as empty.
 Indexes and deletions land together in the shard's one commit.
 
+For a legacy tree that never used yearly expiry, first verify its complete
+files and indexes against an authoritative pre-expiry git revision. Explicitly
+disable `yearly_prune_enable`, run compaction to rebuild the missing index,
+validate the rebuilt entries, and only then enable pruning. Old sibling index
+versions alone are not proof: expiry may have updated only the yearly index.
+Do not use this onboarding path after expiry ran; restore that yearly index
+instead. The canary builder reports only folders that actually exist, so new
+fixture ledgers initialize normally without bypassing the established-tree
+refusal.
+
 An operator range may expire only whole years and cannot skip an older indexed
 year. Otherwise its progress mark could hide retained entries.
 
