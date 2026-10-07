@@ -1,7 +1,7 @@
 
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
+	import { ask, askColumns, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
@@ -138,9 +138,6 @@
 	}
 	function span(): { from: DateStamp; to: DateStamp } {
 		return { from: fromDay, to: toDay };
-	}
-	function quoteLedger(name: LedgerName): string {
-		return `"${name.replace(/"/g, '""')}"`;
 	}
 
 	function emptyLedgerLines(): string {
@@ -414,14 +411,7 @@
 			cost = await askCost(picked, nextSpan.from, nextSpan.to);
 			const described: Column[] = [];
 			for (const ledger of picked) {
-				const day = cost.through[ledger] ?? nextSpan.to;
-				const answer = await ask({ ledgers: [ledger], from: day, to: day, sql: `DESCRIBE ${quoteLedger(ledger)}`, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
-				// DESCRIBE answers one row per column of the ledger: its name and its type.
-				if (answer.state === 'ok') {
-					for (const row of answer.rows) {
-						if (typeof row.column_name === 'string') described.push({ name: `${ledger}.${row.column_name}`, type: String(row.column_type ?? '') });
-					}
-				}
+				for (const column of await askColumns(ledger, config.max_fetch_bytes)) described.push({ name: `${ledger}.${column.name}`, type: column.type });
 			}
 			ledgerColumns = described;
 		} finally {

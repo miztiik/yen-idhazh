@@ -74,7 +74,9 @@ const SITE_ALONE = 'so the question reads this ledger from this site alone';
 
 let queue: Promise<void> = Promise.resolve();
 
-async function serial<T>(work: () => Promise<T>): Promise<T> {
+/** Runs `work` once every call queued before it has ended. The engine has one connection, and
+ *  each call rewrites the ledger views it holds, so no two calls may overlap. */
+export async function serial<T>(work: () => Promise<T>): Promise<T> {
 	const previous = queue;
 	let release!: () => void;
 	queue = new Promise<void>((resolve) => {
@@ -193,7 +195,7 @@ async function rawListing(
 }
 
 /** A ledger's three compact indexes as one keeper reads them, or the first it could not read. */
-async function readIndexes(keeper: PageKeeper, ledger: LedgerName): Promise<Indexes | IndexFailure> {
+export async function readIndexes(keeper: PageKeeper, ledger: LedgerName): Promise<Indexes | IndexFailure> {
 	const indexes: Indexes = { daily: [], monthly: [], yearly: [] };
 	for (const period of COMPACT_PERIODS) {
 		const reading = await readIndexFrom(keeper, ledger, period);
@@ -263,7 +265,7 @@ async function archiveSelection(
  *  A zero-row packed file is kept, because a view that reads no rows needs only the file's
  *  columns, and a ledger whose packed days all hold zero rows would otherwise have no file.
  *  An `empty` or `lost` entry has no file, so the newest entry that has one is taken. */
-async function viewSource(
+export async function viewSource(
 	keeper: PageKeeper,
 	ledger: LedgerName,
 	newestPacked: DateStamp | null,
@@ -416,7 +418,7 @@ function planOf(ledgersPlanned: LedgerPlan[]): Plan | AskResult {
 	};
 }
 
-function quoteIdent(name: LedgerName): string {
+export function quoteIdent(name: LedgerName): string {
 	return `"${name.replaceAll('"', '""')}"`;
 }
 
@@ -442,7 +444,7 @@ function viewPart(names: readonly string[], window: DayWindow): string {
 /** One view over a ledger's held files, in planned order. Neighbouring files read whole share
  *  one read; a file read for part of its days gets its own, and the reads join by column name,
  *  as `union_by_name` joins the files inside one read. */
-function viewStatement(ledger: LedgerName, sources: readonly HeldSource[], empty: boolean): string {
+export function viewStatement(ledger: LedgerName, sources: readonly HeldSource[], empty: boolean): string {
 	const parts: string[] = [];
 	let whole: string[] = [];
 	for (const source of sources) {
@@ -472,7 +474,8 @@ async function prepareViews(
 	}
 }
 
-function columnsOf(rows: Record<string, unknown>[]): Column[] {
+/** The columns a `DESCRIBE` names, each with its type. */
+export function columnsOf(rows: Record<string, unknown>[]): Column[] {
 	return rows.map((row) => ({
 		name: String(row.column_name ?? row.explain_key ?? ''),
 		type: String(row.column_type ?? row.explain_value ?? 'VARCHAR')
@@ -546,10 +549,14 @@ function answeredUnheld(planned: Plan, started: number): AskResult | null {
 	return sourceless ? { state: 'missing', ledger: sourceless.ledger } : null;
 }
 
+/** Why a wanted file could not be had, as the console says it. */
+export function explainMissedFile(file: WantedFile, shortfall: FileShortfall): string {
+	return shortfall.reason === 'absent' ? `${file.path} is not there` : explainShortfall(file, shortfall);
+}
+
 /** The console line for an archive file a question could not read. */
 function archiveFileLine(planned: PlannedFile, shortfall: FileShortfall, from: DateStamp, to: DateStamp): string {
-	const why = shortfall.reason === 'absent' ? `${planned.file.path} is not there` : explainShortfall(planned.file, shortfall);
-	return `${LOG_PREFIX} ${planned.meta.ledger} ${from} to ${to}: the repository's ${why}, ${SITE_ALONE}`;
+	return `${LOG_PREFIX} ${planned.meta.ledger} ${from} to ${to}: the repository's ${explainMissedFile(planned.file, shortfall)}, ${SITE_ALONE}`;
 }
 
 /** The plan with each ledger's archive files held, one ledger at a time, before any site file is
