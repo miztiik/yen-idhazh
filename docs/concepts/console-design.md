@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -77,13 +77,44 @@ it measured. Only the dates and counts inside them are computed, and every one
 is derived from the ledger that is missing - **a date that is not true is worse
 than no date**. None is apologetic, none is styled as an error, and none is a
 banner across the page: three panels can be in three different states on one
-day.
+day. On Hardware and Summaries they sit after the record notes and before the
+first section, in one order - off, sampled, started, then the days one
+instrument covered alone - so a page whose sections have nothing to draw still
+says what the recording was doing; Jony chose the place on 2026-10-07. Susan
+chose the words of the first five on 2026-08-30. Reader and Jony chose new words
+for the measurement-off line on 2026-10-07, and Reader for the started line the
+same day.
 
 Two of them are worth reading twice. **A sampled figure is never scaled up** -
 multiplying a quarter-sample by four publishes an estimate as a measurement,
 which Guardrail #10 forbids. And **no string names a config key as if it were a
 word**: it is `Measurement is off`, never `host_fingerprint is false`, because a
 term from a subsystem is not a term for a user (section 0b).
+
+**The measurement-off line names only a day the open window shows.** It is
+worded once for each window the control offers. A window that holds a recorded
+day names the newest one. A window that holds none says so, and names the
+narrowest offered window that reaches back to the last recorded day, or says
+that no window here does. It says nothing has been recorded at all only of a
+record whose index names no row, in every window. Where the page has not read
+what would make a claim true - a record not packed or not loaded, a window that
+holds no packed day - it says only that measurement is off and how to turn it on.
+
+**The started line names only a start the open window shows, and only a true
+one.** It is worked out once for each window the control offers, from the whole
+read. The instrument's first day is the first day it ran in what the route read -
+a day it recorded, or a day whose record was lost - and that is its true first
+day only when the read reaches back to the oldest named day of every record it
+draws on (the server's counters draw on the machine and the article records). A
+record whose indexes name a day before the read may hold a day the instrument
+ran before anything the read holds, so the instrument gets no started line, and
+no day before the read is opened to learn it. The line prints in each window
+that shows the instrument's first day, names it, and counts the days of the
+window before it that had a run. An instrument whose rows begin after its record
+did - the machine identity in the machine record - is named on its own first
+day. Once a record's first month is packed into one file, its indexes know the
+month and not the day, so when the widest window starts inside that month, after
+its 1st, no window prints a started line: no line rather than a false date.
 
 ## A record that had not begun, a quiet day, and a record that was destroyed
 

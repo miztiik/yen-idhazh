@@ -54,6 +54,7 @@
 	} from '$lib/console/waiting';
 	import Reserved from '$lib/components/Reserved.svelte';
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
+	import { describeHeldPart } from '$lib/console/held-part-note';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
@@ -350,6 +351,9 @@
 	const cost = $derived(
 		data.itemCostByWindow.find((entry) => entry.days === windowDays) ?? data.itemCostByWindow[0]
 	);
+	/** The note under the share, for the same window, or null where no item had
+	 * anything in memory. */
+	const heldPartNote = $derived(describeHeldPart(cost));
 
 	/** Whole seconds, and `<1` where a real measurement rounds away. The console
 	 * prints no decimal, and a `0` there would say the work was free. */
@@ -1288,17 +1292,16 @@
 					</div>
 
 					<!-- The share is printed and never plotted as a trend, and this is why.
-					     The held part barely moves; the prompt does. A falling line here
-					     would read as the cache getting worse when it means the articles
-					     got longer, and that is the one wrong conclusion this panel could
-					     cause somebody to act on. -->
-					<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-item-cost-share-note>
-						The share follows the article, not the memory. The held part hardly changes - the
-						middle item kept {count(cost.reusedMedian)} tokens and the largest kept {count(
-							cost.reusedWidest
-						)} - so a longer article reads as a smaller share while exactly as much is held. Read
-						the token counts above, not the direction of the percentage.
-					</p>
+					     A longer article lowers the share while the part already in
+					     memory stays put, so a falling line would read as the cache
+					     getting worse when the articles merely got longer. The note
+					     checks that the part stayed put on its own two figures, for the
+					     window on screen, and says so where they show it changed a lot. -->
+					{#if heldPartNote !== null}
+						<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-item-cost-share-note>
+							{heldPartNote}
+						</p>
+					{/if}
 				</Panel>
 			{/if}
 		{/if}

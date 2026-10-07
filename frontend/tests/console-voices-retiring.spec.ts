@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import type { SourceHealthRow, SourceHealthView } from '../src/lib/server/payload';
+import { retiring } from '../src/lib/server/source-retiring';
 
 /** The reliability strip: is a source counting down, and can an operator see it?
  *
@@ -8,13 +10,97 @@ import { test, expect } from '@playwright/test';
  * drawn as an area, the shared date axis, and the three sentences that carry
  * the state without colour.
  *
- * Everything is read off the built canary, which is what `playwright.config.ts`
- * serves. Nothing here opens a committed ledger: the archive grows on every run
- * and a test whose cost grows with it is the defect Guardrail #12 names
- * (`CLAUDE.md` section 13).
+ * What a countdown row carries - its bar, where its dwell starts and the line
+ * under it - is worked out by `retiring()` over a census written below, because
+ * no source on the canary is under the mark and a row that is never drawn is a
+ * row no test can read. Everything else is read off the built canary, which is
+ * what `playwright.config.ts` serves, and checks only what holds for any census.
+ * Nothing here opens a committed ledger: the archive grows on every run and a
+ * test whose cost grows with it is the defect Guardrail #12 names (`CLAUDE.md`
+ * section 13).
  */
 
 const ROUTE = '/console/voices/';
+
+/** A source the census names, with every count it was judged on. */
+function source(over: Partial<SourceHealthRow> & Pick<SourceHealthRow, 'source_id'>): SourceHealthRow {
+	return {
+		title: `The ${over.source_id} desk`,
+		vertical: 'world',
+		permission: 'allowed',
+		availability: 'answering',
+		retired: false,
+		retired_on: null,
+		opportunities: 0,
+		publications: 0,
+		source_failures: 0,
+		reliability: 1,
+		reliability_reads: 0,
+		recent_days: [],
+		days_under_the_mark: 0,
+		retires_on: null,
+		...over
+	};
+}
+
+/** One day of a source's share on the census's five-day axis. */
+function day(date: string, publications: number, failures: number) {
+	return { date, opportunities: publications + failures, publications, source_failures: failures };
+}
+
+/** A census of 20 complete days, judged at 7 of them and 30 decisions, with a mark of
+ *  half the addresses a source decides and a dwell of 14 days.
+ *
+ *  - `gone` was retired on 10 Jun 2030: 3 of 40 decided, nothing running now.
+ *  - `falling` published 12 of the 40 it decided, under the mark for its newest 3 days.
+ *  - `sliding` published 15 of 35, under the mark for its newest day.
+ *  - `steady` published 30 of 40 and is at or above the mark.
+ *  - `thin` decided 5 of the 9 it was offered, under both evidence floors.
+ */
+function census(): SourceHealthView {
+	const dates = ['2030-06-11', '2030-06-12', '2030-06-13', '2030-06-14', '2030-06-15'];
+	const days = (shares: [number, number][]) => shares.map(([kept, lost], at) => day(dates[at], kept, lost));
+	return {
+		generated_at: '2030-06-15T19:00:00Z',
+		run_id: '2030-06-15-1',
+		headline_sentence: 'Five sources were read.',
+		reliability_floor: 0.5,
+		reliability_window_days: 30,
+		min_complete_days: 7,
+		complete_dates: 20,
+		yield_readable: true,
+		first_date: '2030-05-27',
+		last_date: '2030-06-15',
+		yield_alarm_point: 0.5,
+		yield_alarm_min_decisions: 30,
+		dwell_days: 14,
+		auto_retire: false,
+		dwell_dates: dates,
+		sources: [
+			source({ source_id: 'gone', retired: true, retired_on: '2030-06-10', opportunities: 45, publications: 3, source_failures: 37 }),
+			source({
+				source_id: 'falling',
+				opportunities: 45,
+				publications: 12,
+				source_failures: 28,
+				recent_days: days([[6, 4], [5, 5], [1, 9], [2, 8], [0, 10]]),
+				days_under_the_mark: 3,
+				retires_on: '2030-06-26'
+			}),
+			source({
+				source_id: 'sliding',
+				opportunities: 40,
+				publications: 15,
+				source_failures: 20,
+				recent_days: days([[7, 3], [6, 4], [8, 2], [5, 5], [3, 7]]),
+				days_under_the_mark: 1,
+				retires_on: '2030-06-28'
+			}),
+			source({ source_id: 'steady', opportunities: 44, publications: 30, source_failures: 10 }),
+			source({ source_id: 'thin', opportunities: 9, publications: 2, source_failures: 3 })
+		]
+	};
+}
 
 test('the panel is present in every state, and says which one it is in', async ({ page }) => {
 	await page.goto(ROUTE);
@@ -63,65 +149,57 @@ test('the lead names the rule in full: a share, a run of days, and a denominator
 	await expect(page.locator('[data-retiring-clear]')).toHaveText(/at or above the mark/);
 });
 
-test('every row draws its bar on the same track with its marker at the same share', async ({
-	page
-}) => {
-	await page.goto(ROUTE);
-	const rows = page.locator('[data-retiring-row]');
-	const drawn = await rows.count();
-	test.skip(drawn === 0, 'no source is under the mark on the canary');
-
-	// The whole reason to stack these is that a column means the same thing all
-	// the way down. A per-row maximum, or a marker at a different x on different
-	// rows, makes the stack unreadable while looking perfectly fine.
-	const tracks = await rows.evaluateAll((list) =>
-		list.map((row) => row.getAttribute('data-retiring-track'))
-	);
-	expect(new Set(tracks).size).toBe(1);
-	expect(tracks[0]).toBe('1');
+test('every row draws its bar on the same track with its marker at the same share', () => {
+	// The whole reason to stack these is that a column means the same thing all the
+	// way down. A per-row maximum, or a marker at a different x on different rows,
+	// makes the stack unreadable while looking perfectly fine. Three ranked rows at
+	// three shares: each bar's fill is its own share, and each track and marker are
+	// the same.
+	const strip = retiring(census(), 10);
+	expect(strip?.rows.map((row) => row.sourceId)).toEqual(['gone', 'falling', 'sliding']);
+	for (const row of strip?.rows ?? []) {
+		expect(row.marks.track, `${row.sourceId} is drawn on its own track`).toBe(1);
+		expect(row.marks.markerFraction, `${row.sourceId} puts the mark elsewhere`).toBe(0.5);
+	}
+	expect(strip?.rows.map((row) => row.marks.valueFraction)).toEqual([3 / 40, 12 / 40, 15 / 35]);
 });
 
-test('the dwell is an area under the newest squares, not a number in a chip', async ({ page }) => {
-	await page.goto(ROUTE);
-	const rows = page.locator('[data-retiring-row]');
-	const drawn = await rows.count();
-	test.skip(drawn === 0, 'no source is under the mark on the canary');
-
-	for (let index = 0; index < drawn; index += 1) {
-		const row = rows.nth(index);
-		const under = Number(await row.getAttribute('data-retiring-days-under'));
-		const rule = row.locator('[data-retiring-dwell-rule]');
-		expect(await rule.count()).toBe(under > 0 ? 1 : 0);
-
-		if (under === 0) continue;
-		// The marked squares are the newest ones, contiguous. Anything else and
-		// the picture and the number below it are telling two stories.
-		const states = await row
-			.locator('[data-retiring-state]')
-			.evaluateAll((list) => list.map((square) => square.getAttribute('data-retiring-state')));
-		const tail = states.slice(states.length - under);
-		expect(tail.every((state) => state !== 'at-or-above')).toBe(true);
-	}
+test('the dwell is an area under the newest squares, not a number in a chip', () => {
+	// On a five-day axis, a run of 3 days under the mark is underlined from the third
+	// square to the newest, and a run of 1 day under the newest square alone. A row
+	// with no run under way draws no rule at all. Which days are under the mark is
+	// the run's own count, and `backend/tests/test_source_dwell.py` holds it.
+	const strip = retiring(census(), 10);
+	expect(strip?.dates).toHaveLength(5);
+	expect(strip?.rows.map((row) => [row.sourceId, row.daysUnder, row.dwellFrom])).toEqual([
+		['gone', 0, null],
+		['falling', 3, 3],
+		['sliding', 1, 5]
+	]);
 });
 
-test('a live countdown reads its days and its date without colour', async ({ page }) => {
-	await page.goto(ROUTE);
-	const rows = page.locator('[data-retiring-row]');
-	const drawn = await rows.count();
-	test.skip(drawn === 0, 'no source is under the mark on the canary');
-
-	for (let index = 0; index < drawn; index += 1) {
-		const row = rows.nth(index);
-		const under = Number(await row.getAttribute('data-retiring-days-under'));
-		if (under === 0) continue;
-
-		const readout = await row.locator('[data-retiring-readout]').innerText();
-		expect(readout).toContain('published of');
-		expect(readout).toContain(`Under the mark for ${under}`);
-
-		const on = await row.getAttribute('data-retiring-on');
-		if (on) expect(readout).toContain(on);
-	}
+test('a live countdown reads its days and its date without colour', () => {
+	// The line under each row says what it published of what it was offered, and
+	// while it is under the mark, for how long and the day it retires on; the chip
+	// counts the days left. A row under its evidence floors says how much it decided.
+	const strip = retiring(census(), 10);
+	expect(strip?.rows.map((row) => [row.sourceId, row.daysLeft, row.readout])).toEqual([
+		['gone', null, '3 published of 45 offered, over 20 complete days.'],
+		[
+			'falling',
+			11,
+			'12 published of 45 offered, over 20 complete days. Under the mark for 3 days running - 3 of 14. Retires on 2030-06-26 if it stays there.'
+		],
+		[
+			'sliding',
+			13,
+			'15 published of 40 offered, over 20 complete days. Under the mark for 1 day running - 1 of 14. Retires on 2030-06-28 if it stays there.'
+		]
+	]);
+	expect(strip?.unjudged.map((row) => [row.sourceId, row.readout])).toEqual([
+		['thin', 'Decided 5 of the 9 addresses it was offered.']
+	]);
+	expect(strip?.clear, 'steady is the one judged source at or above the mark').toBe(1);
 });
 
 test('one date axis serves the whole list, so a column is one day on every row', async ({

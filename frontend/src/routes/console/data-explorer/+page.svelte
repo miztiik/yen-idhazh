@@ -1,13 +1,13 @@
 
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { ask, askCost, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
+	import { ask, askColumns, askCost, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import Notice from '$lib/components/Notice.svelte';
-	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
-	import { shortDate, dayMonth } from '$lib/format';
+	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnansweredNote, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
+	import { shortDate } from '$lib/format';
 	import QuestionStrip from '$lib/console/explorer/QuestionStrip.svelte';
 	import LedgerList from '$lib/console/explorer/LedgerList.svelte';
 	import ColumnList from '$lib/console/explorer/ColumnList.svelte';
@@ -18,13 +18,14 @@
 	import HistoryList from '$lib/console/explorer/HistoryList.svelte';
 	import ShapePanel from '$lib/console/explorer/ShapePanel.svelte';
 	import { chooseExplorerShapes, type ExplorerChartType } from '$lib/console/explorer/shape';
+	import { describeCutDays, describeDaysRead } from '$lib/console/explorer/days-read';
 	import { gapLines } from '$lib/console/explorer/gaps';
 	import { size, statusSentence } from '$lib/console/explorer/status';
 	import { explorerAddress, parseExplorerAddress, LINK_TOO_LONG_NOTICE } from '$lib/console/explorer/address';
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
 	import { fetchRegistry, flattenRegistry, type LedgerRegistry, type RegistryLedger } from '$lib/console/explorer/registry';
 	import type { ExplorerExample } from '$lib/server/config';
-	import { isDay, LEDGER_NAMES } from '$lib/data/slice-shapes';
+	import { isDay, LEDGER_NAMES, type CutDays, type UnansweredDays } from '$lib/data/slice-shapes';
 	import Icon from '$lib/icons/Icon.svelte';
 
 	let { data } = $props();
@@ -46,7 +47,7 @@
 	let initializing = $state(true);
 	let running = $state(false);
 	let refreshing = $state(false);
-	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], siteFrom: null, through: {} });
+	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} });
 	let lastMs = $state<number | null>(null);
 	let lastRead = $state<FetchCost | null>(null);
 	let result = $state<AskResult | null>(null);
@@ -139,9 +140,6 @@
 	function span(): { from: DateStamp; to: DateStamp } {
 		return { from: fromDay, to: toDay };
 	}
-	function quoteLedger(name: LedgerName): string {
-		return `"${name.replace(/"/g, '""')}"`;
-	}
 
 	function emptyLedgerLines(): string {
 		const lines = selected
@@ -170,13 +168,10 @@
 		const empty = emptyLedgerLines();
 		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, days: spanDays(), firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
-	function tableSpanText(): string {
-		return runSpan === null ? '' : `Read from ${spanDays()} UTC days, ${dayMonth(runSpan.from)} to ${shortDate(runSpan.to)}.`;
-	}
 	function siteFromText(): string {
-		return result !== null && (result.state === 'ok' || result.state === 'quiet') && result.siteFrom !== null
-			? `Days before ${shortDate(result.siteFrom)} are not on this site.`
-			: '';
+		const span = runSpan;
+		if (result === null || (result.state !== 'ok' && result.state !== 'quiet') || span === null) return '';
+		return result.cut.map((one) => describeCutDays(one, span.to)).join(' ');
 	}
 	function selectResultTab(tab: 'table' | 'chart') {
 		activeResultTab = tab;
@@ -418,7 +413,7 @@
 		if (!ready) return;
 		const picked = selectedPublished;
 		if (picked.length === 0) {
-			cost = { files: 0, bytes: 0, unpackedDays: [], siteFrom: null, through: {} };
+			cost = { files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} };
 			ledgerColumns = [];
 			return;
 		}
@@ -428,14 +423,7 @@
 			cost = await askCost(picked, nextSpan.from, nextSpan.to);
 			const described: Column[] = [];
 			for (const ledger of picked) {
-				const day = cost.through[ledger] ?? nextSpan.to;
-				const answer = await ask({ ledgers: [ledger], from: day, to: day, sql: `DESCRIBE ${quoteLedger(ledger)}`, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
-				// DESCRIBE answers one row per column of the ledger: its name and its type.
-				if (answer.state === 'ok') {
-					for (const row of answer.rows) {
-						if (typeof row.column_name === 'string') described.push({ name: `${ledger}.${row.column_name}`, type: String(row.column_type ?? '') });
-					}
-				}
+				for (const column of await askColumns(ledger, config.max_fetch_bytes)) described.push({ name: `${ledger}.${column.name}`, type: column.type });
 			}
 			ledgerColumns = described;
 		} finally {
@@ -448,12 +436,13 @@
 		running = true;
 		await replaceAddress();
 		const nextSpan = span();
-		runSpan = nextSpan;
 		lastRead = null;
 		const started = performance.now();
 		try {
 			const answer = await ask({ ledgers: selected, from: nextSpan.from, to: nextSpan.to, sql, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
 			lastMs = Math.round(performance.now() - started);
+			// The window goes with its answer, so the lines under the answer change only on a run.
+			runSpan = nextSpan;
 			result = answer;
 			selectedShapeType = null;
 			if ((answer.state === 'ok' || answer.state === 'quiet') && 'read' in answer) {
@@ -615,6 +604,12 @@
 	{/each}
 {/snippet}
 
+<!-- Where an answer starts when its window began earlier: grey for each ledger whose earlier days
+     are not on this site, amber for days the repository could not give it. -->
+{#snippet startNotes(cut: readonly CutDays[], unanswered: readonly UnansweredDays[], lastDay: DateStamp)}
+	{#each cut as one (one.ledger)}{' '}{describeCutDays(one, lastDay)}{/each}{#if unanswered.length > 0}{' '}<span class="warn" data-explorer-unanswered>{explorerUnansweredNote(unanswered)}</span>{/if}
+{/snippet}
+
 <div class="result-region" data-workbench-region="answer">
 	<div class="result-tabs" role="tablist" aria-label="Answer view" tabindex="-1" onkeydown={resultTabKey}>
 		<button id="explorer-tab-table" type="button" role="tab" aria-selected={activeResultTab === 'table'} aria-controls="data-explorer-rows" tabindex={activeResultTab === 'table' ? 0 : -1} onclick={() => selectResultTab('table')}>Table</button>
@@ -635,9 +630,9 @@
 			{:else if result === null}
 				<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
 			{:else if result.state === 'ok'}
-				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={tableSpanText()} siteFromText={siteFromText()} gapLines={gapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
+				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={runSpan ? describeDaysRead(result.readFrom, runSpan.to) : ''} siteFromText={siteFromText()} unansweredText={result.unanswered.length > 0 ? explorerUnansweredNote(result.unanswered) : ''} gapLines={gapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
 			{:else if result.state === 'quiet'}
-				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if result.siteFrom !== null} {siteFromText()}{/if}{@render gapNotes(result.gaps)}</div>
+				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if runSpan}{@render startNotes(result.cut, result.unanswered, runSpan.to)}{/if}{@render gapNotes(result.gaps)}</div>
 			{:else if result.state === 'missing'}
 				<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
 			{:else if result.state === 'unreachable'}
@@ -1063,6 +1058,16 @@
 		.rail-region[open] {
 			block-size: calc(var(--workbench-control) + var(--editor-lines) * var(--workbench-field-leading) + 2 * var(--space-3));
 			overflow: auto;
+		}
+
+		/* The question is rounded up to a whole pixel, because the answer under it
+		   is one window tall and the browser scrolls and sizes the page in whole
+		   pixels. Its text lines are not whole pixels tall, so left to its content
+		   it ends between two pixels: the answer could never fill the window
+		   exactly, and the page's foot would lie past the last pixel a scroll
+		   reaches. A browser without `calc-size()` keeps the content's height. */
+		.workbench > :global([data-console-panel-id='data-explorer-ask']) {
+			block-size: calc-size(auto, round(up, size, 1px));
 		}
 
 		.rail-region[open] > :global(.ledger-list),

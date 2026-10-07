@@ -1,25 +1,42 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { telemetryCsv } from '../src/lib/charts/series';
+import { telemetryRow } from './support/telemetry-row';
 
 /**
  * Row #17's oracle, wired: a failed month load heals on a later widen.
  *
- * The canary telemetry has two months. 2026-08 is the seed the document opens
- * on; 2026-07 holds one older run the seed never reached, so widening the
- * window fetches its file. The old page marked that month loaded BEFORE the
- * fetch, so a fetch that failed left the month "loaded" and empty for the rest
- * of the session - a gap that never healed. This drives exactly that: fail the
- * 2026-07 fetch, then widen again with the failure cleared, and the month must
- * fill.
+ * The test answers every telemetry month the page asks for with a shard it
+ * builds. A month the default window asks for when the page opens gets an empty
+ * shard. A month the 90-day window asks for first fails; asked again, it gets
+ * `ROWS_A_MONTH` rows dated inside that window. The old page marked a month
+ * loaded BEFORE its fetch, so a fetch that failed left the month "loaded" and
+ * empty for the rest of the session - a gap that never healed.
  *
  * The observable is the viewport's own count of rows in view. On the fixed page
- * the retry pulls 2026-07 in and the count climbs; on the old page the retry
- * finds the month already marked done, fetches nothing, and the count does not
- * move - which is the red this proves.
+ * the retry asks for the failed months again and the count climbs from 0 to
+ * exactly the rows served; on the old page the retry finds the months already
+ * marked done, fetches nothing, and the count stays at 0 - which is the red this
+ * proves.
  */
 
-/** The month whose fetch this test fails and then heals. Older than the 30-day
- * seed, so the seed never carries it and widening is what asks for it. */
-const OLDER_MONTH = '2026-07';
+/** Rows the test serves for each month the widened window asks for. */
+const ROWS_A_MONTH = 3;
+
+/** The month a telemetry shard request names, `YYYY-MM`. */
+function monthOf(url: string): string {
+	const month = /\/telemetry\/(\d{4}-\d{2})\.csv$/.exec(new URL(url).pathname)?.[1];
+	if (month === undefined) throw new Error(`${url} names no telemetry month`);
+	return month;
+}
+
+/** A month's shard: `rows` rows dated `day`, each a different item. */
+function shard(day: string, rows: number): string {
+	return telemetryCsv(
+		Array.from({ length: rows }, (_, at) =>
+			telemetryRow({ date: day, run_id: `${day}-1`, item_id: `healed-${at + 1}` })
+		)
+	);
+}
 
 /** Rows the viewport says it is drawing, read off its own sentence. */
 async function rowsInView(page: Page): Promise<number> {
@@ -57,11 +74,22 @@ test('a failed month load heals on a later widen', async ({ page }) => {
 		route.fulfill({ status: 200, contentType: 'text/javascript', body: '' })
 	);
 
-	let blockOlder = true;
-	let olderRequests = 0;
-	await page.route(`**/telemetry/${OLDER_MONTH}.csv`, (route: Route) => {
-		olderRequests += 1;
-		return blockOlder ? route.abort() : route.continue();
+	const asked: string[] = [];
+	const opened = new Set<string>();
+	let opening = true;
+	let refusing = true;
+	/** The first day of the widened window, read off the page before the retry. */
+	let windowStart = '';
+	await page.route('**/telemetry/*.csv', (route: Route) => {
+		const month = monthOf(route.request().url());
+		asked.push(month);
+		if (opening) opened.add(month);
+		if (opened.has(month)) {
+			return route.fulfill({ status: 200, contentType: 'text/csv', body: shard(`${month}-01`, 0) });
+		}
+		if (refusing) return route.abort();
+		const day = `${month}-01` > windowStart ? `${month}-01` : windowStart;
+		return route.fulfill({ status: 200, contentType: 'text/csv', body: shard(day, ROWS_A_MONTH) });
 	});
 
 	await page.goto('/console/');
@@ -73,28 +101,30 @@ test('a failed month load heals on a later widen', async ({ page }) => {
 		if ('caches' in window) for (const key of await caches.keys()) await caches.delete(key);
 	});
 	await hydrated(page);
+	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
+	expect(opened.size, 'the page opened without asking for a month').toBeGreaterThan(0);
+	opening = false;
 
-	// Widen far enough to reach the older month. Its fetch fails, so its rows
-	// never arrive.
+	// Widen far enough to reach months the opening window did not. Their fetches
+	// fail, so no row arrives.
 	await setWindow(page, 90);
-	expect(olderRequests, 'widening never asked for the older month at all').toBeGreaterThan(0);
-	const afterFail = await rowsInView(page);
+	const refused = asked.filter((month) => !opened.has(month));
+	expect(refused.length, 'widening asked for no month past the opening window').toBeGreaterThan(0);
+	expect(await rowsInView(page)).toBe(0);
+	windowStart = (await page.locator('[data-viewport-control]').getAttribute('data-window-start')) ?? '';
+	expect(windowStart, 'the viewport publishes no window start').toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
-	// Clear the failure and ask again. On the fixed page the month was never
-	// marked loaded, so this widen fetches it; on the old page it was marked
+	// Clear the failure and ask again. On the fixed page the months were never
+	// marked loaded, so this widen fetches them; on the old page they were marked
 	// loaded before the failed fetch, so nothing is asked and nothing fills.
-	blockOlder = false;
-	const before = olderRequests;
+	refusing = false;
+	const before = asked.length;
 	await setWindow(page, 1);
 	await setWindow(page, 90);
 
-	const afterRetry = await rowsInView(page);
 	expect(
-		olderRequests,
-		'the retry never re-asked for the month a failed load left behind'
-	).toBeGreaterThan(before);
-	expect(
-		afterRetry,
-		`a failed month load did not heal: ${afterFail} rows before the retry, ${afterRetry} after`
-	).toBeGreaterThan(afterFail);
+		asked.slice(before),
+		'the retry did not re-ask exactly the months a failed load left behind'
+	).toEqual(refused);
+	expect(await rowsInView(page), 'a failed month load did not heal').toBe(ROWS_A_MONTH * refused.length);
 });

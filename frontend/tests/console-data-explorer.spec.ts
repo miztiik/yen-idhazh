@@ -188,6 +188,18 @@ test('THE ORACLE: the column rail always names the selected ledger\'s own column
 	expect(await page.locator('[data-explorer-columns]').innerText()).toBe(before);
 });
 
+test('THE ORACLE: a ledger whose newest two named days are empty lists its columns in the rail from the packed day before them, and the window stays as selected', async ({ page, context }) => {
+	// seen holds one row a day from 11 to 13 Jun 2030, and its newest two named days, 14 and 15 Jun,
+	// are empty. The link chooses seen and the 14 days that end on the pinned day.
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'seen', pinned: PINNED, days: [...everyDay(4, 2), ...quietDays(1, 0)] });
+	const fetched = fetchedFiles(page);
+	await openExplorer(page, PINNED, { address: '?ledgers=seen&days=14', ready: false });
+	await expect(page.locator('[data-explorer-columns] li code')).toHaveText(['seen.covers', 'seen.date', 'seen.n'], { timeout: 60_000 });
+	expect(fetched).toEqual(['compact/seen/daily/2030/06/13.parquet']);
+	await expect(page.getByRole('textbox', { name: 'From (UTC)' })).toHaveValue('2030-06-02');
+	await expect(page.getByRole('textbox', { name: 'To (UTC)' })).toHaveValue(PINNED);
+});
+
 test('THE ORACLE: the Data explorer fallback document carries the shipped content policy', () => {
 	const html = readFileSync(resolve(process.cwd(), 'build', '404.html'), 'utf8');
 	expect(html).toContain('content-security-policy');
@@ -228,7 +240,9 @@ test('THE ORACLE: with no archive prefix, an old custom span reads from the site
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	const panel = page.locator('[data-console-panel-id="data-explorer-rows"]');
-	await expect(panel.locator('.answer-note')).toContainText('Days before 5 Jun 2030 are not on this site.');
+	await expect(panel.locator('.answer-note')).toHaveText(
+		'Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. All 1 rows shown. Days of the published record before 5 Jun 2030 are not on this site.'
+	);
 	await expect(panel.locator('.warn')).toHaveCount(0);
 	expect(await tableRows(page)).toEqual([['2030-06-05', '11']]);
 });
@@ -261,16 +275,78 @@ test('THE ORACLE: the 14-day preset cuts a ledger that began 5 days ago at its f
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['2030-06-10', '6']]);
-	await expect(note).toContainText('Days before 10 Jun 2030 are not on this site.');
+	await expect(note).toHaveText('Read from 6 UTC days, 10 Jun 2030 to 15 Jun 2030. All 1 rows shown. Days of the host-fingerprint record before 10 Jun 2030 are not on this site.');
 
 	const fetched = fetchedFiles(page);
 	await chooseExplorerQuestion(page, ['seen'], 'SELECT min("covers") AS first_day, count(*) AS rows FROM "seen"');
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['2030-06-02', '14']]);
-	await expect(note).not.toContainText('are not on this site');
+	await expect(note).toHaveText('Read from 14 UTC days, 2 Jun 2030 to 15 Jun 2030. All 1 rows shown.');
 	expect(fetched.sort()).toEqual(daysBetween('2030-06-02', PINNED).map((day) => `compact/seen/daily/${day.replaceAll('-', '/')}.parquet`));
 	expect(archiveAsked).toEqual([]);
+});
+
+test('THE ORACLE: an answer over two ledgers that began on different days names each with its own first day, counts the days it read, and keeps that line when the window moves before the next Run', async ({ page, context }) => {
+	// host-fingerprint is built to begin 10 days before the pinned day, on 5 Jun 2030, and seen 5 days
+	// before it, on 10 Jun, each with one row a day. The 14-day preset asks for 2 to 15 Jun.
+	await serveBuilt(context, test.info().outputPath('state'),
+		{ ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(10, 0) },
+		{ ledger: 'seen', pinned: PINNED, days: everyDay(5, 0) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint', 'seen'], 'SELECT (SELECT count(*) FROM "host-fingerprint") AS fingerprint_rows, (SELECT count(*) FROM "seen") AS seen_rows');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['11', '6']]);
+	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
+	const read = 'Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. All 1 rows shown. Days of the host-fingerprint record before 5 Jun 2030 are not on this site. Days of the seen record before 10 Jun 2030 are not on this site.';
+	await expect(note).toHaveText(read);
+	await expect(note.locator('.warn')).toHaveCount(0);
+
+	// To's lower bound follows From, so once it moves the page has taken the new window.
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2030-06-12');
+	await expect(page.getByRole('textbox', { name: 'To (UTC)' })).toHaveAttribute('min', '2030-06-12');
+	await expect(note).toHaveText(read);
+});
+
+test('THE ORACLE: when the repository host does not answer for the days the site dropped, the answer reads the site\'s days and names the ledger in the warning colour', async ({ page, context }) => {
+	// seen begins 120 days before the pinned day, on 15 Feb 2030, with one row a day and February,
+	// March and April closed. The site copy keeps the 90 days to 15 Jun 2030, from 18 Mar, so it keeps
+	// March whole as one month file and drops February: the site's first day for seen is 1 Mar 2030.
+	// The archive host is left unserved, so tests/support/browser.ts refuses every request to it.
+	expect(publishedWindowDays(), 'the days written out below are for a site copy that keeps 90 days').toBe(90);
+	const root = test.info().outputPath('state');
+	const siteRoot = test.info().outputPath('site');
+	await buildLedger(root, { ledger: 'seen', pinned: PINNED, days: everyDay(120, 0), closedMonths: ['2030-02', '2030-03', '2030-04'] });
+	siteCopy(root, siteRoot, 'seen', publishedWindowDays());
+	await serveToPage(context, siteRoot, 'seen');
+	const archive = ledgerArchiveBaseUrl();
+	const archiveAsked = new Set<string>();
+	const archiveAnswered: string[] = [];
+	context.on('request', (request) => {
+		if (request.url().startsWith(`${archive}/`)) archiveAsked.add(request.url());
+	});
+	context.on('response', (response) => {
+		if (response.url().startsWith(`${archive}/`)) archiveAnswered.push(response.url());
+	});
+
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['seen'], 'SELECT min("covers") AS first_day, count(*) AS rows FROM "seen"');
+	// 365 UTC days that end on the pinned day.
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2029-06-16');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['2030-03-01', '107']]);
+	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
+	await expect(note.locator('.warn[data-explorer-unanswered]')).toHaveText(
+		'Days of the seen record before 1 Mar 2030 are not in this answer, because this page could not read them from the repository. Press Refresh, then Run, to try again.'
+	);
+	await expect(note).toHaveText(
+		'Read from 107 UTC days, 1 Mar 2030 to 15 Jun 2030. All 1 rows shown. Days of the seen record before 1 Mar 2030 are not in this answer, because this page could not read them from the repository. Press Refresh, then Run, to try again.'
+	);
+	expect([...archiveAsked]).toEqual([`${archive}/state/compact/seen/index/daily.json`]);
+	expect(archiveAnswered).toEqual([]);
 });
 
 test('THE ORACLE: a typed join counts the rows of two built ledgers, fetches only their files in the span, and the run cost matches the network', async ({ page, context }) => {

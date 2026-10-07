@@ -4,11 +4,14 @@
  * A test names a ledger, pins a UTC day, and lists the ledger's days counted back from it,
  * each packed with a number of rows, empty or lost. `buildLedger` writes what the gardener's
  * compaction leaves for those days: the three compact indexes, and one real Parquet file for
- * each packed day and each closed month, written by the door's own query engine with
- * `COPY ... TO`. A
- * day the list leaves out is a hole. Each file holds `covers`, the UTC day a row was filed
- * under, and `date`, the same day in the cell a panel slice keeps its rows by, as every
- * packed file does, and `n`, the row's number within its day, from 1.
+ * each packed day and each closed month that holds a row, written by the door's own query
+ * engine with `COPY ... TO`. A packed day may hold no row, as the compaction once packed a
+ * quiet day: its file holds every column and no row. A day the list leaves out is a hole.
+ * Each file holds `covers`, the UTC day a row was filed under, and `date`, the same day in
+ * the cell a panel slice keeps its rows by, as every packed file does, and `n`, the row's
+ * number within its day, from 1. A test may choose more columns, each with one value every
+ * row holds, typed by that value. A packed day or a lost one may name how many of its
+ * writer's files the packing set aside unread.
  * Nothing here reads a committed fixture, so a test's expected values follow from what the
  * test built and nothing else.
  *
@@ -28,10 +31,17 @@ import type { Fetcher } from '../../src/lib/data/fetched-bytes';
 import type { DateStamp, LedgerName } from '../../src/lib/data/slice-shapes';
 import { engineExtensionRepository, ledgerArchiveBaseUrl } from '../../src/lib/server/config';
 
-/** One day of a built ledger, `ago` days before the pinned day: a packed day holds `rows` rows and
- *  may have set `setAside` of its writer's files aside unread, an `empty` day held none, and a
- *  `lost` day lost its rows. */
-export type BuiltDay = { ago: number; rows: number; setAside?: number } | { ago: number; state: 'empty' | 'lost' };
+/** One day of a built ledger, `ago` days before the pinned day: a packed day holds `rows` rows,
+ *  0 or more, an `empty` day held none, and a `lost` day lost its rows. A packed day and a lost
+ *  one may have set `setAside` of their writer's files aside unread. */
+export type BuiltDay =
+	| { ago: number; rows: number; setAside?: number }
+	| { ago: number; state: 'empty' }
+	| { ago: number; state: 'lost'; setAside?: number };
+
+/** The one value a chosen column holds in every row of a built ledger. A whole number is written
+ *  as `BIGINT`, any other number as `DOUBLE`, a text as `VARCHAR`, and true or false as `BOOLEAN`. */
+export type BuiltCell = number | string | boolean;
 
 export interface BuiltLedger {
 	ledger: LedgerName;
@@ -41,11 +51,15 @@ export interface BuiltLedger {
 	days: readonly BuiltDay[];
 	/** Months the compaction has closed, `YYYY-MM`: each is one month entry, and its packed days one file. */
 	closedMonths?: readonly string[];
+	/** Columns every file holds beside `covers`, `date` and `n`, by name, each with its one value. */
+	columns?: Readonly<Record<string, BuiltCell>>;
 }
 
 const DAY_MS = 86_400_000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH = /^\d{4}-\d{2}$/;
+/** The columns every built file holds, which a chosen column may not name again. */
+const BUILT_COLUMNS = new Set(['covers', 'date', 'n']);
 const resolver = createRequire(import.meta.url);
 
 /** The UTC day `ago` days before `day`. */
@@ -67,16 +81,37 @@ export function quietDays(oldest: number, newest: number): BuiltDay[] {
 	return days;
 }
 
+/** A chosen column's name, quoted for the statement. */
+function quoted(name: string): string {
+	return `"${name.replaceAll('"', '""')}"`;
+}
+
+/** A chosen column's value as a literal of the type the value names. */
+function literal(value: BuiltCell): string {
+	if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+	if (typeof value === 'string') return `'${value.replaceAll("'", "''")}'`;
+	if (!Number.isFinite(value)) throw new Error(`${value} is not a number a file can hold`);
+	return `CAST(${value} AS ${Number.isInteger(value) ? 'BIGINT' : 'DOUBLE'})`;
+}
+
 /** Write `rows` rows for each day into one Parquet file at `target`, through this process's own
- *  query engine, and return the file's size. */
-async function writeParquet(target: string, days: readonly [DateStamp, number][]): Promise<number> {
+ *  query engine, every row holding each chosen column's value, and return the file's size. A day of
+ *  0 rows adds none, and a file of no row still holds every column. */
+async function writeParquet(
+	target: string,
+	days: readonly [DateStamp, number][],
+	columns: Readonly<Record<string, BuiltCell>>
+): Promise<number> {
 	for (const [day] of days) if (!DAY.test(day)) throw new Error(`${day} is not a UTC day`);
 	mkdirSync(path.dirname(target), { recursive: true });
 	const values = days.map(([day, rows]) => `('${day}', ${rows})`).join(', ');
+	const chosen = Object.entries(columns)
+		.map(([name, value]) => `, ${literal(value)} AS ${quoted(name)}`)
+		.join('');
 	const to = target.replaceAll('\\', '/').replaceAll("'", "''");
 	const engine = await nodeEngine((specifier) => resolver.resolve(specifier), engineExtensionRepository());
 	await engine.rows(
-		`COPY (SELECT covers, covers AS "date", CAST(unnest(generate_series(1, rows)) AS BIGINT) AS n FROM (VALUES ${values}) AS days(covers, rows) ORDER BY covers, n) TO '${to}' (FORMAT parquet)`,
+		`COPY (SELECT covers, covers AS "date", CAST(unnest(generate_series(1, rows)) AS BIGINT) AS n${chosen} FROM (VALUES ${values}) AS days(covers, rows) ORDER BY covers, n) TO '${to}' (FORMAT parquet)`,
 		[]
 	);
 	return statSync(target).size;
@@ -86,7 +121,7 @@ function indexText(ledger: LedgerName, period: Period, entries: CompactEntry[]):
 	return `${JSON.stringify({ entries, ledger, period, version: COMPACT_INDEX_STAMP }, null, 2)}\n`;
 }
 
-/** The files a packed day set aside, as an entry carries them: absent when it set none aside. */
+/** The files a packed or lost day set aside, as its entry carries them: absent when it set none aside. */
 function setAsideOf(day: BuiltDay): { set_aside?: number } {
 	return 'setAside' in day && day.setAside !== undefined ? { set_aside: day.setAside } : {};
 }
@@ -95,11 +130,15 @@ function setAsideOf(day: BuiltDay): { set_aside?: number } {
 export async function buildLedger(root: string, built: BuiltLedger): Promise<void> {
 	const closed = new Set(built.closedMonths ?? []);
 	for (const month of closed) if (!MONTH.test(month)) throw new Error(`${month} is not a UTC month`);
+	const columns = built.columns ?? {};
+	for (const name of Object.keys(columns)) {
+		if (name === '' || BUILT_COLUMNS.has(name)) throw new Error(`${built.ledger} chooses a column named ${JSON.stringify(name)}`);
+	}
 	const named = new Map<DateStamp, BuiltDay>();
 	for (const day of built.days) {
 		const covers = daysBefore(built.pinned, day.ago);
 		if (named.has(covers)) throw new Error(`${built.ledger} names ${covers} twice`);
-		if ('rows' in day && !(Number.isInteger(day.rows) && day.rows > 0)) throw new Error(`${covers} is packed with ${day.rows} rows`);
+		if ('rows' in day && !(Number.isInteger(day.rows) && day.rows >= 0)) throw new Error(`${covers} is packed with ${day.rows} rows`);
 		const setAside = setAsideOf(day).set_aside;
 		if (setAside !== undefined && !(Number.isInteger(setAside) && setAside > 0)) throw new Error(`${covers} set ${setAside} files aside`);
 		named.set(covers, day);
@@ -112,11 +151,11 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 		if (closed.has(covers.slice(0, 7))) continue;
 		const day = named.get(covers)!;
 		if ('state' in day) {
-			daily.push({ covers, rows: 0, bytes: 0, state: day.state });
+			daily.push({ covers, rows: 0, bytes: 0, state: day.state, ...setAsideOf(day) });
 			continue;
 		}
 		const [year, month, date] = covers.split('-');
-		const bytes = await writeParquet(path.join(ledgerRoot, 'daily', year!, month!, `${date}.parquet`), [[covers, day.rows]]);
+		const bytes = await writeParquet(path.join(ledgerRoot, 'daily', year!, month!, `${date}.parquet`), [[covers, day.rows]], columns);
 		daily.push({ covers, rows: day.rows, bytes, ...setAsideOf(day) });
 	}
 	for (const month of [...closed].sort()) {
@@ -133,12 +172,13 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 		// A month counts every file its days set aside.
 		const setAside = inMonth.reduce((sum, covers) => sum + (setAsideOf(named.get(covers)!).set_aside ?? 0), 0);
 		const setAsideFiles = setAside > 0 ? { set_aside: setAside } : {};
-		if (packed.length === 0) {
+		// A month that holds no row packs as `empty`, with no file, as the compaction packs one.
+		if (packed.every(([, rows]) => rows === 0)) {
 			monthly.push({ covers: month, rows: 0, bytes: 0, state: 'empty', ...lostDays });
 			continue;
 		}
 		const [year, number] = month.split('-');
-		const bytes = await writeParquet(path.join(ledgerRoot, 'monthly', year!, `${number}.parquet`), packed);
+		const bytes = await writeParquet(path.join(ledgerRoot, 'monthly', year!, `${number}.parquet`), packed, columns);
 		monthly.push({ covers: month, rows: packed.reduce((sum, [, rows]) => sum + rows, 0), bytes, ...lostDays, ...setAsideFiles });
 	}
 	mkdirSync(path.join(ledgerRoot, 'index'), { recursive: true });

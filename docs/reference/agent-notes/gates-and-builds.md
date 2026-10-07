@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -56,6 +56,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   ```powershell
   New-Item -ItemType Junction -Path frontend\node_modules -Target (Resolve-Path <sibling>\frontend\node_modules).Path
   cmd /c rmdir frontend\node_modules
+  ```
+
+- **A build through a linked `node_modules` fails on a missing package; the
+  code is fine, the linked install changed under you.** Its owner can run
+  `npm ci` or switch branches while you use it. On 2026-10-07, on this Windows
+  machine with Node 24.12.0, vite failed with `Rollup failed to resolve import
+  "@duckdb/duckdb-wasm"` after two builds through the same link had passed.
+  The tell is that package missing from the sibling's folder. Remove the link,
+  run your own `npm ci` (134 s in one run here), then build again:
+  ```powershell
+  cmd /c rmdir frontend\node_modules
+  npm --prefix frontend ci
   ```
 
 - **A logic spec that renders a component fails with `Cannot find package '$lib'` on its first run in a fresh worktree or a copy of a commit, then passes; the spec is fine, `.svelte-kit/` did not exist yet.**
@@ -120,6 +132,17 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   ```powershell
   git status --porcelain
   npm run build:canary
+  ```
+- **The preview refuses a build your change never touched, after a browser tool ran in the worktree; the tool's files are inputs.**
+  Every untracked file that `.gitignore` does not cover is fingerprinted. The
+  Playwright MCP browser saves page snapshots and screenshots to
+  `.playwright-mcp/` in the worktree root; on 2026-10-07 one snapshot there
+  made `verified-preview.ts` refuse a fresh canary build, until `.gitignore`
+  listed the folder. The tell is `git status` naming a folder no change of
+  yours wrote. Ignore that folder in `.gitignore`; deleting its files before
+  each build only moves the trap:
+  ```powershell
+  git status --porcelain --untracked-files=all
   ```
 - **The same timeout from a fresh build reads as a stale one; the box was too busy to start the preview in 120 s.**
   `verified-preview.ts` checks the build's inputs and output before it

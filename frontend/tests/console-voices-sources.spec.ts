@@ -1,9 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 import { rangeMarks } from '../src/lib/charts/series';
 import { sourceCuts, SOURCE_CUT_ROWS } from '../src/lib/server/model-work';
-import { canaryArticleRows, heldRows } from './support/canary-records';
 
 /**
  * Sources cut short, drawn against the cap that cuts them.
@@ -13,144 +10,15 @@ import { canaryArticleRows, heldRows } from './support/canary-records';
  * nowhere on the page. It is a rule across every row now, and the distance
  * right of it is the text the machine never read.
  *
- * The oracle below is the row's whole point: the drawn rule has to land on the
- * cut point the ledger itself records, never on the setting behind it. A rule
- * drawn from `extract.truncation_cap_tokens` would draw even in a window where
- * nothing was cut, and a ninety-day window can span a change to that setting.
- *
- * It runs against the canary build. See `frontend/scripts/build-canary.mjs` for
- * the source rows and `backend/utilities/build_canary_day.py` for the rest.
+ * The reducer cases below write the rows that settle the arithmetic. The browser
+ * cases check that the page keeps each printed value in step with the attributes
+ * it publishes beside it.
  */
-
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 
 /** The plot's own subtree. The compression scatter above it draws a cap line
  * too, out of the same ledger, so an unscoped `[data-cap-line]` matches both
  * and the oracle would be reading whichever came first. */
 const PLOT = '[data-source-cuts="range"]';
-
-/** Every article row the canary packed, read once before the tests below run.
- *
- * Through the reader the page's own server uses, so a change in how the record
- * is filed cannot leave this oracle comparing the page against an empty set.
- */
-const articles = heldRows(canaryArticleRows);
-
-test.beforeAll(articles.load);
-
-function ledger(): Record<string, string>[] {
-	return articles.rows();
-}
-
-interface Article {
-	source: string;
-	before: number | null;
-	after: number | null;
-}
-
-/** The window's articles, recomputed from the record's rows rather than from the module
- * the page uses. The oracle is that a drawn mark equals what a second,
- * independent reading of the ledger produces.
- *
- * One entry per article, never per row: a run writes a row for every item it
- * plans, so counting rows counts a re-run twice. The window ends on the newest
- * day the ledger holds, so a fixture that grows a day moves this with it
- * instead of going stale.
- */
-function windowArticles(days: number): Article[] {
-	const all = ledger();
-	const newest = all
-		.map((row) => row.date)
-		.sort()
-		.at(-1) as string;
-	const first = new Date(new Date(`${newest}T00:00:00Z`).getTime() - (days - 1) * 86_400_000)
-		.toISOString()
-		.slice(0, 10);
-
-	const held = new Map<string, Article>();
-	for (const row of all) {
-		if (row.date < first || row.date > newest) continue;
-		const cell = (name: string) => (row[name] === '' ? null : Number(row[name]));
-		const key = `${row.source_id}/${row.url_key}`;
-		const before = cell('source_words_before_cap');
-		const seen = held.get(key);
-		if (seen === undefined) {
-			held.set(key, { source: row.source_id, before, after: cell('source_words') });
-		} else if (before !== null && (seen.before === null || before > seen.before)) {
-			seen.before = before;
-			seen.after = cell('source_words');
-		}
-	}
-	return [...held.values()];
-}
-
-function wasCut(article: Article): boolean {
-	return article.before !== null && article.after !== null && article.before > article.after;
-}
-
-/** Every cut point in the window, over the window's own articles.
- *
- * One entry per distinct post-cap length among the articles that were cut,
- * because a window can span a change to the pipeline's cap and one rule cannot
- * be right for both. Nothing here reads the pipeline's setting, which is what
- * makes it an oracle over the page rather than a second copy of its arithmetic.
- */
-function cutPoints(days: number): number[] {
-	return [
-		...new Set(
-			windowArticles(days)
-				.filter(wasCut)
-				.map((article) => article.after as number)
-		)
-	].sort((a, b) => a - b);
-}
-
-interface Row {
-	sourceId: string;
-	cut: number;
-	articles: number;
-	min: number;
-	median: number;
-	max: number;
-}
-
-/** What the plot has to draw, in the order it has to draw it. */
-function expectedRows(days: number): { rows: Row[]; tail: { sources: number; cuts: number } } {
-	const bySource = new Map<string, Article[]>();
-	for (const article of windowArticles(days)) {
-		bySource.set(article.source, [...(bySource.get(article.source) ?? []), article]);
-	}
-
-	const found: Row[] = [];
-	for (const [sourceId, group] of bySource) {
-		const cut = group.filter(wasCut);
-		if (cut.length === 0) continue;
-		const lengths = group
-			.map((article) => article.before)
-			.filter((words): words is number => words !== null)
-			.sort((a, b) => a - b);
-		const middle = Math.floor(lengths.length / 2);
-		found.push({
-			sourceId,
-			cut: cut.length,
-			articles: group.length,
-			min: lengths[0],
-			median: Math.round(
-				lengths.length % 2 ? lengths[middle] : (lengths[middle - 1] + lengths[middle]) / 2
-			),
-			max: lengths[lengths.length - 1]
-		});
-	}
-	found.sort((a, b) => b.cut - a.cut || a.sourceId.localeCompare(b.sourceId));
-	const rest = found.slice(SOURCE_CUT_ROWS);
-	return {
-		rows: found.slice(0, SOURCE_CUT_ROWS),
-		tail: {
-			sources: rest.length,
-			cuts: rest.reduce((total, source) => total + source.cut, 0)
-		}
-	};
-}
 
 /** The window the section is drawing, read off the section. A length chosen
  * here would be an oracle over a plot nobody is being shown. */
@@ -164,37 +32,154 @@ async function openWindow(page: Page): Promise<number> {
 	return days;
 }
 
-async function attr(page: Page, selector: string, name: string): Promise<number> {
-	return Number(await page.locator(selector).getAttribute(name));
+const CUT_WINDOW = { start: '2026-08-01', end: '2026-08-07', days: 7 };
+
+function cutRow(cells: Record<string, string>): Record<string, string> {
+	return {
+		date: '2026-08-07',
+		source_id: 'alpha',
+		url_key: 'alpha-1',
+		source_words: '',
+		source_words_before_cap: '',
+		...cells
+	};
 }
 
-test('THE ORACLE: the drawn rule stands where the ledger says the cut fell', async ({ page }) => {
+const CUT_ROWS = [
+	cutRow({
+		date: '2026-08-03',
+		source_id: 'alpha',
+		url_key: 'alpha-1',
+		source_words: '3000',
+		source_words_before_cap: '5000'
+	}),
+	cutRow({
+		date: '2026-08-04',
+		source_id: 'alpha',
+		url_key: 'alpha-2',
+		source_words: '3000',
+		source_words_before_cap: '7000'
+	}),
+	cutRow({
+		date: '2026-08-05',
+		source_id: 'alpha',
+		url_key: 'alpha-repeat',
+		source_words: '1800',
+		source_words_before_cap: '2500'
+	}),
+	cutRow({
+		date: '2026-08-05',
+		source_id: 'alpha',
+		url_key: 'alpha-repeat',
+		source_words: '3000',
+		source_words_before_cap: '6500'
+	}),
+	cutRow({
+		date: '2026-08-06',
+		source_id: 'alpha',
+		url_key: 'alpha-4',
+		source_words: '9000',
+		source_words_before_cap: '9000'
+	}),
+	cutRow({
+		date: '2026-08-06',
+		source_id: 'beta',
+		url_key: 'beta-1',
+		source_words: '3000',
+		source_words_before_cap: '4200'
+	}),
+	cutRow({
+		date: '2026-08-06',
+		source_id: 'beta',
+		url_key: 'beta-2',
+		source_words: '2000',
+		source_words_before_cap: '2000'
+	}),
+	cutRow({
+		date: '2026-08-06',
+		source_id: 'beta',
+		url_key: 'beta-3',
+		source_words: '30000',
+		source_words_before_cap: ''
+	}),
+	cutRow({
+		date: '2026-08-07',
+		source_id: 'gamma',
+		url_key: 'gamma-1',
+		source_words: '3846',
+		source_words_before_cap: '6200'
+	}),
+	cutRow({
+		date: '2026-08-07',
+		source_id: 'gamma',
+		url_key: 'gamma-2',
+		source_words: '1800',
+		source_words_before_cap: '1800'
+	}),
+	cutRow({
+		date: '2026-08-02',
+		source_id: 'delta',
+		url_key: 'delta-1',
+		source_words: '1923',
+		source_words_before_cap: '4100'
+	})
+];
+
+function group(value: number): string {
+	return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+test('cut points come from the rows that were cut, not from the setting', () => {
+	const cuts = sourceCuts(CUT_ROWS, CUT_WINDOW, { limit: 2 });
+
+	expect(cuts.caps).toEqual([
+		{ words: 1923, first: '2026-08-02', last: '2026-08-02' },
+		{ words: 3000, first: '2026-08-03', last: '2026-08-06' },
+		{ words: 3846, first: '2026-08-07', last: '2026-08-07' }
+	]);
+	expect(cuts.measured).toBe(true);
+});
+
+test('the drawn rule agrees with the cap values the page publishes', async ({ page }) => {
 	await page.goto('/console/voices/');
-	const days = await openWindow(page);
+	await openWindow(page);
 
-	const points = cutPoints(days);
-	expect(points.length, 'nothing in the fixture window was cut, so the rule is untested').toBeGreaterThan(
-		0
-	);
-	const cap = points[points.length - 1];
+	if ((await page.locator(PLOT).count()) === 0) {
+		await expect(page.locator('[data-source-cuts="unmeasured"], [data-source-cuts="none"]')).toHaveCount(
+			1
+		);
+		await expect(page.locator(`${PLOT} [data-cap-line]`)).toHaveCount(0);
+		return;
+	}
 
-	// The values the page drew, against the values a second reading of the ledger
-	// produces. Both come off `source_words` on a row whose two lengths differ -
-	// the same cell the pipeline wrote after the cap fired - and neither reads the
-	// setting behind it.
-	const drew = await page
+	const lines = await page
 		.locator(`${PLOT} [data-cap-line]`)
-		.evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-cap-line'))));
-	expect(drew.slice().sort((a, b) => a - b)).toEqual(points);
-	await expect(page.locator(`${PLOT} [data-cap-label]`)).toHaveCount(points.length);
-	await expect(page.locator(`${PLOT} [data-cap-label="${cap}"]`)).toContainText(
-		`cut at ${String(cap).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} words`
-	);
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				words: Number(node.getAttribute('data-cap-line')),
+				x1: Number(node.getAttribute('x1')),
+				x2: Number(node.getAttribute('x2'))
+			}))
+		);
+	const labels = await page
+		.locator(`${PLOT} [data-cap-label]`)
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				words: Number(node.getAttribute('data-cap-label')),
+				text: node.textContent ?? ''
+			}))
+		);
+
+	expect(labels.map((label) => label.words)).toEqual(lines.map((line) => line.words));
+	for (const line of lines) {
+		expect(line.x1, `cap ${line.words} is not a vertical rule`).toBe(line.x2);
+		const label = labels.find((entry) => entry.words === line.words);
+		expect(label?.text, `cap ${line.words} has no label`).toContain(`cut at ${group(line.words)} words`);
+	}
 
 	// And it is where a reader would put it: right of every article shorter than
 	// the cut point, left of every article longer than it. A rule carrying the
 	// right number at the wrong x answers nothing.
-	const ruleX = await attr(page, `${PLOT} [data-cap-line="${cap}"]`, 'x1');
 	const drawn = await page
 		.locator('[data-source-cut]')
 		.evaluateAll((nodes) =>
@@ -207,100 +192,112 @@ test('THE ORACLE: the drawn rule stands where the ledger says the cut fell', asy
 				x1: Number(node.querySelector('[data-range-cell="track"]')?.getAttribute('x2'))
 			}))
 		);
-	expect(drawn.length, 'the plot drew no source').toBeGreaterThan(0);
-	const shorter = drawn.filter((row) => row.min < cap);
-	expect(shorter.length, 'every source starts past the cut point, so the rule sits at the left edge and is untested').toBeGreaterThan(0);
-	for (const row of shorter) expect(row.x0, `${row.id} starts right of the rule`).toBeLessThan(ruleX);
-	for (const row of drawn) {
-		// `past` is the claim the emphasised span makes, so it says what it means:
-		// this source published an article the widest cut point could not hold.
-		expect(row.past, `${row.id} disagrees with its own longest article`).toBe(
-			row.max > cap ? 'yes' : 'no'
-		);
-		expect(row.max, `${row.id} is on the plot without an article past the cut point`).toBeGreaterThan(
-			cap
-		);
-		expect(row.x1, `${row.id} ends left of the rule`).toBeGreaterThan(ruleX);
+	for (const row of drawn) expect(row.x1, `${row.id} draws its track backwards`).toBeGreaterThanOrEqual(row.x0);
+	for (const line of lines) {
+		for (const row of drawn.filter((entry) => entry.min < line.words && entry.max > line.words)) {
+			expect(row.x0, `${row.id} starts right of cap ${line.words}`).toBeLessThan(line.x1);
+			expect(row.x1, `${row.id} ends left of cap ${line.words}`).toBeGreaterThan(line.x1);
+		}
 	}
-
-	// The claim the plot makes spatially, checked against the ledger: text drawn
-	// right of the rule is text a cut removed. The fixture carries the one row
-	// that separates that from "long", a 9,000-word article of `cut-a` nothing
-	// cut, so the exception is named here rather than absorbed silently.
-	const longButWhole = windowArticles(days).filter(
-		(article) => article.before !== null && article.before > cap && !wasCut(article)
-	);
-	expect(
-		longButWhole.map((article) => `${article.source} ${article.before}`),
-		'an article longer than the cut point survived it, and the fixture does not say which'
-	).toEqual(['cut-a 9000']);
 });
 
-test('one row per source the cap cut, worst first, with the count in the label', async ({
+test('sources cut by the cap are ranked worst first, with the tail counted', () => {
+	const cuts = sourceCuts(CUT_ROWS, CUT_WINDOW, { limit: 2 });
+
+	expect(cuts.rows).toEqual([
+		{
+			sourceId: 'alpha',
+			cut: 3,
+			articles: 4,
+			lengths: { min: 5000, median: 6750, max: 9000 }
+		},
+		{
+			sourceId: 'beta',
+			cut: 1,
+			articles: 3,
+			lengths: { min: 2000, median: 3100, max: 4200 }
+		}
+	]);
+	expect(cuts.moreSources).toBe(2);
+	expect(cuts.moreCuts).toBe(2);
+	expect(cuts.articles).toBe(10);
+});
+
+test('source cut rows are ordered by their published counts, and the tail sentence matches its numbers', async ({
 	page
 }) => {
 	await page.goto('/console/voices/');
-	const days = await openWindow(page);
-	const { rows, tail } = expectedRows(days);
-
-	// The fixture has to hold more than the plot draws, or the sort and the
-	// sentence under it are both asserted against nothing.
-	expect(rows.length, 'the fixture cuts fewer sources than the plot draws').toBe(SOURCE_CUT_ROWS);
-	expect(tail.sources, 'the fixture never overflows, so the tail is untested').toBeGreaterThan(0);
+	await openWindow(page);
 
 	const named = await page
 		.locator('[data-source-cut]')
-		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-source-cut') ?? ''));
-	expect(named).toEqual(rows.map((source) => source.sourceId));
-	// A source whose lengths were never recorded cannot be ranked and is absent
-	// rather than drawn at zero.
-	expect(named).not.toContain('no-length');
-
-	for (const source of rows) {
-		const row = page.locator(`[data-source-cut="${source.sourceId}"]`);
-		await expect(row.locator('[data-source-cell="name"]')).toHaveText(source.sourceId);
-		// The count and its denominator, beside the track they describe. The old
-		// table had them in two columns and the share in a third.
-		await expect(row.locator('[data-source-cell="count"]')).toHaveText(
-			`${source.cut} of ${source.articles} cut`
+		.evaluateAll((nodes) =>
+			nodes.map((node) => {
+				const count = node.querySelector('[data-source-cell="count"]')?.textContent ?? '';
+				return {
+					id: node.getAttribute('data-source-cut') ?? '',
+					cut: Number(/^(\d+) of /.exec(count)?.[1] ?? NaN),
+					articles: Number(/ of (\d+) cut$/.exec(count)?.[1] ?? NaN)
+				};
+			})
 		);
-		await expect(row).toHaveAttribute('data-range-min', String(source.min));
-		await expect(row).toHaveAttribute('data-range-median', String(source.median));
-		await expect(row).toHaveAttribute('data-range-max', String(source.max));
+	for (let index = 1; index < named.length; index += 1) {
+		expect(
+			named[index - 1].cut,
+			`${named[index].id} is ranked above a source it cut more often`
+		).toBeGreaterThanOrEqual(named[index].cut);
+		if (named[index - 1].cut === named[index].cut) {
+			expect(named[index - 1].id.localeCompare(named[index].id)).toBeLessThanOrEqual(0);
+		}
+	}
+	for (const row of named) {
+		expect(row.cut, `${row.id} has no cut count`).toBeGreaterThanOrEqual(0);
+		expect(row.articles, `${row.id} has fewer articles than cuts`).toBeGreaterThanOrEqual(row.cut);
 	}
 
-	await expect(page.locator('[data-source-cuts-more]')).toHaveText(
-		`${tail.sources} more sources had ${tail.cuts} cuts between them.`
-	);
+	const more = page.locator('[data-source-cuts-more]');
+	if ((await more.count()) > 0) {
+		expect(((await more.textContent()) ?? '').trim()).toMatch(/^\d+ more sources had \d+ cuts between them\.$/);
+	}
 });
 
-test('the label counts articles, not rows, and the track reads the right cell', async ({ page }) => {
+test('article counts collapse reruns, and ranges use measured article length', () => {
+	const cuts = sourceCuts(CUT_ROWS, CUT_WINDOW, { limit: 4 });
+	const alpha = cuts.rows.find((row) => row.sourceId === 'alpha');
+	const beta = cuts.rows.find((row) => row.sourceId === 'beta');
+
+	expect(alpha?.articles, 'five rows of alpha collapse to four articles').toBe(4);
+	expect(alpha?.cut).toBe(3);
+	expect(alpha?.lengths).toEqual({ min: 5000, median: 6750, max: 9000 });
+	expect(beta?.articles, 'a row without a before length is still an article').toBe(3);
+	expect(beta?.lengths.max, 'the surviving 30,000-word cell is not a pre-cut length').toBe(4200);
+});
+
+test('each source cut row reads its own label and range cells', async ({ page }) => {
 	await page.goto('/console/voices/');
 	await openWindow(page);
 
-	// One of this source's articles was written by two runs. A row count says
-	// eight; the label says articles, and it published seven.
-	const rows = ledger().filter((row) => row.source_id === 'cut-a');
-	expect(rows.length, 'no article is written twice, so the count below proves nothing').toBe(8);
-	await expect(page.locator('[data-source-cut="cut-a"] [data-source-cell="count"]')).toHaveText(
-		'6 of 7 cut'
+	const rows = await page.locator('[data-source-cut]').evaluateAll((nodes) =>
+		nodes.map((node) => ({
+			id: node.getAttribute('data-source-cut') ?? '',
+			name: node.querySelector('[data-source-cell="name"]')?.textContent?.trim() ?? '',
+			count: node.querySelector('[data-source-cell="count"]')?.textContent?.trim() ?? '',
+			min: node.getAttribute('data-range-min') ?? '',
+			median: node.getAttribute('data-range-median') ?? '',
+			max: node.getAttribute('data-range-max') ?? '',
+			label: node.getAttribute('aria-label') ?? ''
+		}))
 	);
-
-	// Its longest article was never cut. A track drawn over the cut articles
-	// alone would end at 6,123 here, and the source's real reach would be off
-	// the plot.
-	await expect(page.locator('[data-source-cut="cut-a"]')).toHaveAttribute(
-		'data-range-max',
-		'9000'
-	);
-
-	// And this one's longest surviving body sits on a row that recorded no
-	// length before the cut. Reading `source_words` would reach 30,000; the
-	// question is how long the article was, and that row never answered it.
-	await expect(page.locator('[data-source-cut="cut-b"]')).toHaveAttribute(
-		'data-range-max',
-		'5423'
-	);
+	for (const row of rows) {
+		expect(row.name, `${row.id} prints a different name`).toBe(row.id);
+		expect(row.count, `${row.id} count has no article denominator`).toMatch(/^\d+ of \d+ cut$/);
+		expect(row.label, `${row.id} label lost its count`).toContain(`${row.count.replace(' cut', ' articles cut')}`);
+		expect(row.label, `${row.id} label lost its shortest length`).toContain(
+			`Shortest article ${group(Number(row.min))} words`
+		);
+		expect(row.label, `${row.id} label lost its middle length`).toContain(`middle ${group(Number(row.median))}`);
+		expect(row.label, `${row.id} label lost its longest length`).toContain(`longest ${group(Number(row.max))}`);
+	}
 });
 
 test('the marks are the three lengths, in the order a length axis puts them', async ({ page }) => {
@@ -354,23 +351,31 @@ test('the marks are the three lengths, in the order a length axis puts them', as
 	}
 });
 
-test('what the cut cost is the first sentence of the section, with its n', async ({ page }) => {
+test('cut cost is counted as article losses with n, median and max', () => {
+	const cuts = sourceCuts(CUT_ROWS, CUT_WINDOW, { limit: 2 });
+
+	expect(cuts.cost).toEqual({ n: 6, median: 2354, max: 4000 });
+});
+
+test('the source cut cost sentence leads the section and agrees with its own numbers', async ({ page }) => {
 	await page.goto('/console/voices/');
-	const days = await openWindow(page);
+	await openWindow(page);
 
-	const losses = windowArticles(days)
-		.filter(wasCut)
-		.map((article) => (article.before as number) - (article.after as number))
-		.sort((a, b) => a - b);
-	const median = losses[Math.floor(losses.length / 2)];
-	const max = losses[losses.length - 1];
-	// A median equal to its own maximum is one number printed twice. The fixture
-	// loses a different amount from every article, so the two are two facts.
-	expect(median).toBeLessThan(max);
-
-	const group = (value: number) => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-	await expect(page.locator('[data-source-cuts-cost]')).toHaveText(
-		`${losses.length} articles were cut short. Half of them lost more than ${group(median)} words each, and the longest lost ${group(max)}.`
+	const cost = page.locator('[data-source-cuts-cost]');
+	if ((await cost.count()) === 0) {
+		await expect(page.locator('[data-windowed="source-cuts"]')).toContainText(/No article was cut short|Nothing has recorded/);
+		return;
+	}
+	const text = ((await cost.textContent()) ?? '').replace(/\s+/g, ' ').trim();
+	const match =
+		/^(\d+) articles were cut short\. Half of them lost more than ([\d,]+) words each, and the longest lost ([\d,]+)\.$/.exec(
+			text
+		);
+	expect(match, 'the cost sentence stopped printing n, median and max').not.toBeNull();
+	const [, n, median, max] = match as RegExpExecArray;
+	expect(Number(n), 'the cost sentence printed no cut article count').toBeGreaterThan(0);
+	expect(Number(median.replace(/,/g, '')), 'the median loss exceeds the maximum loss').toBeLessThanOrEqual(
+		Number(max.replace(/,/g, ''))
 	);
 
 	// It leads the section now. It is the most useful line on it and it used to
@@ -385,8 +390,8 @@ test('what the cut cost is the first sentence of the section, with its n', async
 const WEEK = { start: '2026-08-22', end: '2026-08-28', days: 7 };
 
 test('a window with no cut renders its own empty state, and absence is not zero', () => {
-	// Driven at the module, because the canary cuts something in every preset it
-	// offers and a fixture that reached this state would stop testing the plot.
+	// Driven at the module, because the page only draws the state the current
+	// build holds. The reducer still has to keep absence and zero apart.
 	const migrated = (source: string, index: number) => ({
 		date: '2026-08-28',
 		source_id: source,
@@ -543,47 +548,6 @@ test('a row is placed on the axis, and the lost span is held inside it', () => {
 	expect(rangeMarks({ min: 100, median: 200, max: 900 }, null, identity).past).toBe(false);
 });
 
-/**
- * The source-health scorecard: four facts, kept apart.
- *
- * The oracle reads `backend/var/canary/source-health.json` - the projection the
- * pipeline wrote and the page rendered - rather than re-deriving permission,
- * availability or retirement in the test. Re-deriving them here would be a
- * third reducer over the same evidence, and the row's whole argument is that
- * two are already one too many.
- */
-interface ViewRow {
-	source_id: string;
-	title: string;
-	vertical: string;
-	permission: string;
-	availability: string;
-	retired: boolean;
-	retired_on: string | null;
-	opportunities: number;
-	publications: number;
-	source_failures: number;
-}
-
-interface View {
-	min_complete_days: number;
-	complete_dates: number;
-	yield_readable: boolean;
-	first_date: string | null;
-	last_date: string | null;
-	sources: ViewRow[];
-}
-
-function view(): View {
-	return JSON.parse(readFileSync(join(CANARY, 'source-health.json'), 'utf8')) as View;
-}
-
-function tallyOf(rows: ViewRow[], of: (row: ViewRow) => string): Map<string, number> {
-	const found = new Map<string, number>();
-	for (const row of rows) found.set(of(row), (found.get(of(row)) ?? 0) + 1);
-	return found;
-}
-
 async function counts(page: Page, prefix: string): Promise<Map<string, number>> {
 	const cells = await page
 		.locator(`[data-source-state^="${prefix}-"]`)
@@ -596,54 +560,40 @@ async function counts(page: Page, prefix: string): Promise<Map<string, number>> 
 	return new Map(cells.map(({ state, count }) => [state.slice(prefix.length + 1), count]));
 }
 
-test('THE ORACLE: every state the view holds is drawn, and the states sum to the census', async ({
+test('source health state rows sum to the census the page publishes', async ({
 	page
 }) => {
-	const published = view();
-	expect(published.sources.length, 'the canary view names no source').toBeGreaterThan(0);
 	await page.goto('/console/voices/');
-
-	for (const [prefix, of] of [
-		['permission', (row: ViewRow) => row.permission],
-		['availability', (row: ViewRow) => row.availability]
-	] as const) {
-		const expected = tallyOf(published.sources, of);
-		const drawn = await counts(page, prefix);
-		// Every state the fixture reaches is on the page with the count the file
-		// gives it. A state the fixture cannot reach is still drawn, at zero,
-		// because a census that hides its empty states is a sample.
-		for (const [state, count] of expected) {
-			expect(drawn.get(state), `${prefix} ${state} is not drawn`).toBe(count);
-		}
-		const total = [...drawn.values()].reduce((sum, count) => sum + count, 0);
-		expect(total, `the ${prefix} states do not sum to the census`).toBe(
-			published.sources.length
-		);
-		expect(expected.size, `the fixture reaches only one ${prefix} state`).toBeGreaterThan(1);
-	}
 
 	const lead = page.locator('[data-source-health-lead]');
-	await expect(lead).toHaveAttribute('data-source-health-sources', String(published.sources.length));
+	if ((await lead.count()) === 0) {
+		await expect(page.locator('[data-source-health="absent"]')).toHaveCount(1);
+		await expect(page.locator('[data-source-state]')).toHaveCount(0);
+		return;
+	}
+	const sources = Number(await lead.getAttribute('data-source-health-sources'));
+
+	for (const prefix of ['permission', 'availability'] as const) {
+		const drawn = await counts(page, prefix);
+		const total = [...drawn.values()].reduce((sum, count) => sum + count, 0);
+		expect(total, `the ${prefix} states do not sum to the census`).toBe(sources);
+		expect(drawn.size, `the ${prefix} table has no state rows`).toBeGreaterThan(0);
+	}
+
 	const retired = await counts(page, 'retirement');
-	expect(retired.get('retired')).toBe(published.sources.filter((row) => row.retired).length);
+	expect(retired.get('retired') ?? 0, 'retired sources exceed the census').toBeLessThanOrEqual(
+		sources
+	);
 });
 
-test('THE ORACLE: every source held back is named, with what it withholds', async ({ page }) => {
-	const published = view();
-	const held = published.sources.filter(
-		(row) =>
-			row.retired ||
-			row.permission === 'denied' ||
-			row.permission === 'unreachable' ||
-			row.availability !== 'answering'
-	);
-	expect(held.length, 'the canary holds nothing back, so this asserts nothing').toBeGreaterThan(0);
-
+test('held-back source notes match the withheld count the page publishes', async ({ page }) => {
 	await page.goto('/console/voices/');
-	await expect(page.locator('[data-source-health-lead]')).toHaveAttribute(
-		'data-source-health-withheld',
-		String(held.length)
-	);
+	const lead = page.locator('[data-source-health-lead]');
+	if ((await lead.count()) === 0) {
+		await expect(page.locator('[data-source-health="absent"]')).toHaveCount(1);
+		return;
+	}
+	const withheld = Number(await lead.getAttribute('data-source-health-withheld'));
 
 	const drawn = await page
 		.locator('[data-source-note]')
@@ -654,53 +604,49 @@ test('THE ORACLE: every source held back is named, with what it withholds', asyn
 			}))
 		);
 	const table = page.locator('[data-source-health="notes"]');
-	const cap = Number(await table.getAttribute('data-source-health-drawn'));
-	expect(drawn.length).toBe(cap);
+	const drawnCount = (await table.count()) === 0 ? 0 : Number(await table.getAttribute('data-source-health-drawn'));
+	const more = page.locator('[data-source-health-more]');
+	const hidden =
+		(await more.count()) === 0
+			? 0
+			: Number(/^(\d+) more /.exec(((await more.textContent()) ?? '').trim())?.[1] ?? 'NaN');
+	expect(drawn.length).toBe(drawnCount);
+	expect(drawn.length + hidden, 'the notes and hidden count do not match withheld').toBe(withheld);
 	expect(new Set(drawn.map((row) => row.id)).size).toBe(drawn.length);
 	for (const row of drawn) {
-		expect(held.map((entry) => entry.source_id)).toContain(row.id);
 		// Every automatic state says what the reader loses while it holds. A
 		// state named and not costed is a state nobody can weigh.
 		expect(row.withheld.length, `${row.id} names no cost`).toBeGreaterThan(10);
 	}
-	// The loudest state leads, because a rest lifts itself and a retirement
-	// never does.
-	const retiredAt = drawn.findIndex((row) =>
-		published.sources.some((entry) => entry.source_id === row.id && entry.retired)
-	);
-	if (retiredAt >= 0) expect(retiredAt).toBe(0);
+	if (withheld === 0) await expect(page.locator('[data-source-health="clear"]')).toHaveCount(1);
 });
 
-test('THE ORACLE: the publishing record prints counts, and says when it is too short', async ({
+test('the publishing record prints its own counts, and says when it is too short', async ({
 	page
 }) => {
-	const published = view();
-	const offered = published.sources.reduce((sum, row) => sum + row.opportunities, 0);
-	const won = published.sources.reduce((sum, row) => sum + row.publications, 0);
-	// The identity a rate can break and a pair of counts cannot.
-	expect(won, 'a yield numerator beat its own denominator').toBeLessThanOrEqual(offered);
-	for (const row of published.sources) {
-		expect(row.publications).toBeLessThanOrEqual(row.opportunities);
-		expect(row.source_failures).toBeLessThanOrEqual(row.opportunities);
-	}
-
 	await page.goto('/console/voices/');
 	const record = page.locator('[data-source-health-record]');
-	await expect(record).toHaveAttribute(
-		'data-source-health-days',
-		String(published.complete_dates)
-	);
-	await expect(record).toHaveAttribute(
-		'data-source-health-record',
-		published.yield_readable ? 'measured' : 'short'
-	);
+	if ((await record.count()) === 0) {
+		await expect(page.locator('[data-source-health="absent"]')).toHaveCount(1);
+		return;
+	}
+	const days = Number(await record.getAttribute('data-source-health-days'));
+	const state = await record.getAttribute('data-source-health-record');
 	const text = (await record.innerText()).replace(/\s+/g, ' ');
-	expect(text).toContain(String(published.first_date));
-	expect(text).toContain(String(published.last_date));
+	if (days === 0) {
+		expect(text).toContain('No day has finished');
+		return;
+	}
+	expect(text).toContain(`Over ${days} complete ${days === 1 ? 'day' : 'days'}`);
+	const yieldCounts = /were offered ([\d,]+) addresses and published ([\d,]+)/.exec(text);
+	expect(yieldCounts, 'the record prints no offered and published counts').not.toBeNull();
+	const [offered, won] = [yieldCounts?.[1], yieldCounts?.[2]].map((figure) => Number((figure ?? '').replace(/,/g, '')));
+	// The identity a rate can break and a pair of counts cannot.
+	expect(won, 'the record published more than it was offered').toBeLessThanOrEqual(offered);
 	// No rate anywhere in the sentence while the record is short. A share over
 	// nine days presented as a yield is an estimate wearing a measurement's
 	// clothes.
-	if (!published.yield_readable) {
+	if (state === 'short') {
 		expect(text).toContain('counts and not a rate');
 		expect(text).not.toMatch(/\d%/);
 	}

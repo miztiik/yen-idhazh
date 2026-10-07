@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -515,7 +515,10 @@ year they are from, as its index names it, and that the page cannot tell a
 quiet stretch from a fault. It names the narrowest window the control offers
 that reaches back to them, and only when one does, because an instruction that
 does not work costs a click. A record whose route already prints its
-"Measurement is off" line gets no second explanation. A record packed as far as
+"Measurement is off" line gets no second explanation: that line is worded for
+the open window too, so it says the window holds nothing recorded and names the
+window that reaches back to the last recorded day, without naming a day the
+window does not show. A record packed as far as
 the day before the newest published day, which is normal running, gets the
 quietest line, last: that day is not shown yet, and that is normal. Each route
 writes its notes once for each window the control offers, and the page picks the
@@ -524,7 +527,11 @@ A record read whole can still be short, and says so in a plain line too: a day
 its packing recorded lost has no record, and a file it set aside unread holds
 rows no panel draws, so that line names the folder a person reads them in. A
 recording note never counts a lost day as a day before the recording started:
-the instrument ran that day, so the day dates its start.
+the instrument ran that day, so the day dates its start. It dates a start only
+where the route's read reaches back to the oldest named day of each record the
+instrument draws on, the read's `first` beside `lastRows`, and prints it only in
+a window that shows that day, so an instrument that ran before the read is never
+said to start in it, and no day before the read is opened to learn it.
 
 **Packing settles rows per day, not over the whole requested window.** This
 scope preserves historical rows; it does not define measurement identity.
