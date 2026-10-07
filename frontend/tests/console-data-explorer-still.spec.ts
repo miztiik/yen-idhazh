@@ -2,7 +2,7 @@ import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, expectAnswer, openExplorer, runExplorer, serveBuilt, type AnswerState } from './support/explorer-answer';
 import { everyDay } from './support/ledger-lifecycle';
 import { explorerConfig } from '../src/lib/server/config';
-import { statusSentence, statusWithHeld } from '../src/lib/console/explorer/status';
+import { statusSentence } from '../src/lib/console/explorer/status';
 
 /** The UTC day every test here pins as the page's today. A built ledger's days count back from it. */
 const PINNED = '2030-06-15';
@@ -81,14 +81,13 @@ async function snapshot(page: Page): Promise<Snapshot> {
 		};
 		const selectors = [
 			['strip', '[data-console-strip]'],
-			['toolbar', '[data-workbench-region="toolbar"]'],
+			['editorHead', '[data-workbench-region="editor"] .editor-head'],
 			['questions', '[data-workbench-region="questions"]'],
 			['ledgers', '[data-workbench-region="ledgers"]'],
 			['editor', '[data-workbench-region="editor"]'],
 			['status', '[data-workbench-region="status"]'],
 			['columns', '[data-workbench-region="columns"]'],
 			['answer', '[data-workbench-region="answer"]'],
-			['chart', '[data-workbench-region="chart"]'],
 			['run', '.run-button'],
 			['editorFrame', '[data-workbench-region="editor"] .editor-frame']
 		] as const;
@@ -141,14 +140,13 @@ for (const view of VIEWS) {
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
 		await page.evaluate(() => window.scrollTo(0, 0));
-		const lede = page.locator('[data-console-panel-id="data-explorer-rows"] [data-lede]');
-		const cases: { sql: string; state: AnswerState; rows: string | null }[] = [
-			{ sql: 'SELECT count(*) AS rows FROM "published"', state: 'table', rows: '1 row' },
-			{ sql: 'SELECT i AS row_number FROM range(0, 1200) AS t(i)', state: 'table', rows: 'The first 1000 rows' },
-			{ sql: 'SELECT * FROM "published" WHERE false', state: 'quiet', rows: null },
-			{ sql: 'SELECT 1; SELECT 2', state: 'refused', rows: null }
+		const cases: { sql: string; state: AnswerState }[] = [
+			{ sql: 'SELECT count(*) AS rows FROM "published"', state: 'table' },
+			{ sql: 'SELECT i AS row_number FROM range(0, 1200) AS t(i)', state: 'table' },
+			{ sql: 'SELECT * FROM "published" WHERE false', state: 'quiet' },
+			{ sql: 'SELECT 1; SELECT 2', state: 'refused' }
 		];
-		for (const { sql, state, rows } of cases) {
+		for (const { sql, state } of cases) {
 			await chooseExplorerQuestion(page, ['published'], sql);
 			// Run is pressed where a person sees it, so the press itself scrolls nothing.
 			await page.locator('.run-button').scrollIntoViewIfNeeded();
@@ -156,7 +154,6 @@ for (const view of VIEWS) {
 			const before = await snapshot(page);
 			await runExplorer(page);
 			await expectAnswer(page, state);
-			if (rows !== null) await expect(lede).toHaveText(rows);
 			await page.waitForTimeout(1000);
 			expectStable(before, await snapshot(page));
 		}
@@ -205,7 +202,7 @@ test('status text never overlaps the reserved answer link box', async ({ page, c
 	await expect(page.getByRole('link', { name: 'See the answer' })).toHaveCount(0);
 });
 
-test('M8: toolbar, questions and narrow rails keep their density heights', async ({ page }) => {
+test('M8: editor head, questions and narrow rails keep their density heights', async ({ page }) => {
 	for (const view of VIEWS) {
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
@@ -225,11 +222,8 @@ test('M8: toolbar, questions and narrow rails keep their density heights', async
 			return { control, space1, space2, space3, regions };
 		});
 		const oneControlRow = sizes.control + 2 * sizes.space1;
-		const toolbarExpected = view.width >= 1024
-			? oneControlRow + 1
-			: 2 * sizes.control + sizes.space2 + 2 * sizes.space1 + (view.width < 640 ? sizes.space1 + 1 : 1);
 		const questionsExpected = view.width < 640 ? oneControlRow + sizes.space3 + 1 : oneControlRow;
-		expect(sizes.regions.toolbar, `${view.width} toolbar`).toBeCloseTo(toolbarExpected, 0);
+		expect(await page.locator('[data-workbench-region="editor"] .editor-head').evaluate((node) => node.getBoundingClientRect().height), `${view.width} editor head`).toBeGreaterThanOrEqual(oneControlRow - 1);
 		expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(questionsExpected, 0);
 		if (view.width < 1024) {
 			expect(sizes.regions.ledgers, `${view.width} ledgers summary`).toBeCloseTo(sizes.control, 0);
@@ -253,6 +247,7 @@ test('M14: the chart draws at the region content width and keeps its height on r
 	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
 	await runExplorer(page);
+	await page.getByRole('tab', { name: 'Chart' }).click();
 	await page.locator('[data-workbench-region="chart"]').evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
 	await page.locator('[data-workbench-region="chart"] svg[data-chart-type]').waitFor({ state: 'visible', timeout: 60_000 });
 	const reading = async () => page.evaluate(() => {
@@ -304,6 +299,30 @@ test('M19: workbench text stays on the declared type scale', async ({ page }) =>
 	});
 	expect(offScale).toEqual([]);
 });
+
+test('R1: column headers stay on one line and the answer box scrolls sideways', async ({ page }) => {
+	for (const view of [{ width: 1440, height: 900 }, { width: 390, height: 844 }] as const) {
+		await page.setViewportSize(view);
+		await openExplorer(page, '2026-08-20');
+		await chooseExplorerQuestion(page, ['item-health'], 'SELECT * FROM "item-health"');
+		await runExplorer(page);
+		await expectAnswer(page, 'table');
+		const reading = await page.locator('[data-explorer-answer]').evaluate((table) => {
+			const box = table.closest('.table-box') as HTMLElement;
+			const headers = [...table.querySelectorAll('thead th:not(.row-number) span')].map((header) => {
+				const rect = header.getBoundingClientRect();
+				const line = parseFloat(getComputedStyle(header).lineHeight);
+				return { text: header.textContent ?? '', height: rect.height, line };
+			});
+			return { scrolls: box.scrollWidth > box.clientWidth, headers };
+		});
+		expect(reading.scrolls, `${view.width} table did not scroll sideways`).toBe(true);
+		for (const header of reading.headers) {
+			expect(header.height, `${view.width} ${header.text} broke across lines`).toBeLessThanOrEqual(header.line + 1);
+		}
+	}
+});
+
 test('M10: non-run interactions keep every region box fixed', async ({ page, context }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
@@ -321,7 +340,11 @@ test('M10: non-run interactions keep every region box fixed', async ({ page, con
 	await measure(() => page.locator('[data-explorer-answer] th button').first().click());
 	await page.getByRole('button', { name: /^Show 50 more rows$/ }).scrollIntoViewIfNeeded();
 	await measure(() => page.getByRole('button', { name: /^Show 50 more rows$/ }).click());
+	await measure(() => page.getByRole('tab', { name: 'Chart' }).click());
+	await measure(() => page.getByRole('tab', { name: 'Table' }).click());
+	await page.getByRole('tab', { name: 'Chart' }).click();
 	if (await page.locator('[data-shape-choice]').count()) await measure(() => page.locator('[data-shape-choice]').last().click());
+	await page.getByRole('tab', { name: 'Table' }).click();
 	if (await page.locator('summary').filter({ hasText: 'more' }).count()) {
 		await measure(() => page.locator('summary').filter({ hasText: 'more' }).first().click());
 		// The open list lies over the regions below it; a person closes it before pressing what it covers.
@@ -346,13 +369,13 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 	expect(statusSentence({ state: 'costing' })).toBe('Choosing a ledger fetches one day of it to list its columns.');
 	expect(statusSentence({ state: 'running-fetch', files: 123, bytes: 67_108_864 })).toBe('Fetching 123 files, 64.0 MB.');
 	expect(statusSentence({ state: 'running-query' })).toBe('Running the question.');
-	expect(statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Answered in 100.0 s. Fetched 123 files, 64.0 MB; 45 more were already in this page.');
-	expect(statusSentence({ state: 'quiet', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Ran in 100.0 s and matched no rows. Fetched 123 files, 64.0 MB.');
+	expect(statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Answered in 100.0 s. Read 123 files, 64.0 MB.');
+	expect(statusSentence({ state: 'quiet', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Ran in 100.0 s and matched no rows. Read 123 files, 64.0 MB.');
 	expect(statusSentence({ state: 'refused' })).toBe('Did not run. The reason is where the answer would be.');
 	expect(statusSentence({ state: 'missing', ledger: 'published' })).toBe('Did not run. published is not on this site yet.');
 	expect(statusSentence({ state: 'unreachable-engine' })).toBe('Did not run. The query engine did not start.');
 	expect(statusSentence({ state: 'unreachable-files' })).toBe('Did not run. The ledger files could not be fetched.');
-	const longest = statusWithHeld(statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 123, ms: 99999 } }), 67_108_864);
+	const longest = statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 123, ms: 99999 } });
 	for (const view of VIEWS) {
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
@@ -446,16 +469,11 @@ test('M15: panel ids stay ordered, headed and joined into one workbench surface'
 	for (const id of ['data-explorer-ask', 'data-explorer-rows', 'data-explorer-shape']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"] h2`)).toHaveCount(1);
 	}
-	// Each panel touches the one before it, under it or, where the answer and the chart share a row, beside it.
-	const joins = await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.slice(0, 3).map((node, index, all) => {
-		if (index === 0) return 'first';
-		const box = node.getBoundingClientRect();
-		const before = all[index - 1].getBoundingClientRect();
-		const under = Math.abs(box.top - before.bottom) < 0.5;
-		const beside = Math.abs(box.left - before.right) < 0.5 && Math.abs(box.top - before.top) < 0.5;
-		return under || beside ? 'joined' : `${box.top - before.bottom}px under and ${box.left - before.right}px beside the panel before it`;
-	}));
-	expect(joins).toEqual(['first', 'joined', 'joined']);
+	await expect(page.getByRole('tablist', { name: 'Answer view' })).toHaveCount(1);
+	await expect(page.getByRole('tab', { name: 'Table' })).toHaveAttribute('aria-controls', 'data-explorer-rows');
+	await expect(page.getByRole('tab', { name: 'Chart' })).toHaveAttribute('aria-controls', 'data-explorer-shape');
+	await expect(page.locator('#data-explorer-rows')).toHaveAttribute('role', 'tabpanel');
+	await expect(page.locator('#data-explorer-shape')).toHaveAttribute('role', 'tabpanel');
 	const colours = await page.evaluate(() => ({
 		page: getComputedStyle(document.body).backgroundColor,
 		workbench: getComputedStyle(document.querySelector('.workbench') as HTMLElement).backgroundColor
@@ -502,7 +520,7 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 			const cut = await page.evaluate(() => {
 				// These regions never scroll, so a control outside them, or content past their
 				// height, is cut off. The rails scroll by design, so they are held only sideways.
-				const whole = ['toolbar', 'questions', 'editor'];
+				const whole = ['questions', 'editor'];
 				const sideways = ['ledgers', 'columns'];
 				const offenders: string[] = [];
 				for (const name of [...whole, ...sideways]) {

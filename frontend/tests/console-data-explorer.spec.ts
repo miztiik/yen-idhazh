@@ -79,7 +79,7 @@ test('THE ORACLE: Data explorer opens as the sixth tab and renders its two panel
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
-	await expect(page.locator('[data-explorer-action-line]')).toContainText('This page holds');
+	await expect(page.locator('[data-explorer-action-line]')).not.toContainText('This page holds');
 });
 
 test('THE ORACLE: console chrome resolves to console unless the route asks for workbench', () => {
@@ -162,16 +162,15 @@ for (const view of [
 	});
 }
 
-test('THE ORACLE: Data explorer puts the span and the dates in the toolbar, and Run beside Save and Copy link', async ({ page }) => {
+test('THE ORACLE: Data explorer puts the span, dates and Run in the editor head', async ({ page }) => {
 	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
-	const toolbar = page.locator('[data-workbench-region="toolbar"]');
-	await expect(toolbar).toHaveCount(1);
+	await expect(page.locator('[data-workbench-region="toolbar"]')).toHaveCount(0);
+	const head = page.locator('[data-workbench-region="editor"] .editor-head');
 	await expect(page.locator('[data-window-control]')).toHaveCount(1);
-	await expect(toolbar.locator('[data-window-control]')).toHaveCount(1);
-	await expect(toolbar.getByRole('textbox', { name: 'From (UTC)' })).toHaveCount(1);
-	await expect(toolbar.getByRole('textbox', { name: 'To (UTC)' })).toHaveCount(1);
-	await expect(toolbar.getByRole('button', { name: /^Run$/ })).toHaveCount(0);
-	await expect(page.locator('[data-workbench-region="editor"] [data-explorer-actions]').getByRole('button', { name: /^Run$/ })).toHaveCount(1);
+	await expect(head.locator('[data-window-control]')).toHaveCount(1);
+	await expect(head.getByRole('textbox', { name: 'From (UTC)' })).toHaveCount(1);
+	await expect(head.getByRole('textbox', { name: 'To (UTC)' })).toHaveCount(1);
+	await expect(head.getByRole('button', { name: /^Run$/ })).toHaveCount(1);
 });
 
 test('THE ORACLE: the column rail always names the selected ledger\'s own columns', async ({ page, context }) => {
@@ -424,7 +423,7 @@ test('THE ORACLE: every Data explorer answer state renders distinct words, tint 
 	expect(seen.size).toBe(9);
 });
 
-test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', async ({ page, context }) => {
+test('THE ORACLE: a refused run after a fetch does not show held-byte text', async ({ page, context }) => {
 	// The page is opened on published alone, built with one day, so the one file it holds is that day's.
 	const root = test.info().outputPath('state');
 	await serveBuilt(context, root, { ledger: 'published', pinned: PINNED, days: [{ ago: 0, rows: 3 }] });
@@ -437,11 +436,12 @@ test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', 
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['3']]);
 	const line = page.locator('[data-explorer-action-line]');
-	await expect(line).toHaveAttribute('data-held-bytes', size);
+	await expect(line).not.toHaveAttribute('data-held-bytes');
 	await page.locator('#explorer-sql').fill('SELECT 1; SELECT 2');
 	await runExplorer(page);
 	await expectAnswer(page, 'refused');
-	await expect(line).toHaveAttribute('data-held-bytes', size);
+	await expect(line).not.toContainText('This page holds');
+	await expect(line).not.toHaveAttribute('data-held-bytes');
 });
 
 test('THE ORACLE: Data explorer does not scroll sideways at phone width', async ({ page }) => {
@@ -607,6 +607,7 @@ test('THE ORACLE: a count by day across a lost day breaks its line there, and th
 	expect(await tableRows(page), 'the answer is not the built days with rows').toEqual([['2030-06-12', '1'], ['2030-06-13', '2'], ['2030-06-15', '3']]);
 
 	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+	await page.getByRole('tab', { name: 'Chart' }).click();
 	const plot = panel.locator('[data-chart-type="dateSeries"]');
 	await expect(plot).toHaveCount(1);
 	const line = panel.locator('[data-date-series-marks="data-explorer-shape"] path');
@@ -639,6 +640,7 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 		await chooseExplorerQuestion(page, ['published'], sql);
 		await runExplorer(page);
 		await expectAnswer(page, 'table');
+		await page.getByRole('tab', { name: 'Chart' }).click();
 		if (await page.locator(`[data-shape-choice="${type}"] input`).count()) {
 			await page.locator(`[data-shape-choice="${type}"] input`).check();
 		}

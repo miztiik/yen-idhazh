@@ -1,7 +1,7 @@
 
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
+	import { ask, askCost, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
@@ -19,7 +19,7 @@
 	import ShapePanel from '$lib/console/explorer/ShapePanel.svelte';
 	import { chooseExplorerShapes, type ExplorerChartType } from '$lib/console/explorer/shape';
 	import { gapLines } from '$lib/console/explorer/gaps';
-	import { size, statusSentence, statusWithHeld } from '$lib/console/explorer/status';
+	import { size, statusSentence } from '$lib/console/explorer/status';
 	import { explorerAddress, parseExplorerAddress, LINK_TOO_LONG_NOTICE } from '$lib/console/explorer/address';
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
 	import { fetchRegistry, flattenRegistry, type LedgerRegistry, type RegistryLedger } from '$lib/console/explorer/registry';
@@ -47,7 +47,6 @@
 	let running = $state(false);
 	let refreshing = $state(false);
 	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], siteFrom: null, through: {} });
-	let heldBytes = $state(0);
 	let lastMs = $state<number | null>(null);
 	let lastRead = $state<FetchCost | null>(null);
 	let result = $state<AskResult | null>(null);
@@ -66,6 +65,7 @@
 	let storageWorks = $state(true);
 	let storageNoticeDismissed = $state(false);
 	let selectedShapeType = $state<ExplorerChartType | null>(null);
+	let activeResultTab = $state<'table' | 'chart'>('table');
 	let saving = $state(false);
 	let draftName = $state('');
 	let nameField = $state<HTMLInputElement | null>(null);
@@ -81,7 +81,7 @@
 	const persistentNotice = $derived(!storageWorks && !storageNoticeDismissed);
 	const readoutLines = $derived(config.readout_lines[readoutBand] ?? config.readout_lines[0]);
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
-	const statusText = $derived(statusWithHeld(statusLine(), heldBytes));
+	const statusText = $derived(statusLine());
 	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
 	const answerLink = $derived(result !== null && !running && answerOffscreen ? '#data-explorer-rows' : '');
 	const shapeBounds = $derived({
@@ -170,6 +170,24 @@
 		const empty = emptyLedgerLines();
 		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, days: spanDays(), firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
+	function tableSpanText(): string {
+		return runSpan === null ? '' : `Read from ${spanDays()} UTC days, ${dayMonth(runSpan.from)} to ${shortDate(runSpan.to)}.`;
+	}
+	function siteFromText(): string {
+		return result !== null && (result.state === 'ok' || result.state === 'quiet') && result.siteFrom !== null
+			? `Days before ${shortDate(result.siteFrom)} are not on this site.`
+			: '';
+	}
+	function selectResultTab(tab: 'table' | 'chart') {
+		activeResultTab = tab;
+	}
+	function resultTabKey(event: KeyboardEvent) {
+		if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+			event.preventDefault();
+			activeResultTab = activeResultTab === 'table' ? 'chart' : 'table';
+			void tick().then(() => document.getElementById(`explorer-tab-${activeResultTab}`)?.focus());
+		}
+	}
 	function toggle(name: LedgerName) {
 		selected = selected.includes(name) ? selected.filter((one) => one !== name) : [...selected, name];
 		void updateCostAndColumns();
@@ -208,7 +226,7 @@
 		registryError = null;
 		try {
 			await startAfresh();
-			heldBytes = 0;
+
 			registry = await fetchRegistry();
 			if (selected.length === 0) {
 				const first = config.examples.find((example) => example.ledgers.every((ledger) => published.includes(ledger)));
@@ -438,7 +456,6 @@
 			lastMs = Math.round(performance.now() - started);
 			result = answer;
 			selectedShapeType = null;
-			heldBytes = pageHeldBytes();
 			if ((answer.state === 'ok' || answer.state === 'quiet') && 'read' in answer) {
 				lastMs = answer.read.ms;
 				lastRead = answer.read;
@@ -519,19 +536,6 @@
 <div class="workbench" style={`--idle-height:${data.console.chart_height}px;--editor-lines:${editorLines};--readout-lines:${readoutLines}`}>
 <Panel id="data-explorer-ask" title="Your question">
 	<div class="question-panel">
-		<div class="workbench-toolbar" data-workbench-region="toolbar">
-			<WindowControl
-				days={windowDays}
-				presets={presets}
-				busy={costing || running}
-				ready={ready}
-				onChange={setWindow}
-			/>
-			<div class="date-fields">
-				<label>From (UTC)<input type="date" value={fromDay} min={minReachDay()} max={toDay < todayUtc() ? toDay : todayUtc()} oninput={(event) => changeFrom(event.currentTarget)} onchange={(event) => changeFrom(event.currentTarget)} /></label>
-				<label>To (UTC)<input type="date" value={toDay} min={fromDay > minReachDay() ? fromDay : minReachDay()} max={todayUtc()} oninput={(event) => changeTo(event.currentTarget)} onchange={(event) => changeTo(event.currentTarget)} /></label>
-			</div>
-		</div>
 		<div data-workbench-region="questions">
 			<QuestionStrip examples={config.examples} {published} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
 			<div class="question-links">
@@ -549,6 +553,17 @@
 				<div data-workbench-region="editor">
 					<div class="editor-head">
 						<label for="explorer-sql"><Icon id="query-editor" /> DuckDB SQL</label>
+						<WindowControl
+							days={windowDays}
+							presets={presets}
+							busy={costing || running}
+							ready={ready}
+							onChange={setWindow}
+						/>
+						<div class="date-fields">
+							<label>From (UTC)<input type="date" value={fromDay} min={minReachDay()} max={toDay < todayUtc() ? toDay : todayUtc()} oninput={(event) => changeFrom(event.currentTarget)} onchange={(event) => changeFrom(event.currentTarget)} /></label>
+							<label>To (UTC)<input type="date" value={toDay} min={fromDay > minReachDay() ? fromDay : minReachDay()} max={todayUtc()} oninput={(event) => changeTo(event.currentTarget)} onchange={(event) => changeTo(event.currentTarget)} /></label>
+						</div>
 						<div class="editor-actions" data-explorer-actions>
 							{#if saving}
 								<label>Name <input bind:this={nameField} bind:value={draftName} maxlength={config.save_name_max_chars} /></label>
@@ -569,7 +584,7 @@
 					</div>
 					<QueryEditor value={sql} maxChars={config.query_max_chars} lines={editorLines} onInput={(value) => { sql = value; if (linkNotices.some((notice) => notice.includes('came from a link'))) linkNotices = []; }} onRun={run} />
 				</div>
-				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href={answerLink} files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} {heldBytes} />
+				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href={answerLink} files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} />
 			</div>
 			<details data-workbench-region="columns" class="rail-region" bind:open={columnsOpen}>
 				<summary>{columnLabel} ({ledgerColumns.length})</summary>
@@ -600,63 +615,57 @@
 	{/each}
 {/snippet}
 
-<Panel id="data-explorer-rows" title="The answer" wide>
-	<div class="answer-region" data-workbench-region="answer">
-		<div class="region-bar" data-explorer-answer-head>
-			<!-- Seen, not heard: the panel's hidden heading already names it. -->
-			<span class="region-label" aria-hidden="true">Answer</span>
-			{#if result !== null && result.state === 'ok'}
+<div class="result-region" data-workbench-region="answer">
+	<div class="result-tabs" role="tablist" aria-label="Answer view" tabindex="-1" onkeydown={resultTabKey}>
+		<button id="explorer-tab-table" type="button" role="tab" aria-selected={activeResultTab === 'table'} aria-controls="data-explorer-rows" tabindex={activeResultTab === 'table' ? 0 : -1} onclick={() => selectResultTab('table')}>Table</button>
+		<button id="explorer-tab-chart" type="button" role="tab" aria-selected={activeResultTab === 'chart'} aria-controls="data-explorer-shape" tabindex={activeResultTab === 'chart' ? 0 : -1} onclick={() => selectResultTab('chart')}>Chart</button>
+		<div class="result-actions">
+			{#if activeResultTab === 'table' && result !== null && result.state === 'ok'}
 				<CopyAnswer columns={answerColumns} rows={orderedRows.length > 0 ? orderedRows : answerRows} onMessage={(text) => (copyNotice = text)} />
+			{:else if activeResultTab === 'chart'}
+				{@render shapeActions()}
 			{/if}
 		</div>
-	{#key running ? 'loading' : result?.state ?? 'idle'}
-		{#if running}
-			<div class="answer-state shimmer" data-state="loading"></div>
-		{:else if result === null}
-			<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
-		{:else if result.state === 'ok'}
-				<div class="answer-note">
-					{#if runSpan}Read from {spanDays()} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}
-					{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}
-					{@render gapNotes(result.gaps)}
-				</div>
-			<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} onOrderChange={(rows) => (orderedRows = rows)} />
+	</div>
+	<div id="data-explorer-rows" data-console-panel-id="data-explorer-rows" role="tabpanel" aria-labelledby="explorer-tab-table" hidden={activeResultTab !== 'table'}>
+		<h2 class="sr-only">The answer</h2>
+		{#key running ? 'loading' : result?.state ?? 'idle'}
+			{#if running}
+				<div class="answer-state shimmer" data-state="loading"></div>
+			{:else if result === null}
+				<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
+			{:else if result.state === 'ok'}
+				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={tableSpanText()} siteFromText={siteFromText()} gapLines={gapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
 			{:else if result.state === 'quiet'}
-				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if result.siteFrom !== null} Days before {shortDate(result.siteFrom)} are not on this site.{/if}{@render gapNotes(result.gaps)}</div>
-		{:else if result.state === 'missing'}
-			<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
-		{:else if result.state === 'unreachable'}
-			<div class="answer-state warn" data-state="unreachable">{explorerUnreachableSentence(result.ledger, result.at, result.fault)}</div>
-		{:else if result.state === 'refused'}
-			<div class="answer-state" data-state="refused">{refusedSentence(result.because)}{#if result.because.kind === 'engine-error'}<pre>{result.because.message}</pre>{/if}</div>
-		{/if}
-	{/key}
+				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if result.siteFrom !== null} {siteFromText()}{/if}{@render gapNotes(result.gaps)}</div>
+			{:else if result.state === 'missing'}
+				<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
+			{:else if result.state === 'unreachable'}
+				<div class="answer-state warn" data-state="unreachable">{explorerUnreachableSentence(result.ledger, result.at, result.fault)}</div>
+			{:else if result.state === 'refused'}
+				<div class="answer-state" data-state="refused">{refusedSentence(result.because)}{#if result.because.kind === 'engine-error'}<pre>{result.because.message}</pre>{/if}</div>
+			{/if}
+		{/key}
 	</div>
-</Panel>
-
-<Panel id="data-explorer-shape" title="The answer, drawn" wide>
-	<div class="chart-region" data-workbench-region="chart">
-		<div class="region-bar">
-			<span class="region-label" aria-hidden="true">Chart</span>
-			{@render shapeActions()}
-		</div>
-	{#key running ? 'loading' : result?.state ?? 'idle'}
-		{#if running}
-			<div class="answer-state shimmer" data-state="loading"></div>
-		{:else if result === null}
-			<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
-		{:else if result.state === 'ok'}
-			<div class="chart-body"><ShapePanel columns={result.columns} rows={result.rows as Row[]} lostDays={result.gaps.flatMap((gap) => gap.lostDays)} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} /></div>
-		{:else if result.state === 'quiet'}
-			<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
-		{:else if result.state === 'refused'}
-			<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
-		{:else}
-			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? 'Part of the data is not on this site, so nothing to draw.' : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
-		{/if}
-	{/key}
+	<div id="data-explorer-shape" data-console-panel-id="data-explorer-shape" data-workbench-region="chart" role="tabpanel" aria-labelledby="explorer-tab-chart" hidden={activeResultTab !== 'chart'}>
+		<h2 class="sr-only">The answer, drawn</h2>
+		{#key running ? 'loading' : result?.state ?? 'idle'}
+			{#if running}
+				<div class="answer-state shimmer" data-state="loading"></div>
+			{:else if result === null}
+				<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
+			{:else if result.state === 'ok'}
+				<div class="chart-body"><ShapePanel columns={result.columns} rows={result.rows as Row[]} lostDays={result.gaps.flatMap((gap) => gap.lostDays)} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} /></div>
+			{:else if result.state === 'quiet'}
+				<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
+			{:else if result.state === 'refused'}
+				<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
+			{:else}
+				<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? 'Part of the data is not on this site, so nothing to draw.' : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
+			{/if}
+		{/key}
 	</div>
-</Panel>
+</div>
 </div>
 
 <style>
@@ -674,46 +683,22 @@
 	}
 
 	.question-panel { display: grid; }
-	.workbench-toolbar {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
-		align-items: center;
-		gap: var(--space-2);
-		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
-		padding: var(--space-1) var(--space-3);
-		border-block-end: 1px solid var(--color-rule);
-	}
-
-	:global([data-workbench-region='toolbar'] [data-window-control] button) {
-		border-radius: 0;
-	}
-
-	:global([data-workbench-region='toolbar'] [data-window-control] .choice-tiles) {
+	:global([data-workbench-region='editor'] [data-window-control] .choice-tiles) {
 		gap: 0;
 	}
 
-	:global([data-workbench-region='toolbar'] [data-window-control] .choice-tile) {
+	:global([data-workbench-region='editor'] [data-window-control] .choice-tile) {
 		min-block-size: var(--workbench-control);
 		min-inline-size: var(--workbench-control);
 		border-radius: 0;
 	}
 
-	:global([data-workbench-region='toolbar'] [data-window-control] button:first-child) {
+	:global([data-workbench-region='editor'] [data-window-control] .choice-tile:first-child) {
 		border-start-start-radius: var(--radius-md);
 		border-end-start-radius: var(--radius-md);
 	}
 
-	:global([data-workbench-region='toolbar'] [data-window-control] .choice-tile:first-child) {
-		border-start-start-radius: var(--radius-md);
-		border-end-start-radius: var(--radius-md);
-	}
-
-	:global([data-workbench-region='toolbar'] [data-window-control] button:last-child) {
-		border-start-end-radius: var(--radius-md);
-		border-end-end-radius: var(--radius-md);
-	}
-
-	:global([data-workbench-region='toolbar'] [data-window-control] .choice-tile:last-child) {
+	:global([data-workbench-region='editor'] [data-window-control] .choice-tile:last-child) {
 		border-start-end-radius: var(--radius-md);
 		border-end-end-radius: var(--radius-md);
 	}
@@ -755,8 +740,7 @@
 		font: inherit;
 	}
 
-	:global([data-workbench-region='toolbar'] [data-window-control]),
-	:global([data-workbench-region='toolbar'] [data-window-control] button),
+	:global([data-workbench-region='editor'] [data-window-control]),
 	:global([data-workbench-region='questions'] .question-strip button),
 	:global([data-workbench-region='questions'] .question-strip summary),
 	:global([data-workbench-region='questions'] .history-list summary) {
@@ -841,7 +825,7 @@
 
 	.question-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
 	.editor-stack { display: grid; align-content: start; }
-	.state, .answer-note { margin: 0; padding-inline: var(--space-3); color: var(--color-text-secondary); }
+	.state { margin: 0; padding-inline: var(--space-3); color: var(--color-text-secondary); }
 	.gap-note { margin: var(--space-1) 0 0; }
 	.warn { color: var(--band-low); }
 	.answer-state { min-block-size: 0; block-size: 100%; display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); }
@@ -882,12 +866,11 @@
 		padding: var(--space-3);
 	}
 
-	.editor-head,
-	.region-bar {
+	.editor-head {
 		min-block-size: var(--workbench-control);
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		justify-content: space-between;
 		gap: var(--space-2);
 		color: var(--color-text-tertiary);
 		font-size: var(--text-xs);
@@ -899,8 +882,7 @@
 	/* One line: the words at its start are cut short before any button moves
 	   or wraps, because a heading line that wraps after a click moves the
 	   region under it. */
-	.editor-head > label,
-	.region-label {
+	.editor-head > label {
 		flex: 0 1000 auto;
 		min-inline-size: 0;
 		overflow: hidden;
@@ -908,18 +890,13 @@
 		white-space: nowrap;
 	}
 
-	.region-bar {
-		padding-inline: var(--space-3);
-	}
-
-	.region-bar > :global(:not(.region-label)) {
-		flex: none;
-	}
-
 	.editor-actions {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
+		margin-inline-start: auto;
+		flex: 0 0 min(100%, 32rem);
+		justify-content: flex-end;
 	}
 
 	.editor-actions > :global(*) {
@@ -941,8 +918,8 @@
 	}
 
 	.editor-actions button,
-	.region-bar :global(button),
-	.region-bar :global(.choice-tile) {
+	.result-actions :global(button),
+	.result-actions :global(.choice-tile) {
 		font-size: var(--text-sm);
 		font-weight: 400;
 		letter-spacing: normal;
@@ -953,31 +930,59 @@
 		font-weight: 600;
 	}
 
-	.answer-region {
-		contain: size;
-		display: grid;
-		grid-template-rows: var(--workbench-control) auto minmax(0, 1fr);
-		border-block-start: 1px solid var(--color-rule);
-		background: var(--color-surface);
-	}
-
-	.answer-region > :global(.answer-state) {
-		grid-row: 2 / -1;
-	}
-
-	/* The heading line holds still and the drawing scrolls in its own box beneath it, so
-	   nothing the chart draws ever passes under the shape tiles. */
-	.chart-region {
+	.result-region {
 		contain: size;
 		display: grid;
 		grid-template-rows: var(--workbench-control) minmax(0, 1fr);
-		overflow: clip;
+		min-block-size: 0;
 		border-block-start: 1px solid var(--color-rule);
+		background: var(--color-bg);
+	}
+
+	.result-tabs {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		padding-inline: var(--space-3);
+		border-block-end: 1px solid var(--color-rule);
+		min-inline-size: 0;
+	}
+
+	.result-tabs > [role='tab'] {
+		min-block-size: var(--workbench-control);
+		border: 0;
+		border-block-end: 3px solid transparent;
+		border-radius: 0;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+		font-weight: 600;
+	}
+
+	.result-tabs > [role='tab'][aria-selected='true'] {
+		border-block-end-color: var(--chart-1);
+		color: var(--color-text);
+	}
+
+	.result-actions {
+		margin-inline-start: auto;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: var(--space-2);
+		min-inline-size: 0;
+	}
+
+	.result-region > [role='tabpanel'] {
+		min-block-size: 0;
+		display: grid;
 		background: var(--color-surface);
 	}
 
-	.chart-region > :global(.answer-state) {
-		block-size: 100%;
+	.result-region > [role='tabpanel'][hidden] {
+		display: none;
 	}
 
 	.chart-body {
@@ -1003,7 +1008,7 @@
 			flex: 1 1 0;
 			min-block-size: 0;
 			display: grid;
-			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			grid-template-columns: minmax(0, 1fr);
 			grid-template-rows: minmax(max-content, 1fr) minmax(0, 1fr);
 		}
 
@@ -1033,18 +1038,12 @@
 			grid-template-rows: auto 1fr;
 		}
 
-		.chart-region {
-			min-block-size: calc(var(--workbench-control) + var(--idle-height));
-			border-inline-start: 1px solid var(--color-rule);
-		}
+		.result-region { min-block-size: 0; }
 	}
 
 	/* Below it the regions stack in one column and the page scrolls: their
 	   smallest useful sizes add up to more than one screen. */
 	@media (max-width: 1023px) {
-		.workbench-toolbar {
-			grid-template-columns: minmax(0, 1fr);
-		}
 		.run-shortcut {
 			display: none;
 		}
@@ -1075,12 +1074,7 @@
 		.rail-region:not([open]) > :global(.column-list) {
 			display: none;
 		}
-		.answer-region {
-			min-block-size: 100svh;
-		}
-		.chart-region {
-			block-size: calc(var(--workbench-control) + var(--idle-height) + 4rem);
-		}
+		.result-region { min-block-size: 100svh; }
 	}
 
 	@media (max-width: 639px) {

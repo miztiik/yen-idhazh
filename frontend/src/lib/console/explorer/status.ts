@@ -58,9 +58,9 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'running-query':
 			return 'Running the question.';
 		case 'answered':
-			return `Answered in ${elapsed(input.ms)}. Fetched ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}; ${input.read?.alreadyHeld ?? 0} more were already in this page.`;
+			return `Answered in ${elapsed(input.ms)}. Read ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
 		case 'quiet':
-			return `Ran in ${elapsed(input.ms)} and matched no rows. Fetched ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
+			return `Ran in ${elapsed(input.ms)} and matched no rows. Read ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
 		case 'refused':
 			return 'Did not run. The reason is where the answer would be.';
 		case 'missing':
@@ -76,8 +76,4 @@ export function statusSentence(input: ExplorerStatusInput): string {
 			return `${prefix}${engine}${empty}`;
 		}
 	}
-}
-
-export function statusWithHeld(sentence: string, heldBytes: number): string {
-	return `${sentence} This page holds ${size(heldBytes)} of fetched files; a reload empties it.`;
 }

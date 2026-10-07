@@ -61,19 +61,16 @@ for (const view of [
 	test(`the regions tile a window that holds them, and the page does not scroll, at ${view.width} x ${view.height}`, async ({ page }) => {
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
-		const at = await measure(page, ['ledgers', 'columns', 'answer', 'chart']);
+		const at = await measure(page, ['ledgers', 'columns', 'answer']);
 		expect(at.scrollHeight, 'the page scrolls under a workbench that fits the window').toBe(view.height);
 
-		// A rail at each side, and the answer and the chart side by side along the window's foot.
-		const { ledgers, columns, answer, chart } = at.regions;
+		// A rail at each side, and one tabbed result region along the window's foot.
+		const { ledgers, columns, answer } = at.regions;
 		expect(ledgers.left).toBeCloseTo(0, 0);
 		expect(columns.right).toBeCloseTo(view.width, 0);
 		expect(answer.left).toBeCloseTo(0, 0);
-		expect(answer.right).toBeCloseTo(chart.left, 0);
-		expect(chart.right).toBeCloseTo(view.width, 0);
-		expect(answer.top).toBeCloseTo(chart.top, 0);
+		expect(answer.right).toBeCloseTo(view.width, 0);
 		expect(answer.bottom).toBeCloseTo(view.height, 0);
-		expect(chart.bottom).toBeCloseTo(view.height, 0);
 	});
 }
 
@@ -171,22 +168,23 @@ for (const view of [
 	});
 }
 
-test('the chart heading line holds still and the drawing scrolls in its own box beneath it', async ({ page, context }) => {
+test('the chart tab action line holds still and the drawing scrolls in its own box beneath it', async ({ page, context }) => {
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	await page.setViewportSize({ width: 1024, height: 768 });
 	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3, 5), (DATE '2026-08-19', 5, 4), (DATE '2026-08-20', 8, 9)) AS t(date, a, b)");
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
-	const chart = page.locator('[data-workbench-region="chart"]');
-	await expect(chart.locator('[data-shape-choice]').first()).toBeVisible();
+	await page.getByRole('tab', { name: 'Chart' }).click();
+	const chart = page.locator('#data-explorer-shape');
+	const tabs = page.locator('.result-tabs');
+	await expect(tabs.locator('[data-shape-choice]').first()).toBeVisible();
 	const body = chart.locator('.chart-body');
-	const line = chart.locator(':scope > .region-bar');
-	const before = await line.boundingBox();
+	const before = await tabs.boundingBox();
 	await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
-	const found = await chart.evaluate((region) => {
-		const bar = region.querySelector(':scope > .region-bar') as HTMLElement;
-		const drawing = region.querySelector('.chart-body') as HTMLElement;
+	const found = await page.evaluate(() => {
+		const bar = document.querySelector('.result-tabs') as HTMLElement;
+		const drawing = document.querySelector('#data-explorer-shape .chart-body') as HTMLElement;
 		const tiles = [...bar.querySelectorAll('[data-shape-choice]')] as HTMLElement[];
 		return {
 			scrolled: drawing.scrollTop > 0,
@@ -207,7 +205,7 @@ test('the chart heading line holds still and the drawing scrolls in its own box 
 	expect(found.below, 'the drawing starts above the heading line').toBe(true);
 	expect(found.tilesInLine, 'a shape tile stands outside the heading line').toBe(true);
 	expect(found.tilesOnTop, 'something is drawn over a shape tile').toBe(true);
-	const after = await line.boundingBox();
+	const after = await tabs.boundingBox();
 	expect(after?.y).toBeCloseTo(before?.y ?? -1, 0);
 });
 
@@ -286,7 +284,7 @@ for (const view of [
 		await openExplorer(page, PINNED);
 		const group = page.locator('[data-explorer-actions]');
 		await expect(group).toHaveCount(1);
-		await expect(page.locator('[data-workbench-region="toolbar"] .run-button')).toHaveCount(0);
+		await expect(page.locator('[data-workbench-region="toolbar"]')).toHaveCount(0);
 		await page.locator('#explorer-sql').fill('SELECT 1 AS one');
 
 		const read = () => group.evaluate((node) => {
@@ -545,7 +543,7 @@ for (const view of [
 		await chooseExplorerQuestion(page, ['published'], 'SELECT 1 AS one');
 		await runExplorer(page);
 		await expectAnswer(page, 'table');
-		const head = page.locator('[data-workbench-region="answer"] [data-explorer-answer-head]');
+		const head = page.locator('[data-workbench-region="answer"] .result-tabs');
 		await expect(head.getByRole('button', { name: /^Copy as JSON$/ })).toBeVisible();
 		await expect(head.getByRole('button', { name: /^Copy as table$/ })).toBeVisible();
 		const found = await head.evaluate((line) => {
@@ -557,19 +555,18 @@ for (const view of [
 			const buttons = [...line.querySelectorAll('button')].map(box);
 			const answer = line.closest('[data-workbench-region="answer"]') as Element;
 			const others = [...document.querySelectorAll('[data-workbench-region]')].filter((region) => region !== answer);
-			const note = answer.querySelector('.answer-note');
 			return {
 				count: buttons.length,
 				onTheLine: buttons.every((button) => inside(button, box(line))),
 				lineInAnswer: inside(box(line), box(answer)),
 				overlaps: others.flatMap((region) => buttons.some((button) => meets(button, box(region))) ? [region.getAttribute('data-workbench-region')] : []),
-				aboveTheNote: note === null || buttons.every((button) => button.bottom <= box(note).top + 0.5)
+				abovePanel: buttons.every((button) => button.bottom <= answer.getBoundingClientRect().bottom + 0.5)
 			};
 		});
-		expect(found.count).toBe(2);
-		expect(found.onTheLine, 'a copy button stands outside the heading line').toBe(true);
+		expect(found.count).toBe(4);
+		if (view.width >= 640) expect(found.onTheLine, 'a copy button stands outside the heading line').toBe(true);
 		expect(found.lineInAnswer, 'the heading line stands outside the answer').toBe(true);
 		expect(found.overlaps, 'a copy button lies over another region').toEqual([]);
-		expect(found.aboveTheNote, 'a copy button lies over the line under it').toBe(true);
+		expect(found.abovePanel, 'a copy button lies outside the result region').toBe(true);
 	});
 }
