@@ -118,10 +118,10 @@ function textCells(row: Row): Record<string, string> {
  * site's newest published day, so a record whose rows stop before the window
  * answers with no rows rather than with its last ones, which would move its
  * window into the past. Where its rows stop is read from the record's indexes
- * instead, as `lastRows`, so the route can say so without reading a day it does
- * not draw. A window that starts before the record began is cut there by the
- * door, and a day after the newest packed day is not packed yet, so the door
- * clamps it away.
+ * instead, as `lastRows`, and where the record begins, as `first`, so the route
+ * can say both without reading a day it does not draw. A window that starts
+ * before the record began is cut there by the door, and a day after the newest
+ * packed day is not packed yet, so the door clamps it away.
  *
  * The read names the days in the window the record's index records lost, and
  * the files the packing of its periods set aside unread.
@@ -148,6 +148,7 @@ export async function windowRows(
 	const read: RecordRead = {
 		state: 'read',
 		through: found.through ?? reach.through,
+		first: reach.first,
 		lastRows: reach.lastRows,
 		lostDays: found.lostDays,
 		setAside: found.setAside
