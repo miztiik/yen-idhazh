@@ -102,6 +102,20 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   node node_modules/@playwright/test/cli.js test --config playwright.logic.config.ts tests/ledger-lifecycle.spec.ts; "exit $LASTEXITCODE"
   ```
 
+- **`test:changed` stops with `The selected Python executable does not exist.` in a worktree with no `.venv`; the Python is there, and the launcher refused the name it chose itself.**
+  With no `.venv`, `frontend/scripts/run-checks.ts` falls back to the bare
+  name `python` and hands that name to the run inside its lock as
+  `IDHAZH_PYTHON`, which that run refuses because no file has that path
+  ([defect 62](../../../TODO/20260823-known-defects-plan.md)). Plan 62's row
+  L20 met it on 2026-10-07. The tell is the message right after
+  `[checks] waiting for the test slot` and a second copy of the selection.
+  Set up `.venv` as
+  [run-the-gates.md](../../how-to/run-the-gates.md#set-up-the-backend-environment)
+  says, or hand the launcher a full path:
+  ```powershell
+  $env:IDHAZH_PYTHON = (Get-Command python).Source
+  ```
+
 ## Two heavy gates on one box
 
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.

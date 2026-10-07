@@ -1,6 +1,6 @@
 # What the quality and source panels draw
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-07
 
 The panels that report what the model wrote and how the sources behaved: the
 eleven measures on `/console/model/`, the two distributions under them, the
@@ -201,8 +201,11 @@ fourteenth day of an unbroken run are the same number and two completely
 different situations, so the panel adds a time axis and reads the run length off
 it.
 
-- **The dwell is the area.** A 2px rule in `--fill-low` sits under exactly the
- contiguous under-the-mark squares at the newest end. A `9/14` chip with no
+- **The dwell is the area.** A 2px rule in `--fill-low` sits under the run the
+ producer counted, from its oldest square under the mark to the newest square. A
+ day the source decided nothing breaks no run, so the rule reads through a square
+ with no share, as the count does. A row whose squares cannot hold its count draws
+ no rule, and its line still prints the count in words. A `9/14` chip with no
  marked run asks the operator to trust a count they cannot check against the
  picture beside it.
 - **The track is the full 0 to 100 percent share, and the marker is the alarm

@@ -21,7 +21,7 @@ from pydantic import TypeAdapter
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.knobs.gardener import TaskPolicy
+from idhazh.contracts.knobs.gardener import GardenerConfig, TaskPolicy
 from idhazh.gardener import registry, runner
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
@@ -44,6 +44,12 @@ def declared() -> dict[str, TaskPolicy]:
         path.stem: _POLICY.validate_json(path.read_text(encoding="utf-8"))
         for path in (folder / name for name in COMMITTED_DECLARATIONS)
     }
+
+
+def first_ledger_year() -> str:
+    """The first UTC year a ledger can hold, as the committed `config/idhazh_gardener.json` says."""
+    knobs = (CONFIG_DIR / "idhazh_gardener.json").read_text(encoding="utf-8")
+    return GardenerConfig.model_validate_json(knobs).first_ledger_year
 
 
 def committed_folders(root: Path, tasks: dict[str, TaskPolicy]) -> frozenset[str]:
@@ -105,6 +111,7 @@ def context_for(
         git_sha=GIT_SHA,
         owned_folders=folders.walk,
         listing=FileListing.from_disk(root, listed, paths=named),
+        first_ledger_year=first_ledger_year(),
         period_range=period_range,
     )
 

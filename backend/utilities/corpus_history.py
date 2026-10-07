@@ -486,6 +486,7 @@ def _squash_as_declared(
         git_sha=_git(repo, "rev-parse", "HEAD").strip(),
         owned_folders=tuple(policy.owns),
         listing=FileListing.from_paths(repo, (), folders=policy.owns),
+        first_ledger_year=settings.config.first_ledger_year,
     )
 
     def record() -> tuple[str, ...]:

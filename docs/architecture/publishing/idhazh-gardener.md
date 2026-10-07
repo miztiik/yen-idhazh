@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -37,7 +37,7 @@ cannot change which tasks a wake plans.
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
 | 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each retention task's fixed UTC period window and each compaction's ledger indexes and watermarks, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each retention task's fixed UTC period window and each compaction's ledger indexes, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
 | 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
@@ -144,7 +144,6 @@ flowchart TB
   subgraph TREE["The committed tree - state/"]
     RAW[("state/raw/ledger/YYYY/MM/DD/file_id.parquet")]
     COMPACT[("state/compact/ledger/daily, monthly, index")]
-    WM[("watermark.json, one for each period")]
   end
 
   WAKE --> PLAN
@@ -176,8 +175,7 @@ flowchart TB
   IDLE --> HIST
   REAPPLY -->|"the record, and every live task's files"| RAW
   RAW -->|"a live compaction takes a due day into its day file"| COMPACT
-  COMPACT -->|"watermark moved last"| WM
-  WM -.->|"Next compaction reads the updated watermark"| RUN
+  COMPACT -.->|"the next compaction works out its marks from the indexes"| RUN
 
   classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
   classDef decision fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
@@ -193,7 +191,7 @@ flowchart TB
   class OK yes;
   class OUTSIDE,REFUSED,ALARM no;
   class IDLE,STALEW,LOSTW warn;
-  class RAW,COMPACT,WM ledger;
+  class RAW,COMPACT ledger;
   class OPS sysOps;
   class TREE sysPublish;
 ```

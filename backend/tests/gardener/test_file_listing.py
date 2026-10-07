@@ -353,21 +353,21 @@ def test_a_file_entry_brings_only_the_files_beside_it(tmp_path: Path) -> None:
         tmp_path,
         ["state/compact/x"],
         [
-            TreeEntry(path="state/compact/x/daily/watermark.json", blob="1" * 40, size=5),
-            TreeEntry(path="state/compact/x/daily/2026/09/01.parquet", blob="2" * 40, size=7),
+            TreeEntry(path="state/compact/x/daily/2026/09/01.parquet", blob="1" * 40, size=5),
+            TreeEntry(path="state/compact/x/daily/2026/09/old/01.parquet", blob="2" * 40, size=7),
             TreeEntry(path="state/compact/x/index/daily.json", blob="3" * 40, size=9),
         ],
         {},
         paths=[
-            "state/compact/x/daily/watermark.json",
-            "state/compact/x/daily/2026/09",
+            "state/compact/x/daily/2026/09/01.parquet",
+            "state/compact/x/daily/2026/09/old",
             "state/compact/x/index/daily.json",
         ],
         widen=lambda _: None,
     )
 
     with pytest.raises(FileNotFetchedError) as refused:
-        listing.fetch(beside=["state/compact/x/daily/watermark.json"])
+        listing.fetch(beside=["state/compact/x/daily/2026/09/01.parquet"])
 
     assert "(1 such files)" in str(refused.value), "a file entry brought a folder beside it"
 
