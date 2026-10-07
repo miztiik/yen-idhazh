@@ -16,6 +16,7 @@ import {
 	type RouteRecord
 } from '../src/lib/console/recording';
 import { checkedRequest } from '../src/lib/data/slice-shapes';
+import { daysBetween } from '../src/lib/data/slice';
 import { HOST_FINGERPRINT_COLUMNS, machineRecord } from '../src/lib/server/host-fingerprint';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { datedFirst, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
@@ -129,6 +130,7 @@ test.describe('reading a packed record', () => {
 		expect(table.read).toEqual({
 			state: 'read',
 			through: '2030-06-15',
+			first: '2030-06-14',
 			lastRows: { period: 'daily', covers: '2030-06-15' },
 			lostDays: [],
 			setAside: {}
@@ -159,6 +161,7 @@ test.describe('reading a packed record', () => {
 		expect(table.read).toEqual({
 			state: 'read',
 			through: '2030-06-14',
+			first: '2030-06-12',
 			lastRows: { period: 'daily', covers: '2030-06-13' },
 			lostDays: [],
 			setAside: {}
@@ -179,6 +182,7 @@ test.describe('reading a packed record', () => {
 		expect(table.read).toEqual({
 			state: 'read',
 			through: '2030-06-15',
+			first: '2030-06-12',
 			lastRows: { period: 'daily', covers: '2030-06-14' },
 			lostDays: [],
 			setAside: {}
@@ -213,6 +217,7 @@ test.describe('reading a packed record', () => {
 		expect(table.read).toEqual({
 			state: 'read',
 			through: '2030-06-15',
+			first: '2030-06-10',
 			lastRows: { period: 'daily', covers: '2030-06-15' },
 			lostDays: ['2030-06-14'],
 			setAside: { '2030-06-14': 2, '2030-06-15': 1 }
@@ -242,6 +247,7 @@ test.describe('reading a packed record', () => {
 		expect(table.read).toEqual({
 			state: 'read',
 			through: '2030-06-14',
+			first: '2030-06-11',
 			lastRows: { period: 'daily', covers: '2030-06-13' },
 			lostDays: [],
 			setAside: {}
@@ -309,12 +315,13 @@ async function builtSite(days: readonly BuiltDay[]): Promise<{ digest: string; s
 const STOPPED = [...everyDay(45, 40), ...quietDays(39, 1)];
 
 test.describe('what a route says about the records it read', () => {
+	/** A record read whole; every record here began long before the window its notes are for. */
 	const read = (
 		through: string,
 		lostDays: string[] = [],
 		setAside: Record<string, number> = {},
 		lastRows: { period: 'daily' | 'monthly' | 'yearly'; covers: string } | null = { period: 'daily', covers: through }
-	): RecordRead => ({ state: 'read', through, lastRows, lostDays, setAside });
+	): RecordRead => ({ state: 'read', through, first: '2025-01-01', lastRows, lostDays, setAside });
 
 	test('records read and packed as far as the newest published day say nothing', () => {
 		expect(
@@ -591,6 +598,7 @@ test.describe('THE ORACLE for the Hardware note: a day the machine record lost r
 		expect(machine.read).toEqual({
 			state: 'read',
 			through: '2030-06-15',
+			first: '2030-06-13',
 			lastRows: { period: 'daily', covers: '2030-06-15' },
 			lostDays: ['2030-06-14'],
 			setAside: {}
@@ -609,7 +617,8 @@ test.describe('THE ORACLE for the Hardware note: a day the machine record lost r
 			enabled: true,
 			recorded: [...new Set(machine.rows.map((row) => row.date))],
 			window: ['2030-06-14', '2030-06-15'],
-			daysWithNoRecord: machine.read.state === 'read' ? machine.read.lostDays : [],
+			read: machine.read,
+			open: { days: 3, start: '2030-06-13', end: '2030-06-15' },
 			figures: 'machine record'
 		});
 		expect(recording.startedMidWindow).toBeNull();
@@ -639,6 +648,7 @@ test.describe('THE ORACLE: a console window ends on the site\'s newest published
 		expect(table.read).toEqual({
 			state: 'read',
 			through: '2030-06-14',
+			first: '2030-05-01',
 			lastRows: { period: 'daily', covers: '2030-05-06' },
 			lostDays: [],
 			setAside: {}
@@ -700,6 +710,53 @@ test.describe('THE ORACLE: the "Measurement is off" line names only a day on scr
 			[14, at],
 			[30, at],
 			[90, at]
+		]);
+	});
+});
+
+test.describe('THE ORACLE: a "Recording started" line names a start the open window shows, and only a true one', () => {
+	/** The started line Hardware prints over each window it offers, for a machine record built
+	 *  with `days`. The route reads the widest window once and hands each window the days of it
+	 *  the counters recorded; here every day of a window had a run. */
+	async function startedOver(days: readonly BuiltDay[]): Promise<[number, string | null][]> {
+		const { digest, state } = await builtSite(days);
+		const day = windowDay(digest);
+		const machine = await machineRecord(openOn(day, 90), state);
+		const recorded = [...new Set(machine.rows.map((row) => row.date))];
+		return offeredOn(day).map((open) => [
+			open.days,
+			recordingNotes({
+				enabled: true,
+				recorded: recorded.filter((date) => date >= open.start && date <= open.end),
+				window: daysBetween(open.start, open.end),
+				read: machine.read,
+				open
+			}).startedMidWindow
+		]);
+	}
+
+	test('a record that began before a window is never said to start inside it', async () => {
+		// One row a day from 16 Apr to 31 May 2030, quiet from 1 to 7 Jun, then one row a day to
+		// 14 Jun, the day before the newest published day. The 14-day window, 2 to 15 Jun,
+		// starts with 6 quiet days, so its first recorded day is 8 Jun; the record began on
+		// 16 Apr, which only the 90-day window holds.
+		expect(await startedOver([...everyDay(60, 15), ...quietDays(14, 8), ...everyDay(7, 1)])).toEqual([
+			[1, null],
+			[7, null],
+			[14, null],
+			[30, null],
+			[90, 'Recording started on 16 Apr 2030. Earlier in this window, 29 days had a run but no server figures.']
+		]);
+	});
+
+	test('a record that began inside a window names its first day there, and in no window that does not show it', async () => {
+		// One row a day from 10 to 14 Jun 2030. The 1-day window, 15 Jun, does not show the 10th.
+		expect(await startedOver(everyDay(5, 1))).toEqual([
+			[1, null],
+			[7, 'Recording started on 10 Jun 2030. Earlier in this window, 1 day had a run but no server figures.'],
+			[14, 'Recording started on 10 Jun 2030. Earlier in this window, 8 days had a run but no server figures.'],
+			[30, 'Recording started on 10 Jun 2030. Earlier in this window, 24 days had a run but no server figures.'],
+			[90, 'Recording started on 10 Jun 2030. Earlier in this window, 84 days had a run but no server figures.']
 		]);
 	});
 });

@@ -77,8 +77,13 @@ it measured. Only the dates and counts inside them are computed, and every one
 is derived from the ledger that is missing - **a date that is not true is worse
 than no date**. None is apologetic, none is styled as an error, and none is a
 banner across the page: three panels can be in three different states on one
-day. Susan chose the words of the first five on 2026-08-30, and Reader and Jony
-chose the words of the measurement-off line on 2026-10-07.
+day. On Hardware and Summaries they sit after the record notes and before the
+first section, in one order - off, sampled, started, then the days one
+instrument covered alone - so a page whose sections have nothing to draw still
+says what the recording was doing; Jony chose the place on 2026-10-07. Susan
+chose the words of the first five on 2026-08-30. Reader and Jony chose new words
+for the measurement-off line on 2026-10-07, and Reader for the started line the
+same day.
 
 Two of them are worth reading twice. **A sampled figure is never scaled up** -
 multiplying a quarter-sample by four publishes an estimate as a measurement,
@@ -94,6 +99,17 @@ that no window here does. It says nothing has been recorded at all only of a
 record whose index names no row, in every window. Where the page has not read
 what would make a claim true - a record not packed or not loaded, a window that
 holds no packed day - it says only that measurement is off and how to turn it on.
+
+**The started line names only a start the open window shows.** It is worked out
+once for each window the control offers. It prints only for a record whose
+indexes begin inside the open window, so it never says that recording started
+inside a window when it started before it; the record's first day comes from its
+indexes, and no day before the window is read to know it. The day it names is the
+first day the instrument ran inside the window - a day it recorded, or a day
+whose record was lost - and it counts the days of the window before that day
+that had a run. Once a record's first month is packed into one file, its indexes
+know the month and not the day, so a window that starts inside that month, before
+the record began, prints no started line: no line rather than a false date.
 
 ## A record that had not begun, a quiet day, and a record that was destroyed
 
