@@ -74,14 +74,19 @@ def add_the_run(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
 
 
-def settings_or_none(config_dir: Path) -> GardenerSettings | None:
-    """The loaded declarations with the event log installed at their level, or None once refused."""
+def settings_or_none(config_dir: Path, *, github: bool = False) -> GardenerSettings | None:
+    """The loaded declarations with the event log installed at their level, or None once refused.
+
+    `github` says the caller runs as a step on GitHub, so the log also writes
+    the workflow commands GitHub reads (`event_log.GitHubLines`). Only the
+    landing utility knows that, and it says so.
+    """
     try:
         settings = config.load_gardener(config_dir)
     except ValueError as refusal:
         print(refusal, file=sys.stderr)
         return None
-    event_log.install(settings.app.logging.level.value)
+    event_log.install(settings.app.logging.level.value, github=github)
     return settings
 
 
