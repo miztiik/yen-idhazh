@@ -12,8 +12,8 @@ then the day's raw files oldest first, one file's rows per work unit - the last
 file of its highest attempt - and then one row per key, by the ledger's own
 key and preference. The other days' rows stay as they are, and the month is
 joined again day by day in date order, as it was built. The month file and its
-entry are written again, the late raw files are deleted, and the pass logs the
-recovery note `reopened-month` with the month. A late day leaves the month's
+entry are written again, the late raw files are deleted, and the pass notes
+`reopened-month` with the month on its record. A late day leaves the month's
 `lost_days`, because it now has a record. The marks do not move. An `empty`
 month has no file, so its rows are the late rows alone.
 
@@ -37,42 +37,21 @@ decided.
 
 from __future__ import annotations
 
-import logging
+from typing import Final
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract
-from idhazh.contracts.collection_prune import StopReason, stop_for
+from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.gardener_events import CompactionStep
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.ledger_index import CompactEntry
 from idhazh.gardener import named_trees
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 
-logger = logging.getLogger(__name__)
-
-
-def _kept(
-    tree: CompactTree,
-    month: str,
-    why: str,
-    ledger_fault: ledger.LedgerFault | None = None,
-    *,
-    fault: GardenerFault = GardenerFault.RAISED,
-) -> tuple[Stop, ...]:
-    """A closed month that is not re-opened, said once by name. Its late raw files are kept.
-
-    `fault` is the record's word for it: `raised`, a defect, unless the caller
-    names a cause outside the code, which defers the pass instead.
-    """
-    logger.error(
-        "a closed month is not re-opened, and the raw files that landed in it are kept "
-        "ledger=%s month=%s fault=%s reason=%s",
-        tree.ledger.value,
-        month,
-        ledger_fault or "none",
-        why,
-    )
-    return (Stop(stop_for(fault), month, fault),)
+#: The step a month this module will not re-open is named under. Its late raw
+#: files are kept either way.
+_STEP: Final = CompactionStep.REOPEN_MONTHS
 
 
 def reopen[C: Contract](
@@ -98,13 +77,15 @@ def reopen[C: Contract](
         tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
     )
     if own is None and entry.names_file:
-        return _kept(
-            tree,
-            month,
-            "the monthly index names it and no monthly file holds it. Restore the file from "
-            "git history, and the next wake re-opens the month",
-            ledger.LedgerFault.FILE_MISSING,
-            fault=GardenerFault.PACKED_FILE_UNREADABLE,
+        # The monthly index names it and no monthly file holds it: a person
+        # restores the file from git history, and the next wake re-opens it.
+        return (
+            tree.refuse(
+                _STEP,
+                month,
+                fault=GardenerFault.PACKED_FILE_UNREADABLE,
+                ledger_fault=ledger.LedgerFault.FILE_MISSING,
+            ),
         )
     tree.fetch(
         [
@@ -117,12 +98,16 @@ def reopen[C: Contract](
     try:
         raws = {day: tree.read_raw_day(day, most=most, model=model) for day in late}
     except ValueError as refusal:
-        return _kept(tree, month, str(refusal))
+        return (tree.refuse(_STEP, month, failure=refusal),)
     answered = {day: raw for day, raw in raws.items() if raw.taken}
     try:
         held = [] if own is None or not answered else tree.load(own, model=model)
     except ValueError as refusal:
-        return _kept(tree, month, str(refusal), fault=GardenerFault.PACKED_FILE_UNREADABLE)
+        return (
+            tree.refuse(
+                _STEP, month, fault=GardenerFault.PACKED_FILE_UNREADABLE, failure=refusal
+            ),
+        )
     days: dict[str, list[ledger.StoredRow[C]]] = {}
     for row in held:
         days.setdefault(row.identity.covers, []).append(row)
@@ -148,11 +133,11 @@ def reopen[C: Contract](
             else None
         )
     except ValueError as refusal:
-        return _kept(tree, month, str(refusal))
+        return (tree.refuse(_STEP, month, failure=refusal),)
     moved = 0
-    for day, raw in raws.items():
-        for path, why in raw.unreadable:
-            tree.set_aside(path, day, why)
+    for raw in raws.values():
+        for path in raw.unreadable:
+            tree.set_aside(path)
             moved += 1
     if built is None:
         tree.monthly[month] = entry.model_copy(update={"set_aside": entry.set_aside + moved})

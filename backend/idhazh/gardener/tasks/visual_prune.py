@@ -29,7 +29,6 @@ KIND = TaskKind.RETENTION
 def run(context: TaskContext) -> Pass:
     """Take the oldest pictures past the window up to the fuse, and file what was found."""
     import dataclasses
-    import logging
     from datetime import date, timedelta
     from pathlib import Path
 
@@ -154,18 +153,4 @@ def run(context: TaskContext) -> Pass:
         ),
     )
     appended = tuple(path.relative_to(context.repo_root).as_posix() for path in reports)
-    logging.getLogger(__name__).info(
-        "visual cleanup%s: %s candidates from %s through %s, %s deleted, %s held back by the "
-        "%s-file fuse, %s bytes reclaimed, oldest picture still kept %s (%s file)",
-        " (dry run)" if row.dry_run else "",
-        row.candidates_found,
-        row.window_start or "no expired window",
-        row.window_end or "no expired window",
-        row.deleted,
-        row.skipped_by_fuse,
-        row.max_deletes_per_run,
-        row.bytes_reclaimed,
-        row.oldest_kept or "none",
-        len(appended),
-    )
     return dataclasses.replace(outcome, appended=appended)

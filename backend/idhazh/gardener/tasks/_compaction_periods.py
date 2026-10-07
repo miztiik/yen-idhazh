@@ -7,7 +7,8 @@ the ledger's indexes (`ledger_marks.work_out_marks`), so a step has no mark only
 when no index names a period of its kind or a coarser one. The choice opens no
 file and lists nothing: the pass first names the months a first day run looks
 back over (`first_run_months`), then the choice is made once, before any step
-runs, logged, and handed to each step as its parameters (`PeriodsChosen`).
+runs, logged, and handed to each step as its parameters (`PeriodsChosen`). A
+pass that takes nothing ends on the word the same choice gives (`idle_word`).
 
 **The drop step takes the oldest months past the keep line**, the oldest month
 the monthly window keeps. It starts at the oldest monthly entry, because the
@@ -77,11 +78,27 @@ from datetime import UTC, date, datetime, timedelta
 
 from idhazh import month_partition
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.gardener_events import PeriodsChosen, StartReason, StepChoice
+from idhazh.contracts.gardener_events import PeriodsChosen, StartReason, StepChoice, TaskOutcome
 from idhazh.contracts.knobs.gardener import GITHUB_RERUN_DAYS, CompactionPolicy
 from idhazh.gardener import schedule
 from idhazh.gardener.tasks._compact_tree import CompactTree
 from idhazh.gardener.tasks._monthly_period import days_of, first_kept_month, shift
+
+
+def idle_word(chosen: PeriodsChosen) -> TaskOutcome:
+    """The word a pass that found nothing to do ends on, read off what it chose.
+
+    A range a person named answers first: a first day run with a range looks
+    only inside it, so its `none` cannot tell an empty ledger from an empty
+    range, and `outside-range` is true of both. Otherwise a ledger whose every
+    step has nothing to start from is `empty`, and any other is `not-due`.
+    """
+    if chosen.operator_range is not None:
+        return TaskOutcome.OUTSIDE_RANGE
+    steps = (chosen.drops, chosen.years, chosen.months, chosen.days)
+    if all(step is None or step.start is StartReason.NONE for step in steps):
+        return TaskOutcome.EMPTY
+    return TaskOutcome.NOT_DUE
 
 
 def choose(
