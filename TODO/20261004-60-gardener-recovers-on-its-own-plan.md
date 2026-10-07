@@ -921,6 +921,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/utilities/ledger_migration/packing.py` (the migrator reads any stop that names a fault as a refusal, so a deferred range refusal still stops it; found during execution)
   - `backend/tests/contracts/test_collection_prune_row.py`
   - `backend/tests/contracts/_fixtures.py` and `backend/tests/ledger/_fixtures.py` (they name the new rows; found during execution)
+  - `backend/tests/council/_imports.py` (the council's named import list names `gardener_fault`, which `collection_prune` now imports; found during execution, by CI)
   - `tests/fixtures/contracts/collection-prune-row/` (new: a `deferred` row with a fault, and two `done` rows with recovered notes - one `not-deletable` with a member id, and one of three periods - because no one pass meets both. The four rows already there gain an empty `fault` and `recovered`; found during execution)
   - `tests/fixtures/gardener/breaks/defect.json` and `tests/fixtures/gardener/task_packages/garden_tasks_breaks/` (`defect.py`, a task whose code is wrong, beside `broken.py`, whose service is down; found during execution)
   - `backend/tests/gardener/test_error_cause.py` (new; found during execution)
