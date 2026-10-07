@@ -71,7 +71,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L15 | The held-part note says what its own two figures show | L13 | E | DONE | fuzzy-goggles | #1368 | Plan 62 row l15 |
 | L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | DONE | supreme-journey | #1367 | Plan 62 row l16 |
 | L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | DONE | probable-umbrella | #1374 | Plan 62 row l17 |
-| L18 | The console home reads each day payload once | L13 | F | DONE | fluffy-carnival | - | Plan 62 row l18 |
+| L18 | The console home reads each day payload once | L13 | F | DONE | fluffy-carnival | #1396 | Plan 62 row l18 |
 | L19 | console-mark-parity's skipped test checks data it builds | L13 | F | DONE | super-spork | #1391 | Plan 62 row l19 |
 | L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | #1371 | Plan 62 row l20 |
 | L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
