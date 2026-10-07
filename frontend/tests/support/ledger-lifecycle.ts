@@ -119,7 +119,7 @@ function indexText(ledger: LedgerName, period: Period, entries: CompactEntry[]):
 	return `${JSON.stringify({ entries, ledger, period, version: COMPACT_INDEX_STAMP }, null, 2)}\n`;
 }
 
-/** The files a packed day set aside, as an entry carries them: absent when it set none aside. */
+/** The files a packed or lost day set aside, as its entry carries them: absent when it set none aside. */
 function setAsideOf(day: BuiltDay): { set_aside?: number } {
 	return 'setAside' in day && day.setAside !== undefined ? { set_aside: day.setAside } : {};
 }
