@@ -187,6 +187,18 @@ test('THE ORACLE: before a run the column rail names the selected ledger\'s own 
 	await expect(rail).toHaveText(['covers', 'date', 'n']);
 });
 
+test('THE ORACLE: a ledger whose newest two named days are empty lists its columns in the rail from the packed day before them, and the window stays as selected', async ({ page, context }) => {
+	// seen holds one row a day from 11 to 13 Jun 2030, and its newest two named days, 14 and 15 Jun,
+	// are empty. The link chooses seen and the 14 days that end on the pinned day.
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'seen', pinned: PINNED, days: [...everyDay(4, 2), ...quietDays(1, 0)] });
+	const fetched = fetchedFiles(page);
+	await openExplorer(page, PINNED, { address: '?ledgers=seen&days=14', ready: false });
+	await expect(page.locator('[data-explorer-columns] li code')).toHaveText(['seen.covers', 'seen.date', 'seen.n'], { timeout: 60_000 });
+	expect(fetched).toEqual(['compact/seen/daily/2030/06/13.parquet']);
+	await expect(page.getByRole('textbox', { name: 'From (UTC)' })).toHaveValue('2030-06-02');
+	await expect(page.getByRole('textbox', { name: 'To (UTC)' })).toHaveValue(PINNED);
+});
+
 test('THE ORACLE: the Data explorer fallback document carries the shipped content policy', () => {
 	const html = readFileSync(resolve(process.cwd(), 'build', '404.html'), 'utf8');
 	expect(html).toContain('content-security-policy');

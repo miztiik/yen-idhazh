@@ -60,7 +60,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L7 | A published ledger that has not started | L1 | B | PENDING | - | - | - |
 | L8 | The archive's failures are named as the archive's | L1, L2, L4, L5 | C | DONE | jubilant-dollop | - | Plan 62 row l8 |
 | L9 | Console specs outside the explorer serve the data they check | L2 | C | DONE | special-robot | - | Plan 62 row l9 |
-| L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | PENDING | - | - | - |
+| L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | DONE | redesigned-spork | - | Plan 62 row l10 |
 
 ## 2. Shared declarations
 
@@ -592,6 +592,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (each path checked on `main` at ea1878cdc; search again once decision 1 is ruled):
   - `frontend/src/routes/console/data-explorer/+page.svelte` (the rail describes each chosen ledger from `cost.through`, its newest named day)
   - `frontend/src/lib/data/ask-reader.ts` (`readAsk` answers `quiet` for a span that holds no file before it uses the empty view: a `LIMIT 0` view over the ledger's newest file)
+  - `frontend/src/lib/data/ledger-columns.ts` (new: the rail's own door call, which takes no window; found during execution, Fowler's ruling on decision 1)
+  - `frontend/src/lib/data/ledger.ts` (exports `askColumns`; found during execution, Fowler's ruling on decision 1)
   - `frontend/tests/ledger-lifecycle.spec.ts` (the reader's case, on a root that Table G, G1 builds)
   - `frontend/tests/console-data-explorer.spec.ts` (the Oracle)
   - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
@@ -602,12 +604,15 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Open: which day the rail describes when a chosen ledger's newest named day holds no rows (the newest day that holds rows, found from the indexes, or the empty view), and whether the rail may read a day older than the selected window | To be ruled at dispatch (Fowler) |
+| 1 | The rail gets a door call of its own, `askColumns()` in `frontend/src/lib/data/ledger.ts`, over `readColumns()` in `frontend/src/lib/data/ledger-columns.ts`. It takes no window, and it lists the columns of the files the ledger's empty view reads (`viewSource()` in `ask-reader.ts`): the newest listed raw day that has files, else the newest index entry that names a file, even one with 0 rows. It runs in the written-question door's queue, keeps the fetch ceiling, and leaves `readAsk`, its quiet rule and `SpanCost` as they were. It may read a file older than the selected window: it returns no rows and takes no window, so it cannot choose, widen, move or end one, and Table D, D2 holds. C1 and C3 do not fire | Fowler, 2026-10-07 |
 | 2 | L10 waits for L8, because L8 edits `ask-reader.ts`, `+page.svelte` and the written-question page | Found during execution (row L2 report), owner 2026-10-06 |
 | 3 | Level 2: what the rail lists changes for one kind of ledger, and every explorer question reads through `ask-reader.ts` | Found during execution (row L2 report), owner 2026-10-06 |
+| 4 | Fowler's reader case for a ledger whose files were packed with 0 rows before #1309 waits: the builder refuses `rows: 0`, and L9 owns the builder this round. The empty view's rule already reads such a file | Found during execution; the owner's dispatch note, 2026-10-07 |
 
 **Rejected alternatives**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | As today: the rail describes each chosen ledger from its newest named day | When that day holds no rows, the rail lists no column for the ledger | Nothing to build, and no column in the rail for a ledger whose newest day was quiet or lost, or whose writer is paused or stopped | Found during execution (row L2 report), owner 2026-10-06 |
+| 2 | Describe from the newest day that holds rows, found from the indexes: a second day for each ledger on `SpanCost`, and the page asks `DESCRIBE` over it | A second rule for "the newest file", which disagrees with the empty view because it skips a file with 0 rows | No new door call, and no column for `candidate-models`, whose packed files hold 0 rows | Fowler, 2026-10-07 |
+| 3 | `readAsk` answers a `DESCRIBE` over a span with no file from the empty views | `DESCRIBE` becomes a special case inside the quiet rule, and a third rule is needed so that a ledger with no file does not answer `missing`, whose words are false for it (Table B, B4) | No page change, and an operator's own `DESCRIBE` over a quiet span would answer its columns too | Fowler, 2026-10-07 |

@@ -21,11 +21,12 @@
 import { base } from '$app/paths';
 import { fetchedBytes } from './fetched-bytes';
 import { readAsk, readAskCost, type ArchiveTier, type RawListedThrough } from './ask-reader';
+import { readColumns } from './ledger-columns';
 import { readReach, type LedgerReach } from './ledger-reach';
 import { pageKeeper, type PageKeeper } from './page-keeper';
 import { readSlice } from './slice-reader';
 import type { QueryEngine } from './slice-query';
-import type { AskOptions, AskResult, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
+import type { AskOptions, AskResult, Column, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
 
 export type { LedgerReach } from './ledger-reach';
 export type { AskFault, AskOptions, AskRefusal, AskResult, Column, DateStamp, FetchCost, LedgerFault, LedgerName, Predicate, Row, SetAsideFiles, SliceOptions, SliceResult, SpanCost, SpanGap } from './slice-shapes';
@@ -99,6 +100,12 @@ export function ask(options: AskOptions): Promise<AskResult> {
 /** What a written question would fetch before it runs. */
 export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> {
 	return readAskCost(keeper(), archiveTier(), ledgers, from, to, rawListedThrough());
+}
+
+/** A chosen ledger's columns, from the files its empty view reads, whatever window is selected:
+ *  it takes no window and moves none. Files over `maxFetchBytes` are not fetched. */
+export function askColumns(ledger: LedgerName, maxFetchBytes: number): Promise<Column[]> {
+	return readColumns(keeper(), ledger, maxFetchBytes, rawListedThrough());
 }
 
 /** Drop this page's query-door cache, so Refresh reads the registry and indexes anew. */

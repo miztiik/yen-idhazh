@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { rmSync } from 'node:fs';
+import { rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { windowOfDays, type TimeWindow } from '../src/lib/charts/viewport';
@@ -7,18 +7,19 @@ import { recordNotes } from '../src/lib/console/recording';
 import { readAsk } from '../src/lib/data/ask-reader';
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
+import { readColumns } from '../src/lib/data/ledger-columns';
 import { readReach } from '../src/lib/data/ledger-reach';
 import { pageKeeper, type PageKeeper } from '../src/lib/data/page-keeper';
 import { daysBetween } from '../src/lib/data/slice';
 import { readSlice } from '../src/lib/data/slice-reader';
-import type { AskOptions, SliceOptions } from '../src/lib/data/slice-shapes';
+import type { AskOptions, Column, SliceOptions } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository } from '../src/lib/server/config';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { windowRows, type LedgerTable } from '../src/lib/server/ledger-rows';
 import { buildLedger, everyDay, servedFrom, siteCopy, type BuiltLedger } from './support/ledger-lifecycle';
 
 /**
- * Which days do a written question, a panel slice and a console window read from a ledger in each lifecycle state?
+ * Which days do a written question, the column rail, a panel slice and a console window read from a ledger in each lifecycle state?
  *
  * Every ledger here is built by the test that asks, with its days counted back from a day the
  * test pins, so each expected value is written out from what that test built: the rows an
@@ -651,5 +652,63 @@ test.describe('a console window ends on the newest published day, and reads only
 		expect(table.rows).toEqual([]);
 		expect(table.read).toEqual({ state: 'read', through: PINNED, lastRows: null, lostDays: [], setAside: {} });
 		expect(recordNotes([{ record: 'machine', read: table.read }], PINNED, FORTNIGHT, OFFERED)).toEqual([]);
+	});
+});
+
+/** The three columns every file of a built ledger holds. */
+const BUILT_COLUMNS = ['covers', 'date', 'n'];
+/** A fetch ceiling that no file built here reaches. */
+const ROOMY_CEILING = 100_000_000;
+const columnNames = (columns: readonly Column[]): string[] => columns.map((column) => column.name);
+
+test.describe('the column rail lists a ledger\'s columns from the file its empty view reads, whatever window is selected', () => {
+	test('a ledger whose newest day is lost and the day before it empty: its columns come from the packed day before them, the only data file asked for', async () => {
+		// One row a day from 11 to 13 Jun 2030, then 14 Jun empty and 15 Jun lost.
+		const { page, asked } = await builtSite([...everyDay(4, 2), { ago: 1, state: 'empty' }, { ago: 0, state: 'lost' }]);
+		try {
+			expect(columnNames(await readColumns(page, LEDGER, ROOMY_CEILING, {}))).toEqual(BUILT_COLUMNS);
+			expect(parquetAsked(asked)).toEqual([dayFile('2030-06-13')]);
+		} finally {
+			await page.release();
+		}
+	});
+
+	test('a writer that stopped inside a closed month and has been quiet since: its columns come from that month\'s file', async () => {
+		// One row a day from 26 Apr to 6 May 2030, April and May closed, then every day empty to the
+		// pinned day, so daily.json names no file and the newest file is May's.
+		const { page, asked } = await builtSite([...everyDay(50, 40), ...emptyDays(39, 0)], ['2030-04', '2030-05']);
+		try {
+			expect(columnNames(await readColumns(page, LEDGER, ROOMY_CEILING, {}))).toEqual(BUILT_COLUMNS);
+			expect(parquetAsked(asked)).toEqual([`compact/${LEDGER}/monthly/2030/05.parquet`]);
+		} finally {
+			await page.release();
+		}
+	});
+
+	test('a ledger that has never held a row lists no column, and asks for no data file', async () => {
+		const { page, asked } = await builtSite(emptyDays(3, 0));
+		try {
+			expect(await readColumns(page, LEDGER, ROOMY_CEILING, {})).toEqual([]);
+			expect(parquetAsked(asked)).toEqual([]);
+		} finally {
+			await page.release();
+		}
+	});
+
+	test('a newest file one byte over the fetch ceiling is not fetched, lists no column and says why, and at the ceiling its columns are listed', async () => {
+		const { page, asked } = await builtSite(everyDay(2, 0));
+		const bytes = statSync(join(test.info().outputPath('state'), 'compact', LEDGER, 'daily', '2030', '06', '15.parquet')).size;
+		try {
+			const over = await warnings(() => readColumns(page, LEDGER, bytes - 1, {}));
+			expect(over.result).toEqual([]);
+			expect(over.warned).toEqual([
+				`[ledger] ${LEDGER}: reading its columns would fetch ${bytes} bytes (${dayFile(PINNED)}), over the ${bytes - 1}-byte fetch ceiling, so the column rail lists none of its columns`
+			]);
+			expect(parquetAsked(asked)).toEqual([]);
+			expect(columnNames(await readColumns(page, LEDGER, bytes, {}))).toEqual(BUILT_COLUMNS);
+			expect(parquetAsked(asked)).toEqual([dayFile(PINNED)]);
+		} finally {
+			await page.release();
+		}
 	});
 });
