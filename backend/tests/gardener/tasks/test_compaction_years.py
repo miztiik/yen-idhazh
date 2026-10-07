@@ -37,6 +37,7 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.gardener_events import CompactionStep, PeriodRefused
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
@@ -48,6 +49,7 @@ from idhazh.gardener.tasks import _compaction_periods, _yearly_period
 from idhazh.gardener.tasks._compact_tree import CompactTree
 from idhazh.ledger import StoredRow
 
+from .._events import the_event
 from ._marks import marks_on_disk
 from ._task import context_for, run_task
 from .test_compaction import recovered
@@ -663,8 +665,13 @@ def test_a_year_missing_a_month_whose_raw_day_is_still_there_is_refused_and_noth
         "2026",
         GardenerFault.RAISED,
     )
-    assert "monthly.json does not name 2026-06" in caplog.text
-    assert f"fault={ledger.LedgerFault.DAY_MISSING}" in caplog.text
+    refused = the_event(caplog.records, PeriodRefused)
+    assert (refused.step, refused.period, refused.ledger_fault, refused.error) == (
+        CompactionStep.PACK_YEARS,
+        "2026",
+        ledger.LedgerFault.DAY_MISSING,
+        None,
+    ), "the gardener's own check refused it, so no exception is named"
     assert files_under(root) == before
 
 
@@ -696,6 +703,11 @@ def test_a_month_file_its_entry_names_that_is_gone_costs_its_year_that_month_s_d
     assert (entry.rows, entry.set_aside) == (22, 0)
     assert entry.lost_days == days("2026-06-01", "2026-06-30")
     assert recovered(outcome, "2026-06") == [RecoveryNote.RECORDED_LOST]
+    assert outcome.periods is not None
+    assert (outcome.periods.years_packed, outcome.periods.lost_days) == (
+        ["2026"],
+        days("2026-06-01", "2026-06-30"),
+    ), "the event says which days the pass recorded lost"
 
 
 def test_a_month_file_that_cannot_be_read_is_set_aside_and_its_year_counts_every_file(
@@ -794,5 +806,14 @@ def test_a_year_file_over_github_s_large_file_line_is_refused_and_its_months_kep
         "2026",
         GardenerFault.RAISED,
     )
-    assert "over GitHub's large-file line of 1000" in caplog.text
+    refused = the_event(caplog.records, PeriodRefused)
+    assert (refused.step, refused.error, refused.ledger_fault) == (
+        CompactionStep.PACK_YEARS,
+        "ValueError",
+        None,
+    )
+    assert refused.where is not None
+    assert refused.where.startswith("idhazh.gardener.tasks._yearly_period:"), (
+        "the line names where the year file was weighed against the large-file line"
+    )
     assert files_under(root) == before

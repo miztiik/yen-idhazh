@@ -4,9 +4,10 @@
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
-shard checks before and after its tasks run, how its one record lands on
-`main` however many shards race it, and how a retention task folds the closed
-days of a CSV day tree into one file each. What each knob means is
+shard checks before and after its tasks run, what each line of its log says,
+how its one record lands on `main` however many shards race it, and how a
+retention task folds the closed days of a CSV day tree into one file each. What
+each knob means is
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md);
 the workflow that wakes it is `.github/workflows/idhazh-gardener.yml`, once a
 day at 00:40 UTC or when a person dispatches it.
@@ -81,8 +82,8 @@ directly under `state/`, and the runner turns that into
 `TaskContext.owned_folders` before any task runs. A folder the commit holds is
 walked whether the checkout holds it or not, because its names come from the
 commit. A declared folder the commit does not hold yet - a ledger's
-`state/compact/` folder before its first day is packed - is left out and
-logged, and the task's first write makes it. A complement task's folders come
+`state/compact/` folder before its first day is packed - is left out and named
+in the task's `task-planned` event, and the task's first write makes it. A complement task's folders come
 from the commit alone, so a folder somebody left in the checkout and never
 committed is not the sweep's to take, and `idhazh gardener run-task`, which
 starts no process and so reads no commit, refuses one by name. A folder a task
@@ -368,6 +369,60 @@ wording can change with no migration. A row written before 2026-10-07 has no
 `fault` and no `recovered`, and reads as one that named none; on such a row
 `failed` means any stop for an error.
 
+## What a shard logs
+
+**Every line a task logs is one event: one line of JSON on stderr.** Each event
+is a model in `backend/idhazh/contracts/gardener_events.py`, and
+`backend/idhazh/gardener/event_log.py` writes it. `idhazh gardener` and
+`gardener_publish.py` install that module's one handler, at the level
+`config/idhazh.json` names. A line starts with three keys: `event`, the event's
+name; `at`, the UTC instant the line was made, to the millisecond, with a `Z`;
+and `level`. The event's own fields follow, in the order it declares them, and a
+field with no value is left out. JSON escapes every character outside ASCII and
+every line break, so one event is always one line, and no text inside it can
+start a line that GitHub reads as a workflow command. A test reads the event off
+the log record (`event_log.payload`), never its text.
+
+| # | Event | When | What it says |
+| --- | --- | --- | --- |
+| 1 | `task-planned` | Before each task runs | The task, its kind, shard, run and attempt, the wake's day, a range a person named, every knob of its declaration, and the declared folders the commit does not hold yet |
+| 2 | `window-chosen` | Before a pass that deletes one member at a time lists one | The window it holds members to, its ceiling, whether it is a dry run, and the mark it walks after |
+| 3 | `member-out-of-order`, `page-out-of-order`, `page-count-changed`, `list-end-missing` | When a walk's check fails ([below](#the-collection-tasks)) | What the check saw; the mark stays where it was |
+| 4 | `periods-chosen` | Before a compaction's steps run | Which periods each step may take, and why they start where they do ([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)) |
+| 5 | `period-refused`, `download-over-budget`, `ledger-fault-met`, `raw-file-skipped` | When a compaction step refuses a period, stops at the download budget, passes a month file already gone, or meets a raw file outside a day folder | The ledger, the step, the period or path, and the words that say why |
+| 6 | `task-finished` | The moment each task returns | How it ended in one word, what it took and wrote, why it stopped, what it recovered, what happens next, how long it ran, what its fold did, and what a compaction did period by period |
+| 7 | `logged-text` | When a module outside the gardener logs text while a task runs | The logger and the message as it was said |
+
+**How a task ended is one word.** `report.classify` takes the first that holds:
+`failed`, `deferred`, `dry-run`, `ceiling`, `done`, and otherwise the pass's
+own idle word - `outside-range` when a person named a range, `empty` when the
+ledger holds nothing for any step to start from, and `not-due` for everything
+else. A pass found work when its window held a member, it wrote or would write
+a file, or its fold found a closed day or month. A pass that found work and
+carried none of it out ends `dry-run`, so a live compaction whose only work is
+the months a report-only monthly window names ends `dry-run` too. A report a
+task files on every pass is not work. `next` is one fixed sentence for the word, or the
+fault's own sentence when a fault stopped the task; no sentence says a member
+is gone. A `failed` task's event is an error, a `deferred` task's event is a
+warning, and every other ending is information. A period refused for a cause a
+person settles is a warning too, so an error in a shard's log always means a
+code defect.
+
+**An exception is named by its type and where it was raised, never by its
+text.** `error` is the type, such as `ValueError`. `where` is the deepest line
+of this package's own code that the exception passed through, as
+`module:line`. The text of an exception can carry a ledger row, and a row can
+hold text fetched from the open web (Guardrail #11), so no event field holds
+it. A line that another module logged with an exception keeps its message and
+names the exception the same way.
+
+**The shard's own lines stay printed text.** A refusal that stops a shard
+before its tasks run, a download over the budget, `run-task`'s closing line, and
+every line the publisher prints are command output on stdout, not events. The
+publisher's two warnings, for a `stale` or `lost` landing, start with
+`::warning::`, so GitHub shows them on the job's page; GitHub reads such a
+command only at the start of a line.
+
 ## Landing the commit
 
 `backend/utilities/gardener_publish.py` is the only code that pushes. It is the
@@ -493,7 +548,8 @@ again for what is left. A dry run deletes nothing, so stopping inside a day woul
 report the same members at every wake: past its ceiling it counts the rest of
 that day without listing them, and its mark moves to that day. A member that
 arrives from an earlier day than one before it means the order failed: the pass
-goes on, and its mark stays where it started.
+goes on, says so in one `member-out-of-order` event, and its mark stays where
+it started.
 
 **GitHub's answer to a delete is read for what it means, and one refused member
 stops nothing.** `error_cause.py` reads the status code alone. A 404 or 410 says
@@ -550,22 +606,23 @@ page never ends past a boundary nobody checked. It sorts each page by the
 instant its artifacts were created, and checks three things.
 
 - **Day order.** The oldest day on a page must be at or after the newest day on
-  every page read before it. When it is not, the walk logs that the order check
-  failed, reads every page, each once and still from the last back, and the mark
-  stays where it was.
+  every page read before it. When it is not, the walk says so in one
+  `page-out-of-order` event, reads every page, each once and still from the
+  last back, and the mark stays where it was.
 - **The count.** Each page's `total_count` must equal the first page's, less
   the artifacts this pass deleted. An artifact made during the walk moves every
   older one a place on, so one can slip onto a page already read while the order
-  still holds. When the count differs, the pass handles what it reads, and the
-  mark stays where it was.
+  still holds. When the count differs, the walk says so in one
+  `page-count-changed` event, the pass handles what it reads, and the mark stays
+  where it was.
 - **Where the list ends.** The last page must hold what is left of the first
   page's count, and when it is full, the page after it is read and must be
   empty; its artifacts are never handed on. GitHub's count for a search by date
   stops at 2,500. The artifacts list is not a search, and its count was exact on
   2026-10-05 - 17 pages held the 1,613 artifacts it named - but a count that
   stopped short would start the walk in the middle of the list. When the list
-  does not end there, the pass handles what it reads, and the mark stays where it
-  was.
+  does not end there, the walk says so in one `list-end-missing` event, the
+  pass handles what it reads, and the mark stays where it was.
 
 Every artifact is still held to the line before it is taken, so a failed check
 costs completeness and never safety. Neither check sees an artifact made and
@@ -843,6 +900,23 @@ settled into takes the word an unreadable one does, `packed-file-unreadable`,
 because a packed file its index names and the tree lacks is already treated as
 unreadable when its month or year closes, and a person fixes both the same way
 (Fowler, 2026-10-07).
+
+**2026-10-07: every line a task logs is one event, and nothing beside it says
+the same thing in prose.** JSON lines, so a program and a person read one line
+the same way (the owner, decision T2, 2026-10-04). A readable line beside each
+event was rejected as a second rendering to keep in step by hand (Fowler,
+2026-10-04), and the per-task report the runner printed was exactly that, so it
+went: `task-finished` carries its list of members, why the pass stopped, and
+what happens next. A pass says its window before it lists a member, so a walk
+that fails part way has already said what it held members to; how many pages
+the walk read is only known at its end, so it is on `task-finished`, not on
+`window-chosen`. A refusal is an event of its own, at the moment it happens and
+at its own level, rather than a list inside `task-finished`, which a task that
+crashed later would never reach. Its two words are kept apart: `fault` is the
+word the record carries, and `ledger_fault` is the ledger's own word for a
+missing file, which the ledger reader and the query door print too. An event
+names an exception's type and place only, so a line can never carry a ledger
+row's text (Fowler, 2026-10-07).
 
 ## See also
 

@@ -35,11 +35,11 @@ from typing import NoReturn
 from idhazh import day_partition, day_shards, ledger, month_partition
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.file_envelope import Format, Period
+from idhazh.contracts.gardener_events import RawFileSkipped
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.gardener import event_log
 from idhazh.gardener.file_listing import FileListing
 from idhazh.site_weight import SiteSize
-
-logger = logging.getLogger(__name__)
 
 
 def _below(
@@ -259,7 +259,7 @@ def raw_days(
 
     The twin of `ledger.raw_days`, over the periods the listing names under the
     raw root, or over these months' folders alone, each one a step named: a
-    name that is not a `YYYY/MM/DD` folder is named in a warning.
+    name that is not a `YYYY/MM/DD` folder is said once, as `RawFileSkipped`.
     """
     root = ledger.raw_root(state_dir, which)
     folders = (
@@ -277,9 +277,11 @@ def raw_days(
         ):
             days.add(f"{parts[0]}-{parts[1]}-{parts[2]}")
             continue
-        logger.warning(
-            "skipped a raw file path=%s reason=not inside a YYYY/MM/DD folder",
-            root.joinpath(*parts).relative_to(listing.repo_root).as_posix(),
+        event_log.emit(
+            RawFileSkipped(
+                path=root.joinpath(*parts).relative_to(listing.repo_root).as_posix()
+            ),
+            level=logging.WARNING,
         )
     return sorted(days)
 

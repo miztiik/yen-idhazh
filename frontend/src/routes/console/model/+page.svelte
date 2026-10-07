@@ -557,9 +557,9 @@
 				{recording.startedMidWindow}
 			</p>
 		{/if}
-		{#if recording?.countersOnly}
-			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="counters-only">
-				{recording.countersOnly}
+		{#if recording?.coveredElsewhere}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="covered-elsewhere">
+				{recording.coveredElsewhere}
 			</p>
 		{/if}
 	</div>

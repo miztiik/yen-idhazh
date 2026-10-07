@@ -223,7 +223,8 @@ class Checkout:
 
     def fetch(self) -> str:
         """Fetch `main` as it is now into `origin/main`, and hand back the commit it is at."""
-        self.git("fetch", "--quiet", REMOTE, BRANCH, "--depth=1")
+        # Keep existing ancestry for push hooks; shallow callers fetch only new commits.
+        self.git("fetch", "--quiet", REMOTE, BRANCH)
         return self.git("rev-parse", "--verify", f"{REMOTE}/{BRANCH}").strip()
 
     def changed_on_main(self, paths: Sequence[str]) -> list[str]:

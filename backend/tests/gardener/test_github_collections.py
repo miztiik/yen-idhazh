@@ -31,9 +31,12 @@ import pytest
 from conftest import FIXTURES_DIR
 
 from idhazh.contracts.collection_prune import Recovery, StopReason
+from idhazh.contracts.gardener_events import ListEndMissing, PageCountChanged, PageOutOfOrder
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
-from idhazh.gardener import github_collections, one_at_a_time
+from idhazh.gardener import event_log, github_collections, one_at_a_time
 from idhazh.gardener.one_at_a_time import Member, Window
+
+from ._events import events, the_event
 
 pytestmark = pytest.mark.contract
 
@@ -228,6 +231,7 @@ def test_a_walk_reads_the_last_page_and_one_more_and_hands_on_the_oldest_first()
     assert api.read_paths == [artifact_page(1), artifact_page(4), artifact_page(3)]
     assert [raw["id"] for raw in members] == [raw["id"] for raw in oldest_first(4)[:10]]
     assert walk.listing_intact()
+    assert walk.pages_read() == 3, "the pass's record counts every page the walk read"
 
 
 def test_times_that_cross_inside_one_utc_day_do_not_send_the_walk_through_every_page() -> None:
@@ -268,16 +272,20 @@ def test_a_page_from_a_day_before_one_already_read_sends_the_walk_through_every_
     api = RecordedAnswers(fixture(ARTIFACT_PAGES), answering={artifact_page(4): last})
     walk = github_collections.artifacts(api, through=RECORDED_LINE)
 
-    with caplog.at_level("WARNING", logger="idhazh.gardener.github_collections"):
+    with caplog.at_level("WARNING", logger=event_log.__name__):
         members = list(walk.listing())
 
     assert api.read_paths == [artifact_page(page) for page in (1, 4, 3, 2)]
     assert len(members) == len({raw["id"] for raw in members}) == 313
     assert not walk.listing_intact()
-    assert "order check failed" in caplog.text
+    assert the_event(caplog.records, PageOutOfOrder) == PageOutOfOrder(
+        collection="workflow-artifacts", page=3
+    )
 
 
-def test_a_count_that_grows_between_two_reads_leaves_the_walk_not_intact() -> None:
+def test_a_count_that_grows_between_two_reads_leaves_the_walk_not_intact(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Page 3 read after one artifact was made: every artifact moved one place on.
 
     So page 2's last artifact is now page 3's first, page 3's last moved onto
@@ -290,11 +298,15 @@ def test_a_count_that_grows_between_two_reads_leaves_the_walk_not_intact() -> No
     api = RecordedAnswers(fixture(ARTIFACT_PAGES), answering={artifact_page(3): pushed})
     walk = github_collections.artifacts(api, through=RECORDED_LINE)
 
-    members = list(walk.listing())
+    with caplog.at_level("WARNING", logger=event_log.__name__):
+        members = list(walk.listing())
 
     assert api.read_paths == [artifact_page(1), artifact_page(4), artifact_page(3)]
     assert len(members) == 10, "the walk handled what it read"
     assert not walk.listing_intact()
+    assert the_event(caplog.records, PageCountChanged) == PageCountChanged(
+        collection="workflow-artifacts", page=3, counted=314, expected=313
+    )
 
 
 @pytest.mark.parametrize(
@@ -306,7 +318,11 @@ def test_a_count_that_grows_between_two_reads_leaves_the_walk_not_intact() -> No
     ],
 )
 def test_the_list_must_end_where_the_first_page_count_says(
-    counted: int, after_the_last: list[Any] | None, reads: tuple[int, ...], intact: bool
+    counted: int,
+    after_the_last: list[Any] | None,
+    reads: tuple[int, ...],
+    intact: bool,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Every page counted as `counted`: the count names page 3 as the last of the 313.
 
@@ -324,11 +340,15 @@ def test_the_list_must_end_where_the_first_page_count_says(
     api = RecordedAnswers(answering=answers)
     walk = github_collections.artifacts(api, through=RECORDED_LINE)
 
-    members = list(walk.listing())
+    with caplog.at_level("WARNING", logger=event_log.__name__):
+        members = list(walk.listing())
 
     assert api.read_paths == [artifact_page(page) for page in reads]
     assert members == [], "the oldest artifact on page 3 is newer than the line"
     assert walk.listing_intact() is intact
+    assert events(caplog.records, ListEndMissing) == (
+        [] if intact else [ListEndMissing(collection="workflow-artifacts", page=3, first_count=counted)]
+    )
 
 
 def test_a_page_read_after_deletes_is_held_to_the_count_they_left() -> None:
