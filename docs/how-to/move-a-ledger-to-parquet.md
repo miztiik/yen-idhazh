@@ -1,10 +1,10 @@
 # Move a ledger to Parquet
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-07
 
 How do I move one ledger from CSV to the ledger door without losing a row?
 
-This procedure is project-specific because it names this repository's ledger contract and migration command. A move has two commits. The code commit changes the writer and reader. The migration commit moves the committed data after the code is on `main`. The migration commit is last, and it is made in a quiet window when no pipeline or upkeep run can write another CSV file.
+This procedure is project-specific because it names this repository's ledger contract and migration command. A move has an online copy phase and a later retirement phase. The code change lands first. The online copy keeps the CSV source and old writer available while raw ledger files are written, packed and proved. Final retirement deletes the CSV only after no old writer can return and fresh proof passes.
 
 ## Complete the code change
 
@@ -30,9 +30,9 @@ A move is complete only when every applicable part below holds.
 
 A test reads a bounded fixture under `tmp_path`, not the growing production state tree. It uses real row and file contracts, and it does not access the network.
 
-## Move the committed files
+## Copy while writers continue
 
-The code pull request does not contain migrated production data. Merge the code first. The owner then makes the data commit last, after checking that no run of `digest.yml`, `idhazh-gardener.yml`, `idhazh-pipeline-tests.yaml`, `validate.yml` or `measure.yml` is queued or running. Check again just before the merge. If a run is active, wait for it and repeat the migration against the final code.
+The code pull request does not contain migrated production data. Merge the code first. Keep the CSV files, old writer and its registered family. Do not wait for unrelated workflows to stop, run `--retire`, or use the full command that deletes CSV.
 
 Run the migrator from the checked-out code commit. Name the roots and UTC months to migrate. `--state-dir`, `--ledger` and the required `--month YYYY-MM` all repeat. The run id is the UTC date of the migration commit followed by `-1`; the SHA is the full commit id of the code being run.
 
@@ -44,14 +44,18 @@ python backend/utilities/migrate_to_parquet.py --state-dir state --state-dir sta
 
 To move the same inputs in separate phases, add exactly one of `--plan`,
 `--write`, `--verify` or `--retire` to that command. Keep the roots, ledgers,
-months, run id and code SHA the same between phases.
+months and run id the same on repeats. Use the current code SHA each time.
 
 1. `--plan` validates each CSV day and previews its row count, whether it needs
    writing, and whether its root can be packed. It writes nothing. A named
    ledger with no CSV in the selected months reports that fact.
-2. `--write` writes raw rows and runs the existing eligible compaction. It
-   never deletes CSV. Compaction can replace or delete raw and compact files
-   it absorbs; keeping CSV does not make this phase read-only.
+2. `--write --raw-only` writes only the migration-owned raw rows. It keeps every
+   CSV byte and leaves every compact file unchanged, including under the
+   production `state/` root. Use this for the online copy. The option is valid
+   only with explicit `--write`; every other combination exits 2 before a
+   phase runs. Its success report says that packing and parity proof remain
+   outstanding. A raw-only write does not prove that the normal reader serves
+   the imported rows.
 3. `--verify` reads the CSV again and proves the rows the ledger reader serves.
    It writes nothing. It refuses missing output for nonempty days, unreadable relevant raw files,
    missing or invalid compact entries and indexes, and incorrect compact row
@@ -64,6 +68,12 @@ With no mode, the command retains the full plan, write, pack, prove and delete
 sequence. It uses the same independent source-cell proof before deleting any
 CSV across the named roots. `--check` is mutually exclusive with every phase. It checks only
 CSV absence; it does not prove output parity.
+
+After raw-only writing, pack through the existing guarded gardener publication
+path. Then run `--verify` against the fresh committed state. If a relevant CSV
+source changes, repeat the import with the same run id and the current code
+SHA, pack again, and prove again. Keep the CSV and old writer until the final
+retirement gate below passes.
 
 Every phase exits zero when its named operation completes, including when no
 CSV inputs remain. Plan, write, verify, retire and the default full command
@@ -120,6 +130,13 @@ The listing names the selected months' raw and daily folders, their monthly and 
 
 The migrator reads each layout it declares: a day tree, `YYYY/MM/DD/*.csv`, or a shared day file, `YYYY/MM/DD.csv`. A row with a date must name the day in its path. A row without a date uses the day in its path. Any other layout or invalid row stops the run. The migrator reads back every named day through the ledger door and compares every cell with the planned rows. It deletes no CSV in any root until every day in every root passes.
 
+## Retire CSV after the old writer is retired
+
+The online copy does not authorize deletion. First satisfy the ledger's
+retirement gate: no old-code writer can still run or return, captured output
+has been accounted for, and the current source has been imported, packed and
+proved. Keep the CSV, family and old-row reader until that evidence is complete.
+
 Keep writers stopped throughout retirement. The proof does not lock a tree
 against another process, and filesystem deletion is not a transaction. A
 deletion error can stop cleanup after earlier proven files have been removed.
@@ -127,7 +144,13 @@ A header-only CSV day needs no stored output when both the CSV and the door
 hold zero rows. Verification passes that same empty-day proof in every mode,
 and retirement or the default full command can delete the header-only file.
 
-Run the same roots, months and ledger list with `--check` after migration. It must print `0 CSV file(s) left` and exit 0. Run a dry compaction pass for each ledger moved in `state/`; it must have no period left to pack. Stage only the intended CSV deletions and new `state/raw/` and `state/compact/` files. Do not add trial-root compact files. Push the data commit and wait for its selected CI checks to pass.
+Run `--retire` with the named roots, months and ledgers. It re-reads and proves
+all named sources in one process before deleting any CSV. Then run the same
+roots, months and ledger list with `--check`. It must print `0 CSV file(s) left`
+and exit 0. Run a dry compaction pass for each ledger moved in `state/`; it must
+have no period left to pack. Stage only the intended CSV deletions and new
+`state/raw/` and `state/compact/` files. Do not add trial-root compact files.
+Push the data commit and wait for its selected CI checks to pass.
 
 After the merge, run `--check` again over `state/` and every trial root in the next quiet window. A CSV file found then belongs in a follow-up migration commit under the same row and run id.
 

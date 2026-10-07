@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import REPO_ROOT, SEED_COMMIT
 
-from idhazh import ledger
+from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_name import LedgerName
@@ -20,18 +20,22 @@ from utilities.ledger_migration import (
     path_labels,
     phases,
 )
+from utilities.ledger_migration.packing import packs_here
 
 from ._fixtures import (
     EVALS,
     HOST,
     ITEM,
     MONTH_ARGS,
+    MONTHS,
     NEW,
     OLD,
     ON_CSV,
     RUN,
     ByKey,
     clock_row,
+    config_beside,
+    csv_files,
     entry_back_on_csv,
     feed_row,
     file_hashes,
@@ -152,6 +156,87 @@ def test_cli_migrates_each_repeated_trial_root_raw_only(
         assert not ledger.compact_index_path(trial, which, Period.DAILY).exists()
     check = [*args, "--check"]
     assert command.main([*MONTH_ARGS, *check]) == command.EXIT_MIGRATED
+
+
+@pytest.mark.parametrize(
+    "phase",
+    [[], ["--plan"], ["--check"], ["--verify"], ["--retire"]],
+    ids=["no-write", "plan", "check", "verify", "retire"],
+)
+def test_raw_only_requires_explicit_write_before_any_file_changes(
+    tmp_path: Path, phase: list[str]
+) -> None:
+    args = [
+        *MONTH_ARGS,
+        "--state-dir",
+        str(tmp_path),
+        "--ledger",
+        ITEM.value,
+        "--run-id",
+        RUN,
+        "--git-sha",
+        SEED_COMMIT,
+        *phase,
+        "--raw-only",
+    ]
+    before = file_hashes(tmp_path)
+    with pytest.raises(SystemExit) as refused:
+        command.main(args)
+    assert refused.value.code == 2
+    assert file_hashes(tmp_path) == before
+
+
+def test_production_raw_only_write_leaves_csv_and_compact_bytes_unchanged(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = tmp_path / "state"
+    config_dir = config_beside(state)
+    monkeypatch.setattr(config, "DEFAULT_CONFIG_DIR", config_dir)
+    assert packs_here(state, config_dir)
+    args = [
+        *MONTH_ARGS,
+        "--state-dir",
+        str(state),
+        "--ledger",
+        ITEM.value,
+        "--run-id",
+        RUN,
+        "--git-sha",
+        SEED_COMMIT,
+    ]
+    first = item_row(OLD, "ai-01", machine=True)
+    write_csv(
+        state,
+        ITEM,
+        OLD,
+        writer_file_name(OLD, 1, ServerJob.WORK),
+        [first.csv_row()],
+    )
+    assert command.main(args) == command.EXIT_MIGRATED
+    capsys.readouterr()
+
+    late = item_row(OLD, "ai-02", machine=True)
+    source = write_csv(
+        state,
+        ITEM,
+        OLD,
+        writer_file_name(OLD, 2, ServerJob.WORK),
+        [late.csv_row()],
+    )
+    csv_before = {path: path.read_bytes() for path in csv_files.left(state, [ITEM], months=MONTHS)}
+    compact_before = file_hashes(state / "compact")
+    assert compact_before, "the production-root setup must have compact output to protect"
+
+    assert command.main([*args, "--write", "--raw-only"]) == command.EXIT_MIGRATED
+    output = capsys.readouterr().out
+
+    assert "raw-only write complete" in output
+    assert "packing and parity proof outstanding" in output
+    assert source.exists()
+    assert {path: path.read_bytes() for path in csv_files.left(state, [ITEM], months=MONTHS)} == csv_before
+    assert file_hashes(state / "compact") == compact_before
 
 
 @pytest.mark.parametrize("mode", ["--check", "--plan", "--write", "--verify", "--retire", None])

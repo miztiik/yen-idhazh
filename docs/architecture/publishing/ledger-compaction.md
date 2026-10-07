@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-07
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -330,6 +330,16 @@ deleted, and the pass logs `note=reopened-month` with the month. A late day
 leaves the month's `lost_days`, because it now has a record. No mark moves. An
 `empty` month has no file, so its rows are the late rows alone. The re-open is
 `backend/idhazh/gardener/tasks/_reopened_month.py`.
+
+An online CSV import can write raw rows without starting compaction by using
+`--write --raw-only`. The migrator files only rows from that CSV and earlier
+rows written by the same migration work unit. It does not copy native writer
+rows into the migration identity. A native retry therefore keeps its own work
+unit and attempt, which the reader settles before it applies the ledger key.
+Raw-only success leaves CSV and compact files unchanged; packing and parity
+proof remain outstanding. If a compact index already covers the day, the
+normal reader may continue to serve the compact file until a later compaction
+includes the raw arrival.
 
 **A re-open that cannot finish keeps every file, and the pass ends `failed` at
 the month.** A `packed` entry whose month file is not there is refused as
