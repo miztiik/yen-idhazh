@@ -43,9 +43,11 @@ import {
 } from '$lib/server/host-fingerprint';
 import { windowOfDays } from '$lib/charts/viewport';
 import {
+	measurementOff,
 	recordingNotes,
 	recordNotesByWindow,
 	type LostDay,
+	type OfferedWindow,
 	type RecordingNotes
 } from '$lib/console/recording';
 import {
@@ -87,6 +89,9 @@ export interface MachineWindow {
 	end: string;
 	runsRead: number;
 	refused: RefusedRun[];
+	/** The "Measurement is off" line for this span, null while the counters are
+	 * recorded. It names a day only inside the span. */
+	measurementOff: string | null;
 	recording: RecordingNotes;
 	/** What the MACHINE record was doing, which is a different instrument from
 	 * the counters above and can be in a different state on the same day. */
@@ -284,6 +289,16 @@ export async function load() {
 		named: console_.processor_lost_pct_named
 	};
 
+	// The default span is answered whether or not it is one of the presets, so
+	// the document the browser is handed always has an entry to fall back to.
+	const spans = [...new Set([console_.default_window_days, ...console_.window_presets])];
+	// Every span as the notes about the records read it, so a note for one span
+	// can name the narrowest other span that reaches back to a record's last rows.
+	const offered: OfferedWindow[] = spans.map((count) => ({
+		days: count,
+		...windowOfDays(day, count, console_.today_anchor)
+	}));
+
 	/** One span, and every figure that reads a span. */
 	function answer(days: number): MachineWindow {
 		const span = windowOfDays(day, days, console_.today_anchor);
@@ -291,6 +306,7 @@ export async function load() {
 			rows.filter((row) => row.date >= span.start && row.date <= span.end);
 
 		const runs = inSpan(counters.runs);
+		const ranOn = [...new Set(runs.map((run) => run.date))].sort();
 		const lostInSpan = inSpan(lostDays);
 		const machineLostInSpan = machineLost.filter((date) => date >= span.start && date <= span.end);
 		const spanDays = [...new Set(inSpan(dates.map((date) => ({ date }))).map((row) => row.date))].sort();
@@ -329,6 +345,16 @@ export async function load() {
 			// is named on the page with the reason, because a run count that quietly
 			// excludes one is a run count nobody can check.
 			refused: inSpan(counters.refused),
+			// Whether the counters are switched off, said of this span alone: a day
+			// it names is one the span shows, and a span that holds none of the
+			// record's rows names the span that reaches back to them instead.
+			measurementOff: measurementOff({
+				enabled: observability.host_fingerprint,
+				recorded: ranOn,
+				read: machine.read,
+				open: { days, start: span.start, end: span.end },
+				offered
+			}),
 			// What the recording itself was doing. Every panel below reads the model
 			// server's own counters, so a day the scrape never ran is a gap in the
 			// recording rather than a machine that did nothing - and the two states
@@ -338,7 +364,7 @@ export async function load() {
 			recording: recordingNotes({
 				enabled: observability.host_fingerprint,
 				rate: observability.sample_rate,
-				recorded: [...new Set(runs.map((run) => run.date))].sort(),
+				recorded: ranOn,
 				window: spanDays,
 				coveredElsewhere: [...new Set(healthRows.map((row) => row.date ?? ''))]
 					.filter((date) => date !== '')
@@ -374,9 +400,6 @@ export async function load() {
 		};
 	}
 
-	// The default span is answered whether or not it is one of the presets, so
-	// the document the browser is handed always has an entry to fall back to.
-	const spans = [...new Set([console_.default_window_days, ...console_.window_presets])];
 	const windows = new Map<number, MachineWindow>(spans.map((days) => [days, answer(days)]));
 	// The span the prerendered document opens on. Its drawings are the ones
 	// inlined; a browser redraws from the arrays when the operator moves the
@@ -555,7 +578,7 @@ export async function load() {
 				{ record: 'article', read: healthTable.read }
 			],
 			latestDate(undefined, 1),
-			[...windows.values()]
+			offered
 		),
 		console: console_,
 		chart
