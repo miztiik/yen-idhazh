@@ -71,9 +71,10 @@ state would be mostly undesigned.
 
 Six states have fixed wording, held in
 [../../frontend/src/lib/console/recording.ts](../../frontend/src/lib/console/recording.ts):
-measurement off, sampled below 1.0, counters but no scores, scores but no
-counters, recording started mid-window, and a day that published and lost what
-it measured. Only the dates and counts inside them are computed, and every one
+measurement off, sampled below 1.0, days the machine was timed and nothing
+scored the summaries, days the server's own counters were not written down,
+recording started mid-window, and a day that published and lost what it
+measured. Only the dates and counts inside them are computed, and every one
 is derived from the ledger that is missing - **a date that is not true is worse
 than no date**. None is apologetic, none is styled as an error, and none is a
 banner across the page: three panels can be in three different states on one
@@ -81,9 +82,9 @@ day. On Hardware and Summaries they sit after the record notes and before the
 first section, in one order - off, sampled, started, then the days one
 instrument covered alone - so a page whose sections have nothing to draw still
 says what the recording was doing; Jony chose the place on 2026-10-07. Susan
-chose the words of the first five on 2026-08-30. Reader and Jony chose new words
-for the measurement-off line on 2026-10-07, and Reader for the started line the
-same day.
+chose the words of the first five on 2026-08-30. On 2026-10-07 Reader and Jony
+chose new words for the measurement-off line and for the two lines about days
+one instrument covered alone, and Reader for the started line.
 
 Two of them are worth reading twice. **A sampled figure is never scaled up** -
 multiplying a quarter-sample by four publishes an estimate as a measurement,
@@ -115,6 +116,21 @@ did - the machine identity in the machine record - is named on its own first
 day. Once a record's first month is packed into one file, its indexes know the
 month and not the day, so when the widest window starts inside that month, after
 its 1st, no window prints a started line: no line rather than a false date.
+
+**The line about days one instrument covered alone names only days the other
+could have answered, and each day once.** On both routes the article record is
+the instrument that answered: on Summaries the scorer's figures are missing, on
+Hardware the server's own counters. The line is worked out once for each window
+the control offers. A day the missing record holds or recorded lost is a day it
+answered, and a lost day has a record note of its own. A day after that record's
+newest packed day is not packed yet, and a record that did not read answers
+nothing, so neither gets the line. The started line speaks for the days before
+the instrument began, and while measurement is off the off line speaks for the
+days after the newest one recorded, so this line names only the gaps between.
+It names the days and never counts them - `There are no quality figures for
+1 Oct and 3 Oct 2026.` - and where every day on screen is one of them it uses
+the window's own words, `these 7 days` or `this one day`. Hardware's line claims
+no score: it says only where its speed figures came from.
 
 ## A record that had not begun, a quiet day, and a record that was destroyed
 
@@ -277,6 +293,17 @@ the days control's own words, so the second name adds no new kind of words to th
 page. A name per sentence was what the console had before, and at the 1-day
 window it printed `these 1 days`, `over the last 1 days` and `the 1 days ending
 there` from templates of their own on every route. Reader ruled the words on
+2026-10-07.
+
+**A line about days one instrument covered alone names its days, and Hardware's
+claims no score.** A count was the shorter line, and beside the started line it
+reads as a second set of days: `on 2 of 90 days` under `3 days had a run but no
+quality figures`. A name says where to look. Hardware could learn which days
+were scored from the score record it already reads for its change markers, but
+it draws no quality figure, so the claim would buy one clause at the price of
+that record's read states, its lost days and a second sentence for a day with
+neither. The line says where the speed figures came from, which is what the page
+draws. Reader and Jony chose the words and Fowler ruled the score claim out, on
 2026-10-07.
 
 **One classification of a column's type.** The table, the chart and the colours
